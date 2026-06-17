@@ -1,0 +1,43 @@
+# Rust
+/target
+**/*.rs.bk
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# IDE
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Build artifacts
+*.o
+*.so
+*.dylib
+*.tsbuildinfo
+frontend/vite.config.d.ts
+frontend/vite.config.d.ts.map
+frontend/vite.config.js
+
+# Worktrees
+.worktrees/

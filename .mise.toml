@@ -1,0 +1,9 @@
+[tools]
+rust = "stable"
+# bun = "latest"
+node = "latest"
+"npm:bun" = "latest"
+
+[env]
+CARGO_TERM_COLOR = "always"
+RUST_BACKTRACE = "1"
