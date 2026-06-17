@@ -1,0 +1,18 @@
+[package]
+name = "rex-binaries"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "rex-hub"
+path = "src/bin/rex-hub.rs"
+
+[[bin]]
+name = "rex-agent"
+path = "src/bin/rex-agent.rs"
+
+[dependencies]
+rex-common = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

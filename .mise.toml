@@ -1,9 +1,17 @@
 [tools]
 rust = "stable"
-# bun = "latest"
 node = "latest"
 "npm:bun" = "latest"
 
 [env]
 CARGO_TERM_COLOR = "always"
 RUST_BACKTRACE = "1"
+
+[tasks]
+dev-rust = "cargo run -p rex-hub"
+dev-web = "cd packages/rex-console-web && bun run dev"
+build-web = "cd packages/rex-console-web && bun run build"
+check-rust = "cargo fmt --check && cargo clippy --workspace --all-targets"
+check-web = "cd packages/rex-console-web && bun run type-check"
+test-rust = "cargo test --workspace"
+fmt = "cargo fmt"
