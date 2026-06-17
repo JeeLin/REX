@@ -1,0 +1,37 @@
+export default {
+  app: { name: 'REX Hub' },
+  common: {
+    loading: '加载中',
+    error: '错误',
+    confirm: '确认',
+    cancel: '取消',
+    save: '保存',
+    delete: '删除',
+    edit: '编辑',
+    copy: '复制',
+    paste: '粘贴',
+    refresh: '刷新',
+    search: '搜索...',
+    noData: '暂无数据',
+    copySuccess: '已复制到剪贴板',
+  },
+  nav: {
+    workspace: '工作区',
+    dashboard: '仪表盘',
+    environments: '环境',
+    agents: 'Agent',
+    settings: '设置',
+    auditLog: '审计日志',
+  },
+  auth: {
+    login: '登录',
+    logout: '退出登录',
+    username: '用户名',
+    password: '密码',
+  },
+  status: {
+    online: '在线',
+    offline: '离线',
+    connecting: '连接中',
+  },
+}

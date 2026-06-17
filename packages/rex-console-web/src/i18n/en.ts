@@ -1,0 +1,37 @@
+export default {
+  app: { name: 'REX Hub' },
+  common: {
+    loading: 'Loading',
+    error: 'Error',
+    confirm: 'Confirm',
+    cancel: 'Cancel',
+    save: 'Save',
+    delete: 'Delete',
+    edit: 'Edit',
+    copy: 'Copy',
+    paste: 'Paste',
+    refresh: 'Refresh',
+    search: 'Search...',
+    noData: 'No data',
+    copySuccess: 'Copied to clipboard',
+  },
+  nav: {
+    workspace: 'Workspace',
+    dashboard: 'Dashboard',
+    environments: 'Environments',
+    agents: 'Agents',
+    settings: 'Settings',
+    auditLog: 'Audit Log',
+  },
+  auth: {
+    login: 'Login',
+    logout: 'Logout',
+    username: 'Username',
+    password: 'Password',
+  },
+  status: {
+    online: 'Online',
+    offline: 'Offline',
+    connecting: 'Connecting',
+  },
+}
