@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>REX Hub — SSH 终端</title>
+  <link rel="stylesheet" href="css/base.css">
+  <style>
+    body { overflow: hidden; height: 100vh; }
+
+    .terminal-layout {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: #0D1117;
+    }
+
+    /* Tab Bar */
+    .tab-bar {
+      display: flex;
+      align-items: center;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      height: 38px;
+      flex-shrink: 0;
+      padding: 0 var(--sp-sm);
+      gap: 2px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .tab-bar::-webkit-scrollbar { display: none; }
+
+    .term-tab {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      padding: var(--sp-sm) var(--sp-md);
+      border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+      font-size: var(--fs-sm);
+      color: var(--text-secondary);
+      cursor: pointer;
+      white-space: nowrap;
+      border: 1px solid transparent;
+      border-bottom: none;
+      background: none;
+      font-family: var(--font-body);
+      transition: all var(--transition-fast);
+      position: relative;
+    }
+    .term-tab:hover { color: var(--text-primary); background: var(--bg-hover); }
+    .term-tab.active {
+      color: var(--text-primary);
+      background: #0D1117;
+      border-color: var(--border);
+    }
+    .term-tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 20%;
+      right: 20%;
+      height: 1px;
+      background: var(--accent);
+      filter: blur(2px);
+    }
+    .tab-status {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 4px var(--success-glow);
+    }
+    .tab-close {
+      width: 16px; height: 16px;
+      border-radius: 3px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px;
+      color: var(--text-muted);
+      opacity: 0;
+      transition: opacity var(--transition-fast);
+    }
+    .term-tab:hover .tab-close { opacity: 1; }
+    .tab-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+    .tab-add {
+      width: 28px; height: 28px;
+      border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      color: var(--text-muted);
+      cursor: pointer;
+      background: none;
+      border: none;
+      flex-shrink: 0;
+    }
+    .tab-add:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+    .tab-bar-spacer { flex: 1; }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      padding: var(--sp-xs) var(--sp-md);
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      height: 36px;
+      flex-shrink: 0;
+      gap: var(--sp-md);
+    }
+    .toolbar-info {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-md);
+      font-size: var(--fs-sm);
+      font-family: var(--font-mono);
+    }
+    .toolbar-item {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-xs);
+      color: var(--text-secondary);
+    }
+    .toolbar-item .val { color: var(--text-primary); }
+    .toolbar-spacer { flex: 1; }
+    .toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-xs);
+    }
+    .toolbar-btn-sftp {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-xs);
+      padding: 3px var(--sp-sm);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: var(--fs-xs);
+      color: #8B5CF6;
+      background: rgba(139,92,246,0.08);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .toolbar-btn-sftp:hover {
+      border-color: #8B5CF6;
+      background: rgba(139,92,246,0.15);
+      box-shadow: 0 0 8px rgba(139,92,246,0.2);
+    }
+
+    /* Terminal + SFTP split */
+    .terminal-sftp-wrap {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .terminal-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .terminal {
+      width: 100%;
+      height: 100%;
+      padding: var(--sp-md);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.4;
+      color: #E6EDF3;
+      background: #0D1117;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .term-prompt { color: var(--success); font-weight: 600; }
+    .term-path { color: var(--info); }
+    .term-comment { color: var(--text-muted); }
+    .term-output { color: var(--text-secondary); }
+    .term-highlight { color: var(--accent); }
+    .term-error { color: var(--danger); }
+    .term-cursor {
+      display: inline-block;
+      width: 8px;
+      height: 16px;
+      background: var(--accent);
+      animation: blink 1s step-end infinite;
+      vertical-align: text-bottom;
+      box-shadow: 0 0 6px var(--accent-glow), 0 0 12px rgba(232,145,45,0.15);
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    /* Inline SFTP Panel */
+    .sftp-panel-inline {
+      width: 400px;
+      border-left: 1px solid var(--border);
+      background: var(--bg-surface);
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .sftp-panel-inline.show { display: flex; }
+    .sftp-inline-header {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      padding: var(--sp-sm) var(--sp-md);
+      border-bottom: 1px solid var(--border);
+      font-size: var(--fs-sm);
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .sftp-inline-header .panel-title { flex: 1; }
+    .sftp-inline-header .panel-path {
+      font-family: var(--font-mono);
+      font-size: var(--fs-xs);
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+    .sftp-inline-breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: var(--sp-xs) var(--sp-md);
+      border-bottom: 1px solid var(--border);
+      font-size: var(--fs-xs);
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    .sftp-inline-toolbar {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-xs);
+      padding: var(--sp-xs) var(--sp-md);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .sftp-inline-toolbar .btn { height: 24px; font-size: var(--fs-xs); }
+    .sftp-inline-files {
+      flex: 1;
+      overflow-y: auto;
+    }
+    .sfile-row {
+      display: flex;
+      align-items: center;
+      padding: 4px var(--sp-md);
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background var(--transition-fast);
+      font-size: var(--fs-xs);
+    }
+    .sfile-row:hover { background: var(--bg-hover); }
+    .sfile-row.selected { background: rgba(88,166,255,0.1); }
+    .sfile-icon { width: 16px; text-align: center; margin-right: var(--sp-sm); flex-shrink: 0; }
+    .sfile-icon.folder { color: var(--info); }
+    .sfile-icon.file { color: var(--text-muted); }
+    .sfile-icon.code { color: var(--success); }
+    .sfile-icon.image { color: #E879F9; }
+    .sfile-icon.archive { color: var(--warning); }
+    .sfile-name { flex: 1; font-family: var(--font-mono); color: var(--text-primary); }
+    .sfile-name.parent { color: var(--text-secondary); }
+    .sfile-size { width: 60px; text-align: right; color: var(--text-muted); font-family: var(--font-mono); }
+    .sfile-time { width: 100px; color: var(--text-muted); }
+
+    /* Resize handle */
+    .sftp-resize-handle {
+      width: 4px;
+      cursor: col-resize;
+      background: transparent;
+      transition: background var(--transition-fast);
+      flex-shrink: 0;
+    }
+    .sftp-resize-handle:hover { background: var(--accent); }
+
+    /* Status Bar */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      padding: 0 var(--sp-md);
+      background: var(--accent);
+      color: #000;
+      height: 22px;
+      flex-shrink: 0;
+      font-size: var(--fs-xs);
+      font-family: var(--font-mono);
+      font-weight: 500;
+      gap: var(--sp-lg);
+    }
+    .status-bar .spacer { flex: 1; }
+    .status-bar-item {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-xs);
+    }
+
+    /* Mobile Floating Toolbar */
+    .mobile-toolbar {
+      display: none;
+      position: fixed;
+      bottom: var(--sp-lg);
+      left: var(--sp-lg);
+      right: var(--sp-lg);
+      background: rgba(22, 27, 34, 0.95);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: var(--sp-sm);
+      z-index: 200;
+      justify-content: space-around;
+      align-items: center;
+    }
+    .mobile-toolbar-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: var(--sp-sm);
+      border-radius: var(--radius-md);
+      font-size: var(--fs-xs);
+      color: var(--text-secondary);
+      cursor: pointer;
+      background: none;
+      border: none;
+    }
+    .mobile-toolbar-btn:active { background: var(--bg-hover); }
+    .mobile-toolbar-btn .mt-icon { font-size: 18px; }
+    .mobile-toolbar-btn.mt-wide {
+      flex-direction: row;
+      gap: var(--sp-xs);
+      padding: var(--sp-xs) var(--sp-md);
+    }
+    .mt-dpad {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      padding: var(--sp-xs) 0;
+    }
+    .mt-dpad-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      color: var(--text-secondary);
+      background: none;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .mt-dpad-btn:active {
+      background: var(--bg-hover);
+      border-color: var(--accent);
+      color: var(--text-primary);
+    }
+    .mt-dpad-btn.mt-tab-btn {
+      font-size: var(--fs-xs);
+      font-weight: 600;
+      font-family: var(--font-mono);
+      color: var(--accent);
+      border-color: var(--accent);
+      background: rgba(232,145,45,0.08);
+    }
+    .mt-dpad-btn.mt-enter-btn {
+      font-size: var(--fs-xs);
+      font-weight: 600;
+      color: var(--success);
+      border-color: var(--success);
+      background: rgba(63,185,80,0.08);
+    }
+
+    /* Mobile: hide desktop chrome */
+    @media (max-width: 767px) {
+      .tab-bar { display: none; }
+      .toolbar { display: none; }
+      .status-bar { display: none; }
+      .mobile-toolbar { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-xs); padding: var(--sp-sm) var(--sp-md); }
+      .terminal-container { padding-bottom: 140px; }
+      .sftp-panel-inline { display: none !important; }
+      .sftp-resize-handle { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="terminal-layout">
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <div class="term-tab active" oncontextmenu="showTabCtx(event, 0)">
+        <span class="tab-status"></span>
+        <span>🖥 云服务器</span>
+        <span class="tab-close" onclick="event.stopPropagation()">×</span>
+      </div>
+      <div class="term-tab" oncontextmenu="showTabCtx(event, 1)">
+        <span class="tab-status"></span>
+        <span>📁 云服务器 · SFTP</span>
+        <span class="tab-close">×</span>
+      </div>
+      <div class="term-tab" oncontextmenu="showTabCtx(event, 2)">
+        <span class="tab-status"></span>
+        <span>🖥 开发服务器</span>
+        <span class="tab-close">×</span>
+      </div>
+      <div class="term-tab" oncontextmenu="showTabCtx(event, 3)">
+        <span class="tab-status" style="background:var(--accent);box-shadow:0 0 4px var(--accent-glow)"></span>
+        <span>🖥 NAS</span>
+        <span class="tab-close">×</span>
+      </div>
+      <button class="tab-add" title="新建标签 (Ctrl+T)">+</button>
+      <div class="tab-bar-spacer"></div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="toolbar-info">
+        <div class="toolbar-item">
+          <span style="color:var(--success)">●</span>
+          <span class="val">root@192.168.1.100</span>
+        </div>
+        <div class="toolbar-item">
+          <span>延迟</span>
+          <span class="val" style="color:var(--success)">12ms</span>
+        </div>
+        <div class="toolbar-item" style="color:var(--text-muted);font-size:var(--fs-xs)">
+          🐧 Linux · Ubuntu 22.04 LTS · x86_64
+        </div>
+      </div>
+      <div class="toolbar-spacer"></div>
+      <div class="toolbar-actions">
+        <button class="toolbar-btn-sftp" onclick="toggleSftpPanel()" title="📁 SFTP 面板 (Ctrl+Shift+F)">📁 SFTP</button>
+        <div style="width:1px;height:16px;background:var(--border);margin:0 var(--sp-xs)"></div>
+        <button class="btn btn-ghost btn-sm btn-icon" title="复制" onclick="showToast('已复制到剪贴板')">📋</button>
+        <button class="btn btn-ghost btn-sm btn-icon" title="粘贴">📑</button>
+        <button class="btn btn-ghost btn-sm btn-icon" title="清屏">🗑</button>
+        <button class="btn btn-ghost btn-sm btn-icon" title="全屏">⛶</button>
+        <button class="btn btn-danger btn-sm" onclick="confirmDisconnect()">断开</button>
+      </div>
+    </div>
+
+    <!-- Terminal + SFTP Split -->
+    <div class="terminal-sftp-wrap">
+      <!-- Terminal -->
+      <div class="terminal-container" id="terminalContainer">
+        <div class="terminal" id="terminal" oncontextmenu="showTerminalCtx(event)">
+<span class="term-comment"># 欢迎使用 REX Hub SSH 终端</span>
+<span class="term-comment"># 按 Ctrl+Shift+C 复制，Ctrl+Shift+V 粘贴</span>
+
+<span class="term-prompt">root@prod-server</span>:<span class="term-path">~</span>$ <span class="term-output">uptime</span>
+ 14:23:07 up 14 days,  3:21,  1 user,  load average: 0.12, 0.08, 0.05
+
+<span class="term-prompt">root@prod-server</span>:<span class="term-path">~</span>$ <span class="term-output">docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"</span>
+NAMES                STATUS          PORTS
+rex-app              Up 2 days       0.0.0.0:3000->3000/tcp
+rex-db               Up 2 days       0.0.0.0:3306->3306/tcp
+nginx-proxy          Up 2 days       0.0.0.0:80->80/tcp, 0.0.0.0:443->443/tcp
+redis-cache          Up 2 days       0.0.0.0:6379->6379/tcp
+
+<span class="term-prompt">root@prod-server</span>:<span class="term-path">~</span>$ <span class="term-output">df -h /</span>
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/vda1        40G   18G   20G  48% /
+
+<span class="term-prompt">root@prod-server</span>:<span class="term-path">~</span>$ <span class="term-output">free -h</span>
+              total        used        free      shared  buff/cache   available
+Mem:          3.8Gi       2.1Gi       256Mi        12Mi       1.5Gi       1.4Gi
+Swap:            0B          0B          0B
+
+<span class="term-prompt">root@prod-server</span>:<span class="term-path">~</span>$ <span class="term-output">cd /opt/rex && ls -la</span>
+total 32
+drwxr-xr-x  5 root root 4096 Jun 13 10:22 .
+drwxr-xr-x  3 root root 4096 Jun 10 08:15 ..
+-rw-r--r--  1 root root  220 Jun 10 08:15 .env
+drwxr-xr-x  8 root root 4096 Jun 13 10:22 app
+drwxr-xr-x  2 root root 4096 Jun 10 08:15 data
+-rw-r--r--  1 root root  564 Jun 13 10:22 docker-compose.yml
+
+<span class="term-prompt">root@prod-server</span>:<span class="term-path">/opt/rex</span>$ <span class="term-cursor"></span></div>
+
+      <!-- Resize Handle -->
+      <div class="sftp-resize-handle" id="sftpResize"></div>
+
+      <!-- Inline SFTP Panel -->
+      <div class="sftp-panel-inline" id="sftpPanel">
+        <div class="sftp-inline-header">
+          <span style="color:#8B5CF6">📁</span>
+          <span class="panel-title">SFTP</span>
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="toggleSftpPanel()" title="关闭 SFTP">✕</button>
+        </div>
+        <div class="sftp-inline-breadcrumb">
+          <span style="cursor:pointer">/</span>
+          <span>/</span>
+          <span style="cursor:pointer">opt</span>
+          <span>/</span>
+          <span style="cursor:pointer">rex</span>
+          <span>/</span>
+          <span style="color:var(--text-primary);font-weight:500">app</span>
+        </div>
+        <div class="sftp-inline-toolbar">
+          <button class="btn btn-ghost btn-sm">⬆ 上传</button>
+          <button class="btn btn-ghost btn-sm">⬇ 下载</button>
+          <button class="btn btn-ghost btn-sm">📁 新建</button>
+          <button class="btn btn-ghost btn-sm">↻</button>
+        </div>
+        <div class="sftp-inline-files">
+          <div class="sfile-row" oncontextmenu="showSfileCtx(event, 'parent')">
+            <span class="sfile-icon folder">📁</span>
+            <span class="sfile-name parent">..</span>
+            <span class="sfile-size"></span>
+            <span class="sfile-time"></span>
+          </div>
+          <div class="sfile-row" oncontextmenu="showSfileCtx(event, 'components')">
+            <span class="sfile-icon folder">📁</span>
+            <span class="sfile-name">components</span>
+            <span class="sfile-size">—</span>
+            <span class="sfile-time">10:22</span>
+          </div>
+          <div class="sfile-row" oncontextmenu="showSfileCtx(event, 'config')">
+            <span class="sfile-icon folder">📁</span>
+            <span class="sfile-name">config</span>
+            <span class="sfile-size">—</span>
+            <span class="sfile-time">08:15</span>
+          </div>
+          <div class="sfile-row" oncontextmenu="showSfileCtx(event, 'src')">
+            <span class="sfile-icon folder">📁</span>
+            <span class="sfile-name">src</span>
+            <span class="sfile-size">—</span>
+            <span class="sfile-time">14:30</span>
+          </div>
+          <div class="sfile-row" oncontextmenu="showSfileCtx(event, 'env')">
+            <span class="sfile-icon code">📄</span>
+            <span class="sfile-name">.env</span>
+            <span class="sfile-size">220B</span>
+            <span class="sfile-time">08:15</span>
+          </div>
+          <div class="sfile-row" oncontextmenu="showSfileCtx(event, 'docker')">
+            <span class="sfile-icon code">📄</span>
+            <span class="sfile-name">docker-compose.yml</span>
+            <span class="sfile-size">564B</span>
+            <span class="sfile-time">10:22</span>
+          </div>
+          <div class="sfile-row" oncontextmenu="showSfileCtx(event, 'readme')">
+            <span class="sfile-icon">📄</span>
+            <span class="sfile-name">README.md</span>
+            <span class="sfile-size">4.7K</span>
+            <span class="sfile-time">14:30</span>
+          </div>
+          <div class="sfile-row" oncontextmenu="showSfileCtx(event, 'backup')">
+            <span class="sfile-icon archive">📦</span>
+            <span class="sfile-name">backup.tar.gz</span>
+            <span class="sfile-size">23M</span>
+            <span class="sfile-time">09:00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <div class="status-bar-item">
+        <span>SSH</span>
+        <span>·</span>
+        <span>UTF-8</span>
+      </div>
+      <div class="status-bar-item">
+        <span>180×42</span>
+      </div>
+      <div class="spacer"></div>
+      <div class="status-bar-item" id="sftpStatusBar" style="display:none">
+        <span>SFTP: /opt/rex/app</span>
+      </div>
+      <div class="status-bar-item">
+        <span>通过 Agent 代理</span>
+      </div>
+      <div class="status-bar-item">
+        <span>Ctrl+Shift+C 复制</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile Floating Toolbar -->
+  <div class="mobile-toolbar">
+    <!-- Row 1: Direction pad + Tab/Enter -->
+    <div style="width:100%;display:flex;justify-content:center;margin-bottom:var(--sp-xs)">
+      <div class="mt-dpad">
+        <button class="mt-dpad-btn" onclick="termKey('ArrowUp')" title="↑ 上（历史记录）">↑</button>
+        <button class="mt-dpad-btn" onclick="termKey('ArrowDown')" title="↓ 下（历史记录）">↓</button>
+        <button class="mt-dpad-btn" onclick="termKey('ArrowLeft')" title="← 左">←</button>
+        <button class="mt-dpad-btn" onclick="termKey('ArrowRight')" title="→ 右">→</button>
+        <button class="mt-dpad-btn mt-tab-btn" onclick="termKey('Tab')" title="Tab 补全">Tab</button>
+        <button class="mt-dpad-btn mt-enter-btn" onclick="termKey('Enter')" title="Enter 执行">⏎</button>
+        <button class="mt-dpad-btn" onclick="termKey('Ctrl+C')" title="Ctrl+C 中断" style="color:var(--danger);border-color:var(--danger)">^C</button>
+        <button class="mt-dpad-btn" onclick="termKey('Ctrl+L')" title="Ctrl+L 清屏" style="color:var(--info)">^L</button>
+      </div>
+    </div>
+    <!-- Row 2: Action buttons -->
+    <div style="width:100%;display:flex;justify-content:space-around">
+      <button class="mobile-toolbar-btn" onclick="showMobileInput('history')">
+        <span class="mt-icon">📜</span>
+        <span>历史</span>
+      </button>
+      <button class="mobile-toolbar-btn" onclick="showMobileInput('paste')">
+        <span class="mt-icon">📋</span>
+        <span>粘贴</span>
+      </button>
+      <button class="mobile-toolbar-btn">
+        <span class="mt-icon">A-</span>
+        <span>缩小</span>
+      </button>
+      <button class="mobile-toolbar-btn">
+        <span class="mt-icon">A+</span>
+        <span>放大</span>
+      </button>
+      <button class="mobile-toolbar-btn">
+        <span class="mt-icon">⚙</span>
+        <span>更多</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Disconnect Modal -->
+  <div class="modal-overlay" id="disconnectModal" style="display:none">
+    <div class="modal">
+      <div class="modal-title">断开连接？</div>
+      <p style="color:var(--text-secondary);font-size:var(--fs-base)">
+        断开后当前会话将终止，未保存的工作可能会丢失。
+      </p>
+      <div class="modal-actions">
+        <button class="btn" onclick="hideModal('disconnectModal')">取消</button>
+        <button class="btn btn-danger" onclick="hideModal('disconnectModal');showToast('已断开连接','error')">断开</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="shared.js"></script>
+  <script>
+    // ── Terminal right-click context menu ──
+    document.getElementById('terminal').addEventListener('contextmenu', (e) => {
+      // Only trigger on the terminal area itself, not on file rows inside SFTP
+      if (e.target.closest('.sftp-panel-inline')) return;
+      e.preventDefault();
+      showContextMenu(e, [
+        { label: t('copy'), icon: '📋', shortcut: 'Ctrl+Shift+C', action: () => {} },
+        { label: t('paste'), icon: '📑', shortcut: 'Ctrl+Shift+V', action: () => {} },
+        '---',
+        { label: t('clear'), icon: '🗑', shortcut: 'Ctrl+L', action: () => {} },
+        { label: t('selectAll'), shortcut: 'Ctrl+A', action: () => {} },
+        '---',
+        { label: t('openSftp'), icon: '📁', shortcut: 'Ctrl+Shift+F', action: () => toggleSftpPanel() },
+        { label: t('openSftpNewTab'), icon: '↗', action: () => {} },
+        '---',
+        { label: t('reconnect'), icon: '↻', action: () => {} },
+        { label: t('disconnect'), icon: '⏻', danger: true, action: () => confirmDisconnect() },
+      ]);
+    });
+
+    // ── Tab right-click context menu ──
+    function showTabCtx(e, index) {
+      e.preventDefault();
+      e.stopPropagation();
+      showContextMenu(e, [
+        { label: t('close'), icon: '✕', action: () => {} },
+        { label: t('closeOthers'), action: () => {} },
+        { label: t('closeRight'), action: () => {} },
+        { label: t('closeLeft'), action: () => {} },
+        { label: t('closeAll'), action: () => {} },
+        '---',
+        { label: t('duplicate'), icon: '⊕', action: () => {} },
+        { label: t('moveToPanel'), icon: '⊞', sub: [
+          { label: '面板 1', action: () => {} },
+          { label: '面板 2', action: () => {} },
+          { label: '面板 3', action: () => {} },
+        ]},
+        '---',
+        { label: '复制连接地址', icon: '📋', action: () => {} },
+        { label: '断开此连接', icon: '⏻', danger: true, action: () => {} },
+      ]);
+    }
+
+    // ── SFTP file right-click context menu ──
+    function showSfileCtx(e, name) {
+      e.preventDefault();
+      e.stopPropagation();
+      const isDir = name === 'parent' || name === 'components' || name === 'config' || name === 'src';
+      showContextMenu(e, [
+        isDir
+          ? { label: '打开', icon: '📂', action: () => {} }
+          : { label: t('open'), icon: '📄', action: () => {} },
+        '---',
+        { label: t('download'), icon: '⬇', action: () => {} },
+        { label: t('copyPath'), icon: '📋', action: () => {} },
+        { label: t('copyFileName'), icon: '📎', action: () => {} },
+        '---',
+        { label: t('sendTo') || '发送到…', icon: '📤', sub: [
+          { label: '📤 发送到 树莓派集群 → NAS 主机', action: () => showToast('文件传输已启动') },
+          { label: '📤 发送到 家庭 NAS → NAS 文件', action: () => showToast('文件传输已启动') },
+        ]},
+        '---',
+        { label: t('properties'), icon: 'ℹ', action: () => {} },
+        { label: t('deleteFile'), icon: '🗑', danger: true, action: () => {} },
+      ]);
+    }
+
+    // ── SFTP Panel Toggle ──
+    function toggleSftpPanel() {
+      const panel = document.getElementById('sftpPanel');
+      const statusBar = document.getElementById('sftpStatusBar');
+      panel.classList.toggle('show');
+      if (statusBar) statusBar.style.display = panel.classList.contains('show') ? 'flex' : 'none';
+    }
+
+    // ── Toast ──
+    function showToast(msg, type = 'success') {
+      const toast = document.createElement('div');
+      toast.className = 'toast toast-' + type;
+      toast.innerHTML = '<span class="toast-icon">' + (type === 'success' ? '✓' : '✕') + '</span><span>' + msg + '</span>';
+      document.body.appendChild(toast);
+      setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; }, 2500);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // ── Modal ──
+    function confirmDisconnect() {
+      document.getElementById('disconnectModal').style.display = 'flex';
+    }
+    function hideModal(id) {
+      document.getElementById(id).style.display = 'none';
+    }
+
+    // ── Tab switching ──
+    document.querySelectorAll('.term-tab').forEach(tab => {
+      tab.addEventListener('click', function(e) {
+        if (e.target.classList.contains('tab-close')) return;
+        document.querySelectorAll('.term-tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
+
+    // ── SFTP file row selection ──
+    document.querySelectorAll('.sfile-row').forEach(row => {
+      row.addEventListener('click', function(e) {
+        document.querySelectorAll('.sfile-row').forEach(r => r.classList.remove('selected'));
+        this.classList.add('selected');
+      });
+    });
+
+    // ── Keyboard shortcuts ──
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'F') {
+        e.preventDefault();
+        toggleSftpPanel();
+      }
+    });
+
+    // ── Mobile terminal interaction ──
+    const TERM_HISTORY = [
+      'docker ps --format "table {{.Names}}\\t{{.Status}}"',
+      'df -h /',
+      'free -h',
+      'cd /opt/rex && ls -la',
+      'cat docker-compose.yml',
+      'systemctl status nginx',
+      'top -bn1 | head -20',
+      'netstat -tlnp',
+      'git log --oneline -10',
+      'tail -f /var/log/app.log',
+    ];
+
+    function termKey(key) {
+      // In a real app, this sends the key to the terminal emulator (xterm.js)
+      showToast('发送按键: ' + key);
+    }
+
+    function showMobileInput(type) {
+      let title, placeholder, options;
+      if (type === 'history') {
+        title = 'bash 历史记录';
+        placeholder = '搜索历史命令...';
+        options = TERM_HISTORY;
+      } else {
+        title = '粘贴文本';
+        placeholder = '输入或粘贴要发送的文本...';
+        options = null;
+      }
+
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.style.display = 'flex';
+      overlay.onclick = (ev) => { if (ev.target === overlay) overlay.remove(); };
+
+      let listHtml = '';
+      if (options) {
+        listHtml = '<div style="max-height:240px;overflow-y:auto;margin-top:var(--sp-md);border:1px solid var(--border);border-radius:var(--radius-md)">' +
+          options.map(cmd =>
+            `<div onclick="termSendCmd('${cmd.replace(/'/g, "\\'")}');this.closest('.modal-overlay').remove()"
+                 style="padding:var(--sp-sm) var(--sp-md);font-family:var(--font-mono);font-size:var(--fs-sm);color:var(--text-primary);cursor:pointer;border-bottom:1px solid var(--border);word-break:break-all"
+                 onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background=''">${cmd}</div>`
+          ).join('') + '</div>';
+      }
+
+      overlay.innerHTML = `
+        <div class="modal" style="width:90%;max-width:420px">
+          <div class="modal-title">${title}</div>
+          <input class="form-input" style="margin-top:var(--sp-md);font-family:var(--font-mono);font-size:var(--fs-sm)"
+                 placeholder="${placeholder}" id="mobileTermInput"
+                 oninput="filterMobileHistory(this.value)">
+          ${listHtml}
+          <div id="mobileTermList"></div>
+          <div class="modal-actions" style="margin-top:var(--sp-md)">
+            <button class="btn" onclick="this.closest('.modal-overlay').remove()">取消</button>
+            ${type !== 'history' ? '<button class="btn btn-primary" onclick="termSendCmd(document.getElementById(\'mobileTermInput\').value);this.closest(\'.modal-overlay\').remove()">发送</button>' : ''}
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+      setTimeout(() => document.getElementById('mobileTermInput')?.focus(), 100);
+    }
+
+    function filterMobileHistory(query) {
+      const filtered = TERM_HISTORY.filter(cmd => cmd.toLowerCase().includes(query.toLowerCase()));
+      const container = document.getElementById('mobileTermList');
+      if (!container) return;
+      // Update the list in the overlay
+      const listDiv = container.parentElement.querySelector('div[style*="max-height"]');
+      if (listDiv) {
+        listDiv.innerHTML = filtered.map(cmd =>
+          `<div onclick="termSendCmd('${cmd.replace(/'/g, "\\'")}');this.closest('.modal-overlay').remove()"
+               style="padding:var(--sp-sm) var(--sp-md);font-family:var(--font-mono);font-size:var(--fs-sm);color:var(--text-primary);cursor:pointer;border-bottom:1px solid var(--border);word-break:break-all"
+               onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background=''">${cmd}</div>`
+        ).join('') || '<div style="padding:var(--sp-lg);text-align:center;color:var(--text-muted)">无匹配命令</div>';
+      }
+    }
+
+    function termSendCmd(cmd) {
+      if (!cmd) return;
+      showToast('发送命令: ' + cmd);
+    }
+  </script>
+</body>
+</html>

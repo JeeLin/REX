@@ -1,0 +1,1702 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>REX Hub — SQL 控制台</title>
+  <link rel="stylesheet" href="css/base.css">
+  <style>
+    body { overflow: hidden; height: 100vh; }
+
+    .sql-layout {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: var(--bg-deep);
+    }
+
+    /* Top Bar */
+    .sql-topbar {
+      display: flex;
+      align-items: center;
+      padding: 0 var(--sp-md);
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      height: 40px;
+      flex-shrink: 0;
+      gap: var(--sp-md);
+    }
+    .sql-topbar-breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      font-size: var(--fs-sm);
+      font-family: var(--font-mono);
+      color: var(--text-secondary);
+    }
+    .sql-topbar-breadcrumb .sep { color: var(--text-muted); }
+    .sql-topbar-breadcrumb .current { color: var(--text-primary); font-weight: 500; }
+    .sql-topbar-spacer { flex: 1; }
+
+    .db-selector {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+    }
+    .db-selector label {
+      font-size: var(--fs-sm);
+      color: var(--text-secondary);
+    }
+    .db-selector select {
+      padding: 2px var(--sp-sm);
+      padding-right: 24px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: var(--fs-sm);
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%238B949E' d='M5 7L0 2h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 6px center;
+    }
+
+    /* SQL Tabs — Query Files */
+    .sql-tabs {
+      display: flex;
+      align-items: center;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 var(--sp-md);
+      height: 32px;
+      flex-shrink: 0;
+      gap: 2px;
+      overflow-x: auto;
+    }
+    .sql-tabs::-webkit-scrollbar { display: none; }
+    .sql-tab {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      padding: var(--sp-xs) var(--sp-sm);
+      font-size: var(--fs-sm);
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      white-space: nowrap;
+      background: none;
+      border-top: none; border-left: none; border-right: none;
+      font-family: var(--font-body);
+      border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+      transition: all var(--transition-fast);
+    }
+    .sql-tab:hover { color: var(--text-primary); background: var(--bg-hover); }
+    .sql-tab.active {
+      color: var(--text-primary);
+      border-bottom-color: var(--accent);
+      background: var(--bg-deep);
+    }
+    .sql-tab .tab-icon { font-size: 10px; }
+    .sql-tab .tab-close {
+      font-size: 10px;
+      color: var(--text-muted);
+      opacity: 0;
+      cursor: pointer;
+      width: 14px; height: 14px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 3px;
+    }
+    .sql-tab:hover .tab-close { opacity: 1; }
+    .sql-tab-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .sql-tab-add {
+      width: 24px; height: 24px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+      color: var(--text-muted);
+      cursor: pointer;
+      background: none;
+      border: none;
+      border-radius: var(--radius-sm);
+    }
+    .sql-tab-add:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+    /* Toolbar */
+    .sql-toolbar {
+      display: flex;
+      align-items: center;
+      padding: var(--sp-xs) var(--sp-md);
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      height: 36px;
+      flex-shrink: 0;
+      gap: var(--sp-sm);
+    }
+    .sql-toolbar .btn { height: 28px; font-size: var(--fs-sm); }
+    .btn-run {
+      background: var(--success) !important;
+      border-color: var(--success) !important;
+      color: #000 !important;
+      font-weight: 600;
+      box-shadow: 0 0 10px var(--success-glow);
+    }
+    .btn-run:hover { background: #2ea043 !important; box-shadow: 0 0 16px var(--success-glow); }
+    .sql-toolbar-sep {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+      margin: 0 var(--sp-xs);
+    }
+    .sql-toolbar-spacer { flex: 1; }
+    .sql-toolbar-info {
+      font-size: var(--fs-xs);
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    /* Main Area */
+    .sql-main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ── Left Sidebar: DB Structure (collapsible) ── */
+    .sql-sidebar {
+      width: 260px;
+      border-right: 1px solid var(--border);
+      background: var(--bg-surface);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow: hidden;
+      transition: width var(--transition-base);
+    }
+    .sql-sidebar.collapsed {
+      width: 0;
+      border-right: none;
+    }
+    .sql-sidebar-toggle {
+      position: absolute;
+      top: 50%;
+      left: 260px;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 48px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-left: none;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 10px;
+      z-index: 10;
+      transition: left var(--transition-base);
+    }
+    .sql-sidebar.collapsed + .sql-sidebar-toggle {
+      left: 0;
+    }
+    .sql-sidebar-toggle:hover {
+      color: var(--text-primary);
+      background: var(--bg-hover);
+    }
+
+    /* Sidebar mode tabs */
+    .sql-sidebar-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .sql-sidebar-tab {
+      flex: 1;
+      padding: var(--sp-sm);
+      text-align: center;
+      font-size: var(--fs-xs);
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      font-family: var(--font-body);
+    }
+    .sql-sidebar-tab:hover { color: var(--text-secondary); }
+    .sql-sidebar-tab.active {
+      color: var(--text-primary);
+      border-bottom-color: var(--accent);
+    }
+
+    .sql-sidebar-header {
+      padding: var(--sp-sm) var(--sp-md);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: var(--fs-sm);
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .sql-sidebar-search {
+      padding: var(--sp-sm) var(--sp-md);
+      border-bottom: 1px solid var(--border);
+    }
+    .sql-sidebar-search input {
+      width: 100%;
+      padding: var(--sp-xs) var(--sp-sm);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      font-size: var(--fs-sm);
+      outline: none;
+    }
+    .sql-sidebar-search input:focus { border-color: var(--border-focus); }
+
+    .sql-tree {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--sp-xs) 0;
+      font-size: var(--fs-sm);
+    }
+
+    /* Tree items */
+    .tree-item {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      padding: 3px var(--sp-md);
+      cursor: pointer;
+      color: var(--text-secondary);
+      transition: all var(--transition-fast);
+    }
+    .tree-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .tree-item.active { background: var(--bg-hover); color: var(--text-primary); }
+    .tree-item .tree-icon { width: 14px; text-align: center; flex-shrink: 0; font-size: 10px; }
+    .tree-item .tree-label { flex: 1; }
+    .tree-item .tree-count {
+      font-size: var(--fs-xs);
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .tree-group-header {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      padding: 3px var(--sp-md);
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--text-primary);
+      font-size: var(--fs-sm);
+    }
+    .tree-group-header:hover { background: var(--bg-hover); }
+    .tree-group-header .tree-icon { font-size: 8px; color: var(--text-muted); }
+    .tree-children { padding-left: var(--sp-lg); }
+
+    /* Column details in tree */
+    .tree-col-item {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      padding: 2px var(--sp-md);
+      font-size: var(--fs-xs);
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+    .tree-col-item .col-name { flex: 1; color: var(--text-secondary); }
+    .tree-col-item .col-type { color: var(--accent); }
+    .tree-col-item .col-key { color: var(--info); font-size: 9px; }
+
+    /* Right Panel */
+    .sql-right {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Editor */
+    .sql-editor-wrap {
+      flex: 1;
+      min-height: 180px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      border-bottom: 3px solid var(--border);
+    }
+    .sql-editor {
+      flex: 1;
+      width: 100%;
+      padding: var(--sp-md);
+      background: #0D1117;
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      border: none;
+      outline: none;
+      resize: none;
+      tab-size: 2;
+    }
+
+    /* Results */
+    .sql-results {
+      flex: 1;
+      min-height: 120px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--sp-sm) var(--sp-md);
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .results-tabs {
+      display: flex;
+      gap: var(--sp-md);
+      font-size: var(--fs-sm);
+    }
+    .results-tab { color: var(--text-secondary); cursor: pointer; }
+    .results-tab.active { color: var(--text-primary); font-weight: 600; }
+    .results-actions { display: flex; gap: var(--sp-sm); }
+
+    .results-table-wrap {
+      flex: 1;
+      overflow: auto;
+    }
+    .results-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--fs-sm);
+      font-family: var(--font-mono);
+    }
+    .results-table th {
+      position: sticky;
+      top: 0;
+      background: var(--bg-elevated);
+      padding: var(--sp-sm) var(--sp-md);
+      text-align: left;
+      font-weight: 600;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .results-table th:hover { color: var(--text-primary); }
+    .results-table td {
+      padding: var(--sp-sm) var(--sp-md);
+      border-bottom: 1px solid var(--border);
+      color: var(--text-primary);
+      white-space: nowrap;
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .results-table tr:hover td { background: var(--bg-hover); }
+    .results-table .cell-null { color: var(--text-muted); font-style: italic; }
+    .results-table .cell-number { color: var(--accent); }
+    .results-table .cell-pk { color: var(--info); }
+
+    .results-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--sp-xs) var(--sp-md);
+      background: var(--bg-surface);
+      border-top: 1px solid var(--border);
+      font-size: var(--fs-xs);
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .results-pagination {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+    }
+    .results-pagination button {
+      padding: 2px 6px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      font-size: var(--fs-xs);
+      cursor: pointer;
+    }
+    .results-pagination button:hover { border-color: var(--text-muted); }
+    .results-pagination button:disabled { opacity: 0.4; cursor: default; }
+
+    /* Save Query Dialog */
+    .save-dialog {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      backdrop-filter: blur(2px);
+    }
+    .save-dialog-box {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: var(--sp-2xl);
+      width: 90%;
+      max-width: 420px;
+      box-shadow: var(--shadow-lg);
+    }
+
+    /* Query Files Panel */
+    .query-files-panel {
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .query-files-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--sp-sm) var(--sp-md);
+      font-size: var(--fs-xs);
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      position: sticky;
+      top: 0;
+      background: var(--bg-surface);
+      z-index: 1;
+    }
+    .query-file-item {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      padding: 3px var(--sp-md);
+      cursor: pointer;
+      font-size: var(--fs-sm);
+      color: var(--text-secondary);
+      transition: all var(--transition-fast);
+    }
+    .query-file-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .query-file-item.active { background: var(--bg-hover); color: var(--accent); }
+    .query-file-item .qf-icon { font-size: 10px; color: var(--info); flex-shrink: 0; }
+    .query-file-item .qf-name { flex: 1; font-family: var(--font-mono); }
+    .query-file-item .qf-date { font-size: var(--fs-xs); color: var(--text-muted); }
+
+    /* ── Global Query Panel ── */
+    .global-query-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 300;
+      backdrop-filter: blur(2px);
+      align-items: flex-start;
+      justify-content: center;
+      padding-top: 10vh;
+    }
+    .global-query-overlay.show { display: flex; }
+    .global-query-box {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      width: 90%;
+      max-width: 640px;
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+    }
+    .gq-header {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-md);
+      padding: var(--sp-lg) var(--sp-xl);
+      border-bottom: 1px solid var(--border);
+    }
+    .gq-header-icon {
+      width: 32px; height: 32px;
+      border-radius: var(--radius-md);
+      background: rgba(88,166,255,0.12);
+      color: var(--info);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+    }
+    .gq-header-text { flex: 1; }
+    .gq-header-title { font-weight: 600; font-size: var(--fs-md); }
+    .gq-header-desc { font-size: var(--fs-xs); color: var(--text-muted); }
+    .gq-close {
+      width: 28px; height: 28px;
+      border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      background: none; border: none;
+      color: var(--text-muted); cursor: pointer;
+      font-size: 16px;
+    }
+    .gq-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+    .gq-scope {
+      display: flex;
+      gap: var(--sp-sm);
+      padding: var(--sp-md) var(--sp-xl);
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .gq-scope-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--sp-xs);
+      padding: 3px var(--sp-md);
+      border-radius: 99px;
+      font-size: var(--fs-xs);
+      font-family: var(--font-mono);
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--bg-deep);
+      color: var(--text-secondary);
+      transition: all var(--transition-fast);
+    }
+    .gq-scope-chip:hover { border-color: var(--text-muted); color: var(--text-primary); }
+    .gq-scope-chip.active { border-color: var(--accent); color: var(--accent); background: rgba(232,145,45,0.08); box-shadow: 0 0 8px var(--accent-glow); }
+
+    .gq-editor {
+      width: 100%;
+      min-height: 100px;
+      padding: var(--sp-lg) var(--sp-xl);
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      border: none;
+      outline: none;
+      resize: vertical;
+    }
+    .gq-editor::placeholder { color: var(--text-muted); }
+
+    .gq-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--sp-md) var(--sp-xl);
+      border-top: 1px solid var(--border);
+    }
+    .gq-footer-info {
+      font-size: var(--fs-xs);
+      color: var(--text-muted);
+    }
+
+    /* ── AI Assistant Panel ── */
+    .ai-panel {
+      width: 360px;
+      border-left: 1px solid var(--border);
+      background: var(--bg-surface);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .ai-panel.hidden { display: none; }
+    .ai-panel-header {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      padding: var(--sp-md) var(--sp-lg);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .ai-panel-icon {
+      width: 28px; height: 28px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, var(--accent), #E8792D);
+      color: #000;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 700;
+    }
+    .ai-panel-title {
+      flex: 1;
+      font-weight: 600;
+      font-size: var(--fs-base);
+    }
+    .ai-panel-close {
+      width: 24px; height: 24px;
+      border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      background: none; border: none;
+      color: var(--text-muted); cursor: pointer; font-size: 14px;
+    }
+    .ai-panel-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+    /* Context bar */
+    .ai-context-bar {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      padding: var(--sp-sm) var(--sp-md);
+      background: var(--bg-deep);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .ai-context-bar::-webkit-scrollbar { display: none; }
+    .ai-context-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px var(--sp-sm);
+      border-radius: var(--radius-sm);
+      font-size: var(--fs-xs);
+      font-family: var(--font-mono);
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .ai-context-chip .chip-remove {
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 10px;
+    }
+    .ai-context-chip .chip-remove:hover { color: var(--danger); }
+
+    /* Chat messages */
+    .ai-chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--sp-md);
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-md);
+    }
+    .ai-msg {
+      display: flex;
+      gap: var(--sp-sm);
+      font-size: var(--fs-sm);
+      line-height: 1.6;
+    }
+    .ai-msg-avatar {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .ai-msg-avatar.user { background: var(--info); color: #000; }
+    .ai-msg-avatar.ai { background: linear-gradient(135deg, var(--accent), #E8792D); color: #000; }
+    .ai-msg-body { flex: 1; min-width: 0; }
+    .ai-msg-name {
+      font-weight: 600;
+      font-size: var(--fs-xs);
+      margin-bottom: 2px;
+    }
+    .ai-msg-content { color: var(--text-secondary); }
+    .ai-msg-content code {
+      background: var(--bg-deep);
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-family: var(--font-mono);
+      font-size: var(--fs-xs);
+      color: var(--text-primary);
+    }
+    .ai-msg-content pre {
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--sp-sm) var(--sp-md);
+      margin: var(--sp-sm) 0;
+      font-family: var(--font-mono);
+      font-size: var(--fs-xs);
+      overflow-x: auto;
+      color: var(--text-primary);
+    }
+    .ai-msg-content .code-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: var(--sp-sm);
+      padding: 2px var(--sp-sm);
+      background: rgba(63,185,80,0.1);
+      border: 1px solid rgba(63,185,80,0.3);
+      border-radius: var(--radius-sm);
+      color: var(--success);
+      font-size: var(--fs-xs);
+      cursor: pointer;
+    }
+    .ai-msg-content .code-action:hover { background: rgba(63,185,80,0.15); }
+
+    /* Risk warning */
+    .ai-risk-warning {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--sp-sm);
+      padding: var(--sp-sm) var(--sp-md);
+      background: rgba(248,81,73,0.08);
+      border: 1px solid rgba(248,81,73,0.2);
+      border-radius: var(--radius-md);
+      margin-top: var(--sp-sm);
+      font-size: var(--fs-xs);
+      color: var(--danger);
+      line-height: 1.5;
+    }
+    .ai-risk-warning .risk-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+
+    /* Quick actions */
+    .ai-quick-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--sp-sm);
+      padding: var(--sp-sm) 0;
+    }
+    .ai-quick-btn {
+      padding: 3px var(--sp-md);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      font-size: var(--fs-xs);
+      cursor: pointer;
+      background: var(--bg-deep);
+      color: var(--text-secondary);
+      transition: all var(--transition-fast);
+    }
+    .ai-quick-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* AI input */
+    .ai-input-area {
+      display: flex;
+      align-items: flex-end;
+      gap: var(--sp-sm);
+      padding: var(--sp-md);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .ai-input {
+      flex: 1;
+      padding: var(--sp-sm) var(--sp-md);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      font-size: var(--fs-sm);
+      outline: none;
+      resize: none;
+      min-height: 36px;
+      max-height: 120px;
+    }
+    .ai-input:focus { border-color: var(--border-focus); }
+    .ai-send-btn {
+      width: 36px; height: 36px;
+      border-radius: var(--radius-md);
+      background: var(--accent);
+      border: none;
+      color: #000;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .ai-send-btn:hover { background: var(--accent-hover); }
+
+    /* Mobile */
+    @media (max-width: 767px) {
+      .sql-sidebar { display: none; }
+      .sql-tabs { display: none; }
+      .sql-editor-wrap { min-height: 40%; }
+      .sql-results { min-height: 30%; }
+      .ai-panel { position: fixed; inset: 0; z-index: 300; width: 100%; }
+      .mobile-sql-nav {
+        display: flex !important;
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        height: var(--bottombar-height);
+        background: var(--bg-surface);
+        border-top: 1px solid var(--border);
+        z-index: 100;
+        align-items: center;
+        justify-content: space-around;
+      }
+    }
+    @media (min-width: 768px) {
+      .mobile-sql-nav { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sql-layout">
+    <!-- Top Bar -->
+    <div class="sql-topbar">
+      <div class="sql-topbar-breadcrumb">
+        <span>阿里云</span>
+        <span class="sep">›</span>
+        <span>主数据库</span>
+        <span class="sep">›</span>
+        <span class="current">MySQL</span>
+      </div>
+      <div class="sql-topbar-spacer"></div>
+      <div class="db-selector">
+        <label>数据库:</label>
+        <select>
+          <option>production_db</option>
+          <option>analytics_db</option>
+          <option>logs_db</option>
+        </select>
+      </div>
+      <button class="btn btn-ghost btn-sm" title="刷新连接" style="font-size:14px">↻</button>
+      <button class="btn btn-ghost btn-sm" title="全局查询 (Ctrl+Shift+Q)" onclick="showGlobalQuery()">⊞ 全局查询</button>
+      <button class="btn btn-ghost btn-sm" title="AI 助手 (Ctrl+Shift+A)" onclick="toggleAI()">✦ AI 助手</button>
+    </div>
+
+    <!-- SQL Query Tabs -->
+    <div class="sql-tabs">
+      <div class="sql-tab active">
+        <span class="tab-icon">📄</span> 查询 1
+        <span class="tab-close">×</span>
+      </div>
+      <div class="sql-tab">
+        <span class="tab-icon">💾</span> 用户统计.sql
+        <span class="tab-close">×</span>
+      </div>
+      <div class="sql-tab">
+        <span class="tab-icon">💾</span> 订单分析.sql
+        <span class="tab-close">×</span>
+      </div>
+      <button class="sql-tab-add" title="新建查询">+</button>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="sql-toolbar">
+      <button class="btn btn-run btn-sm">▶ 执行</button>
+      <div class="sql-toolbar-sep"></div>
+      <button class="btn btn-ghost btn-sm" title="格式化 SQL">格式化</button>
+      <button class="btn btn-ghost btn-sm" title="清空编辑器">清空</button>
+      <div class="sql-toolbar-sep"></div>
+      <button class="btn btn-ghost btn-sm" title="保存查询文件" onclick="showSaveDialog()">💾 保存</button>
+      <button class="btn btn-ghost btn-sm" title="打开已保存的查询">📂 打开</button>
+      <div class="sql-toolbar-spacer"></div>
+      <span class="sql-toolbar-info">Ctrl+Enter 执行 · Ctrl+S 保存</span>
+    </div>
+
+    <!-- Main Area -->
+    <div class="sql-main">
+      <!-- Sidebar: DB Structure -->
+      <div class="sql-sidebar">
+        <!-- Mode Tabs -->
+        <div class="sql-sidebar-tabs">
+          <button class="sql-sidebar-tab active" onclick="switchSidebarTab(this, 'structure')">库表结构</button>
+          <button class="sql-sidebar-tab" onclick="switchSidebarTab(this, 'files')">查询文件</button>
+        </div>
+
+        <!-- Structure Panel -->
+        <div id="panel-structure">
+          <div class="sql-sidebar-search">
+            <input type="text" placeholder="搜索表、视图...">
+          </div>
+          <div class="sql-tree">
+            <div class="tree-group-header" onclick="toggleTreeGroup(this)">
+              <span class="tree-icon">▾</span>
+              <span style="color:var(--info)">⊞</span>
+              <span>production_db</span>
+            </div>
+            <div class="tree-children">
+              <!-- Tables -->
+              <div class="tree-group-header" onclick="toggleTreeGroup(this)">
+                <span class="tree-icon">▾</span>
+                <span>表</span>
+                <span class="tree-count" style="margin-left:auto">8</span>
+              </div>
+              <div class="tree-children">
+                <!-- users table with columns expanded -->
+                <div class="tree-group-header" onclick="toggleTreeGroup(this)" style="padding-left:var(--sp-lg)">
+                  <span class="tree-icon">▾</span>
+                  <span>⊞</span>
+                  <span style="color:var(--text-primary)">users</span>
+                  <span class="tree-count" style="margin-left:auto">12,847</span>
+                </div>
+                <div class="tree-children">
+                  <div class="tree-col-item">
+                    <span class="col-key">PK</span>
+                    <span class="col-name">id</span>
+                    <span class="col-type">INT</span>
+                  </div>
+                  <div class="tree-col-item">
+                    <span class="col-key" style="visibility:hidden">_</span>
+                    <span class="col-name">username</span>
+                    <span class="col-type">VARCHAR(64)</span>
+                  </div>
+                  <div class="tree-col-item">
+                    <span class="col-key" style="visibility:hidden">_</span>
+                    <span class="col-name">email</span>
+                    <span class="col-type">VARCHAR(255)</span>
+                  </div>
+                  <div class="tree-col-item">
+                    <span class="col-key" style="visibility:hidden">_</span>
+                    <span class="col-name">password_hash</span>
+                    <span class="col-type">VARCHAR(255)</span>
+                  </div>
+                  <div class="tree-col-item">
+                    <span class="col-key" style="visibility:hidden">_</span>
+                    <span class="col-name">created_at</span>
+                    <span class="col-type">DATETIME</span>
+                  </div>
+                  <div class="tree-col-item">
+                    <span class="col-key" style="visibility:hidden">_</span>
+                    <span class="col-name">updated_at</span>
+                    <span class="col-type">DATETIME</span>
+                  </div>
+                </div>
+
+                <div class="tree-item" style="padding-left:var(--sp-lg)">
+                  <span class="tree-icon">⊞</span>
+                  <span class="tree-label">orders</span>
+                  <span class="tree-count">89,234</span>
+                </div>
+                <div class="tree-item" style="padding-left:var(--sp-lg)">
+                  <span class="tree-icon">⊞</span>
+                  <span class="tree-label">products</span>
+                  <span class="tree-count">1,256</span>
+                </div>
+                <div class="tree-item" style="padding-left:var(--sp-lg)">
+                  <span class="tree-icon">⊞</span>
+                  <span class="tree-label">payments</span>
+                  <span class="tree-count">67,891</span>
+                </div>
+                <div class="tree-item" style="padding-left:var(--sp-lg)">
+                  <span class="tree-icon">⊞</span>
+                  <span class="tree-label">sessions</span>
+                  <span class="tree-count">3,421</span>
+                </div>
+                <div class="tree-item" style="padding-left:var(--sp-lg)">
+                  <span class="tree-icon">⊞</span>
+                  <span class="tree-label">logs</span>
+                  <span class="tree-count">234,567</span>
+                </div>
+                <div class="tree-item" style="padding-left:var(--sp-lg)">
+                  <span class="tree-icon">⊞</span>
+                  <span class="tree-label">settings</span>
+                  <span class="tree-count">42</span>
+                </div>
+                <div class="tree-item" style="padding-left:var(--sp-lg)">
+                  <span class="tree-icon">⊞</span>
+                  <span class="tree-label">migrations</span>
+                  <span class="tree-count">156</span>
+                </div>
+              </div>
+
+              <!-- Views -->
+              <div class="tree-group-header" onclick="toggleTreeGroup(this)">
+                <span class="tree-icon">▸</span>
+                <span>视图</span>
+                <span class="tree-count" style="margin-left:auto">3</span>
+              </div>
+              <div class="tree-children" style="display:none">
+                <div class="tree-item" style="padding-left:var(--sp-lg)">
+                  <span class="tree-icon" style="color:var(--info)">◇</span>
+                  <span class="tree-label">v_user_stats</span>
+                </div>
+                <div class="tree-item" style="padding-left:var(--sp-lg)">
+                  <span class="tree-icon" style="color:var(--info)">◇</span>
+                  <span class="tree-label">v_order_summary</span>
+                </div>
+                <div class="tree-item" style="padding-left:var(--sp-lg)">
+                  <span class="tree-icon" style="color:var(--info)">◇</span>
+                  <span class="tree-label">v_daily_revenue</span>
+                </div>
+              </div>
+
+              <!-- Stored Procedures -->
+              <div class="tree-group-header" onclick="toggleTreeGroup(this)">
+                <span class="tree-icon">▸</span>
+                <span>存储过程</span>
+                <span class="tree-count" style="margin-left:auto">5</span>
+              </div>
+              <div class="tree-children" style="display:none">
+                <div class="tree-item" style="padding-left:var(--sp-lg)">
+                  <span class="tree-icon" style="color:var(--warning)">⚡</span>
+                  <span class="tree-label">sp_sync_users</span>
+                </div>
+                <div class="tree-item" style="padding-left:var(--sp-lg)">
+                  <span class="tree-icon" style="color:var(--warning)">⚡</span>
+                  <span class="tree-label">sp_daily_report</span>
+                </div>
+              </div>
+
+              <!-- Functions -->
+              <div class="tree-group-header" onclick="toggleTreeGroup(this)">
+                <span class="tree-icon">▸</span>
+                <span>函数</span>
+                <span class="tree-count" style="margin-left:auto">4</span>
+              </div>
+              <div class="tree-children" style="display:none">
+                <div class="tree-item" style="padding-left:var(--sp-lg)">
+                  <span class="tree-icon" style="color:var(--accent)">ƒ</span>
+                  <span class="tree-label">fn_calc_total</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Query Files Panel -->
+        <div id="panel-files" style="display:none">
+          <div class="sql-sidebar-search">
+            <input type="text" placeholder="搜索查询文件...">
+          </div>
+          <div class="query-files-panel" style="max-height:none;border:none">
+            <div class="query-file-item active">
+              <span class="qf-icon">📄</span>
+              <span class="qf-name">用户统计.sql</span>
+              <span class="qf-date">今天</span>
+            </div>
+            <div class="query-file-item">
+              <span class="qf-icon">📄</span>
+              <span class="qf-name">订单分析.sql</span>
+              <span class="qf-date">今天</span>
+            </div>
+            <div class="query-file-item">
+              <span class="qf-icon">📄</span>
+              <span class="qf-name">慢查询排查.sql</span>
+              <span class="qf-date">昨天</span>
+            </div>
+            <div class="query-file-item">
+              <span class="qf-icon">📄</span>
+              <span class="qf-name">数据清理脚本.sql</span>
+              <span class="qf-date">6月12日</span>
+            </div>
+            <div class="query-file-item">
+              <span class="qf-icon">📄</span>
+              <span class="qf-name">报表查询.sql</span>
+              <span class="qf-date">6月10日</span>
+            </div>
+            <div class="query-file-item">
+              <span class="qf-icon">📄</span>
+              <span class="qf-name">索引优化建议.sql</span>
+              <span class="qf-date">6月8日</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Editor + Results -->
+      <div class="sql-right">
+        <!-- Editor -->
+        <div class="sql-editor-wrap" oncontextmenu="showEditorCtx(event)">
+          <textarea class="sql-editor" spellcheck="false" oncontextmenu="showEditorCtx(event)">SELECT
+  u.id,
+  u.username,
+  u.email,
+  u.created_at,
+  COUNT(o.id) AS order_count,
+  SUM(o.total_amount) AS total_spent
+FROM users u
+LEFT JOIN orders o ON o.user_id = u.id
+WHERE u.created_at >= '2024-01-01'
+GROUP BY u.id, u.username, u.email, u.created_at
+HAVING COUNT(o.id) > 5
+ORDER BY total_spent DESC
+LIMIT 100;</textarea>
+        </div>
+
+        <!-- Results -->
+        <div class="sql-results">
+          <div class="results-header">
+            <div class="results-tabs">
+              <span class="results-tab active">结果</span>
+              <span class="results-tab">消息</span>
+              <span class="results-tab">执行计划</span>
+            </div>
+            <div class="results-actions">
+              <button class="btn btn-ghost btn-sm">📋 复制</button>
+              <button class="btn btn-ghost btn-sm">⬇ 导出</button>
+              <button class="btn btn-ghost btn-sm" style="font-size:var(--fs-xs)">JSON · CSV</button>
+            </div>
+          </div>
+          <div class="results-table-wrap">
+            <table class="results-table">
+              <thead>
+                <tr oncontextmenu="showHeaderCtx(event)">
+                  <th oncontextmenu="showHeaderCtx(event)">#</th>
+                  <th>id</th>
+                  <th>username</th>
+                  <th>email</th>
+                  <th>created_at</th>
+                  <th>order_count</th>
+                  <th>total_spent</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td class="text-muted">1</td><td class="cell-pk">1024</td><td>zhang_wei</td><td>zhang.wei@example.com</td><td>2024-01-15 08:30:00</td><td class="cell-number">234</td><td class="cell-number">89,234.50</td></tr>
+                <tr><td class="text-muted">2</td><td class="cell-pk">512</td><td>li_na</td><td>li.na@example.com</td><td>2024-02-03 14:22:00</td><td class="cell-number">187</td><td class="cell-number">67,891.00</td></tr>
+                <tr><td class="text-muted">3</td><td class="cell-pk">2048</td><td>wang_fang</td><td>wang.fang@example.com</td><td>2024-01-20 09:15:00</td><td class="cell-number">156</td><td class="cell-number">54,321.75</td></tr>
+                <tr><td class="text-muted">4</td><td class="cell-pk">768</td><td>chen_ming</td><td>chen.ming@example.com</td><td>2024-03-10 11:45:00</td><td class="cell-number">98</td><td class="cell-number">43,210.25</td></tr>
+                <tr><td class="text-muted">5</td><td class="cell-pk">1536</td><td>liu_yang</td><td>liu.yang@example.com</td><td>2024-02-28 16:30:00</td><td class="cell-number">87</td><td class="cell-number">38,765.00</td></tr>
+                <tr><td class="text-muted">6</td><td class="cell-pk">256</td><td>zhao_jie</td><td>zhao.jie@example.com</td><td>2024-04-05 08:00:00</td><td class="cell-number">76</td><td class="cell-number">32,100.50</td></tr>
+                <tr><td class="text-muted">7</td><td class="cell-pk">3072</td><td>wu_lei</td><td>wu.lei@example.com</td><td>2024-03-22 13:10:00</td><td class="cell-number">65</td><td class="cell-number">28,450.00</td></tr>
+                <tr><td class="text-muted">8</td><td class="cell-pk">1280</td><td>huang_ping</td><td class="cell-null">NULL</td><td>2024-01-08 10:20:00</td><td class="cell-number">54</td><td class="cell-number">21,890.75</td></tr>
+                <tr><td class="text-muted">9</td><td class="cell-pk">896</td><td>zhou_xin</td><td>zhou.xin@example.com</td><td>2024-05-01 09:00:00</td><td class="cell-number">43</td><td class="cell-number">18,650.25</td></tr>
+                <tr><td class="text-muted">10</td><td class="cell-pk">1792</td><td>sun_li</td><td>sun.li@example.com</td><td>2024-04-18 15:40:00</td><td class="cell-number">38</td><td class="cell-number">15,430.00</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="results-footer">
+            <span>10 行 · 执行时间: 0.023s</span>
+            <div class="results-pagination">
+              <button disabled>‹</button>
+              <span>1 / 1</span>
+              <button disabled>›</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Assistant Panel -->
+    <div class="ai-panel hidden" id="aiPanel">
+      <div class="ai-panel-header">
+        <div class="ai-panel-icon">✦</div>
+        <span class="ai-panel-title">AI 助手</span>
+        <button class="ai-panel-close" onclick="toggleAI()">✕</button>
+      </div>
+
+      <!-- Context: what AI has access to -->
+      <div class="ai-context-bar">
+        <span class="ai-context-chip">📋 production_db<span class="chip-remove" onclick="this.parentElement.remove()">×</span></span>
+        <span class="ai-context-chip">⊞ users 表<span class="chip-remove">×</span></span>
+        <span class="ai-context-chip">📄 当前查询<span class="chip-remove">×</span></span>
+        <span class="ai-context-chip" style="color:var(--accent)">+ 注入上下文</span>
+      </div>
+
+      <!-- Chat -->
+      <div class="ai-chat" id="aiChat">
+        <div class="ai-msg">
+          <div class="ai-msg-avatar ai">✦</div>
+          <div class="ai-msg-body">
+            <div class="ai-msg-name" style="color:var(--accent)">AI 助手</div>
+            <div class="ai-msg-content">
+              已加载 <code>production_db</code> 的表结构（8 张表、3 个视图）。你可以问我：
+              <div class="ai-quick-actions">
+                <button class="ai-quick-btn" onclick="aiAsk('这个查询为什么慢？')">🔍 分析慢查询</button>
+                <button class="ai-quick-btn" onclick="aiAsk('如何优化 users 表的查询性能？')">⚡ 性能优化</button>
+                <button class="ai-quick-btn" onclick="aiAsk('帮我写一个订单统计的查询')">📝 生成 SQL</button>
+                <button class="ai-quick-btn" onclick="aiAsk('users 和 orders 的关联关系是什么？')">🔗 表关系</button>
+              </div>
+              <div class="ai-risk-warning">
+                <span class="risk-icon">⚠</span>
+                <span><strong>AI 风险提示：</strong>AI 生成的 SQL 可能存在逻辑错误或性能问题。请务必先在测试环境验证，不要直接在生产环境执行未经确认的 AI 建议。AI 可能产生幻觉，导致对不存在的表或字段的引用。</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ai-msg">
+          <div class="ai-msg-avatar user">我</div>
+          <div class="ai-msg-body">
+            <div class="ai-msg-name">用户</div>
+            <div class="ai-msg-content">这个查询为什么慢？</div>
+          </div>
+        </div>
+
+        <div class="ai-msg">
+          <div class="ai-msg-avatar ai">✦</div>
+          <div class="ai-msg-body">
+            <div class="ai-msg-name" style="color:var(--accent)">AI 助手</div>
+            <div class="ai-msg-content">
+              分析当前查询，发现以下性能问题：<br><br>
+              <strong>1. 全表扫描</strong><br>
+              <code>LEFT JOIN orders</code> 在 <code>users</code> 表上，但没有利用索引。建议：
+              <pre>CREATE INDEX idx_orders_user_id ON orders(user_id);</pre>
+              <strong>2. HAVING 子句中的聚合过滤</strong><br>
+              <code>HAVING COUNT(o.id) > 5</code> 会在分组后才过滤，建议改用子查询：
+              <pre>WHERE u.id IN (
+  SELECT user_id FROM orders
+  WHERE created_at >= '2024-01-01'
+  GROUP BY user_id HAVING COUNT(*) > 5
+)</pre>
+              <div class="ai-risk-warning">
+                <span class="risk-icon">⚠</span>
+                <span>以上建议基于表结构分析，未考虑实际数据分布。执行 <code>EXPLAIN</code> 验证执行计划后再决定是否采纳。</span>
+              </div>
+              <div class="code-action" onclick="this.textContent='✓ 已复制到编辑器'">→ 复制优化后的 SQL 到编辑器</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input -->
+      <div class="ai-input-area">
+        <textarea class="ai-input" placeholder="问 AI 任何问题...（Ctrl+Shift+A）" rows="1" id="aiInput"></textarea>
+        <button class="ai-send-btn" onclick="sendAI()">→</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Query Overlay -->
+  <div class="global-query-overlay" id="globalQueryOverlay" onclick="if(event.target===this)hideGlobalQuery()">
+    <div class="global-query-box">
+      <div class="gq-header">
+        <div class="gq-header-icon">⊞</div>
+        <div class="gq-header-text">
+          <div class="gq-header-title">全局查询</div>
+          <div class="gq-header-desc">跨数据库执行 SQL，同时查询多个资源</div>
+        </div>
+        <button class="gq-close" onclick="hideGlobalQuery()">✕</button>
+      </div>
+      <div class="gq-scope">
+        <span style="font-size:var(--fs-xs);color:var(--text-muted);line-height:26px">查询范围：</span>
+        <span class="gq-scope-chip active">⊞ production_db</span>
+        <span class="gq-scope-chip active">⊞ analytics_db</span>
+        <span class="gq-scope-chip">⊞ logs_db</span>
+      </div>
+      <textarea class="gq-editor" placeholder="-- 输入 SQL，将同时在选中的数据库上执行&#10;-- 注意：跨库查询仅支持相同方言的数据库&#10;SELECT database(), COUNT(*) as total FROM users;" spellcheck="false"></textarea>
+      <div class="gq-footer">
+        <span class="gq-footer-info">将在 2 个数据库上执行</span>
+        <div style="display:flex;gap:var(--sp-sm)">
+          <button class="btn btn-ghost btn-sm" onclick="hideGlobalQuery()">取消</button>
+          <button class="btn btn-primary btn-sm" onclick="runGlobalQuery()">▶ 执行</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save Query Dialog -->
+  <div class="save-dialog" id="saveDialog" style="display:none" onclick="if(event.target===this)hideSaveDialog()">
+    <div class="save-dialog-box">
+      <div class="modal-title">保存查询文件</div>
+      <div class="form-group" style="margin-top:var(--sp-lg)">
+        <label class="form-label">文件名</label>
+        <input class="form-input" value="查询 1.sql" id="queryFileName">
+      </div>
+      <div class="form-group" style="margin-top:var(--sp-md)">
+        <label class="form-label">描述（可选）</label>
+        <input class="form-input" placeholder="简要描述查询用途">
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="hideSaveDialog()">取消</button>
+        <button class="btn btn-primary" onclick="saveQuery()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile SQL Nav -->
+  <div class="mobile-sql-nav" style="display:none">
+    <button class="bottom-nav-item" onclick="alert('切换数据库/表选择')">
+      <span class="bnav-icon">☰</span><span>库表</span>
+    </button>
+    <button class="bottom-nav-item" onclick="alert('执行SQL')">
+      <span class="bnav-icon" style="color:var(--success)">▶</span><span>执行</span>
+    </button>
+    <button class="bottom-nav-item">
+      <span class="bnav-icon">💾</span><span>保存</span>
+    </button>
+    <button class="bottom-nav-item">
+      <span class="bnav-icon">📂</span><span>打开</span>
+    </button>
+  </div>
+
+  <script src="shared.js"></script>
+  <script>
+    // Tab switching
+    document.querySelectorAll('.sql-tab').forEach(tab => {
+      tab.addEventListener('click', function(e) {
+        if (e.target.classList.contains('tab-close')) return;
+        document.querySelectorAll('.sql-tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
+
+    // ── SQL Tab right-click ──
+    document.querySelectorAll('.sql-tab').forEach(tab => {
+      tab.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const isSaved = this.querySelector('.tab-icon')?.textContent === '💾';
+        const isActive = this.classList.contains('active');
+        showContextMenu(e, [
+          { label: t('close'), icon: '✕', action: () => {} },
+          { label: t('closeOthers'), action: () => {} },
+          { label: t('closeRight'), action: () => {} },
+          { label: t('closeAll'), action: () => {} },
+          '---',
+          { label: t('duplicate'), icon: '⊕', action: () => {} },
+          ...(isSaved ? [
+            '---',
+            { label: t('rename'), icon: '✏', action: () => {} },
+            { label: t('save'), icon: '💾', action: () => {} },
+            { label: t('copyToClipboard'), icon: '📋', action: () => {} },
+          ] : [
+            '---',
+            { label: t('save'), icon: '💾', action: () => showSaveDialog() },
+            { label: t('saveAs') || '另存为…', icon: '📋', action: () => showSaveDialog() },
+          ]),
+        ]);
+      });
+    });
+
+    // Tree toggle
+    function toggleTreeGroup(el) {
+      const children = el.nextElementSibling;
+      if (!children || !children.classList.contains('tree-children')) return;
+      const icon = el.querySelector('.tree-icon');
+      if (children.style.display === 'none') {
+        children.style.display = 'block';
+        if (icon) icon.textContent = '▾';
+      } else {
+        children.style.display = 'none';
+        if (icon) icon.textContent = '▸';
+      }
+    }
+
+    // Sidebar tabs
+    function switchSidebarTab(btn, panel) {
+      document.querySelectorAll('.sql-sidebar-tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('panel-structure').style.display = panel === 'structure' ? 'block' : 'none';
+      document.getElementById('panel-files').style.display = panel === 'files' ? 'block' : 'none';
+    }
+
+    // Results tab switching
+    document.querySelectorAll('.results-tab').forEach(tab => {
+      tab.addEventListener('click', function() {
+        document.querySelectorAll('.results-tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
+
+    // Save dialog
+    function showSaveDialog() {
+      document.getElementById('saveDialog').style.display = 'flex';
+      document.getElementById('queryFileName').focus();
+      document.getElementById('queryFileName').select();
+    }
+
+    // ── SQL Editor right-click ──
+    function showEditorCtx(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      showContextMenu(e, [
+        { label: t('executeSelected'), icon: '▶', shortcut: 'Ctrl+Enter', action: () => {} },
+        { label: t('executeAll'), icon: '▶▶', shortcut: 'Ctrl+Shift+Enter', action: () => {} },
+        '---',
+        { label: t('format'), icon: '✨', action: () => {} },
+        { label: t('comment'), icon: '#', shortcut: 'Ctrl+/', action: () => {} },
+        { label: t('caseConvert'), icon: 'Aa', sub: [
+          { label: t('upperCase'), action: () => {} },
+          { label: t('lowerCase'), action: () => {} },
+          { label: t('titleCase'), action: () => {} },
+        ]},
+        '---',
+        { label: t('copySql'), icon: '📋', action: () => {} },
+        { label: t('paste'), icon: '📑', action: () => {} },
+        '---',
+        { label: t('history'), icon: '📜', action: () => {} },
+        { label: t('insertTemplate'), icon: '📝', sub: [
+          { label: 'SELECT ... FROM ... WHERE', action: () => {} },
+          { label: 'INSERT INTO ... VALUES', action: () => {} },
+          { label: 'UPDATE ... SET ... WHERE', action: () => {} },
+          { label: 'DELETE FROM ... WHERE', action: () => {} },
+          { label: 'CREATE TABLE ...', action: () => {} },
+          { label: 'JOIN ... ON ...', action: () => {} },
+        ]},
+        '---',
+        { label: '清空编辑器', icon: '🗑', danger: true, action: () => {} },
+      ]);
+    }
+
+    // ── Results table row right-click ──
+    document.querySelectorAll('.results-table tbody tr').forEach(row => {
+      row.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        const cells = this.querySelectorAll('td');
+        const pkVal = cells[1]?.textContent || '';
+        const tableName = 'users';
+        showContextMenu(e, [
+          { label: t('copyRow'), icon: '📋', action: () => {} },
+          { label: t('copyAsJson'), icon: '{ }', action: () => {} },
+          '---',
+          { label: t('generateUpdate'), icon: '✎', action: () => {
+            const editor = document.querySelector('.sql-editor');
+            editor.value = `UPDATE ${tableName}\nSET column_name = 'new_value'\nWHERE id = ${pkVal};`;
+            showToast('UPDATE 语句已插入编辑器');
+          }},
+          { label: t('generateDelete'), icon: '🗑', danger: true, action: () => {
+            const editor = document.querySelector('.sql-editor');
+            editor.value = `DELETE FROM ${tableName}\nWHERE id = ${pkVal};`;
+            showToast('DELETE 语句已插入编辑器');
+          }},
+          '---',
+          { label: t('exportRow'), icon: '⬇', action: () => {} },
+        ]);
+      });
+    });
+
+    // ── Results table header right-click ──
+    function showHeaderCtx(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      showContextMenu(e, [
+        { label: t('copyColumn'), icon: '📋', action: () => {} },
+        '---',
+        { label: t('sortAsc'), icon: '↑', action: () => {} },
+        { label: t('sortDesc'), icon: '↓', action: () => {} },
+        '---',
+        { label: t('copyAsJson'), icon: '{ }', action: () => {} },
+        { label: t('exportAll'), icon: '⬇', action: () => {} },
+      ]);
+    }
+
+    // ── Results cell right-click ──
+    document.querySelectorAll('.results-table td').forEach(cell => {
+      cell.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        showContextMenu(e, [
+          { label: t('copyCell'), icon: '📋', action: () => {} },
+          '---',
+          { label: t('copyColumnName'), icon: '📎', action: () => {} },
+          '---',
+          { label: t('sortAsc'), icon: '↑', action: () => {} },
+          { label: t('sortDesc'), icon: '↓', action: () => {} },
+        ]);
+      });
+    });
+
+    // ── Database structure tree right-click ──
+    document.querySelectorAll('.tree-item').forEach(item => {
+      item.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        const name = this.querySelector('.tree-label')?.textContent || '';
+        const icon = this.querySelector('.tree-icon')?.textContent || '';
+        const isTable = icon === '⊞';
+        const isView = icon === '◇';
+        const isProc = icon === '⚡';
+        const isFunc = icon === 'ƒ';
+
+        const items = [];
+        if (isTable) {
+          items.push(
+            { label: t('viewStructure'), icon: '🔍', action: () => {} },
+            { label: t('selectStar'), icon: '▶', action: () => {
+              const editor = document.querySelector('.sql-editor');
+              editor.value = `SELECT * FROM ${name} LIMIT 100;`;
+              showToast(`SELECT * FROM ${name}`);
+            }},
+            { label: t('viewCount'), icon: '#', action: () => {} },
+            '---',
+            { label: t('copyTableName'), icon: '📋', action: () => {} },
+            { label: t('exportTable'), icon: '⬇', action: () => {} },
+          );
+        } else if (isView) {
+          items.push(
+            { label: t('viewDefinition'), icon: '🔍', action: () => {} },
+            { label: t('selectStar'), icon: '▶', action: () => {
+              const editor = document.querySelector('.sql-editor');
+              editor.value = `SELECT * FROM ${name} LIMIT 100;`;
+              showToast(`SELECT * FROM ${name}`);
+            }},
+            '---',
+            { label: t('copyViewName'), icon: '📋', action: () => {} },
+          );
+        } else if (isProc) {
+          items.push(
+            { label: '调用存储过程', icon: '▶', action: () => {} },
+            { label: '查看定义', icon: '🔍', action: () => {} },
+            '---',
+            { label: '复制名称', icon: '📋', action: () => {} },
+          );
+        } else if (isFunc) {
+          items.push(
+            { label: '查看定义', icon: '🔍', action: () => {} },
+            '---',
+            { label: '复制名称', icon: '📋', action: () => {} },
+          );
+        }
+
+        if (items.length > 0) showContextMenu(e, items);
+      });
+    });
+
+    // ── DB group header right-click ──
+    document.querySelectorAll('.tree-group-header').forEach(header => {
+      header.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        const name = this.querySelector('span:nth-child(3)')?.textContent || '';
+        const isDb = name.includes('_db');
+        const isGroup = name === '表' || name === '视图' || name === '存储过程' || name === '函数';
+        if (isDb) {
+          showContextMenu(e, [
+            { label: t('copyDbName'), icon: '📋', action: () => {} },
+            '---',
+            { label: t('refresh'), icon: '↻', action: () => {} },
+            { label: t('newTable'), icon: '+', action: () => {} },
+            '---',
+            { label: t('expandAll'), icon: '▾', action: () => {} },
+            { label: t('collapseAll'), icon: '▸', action: () => {} },
+          ]);
+        } else if (isGroup) {
+          showContextMenu(e, [
+            { label: t('expandAll'), icon: '▾', action: () => {} },
+            { label: t('collapseAll'), icon: '▸', action: () => {} },
+            ...(name === '表' ? [
+              '---',
+              { label: t('newTable'), icon: '+', action: () => {} },
+            ] : []),
+          ]);
+        }
+      });
+    });
+
+    // ── Query file item right-click ──
+    document.querySelectorAll('.query-file-item').forEach(item => {
+      item.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        const name = this.querySelector('.qf-name')?.textContent || '';
+        showContextMenu(e, [
+          { label: '打开', icon: '📄', action: () => {} },
+          '---',
+          { label: t('rename'), icon: '✏', action: () => {} },
+          { label: t('copyToClipboard'), icon: '📋', action: () => {} },
+          '---',
+          { label: t('deleteFile'), icon: '🗑', danger: true, action: () => {} },
+        ]);
+      });
+    });
+    function hideSaveDialog() {
+      document.getElementById('saveDialog').style.display = 'none';
+    }
+    function saveQuery() {
+      const name = document.getElementById('queryFileName').value;
+      hideSaveDialog();
+      // Add tab
+      const tabs = document.querySelector('.sql-tabs');
+      const addBtn = tabs.querySelector('.sql-tab-add');
+      const tab = document.createElement('div');
+      tab.className = 'sql-tab';
+      tab.innerHTML = '<span class="tab-icon">💾</span> ' + name + ' <span class="tab-close">×</span>';
+      tab.addEventListener('click', function(e) {
+        if (e.target.classList.contains('tab-close')) return;
+        document.querySelectorAll('.sql-tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+      });
+      tabs.insertBefore(tab, addBtn);
+      // Add to query files panel
+      const filesPanel = document.querySelector('#panel-files .query-files-panel');
+      if (filesPanel) {
+        const item = document.createElement('div');
+        item.className = 'query-file-item';
+        item.innerHTML = '<span class="qf-icon">📄</span><span class="qf-name">' + name + '</span><span class="qf-date">刚刚</span>';
+        filesPanel.insertBefore(item, filesPanel.firstChild);
+      }
+    }
+
+    // Ctrl+S to save
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        showSaveDialog();
+      }
+    });
+
+    // Query file item click
+    document.querySelectorAll('.query-file-item').forEach(item => {
+      item.addEventListener('click', function() {
+        document.querySelectorAll('.query-file-item').forEach(i => i.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
+
+    // ── AI Assistant ──
+    function toggleAI() {
+      const panel = document.getElementById('aiPanel');
+      panel.classList.toggle('hidden');
+    }
+    function aiAsk(question) {
+      const input = document.getElementById('aiInput');
+      input.value = question;
+      sendAI();
+    }
+    function sendAI() {
+      const input = document.getElementById('aiInput');
+      const q = input.value.trim();
+      if (!q) return;
+      const chat = document.getElementById('aiChat');
+      // Add user message
+      chat.innerHTML += `<div class="ai-msg">
+        <div class="ai-msg-avatar user">我</div>
+        <div class="ai-msg-body">
+          <div class="ai-msg-name">用户</div>
+          <div class="ai-msg-content">${q.replace(/</g,'&lt;')}</div>
+        </div>
+      </div>`;
+      input.value = '';
+      // Simulate AI thinking
+      setTimeout(() => {
+        chat.innerHTML += `<div class="ai-msg">
+          <div class="ai-msg-avatar ai">✦</div>
+          <div class="ai-msg-body">
+            <div class="ai-msg-name" style="color:var(--accent)">AI 助手</div>
+            <div class="ai-msg-content">
+              这是 AI 的模拟回复。在实际产品中，这里会连接 LLM API 返回真实的分析结果。<br><br>
+              <div class="ai-risk-warning">
+                <span class="risk-icon">⚠</span>
+                <span><strong>AI 风险提示：</strong>AI 生成的内容可能存在错误。请在测试环境验证后再执行。</span>
+              </div>
+            </div>
+          </div>
+        </div>`;
+        chat.scrollTop = chat.scrollHeight;
+      }, 800);
+    }
+    // Enter to send (Shift+Enter for newline)
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && document.activeElement?.id === 'aiInput') {
+        e.preventDefault();
+        sendAI();
+      }
+    });
+
+    // ── Global Query ──
+    function showGlobalQuery() {
+      document.getElementById('globalQueryOverlay').classList.add('show');
+    }
+    function hideGlobalQuery() {
+      document.getElementById('globalQueryOverlay').classList.remove('show');
+    }
+    function runGlobalQuery() {
+      hideGlobalQuery();
+      showToast('全局查询已发送到 2 个数据库');
+    }
+    // Scope chip toggle
+    document.querySelectorAll('.gq-scope-chip').forEach(chip => {
+      chip.addEventListener('click', function() { this.classList.toggle('active'); });
+    });
+
+    // ── Keyboard Shortcuts ──
+    document.addEventListener('keydown', (e) => {
+      // Ctrl+Shift+Q: Global Query
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Q') {
+        e.preventDefault();
+        showGlobalQuery();
+      }
+      // Ctrl+Shift+A: Toggle AI
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'A') {
+        e.preventDefault();
+        toggleAI();
+      }
+      // Escape: close overlays
+      if (e.key === 'Escape') {
+        hideGlobalQuery();
+        hideSaveDialog();
+      }
+    });
+  </script>
+</body>
+</html>

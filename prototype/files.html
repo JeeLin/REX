@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>REX Hub — SFTP 文件浏览器</title>
+  <link rel="stylesheet" href="css/base.css">
+  <style>
+    body { overflow: hidden; height: 100vh; }
+
+    .sftp-layout {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: var(--bg-deep);
+    }
+
+    /* Top Bar */
+    .sftp-topbar {
+      display: flex;
+      align-items: center;
+      padding: 0 var(--sp-md);
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      height: 40px;
+      flex-shrink: 0;
+      gap: var(--sp-md);
+    }
+    .sftp-topbar-breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      font-size: var(--fs-sm);
+      font-family: var(--font-mono);
+      color: var(--text-secondary);
+    }
+    .breadcrumb-item { cursor: pointer; }
+    .breadcrumb-item:hover { color: var(--text-primary); }
+    .breadcrumb-item.current { color: var(--text-primary); font-weight: 500; }
+    .breadcrumb-sep { color: var(--text-muted); }
+    .sftp-topbar-spacer { flex: 1; }
+
+    /* Toolbar */
+    .sftp-toolbar {
+      display: flex;
+      align-items: center;
+      padding: var(--sp-xs) var(--sp-md);
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      height: 36px;
+      flex-shrink: 0;
+      gap: var(--sp-sm);
+    }
+    .sftp-toolbar .btn { height: 28px; font-size: var(--fs-sm); }
+    .sftp-toolbar-sep {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+      margin: 0 var(--sp-xs);
+    }
+    .sftp-toolbar-spacer { flex: 1; }
+    .sftp-toolbar-info {
+      font-size: var(--fs-xs);
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    /* Main: Dual Panel */
+    .sftp-main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* Panel */
+    .sftp-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sftp-panel + .sftp-panel {
+      border-left: 1px solid var(--border);
+    }
+    .sftp-panel-header {
+      display: flex;
+      align-items: center;
+      padding: var(--sp-sm) var(--sp-md);
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+      gap: var(--sp-sm);
+      font-size: var(--fs-sm);
+      font-weight: 600;
+    }
+    .sftp-panel-header .panel-icon { color: var(--accent); }
+    .sftp-panel-header .panel-title { flex: 1; }
+    .sftp-panel-header .panel-path {
+      font-family: var(--font-mono);
+      font-size: var(--fs-xs);
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    /* File List */
+    .file-list {
+      flex: 1;
+      overflow-y: auto;
+    }
+    .file-list-header {
+      display: flex;
+      align-items: center;
+      padding: var(--sp-sm) var(--sp-md);
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      font-size: var(--fs-xs);
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .file-col-name { flex: 1; padding-left: 28px; }
+    .file-col-size { width: 80px; text-align: right; }
+    .file-col-perm { width: 100px; }
+    .file-col-time { width: 140px; }
+
+    .file-row {
+      display: flex;
+      align-items: center;
+      padding: var(--sp-sm) var(--sp-md);
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background var(--transition-fast);
+      font-size: var(--fs-sm);
+    }
+    .file-row:hover { background: var(--bg-hover); }
+    .file-row.selected { background: rgba(88,166,255,0.1); }
+    .file-row.drag-over {
+      background: rgba(232,145,45,0.1);
+      border-color: var(--accent);
+    }
+
+    .file-icon {
+      width: 20px;
+      text-align: center;
+      margin-right: var(--sp-sm);
+      flex-shrink: 0;
+    }
+    .file-icon.folder { color: var(--info); }
+    .file-icon.file { color: var(--text-muted); }
+    .file-icon.image { color: #E879F9; }
+    .file-icon.code { color: var(--success); }
+    .file-icon.archive { color: var(--warning); }
+
+    .file-name { flex: 1; font-family: var(--font-mono); color: var(--text-primary); }
+    .file-name.parent { color: var(--text-secondary); }
+    .file-size { width: 80px; text-align: right; color: var(--text-muted); font-family: var(--font-mono); }
+    .file-perm { width: 100px; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--fs-xs); }
+    .file-time { width: 140px; color: var(--text-muted); font-size: var(--fs-xs); }
+
+    /* Transfer Queue */
+    .transfer-queue {
+      border-top: 1px solid var(--border);
+      background: var(--bg-surface);
+      flex-shrink: 0;
+    }
+    .transfer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--sp-sm) var(--sp-md);
+      border-bottom: 1px solid var(--border);
+      font-size: var(--fs-sm);
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .transfer-header .chevron { color: var(--text-muted); transition: transform var(--transition-fast); }
+    .transfer-list { padding: var(--sp-sm) var(--sp-md); max-height: 120px; overflow-y: auto; }
+    .transfer-item {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-md);
+      padding: var(--sp-xs) 0;
+      font-size: var(--fs-sm);
+    }
+    .transfer-item .t-icon { color: var(--success); }
+    .transfer-item .t-name { flex: 1; font-family: var(--font-mono); }
+    .transfer-item .t-route { font-size: var(--fs-xs); color: var(--text-muted); width: 120px; }
+    .transfer-item .t-progress {
+      width: 100px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .transfer-item .t-progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      transition: width 0.3s;
+      box-shadow: 0 0 6px var(--accent-glow);
+    }
+    .transfer-item .t-status { font-size: var(--fs-xs); color: var(--text-muted); width: 60px; text-align: right; }
+
+    /* Transfer confirmation modal */
+    .transfer-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      backdrop-filter: blur(4px);
+    }
+    .transfer-modal-box {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: var(--sp-2xl);
+      width: 90%;
+      max-width: 480px;
+      box-shadow: var(--shadow-lg), var(--phosphor-shadow);
+      animation: modalIn 0.15s ease;
+    }
+    .transfer-route {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-md);
+      padding: var(--sp-lg);
+      background: var(--bg-deep);
+      border-radius: var(--radius-md);
+      margin: var(--sp-lg) 0;
+      font-family: var(--font-mono);
+      font-size: var(--fs-sm);
+    }
+    .transfer-route .route-arrow { color: var(--accent); font-size: 18px; }
+
+    /* Mobile */
+    @media (max-width: 767px) {
+      .sftp-main { flex-direction: column; }
+      .sftp-panel + .sftp-panel { border-left: none; border-top: 1px solid var(--border); }
+      .sftp-panel { min-height: 50%; }
+      .file-col-perm, .file-perm { display: none; }
+      .file-col-time, .file-time { display: none; }
+
+      .mobile-filebar {
+        display: flex !important;
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        height: var(--bottombar-height);
+        background: var(--bg-surface);
+        border-top: 1px solid var(--border);
+        z-index: 100;
+        align-items: center;
+        justify-content: space-around;
+      }
+    }
+    @media (min-width: 768px) {
+      .mobile-filebar { display: none; }
+    }
+
+    /* Drop zone overlay */
+    .drop-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(232,145,45,0.08);
+      border: 2px dashed var(--accent);
+      border-radius: var(--radius-lg);
+      z-index: 50;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--fs-lg);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .drop-overlay.show { display: flex; }
+  </style>
+</head>
+<body>
+  <div class="sftp-layout">
+    <!-- Top Bar -->
+    <div class="sftp-topbar">
+      <div class="sftp-topbar-breadcrumb">
+        <span class="breadcrumb-item">阿里云</span>
+        <span class="breadcrumb-sep">›</span>
+        <span class="breadcrumb-item">Web 文件服务器</span>
+        <span class="breadcrumb-sep">›</span>
+        <span class="breadcrumb-item current">SFTP</span>
+      </div>
+      <div class="sftp-topbar-spacer"></div>
+      <button class="btn btn-ghost btn-sm" title="刷新">↻</button>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="sftp-toolbar">
+      <button class="btn btn-ghost btn-sm">📁 新建文件夹</button>
+      <button class="btn btn-ghost btn-sm">📄 新建文件</button>
+      <div class="sftp-toolbar-sep"></div>
+      <button class="btn btn-ghost btn-sm">⬆ 上传</button>
+      <button class="btn btn-ghost btn-sm">⬇ 下载</button>
+      <div class="sftp-toolbar-sep"></div>
+      <button class="btn btn-ghost btn-sm">🗑 删除</button>
+      <button class="btn btn-ghost btn-sm">✏ 重命名</button>
+      <div class="sftp-toolbar-spacer"></div>
+      <span class="sftp-toolbar-info">通过 Agent 代理 · 12ms</span>
+    </div>
+
+    <!-- Main: Dual Panel -->
+    <div class="sftp-main" style="position:relative">
+      <!-- Remote Panel (Primary) -->
+      <div class="sftp-panel" style="position:relative">
+        <div class="sftp-panel-header">
+          <span class="panel-icon">◉</span>
+          <span class="panel-title">远程</span>
+          <span class="panel-path">/opt/rex/app</span>
+        </div>
+
+        <!-- Breadcrumb -->
+        <div style="display:flex;align-items:center;padding:var(--sp-sm) var(--sp-md);border-bottom:1px solid var(--border);font-size:var(--fs-sm);font-family:var(--font-mono);gap:4px;flex-wrap:wrap">
+          <span class="breadcrumb-item" style="color:var(--text-muted)">/</span>
+          <span class="breadcrumb-sep" style="color:var(--text-muted)">/</span>
+          <span class="breadcrumb-item" style="color:var(--text-muted)">opt</span>
+          <span class="breadcrumb-sep" style="color:var(--text-muted)">/</span>
+          <span class="breadcrumb-item" style="color:var(--text-muted)">rex</span>
+          <span class="breadcrumb-sep" style="color:var(--text-muted)">/</span>
+          <span class="breadcrumb-item current">app</span>
+        </div>
+
+        <div class="file-list" id="fileList">
+          <div class="file-list-header">
+            <span class="file-col-name">名称</span>
+            <span class="file-col-size">大小</span>
+            <span class="file-col-perm">权限</span>
+            <span class="file-col-time">修改时间</span>
+          </div>
+
+          <div class="file-row" ondblclick="navigateParent()" oncontextmenu="showFileCtx(event, '..', true)">
+            <span class="file-icon folder">📁</span>
+            <span class="file-name parent">..</span>
+            <span class="file-size"></span>
+            <span class="file-perm"></span>
+            <span class="file-time"></span>
+          </div>
+
+          <div class="file-row" ondblclick="navigateFolder(this)" oncontextmenu="showFileCtx(event, 'components', true)" draggable="true">
+            <span class="file-icon folder">📁</span>
+            <span class="file-name">components</span>
+            <span class="file-size">—</span>
+            <span class="file-perm">drwxr-xr-x</span>
+            <span class="file-time">2024-06-13 10:22</span>
+          </div>
+          <div class="file-row" ondblclick="navigateFolder(this)" oncontextmenu="showFileCtx(event, 'config', true)" draggable="true">
+            <span class="file-icon folder">📁</span>
+            <span class="file-name">config</span>
+            <span class="file-size">—</span>
+            <span class="file-perm">drwxr-xr-x</span>
+            <span class="file-time">2024-06-10 08:15</span>
+          </div>
+          <div class="file-row" ondblclick="navigateFolder(this)" oncontextmenu="showFileCtx(event, 'public', true)" draggable="true">
+            <span class="file-icon folder">📁</span>
+            <span class="file-name">public</span>
+            <span class="file-size">—</span>
+            <span class="file-perm">drwxr-xr-x</span>
+            <span class="file-time">2024-06-10 08:15</span>
+          </div>
+          <div class="file-row" ondblclick="navigateFolder(this)" oncontextmenu="showFileCtx(event, 'src', true)" draggable="true">
+            <span class="file-icon folder">📁</span>
+            <span class="file-name">src</span>
+            <span class="file-size">—</span>
+            <span class="file-perm">drwxr-xr-x</span>
+            <span class="file-time">2024-06-13 14:30</span>
+          </div>
+
+          <div class="file-row" oncontextmenu="showFileCtx(event, '.env', false)" draggable="true">
+            <span class="file-icon code">📄</span>
+            <span class="file-name">.env</span>
+            <span class="file-size">220 B</span>
+            <span class="file-perm">-rw-r--r--</span>
+            <span class="file-time">2024-06-10 08:15</span>
+          </div>
+          <div class="file-row" oncontextmenu="showFileCtx(event, '.gitignore', false)" draggable="true">
+            <span class="file-icon code">📄</span>
+            <span class="file-name">.gitignore</span>
+            <span class="file-size">156 B</span>
+            <span class="file-perm">-rw-r--r--</span>
+            <span class="file-time">2024-06-10 08:15</span>
+          </div>
+          <div class="file-row" oncontextmenu="showFileCtx(event, 'Cargo.toml', false)" draggable="true">
+            <span class="file-icon code">📄</span>
+            <span class="file-name">Cargo.toml</span>
+            <span class="file-size">1.2 KB</span>
+            <span class="file-perm">-rw-r--r--</span>
+            <span class="file-time">2024-06-12 16:45</span>
+          </div>
+          <div class="file-row" oncontextmenu="showFileCtx(event, 'docker-compose.yml', false)" draggable="true">
+            <span class="file-icon code">📄</span>
+            <span class="file-name">docker-compose.yml</span>
+            <span class="file-size">564 B</span>
+            <span class="file-perm">-rw-r--r--</span>
+            <span class="file-time">2024-06-13 10:22</span>
+          </div>
+          <div class="file-row" oncontextmenu="showFileCtx(event, 'README.md', false)" draggable="true">
+            <span class="file-icon">📄</span>
+            <span class="file-name">README.md</span>
+            <span class="file-size">4.7 KB</span>
+            <span class="file-perm">-rw-r--r--</span>
+            <span class="file-time">2024-06-13 14:30</span>
+          </div>
+          <div class="file-row" oncontextmenu="showFileCtx(event, 'backup-20240610.tar.gz', false)" draggable="true">
+            <span class="file-icon archive">📦</span>
+            <span class="file-name">backup-20240610.tar.gz</span>
+            <span class="file-size">23.4 MB</span>
+            <span class="file-perm">-rw-r--r--</span>
+            <span class="file-time">2024-06-10 09:00</span>
+          </div>
+          <div class="file-row" oncontextmenu="showFileCtx(event, 'logo.png', false)" draggable="true">
+            <span class="file-icon image">🖼</span>
+            <span class="file-name">logo.png</span>
+            <span class="file-size">12.8 KB</span>
+            <span class="file-perm">-rw-r--r--</span>
+            <span class="file-time">2024-06-11 11:20</span>
+          </div>
+        </div>
+
+        <div class="drop-overlay" id="dropOverlay">拖放文件到此处上传</div>
+      </div>
+
+      <!-- Transfer Queue -->
+      <div class="transfer-queue">
+        <div class="transfer-header">
+          <span>传输队列</span>
+          <span style="font-size:var(--fs-xs);color:var(--text-muted)">4 项 · 1 完成</span>
+          <span class="chevron">▴</span>
+        </div>
+        <div class="transfer-list">
+          <div class="transfer-item">
+            <span class="t-icon">✓</span>
+            <span class="t-name">backup-20240610.tar.gz</span>
+            <span class="t-route" style="color:var(--text-muted)">阿里云 → 本地</span>
+            <span class="t-progress"><div class="t-progress-fill" style="width:100%"></div></span>
+            <span class="t-status" style="color:var(--success)">完成</span>
+          </div>
+          <div class="transfer-item">
+            <span class="t-icon">⬆</span>
+            <span class="t-name">docker-compose.yml</span>
+            <span class="t-route" style="color:var(--accent)">阿里云 → 树莓派</span>
+            <span class="t-progress"><div class="t-progress-fill" style="width:67%"></div></span>
+            <span class="t-status">67%</span>
+          </div>
+          <div class="transfer-item">
+            <span class="t-icon" style="color:var(--text-muted)">⏳</span>
+            <span class="t-name">node_modules.tar.gz</span>
+            <span class="t-route" style="color:var(--text-muted)">树莓派 → 阿里云</span>
+            <span class="t-progress"><div class="t-progress-fill" style="width:0%"></div></span>
+            <span class="t-status">等待中</span>
+          </div>
+          <div class="transfer-item">
+            <span class="t-icon" style="color:var(--text-muted)">⏳</span>
+            <span class="t-name">config.yml</span>
+            <span class="t-route" style="color:var(--text-muted)">家庭NAS → 阿里云</span>
+            <span class="t-progress"><div class="t-progress-fill" style="width:0%"></div></span>
+            <span class="t-status">等待中</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Transfer Confirmation Modal -->
+  <div class="transfer-modal" id="transferModal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="transfer-modal-box">
+      <div class="modal-title">确认文件传输</div>
+      <p style="color:var(--text-secondary);font-size:var(--fs-sm);margin-top:var(--sp-md)">
+        将文件通过 Hub 中转传输到目标连接
+      </p>
+      <div class="transfer-route">
+        <span>📤 阿里云 · Web 文件服务器</span>
+        <span class="route-arrow">→</span>
+        <span>📥 树莓派集群 · NAS 主机</span>
+      </div>
+      <div style="font-size:var(--fs-sm);color:var(--text-secondary)">
+        文件：<strong style="color:var(--text-primary)">docker-compose.yml</strong> (564 B)<br>
+        目标路径：<code style="background:var(--bg-deep);padding:2px 6px;border-radius:3px;font-family:var(--font-mono)">/home/pi/projects/</code>
+      </div>
+      <div class="modal-actions" style="margin-top:var(--sp-lg)">
+        <button class="btn" onclick="document.getElementById('transferModal').style.display='none'">取消</button>
+        <button class="btn btn-primary" onclick="document.getElementById('transferModal').style.display='none';showToast('文件传输已启动')">确认传输</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile Bottom Bar -->
+  <div class="mobile-filebar" style="display:none">
+    <button class="bottom-nav-item">
+      <span class="bnav-icon">⬆</span><span>上传</span>
+    </button>
+    <button class="bottom-nav-item">
+      <span class="bnav-icon">📁</span><span>新建</span>
+    </button>
+    <button class="bottom-nav-item">
+      <span class="bnav-icon">↻</span><span>刷新</span>
+    </button>
+    <button class="bottom-nav-item">
+      <span class="bnav-icon">⚙</span><span>更多</span>
+    </button>
+  </div>
+
+  <script src="shared.js"></script>
+  <script>
+    // ── File right-click context menu ──
+    function showFileCtx(e, name, isDir) {
+      e.preventDefault();
+      e.stopPropagation();
+      const items = isDir && name !== '..' ? [
+        { label: '打开', icon: '📂', action: () => {} },
+        '---',
+      ] : (name === '..' ? [] : [
+        { label: t('open'), icon: '📄', action: () => {} },
+        '---',
+      ]);
+
+      if (name !== '..') {
+        items.push(
+          { label: t('download'), icon: '⬇', action: () => {} },
+          { label: t('copyPath'), icon: '📋', action: () => {} },
+          { label: t('copyFileName'), icon: '📎', action: () => {} },
+          '---',
+          { label: '发送到…', icon: '📤', sub: [
+            { label: '📤 → 树莓派集群 · NAS 主机 (/home/pi/)', action: () => showTransferConfirm(name, '树莓派集群', '/home/pi/') },
+            { label: '📤 → 家庭 NAS · NAS 文件 (/volume1/)', action: () => showTransferConfirm(name, '家庭 NAS', '/volume1/') },
+          ]},
+          '---',
+          { label: t('properties'), icon: 'ℹ', action: () => {} },
+          { label: t('deleteFile'), icon: '🗑', danger: true, action: () => {} },
+        );
+      }
+
+      showContextMenu(e, items);
+    }
+
+    // ── Blank area right-click ──
+    document.getElementById('fileList').addEventListener('contextmenu', (e) => {
+      if (e.target.closest('.file-row')) return;
+      e.preventDefault();
+      showContextMenu(e, [
+        { label: t('uploadFile'), icon: '⬆', action: () => {} },
+        { label: t('uploadFolder'), icon: '📁', action: () => {} },
+        '---',
+        { label: t('newFolder'), icon: '📁', action: () => {} },
+        { label: t('newFile'), icon: '📄', action: () => {} },
+        '---',
+        { label: t('paste'), icon: '📋', action: () => {} },
+        { label: t('selectAll'), shortcut: 'Ctrl+A', action: () => {} },
+        '---',
+        { label: t('refresh'), icon: '↻', action: () => {} },
+      ]);
+    });
+
+    // ── Cross-connection transfer confirm ──
+    function showTransferConfirm(fileName, targetEnv, targetPath) {
+      document.getElementById('transferModal').style.display = 'flex';
+    }
+
+    // ── Drag and drop ──
+    const dropOverlay = document.getElementById('dropOverlay');
+    const remotePanel = document.querySelector('.sftp-panel');
+    remotePanel.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropOverlay.classList.add('show');
+    });
+    remotePanel.addEventListener('dragleave', (e) => {
+      if (!remotePanel.contains(e.relatedTarget)) {
+        dropOverlay.classList.remove('show');
+      }
+    });
+    remotePanel.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropOverlay.classList.remove('show');
+      showToast('文件上传中...');
+    });
+
+    // ── Row selection ──
+    document.querySelectorAll('.file-row').forEach(row => {
+      row.addEventListener('click', function(e) {
+        if (this.querySelector('.file-name.parent')) return;
+        document.querySelectorAll('.file-row').forEach(r => r.classList.remove('selected'));
+        this.classList.add('selected');
+      });
+    });
+
+    // ── Toast ──
+    function showToast(msg, type = 'success') {
+      const toast = document.createElement('div');
+      toast.className = 'toast toast-' + type;
+      toast.innerHTML = '<span class="toast-icon">' + (type === 'success' ? '✓' : '✕') + '</span><span>' + msg + '</span>';
+      document.body.appendChild(toast);
+      setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; }, 2500);
+      setTimeout(() => toast.remove(), 3000);
+    }
+  </script>
+</body>
+</html>
