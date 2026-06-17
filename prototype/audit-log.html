@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>REX Hub — 审计日志</title>
+  <link rel="stylesheet" href="css/base.css">
+  <style>
+    /* ── Filters ── */
+    .audit-filters {
+      display: flex; align-items: center; gap: var(--sp-sm);
+      padding: var(--sp-lg) var(--sp-xl);
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      margin-bottom: var(--sp-lg);
+      flex-wrap: wrap;
+    }
+    .audit-filters .filter-group {
+      display: flex; align-items: center; gap: var(--sp-xs);
+    }
+    .audit-filters .filter-label {
+      font-size: var(--fs-xs); color: var(--text-muted); font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .audit-filters select, .audit-filters input {
+      padding: var(--sp-xs) var(--sp-sm);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      font-size: var(--fs-sm);
+      outline: none;
+      height: 28px;
+    }
+    .audit-filters select { cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%238B949E' d='M4 6L0 2h8z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 6px center; padding-right: 20px;
+    }
+    .audit-filters .filter-sep {
+      width: 1px; height: 20px; background: var(--border); margin: 0 var(--sp-xs);
+    }
+    .audit-filters .filter-spacer { flex: 1; }
+    .audit-filters .btn { height: 28px; font-size: var(--fs-sm); }
+
+    /* ── Stats Row ── */
+    .audit-stats {
+      display: flex; gap: var(--sp-md); margin-bottom: var(--sp-lg);
+    }
+    .audit-stat {
+      display: flex; align-items: center; gap: var(--sp-sm);
+      padding: var(--sp-sm) var(--sp-lg);
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      font-size: var(--fs-sm);
+    }
+    .audit-stat .stat-num {
+      font-family: var(--font-mono); font-weight: 700; font-size: var(--fs-lg);
+    }
+
+    /* ── Log Table ── */
+    .audit-table-wrap {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .audit-table {
+      width: 100%; border-collapse: collapse;
+    }
+    .audit-table th {
+      padding: var(--sp-md) var(--sp-lg);
+      text-align: left;
+      font-size: var(--fs-xs); color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.5px;
+      font-weight: 600;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+    }
+    .audit-table th:hover { color: var(--text-primary); }
+    .audit-table td {
+      padding: var(--sp-md) var(--sp-lg);
+      border-bottom: 1px solid var(--border);
+      font-size: var(--fs-sm);
+    }
+    .audit-table tr:last-child td { border-bottom: none; }
+    .audit-table tr:hover td { background: var(--bg-hover); }
+    .audit-table tr { cursor: pointer; }
+    .audit-table tr.expanded td { background: var(--bg-deep); }
+
+    .audit-time {
+      font-family: var(--font-mono); color: var(--text-muted); white-space: nowrap;
+    }
+    .audit-user {
+      font-family: var(--font-mono); font-weight: 500;
+    }
+    .audit-env {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: var(--fs-xs); color: var(--text-secondary);
+    }
+    .audit-op {
+      display: inline-flex; align-items: center;
+      padding: 2px var(--sp-sm);
+      border-radius: var(--radius-sm);
+      font-size: var(--fs-xs);
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+    .audit-op.connect { background: rgba(63,185,80,0.12); color: var(--success); }
+    .audit-op.disconnect { background: rgba(139,148,158,0.15); color: var(--text-muted); }
+    .audit-op.query { background: rgba(88,166,255,0.12); color: var(--info); }
+    .audit-op.upload { background: rgba(139,92,246,0.12); color: #8B5CF6; }
+    .audit-op.download { background: rgba(63,185,80,0.12); color: var(--success); }
+    .audit-op.delete { background: rgba(248,81,73,0.12); color: var(--danger); }
+    .audit-op.login { background: rgba(232,145,45,0.12); color: var(--accent); }
+    .audit-op.command { background: rgba(210,153,34,0.12); color: var(--warning); }
+    .audit-op.connect { box-shadow: 0 0 6px var(--success-glow); }
+    .audit-op.login { box-shadow: 0 0 6px var(--accent-glow); }
+
+    .audit-summary { color: var(--text-secondary); }
+    .audit-result { font-family: var(--font-mono); font-size: var(--fs-xs); }
+    .audit-result.ok { color: var(--success); }
+    .audit-result.fail { color: var(--danger); }
+
+    /* ── Detail Panel ── */
+    .audit-detail {
+      display: none;
+    }
+    .audit-detail.show { display: table-row; }
+    .audit-detail td {
+      padding: 0 !important;
+      background: var(--bg-deep);
+    }
+    .audit-detail-inner {
+      padding: var(--sp-lg) var(--sp-xl);
+      font-family: var(--font-mono);
+      font-size: var(--fs-sm);
+      line-height: 1.6;
+    }
+    .audit-detail-inner .detail-title {
+      font-weight: 600; color: var(--text-primary);
+      margin-bottom: var(--sp-sm);
+    }
+    .audit-detail-inner .detail-grid {
+      display: grid; grid-template-columns: 140px 1fr;
+      gap: var(--sp-xs) var(--sp-lg);
+    }
+    .audit-detail-inner .detail-label { color: var(--text-muted); }
+    .audit-detail-inner .detail-value { color: var(--text-primary); word-break: break-all; }
+    .audit-detail-inner .detail-cmd {
+      margin-top: var(--sp-md);
+      padding: var(--sp-md);
+      background: var(--bg-deep);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      white-space: pre-wrap;
+    }
+
+    /* ── Pagination ── */
+    .audit-pagination {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--sp-md) var(--sp-xl);
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+      font-size: var(--fs-sm); color: var(--text-muted);
+    }
+    .audit-pagination .page-btns {
+      display: flex; gap: var(--sp-xs);
+    }
+    .audit-pagination .page-btn {
+      padding: var(--sp-xs) var(--sp-sm);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-deep);
+      color: var(--text-secondary);
+      font-size: var(--fs-xs);
+      cursor: pointer;
+      font-family: var(--font-mono);
+    }
+    .audit-pagination .page-btn:hover { color: var(--text-primary); border-color: var(--text-muted); }
+    .audit-pagination .page-btn.active {
+      background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600;
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+
+    /* ── Mobile ── */
+    @media (max-width: 767px) {
+      .audit-filters { flex-direction: column; align-items: stretch; }
+      .audit-filters .filter-group { justify-content: space-between; }
+      .audit-filters .filter-sep { display: none; }
+      .audit-filters .filter-spacer { display: none; }
+      .audit-stats { flex-wrap: wrap; }
+      .audit-table th:nth-child(4), .audit-table td:nth-child(4),
+      .audit-table th:nth-child(5), .audit-table td:nth-child(5) { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <div id="sidebarContainer" data-active-page="settings"></div>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div class="flex items-center gap-md">
+          <a href="settings.html" class="btn btn-ghost btn-sm btn-icon">←</a>
+          <h1 class="page-title">审计日志</h1>
+        </div>
+        <div class="flex items-center gap-sm">
+          <button class="btn btn-ghost btn-sm">导出 CSV</button>
+        </div>
+      </header>
+
+      <div class="page-body">
+        <!-- Filters -->
+        <div class="audit-filters">
+          <div class="filter-group">
+            <span class="filter-label">时间</span>
+            <select>
+              <option>最近 1 小时</option>
+              <option selected>最近 24 小时</option>
+              <option>最近 7 天</option>
+              <option>最近 30 天</option>
+            </select>
+          </div>
+          <div class="filter-sep"></div>
+          <div class="filter-group">
+            <span class="filter-label">用户</span>
+            <select>
+              <option selected>全部</option>
+              <option>admin</option>
+            </select>
+          </div>
+          <div class="filter-sep"></div>
+          <div class="filter-group">
+            <span class="filter-label">环境</span>
+            <select>
+              <option selected>全部</option>
+              <option>阿里云</option>
+              <option>树莓派集群</option>
+              <option>家庭 NAS</option>
+            </select>
+          </div>
+          <div class="filter-sep"></div>
+          <div class="filter-group">
+            <span class="filter-label">操作</span>
+            <select>
+              <option selected>全部</option>
+              <option>连接</option>
+              <option>断开</option>
+              <option>SQL 查询</option>
+              <option>文件上传</option>
+              <option>文件下载</option>
+              <option>SSH 命令</option>
+              <option>登录</option>
+            </select>
+          </div>
+          <span class="filter-spacer"></span>
+          <button class="btn btn-ghost btn-sm" onclick="showToast('已重置筛选')">重置</button>
+        </div>
+
+        <!-- Stats -->
+        <div class="audit-stats">
+          <div class="audit-stat">
+            <span style="color:var(--text-muted)">总操作</span>
+            <span class="stat-num text-accent">37</span>
+          </div>
+          <div class="audit-stat">
+            <span style="color:var(--text-muted)">成功</span>
+            <span class="stat-num text-success">35</span>
+          </div>
+          <div class="audit-stat">
+            <span style="color:var(--text-muted)">失败</span>
+            <span class="stat-num text-danger">2</span>
+          </div>
+          <div class="audit-stat">
+            <span style="color:var(--text-muted)">活跃用户</span>
+            <span class="stat-num" style="color:var(--info)">1</span>
+          </div>
+        </div>
+
+        <!-- Log Table -->
+        <div class="audit-table-wrap">
+          <table class="audit-table">
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>用户</th>
+                <th>环境</th>
+                <th>操作</th>
+                <th>摘要</th>
+                <th>结果</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr onclick="toggleDetail('d1')">
+                <td class="audit-time">16:51:30</td>
+                <td class="audit-user">admin</td>
+                <td><span class="audit-env">● 阿里云</span></td>
+                <td><span class="audit-op connect">SSH 连接</span></td>
+                <td class="audit-summary">root@192.168.1.100:22</td>
+                <td><span class="audit-result ok">✓ 成功</span></td>
+              </tr>
+              <tr class="audit-detail" id="d1"><td colspan="6">
+                <div class="audit-detail-inner">
+                  <div class="detail-title">连接详情</div>
+                  <div class="detail-grid">
+                    <span class="detail-label">协议</span><span class="detail-value">SSH</span>
+                    <span class="detail-label">目标</span><span class="detail-value">192.168.1.100:22</span>
+                    <span class="detail-label">用户</span><span class="detail-value">root</span>
+                    <span class="detail-label">Agent</span><span class="detail-value">agt_7x8k9m (阿里云 Agent)</span>
+                    <span class="detail-label">会话时长</span><span class="detail-value">88 秒</span>
+                    <span class="detail-label">传输量</span><span class="detail-value">↑ 1.2KB ↓ 15.6KB</span>
+                  </div>
+                  <div class="detail-cmd">root@prod:~$ uptime
+ 16:45:12 up 14 days,  3:21,  1 user,  load average: 0.12, 0.08, 0.05
+
+root@prod:~$ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+NAMES                STATUS          PORTS
+rex-app              Up 2 days       0.0.0.0:3000->3000/tcp</div>
+                </div>
+              </td></tr>
+
+              <tr onclick="toggleDetail('d2')">
+                <td class="audit-time">16:49:01</td>
+                <td class="audit-user">admin</td>
+                <td><span class="audit-env">● 阿里云</span></td>
+                <td><span class="audit-op query">SQL 查询</span></td>
+                <td class="audit-summary">production_db · SELECT 5 行</td>
+                <td><span class="audit-result ok">✓ 成功</span></td>
+              </tr>
+              <tr class="audit-detail" id="d2"><td colspan="6">
+                <div class="audit-detail-inner">
+                  <div class="detail-title">查询详情</div>
+                  <div class="detail-grid">
+                    <span class="detail-label">数据库</span><span class="detail-value">production_db (MySQL)</span>
+                    <span class="detail-label">资源</span><span class="detail-value">主数据库 · db.internal:3306</span>
+                    <span class="detail-label">耗时</span><span class="detail-value">23ms</span>
+                    <span class="detail-label">返回行数</span><span class="detail-value">5</span>
+                  </div>
+                  <div class="detail-cmd">SELECT
+  u.id, u.username, u.email,
+  COUNT(o.id) AS order_count,
+  SUM(o.total_amount) AS total_spent
+FROM users u
+LEFT JOIN orders o ON o.user_id = u.id
+WHERE u.created_at >= '2024-01-01'
+GROUP BY u.id, u.username, u.email
+HAVING COUNT(o.id) > 5
+ORDER BY total_spent DESC
+LIMIT 100;</div>
+                </div>
+              </td></tr>
+
+              <tr onclick="toggleDetail('d3')">
+                <td class="audit-time">16:47:02</td>
+                <td class="audit-user">admin</td>
+                <td><span class="audit-env">● 树莓派集群</span></td>
+                <td><span class="audit-op upload">文件上传</span></td>
+                <td class="audit-summary">docker-compose.yml → /opt/rex/</td>
+                <td><span class="audit-result ok">✓ 成功</span></td>
+              </tr>
+              <tr class="audit-detail" id="d3"><td colspan="6">
+                <div class="audit-detail-inner">
+                  <div class="detail-title">传输详情</div>
+                  <div class="detail-grid">
+                    <span class="detail-label">协议</span><span class="detail-value">SFTP</span>
+                    <span class="detail-label">资源</span><span class="detail-value">Web 文件服务器</span>
+                    <span class="detail-label">文件大小</span><span class="detail-value">564 B</span>
+                    <span class="detail-label">目标路径</span><span class="detail-value">/opt/rex/docker-compose.yml</span>
+                  </div>
+                </div>
+              </td></tr>
+
+              <tr onclick="toggleDetail('d4')">
+                <td class="audit-time">16:45:13</td>
+                <td class="audit-user">admin</td>
+                <td><span class="audit-env">● 阿里云</span></td>
+                <td><span class="audit-op login">登录</span></td>
+                <td class="audit-summary">admin · 172.16.0.52</td>
+                <td><span class="audit-result ok">✓ 成功</span></td>
+              </tr>
+              <tr class="audit-detail" id="d4"><td colspan="6">
+                <div class="audit-detail-inner">
+                  <div class="detail-title">登录详情</div>
+                  <div class="detail-grid">
+                    <span class="detail-label">用户</span><span class="detail-value">admin</span>
+                    <span class="detail-label">IP 地址</span><span class="detail-value">172.16.0.52</span>
+                    <span class="detail-label">浏览器</span><span class="detail-value">Chrome 125.0 (macOS)</span>
+                    <span class="detail-label">认证方式</span><span class="detail-value">密码登录</span>
+                  </div>
+                </div>
+              </td></tr>
+
+              <tr onclick="toggleDetail('d5')">
+                <td class="audit-time">16:43:22</td>
+                <td class="audit-user">admin</td>
+                <td><span class="audit-env">● 阿里云</span></td>
+                <td><span class="audit-op command">SSH 命令</span></td>
+                <td class="audit-summary">root@192.168.1.100 · docker ps</td>
+                <td><span class="audit-result ok">✓ 成功</span></td>
+              </tr>
+              <tr class="audit-detail" id="d5"><td colspan="6">
+                <div class="audit-detail-inner">
+                  <div class="detail-title">命令详情</div>
+                  <div class="detail-grid">
+                    <span class="detail-label">协议</span><span class="detail-value">SSH</span>
+                    <span class="detail-label">资源</span><span class="detail-value">云服务器 · 192.168.1.100:22</span>
+                    <span class="detail-label">执行用户</span><span class="detail-value">root</span>
+                    <span class="detail-label">耗时</span><span class="detail-value">0.3s</span>
+                  </div>
+                  <div class="detail-cmd">docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"</div>
+                </div>
+              </td></tr>
+
+              <tr onclick="toggleDetail('d6')">
+                <td class="audit-time">16:40:05</td>
+                <td class="audit-user">admin</td>
+                <td><span class="audit-env">● 阿里云</span></td>
+                <td><span class="audit-op download">文件下载</span></td>
+                <td class="audit-summary">backup-20240610.tar.gz (23.4 MB)</td>
+                <td><span class="audit-result ok">✓ 成功</span></td>
+              </tr>
+              <tr class="audit-detail" id="d6"><td colspan="6">
+                <div class="audit-detail-inner">
+                  <div class="detail-title">传输详情</div>
+                  <div class="detail-grid">
+                    <span class="detail-label">协议</span><span class="detail-value">SFTP</span>
+                    <span class="detail-label">资源</span><span class="detail-value">Web 文件服务器</span>
+                    <span class="detail-label">文件大小</span><span class="detail-value">23.4 MB</span>
+                    <span class="detail-label">源路径</span><span class="detail-value">/opt/rex/backup-20240610.tar.gz</span>
+                  </div>
+                </div>
+              </td></tr>
+
+              <tr>
+                <td class="audit-time">16:38:12</td>
+                <td class="audit-user">admin</td>
+                <td><span class="audit-env">● 家庭 NAS</span></td>
+                <td><span class="audit-op connect">SSH 连接</span></td>
+                <td class="audit-summary">root@192.168.0.100:22</td>
+                <td><span class="audit-result fail">✕ 失败</span></td>
+              </tr>
+
+              <tr>
+                <td class="audit-time">16:35:00</td>
+                <td class="audit-user">admin</td>
+                <td><span class="audit-env">● 家庭 NAS</span></td>
+                <td><span class="audit-op disconnect">连接断开</span></td>
+                <td class="audit-summary">Agent agt_9p2q4r 离线</td>
+                <td><span class="audit-result fail">Agent 离线</span></td>
+              </tr>
+
+              <tr>
+                <td class="audit-time">16:30:45</td>
+                <td class="audit-user">admin</td>
+                <td><span class="audit-env">● 树莓派集群</span></td>
+                <td><span class="audit-op query">SQL 查询</span></td>
+                <td class="audit-summary">test_db · SELECT 12 行</td>
+                <td><span class="audit-result ok">✓ 成功</span></td>
+              </tr>
+
+              <tr>
+                <td class="audit-time">16:25:10</td>
+                <td class="audit-user">admin</td>
+                <td><span class="audit-env">● 阿里云</span></td>
+                <td><span class="audit-op delete">文件删除</span></td>
+                <td class="audit-summary">/tmp/debug.log</td>
+                <td><span class="audit-result ok">✓ 成功</span></td>
+              </tr>
+
+              <tr>
+                <td class="audit-time">16:20:33</td>
+                <td class="audit-user">admin</td>
+                <td><span class="audit-env">● 阿里云</span></td>
+                <td><span class="audit-op connect">SSH 连接</span></td>
+                <td class="audit-summary">root@192.168.1.100:22</td>
+                <td><span class="audit-result ok">✓ 成功</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="audit-pagination">
+          <span>显示 1-15 / 共 37 条</span>
+          <div class="page-btns">
+            <button class="page-btn">‹</button>
+            <button class="page-btn active">1</button>
+            <button class="page-btn">2</button>
+            <button class="page-btn">3</button>
+            <button class="page-btn">›</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <nav class="bottom-nav">
+    <a href="dashboard.html" class="bottom-nav-item"><span class="bnav-icon">◉</span><span>首页</span></a>
+    <a href="environments.html" class="bottom-nav-item"><span class="bnav-icon">◈</span><span>环境</span></a>
+    <a href="environment-new.html" class="bottom-nav-item"><span class="bnav-icon">+</span><span>新建</span></a>
+    <a href="agents.html" class="bottom-nav-item"><span class="bnav-icon">⬡</span><span>Agent</span></a>
+    <a href="settings.html" class="bottom-nav-item"><span class="bnav-icon">⚙</span><span>设置</span></a>
+  </nav>
+
+  <script src="shared.js"></script>
+  <script>
+    document.getElementById('sidebarContainer').innerHTML = buildSidebar('settings');
+    bindSidebarEvents();
+
+    function toggleDetail(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const row = el.previousElementSibling;
+      const isOpen = el.classList.toggle('show');
+      if (row) row.classList.toggle('expanded', isOpen);
+    }
+  </script>
+</body>
+</html>

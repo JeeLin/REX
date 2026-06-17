@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>REX Hub — 创建环境</title>
+  <link rel="stylesheet" href="css/base.css">
+  <style>
+    .create-layout { max-width: 560px; margin: 0 auto; }
+    .env-name-section {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--sp-xl);
+      margin-bottom: var(--sp-lg);
+    }
+    .env-name-section h3 {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      margin-bottom: var(--sp-lg);
+    }
+    .env-type-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--sp-md);
+      margin-bottom: var(--sp-lg);
+    }
+    .env-type-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--sp-sm);
+      padding: var(--sp-xl) var(--sp-md);
+      background: var(--bg-deep);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-lg);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      text-align: center;
+    }
+    .env-type-card:hover { border-color: var(--text-muted); }
+    .env-type-card.selected { border-color: var(--accent); background: rgba(232,145,45,0.05); box-shadow: 0 0 16px var(--accent-glow); }
+    .env-type-icon { font-size: 28px; }
+    .env-type-name { font-weight: 600; font-size: var(--fs-base); }
+    .env-type-desc { font-size: var(--fs-xs); color: var(--text-muted); line-height: 1.4; }
+
+    .env-desc-section {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--sp-xl);
+      margin-bottom: var(--sp-lg);
+    }
+    .env-desc-section h3 {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      margin-bottom: var(--sp-lg);
+    }
+    .form-actions {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--sp-md);
+      margin-top: var(--sp-xl);
+    }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <div id="sidebarContainer" data-active-page="environments"></div>
+    <main class="main-content">
+      <header class="page-header">
+        <div class="flex items-center gap-md">
+          <a href="environments.html" class="btn btn-ghost btn-sm btn-icon">←</a>
+          <h1 class="page-title">创建环境</h1>
+        </div>
+      </header>
+      <div class="page-body">
+        <div class="create-layout">
+          <!-- Name -->
+          <div class="env-name-section">
+            <h3>环境名称</h3>
+            <div class="form-group" style="margin-bottom:var(--sp-lg)">
+              <label class="form-label">名称 <span style="color:var(--danger)">*</span></label>
+              <input class="form-input" placeholder="例如：阿里云、树莓派集群" id="envName">
+            </div>
+            <div class="form-group">
+              <label class="form-label">描述（可选）</label>
+              <input class="form-input" placeholder="简要描述这个环境的用途">
+            </div>
+          </div>
+
+          <!-- Type -->
+          <div class="env-desc-section">
+            <h3>连接方式</h3>
+            <div class="env-type-grid">
+              <div class="env-type-card selected" onclick="selectType(this, 'agent')">
+                <div class="env-type-icon">⬡</div>
+                <div class="env-type-name">Agent 代理</div>
+                <div class="env-type-desc">部署 Agent 到内网，通过反向隧道访问内网资源</div>
+              </div>
+              <div class="env-type-card" onclick="selectType(this, 'direct')">
+                <div class="env-type-icon">◉</div>
+                <div class="env-type-name">直连</div>
+                <div class="env-type-desc">REX Hub 服务器直接连接公网资源</div>
+              </div>
+            </div>
+
+            <!-- Agent info -->
+            <div id="agent-info" style="padding:var(--sp-lg);background:var(--bg-deep);border-radius:var(--radius-md);border:1px solid var(--border)">
+              <div style="font-size:var(--fs-sm);color:var(--text-secondary);margin-bottom:var(--sp-md)">
+                部署 Agent 后，此环境下的所有资源将通过 Agent 代理访问。
+              </div>
+              <div style="font-size:var(--fs-sm);color:var(--text-secondary)">
+                <strong>下一步：</strong>创建环境后，在环境详情页面获取注册令牌，然后在目标内网部署 Agent。
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <a href="environments.html" class="btn">取消</a>
+            <button class="btn btn-primary" onclick="createEnv()">创建环境</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <nav class="bottom-nav">
+    <a href="dashboard.html" class="bottom-nav-item"><span class="bnav-icon">◉</span><span>首页</span></a>
+    <a href="environments.html" class="bottom-nav-item active"><span class="bnav-icon">◈</span><span>环境</span></a>
+    <a href="environment-new.html" class="bottom-nav-item active"><span class="bnav-icon">+</span><span>新建</span></a>
+    <a href="agents.html" class="bottom-nav-item"><span class="bnav-icon">⬡</span><span>Agent</span></a>
+    <a href="settings.html" class="bottom-nav-item"><span class="bnav-icon">⚙</span><span>设置</span></a>
+  </nav>
+  <script src="shared.js"></script>
+  <script>
+    document.getElementById('sidebarContainer').innerHTML = buildSidebar('environments');
+    bindSidebarEvents();
+
+    function selectType(el, type) {
+      document.querySelectorAll('.env-type-card').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+      document.getElementById('agent-info').style.display = type === 'agent' ? 'block' : 'none';
+    }
+    function createEnv() {
+      window.location.href = 'environment.html';
+    }
+  </script>
+</body>
+</html>

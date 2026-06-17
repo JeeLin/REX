@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>REX Hub — Agent 管理</title>
+  <link rel="stylesheet" href="css/base.css">
+  <style>
+    .agent-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: var(--sp-lg);
+    }
+    .agent-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--sp-xl);
+      transition: border-color var(--transition-base), box-shadow var(--transition-base);
+    }
+    .agent-card:hover {
+      border-color: rgba(232,145,45,0.15);
+      box-shadow: var(--phosphor-glow);
+    }
+    .agent-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--sp-lg);
+    }
+    .agent-card-name {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: var(--fs-md);
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+    }
+    .agent-card-env {
+      font-size: var(--fs-sm);
+      color: var(--text-secondary);
+      margin-bottom: var(--sp-md);
+    }
+    .agent-card-device {
+      display: flex; align-items: center; gap: var(--sp-sm);
+      padding: var(--sp-xs) var(--sp-md);
+      background: var(--bg-deep);
+      border-radius: var(--radius-md);
+      font-size: var(--fs-xs); color: var(--text-muted);
+      font-family: var(--font-mono);
+      margin-bottom: var(--sp-lg);
+    }
+    .agent-card-device .os-icon { font-size: 14px; }
+    .agent-card-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--sp-md) var(--sp-lg);
+      margin-bottom: var(--sp-lg);
+      padding-bottom: var(--sp-lg);
+      border-bottom: 1px solid var(--border);
+    }
+    .agent-meta-item { display: flex; flex-direction: column; gap: 2px; }
+    .agent-meta-label { font-size: var(--fs-xs); color: var(--text-muted); }
+    .agent-meta-value { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--text-primary); }
+    .agent-card-actions { display: flex; gap: var(--sp-sm); }
+
+    /* Setup Guide */
+    .setup-section {
+      margin-top: var(--sp-2xl);
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .setup-header { padding: var(--sp-xl); border-bottom: 1px solid var(--border); }
+    .setup-title { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: 600; margin-bottom: var(--sp-sm); }
+    .setup-subtitle { font-size: var(--fs-base); color: var(--text-secondary); }
+    .setup-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      padding: 0 var(--sp-xl);
+      overflow-x: auto;
+    }
+    .setup-tabs::-webkit-scrollbar { display: none; }
+    .setup-tab {
+      padding: var(--sp-md) var(--sp-lg);
+      font-size: var(--fs-base);
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      background: none;
+      border-top: none; border-left: none; border-right: none;
+      font-family: var(--font-body);
+      white-space: nowrap;
+    }
+    .setup-tab:hover { color: var(--text-primary); }
+    .setup-tab.active { color: var(--text-primary); border-bottom-color: var(--accent); }
+    .setup-content { padding: var(--sp-xl); }
+    .setup-step {
+      display: flex;
+      gap: var(--sp-lg);
+      margin-bottom: var(--sp-xl);
+    }
+    .setup-step:last-child { margin-bottom: 0; }
+    .step-number {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #000;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: var(--fs-sm);
+      flex-shrink: 0;
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+    .step-content { flex: 1; }
+    .step-title { font-weight: 600; margin-bottom: var(--sp-sm); }
+    .step-desc { font-size: var(--fs-sm); color: var(--text-secondary); margin-bottom: var(--sp-md); }
+    .code-block {
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--sp-md) var(--sp-lg);
+      font-family: var(--font-mono);
+      font-size: var(--fs-sm);
+      color: var(--text-primary);
+      overflow-x: auto;
+      white-space: pre;
+      position: relative;
+    }
+    .code-block .copy-btn {
+      position: absolute;
+      top: var(--sp-sm); right: var(--sp-sm);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 2px 8px;
+      font-size: var(--fs-xs);
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+    .code-block .copy-btn:hover { color: var(--text-primary); border-color: var(--text-muted); }
+    .code-comment { color: var(--text-muted); }
+    .code-flag { color: var(--accent); }
+    .code-string { color: var(--success); }
+    .code-url { color: var(--info); }
+    .token-box {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      padding: var(--sp-sm) var(--sp-md);
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      font-family: var(--font-mono);
+      font-size: var(--fs-sm);
+      color: var(--text-primary);
+      margin-top: var(--sp-md);
+    }
+    .token-box .token { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+    .token-box .token-label { color: var(--text-muted); flex-shrink: 0; }
+
+    @media (max-width: 767px) {
+      .agent-cards { grid-template-columns: 1fr; }
+    }
+
+    /* ── Config Panel ── */
+    .config-overlay {
+      position: fixed; inset: 0;
+      z-index: 400;
+      display: none;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+    }
+    .config-overlay.show { display: flex; align-items: center; justify-content: center; }
+    .config-panel {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      width: 520px; max-width: 90vw;
+      max-height: 80vh; overflow-y: auto;
+      box-shadow: var(--shadow-lg), var(--phosphor-shadow);
+      animation: modalIn 0.2s ease;
+    }
+    .config-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--sp-xl);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0;
+      background: var(--bg-elevated);
+      z-index: 1;
+    }
+    .config-panel-title {
+      font-family: var(--font-mono); font-size: var(--fs-md); font-weight: 600;
+    }
+    .config-panel-close {
+      width: 28px; height: 28px; border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; background: none; border: none;
+      color: var(--text-muted); font-size: var(--fs-md);
+    }
+    .config-panel-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .config-panel-body { padding: var(--sp-xl); }
+    .config-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--sp-md) 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .config-row:last-child { border-bottom: none; }
+    .config-row-label { font-size: var(--fs-sm); color: var(--text-secondary); }
+    .config-row-value {
+      font-family: var(--font-mono); font-size: var(--fs-sm);
+      color: var(--text-primary); text-align: right;
+    }
+    .config-row-value.editable {
+      padding: var(--sp-xs) var(--sp-sm);
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      min-width: 120px;
+    }
+    .config-section-title {
+      font-family: var(--font-mono); font-size: var(--fs-xs);
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;
+      font-weight: 600; margin-top: var(--sp-lg); margin-bottom: var(--sp-sm);
+    }
+
+    /* ── Log Viewer ── */
+    .log-overlay {
+      position: fixed; inset: 0;
+      z-index: 400;
+      display: none;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+    }
+    .log-overlay.show { display: flex; align-items: center; justify-content: center; }
+    .log-panel {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      width: 680px; max-width: 90vw;
+      max-height: 80vh;
+      display: flex; flex-direction: column;
+      box-shadow: var(--shadow-lg), var(--phosphor-shadow);
+      animation: modalIn 0.2s ease;
+      overflow: hidden;
+    }
+    .log-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--sp-lg) var(--sp-xl);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .log-panel-title {
+      font-family: var(--font-mono); font-size: var(--fs-md); font-weight: 600;
+      display: flex; align-items: center; gap: var(--sp-sm);
+    }
+    .log-panel-close {
+      width: 28px; height: 28px; border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; background: none; border: none;
+      color: var(--text-muted); font-size: var(--fs-md);
+    }
+    .log-panel-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .log-toolbar {
+      display: flex; align-items: center; gap: var(--sp-sm);
+      padding: var(--sp-sm) var(--sp-xl);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .log-toolbar .log-filter-btn {
+      padding: 2px 8px; border-radius: var(--radius-sm);
+      font-size: var(--fs-xs); cursor: pointer;
+      background: none; border: 1px solid transparent;
+      color: var(--text-secondary); font-family: var(--font-body);
+    }
+    .log-toolbar .log-filter-btn.active {
+      border-color: var(--accent); color: var(--accent);
+      background: rgba(232,145,45,0.08);
+    }
+    .log-toolbar .log-filter-btn:hover { color: var(--text-primary); }
+    .log-toolbar .log-spacer { flex: 1; }
+    .log-toolbar .log-auto-scroll {
+      font-size: var(--fs-xs); color: var(--text-muted);
+      display: flex; align-items: center; gap: var(--sp-xs);
+    }
+    .log-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--sp-md) var(--sp-xl);
+      background: var(--bg-deep);
+      font-family: var(--font-mono);
+      font-size: var(--fs-sm);
+      line-height: 1.6;
+      min-height: 300px;
+    }
+    .log-line {
+      display: flex; gap: var(--sp-md);
+    }
+    .log-time { color: var(--text-muted); flex-shrink: 0; }
+    .log-level {
+      flex-shrink: 0; font-weight: 600; width: 44px; text-align: center;
+    }
+    .log-level.info { color: var(--info); }
+    .log-level.warn { color: var(--warning); }
+    .log-level.error { color: var(--danger); }
+    .log-level.debug { color: var(--text-muted); }
+    .log-msg { color: var(--text-primary); flex: 1; word-break: break-all; }
+    .log-msg .log-highlight { color: var(--success); font-weight: 600; }
+    .log-msg .log-error-msg { color: var(--danger); }
+    .log-footer {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--sp-sm) var(--sp-xl);
+      border-top: 1px solid var(--border);
+      font-size: var(--fs-xs); color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    /* ── Remove Confirm ── */
+    .remove-overlay {
+      position: fixed; inset: 0;
+      z-index: 400;
+      display: none;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+    }
+    .remove-overlay.show { display: flex; align-items: center; justify-content: center; }
+    .remove-panel {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: var(--sp-2xl);
+      width: 420px; max-width: 90vw;
+      box-shadow: var(--shadow-lg);
+    }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <div id="sidebarContainer" data-active-page="agents"></div>
+
+    <main class="main-content">
+      <header class="page-header">
+        <h1 class="page-title" data-i18n="agents">Agent 管理</h1>
+      </header>
+
+      <div class="page-body">
+        <!-- Agent Cards -->
+        <div class="agent-cards" style="margin-bottom:var(--sp-2xl)">
+          <div class="agent-card" oncontextmenu="showAgentCtx(event,'aliyun')">
+            <div class="agent-card-header">
+              <div class="agent-card-name"><span style="color:var(--success)">●</span> 阿里云 Agent</div>
+              <span class="agent-badge online"><span class="status-dot connected"></span> 在线</span>
+            </div>
+            <div class="agent-card-env">环境: 阿里云</div>
+            <div class="agent-card-device"><span class="os-icon">🐧</span> Linux · Ubuntu 22.04 LTS · x86_64</div>
+            <div class="agent-card-meta">
+              <div class="agent-meta-item"><span class="agent-meta-label">版本</span><span class="agent-meta-value">v0.1.0</span></div>
+              <div class="agent-meta-item"><span class="agent-meta-label">Agent ID</span><span class="agent-meta-value">agt_7x8k9m</span></div>
+              <div class="agent-meta-item"><span class="agent-meta-label">连接 IP</span><span class="agent-meta-value">172.16.0.52</span></div>
+              <div class="agent-meta-item"><span class="agent-meta-label">运行时间</span><span class="agent-meta-value">14 天 3 时</span></div>
+              <div class="agent-meta-item"><span class="agent-meta-label">延迟</span><span class="agent-meta-value text-success">12ms</span></div>
+              <div class="agent-meta-item"><span class="agent-meta-label">代理资源</span><span class="agent-meta-value">4 个</span></div>
+            </div>
+            <div class="agent-card-actions">
+              <button class="btn btn-ghost btn-sm" onclick="showConfig('aliyun')">配置</button>
+              <button class="btn btn-ghost btn-sm" onclick="showLog('aliyun')">日志</button>
+              <button class="btn btn-danger btn-sm" onclick="showResetToken('aliyun')">重置令牌</button>
+            </div>
+          </div>
+
+          <div class="agent-card" oncontextmenu="showAgentCtx(event,'office')">
+            <div class="agent-card-header">
+              <div class="agent-card-name"><span style="color:var(--success)">●</span> 树莓派 Agent</div>
+              <span class="agent-badge online"><span class="status-dot connected"></span> 在线</span>
+            </div>
+            <div class="agent-card-env">环境: 树莓派集群</div>
+            <div class="agent-card-device"><span class="os-icon">🐧</span> Linux · Raspberry Pi OS · arm64</div>
+            <div class="agent-card-meta">
+              <div class="agent-meta-item"><span class="agent-meta-label">版本</span><span class="agent-meta-value">v0.1.0</span></div>
+              <div class="agent-meta-item"><span class="agent-meta-label">Agent ID</span><span class="agent-meta-value">agt_3k5m7n</span></div>
+              <div class="agent-meta-item"><span class="agent-meta-label">连接 IP</span><span class="agent-meta-value">10.0.1.28</span></div>
+              <div class="agent-meta-item"><span class="agent-meta-label">运行时间</span><span class="agent-meta-value">7 天 18 时</span></div>
+              <div class="agent-meta-item"><span class="agent-meta-label">延迟</span><span class="agent-meta-value text-success">8ms</span></div>
+              <div class="agent-meta-item"><span class="agent-meta-label">代理资源</span><span class="agent-meta-value">3 个</span></div>
+            </div>
+            <div class="agent-card-actions">
+              <button class="btn btn-ghost btn-sm" onclick="showConfig('office')">配置</button>
+              <button class="btn btn-ghost btn-sm" onclick="showLog('office')">日志</button>
+              <button class="btn btn-danger btn-sm" onclick="showResetToken('office')">重置令牌</button>
+            </div>
+          </div>
+
+          <div class="agent-card" style="opacity:0.7" oncontextmenu="showAgentCtx(event,'nas')">
+            <div class="agent-card-header">
+              <div class="agent-card-name"><span style="color:var(--text-muted)">●</span> NAS Agent</div>
+              <span class="agent-badge offline"><span class="status-dot disconnected"></span> 离线</span>
+            </div>
+            <div class="agent-card-env">环境: 家庭 NAS</div>
+            <div class="agent-card-device"><span class="os-icon">🐧</span> Linux · Debian 11 · armv7l</div>
+            <div class="agent-card-meta">
+              <div class="agent-meta-item"><span class="agent-meta-label">版本</span><span class="agent-meta-value">v0.0.9</span></div>
+              <div class="agent-meta-item"><span class="agent-meta-label">Agent ID</span><span class="agent-meta-value">agt_9p2q4r</span></div>
+              <div class="agent-meta-item"><span class="agent-meta-label">最后在线</span><span class="agent-meta-value">3 天前</span></div>
+              <div class="agent-meta-item"><span class="agent-meta-label">代理资源</span><span class="agent-meta-value">2 个</span></div>
+            </div>
+            <div class="agent-card-actions">
+              <button class="btn btn-ghost btn-sm" onclick="showConfig('nas')">配置</button>
+              <button class="btn btn-danger btn-sm" onclick="showResetToken('nas')">重置令牌</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Setup Guide -->
+        <div class="setup-section">
+          <div class="setup-header">
+            <div class="setup-title">部署新 Agent</div>
+            <div class="setup-subtitle">在需要管理的内网环境中部署 Agent，即可通过 REX Hub 访问内网资源</div>
+          </div>
+          <div class="setup-tabs">
+            <button class="setup-tab active" onclick="switchSetupTab(this,'binary')">二进制文件</button>
+            <button class="setup-tab" onclick="switchSetupTab(this,'docker')">Docker</button>
+            <button class="setup-tab" onclick="switchSetupTab(this,'compose')">Docker Compose</button>
+            <button class="setup-tab" onclick="switchSetupTab(this,'config')">配置文件</button>
+          </div>
+
+          <!-- Binary -->
+          <div class="setup-content" id="setup-binary">
+            <div class="setup-step">
+              <div class="step-number">1</div>
+              <div class="step-content">
+                <div class="step-title">下载 Agent</div>
+                <div class="step-desc">根据目标系统选择对应的二进制文件</div>
+                <div style="display:flex;flex-wrap:wrap;gap:var(--sp-sm);margin-bottom:var(--sp-md)">
+                  <a href="/api/agent/download?os=linux&arch=amd64" class="btn btn-ghost btn-sm" style="font-family:var(--font-mono);font-size:var(--fs-xs)">⬇ linux-amd64</a>
+                  <a href="/api/agent/download?os=linux&arch=arm64" class="btn btn-ghost btn-sm" style="font-family:var(--font-mono);font-size:var(--fs-xs)">⬇ linux-arm64</a>
+                  <a href="/api/agent/download?os=linux&arch=armv7l" class="btn btn-ghost btn-sm" style="font-family:var(--font-mono);font-size:var(--fs-xs)">⬇ linux-armv7l</a>
+                  <a href="/api/agent/download?os=darwin&arch=arm64" class="btn btn-ghost btn-sm" style="font-family:var(--font-mono);font-size:var(--fs-xs)">⬇ darwin-arm64</a>
+                  <a href="/api/agent/download?os=darwin&arch=amd64" class="btn btn-ghost btn-sm" style="font-family:var(--font-mono);font-size:var(--fs-xs)">⬇ darwin-amd64</a>
+                  <a href="/api/agent/download?os=windows&arch=amd64" class="btn btn-ghost btn-sm" style="font-family:var(--font-mono);font-size:var(--fs-xs)">⬇ windows-amd64</a>
+                </div>
+                <div class="code-block">
+<span class="code-comment"># Linux (x86_64)</span>
+curl -fsSL <span class="code-url">https://get.rexhub.dev/agent/linux-amd64</span> -o rex-agent
+chmod +x rex-agent
+
+<span class="code-comment"># macOS (Apple Silicon)</span>
+curl -fsSL <span class="code-url">https://get.rexhub.dev/agent/darwin-arm64</span> -o rex-agent
+chmod +x rex-agent
+
+<span class="code-comment"># Windows</span>
+<span class="code-comment"># 从 GitHub Releases 下载 rex-agent.exe</span>
+<button class="copy-btn" onclick="copyCode(this)">复制</button>
+                </div>
+              </div>
+            </div>
+            <div class="setup-step">
+              <div class="step-number">2</div>
+              <div class="step-content">
+                <div class="step-title">获取注册令牌</div>
+                <div class="step-desc">打开 <strong>环境详情</strong> 页面，在「Agent 注册令牌」区域复制令牌。使用此令牌部署的 Agent 将自动归属到对应环境。</div>
+                <div class="token-box">
+                  <span class="token-label">令牌</span>
+                  <span class="token">rex_env_aliyun_prod_a1b2c3d4e5f6g7h8i9j0...</span>
+                  <button class="btn btn-ghost btn-sm" onclick="this.textContent='已复制'">复制</button>
+                </div>
+              </div>
+            </div>
+            <div class="setup-step">
+              <div class="step-number">3</div>
+              <div class="step-content">
+                <div class="step-title">启动 Agent</div>
+                <div class="step-desc">使用令牌连接到 REX Hub 服务器</div>
+                <div class="code-block">
+./rex-agent \
+  <span class="code-flag">--server</span> <span class="code-string">https://hub.example.com</span> \
+  <span class="code-flag">--token</span>  <span class="code-string">rex_env_aliyun_prod_a1b2c3d4e5...</span> \
+  <span class="code-flag">--name</span>   <span class="code-string">"阿里云 Agent"</span>
+<button class="copy-btn" onclick="copyCode(this)">复制</button>
+                </div>
+              </div>
+            </div>
+            <div class="setup-step">
+              <div class="step-number">4</div>
+              <div class="step-content">
+                <div class="step-title">确认连接</div>
+                <div class="step-desc">回到 REX Hub，确认 Agent 已显示为「在线」状态</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Docker -->
+          <div class="setup-content" id="setup-docker" style="display:none">
+            <div class="setup-step">
+              <div class="step-number">1</div>
+              <div class="step-content">
+                <div class="step-title">拉取镜像</div>
+                <div class="code-block">
+docker pull rexhub/agent:latest
+<button class="copy-btn" onclick="copyCode(this)">复制</button>
+                </div>
+              </div>
+            </div>
+            <div class="setup-step">
+              <div class="step-number">2</div>
+              <div class="step-content">
+                <div class="step-title">启动容器</div>
+                <div class="code-block">
+docker run -d \
+  <span class="code-flag">--name</span> rex-agent \
+  <span class="code-flag">--restart</span> unless-stopped \
+  <span class="code-flag">-e</span> REX_SERVER=<span class="code-string">https://hub.example.com</span> \
+  <span class="code-flag">-e</span> REX_TOKEN=<span class="code-string">rex_env_aliyun_prod_a1b2c3d4e5...</span> \
+  <span class="code-flag">-v</span> /var/run/docker.sock:/var/run/docker.sock \
+  rexhub/agent:latest
+<button class="copy-btn" onclick="copyCode(this)">复制</button>
+                </div>
+              </div>
+            </div>
+            <div class="setup-step">
+              <div class="step-number">3</div>
+              <div class="step-content">
+                <div class="step-title">查看日志确认连接</div>
+                <div class="code-block">
+docker logs -f rex-agent
+<span class="code-comment"># ✓ Connected to REX Hub server</span>
+<span class="code-comment"># ✓ Agent registered: agt_new123</span>
+<span class="code-comment"># ✓ Tunnel established, waiting for connections...</span>
+<button class="copy-btn" onclick="copyCode(this)">复制</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Docker Compose -->
+          <div class="setup-content" id="setup-compose" style="display:none">
+            <div class="setup-step">
+              <div class="step-number">1</div>
+              <div class="step-content">
+                <div class="step-title">创建 docker-compose.yml</div>
+                <div class="step-desc">在 Agent 所在目录创建编排文件</div>
+                <div class="code-block">
+<span class="code-comment"># docker-compose.yml</span>
+<span class="code-string">services:</span>
+  <span class="code-string">rex-agent:</span>
+    <span class="code-flag">image:</span> <span class="code-string">rexhub/agent:latest</span>
+    <span class="code-flag">container_name:</span> <span class="code-string">rex-agent</span>
+    <span class="code-flag">restart:</span> <span class="code-string">unless-stopped</span>
+    <span class="code-flag">environment:</span>
+      - <span class="code-flag">REX_SERVER</span>=<span class="code-string">https://hub.example.com</span>
+      - <span class="code-flag">REX_TOKEN</span>=<span class="code-string">rex_env_aliyun_prod_a1b2c3d4e5...</span>
+    <span class="code-flag">volumes:</span>
+      - <span class="code-string">/var/run/docker.sock:/var/run/docker.sock</span>
+      - <span class="code-string">./agent.yaml:/app/agent.yaml:ro</span>
+    <span class="code-flag">network_mode:</span> <span class="code-string">host</span>
+    <span class="code-flag">logging:</span>
+      <span class="code-flag">driver:</span> <span class="code-string">json-file</span>
+      <span class="code-flag">options:</span>
+        <span class="code-flag">max-size:</span> <span class="code-string">"10m"</span>
+        <span class="code-flag">max-file:</span> <span class="code-string">"3"</span>
+<button class="copy-btn" onclick="copyCode(this)">复制</button>
+                </div>
+              </div>
+            </div>
+            <div class="setup-step">
+              <div class="step-number">2</div>
+              <div class="step-content">
+                <div class="step-title">创建 agent.yaml（可选）</div>
+                <div class="step-desc">挂载配置文件可使用环境变量以外的高级配置</div>
+                <div class="code-block">
+<span class="code-comment"># agent.yaml</span>
+server: <span class="code-string">https://hub.example.com</span>
+token: <span class="code-string">rex_env_aliyun_prod_a1b2c3d4e5...</span>
+name: <span class="code-string">"树莓派 Agent"</span>
+<button class="copy-btn" onclick="copyCode(this)">复制</button>
+                </div>
+              </div>
+            </div>
+            <div class="setup-step">
+              <div class="step-number">3</div>
+              <div class="step-content">
+                <div class="step-title">启动服务</div>
+                <div class="code-block">
+<span class="code-comment"># 启动</span>
+docker compose up -d
+
+<span class="code-comment"># 查看日志</span>
+docker compose logs -f rex-agent
+
+<span class="code-comment"># 停止</span>
+docker compose down
+
+<span class="code-comment"># 更新到最新版</span>
+docker compose pull && docker compose up -d
+<button class="copy-btn" onclick="copyCode(this)">复制</button>
+                </div>
+              </div>
+            </div>
+            <div class="setup-step">
+              <div class="step-number">4</div>
+              <div class="step-content">
+                <div class="step-title">确认连接</div>
+                <div class="step-desc">回到 REX Hub，确认 Agent 已显示为「在线」状态</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Config File -->
+          <div class="setup-content" id="setup-config" style="display:none">
+            <div class="setup-step">
+              <div class="step-number">1</div>
+              <div class="step-content">
+                <div class="step-title">创建配置文件</div>
+                <div class="step-desc">在 Agent 所在目录创建 <code style="background:var(--bg-deep);padding:1px 4px;border-radius:3px;font-family:var(--font-mono);font-size:var(--fs-sm)">agent.yaml</code></div>
+                <div class="code-block">
+<span class="code-comment"># agent.yaml</span>
+server: <span class="code-string">https://hub.example.com</span>
+token: <span class="code-string">rex_env_aliyun_prod_a1b2c3d4e5...</span>
+name: <span class="code-string">"树莓派 Agent"</span>
+<button class="copy-btn" onclick="copyCode(this)">复制</button>
+                </div>
+              </div>
+            </div>
+            <div class="setup-step">
+              <div class="step-number">2</div>
+              <div class="step-content">
+                <div class="step-title">使用配置启动</div>
+                <div class="code-block">
+./rex-agent <span class="code-flag">--config</span> agent.yaml
+<button class="copy-btn" onclick="copyCode(this)">复制</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <nav class="bottom-nav">
+    <a href="dashboard.html" class="bottom-nav-item"><span class="bnav-icon">◉</span><span>首页</span></a>
+    <a href="environments.html" class="bottom-nav-item"><span class="bnav-icon">◈</span><span>环境</span></a>
+    <a href="environment-new.html" class="bottom-nav-item"><span class="bnav-icon">+</span><span>新建</span></a>
+    <a href="agents.html" class="bottom-nav-item active"><span class="bnav-icon">⬡</span><span>Agent</span></a>
+    <a href="settings.html" class="bottom-nav-item"><span class="bnav-icon">⚙</span><span>设置</span></a>
+  </nav>
+
+  <script src="shared.js"></script>
+  <script>
+    document.getElementById('sidebarContainer').innerHTML = buildSidebar('agents');
+    bindSidebarEvents();
+
+    // ── Agent Data ──
+    const AGENTS = {
+      aliyun: {
+        name: '阿里云 Agent', env: '阿里云', id: 'agt_7x8k9m', version: 'v0.1.0',
+        ip: '172.16.0.52', uptime: '14 天 3 时', latency: '12ms', resources: 4,
+        server: 'https://hub.example.com', token: 'rex_env_aliyun_prod_a1b2c3d4e5...',
+        logLevel: 'info', autoUpdate: true,
+      },
+      office: {
+        name: '树莓派 Agent', env: '树莓派集群', id: 'agt_3k5m7n', version: 'v0.1.0',
+        ip: '10.0.1.28', uptime: '7 天 18 时', latency: '8ms', resources: 3,
+        server: 'https://hub.example.com', token: 'rex_env_office_a1b2c3d4e5...',
+        logLevel: 'info', autoUpdate: true,
+      },
+      nas: {
+        name: 'NAS Agent', env: '家庭 NAS', id: 'agt_9p2q4r', version: 'v0.0.9',
+        ip: '—', uptime: '—', latency: '—', resources: 2,
+        server: 'https://hub.example.com', token: 'rex_env_nas_a1b2c3d4e5...',
+        logLevel: 'info', autoUpdate: false,
+      },
+    };
+
+    // ── Config Panel ──
+    function showConfig(key) {
+      const a = AGENTS[key];
+      document.getElementById('configAgentName').textContent = a.name;
+      document.getElementById('cfgEnv').textContent = a.env;
+      document.getElementById('cfgId').textContent = a.id;
+      document.getElementById('cfgVersion').textContent = a.version;
+      document.getElementById('cfgServer').textContent = a.server;
+      document.getElementById('cfgToken').textContent = a.token;
+      document.getElementById('cfgAutoUpdate').checked = a.autoUpdate;
+      document.getElementById('configOverlay').classList.add('show');
+    }
+    function hideConfig() {
+      document.getElementById('configOverlay').classList.remove('show');
+    }
+
+    // ── Log Viewer ──
+    function showLog(key) {
+      const a = AGENTS[key];
+      document.getElementById('logAgentName').textContent = a.name;
+      renderLogs();
+      document.getElementById('logOverlay').classList.add('show');
+    }
+    function hideLog() {
+      document.getElementById('logOverlay').classList.remove('show');
+    }
+
+    const LOG_DATA = [
+      { time: '16:45:12', level: 'info', msg: 'Agent started, version <span class="log-highlight">v0.1.0</span>' },
+      { time: '16:45:12', level: 'info', msg: 'Connecting to server hub.example.com:443...' },
+      { time: '16:45:13', level: 'info', msg: '<span class="log-highlight">TLS 1.3</span> handshake completed (ECDHE-X25519)' },
+      { time: '16:45:13', level: 'info', msg: 'Token verified, environment: <span class="log-highlight">aliyun-prod</span>' },
+      { time: '16:45:13', level: 'info', msg: 'WebSocket tunnel established, waiting for connections...' },
+      { time: '16:45:15', level: 'debug', msg: 'Heartbeat sent (latency: 12ms)' },
+      { time: '16:46:15', level: 'debug', msg: 'Heartbeat sent (latency: 11ms)' },
+      { time: '16:47:02', level: 'info', msg: 'Connection request: <span class="log-highlight">SSH</span> → 192.168.1.100:22 (user: root)' },
+      { time: '16:47:02', level: 'info', msg: 'SSH session established, PTY allocated (180×42)' },
+      { time: '16:47:15', level: 'debug', msg: 'Data transferred: ↑ 1.2KB ↓ 15.6KB' },
+      { time: '16:48:30', level: 'info', msg: 'SSH session closed (root@192.168.1.100, duration: 88s)' },
+      { time: '16:49:01', level: 'info', msg: 'Connection request: <span class="log-highlight">MySQL</span> → db.internal:3306 (user: app)' },
+      { time: '16:49:01', level: 'info', msg: 'MySQL proxy tunnel established' },
+      { time: '16:50:12', level: 'warn', msg: 'High latency detected: <span class="log-error-msg">156ms</span> (threshold: 100ms)' },
+      { time: '16:50:15', level: 'info', msg: 'Latency recovered: 14ms' },
+      { time: '16:51:30', level: 'info', msg: 'MySQL proxy tunnel closed (duration: 149s)' },
+      { time: '16:52:00', level: 'debug', msg: 'Resource scan: 4 local services detected' },
+      { time: '16:53:00', level: 'debug', msg: 'Heartbeat sent (latency: 12ms)' },
+    ];
+
+    let logFilter = 'all';
+    function renderLogs() {
+      const body = document.getElementById('logBody');
+      const filtered = logFilter === 'all' ? LOG_DATA : LOG_DATA.filter(l => l.level === logFilter);
+      body.innerHTML = filtered.map(l =>
+        `<div class="log-line"><span class="log-time">${l.time}</span><span class="log-level ${l.level}">${l.level.toUpperCase().padEnd(5)}</span><span class="log-msg">${l.msg}</span></div>`
+      ).join('');
+      body.scrollTop = body.scrollHeight;
+      document.getElementById('logCount').textContent = filtered.length + ' 行';
+    }
+    function filterLogs(level) {
+      logFilter = level;
+      document.querySelectorAll('.log-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.level === level));
+      renderLogs();
+    }
+
+    // ── Remove Confirm ──
+    function showResetToken(key) {
+      const a = AGENTS[key];
+      document.getElementById('resetAgentName').textContent = a.name;
+      document.getElementById('resetOverlay').classList.add('show');
+    }
+    function hideResetToken() {
+      document.getElementById('resetOverlay').classList.remove('show');
+    }
+    function showAgentCtx(e, key) {
+      const a = AGENTS[key];
+      showContextMenu(e, [
+        { label: '查看日志', icon: '📋', action: () => showLog(key) },
+        { label: '配置', icon: '⚙', action: () => showConfig(key) },
+        '---',
+        { label: '复制 Agent ID', icon: '📋', action: () => navigator.clipboard.writeText(a.id) },
+        { label: '复制注册令牌', icon: '🔑', action: () => navigator.clipboard.writeText(a.token) },
+        '---',
+        { label: '重置令牌', icon: '🔄', danger: true, action: () => showResetToken(key) },
+      ]);
+    }
+
+    // ── Setup Guide ──
+    function switchSetupTab(btn, tab) {
+      document.querySelectorAll('.setup-tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.setup-content').forEach(c => c.style.display = 'none');
+      document.getElementById('setup-' + tab).style.display = 'block';
+    }
+    function copyCode(btn) {
+      const block = btn.closest('.code-block');
+      const text = block.textContent.replace('复制', '').replace('已复制', '').trim();
+      navigator.clipboard.writeText(text);
+      btn.textContent = '已复制';
+      setTimeout(() => btn.textContent = '复制', 2000);
+    }
+  </script>
+
+  <!-- Config Panel Modal -->
+  <div class="config-overlay" id="configOverlay" onclick="hideConfig()">
+    <div class="config-panel" onclick="event.stopPropagation()">
+      <div class="config-panel-header">
+        <div class="config-panel-title" id="configAgentName">Agent 配置</div>
+        <button class="config-panel-close" onclick="hideConfig()">×</button>
+      </div>
+      <div class="config-panel-body">
+        <div class="config-section-title">基本信息</div>
+        <div class="config-row"><span class="config-row-label">所属环境</span><span class="config-row-value" id="cfgEnv">—</span></div>
+        <div class="config-row"><span class="config-row-label">Agent ID</span><span class="config-row-value" id="cfgId">—</span></div>
+        <div class="config-row"><span class="config-row-label">版本</span><span class="config-row-value" id="cfgVersion">—</span></div>
+
+        <div class="config-section-title">连接</div>
+        <div class="config-row"><span class="config-row-label">服务器地址</span><span class="config-row-value" id="cfgServer">—</span></div>
+        <div class="config-row"><span class="config-row-label">注册令牌</span><span class="config-row-value editable" id="cfgToken" style="cursor:pointer" onclick="navigator.clipboard.writeText(this.textContent);this.style.borderColor='var(--success)';setTimeout(()=>this.style.borderColor='',1000)">— 点击复制</span></div>
+
+        <div class="config-section-title">更新</div>
+        <div class="config-row">
+          <span class="config-row-label">自动更新</span>
+          <label style="position:relative;width:40px;height:22px;cursor:pointer">
+            <input type="checkbox" id="cfgAutoUpdate" style="opacity:0;width:0;height:0">
+            <span style="position:absolute;inset:0;background:var(--border);border-radius:11px;transition:all .2s"></span>
+            <span style="position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s"></span>
+          </label>
+        </div>
+        <div class="config-row">
+          <span class="config-row-label">当前版本</span>
+          <span class="config-row-value" style="color:var(--text-muted)">v0.1.0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log Viewer Modal -->
+  <div class="log-overlay" id="logOverlay" onclick="hideLog()">
+    <div class="log-panel" onclick="event.stopPropagation()">
+      <div class="log-panel-header">
+        <div class="log-panel-title">
+          <span style="color:var(--success)">●</span>
+          <span id="logAgentName">Agent 日志</span>
+        </div>
+        <button class="log-panel-close" onclick="hideLog()">×</button>
+      </div>
+      <div class="log-toolbar">
+        <button class="log-filter-btn active" data-level="all" onclick="filterLogs('all')">全部</button>
+        <button class="log-filter-btn" data-level="info" onclick="filterLogs('info')">INFO</button>
+        <button class="log-filter-btn" data-level="warn" onclick="filterLogs('warn')">WARN</button>
+        <button class="log-filter-btn" data-level="error" onclick="filterLogs('error')">ERROR</button>
+        <button class="log-filter-btn" data-level="debug" onclick="filterLogs('debug')">DEBUG</button>
+        <span class="log-spacer"></span>
+        <label class="log-auto-scroll">
+          <input type="checkbox" checked style="accent-color:var(--accent)"> 自动滚动
+        </label>
+      </div>
+      <div class="log-body" id="logBody"></div>
+      <div class="log-footer">
+        <span id="logCount">0 行</span>
+        <span>实时更新 · 最近 1 小时</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reset Token Confirm Modal -->
+  <div class="remove-overlay" id="resetOverlay" onclick="hideResetToken()">
+    <div class="remove-panel" onclick="event.stopPropagation()">
+      <div class="modal-title">重置注册令牌？</div>
+      <p style="color:var(--text-secondary);font-size:var(--fs-base);margin-bottom:var(--sp-lg)">
+        确定要重置 <strong id="resetAgentName">Agent</strong> 的注册令牌吗？<br>
+        重置后该 Agent 将立即断开连接且无法重新连接。请在 Agent 所在机器上使用新令牌重新启动。
+      </p>
+      <div style="padding:var(--sp-md);background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius-md);margin-bottom:var(--sp-lg)">
+        <label style="display:flex;align-items:center;gap:var(--sp-sm);font-size:var(--fs-sm);color:var(--text-secondary);cursor:pointer">
+          <input type="checkbox" style="accent-color:var(--danger)"> 重置令牌并关闭所有该环境的连接
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="hideResetToken()">取消</button>
+        <button class="btn btn-danger" onclick="hideResetToken()">确认重置</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>REX Hub — 创建资源</title>
+  <link rel="stylesheet" href="css/base.css">
+  <style>
+    .create-layout {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    /* Steps Indicator */
+    .steps-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--sp-sm);
+      margin-bottom: var(--sp-2xl);
+      padding: 0 var(--sp-xl);
+    }
+    .step-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+      transition: all var(--transition-fast);
+    }
+    .step-dot.active { background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+    .step-dot.done { background: var(--success); }
+    .step-line {
+      width: 32px; height: 2px;
+      background: var(--border);
+    }
+    .step-line.done { background: var(--success); }
+
+    /* Protocol Grid */
+    .protocol-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: var(--sp-md);
+    }
+    .protocol-option {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--sp-sm);
+      padding: var(--sp-xl) var(--sp-md);
+      background: var(--bg-surface);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-lg);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      text-align: center;
+    }
+    .protocol-option:hover {
+      border-color: var(--text-muted);
+      background: var(--bg-elevated);
+    }
+    .protocol-option.selected {
+      border-color: var(--accent);
+      background: rgba(232,145,45,0.05);
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+    .protocol-option-icon {
+      width: 44px; height: 44px;
+      border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: var(--fs-md);
+    }
+    .protocol-option-name {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: var(--fs-base);
+    }
+    .protocol-option-desc {
+      font-size: var(--fs-xs);
+      color: var(--text-muted);
+    }
+
+    /* Form Section */
+    .form-section {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--sp-xl);
+      margin-bottom: var(--sp-lg);
+    }
+    .form-section-title {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: var(--fs-md);
+      margin-bottom: var(--sp-lg);
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+    }
+    .form-section-title .badge { font-size: var(--fs-xs); }
+
+    /* Connection Mode */
+    .connection-mode-select {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--sp-md);
+      margin-bottom: var(--sp-lg);
+    }
+    .mode-option {
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-sm);
+      padding: var(--sp-lg);
+      background: var(--bg-deep);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-lg);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .mode-option:hover { border-color: var(--text-muted); }
+    .mode-option.selected { border-color: var(--accent); box-shadow: 0 0 12px var(--accent-glow); }
+    .mode-option-title {
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+    }
+    .mode-option-desc {
+      font-size: var(--fs-sm);
+      color: var(--text-secondary);
+    }
+
+    /* Auth Toggle */
+    .auth-toggle {
+      display: flex;
+      gap: 2px;
+      background: var(--bg-deep);
+      border-radius: var(--radius-md);
+      padding: 2px;
+      margin-bottom: var(--sp-lg);
+      width: fit-content;
+    }
+    .auth-toggle-btn {
+      padding: var(--sp-sm) var(--sp-lg);
+      border-radius: var(--radius-sm);
+      font-size: var(--fs-sm);
+      font-weight: 500;
+      cursor: pointer;
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-family: var(--font-body);
+      transition: all var(--transition-fast);
+    }
+    .auth-toggle-btn.active {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+    }
+
+    /* Form Actions */
+    .form-actions {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--sp-md);
+      margin-top: var(--sp-xl);
+    }
+    .form-actions .spacer { flex: 1; }
+
+    /* Test Connection */
+    .test-result {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-sm);
+      padding: var(--sp-md) var(--sp-lg);
+      border-radius: var(--radius-md);
+      font-size: var(--fs-sm);
+      margin-top: var(--sp-lg);
+    }
+    .test-result.success {
+      background: rgba(63,185,80,0.1);
+      border: 1px solid rgba(63,185,80,0.3);
+      color: var(--success);
+    }
+    .test-result.error {
+      background: rgba(248,81,73,0.1);
+      border: 1px solid rgba(248,81,73,0.3);
+      color: var(--danger);
+    }
+
+    @media (max-width: 767px) {
+      .protocol-grid { grid-template-columns: repeat(2, 1fr); }
+      .connection-mode-select { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <div id="sidebarContainer" data-active-page="environments"></div>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div class="flex items-center gap-md">
+          <a href="dashboard.html" class="btn btn-ghost btn-sm btn-icon">←</a>
+          <h1 class="page-title">创建资源</h1>
+        </div>
+      </header>
+
+      <div class="page-body">
+        <div class="create-layout">
+          <!-- Steps -->
+          <div class="steps-indicator">
+            <div class="step-dot active" id="dot-1"></div>
+            <div class="step-line" id="line-1"></div>
+            <div class="step-dot" id="dot-2"></div>
+            <div class="step-line" id="line-2"></div>
+            <div class="step-dot" id="dot-3"></div>
+            <div class="step-line" id="line-3"></div>
+            <div class="step-dot" id="dot-4"></div>
+          </div>
+
+          <!-- Step 1: Choose Protocol -->
+          <div id="step-1">
+            <div class="form-section">
+              <div class="form-section-title">选择协议</div>
+              <div class="protocol-grid">
+                <div class="protocol-option" onclick="selectProtocol(this, 'ssh')">
+                  <div class="protocol-option-icon" style="background:rgba(63,185,80,0.12);color:var(--success)">$</div>
+                  <div class="protocol-option-name">SSH</div>
+                  <div class="protocol-option-desc">远程终端</div>
+                </div>
+                <div class="protocol-option" onclick="selectProtocol(this, 'sftp')">
+                  <div class="protocol-option-icon" style="background:rgba(139,92,246,0.12);color:#8B5CF6">📁</div>
+                  <div class="protocol-option-name">SFTP</div>
+                  <div class="protocol-option-desc">文件传输</div>
+                </div>
+                <div class="protocol-option" onclick="selectProtocol(this, 'mysql')">
+                  <div class="protocol-option-icon" style="background:rgba(88,166,255,0.12);color:var(--info)">dB</div>
+                  <div class="protocol-option-name">MySQL</div>
+                  <div class="protocol-option-desc">SQL 控制台</div>
+                </div>
+                <div class="protocol-option" onclick="selectProtocol(this, 'postgresql')">
+                  <div class="protocol-option-icon" style="background:rgba(139,92,246,0.12);color:#8B5CF6">pg</div>
+                  <div class="protocol-option-name">PostgreSQL</div>
+                  <div class="protocol-option-desc">SQL 控制台</div>
+                </div>
+                <div class="protocol-option" onclick="selectProtocol(this, 'redis')">
+                  <div class="protocol-option-icon" style="background:rgba(248,81,73,0.12);color:var(--danger)">R</div>
+                  <div class="protocol-option-name">Redis</div>
+                  <div class="protocol-option-desc">命令控制台</div>
+                </div>
+                <div class="protocol-option" onclick="selectProtocol(this, 'docker')">
+                  <div class="protocol-option-icon" style="background:rgba(88,166,255,0.12);color:var(--info)">🐳</div>
+                  <div class="protocol-option-name">Docker</div>
+                  <div class="protocol-option-desc">容器管理</div>
+                </div>
+                <div class="protocol-option" onclick="selectProtocol(this, 'sqlite')">
+                  <div class="protocol-option-icon" style="background:rgba(210,153,34,0.12);color:var(--warning)">S</div>
+                  <div class="protocol-option-name">SQLite</div>
+                  <div class="protocol-option-desc">本地数据库</div>
+                </div>
+                <div class="protocol-option" onclick="selectProtocol(this, 's3')">
+                  <div class="protocol-option-icon" style="background:rgba(232,145,45,0.12);color:var(--accent)">☁</div>
+                  <div class="protocol-option-name">S3 / MinIO</div>
+                  <div class="protocol-option-desc">对象存储</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <div class="spacer"></div>
+              <button class="btn btn-primary" onclick="goToStep(2)" id="next-1" disabled>下一步</button>
+            </div>
+          </div>
+
+          <!-- Step 2: Basic Info + Connection Mode -->
+          <div id="step-2" style="display:none">
+            <div class="form-section">
+              <div class="form-section-title">基本信息</div>
+              <div class="form-group" style="margin-bottom:var(--sp-lg)">
+                <label class="form-label">资源名称</label>
+                <input class="form-input" placeholder="例如：云服务器、主数据库" id="resourceName">
+              </div>
+
+              <div class="form-group" style="margin-bottom:var(--sp-lg)">
+                <label class="form-label">所属环境</label>
+                <select class="form-select">
+                  <option>阿里云</option>
+                  <option>树莓派集群</option>
+                  <option>家庭 NAS</option>
+                  <option value="new">+ 创建新环境</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <div class="form-section-title">连接方式</div>
+              <div class="connection-mode-select">
+                <div class="mode-option" onclick="selectMode(this, 'agent')">
+                  <div class="mode-option-title">
+                    <span class="connection-mode agent">⬡ Agent</span>
+                    通过 Agent 代理
+                  </div>
+                  <div class="mode-option-desc">适用于内网资源。Agent 从内网主动连接服务器，无需开放入站端口。</div>
+                </div>
+                <div class="mode-option" onclick="selectMode(this, 'direct')">
+                  <div class="mode-option-title">
+                    <span class="connection-mode direct">◉ 直连</span>
+                    服务器直连
+                  </div>
+                  <div class="mode-option-desc">适用于公网资源。REX Hub 服务器直接连接目标主机。</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button class="btn" onclick="goToStep(1)">上一步</button>
+              <button class="btn btn-primary" onclick="goToStep(3)">下一步</button>
+            </div>
+          </div>
+
+          <!-- Step 3: Connection Details (SSH example) -->
+          <div id="step-3" style="display:none">
+            <div class="form-section" id="form-ssh">
+              <div class="form-section-title">
+                SSH 连接信息
+                <span class="badge badge-ssh">SSH</span>
+              </div>
+              <div class="form-row" style="margin-bottom:var(--sp-lg)">
+                <div class="form-group">
+                  <label class="form-label">主机地址 <span style="color:var(--danger)">*</span></label>
+                  <input class="form-input" placeholder="192.168.1.100" id="sshHost">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">端口</label>
+                  <input class="form-input" value="22" id="sshPort">
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-bottom:var(--sp-lg)">
+                <label class="form-label">用户名 <span style="color:var(--danger)">*</span></label>
+                <input class="form-input" placeholder="root" id="sshUser">
+              </div>
+
+              <div class="form-group" style="margin-bottom:var(--sp-lg)">
+                <label class="form-label">认证方式</label>
+                <div class="auth-toggle">
+                  <button class="auth-toggle-btn active" onclick="switchAuth(this, 'password')">密码</button>
+                  <button class="auth-toggle-btn" onclick="switchAuth(this, 'key')">密钥</button>
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-bottom:var(--sp-lg)" id="auth-password">
+                <label class="form-label">密码</label>
+                <input class="form-input" type="password" placeholder="输入密码">
+              </div>
+
+              <div class="form-group" style="margin-bottom:var(--sp-lg);display:none" id="auth-key">
+                <label class="form-label">SSH 密钥</label>
+                <div style="border:1px dashed var(--border);border-radius:var(--radius-md);padding:var(--sp-xl);text-align:center;color:var(--text-muted);cursor:pointer">
+                  点击上传密钥文件，或拖放文件到此处<br>
+                  <span class="text-xs" style="margin-top:4px;display:block">支持 PEM、PPK、OpenSSH 格式</span>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">终端编码</label>
+                  <select class="form-select">
+                    <option>UTF-8 (推荐)</option>
+                    <option>GBK</option>
+                    <option>ISO-8859-1</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">保活间隔</label>
+                  <select class="form-select">
+                    <option>60 秒</option>
+                    <option>30 秒</option>
+                    <option>120 秒</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <button class="btn" style="width:100%;margin-bottom:var(--sp-lg)" onclick="testConnection()">
+              🔌 测试连接
+            </button>
+
+            <div class="test-result success" id="test-success" style="display:none">
+              ✓ 连接成功！延迟 12ms，认证通过
+            </div>
+            <div class="test-result error" id="test-error" style="display:none">
+              ✕ 连接失败：Connection refused (port 22)
+            </div>
+
+            <div class="form-actions">
+              <button class="btn" onclick="goToStep(2)">上一步</button>
+              <button class="btn btn-primary" onclick="saveResource()">保存资源</button>
+            </div>
+          </div>
+
+          <!-- Step 4: Done -->
+          <div id="step-4" style="display:none">
+            <div class="form-section" style="text-align:center;padding:var(--sp-3xl)">
+              <div style="font-size:48px;margin-bottom:var(--sp-lg)">✓</div>
+              <div style="font-family:var(--font-mono);font-size:var(--fs-xl);font-weight:700;margin-bottom:var(--sp-sm)">资源创建成功</div>
+              <div style="color:var(--text-secondary);margin-bottom:var(--sp-2xl)">
+                资源已保存到 <strong>阿里云</strong> 环境
+              </div>
+              <div style="display:flex;gap:var(--sp-md);justify-content:center">
+                <a href="app.html" class="btn btn-primary">立即连接</a>
+                <a href="dashboard.html" class="btn">返回仪表盘</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <nav class="bottom-nav">
+    <a href="dashboard.html" class="bottom-nav-item"><span class="bnav-icon">◉</span><span>首页</span></a>
+    <a href="environments.html" class="bottom-nav-item"><span class="bnav-icon">◈</span><span>环境</span></a>
+    <a href="resource-new.html" class="bottom-nav-item active"><span class="bnav-icon">+</span><span>新建</span></a>
+    <a href="agents.html" class="bottom-nav-item"><span class="bnav-icon">⬡</span><span>Agent</span></a>
+    <a href="settings.html" class="bottom-nav-item"><span class="bnav-icon">⚙</span><span>设置</span></a>
+  </nav>
+  <script src="shared.js"></script>
+  <script>
+    document.getElementById('sidebarContainer').innerHTML = buildSidebar('resource-new');
+    bindSidebarEvents();
+    let currentStep = 1;
+    let selectedProtocol = null;
+
+    function selectProtocol(el, proto) {
+      document.querySelectorAll('.protocol-option').forEach(p => p.classList.remove('selected'));
+      el.classList.add('selected');
+      selectedProtocol = proto;
+      document.getElementById('next-1').disabled = false;
+    }
+
+    function selectMode(el, mode) {
+      document.querySelectorAll('.mode-option').forEach(m => m.classList.remove('selected'));
+      el.classList.add('selected');
+    }
+
+    function switchAuth(btn, type) {
+      document.querySelectorAll('.auth-toggle-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('auth-password').style.display = type === 'password' ? 'block' : 'none';
+      document.getElementById('auth-key').style.display = type === 'key' ? 'block' : 'none';
+    }
+
+    function goToStep(n) {
+      for (let i = 1; i <= 4; i++) {
+        document.getElementById('step-' + i).style.display = i === n ? 'block' : 'none';
+        const dot = document.getElementById('dot-' + i);
+        dot.className = 'step-dot' + (i === n ? ' active' : (i < n ? ' done' : ''));
+        if (i < 4) {
+          const line = document.getElementById('line-' + i);
+          line.className = 'step-line' + (i < n ? ' done' : '');
+        }
+      }
+      currentStep = n;
+      window.scrollTo(0, 0);
+    }
+
+    function testConnection() {
+      const host = document.getElementById('sshHost').value;
+      if (!host) {
+        document.getElementById('test-error').textContent = '✕ 请填写主机地址';
+        document.getElementById('test-error').style.display = 'flex';
+        return;
+      }
+      document.getElementById('test-success').style.display = 'none';
+      document.getElementById('test-error').style.display = 'none';
+      setTimeout(() => {
+        document.getElementById('test-success').style.display = 'flex';
+      }, 1500);
+    }
+
+    function saveResource() {
+      goToStep(4);
+    }
+  </script>
+</body>
+</html>
