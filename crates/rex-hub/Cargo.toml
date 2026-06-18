@@ -1,0 +1,25 @@
+[package]
+name = "rex-hub"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "rex-hub"
+path = "src/bin/rex-hub.rs"
+
+[dependencies]
+rex-common = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+axum = { workspace = true }
+rusqlite = { workspace = true }
+jsonwebtoken = { workspace = true }
+argon2 = { workspace = true }
+uuid = { workspace = true }
+tower = { workspace = true }
+r2d2 = { workspace = true }
+rand_core = { workspace = true }

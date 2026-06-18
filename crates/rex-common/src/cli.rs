@@ -7,6 +7,10 @@ pub struct Cli {
     /// 以 worker 模式运行
     #[arg(long)]
     pub worker: bool,
+
+    /// 配置文件路径（仅 Hub）
+    #[arg(long)]
+    pub config: Option<String>,
 }
 
 #[cfg(test)]
@@ -23,11 +27,19 @@ mod tests {
     fn parse_worker_flag() {
         let cli = Cli::parse_from(["rex", "--worker"]);
         assert!(cli.worker);
+        assert!(cli.config.is_none());
     }
 
     #[test]
     fn parse_no_flags() {
         let cli = Cli::parse_from(["rex"]);
         assert!(!cli.worker);
+    }
+
+    #[test]
+    fn parse_config_flag() {
+        let cli = Cli::parse_from(["rex", "--worker", "--config", "hub.yaml"]);
+        assert!(cli.worker);
+        assert_eq!(cli.config.as_deref(), Some("hub.yaml"));
     }
 }
