@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod audit;
 pub mod auth;
 pub mod config;
@@ -6,3 +7,4 @@ pub mod env;
 pub mod helpers;
 pub mod resource;
 pub mod routes;
+pub mod ws;

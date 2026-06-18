@@ -7,25 +7,35 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use std::sync::Arc;
 
+use crate::agent;
 use crate::audit;
 use crate::auth;
 use crate::db::Database;
 use crate::env;
 use crate::helpers::{ErrorBody, ErrorResponse};
 use crate::resource;
+use crate::ws::AgentConnections;
 
 /// 共享应用状态
 pub struct AppState {
     pub db: Arc<Database>,
     pub secret_key: String,
+    pub connections: Arc<AgentConnections>,
 }
 
 pub fn app(db: Arc<Database>, secret_key: String) -> axum::Router {
-    let state = Arc::new(AppState { db, secret_key });
+    let connections = Arc::new(crate::ws::new_connections());
+    let state = Arc::new(AppState {
+        db,
+        secret_key,
+        connections,
+    });
 
     let public_routes = Router::new()
         .route("/healthz", get(healthz))
-        .route("/api/auth/login", post(auth::login));
+        .route("/api/auth/login", post(auth::login))
+        .route("/api/agents/register", post(agent::register))
+        .route("/ws/agent", get(crate::ws::agent_ws_handler));
 
     let protected_routes = Router::new()
         .route(
@@ -48,6 +58,7 @@ pub fn app(db: Arc<Database>, secret_key: String) -> axum::Router {
                 .put(resource::update_resource)
                 .delete(resource::delete_resource),
         )
+        .route("/api/environments/:env_id/agents", get(agent::list_agents))
         .route("/api/audit-log", get(audit::list_audit_log))
         .layer(middleware::from_fn_with_state(
             state.clone(),
