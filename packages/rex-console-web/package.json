@@ -11,11 +11,13 @@
     "lint": "eslint . --ext .vue,.ts,.tsx"
   },
   "dependencies": {
-    "vue": "^3.5.0",
-    "vue-router": "^4.4.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "axios": "^1.18.0",
     "pinia": "^2.2.0",
+    "vue": "^3.5.0",
     "vue-i18n": "^10.0.0",
-    "axios": "^1.18.0"
+    "vue-router": "^4.4.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.1.0",

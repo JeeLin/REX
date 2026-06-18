@@ -45,6 +45,11 @@ const router = createRouter({
         },
       ],
     },
+    {
+      path: '/terminal/:resourceId',
+      name: 'terminal',
+      component: () => import('./pages/Terminal.vue'),
+    },
   ],
 })
 
