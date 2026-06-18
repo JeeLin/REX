@@ -1,3 +1,4 @@
+pub mod local;
 pub mod sftp;
 
 use std::path::{Path, PathBuf};
