@@ -44,7 +44,7 @@ impl HubConfig {
         if let Ok(val) = std::env::var("REX_SECRET_KEY") {
             config.secret_key = val;
         }
-        if let Ok(val) = std::env::var("STATIC_DIR") {
+        if let Ok(val) = std::env::var("REX_STATIC_DIR") {
             config.static_dir = Some(PathBuf::from(val));
         }
 

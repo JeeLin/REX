@@ -22,7 +22,7 @@ COPY dist/static/ /app/static/
 RUN mkdir -p /app/data
 
 ENV DATA_DIR=/app/data
-ENV STATIC_DIR=/app/static
+ENV REX_STATIC_DIR=/app/static
 
 EXPOSE 3000
 

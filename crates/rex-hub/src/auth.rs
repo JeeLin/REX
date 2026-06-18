@@ -60,11 +60,14 @@ pub async fn login(
         )
         .ok();
 
+    let default_password = std::env::var("REX_DEFAULT_PASSWORD")
+        .unwrap_or_else(|_| "admin".to_string());
+
     let password_hash = stored_hash.unwrap_or_else(|| {
         let salt = SaltString::generate(&mut OsRng);
         let hash = argon2::password_hash::PasswordHasher::hash_password(
             &argon2::Argon2::default(),
-            "admin".as_bytes(),
+            default_password.as_bytes(),
             &salt,
         )
         .unwrap()
