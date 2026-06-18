@@ -37,6 +37,11 @@
         @select="handleSelect"
         @context-menu="handleContextMenu"
       />
+      <TransferQueuePanel
+        :tasks="transferTasks"
+        @cancel="handleCancelTransfer"
+        @remove="handleRemoveTransfer"
+      />
     </div>
 
     <!-- Status Bar -->
@@ -155,8 +160,10 @@
 import { ref, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useFileManager } from '@/features/files/useFileManager'
+import { useTransferQueue } from '@/features/files/useTransferQueue'
 import FileBreadcrumb from '@/features/files/FileBreadcrumb.vue'
 import FileList from '@/features/files/FileList.vue'
+import TransferQueuePanel from '@/features/files/TransferQueuePanel.vue'
 import type { FileEntry } from '@/api/files'
 
 const route = useRoute()
@@ -180,6 +187,16 @@ const {
 } = useFileManager(resourceId)
 
 const selectedPaths = ref<string[]>([])
+
+const { tasks: transferTasks, cancel: cancelTransfer, remove: removeTransfer } = useTransferQueue()
+
+function handleCancelTransfer(id: string) {
+  cancelTransfer(id)
+}
+
+function handleRemoveTransfer(id: string) {
+  removeTransfer(id)
+}
 
 // Context menu
 const showContextMenu = ref(false)

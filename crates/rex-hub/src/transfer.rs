@@ -145,6 +145,32 @@ pub async fn cancel_transfer(
     }
 }
 
+/// DELETE /api/transfers/:id/remove — 从列表中移除任务（仅 completed/failed/cancelled）
+pub async fn remove_transfer(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+    let transfer_state = state
+        .transfer
+        .as_ref()
+        .ok_or_else(|| err_resp("INTERNAL_ERROR", "传输管理器未初始化"))?;
+
+    match transfer_state.manager.remove_task(&id).await {
+        Ok(()) => {
+            tracing::info!(task_id = %id, "transfer task removed via API");
+            Ok(StatusCode::NO_CONTENT)
+        }
+        Err(e) => {
+            let msg = e.to_string();
+            if msg.contains("task not found") {
+                Err(not_found("TRANSFER_NOT_FOUND", "传输任务不存在"))
+            } else {
+                Err(bad_request(&msg))
+            }
+        }
+    }
+}
+
 /// 验证传输端点参数
 fn validate_endpoint(
     ep: &TransferEndpoint,

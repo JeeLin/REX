@@ -2,7 +2,7 @@ use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Request, StatusCode};
 use axum::middleware::{self, Next};
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use std::sync::Arc;
@@ -28,6 +28,14 @@ pub struct AppState {
 }
 
 pub fn app(db: Arc<Database>, secret_key: String) -> axum::Router {
+    app_with_static(db, secret_key, None)
+}
+
+pub fn app_with_static(
+    db: Arc<Database>,
+    secret_key: String,
+    static_dir: Option<std::path::PathBuf>,
+) -> axum::Router {
     let connections = Arc::new(crate::ws::new_connections());
     let sessions = Arc::new(SessionManager::new(900));
     let transfer_state = Arc::new(crate::transfer::TransferState {
@@ -91,6 +99,10 @@ pub fn app(db: Arc<Database>, secret_key: String) -> axum::Router {
             get(crate::transfer::get_transfer).delete(crate::transfer::cancel_transfer),
         )
         .route(
+            "/api/transfers/:id/remove",
+            delete(crate::transfer::remove_transfer),
+        )
+        .route(
             "/api/resources/:resource_id/files",
             get(crate::files::list_files).delete(crate::files::delete_file),
         )
@@ -111,7 +123,19 @@ pub fn app(db: Arc<Database>, secret_key: String) -> axum::Router {
             auth_middleware,
         ));
 
-    public_routes.merge(protected_routes).with_state(state)
+    let mut router = public_routes.merge(protected_routes).with_state(state);
+
+    // 前端静态文件服务：不经过鉴权
+    if let Some(dir) = static_dir {
+        let index_path = dir.join("index.html");
+        router = router.fallback_service(
+            ServeDir::new(&dir)
+                .append_index_html_on_directories(true)
+                .not_found_service(ServeFile::new(index_path)),
+        );
+    }
+
+    router
 }
 
 async fn healthz() -> &'static str {
