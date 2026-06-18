@@ -3,7 +3,7 @@ use axum::extract::State;
 use axum::http::{Request, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::Response;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use std::sync::Arc;
 
@@ -14,6 +14,7 @@ use crate::db::Database;
 use crate::env;
 use crate::helpers::{ErrorBody, ErrorResponse};
 use crate::resource;
+use crate::terminal::SessionManager;
 use crate::ws::AgentConnections;
 
 /// 共享应用状态
@@ -21,14 +22,17 @@ pub struct AppState {
     pub db: Arc<Database>,
     pub secret_key: String,
     pub connections: Arc<AgentConnections>,
+    pub sessions: Arc<SessionManager>,
 }
 
 pub fn app(db: Arc<Database>, secret_key: String) -> axum::Router {
     let connections = Arc::new(crate::ws::new_connections());
+    let sessions = Arc::new(SessionManager::new(900));
     let state = Arc::new(AppState {
         db,
         secret_key,
         connections,
+        sessions,
     });
 
     let public_routes = Router::new()
@@ -60,6 +64,18 @@ pub fn app(db: Arc<Database>, secret_key: String) -> axum::Router {
         )
         .route("/api/environments/:env_id/agents", get(agent::list_agents))
         .route("/api/audit-log", get(audit::list_audit_log))
+        .route(
+            "/api/ssh/sessions",
+            post(crate::ws_terminal::create_session_handler),
+        )
+        .route(
+            "/api/ssh/sessions/:session_id",
+            delete(crate::ws_terminal::delete_session_handler),
+        )
+        .route(
+            "/ws/terminal/:session_id",
+            get(crate::ws_terminal::terminal_ws_handler),
+        )
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
