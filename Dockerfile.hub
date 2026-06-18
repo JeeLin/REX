@@ -1,38 +1,11 @@
-# ── Stage 1: Build frontend ──────────────────────────────
-FROM node:22-slim AS frontend-builder
-RUN npm install -g bun
-WORKDIR /app
-COPY packages/rex-console-web/package.json packages/rex-console-web/bun.lock* ./
-RUN cd packages/rex-console-web && bun install --frozen-lockfile || bun install
-COPY packages/rex-console-web/ ./packages/rex-console-web/
-RUN cd packages/rex-console-web && bun run build
+# Hub Docker 镜像：复制 CI 预构建的二进制和前端资源
+#
+# CI 流程：
+# 1. build-hub → dist/rex-hub
+# 2. build-frontend → dist/static/
+# 3. build-agent（全平台矩阵）→ dist/agents/{linux-amd64,linux-arm64,mac-amd64,mac-arm64,windows-amd64}/
+# 4. 本 Dockerfile 将所有产物打包到最终镜像
 
-# ── Stage 2: Build Rust binaries ────────────────────────
-FROM rust:slim AS rust-builder
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    pkg-config libssl-dev gcc-aarch64-linux-gnu && \
-    rm -rf /var/lib/apt/lists/*
-
-RUN rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
-
-WORKDIR /app
-COPY . .
-
-# 在同一个 RUN 中构建所有二进制，共享 cargo 编译缓存
-RUN --mount=type=cache,target=target \
-    --mount=type=cache,from=rust:slim,source=/usr/local/cargo/registry,target=/usr/local/cargo/registry \
-    cargo build --release -p rex-hub && \
-    CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc \
-      cargo build --release -p rex-agent --target x86_64-unknown-linux-gnu && \
-    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
-      cargo build --release -p rex-agent --target aarch64-unknown-linux-gnu && \
-    cp target/release/rex-hub /usr/local/bin/rex-hub && \
-    cp target/x86_64-unknown-linux-gnu/release/rex-agent /usr/local/bin/agent/amd64/rex-agent && \
-    cp target/aarch64-unknown-linux-gnu/release/rex-agent /usr/local/bin/agent/arm64/rex-agent
-
-# ── Stage 3: Final image ────────────────────────────────
 FROM debian:bookworm-slim
 
 RUN apt-get update && \
@@ -41,9 +14,14 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-COPY --from=rust-builder /usr/local/bin/rex-hub /usr/local/bin/
-COPY --from=rust-builder /usr/local/bin/agent/ /usr/local/bin/agent/
-COPY --from=frontend-builder /app/packages/rex-console-web/dist /app/static
+# Hub 二进制
+COPY dist/rex-hub /usr/local/bin/
+
+# 所有平台 Agent 二进制（供 Hub 页面提供下载）
+COPY dist/agents/ /app/agents/
+
+# 前端静态资源
+COPY dist/static/ /app/static/
 
 RUN mkdir -p /app/data
 

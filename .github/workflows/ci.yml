@@ -2,7 +2,6 @@ name: CI
 
 on:
   push:
-    branches: [main]
     tags: ['v*']
 
 env:
@@ -39,19 +38,91 @@ jobs:
       - run: bun run build
         working-directory: packages/rex-console-web
 
-  # ── 构建并推送 Docker 镜像 ──────────────────────────
-  docker:
-    needs: [check-rust, check-web]
+  # ── 构建 Agent 二进制（全平台矩阵） ──────────────────
+  # 产物用于：Docker Hub 镜像内嵌 + Release 发布
+  build-agent:
+    needs: [check-rust]
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            arch: linux-amd64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            arch: linux-arm64
+            cross: true
+          - target: x86_64-apple-darwin
+            os: macos-14
+            arch: mac-amd64
+          - target: aarch64-apple-darwin
+            os: macos-14
+            arch: mac-arm64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            arch: windows-amd64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Install cross-compilation tools
+        if: matrix.cross
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Build
+        run: cargo build --release -p rex-agent --target ${{ matrix.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-${{ matrix.arch }}
+          path: target/${{ matrix.target }}/release/rex-agent*
+
+  # ── 构建 Hub 二进制（linux/amd64） ────────────────────
+  build-hub:
+    needs: [check-rust]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: hub-linux-amd64
+      - run: cargo build --release -p rex-hub
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hub-linux-amd64
+          path: target/release/rex-hub
+
+  # ── 构建前端 ──────────────────────────────────────────
+  build-frontend:
+    needs: [check-web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        working-directory: packages/rex-console-web
+      - run: bun run build
+        working-directory: packages/rex-console-web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend
+          path: packages/rex-console-web/dist/
+
+  # ── Docker: Hub 镜像（包含所有平台 Agent 二进制） ─────
+  docker-hub:
+    needs: [build-hub, build-frontend, build-agent]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up QEMU（多平台构建）
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -63,14 +134,41 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Download hub binary
+        uses: actions/download-artifact@v4
+        with:
+          name: hub-linux-amd64
+          path: dist/
+
+      - name: Download frontend
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend
+          path: dist/static/
+
+      - name: Download all agent binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: agent-*
+          path: dist/agents-tmp/
+          merge-multiple: false
+
+      - name: Organize agent binaries
+        run: |
+          for dir in dist/agents-tmp/agent-*/; do
+            arch=$(basename "$dir" | sed 's/^agent-//')
+            mkdir -p "dist/agents/$arch"
+            cp "$dir"/rex-agent* "dist/agents/$arch/"
+          done
+          rm -rf dist/agents-tmp
+          chmod +x dist/agents/*/rex-agent
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.HUB_IMAGE }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=tag
+          tags: type=ref,event=tag
 
       - name: Build and push Hub image
         uses: docker/build-push-action@v6
@@ -84,16 +182,37 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Docker meta (agent)
+  # ── Docker: Agent 镜像（linux/amd64 + linux/arm64） ───
+  docker-agent:
+    needs: [check-rust, check-web]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker meta
         id: meta-agent
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.AGENT_IMAGE }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=tag
+          tags: type=ref,event=tag
 
-      - name: Build and push Agent image（多平台）
+      - name: Build and push Agent image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -104,3 +223,30 @@ jobs:
           labels: ${{ steps.meta-agent.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # ── Release: Agent 二进制 zip 包 ──────────────────────
+  release:
+    needs: [build-agent]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all agent binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: agent-*
+          path: artifacts/
+          merge-multiple: false
+
+      - name: Create zip packages
+        run: |
+          for dir in artifacts/agent-*/; do
+            arch=$(basename "$dir" | sed 's/^agent-//')
+            (cd "$dir" && zip -j "../../rex-agent-${arch}.zip" rex-agent*)
+          done
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: rex-agent-*.zip
+          generate_release_notes: true
