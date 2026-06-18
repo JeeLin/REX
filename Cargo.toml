@@ -34,3 +34,5 @@ hex = "0.4"
 hostname = "0.4"
 russh = { version = "=0.50.0-beta.7" }
 russh-keys = { version = "=0.50.0-beta.7" }
+aes-gcm = "0.10"
+base64 = "0.22"

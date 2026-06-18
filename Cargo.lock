@@ -1994,11 +1994,13 @@ dependencies = [
  "anyhow",
  "argon2",
  "axum",
+ "base64",
  "futures-util",
  "jsonwebtoken",
  "r2d2",
  "rand_core 0.6.4",
  "rex-common",
+ "rex-ssh",
  "rusqlite",
  "serde",
  "serde_json",
@@ -2015,10 +2017,13 @@ dependencies = [
 name = "rex-ssh"
 version = "0.1.0"
 dependencies = [
+ "aes-gcm",
  "anyhow",
  "async-trait",
+ "hex",
  "russh",
  "russh-keys",
+ "sha2",
  "tokio",
  "tracing",
 ]
