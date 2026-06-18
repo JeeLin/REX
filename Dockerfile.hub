@@ -3,8 +3,7 @@
 # CI 流程：
 # 1. build-hub → dist/rex-hub
 # 2. build-frontend → dist/static/
-# 3. build-agent（全平台矩阵）→ dist/agents/{linux-amd64,linux-arm64,mac-amd64,mac-arm64,windows-amd64}/
-# 4. 本 Dockerfile 将所有产物打包到最终镜像
+# 3. 本 Dockerfile 将所有产物打包到最终镜像
 
 FROM debian:bookworm-slim
 
@@ -16,9 +15,6 @@ WORKDIR /app
 
 # Hub 二进制
 COPY dist/rex-hub /usr/local/bin/
-
-# 所有平台 Agent 二进制（供 Hub 页面提供下载）
-COPY dist/agents/ /app/agents/
 
 # 前端静态资源
 COPY dist/static/ /app/static/
