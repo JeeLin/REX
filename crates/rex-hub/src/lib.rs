@@ -7,4 +7,5 @@ pub mod env;
 pub mod helpers;
 pub mod resource;
 pub mod routes;
+pub mod terminal;
 pub mod ws;
