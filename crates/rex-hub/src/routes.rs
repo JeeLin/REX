@@ -118,6 +118,22 @@ pub fn app_with_static(
             "/api/resources/:resource_id/files/rename",
             put(crate::files::rename_file),
         )
+        .route(
+            "/api/resources/:resource_id/sql/execute",
+            post(crate::sql::execute_sql),
+        )
+        .route(
+            "/api/resources/:resource_id/sql/databases",
+            get(crate::sql::list_databases),
+        )
+        .route(
+            "/api/resources/:resource_id/sql/tables",
+            get(crate::sql::list_tables),
+        )
+        .route(
+            "/api/resources/:resource_id/sql/columns",
+            get(crate::sql::list_columns),
+        )
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,

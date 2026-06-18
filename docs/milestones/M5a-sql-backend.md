@@ -26,7 +26,7 @@ M4a+M4b 完成了文件传输和文件管理。M5a 实现 SQL 控制台的后端
 |--------|------|-----------|------|
 | 5a.1 | SQL 连接器 trait + MySQL connector | 后端 | ✅ |
 | 5a.2 | PostgreSQL connector | 后端 | ✅ |
-| 5a.3 | SQL REST API（execute/databases/tables/columns） | 后端 | ⬜ |
+| 5a.3 | SQL REST API（execute/databases/tables/columns） | 后端 | ✅ |
 
 ---
 

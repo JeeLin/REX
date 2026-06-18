@@ -8,6 +8,7 @@ pub mod files;
 pub mod helpers;
 pub mod resource;
 pub mod routes;
+pub mod sql;
 pub mod ssh_config;
 pub mod terminal;
 pub mod transfer;
