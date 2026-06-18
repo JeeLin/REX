@@ -1,0 +1,12 @@
+[package]
+name = "rex-ssh"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+russh = { workspace = true }
+russh-keys = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+async-trait = "0.1"
