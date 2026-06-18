@@ -31,7 +31,6 @@ CREATE TABLE IF NOT EXISTS resources (
     environment_id TEXT NOT NULL,
     name TEXT NOT NULL,
     protocol TEXT NOT NULL,
-    connection_mode TEXT NOT NULL,
     agent_id TEXT,
     config_json TEXT NOT NULL,
     status TEXT NOT NULL,

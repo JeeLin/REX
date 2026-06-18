@@ -16,7 +16,6 @@ pub struct Resource {
     pub environment_id: String,
     pub name: String,
     pub protocol: String,
-    pub connection_mode: String,
     pub agent_id: Option<String>,
     pub config_json: String,
     pub status: String,
@@ -28,7 +27,6 @@ pub struct Resource {
 pub struct CreateResource {
     pub name: String,
     pub protocol: String,
-    pub connection_mode: String,
     pub agent_id: Option<String>,
     pub config_json: String,
 }
@@ -58,13 +56,13 @@ pub async fn list_resources(
     let resources = tokio::task::spawn_blocking(move || {
         let conn = db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
         let mut stmt = conn.prepare(
-            "SELECT id, environment_id, name, protocol, connection_mode, agent_id, config_json, status, created_at, updated_at FROM resources WHERE environment_id = ?1 ORDER BY created_at DESC",
+            "SELECT id, environment_id, name, protocol, agent_id, config_json, status, created_at, updated_at FROM resources WHERE environment_id = ?1 ORDER BY created_at DESC",
         ).map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
         let rows = stmt.query_map(rusqlite::params![env_id], |row| {
             Ok(Resource {
                 id: row.get(0)?, environment_id: row.get(1)?, name: row.get(2)?,
-                protocol: row.get(3)?, connection_mode: row.get(4)?, agent_id: row.get(5)?,
-                config_json: row.get(6)?, status: row.get(7)?, created_at: row.get(8)?, updated_at: row.get(9)?,
+                protocol: row.get(3)?, agent_id: row.get(4)?,
+                config_json: row.get(5)?, status: row.get(6)?, created_at: row.get(7)?, updated_at: row.get(8)?,
             })
         }).map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
         let resources: Vec<Resource> = rows.filter_map(|r| r.ok()).collect();
@@ -85,9 +83,6 @@ pub async fn create_resource(
     if !VALID_PROTOCOLS.contains(&input.protocol.as_str()) {
         return Err(bad_request(&format!("不支持的协议: {}", input.protocol)));
     }
-    if input.connection_mode != "agent_proxy" && input.connection_mode != "direct" {
-        return Err(bad_request("connection_mode 必须是 agent_proxy 或 direct"));
-    }
 
     let ip = extract_client_ip(&headers);
     let db = state.db.clone();
@@ -104,12 +99,12 @@ pub async fn create_resource(
         let id = gen_id("res");
         let now = now_iso();
         conn.execute(
-            "INSERT INTO resources (id, environment_id, name, protocol, connection_mode, agent_id, config_json, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-            rusqlite::params![id, env_id_clone, input.name, input.protocol, input.connection_mode, input.agent_id, input.config_json, "ready", now.clone(), now],
+            "INSERT INTO resources (id, environment_id, name, protocol, agent_id, config_json, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            rusqlite::params![id, env_id_clone, input.name, input.protocol, input.agent_id, input.config_json, "ready", now.clone(), now],
         ).map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
         Ok::<_, (StatusCode, Json<ErrorResponse>)>(Resource {
             id, environment_id: env_id_clone, name: input.name, protocol: input.protocol,
-            connection_mode: input.connection_mode, agent_id: input.agent_id, config_json: input.config_json,
+            agent_id: input.agent_id, config_json: input.config_json,
             status: "ready".to_string(), created_at: now.clone(), updated_at: now,
         })
     }).await.map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
@@ -137,12 +132,12 @@ pub async fn get_resource(
     let resource = tokio::task::spawn_blocking(move || {
         let conn = db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
         conn.query_row(
-            "SELECT id, environment_id, name, protocol, connection_mode, agent_id, config_json, status, created_at, updated_at FROM resources WHERE id = ?1 AND environment_id = ?2",
+            "SELECT id, environment_id, name, protocol, agent_id, config_json, status, created_at, updated_at FROM resources WHERE id = ?1 AND environment_id = ?2",
             rusqlite::params![id, env_id],
             |row| Ok(Resource {
                 id: row.get(0)?, environment_id: row.get(1)?, name: row.get(2)?,
-                protocol: row.get(3)?, connection_mode: row.get(4)?, agent_id: row.get(5)?,
-                config_json: row.get(6)?, status: row.get(7)?, created_at: row.get(8)?, updated_at: row.get(9)?,
+                protocol: row.get(3)?, agent_id: row.get(4)?,
+                config_json: row.get(5)?, status: row.get(6)?, created_at: row.get(7)?, updated_at: row.get(8)?,
             }),
         ).map_err(|_| not_found("RESOURCE_NOT_FOUND", "资源不存在"))
     }).await.map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
@@ -163,12 +158,12 @@ pub async fn update_resource(
     let resource = tokio::task::spawn_blocking(move || {
         let conn = db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
         let existing: Resource = conn.query_row(
-            "SELECT id, environment_id, name, protocol, connection_mode, agent_id, config_json, status, created_at, updated_at FROM resources WHERE id = ?1 AND environment_id = ?2",
+            "SELECT id, environment_id, name, protocol, agent_id, config_json, status, created_at, updated_at FROM resources WHERE id = ?1 AND environment_id = ?2",
             rusqlite::params![id_clone, env_id_clone],
             |row| Ok(Resource {
                 id: row.get(0)?, environment_id: row.get(1)?, name: row.get(2)?,
-                protocol: row.get(3)?, connection_mode: row.get(4)?, agent_id: row.get(5)?,
-                config_json: row.get(6)?, status: row.get(7)?, created_at: row.get(8)?, updated_at: row.get(9)?,
+                protocol: row.get(3)?, agent_id: row.get(4)?,
+                config_json: row.get(5)?, status: row.get(6)?, created_at: row.get(7)?, updated_at: row.get(8)?,
             }),
         ).map_err(|_| not_found("RESOURCE_NOT_FOUND", "资源不存在"))?;
         let name = input.name.unwrap_or(existing.name);
@@ -180,7 +175,7 @@ pub async fn update_resource(
         ).map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
         Ok::<_, (StatusCode, Json<ErrorResponse>)>(Resource {
             id: existing.id, environment_id: existing.environment_id, name,
-            protocol: existing.protocol, connection_mode: existing.connection_mode,
+            protocol: existing.protocol,
             agent_id: existing.agent_id, config_json, status: existing.status,
             created_at: existing.created_at, updated_at: now,
         })

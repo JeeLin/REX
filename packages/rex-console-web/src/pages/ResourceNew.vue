@@ -16,16 +16,11 @@
       <div class="step-line" :class="{ active: step > 1 }"></div>
       <div class="step" :class="{ active: step === 2, done: step > 2 }">
         <span class="step-num">{{ step > 2 ? '✓' : '2' }}</span>
-        <span class="step-label">{{ t('resource.step2') }}</span>
-      </div>
-      <div class="step-line" :class="{ active: step > 2 }"></div>
-      <div class="step" :class="{ active: step === 3, done: step > 3 }">
-        <span class="step-num">{{ step > 3 ? '✓' : '3' }}</span>
         <span class="step-label">{{ t('resource.step3') }}</span>
       </div>
-      <div class="step-line" :class="{ active: step > 3 }"></div>
-      <div class="step" :class="{ active: step === 4 }">
-        <span class="step-num">4</span>
+      <div class="step-line" :class="{ active: step > 2 }"></div>
+      <div class="step" :class="{ active: step === 3 }">
+        <span class="step-num">3</span>
         <span class="step-label">{{ t('resource.step4') }}</span>
       </div>
     </div>
@@ -47,38 +42,13 @@
       </div>
     </div>
 
-    <!-- Step 2: Basic Info -->
+    <!-- Step 2: Name + Connection Details -->
     <div v-if="step === 2" class="step-content">
       <form class="wizard-form card" @submit.prevent="nextStep">
         <div class="form-group">
           <label class="form-label">{{ t('resource.name') }}</label>
           <input v-model="form.name" class="form-input" :placeholder="t('resource.namePlaceholder')" required />
         </div>
-        <div class="form-group">
-          <label class="form-label">{{ t('resource.connectionMode') }}</label>
-          <div class="mode-cards">
-            <div
-              class="mode-card"
-              :class="{ active: form.connection_mode === 'agent_proxy' }"
-              @click="form.connection_mode = 'agent_proxy'"
-            >
-              <div class="mode-title">⬡ {{ t('env.agentProxy') }}</div>
-            </div>
-            <div
-              class="mode-card"
-              :class="{ active: form.connection_mode === 'direct' }"
-              @click="form.connection_mode = 'direct'"
-            >
-              <div class="mode-title">→ {{ t('env.direct') }}</div>
-            </div>
-          </div>
-        </div>
-      </form>
-    </div>
-
-    <!-- Step 3: Connection Details (SSH example) -->
-    <div v-if="step === 3" class="step-content">
-      <form class="wizard-form card" @submit.prevent="nextStep">
         <div class="form-row">
           <div class="form-group flex-2">
             <label class="form-label">{{ t('resource.ssh.host') }}</label>
@@ -130,8 +100,8 @@
       </form>
     </div>
 
-    <!-- Step 4: Complete -->
-    <div v-if="step === 4" class="step-content">
+    <!-- Step 3: Complete -->
+    <div v-if="step === 3" class="step-content">
       <div class="complete-card card">
         <div class="complete-icon">✓</div>
         <h3 class="complete-title">{{ t('resource.created') }}</h3>
@@ -145,18 +115,17 @@
     </div>
 
     <!-- Navigation -->
-    <div v-if="step < 4" class="wizard-nav">
+    <div v-if="step < 3" class="wizard-nav">
       <button v-if="step > 1" class="btn btn-ghost" @click="prevStep">
         {{ t('common.prev') }}
       </button>
       <div v-else></div>
       <button
-        v-if="step < 4"
         class="btn btn-primary"
         :disabled="!canNext"
-        @click="step === 3 ? submitResource() : nextStep()"
+        @click="step === 2 ? submitResource() : nextStep()"
       >
-        {{ step === 3 ? t('resource.createBtn') : t('common.next') }}
+        {{ step === 2 ? t('resource.createBtn') : t('common.next') }}
       </button>
     </div>
   </div>
@@ -164,13 +133,12 @@
 
 <script setup lang="ts">
 import { reactive, ref, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import client from '@/api/client'
 
 const { t } = useI18n()
 const route = useRoute()
-const router = useRouter()
 
 const envId = route.params.envId as string
 const step = ref(1)
@@ -189,7 +157,6 @@ const protocols = [
 const form = reactive({
   protocol: '',
   name: '',
-  connection_mode: 'direct',
   config_json: '',
 })
 
@@ -204,8 +171,7 @@ const sshConfig = reactive({
 
 const canNext = computed(() => {
   if (step.value === 1) return !!form.protocol
-  if (step.value === 2) return !!form.name.trim()
-  if (step.value === 3) return !!sshConfig.host.trim() && !!sshConfig.user.trim()
+  if (step.value === 2) return !!form.name.trim() && !!sshConfig.host.trim() && !!sshConfig.user.trim()
   return false
 })
 
@@ -216,7 +182,7 @@ function selectProtocol(id: string) {
 }
 
 function nextStep() {
-  if (step.value < 4) step.value++
+  if (step.value < 3) step.value++
 }
 
 function prevStep() {
@@ -227,7 +193,7 @@ async function submitResource() {
   form.config_json = JSON.stringify(sshConfig)
   try {
     await client.post(`/environments/${envId}/resources`, form)
-    step.value = 4
+    step.value = 3
   } catch {
     // 静默处理
   }
@@ -371,37 +337,6 @@ async function submitResource() {
 
 .flex-1 { flex: 1; }
 .flex-2 { flex: 2; }
-
-.mode-cards {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--sp-md);
-}
-
-.mode-card {
-  background: var(--bg-deep);
-  border: 2px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: var(--sp-lg);
-  cursor: pointer;
-  transition: all var(--transition-base);
-  text-align: center;
-}
-
-.mode-card:hover {
-  border-color: var(--accent);
-}
-
-.mode-card.active {
-  border-color: var(--accent);
-  background: rgba(232, 145, 45, 0.05);
-}
-
-.mode-title {
-  font-family: var(--font-mono);
-  font-weight: 600;
-  font-size: var(--fs-sm);
-}
 
 .auth-toggle {
   display: flex;

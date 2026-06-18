@@ -61,12 +61,12 @@ impl Database {
     pub fn get_resource_by_id(&self, id: &str) -> Result<Option<super::resource::Resource>> {
         let conn = self.pool.get().context("failed to get connection")?;
         let result = conn.query_row(
-            "SELECT id, environment_id, name, protocol, connection_mode, agent_id, config_json, status, created_at, updated_at FROM resources WHERE id = ?1",
+            "SELECT id, environment_id, name, protocol, agent_id, config_json, status, created_at, updated_at FROM resources WHERE id = ?1",
             rusqlite::params![id],
             |row| Ok(super::resource::Resource {
                 id: row.get(0)?, environment_id: row.get(1)?, name: row.get(2)?,
-                protocol: row.get(3)?, connection_mode: row.get(4)?, agent_id: row.get(5)?,
-                config_json: row.get(6)?, status: row.get(7)?, created_at: row.get(8)?, updated_at: row.get(9)?,
+                protocol: row.get(3)?, agent_id: row.get(4)?,
+                config_json: row.get(5)?, status: row.get(6)?, created_at: row.get(7)?, updated_at: row.get(8)?,
             }),
         );
         match result {
@@ -89,6 +89,10 @@ impl Database {
 fn run_migrations(conn: &Connection) -> Result<()> {
     conn.execute_batch(include_str!("migrations.sql"))
         .context("failed to run database migrations")?;
+
+    // Migration: remove connection_mode from resources (it belongs to environment, not resource)
+    let _ = conn.execute_batch("ALTER TABLE resources DROP COLUMN connection_mode");
+
     Ok(())
 }
 

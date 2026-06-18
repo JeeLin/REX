@@ -101,13 +101,13 @@ pub async fn create_session_handler(
     let resource = tokio::task::spawn_blocking(move || {
         let conn = db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "pool error"))?;
         conn.query_row(
-            "SELECT id, environment_id, name, protocol, connection_mode, agent_id, config_json, status, created_at, updated_at \
+            "SELECT id, environment_id, name, protocol, agent_id, config_json, status, created_at, updated_at \
              FROM resources WHERE id = ?1",
             rusqlite::params![resource_id],
             |row| Ok(Resource {
                 id: row.get(0)?, environment_id: row.get(1)?, name: row.get(2)?,
-                protocol: row.get(3)?, connection_mode: row.get(4)?, agent_id: row.get(5)?,
-                config_json: row.get(6)?, status: row.get(7)?, created_at: row.get(8)?, updated_at: row.get(9)?,
+                protocol: row.get(3)?, agent_id: row.get(4)?,
+                config_json: row.get(5)?, status: row.get(6)?, created_at: row.get(7)?, updated_at: row.get(8)?,
             }),
         )
         .map_err(|_| not_found("RESOURCE_NOT_FOUND", "资源不存在"))
