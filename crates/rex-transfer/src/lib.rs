@@ -1,5 +1,6 @@
 pub mod local;
 pub mod sftp;
+pub mod task;
 
 use std::path::{Path, PathBuf};
 

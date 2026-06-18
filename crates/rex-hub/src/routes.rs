@@ -23,23 +23,32 @@ pub struct AppState {
     pub secret_key: String,
     pub connections: Arc<AgentConnections>,
     pub sessions: Arc<SessionManager>,
+    pub transfer: Option<Arc<crate::transfer::TransferState>>,
 }
 
 pub fn app(db: Arc<Database>, secret_key: String) -> axum::Router {
     let connections = Arc::new(crate::ws::new_connections());
     let sessions = Arc::new(SessionManager::new(900));
+    let transfer_state = Arc::new(crate::transfer::TransferState {
+        manager: Arc::new(rex_transfer::task::TransferManager::new()),
+    });
     let state = Arc::new(AppState {
         db,
         secret_key,
         connections,
         sessions,
+        transfer: Some(transfer_state),
     });
 
     let public_routes = Router::new()
         .route("/healthz", get(healthz))
         .route("/api/auth/login", post(auth::login))
         .route("/api/agents/register", post(agent::register))
-        .route("/ws/agent", get(crate::ws::agent_ws_handler));
+        .route("/ws/agent", get(crate::ws::agent_ws_handler))
+        .route(
+            "/ws/terminal/:session_id",
+            get(crate::ws_terminal::terminal_ws_handler),
+        );
 
     let protected_routes = Router::new()
         .route(
@@ -73,8 +82,12 @@ pub fn app(db: Arc<Database>, secret_key: String) -> axum::Router {
             delete(crate::ws_terminal::delete_session_handler),
         )
         .route(
-            "/ws/terminal/:session_id",
-            get(crate::ws_terminal::terminal_ws_handler),
+            "/api/transfers",
+            get(crate::transfer::list_transfers).post(crate::transfer::create_transfer),
+        )
+        .route(
+            "/api/transfers/:id",
+            get(crate::transfer::get_transfer).delete(crate::transfer::cancel_transfer),
         )
         .layer(middleware::from_fn_with_state(
             state.clone(),

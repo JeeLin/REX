@@ -9,5 +9,6 @@ pub mod resource;
 pub mod routes;
 pub mod ssh_config;
 pub mod terminal;
+pub mod transfer;
 pub mod ws;
 pub mod ws_terminal;
