@@ -40,6 +40,9 @@
         <span class="resource-status badge badge-success">{{ t('status.online') }}</span>
       </div>
     </div>
+
+    <!-- Agent Status -->
+    <AgentStatusPanel v-if="env" :env-id="env.id" />
   </div>
 </template>
 
@@ -48,6 +51,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import client from '@/api/client'
+import AgentStatusPanel from '@/features/agents/AgentStatusPanel.vue'
 
 const { t } = useI18n()
 const route = useRoute()

@@ -38,6 +38,11 @@ const router = createRouter({
           name: 'resource-new',
           component: () => import('./pages/ResourceNew.vue'),
         },
+        {
+          path: 'agents',
+          name: 'agents',
+          component: () => import('./pages/Agents.vue'),
+        },
       ],
     },
   ],
