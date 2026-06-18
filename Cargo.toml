@@ -40,4 +40,3 @@ russh-sftp = "2.3"
 aes-gcm = "0.10"
 base64 = "0.22"
 tower-http = { version = "0.5", features = ["fs", "cors"] }
-tower-http = { version = "0.5", features = ["fs", "cors"] }

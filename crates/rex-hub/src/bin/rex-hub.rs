@@ -27,9 +27,14 @@ fn main() -> anyhow::Result<()> {
         }
 
         let rt = tokio::runtime::Runtime::new()?;
+        let static_dir = config.static_dir.clone();
         rt.block_on(async {
             let listener = tokio::net::TcpListener::bind(&config.listen).await?;
-            axum::serve(listener, routes::app(Arc::new(db), secret_key)).await?;
+            axum::serve(
+                listener,
+                routes::app_with_static(Arc::new(db), secret_key, static_dir),
+            )
+            .await?;
             Ok::<(), anyhow::Error>(())
         })?;
     } else {

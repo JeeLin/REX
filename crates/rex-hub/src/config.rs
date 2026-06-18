@@ -7,6 +7,8 @@ pub struct HubConfig {
     pub listen: String,
     pub data_dir: PathBuf,
     pub secret_key: String,
+    #[serde(default)]
+    pub static_dir: Option<PathBuf>,
 }
 
 impl Default for HubConfig {
@@ -15,6 +17,7 @@ impl Default for HubConfig {
             listen: "0.0.0.0:3000".to_string(),
             data_dir: PathBuf::from("./data"),
             secret_key: String::new(),
+            static_dir: None,
         }
     }
 }
@@ -40,6 +43,23 @@ impl HubConfig {
         }
         if let Ok(val) = std::env::var("REX_SECRET_KEY") {
             config.secret_key = val;
+        }
+        if let Ok(val) = std::env::var("STATIC_DIR") {
+            config.static_dir = Some(PathBuf::from(val));
+        }
+
+        // 兼容：如果 static_dir 未设置，尝试常见的默认路径
+        if config.static_dir.is_none() {
+            let candidates = [
+                PathBuf::from("/app/static"),
+                PathBuf::from("packages/rex-console-web/dist"),
+            ];
+            for candidate in &candidates {
+                if candidate.is_dir() {
+                    config.static_dir = Some(candidate.clone());
+                    break;
+                }
+            }
         }
 
         Ok(config)
