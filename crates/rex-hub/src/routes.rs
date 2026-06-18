@@ -3,7 +3,7 @@ use axum::extract::State;
 use axum::http::{Request, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::Response;
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use std::sync::Arc;
 
@@ -88,6 +88,22 @@ pub fn app(db: Arc<Database>, secret_key: String) -> axum::Router {
         .route(
             "/api/transfers/:id",
             get(crate::transfer::get_transfer).delete(crate::transfer::cancel_transfer),
+        )
+        .route(
+            "/api/resources/:resource_id/files",
+            get(crate::files::list_files).delete(crate::files::delete_file),
+        )
+        .route(
+            "/api/resources/:resource_id/files/mkdir",
+            post(crate::files::mkdir),
+        )
+        .route(
+            "/api/resources/:resource_id/files/touch",
+            post(crate::files::touch),
+        )
+        .route(
+            "/api/resources/:resource_id/files/rename",
+            put(crate::files::rename_file),
         )
         .layer(middleware::from_fn_with_state(
             state.clone(),

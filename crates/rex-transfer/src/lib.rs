@@ -60,6 +60,15 @@ pub trait FileConnector: Send + Sync {
 
     /// 写入文件内容
     async fn write(&self, path: &Path, bytes: &[u8]) -> Result<()>;
+
+    /// 创建目录
+    async fn mkdir(&self, path: &Path) -> Result<()>;
+
+    /// 删除文件或目录
+    async fn delete(&self, path: &Path) -> Result<()>;
+
+    /// 重命名/移动
+    async fn rename(&self, from: &Path, to: &Path) -> Result<()>;
 }
 
 // ── Tests ──────────────────────────────────────────────

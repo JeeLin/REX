@@ -4,6 +4,7 @@ pub mod auth;
 pub mod config;
 pub mod db;
 pub mod env;
+pub mod files;
 pub mod helpers;
 pub mod resource;
 pub mod routes;

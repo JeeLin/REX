@@ -140,6 +140,42 @@ impl FileConnector for SftpConnector {
 
         Ok(())
     }
+
+    async fn mkdir(&self, path: &Path) -> Result<()> {
+        let path_str = path.to_string_lossy();
+        self.session
+            .create_dir(path_str.as_ref())
+            .await
+            .context("SFTP mkdir failed")?;
+        Ok(())
+    }
+
+    async fn delete(&self, path: &Path) -> Result<()> {
+        let path_str = path.to_string_lossy();
+        let entry = self.metadata(path).await?;
+        if entry.file_type == FileType::Directory {
+            self.session
+                .remove_dir(path_str.as_ref())
+                .await
+                .context("SFTP remove_dir failed")?;
+        } else {
+            self.session
+                .remove_file(path_str.as_ref())
+                .await
+                .context("SFTP remove_file failed")?;
+        }
+        Ok(())
+    }
+
+    async fn rename(&self, from: &Path, to: &Path) -> Result<()> {
+        let from_str = from.to_string_lossy();
+        let to_str = to.to_string_lossy();
+        self.session
+            .rename(from_str.as_ref(), to_str.as_ref())
+            .await
+            .context("SFTP rename failed")?;
+        Ok(())
+    }
 }
 
 // ── Tests ──────────────────────────────────────────────

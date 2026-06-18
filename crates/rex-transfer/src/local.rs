@@ -175,6 +175,46 @@ impl FileConnector for LocalConnector {
 
         Ok(())
     }
+
+    async fn mkdir(&self, path: &Path) -> Result<()> {
+        let resolved = self.resolve(path)?;
+        tokio::fs::create_dir(&resolved)
+            .await
+            .with_context(|| format!("failed to create directory: {}", resolved.display()))?;
+        Ok(())
+    }
+
+    async fn delete(&self, path: &Path) -> Result<()> {
+        let resolved = self.resolve(path)?;
+        let meta = tokio::fs::metadata(&resolved)
+            .await
+            .with_context(|| format!("failed to read metadata: {}", resolved.display()))?;
+        if meta.is_dir() {
+            tokio::fs::remove_dir_all(&resolved)
+                .await
+                .with_context(|| format!("failed to remove directory: {}", resolved.display()))?;
+        } else {
+            tokio::fs::remove_file(&resolved)
+                .await
+                .with_context(|| format!("failed to remove file: {}", resolved.display()))?;
+        }
+        Ok(())
+    }
+
+    async fn rename(&self, from: &Path, to: &Path) -> Result<()> {
+        let from_resolved = self.resolve(from)?;
+        let to_resolved = self.resolve(to)?;
+        tokio::fs::rename(&from_resolved, &to_resolved)
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to rename {} -> {}",
+                    from_resolved.display(),
+                    to_resolved.display()
+                )
+            })?;
+        Ok(())
+    }
 }
 
 // ── Tests ──────────────────────────────────────────────
@@ -246,5 +286,71 @@ mod tests {
         let (_tmp, connector) = setup_connector();
         let result = connector.resolve(Path::new("/../../../etc/passwd"));
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn mkdir_creates_directory() {
+        let (_tmp, connector) = setup_connector();
+        connector.mkdir(Path::new("/subdir")).await.unwrap();
+        let entry = connector.metadata(Path::new("/subdir")).await.unwrap();
+        assert_eq!(entry.file_type, FileType::Directory);
+    }
+
+    #[tokio::test]
+    async fn delete_file() {
+        let (_tmp, connector) = setup_connector();
+        connector
+            .write(Path::new("/to_delete.txt"), b"data")
+            .await
+            .unwrap();
+        connector.delete(Path::new("/to_delete.txt")).await.unwrap();
+        let result = connector.metadata(Path::new("/to_delete.txt")).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn delete_directory() {
+        let (_tmp, connector) = setup_connector();
+        connector.mkdir(Path::new("/dir")).await.unwrap();
+        connector
+            .write(Path::new("/dir/file.txt"), b"data")
+            .await
+            .unwrap();
+        connector.delete(Path::new("/dir")).await.unwrap();
+        let result = connector.metadata(Path::new("/dir")).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn rename_file() {
+        let (_tmp, connector) = setup_connector();
+        connector
+            .write(Path::new("/old.txt"), b"data")
+            .await
+            .unwrap();
+        connector
+            .rename(Path::new("/old.txt"), Path::new("/new.txt"))
+            .await
+            .unwrap();
+        let entry = connector.metadata(Path::new("/new.txt")).await.unwrap();
+        assert_eq!(entry.name, "new.txt");
+        assert!(connector.metadata(Path::new("/old.txt")).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn rename_directory() {
+        let (_tmp, connector) = setup_connector();
+        connector.mkdir(Path::new("/old_dir")).await.unwrap();
+        connector
+            .write(Path::new("/old_dir/file.txt"), b"data")
+            .await
+            .unwrap();
+        connector
+            .rename(Path::new("/old_dir"), Path::new("/new_dir"))
+            .await
+            .unwrap();
+        let entry = connector.metadata(Path::new("/new_dir")).await.unwrap();
+        assert_eq!(entry.file_type, FileType::Directory);
+        assert!(connector.metadata(Path::new("/old_dir")).await.is_err());
     }
 }
