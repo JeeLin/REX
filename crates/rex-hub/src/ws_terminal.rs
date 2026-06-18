@@ -1,5 +1,5 @@
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
@@ -8,6 +8,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use crate::auth;
 use crate::helpers::{bad_request, err_resp, not_found, ApiResponse, ErrorResponse};
 use crate::resource::Resource;
 use crate::routes::AppState;
@@ -70,6 +71,13 @@ pub struct TerminalClosed {
 #[derive(Debug, Serialize)]
 pub struct ClosedPayload {
     pub exit_status: i32,
+}
+
+// ── Query 参数 ─────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct WsQuery {
+    pub token: Option<String>,
 }
 
 // ── REST handlers ─────────────────────────────────────────
@@ -140,13 +148,19 @@ pub async fn delete_session_handler(
     }
 }
 
-/// GET /ws/terminal/:session_id — WebSocket 终端数据通道
+/// GET /ws/terminal/:session_id?token=xxx — WebSocket 终端数据通道
 pub async fn terminal_ws_handler(
     ws: WebSocketUpgrade,
     Path(session_id): Path<String>,
+    Query(query): Query<WsQuery>,
     State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_terminal_socket(socket, session_id, state))
+) -> Result<impl IntoResponse, StatusCode> {
+    // WebSocket 无法设置自定义 HTTP 头，通过 query string 验证 token
+    let token = query.token.ok_or(StatusCode::UNAUTHORIZED)?;
+    if !auth::verify_token(&state.secret_key, &token) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    Ok(ws.on_upgrade(move |socket| handle_terminal_socket(socket, session_id, state)))
 }
 
 // ── WebSocket 主循环 ─────────────────────────────────────

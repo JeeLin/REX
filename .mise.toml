@@ -6,12 +6,64 @@ node = "latest"
 [env]
 CARGO_TERM_COLOR = "always"
 RUST_BACKTRACE = "1"
+STATIC_DIR = "packages/dist"
 
-[tasks]
-dev-rust = "cargo run -p rex-hub"
-dev-web = "cd packages/rex-console-web && bun run dev"
-build-web = "cd packages/rex-console-web && bun run build"
-check-rust = "cargo fmt --check && cargo clippy --workspace --all-targets"
-check-web = "cd packages/rex-console-web && bun run type-check"
-test-rust = "cargo test --workspace"
-fmt = "cargo fmt"
+[tasks.install-frontend]
+description = "Install frontend dependencies via Bun"
+run = "cd packages/rex-console-web && bun install"
+
+[tasks.build-frontend]
+description = "Build Vue frontend with Vite + Bun"
+depends = ["install-frontend"]
+run = "cd packages/rex-console-web && bun run build"
+
+[tasks.build]
+description = "Build both frontend and backend (release)"
+depends = ["build-frontend"]
+run = "cargo build --release -p rex-hub"
+
+[tasks.start]
+description = "Build and run rex-hub"
+depends = ["build"]
+run = "cargo run --release -p rex-hub"
+
+[tasks.dev-backend]
+description = "Start backend dev server"
+run = "cargo run -p rex-hub"
+
+[tasks.dev-frontend]
+description = "Start Vite dev server with HMR"
+depends = ["install-frontend"]
+run = "cd packages/rex-console-web && bun run dev"
+
+[tasks.dev]
+description = "Run frontend and backend dev servers"
+depends = ["dev-frontend", "dev-backend"]
+
+[tasks.check]
+description = "Full check: fmt + clippy + tests + frontend type-check + lint"
+run = "cargo fmt --check && cargo clippy --workspace --all-targets && cargo test --workspace && cd packages/rex-console-web && bun run type-check && bun run lint"
+
+[tasks.check-rust]
+description = "Check Rust fmt + clippy"
+run = "cargo fmt --check && cargo clippy --workspace --all-targets"
+
+[tasks.check-web]
+description = "Check frontend type-check + lint"
+run = "cd packages/rex-console-web && bun run type-check && bun run lint"
+
+[tasks.test]
+description = "Run all workspace tests"
+run = "cargo test --workspace"
+
+[tasks.fmt]
+description = "Format Rust code"
+run = "cargo fmt"
+
+[tasks.fix]
+description = "Auto-fix Rust fmt + clippy"
+run = "cargo fmt && cargo clippy --workspace --all-targets --fix --allow-dirty"
+
+[tasks.clean]
+description = "Remove all build artifacts"
+run = "rm -rf target && cargo clean && echo Cleaned."
