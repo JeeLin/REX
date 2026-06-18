@@ -50,6 +50,11 @@ const router = createRouter({
       name: 'terminal',
       component: () => import('./pages/Terminal.vue'),
     },
+    {
+      path: '/files/:resourceId',
+      name: 'files',
+      component: () => import('./pages/Files.vue'),
+    },
   ],
 })
 

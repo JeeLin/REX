@@ -2,10 +2,11 @@ use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Request, StatusCode};
 use axum::middleware::{self, Next};
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use std::sync::Arc;
+use tower_http::services::{ServeDir, ServeFile};
 
 use crate::agent;
 use crate::audit;
