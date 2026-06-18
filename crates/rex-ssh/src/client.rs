@@ -214,6 +214,24 @@ impl SshClient {
         }
     }
 
+    /// 打开 SFTP 子系统通道，返回 AsyncRead+AsyncWrite 流
+    pub async fn open_sftp_channel(&mut self) -> Result<ChannelStream<client::Msg>> {
+        let channel = self
+            .handle
+            .channel_open_session()
+            .await
+            .context("failed to open SSH session channel for SFTP")?;
+
+        channel
+            .request_subsystem(true, "sftp")
+            .await
+            .context("failed to request SFTP subsystem")?;
+
+        tracing::info!("SFTP subsystem channel opened");
+
+        Ok(channel.into_stream())
+    }
+
     /// 关闭连接
     pub async fn disconnect(&mut self) -> Result<()> {
         if let Some(channel) = self.channel.take() {
