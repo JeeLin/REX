@@ -1,0 +1,185 @@
+<template>
+  <div>
+    <div class="section-header">
+      <h2 class="section-title">{{ t('env.title') }}</h2>
+      <router-link to="/environments/new" class="btn btn-primary btn-sm">
+        {{ t('env.create') }}
+      </router-link>
+    </div>
+
+    <div v-if="loading" class="loading-text">{{ t('common.loading') }}</div>
+
+    <div v-else-if="environments.length === 0" class="empty-state">
+      <p>{{ t('common.noData') }}</p>
+      <router-link to="/environments/new" class="btn btn-primary">
+        {{ t('env.create') }}
+      </router-link>
+    </div>
+
+    <div v-else class="env-grid">
+      <router-link
+        v-for="env in environments"
+        :key="env.id"
+        :to="`/environments/${env.id}`"
+        class="env-card"
+      >
+        <div class="env-card-header">
+          <span class="env-card-name">{{ env.name }}</span>
+          <span class="badge" :class="env.connection_mode === 'direct' ? 'badge-info' : 'badge-success'">
+            {{ env.connection_mode === 'direct' ? t('env.connectionModeLabel') : t('env.agentOnline') }}
+          </span>
+        </div>
+        <div class="env-card-desc">{{ env.description || '—' }}</div>
+        <div class="env-card-footer">
+          <span>{{ env.connection_mode === 'direct' ? t('env.direct') : t('env.agentProxy') }}</span>
+        </div>
+      </router-link>
+
+      <router-link to="/environments/new" class="add-env-card">
+        <div class="add-icon">+</div>
+        <div>{{ t('dashboard.createEnv') }}</div>
+      </router-link>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import client from '@/api/client'
+
+const { t } = useI18n()
+
+interface Environment {
+  id: string
+  name: string
+  description: string | null
+  connection_mode: string
+  created_at: string
+  updated_at: string
+}
+
+const environments = ref<Environment[]>([])
+const loading = ref(true)
+
+onMounted(async () => {
+  try {
+    const { data } = await client.get<{ data: Environment[] }>('/environments')
+    environments.value = data.data
+  } catch {
+    // 静默处理
+  } finally {
+    loading.value = false
+  }
+})
+</script>
+
+<style scoped>
+.loading-text {
+  text-align: center;
+  padding: var(--sp-3xl);
+  color: var(--text-secondary);
+}
+
+.empty-state {
+  text-align: center;
+  padding: var(--sp-3xl);
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-lg);
+}
+
+.env-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-xl);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.env-card:hover {
+  border-color: rgba(232, 145, 45, 0.2);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-glow);
+  text-decoration: none;
+}
+
+.env-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-md);
+}
+
+.env-card-name {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: var(--fs-lg);
+}
+
+.env-card-desc {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-lg);
+}
+
+.env-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--sp-md);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.add-env-card {
+  background: var(--bg-surface);
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-xl);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-md);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  min-height: 200px;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.add-env-card:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(232, 145, 45, 0.03);
+  text-decoration: none;
+  box-shadow: 0 0 20px rgba(232, 145, 45, 0.06);
+}
+
+.add-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.add-env-card:hover .add-icon {
+  box-shadow: 0 0 16px var(--accent-glow);
+}
+
+.badge-info {
+  color: var(--info);
+}
+</style>
