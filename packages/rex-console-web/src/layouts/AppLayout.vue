@@ -8,8 +8,8 @@
           <button class="sidebar-icon-btn" @click="toggleTheme" :title="themeLabel">
             {{ themeIcon }}
           </button>
-          <button class="sidebar-icon-btn" @click="toggleLang" :title="lang === 'zh' ? 'EN' : '中'">
-            {{ lang === 'zh' ? 'EN' : '中' }}
+          <button class="sidebar-icon-btn" @click="toggleLang" :title="lang === 'zh' ? '中文' : 'English'">
+            {{ lang === 'zh' ? '中' : 'EN' }}
           </button>
         </div>
       </div>
