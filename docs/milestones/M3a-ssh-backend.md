@@ -480,3 +480,14 @@ feat: add WebSocket terminal data channel and session REST API
 - [x] Session 空闲超时 15 分钟自动断开
 - [x] 不实现跳板机、known_hosts 校验、私钥上传
 - [x] 前端 terminal 页面在 M3b 实现
+
+## Flow Status
+
+- [x] 步骤1：编写里程碑文档
+- [x] 步骤2：设计核对
+- [x] 步骤3：开发
+- [x] 步骤4：代码精简
+- [x] 步骤5：代码审查
+- [x] 步骤6：测试验证
+- [x] 步骤7：设计再确认
+- [x] 步骤8：提交

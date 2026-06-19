@@ -486,3 +486,14 @@ feat: implement agent management page with deploy guide
 - [x] Agent 身份（agent.json）持久化，重启后保持同一 ID
 - [x] 不引入 Agent 日志实时推送、重置令牌等超前功能
 - [x] 前端 Agent 管理页与 prototype/agents.html 交互一致
+
+## Flow Status
+
+- [x] 步骤1：编写里程碑文档
+- [x] 步骤2：设计核对
+- [x] 步骤3：开发
+- [x] 步骤4：代码精简
+- [x] 步骤5：代码审查
+- [x] 步骤6：测试验证
+- [x] 步骤7：设计再确认
+- [x] 步骤8：提交
