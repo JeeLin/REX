@@ -67,3 +67,7 @@ run = "cargo fmt && cargo clippy --workspace --all-targets --fix --allow-dirty"
 [tasks.clean]
 description = "Remove all build artifacts"
 run = "rm -rf target && cargo clean && echo Cleaned."
+
+[tasks.claude]
+description = "Launch Claude Code with REX project connection, skip permissions"
+run = "claude --dangerously-skip-permissions -r REX"
