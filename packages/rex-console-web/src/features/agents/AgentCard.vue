@@ -19,7 +19,9 @@
       </div>
       <div class="info-row">
         <span class="info-label">{{ t('agent.version') }}</span>
-        <span class="info-value mono">v{{ agent.version }}</span>
+        <span class="info-value mono">
+          <AgentVersionBadge :version="agent.version" :needs-update="needsUpdate()" />
+        </span>
       </div>
       <div class="info-row">
         <span class="info-label">{{ t('agent.agentId') }}</span>
@@ -36,8 +38,13 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { Agent } from '@/api/agent'
+import AgentVersionBadge from './AgentVersionBadge.vue'
 
-defineProps<{ agent: Agent }>()
+const props = defineProps<{ agent: Agent; hubVersion?: string }>()
+
+function needsUpdate(): boolean {
+  return !!(props.hubVersion && props.agent.version !== props.hubVersion)
+}
 
 const { t } = useI18n()
 
