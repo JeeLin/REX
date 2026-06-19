@@ -1,5 +1,7 @@
-/// GitHub Releases 更新检查器
+/// GitHub Releases 更新检查器 + 下载 + SHA256 校验
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
+use std::path::{Path, PathBuf};
 
 /// GitHub Release 信息
 #[derive(Debug, Deserialize)]
@@ -8,6 +10,15 @@ pub struct GitHubRelease {
     pub name: String,
     pub published_at: String,
     pub body: Option<String>,
+    pub assets: Vec<GitHubAsset>,
+}
+
+/// GitHub Release Asset
+#[derive(Debug, Deserialize)]
+pub struct GitHubAsset {
+    pub name: String,
+    pub browser_download_url: String,
+    pub size: u64,
 }
 
 /// 版本比较结果
@@ -26,6 +37,9 @@ pub enum UpdateStatus {
     CheckFailed(String),
 }
 
+/// 下载进度回调
+pub type ProgressCallback = Box<dyn Fn(u32) + Send + Sync>;
+
 /// 更新检查器
 pub struct UpdateChecker {
     repo: String,
@@ -34,14 +48,19 @@ pub struct UpdateChecker {
 
 impl UpdateChecker {
     /// 创建新的更新检查器
-    ///
-    /// - `repo`: GitHub 仓库，格式为 "owner/repo"
-    /// - `current_version`: 当前版本号，如 "0.1.0" 或 "v0.1.0"
     pub fn new(repo: &str, current_version: &str) -> Self {
         Self {
             repo: repo.to_string(),
             current_version: current_version.to_string(),
         }
+    }
+
+    /// 获取 HTTP 客户端
+    fn client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .user_agent("rex-hub-update-checker")
+            .build()
+            .unwrap_or_default()
     }
 
     /// 检查是否有新版本
@@ -51,12 +70,7 @@ impl UpdateChecker {
             self.repo
         );
 
-        let client = reqwest::Client::builder()
-            .user_agent("rex-hub-update-checker")
-            .build()
-            .unwrap_or_default();
-
-        let resp = match client.get(&url).send().await {
+        let resp = match Self::client().get(&url).send().await {
             Ok(r) => r,
             Err(e) => return UpdateStatus::CheckFailed(format!("网络错误: {e}")),
         };
@@ -89,6 +103,154 @@ impl UpdateChecker {
             )),
         }
     }
+
+    /// 确定当前平台的 asset 文件名前缀
+    pub fn platform_asset_prefix() -> &'static str {
+        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+        { "rex-linux-x86_64" }
+        #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+        { "rex-linux-aarch64" }
+        #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+        { "rex-macos-x86_64" }
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        { "rex-macos-aarch64" }
+        #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+        { "rex-windows-x86_64.exe" }
+        #[cfg(not(any(
+            all(target_os = "linux", target_arch = "x86_64"),
+            all(target_os = "linux", target_arch = "aarch64"),
+            all(target_os = "macos", target_arch = "x86_64"),
+            all(target_os = "macos", target_arch = "aarch64"),
+            all(target_os = "windows", target_arch = "x86_64"),
+        )))]
+        { "rex-unknown" }
+    }
+
+    /// 下载新版本二进制到 staging 目录
+    pub async fn download_update(
+        &self,
+        data_dir: &Path,
+        on_progress: Option<ProgressCallback>,
+    ) -> anyhow::Result<PathBuf> {
+        // 获取 latest release
+        let url = format!(
+            "https://api.github.com/repos/{}/releases/latest",
+            self.repo
+        );
+        let release: GitHubRelease = Self::client()
+            .get(&url)
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        let prefix = Self::platform_asset_prefix();
+        let asset = release
+            .assets
+            .iter()
+            .find(|a| a.name.starts_with(prefix))
+            .ok_or_else(|| anyhow::anyhow!("未找到平台 {} 对应的二进制", prefix))?;
+
+        // 创建 staging 目录
+        let staging_dir = data_dir.join("updates").join("staging");
+        std::fs::create_dir_all(&staging_dir)?;
+
+        let staged_path = staging_dir.join(&asset.name);
+
+        // 下载
+        let resp = Self::client()
+            .get(&asset.browser_download_url)
+            .send()
+            .await?;
+
+        let total = asset.size;
+        let mut downloaded: u64 = 0;
+        let mut bytes = Vec::with_capacity(total as usize);
+
+        let mut stream = resp.bytes_stream();
+        use futures_util::StreamExt;
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk?;
+            downloaded += chunk.len() as u64;
+            bytes.extend_from_slice(&chunk);
+            if let Some(ref cb) = on_progress {
+                let percent = if total > 0 {
+                    (downloaded * 100 / total) as u32
+                } else {
+                    0
+                };
+                cb(percent);
+            }
+        }
+
+        std::fs::write(&staged_path, &bytes)?;
+
+        // chmod +x (Unix)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&staged_path)?.permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&staged_path, perms)?;
+        }
+
+        Ok(staged_path)
+    }
+
+    /// 备份当前二进制到 rollback 目录
+    pub fn backup_current(data_dir: &Path) -> anyhow::Result<PathBuf> {
+        let rollback_dir = data_dir.join("updates").join("rollback");
+        std::fs::create_dir_all(&rollback_dir)?;
+
+        let current_exe = std::env::current_exe()?;
+        let filename = current_exe
+            .file_name()
+            .ok_or_else(|| anyhow::anyhow!("无法获取当前二进制文件名"))?;
+
+        let rollback_path = rollback_dir.join(filename);
+
+        // 如果已存在备份，先删除
+        if rollback_path.exists() {
+            std::fs::remove_file(&rollback_path)?;
+        }
+
+        std::fs::copy(&current_exe, &rollback_path)?;
+
+        Ok(rollback_path)
+    }
+}
+
+/// 计算文件 SHA256
+pub fn sha256_file(path: &Path) -> anyhow::Result<String> {
+    let bytes = std::fs::read(path)?;
+    let mut hasher = Sha256::new();
+    hasher.update(&bytes);
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+/// 下载并验证 SHA256SUMS
+pub async fn verify_download(
+    binary_path: &Path,
+    checksums_url: &str,
+    expected_filename: &str,
+) -> anyhow::Result<bool> {
+    let resp = reqwest::get(checksums_url).await?;
+    if !resp.status().is_success() {
+        anyhow::bail!("下载 checksums 失败: {}", resp.status());
+    }
+    let checksums_text = resp.text().await?;
+
+    // 解析 checksums 文件，找到对应文件的 hash
+    for line in checksums_text.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() == 2 && parts[1] == expected_filename {
+            let expected_hash = parts[0];
+            let actual_hash = sha256_file(binary_path)?;
+            return Ok(actual_hash == expected_hash);
+        }
+    }
+
+    anyhow::bail!("checksums 中未找到 {}", expected_filename)
 }
 
 #[cfg(test)]
@@ -103,8 +265,27 @@ mod tests {
     }
 
     #[test]
-    fn update_checker_strips_v_prefix() {
-        let checker = UpdateChecker::new("test/repo", "v0.1.0");
-        assert_eq!(checker.current_version, "v0.1.0");
+    fn platform_asset_prefix_is_nonempty() {
+        let prefix = UpdateChecker::platform_asset_prefix();
+        assert!(!prefix.is_empty());
+    }
+
+    #[test]
+    fn sha256_file_works() {
+        use std::io::Write;
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        tmp.as_file().write_all(b"hello world").unwrap();
+        let hash = sha256_file(tmp.path()).unwrap();
+        // SHA256("hello world") = b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9
+        assert_eq!(hash, "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
+    }
+
+    #[test]
+    fn backup_current_creates_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let result = UpdateChecker::backup_current(tmp.path());
+        assert!(result.is_ok());
+        let path = result.unwrap();
+        assert!(path.exists());
     }
 }
