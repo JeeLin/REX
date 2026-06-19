@@ -2,6 +2,7 @@ pub mod app;
 pub mod cli;
 pub mod sql;
 pub mod supervisor;
+pub mod update_state;
 pub mod updater;
 pub mod version;
 
