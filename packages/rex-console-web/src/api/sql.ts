@@ -32,6 +32,15 @@ export interface ColumnInfo {
 
 // ── API 函数 ──────────────────────────────────────────────
 
+/** 获取资源基本信息 */
+export function getResourceInfo(
+  resourceId: string,
+): Promise<{ name: string; protocol: string }> {
+  return client
+    .get(`/resources/${resourceId}/sql/info`)
+    .then((r) => r.data.data)
+}
+
 /** 执行 SQL 查询 */
 export function executeSql(resourceId: string, sql: string): Promise<SqlResult> {
   return client
