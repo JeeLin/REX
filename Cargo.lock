@@ -2053,6 +2053,8 @@ dependencies = [
  "r2d2",
  "rand_core 0.6.4",
  "rex-common",
+ "rex-mysql",
+ "rex-postgresql",
  "rex-ssh",
  "rex-transfer",
  "rusqlite",
@@ -2070,6 +2072,19 @@ dependencies = [
 
 [[package]]
 name = "rex-mysql"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "rex-common",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "rex-postgresql"
 version = "0.1.0"
 dependencies = [
  "anyhow",

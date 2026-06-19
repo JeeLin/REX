@@ -60,8 +60,8 @@ pub async fn login(
         )
         .ok();
 
-    let default_password = std::env::var("REX_DEFAULT_PASSWORD")
-        .unwrap_or_else(|_| "admin".to_string());
+    let default_password =
+        std::env::var("REX_DEFAULT_PASSWORD").unwrap_or_else(|_| "admin".to_string());
 
     let password_hash = stored_hash.unwrap_or_else(|| {
         let salt = SaltString::generate(&mut OsRng);

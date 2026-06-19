@@ -125,6 +125,31 @@ pub async fn list_columns(
     Ok(Json(ApiResponse { data: columns }))
 }
 
+#[derive(Debug, serde::Serialize)]
+pub struct ResourceInfo {
+    pub name: String,
+    pub protocol: String,
+}
+
+/// GET /api/resources/:resource_id/info — 获取资源基本信息
+pub async fn get_resource_info(
+    State(state): State<Arc<AppState>>,
+    Path(resource_id): Path<String>,
+) -> Result<Json<ApiResponse<ResourceInfo>>, (StatusCode, Json<ErrorResponse>)> {
+    let resource = state
+        .db
+        .get_resource_by_id(&resource_id)
+        .map_err(|e| err_resp("DB_ERROR", &format!("查询资源失败: {e}")))?
+        .ok_or_else(|| not_found("RESOURCE_NOT_FOUND", "资源不存在"))?;
+
+    Ok(Json(ApiResponse {
+        data: ResourceInfo {
+            name: resource.name,
+            protocol: resource.protocol,
+        },
+    }))
+}
+
 // ── 内部函数 ──────────────────────────────────────────────
 
 /// 根据资源 ID 获取 SqlConnector
