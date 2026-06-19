@@ -26,10 +26,10 @@ M0-M3b 完成了项目骨架、Hub 管理 API、Agent 连接、SSH 终端。M4a 
 
 | 子任务 | 内容 | 前端/后端 | 状态 |
 |--------|------|-----------|------|
-| 4a.1 | FileConnector trait + 文件模型 | 后端 | ⬜ |
-| 4a.2 | SFTP connector 实现 | 后端 | ⬜ |
-| 4a.3 | 本地文件 connector | 后端 | ⬜ |
-| 4a.4 | 传输任务模型 + REST API + WebSocket | 后端 | ⬜ |
+| 4a.1 | FileConnector trait + 文件模型 | 后端 | ✅ |
+| 4a.2 | SFTP connector 实现 | 后端 | ✅ |
+| 4a.3 | 本地文件 connector | 后端 | ✅ |
+| 4a.4 | 传输任务模型 + REST API + WebSocket | 后端 | ✅ |
 
 ---
 
@@ -218,3 +218,14 @@ feat: add transfer task model and REST API
 - [ ] FileConnector trait 可扩展
 - [ ] 传输进度实时推送
 - [ ] 任务可取消
+
+## Flow Status
+
+- [x] 步骤1：编写里程碑文档
+- [x] 步骤2：设计核对
+- [x] 步骤3：开发
+- [x] 步骤4：代码精简
+- [x] 步骤5：代码审查
+- [x] 步骤6：测试验证
+- [x] 步骤7：设计再确认
+- [x] 步骤8：提交

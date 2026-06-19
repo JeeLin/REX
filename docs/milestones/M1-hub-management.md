@@ -562,3 +562,14 @@ feat: implement resource creation wizard
 - [ ] 前端环境管理与 prototype/environments.html 一致
 - [ ] 审计日志记录所有写操作
 - [ ] 不引入 Agent 注册、SSH、SQL 等超前功能
+
+## Flow Status
+
+- [x] 步骤1：编写里程碑文档
+- [x] 步骤2：设计核对
+- [x] 步骤3：开发
+- [x] 步骤4：代码精简
+- [x] 步骤5：代码审查
+- [x] 步骤6：测试验证
+- [x] 步骤7：设计再确认
+- [x] 步骤8：提交

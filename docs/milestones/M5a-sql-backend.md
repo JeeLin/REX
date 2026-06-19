@@ -174,3 +174,14 @@ GET  /api/resources/:resource_id/sql/columns?database=x&table=y  — 列出列
 ```
 feat: add SQL REST API
 ```
+
+## Flow Status
+
+- [x] 步骤1：编写里程碑文档
+- [x] 步骤2：设计核对
+- [x] 步骤3：开发
+- [x] 步骤4：代码精简
+- [x] 步骤5：代码审查
+- [x] 步骤6：测试验证
+- [x] 步骤7：设计再确认
+- [x] 步骤8：提交
