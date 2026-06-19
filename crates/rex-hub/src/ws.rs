@@ -187,7 +187,13 @@ async fn handle_agent_socket(socket: WebSocket, state: Arc<AppState>) {
                                     let ver = ws_msg.payload["version"].as_str().unwrap_or(&version);
                                     let sha = ws_msg.payload["sha256"].as_str().unwrap_or("");
                                     agent::update_heartbeat(&db, &aid, ver, sha);
-                                    let _ = send_ws_msg(&mut write, "heartbeat_ack", serde_json::json!({})).await;
+                                    // 版本对比：Agent 版本 ≠ Hub 版本 → needs_update
+                                    let hub_version = rex_common::version::VERSION;
+                                    let needs_update = ver != hub_version;
+                                    let _ = send_ws_msg(&mut write, "heartbeat_ack", serde_json::json!({
+                                        "hub_version": hub_version,
+                                        "needs_update": needs_update,
+                                    })).await;
                                 }
                                 "disconnect" => {
                                     tracing::info!(agent_id = %aid, "agent requested disconnect");
