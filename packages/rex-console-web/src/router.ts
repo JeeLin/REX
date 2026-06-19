@@ -55,6 +55,11 @@ const router = createRouter({
       name: 'files',
       component: () => import('./pages/Files.vue'),
     },
+    {
+      path: '/sql/:resourceId',
+      name: 'sql',
+      component: () => import('./pages/SqlConsole.vue'),
+    },
   ],
 })
 
