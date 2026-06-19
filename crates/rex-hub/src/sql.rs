@@ -201,6 +201,7 @@ mod tests {
             transfer: Some(Arc::new(crate::transfer::TransferState {
                 manager: Arc::new(TransferManager::new()),
             })),
+            update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
         })
     }
 

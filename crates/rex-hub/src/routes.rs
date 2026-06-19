@@ -18,6 +18,21 @@ use crate::resource;
 use crate::terminal::SessionManager;
 use crate::ws::AgentConnections;
 
+/// 更新检查缓存
+pub struct UpdateCache {
+    pub latest_version: Option<String>,
+    pub last_checked: Option<String>,
+}
+
+impl UpdateCache {
+    pub fn new() -> Self {
+        Self {
+            latest_version: None,
+            last_checked: None,
+        }
+    }
+}
+
 /// 共享应用状态
 pub struct AppState {
     pub db: Arc<Database>,
@@ -25,6 +40,7 @@ pub struct AppState {
     pub connections: Arc<AgentConnections>,
     pub sessions: Arc<SessionManager>,
     pub transfer: Option<Arc<crate::transfer::TransferState>>,
+    pub update_cache: tokio::sync::RwLock<UpdateCache>,
 }
 
 pub fn app(db: Arc<Database>, secret_key: String) -> axum::Router {
@@ -47,6 +63,7 @@ pub fn app_with_static(
         connections,
         sessions,
         transfer: Some(transfer_state),
+        update_cache: tokio::sync::RwLock::new(UpdateCache::new()),
     });
 
     let public_routes = Router::new()
@@ -137,6 +154,12 @@ pub fn app_with_static(
         .route(
             "/api/resources/:resource_id/sql/columns",
             get(crate::sql::list_columns),
+        )
+        .route("/api/update/status", get(crate::update::get_update_status))
+        .route("/api/update/check", get(crate::update::check_update))
+        .route(
+            "/api/update/agents",
+            get(crate::update::list_agent_versions),
         )
         .layer(middleware::from_fn_with_state(
             state.clone(),

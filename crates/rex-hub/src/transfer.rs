@@ -213,6 +213,7 @@ mod tests {
             transfer: Some(Arc::new(TransferState {
                 manager: Arc::new(TransferManager::new()),
             })),
+            update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
         })
     }
 
@@ -440,6 +441,7 @@ mod tests {
             connections: Arc::new(crate::ws::new_connections()),
             sessions: Arc::new(crate::terminal::SessionManager::new(900)),
             transfer: Some(transfer_state),
+            update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
         });
 
         use axum::routing::{get, post};
