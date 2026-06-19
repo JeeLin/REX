@@ -184,4 +184,17 @@ export default {
     executing: '执行中...',
     emptySql: 'SQL 不能为空',
   },
+  settings: {
+    update: {
+      title: '更新',
+      currentVersion: '当前版本',
+      lastChecked: '检查时间',
+      checkNow: '检查更新',
+      checking: '检查中...',
+      foundNew: '发现新版本',
+      download: '下载更新',
+      upToDate: '已是最新版本',
+      autoCheck: '自动检查更新',
+    },
+  },
 }

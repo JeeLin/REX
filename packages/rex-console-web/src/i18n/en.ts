@@ -184,4 +184,17 @@ export default {
     executing: 'Executing...',
     emptySql: 'SQL cannot be empty',
   },
+  settings: {
+    update: {
+      title: 'Update',
+      currentVersion: 'Current Version',
+      lastChecked: 'Last Checked',
+      checkNow: 'Check for Updates',
+      checking: 'Checking...',
+      foundNew: 'New version available',
+      download: 'Download Update',
+      upToDate: 'Up to date',
+      autoCheck: 'Auto-check for updates',
+    },
+  },
 }

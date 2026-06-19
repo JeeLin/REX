@@ -43,6 +43,11 @@ const router = createRouter({
           name: 'agents',
           component: () => import('./pages/Agents.vue'),
         },
+        {
+          path: 'settings',
+          name: 'settings',
+          component: () => import('./pages/Settings.vue'),
+        },
       ],
     },
     {
