@@ -161,6 +161,14 @@ pub fn app_with_static(
             "/api/update/agents",
             get(crate::update::list_agent_versions),
         )
+        .route(
+            "/api/update/download",
+            post(crate::update::download_update),
+        )
+        .route(
+            "/api/update/apply",
+            post(crate::update::apply_update),
+        )
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,

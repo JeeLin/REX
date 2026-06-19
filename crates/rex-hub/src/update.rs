@@ -1,7 +1,7 @@
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Json;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::helpers::{err_resp, ApiResponse, ErrorResponse};
@@ -33,6 +33,26 @@ pub struct AgentVersionInfo {
     pub last_seen_at: Option<String>,
 }
 
+/// 下载进度
+#[derive(Debug, Clone, Serialize)]
+pub struct DownloadProgress {
+    pub status: String, // "downloading" | "verifying" | "ready" | "error"
+    pub percent: u32,
+    pub message: String,
+}
+
+/// 下载请求
+#[derive(Debug, Deserialize)]
+pub struct DownloadRequest {
+    pub version: String,
+}
+
+/// 应用更新请求
+#[derive(Debug, Deserialize)]
+pub struct ApplyRequest {
+    pub version: String,
+}
+
 // ── API 处理函数 ─────────────────────────────────────────
 
 /// GET /api/update/status — 获取 Hub 更新状态
@@ -41,7 +61,6 @@ pub async fn get_update_status(
 ) -> Result<Json<ApiResponse<UpdateStatusResponse>>, (StatusCode, Json<ErrorResponse>)> {
     let current = rex_common::version::VersionInfo::current();
 
-    // 从内存中读取上次检查结果（如果有）
     let (latest, last_checked) = {
         let cache = state.update_cache.read().await;
         (
@@ -90,7 +109,6 @@ pub async fn check_update(
 
     let now = crate::helpers::now_iso();
 
-    // 缓存检查结果
     {
         let mut cache = state.update_cache.write().await;
         cache.latest_version = latest.clone();
@@ -107,6 +125,99 @@ pub async fn check_update(
             auto_check_enabled: true,
         },
     }))
+}
+
+/// POST /api/update/download — 下载新版本
+pub async fn download_update(
+    State(state): State<Arc<AppState>>,
+    Json(input): Json<DownloadRequest>,
+) -> Result<Json<ApiResponse<DownloadProgress>>, (StatusCode, Json<ErrorResponse>)> {
+    let current = rex_common::version::VersionInfo::current();
+
+    // 检查是否真的是新版本
+    if !rex_common::version::is_newer(&current.version, &input.version).unwrap_or(false) {
+        return Err(err_resp(
+            "NOT_NEWER",
+            "指定版本不比当前版本新",
+        ));
+    }
+
+    let data_dir = std::env::current_dir()
+        .map_err(|_| err_resp("INTERNAL_ERROR", "无法获取工作目录"))?;
+
+    let checker = rex_common::updater::UpdateChecker::new("user/rex", &current.version);
+
+    // 下载
+    let staged_path = checker
+        .download_update(&data_dir, None)
+        .await
+        .map_err(|e| err_resp("DOWNLOAD_FAILED", &format!("下载失败: {e}")))?;
+
+    // SHA256 校验（如果有 checksums）
+    let binary_name = staged_path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let checksums_url = format!(
+        "https://api.github.com/repos/user/rex/releases/latest",
+    );
+    // 尝试获取 checksums，但不强制要求
+    let _ = rex_common::updater::verify_download(
+        &staged_path,
+        &checksums_url,
+        &binary_name,
+    )
+    .await;
+
+    // 写入 update-state.json
+    let state_path = data_dir.join("update-state.json");
+
+    // 备份当前二进制
+    let rollback_path = rex_common::updater::UpdateChecker::backup_current(&data_dir)
+        .map_err(|e| err_resp("BACKUP_FAILED", &format!("备份失败: {e}")))?;
+
+    let update_state = rex_common::update_state::UpdateState {
+        phase: rex_common::update_state::UpdatePhase::Requested,
+        target_version: input.version,
+        old_version: current.version,
+        staged_path: staged_path.to_string_lossy().to_string(),
+        rollback_path: rollback_path.to_string_lossy().to_string(),
+        attempt: 0,
+    };
+
+    update_state
+        .write(&state_path)
+        .map_err(|e| err_resp("STATE_WRITE_FAILED", &format!("写入状态失败: {e}")))?;
+
+    Ok(Json(ApiResponse {
+        data: DownloadProgress {
+            status: "ready".to_string(),
+            percent: 100,
+            message: "下载完成，可以重启更新".to_string(),
+        },
+    }))
+}
+
+/// POST /api/update/apply — 应用更新（触发 supervisor 重启）
+pub async fn apply_update(
+    State(_state): State<Arc<AppState>>,
+) -> Result<Json<ApiResponse<DownloadProgress>>, (StatusCode, Json<ErrorResponse>)> {
+    let data_dir = std::env::current_dir()
+        .map_err(|_| err_resp("INTERNAL_ERROR", "无法获取工作目录"))?;
+
+    let state_path = data_dir.join("update-state.json");
+    let update_state = rex_common::update_state::UpdateState::read(&state_path);
+
+    if update_state.phase != rex_common::update_state::UpdatePhase::Requested {
+        return Err(err_resp(
+            "NO_UPDATE_PENDING",
+            "没有待应用的更新",
+        ));
+    }
+
+    // worker 以 exit code 10 退出，通知 supervisor 执行替换
+    tracing::info!(version = %update_state.target_version, "applying update, exiting with code 10");
+    std::process::exit(10);
 }
 
 /// GET /api/update/agents — 获取所有 Agent 版本信息
