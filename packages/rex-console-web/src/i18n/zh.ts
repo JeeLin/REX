@@ -195,6 +195,12 @@ export default {
       download: '下载更新',
       upToDate: '已是最新版本',
       autoCheck: '自动检查更新',
+      downloading: '下载中...',
+      verifying: '校验中...',
+      ready: '可以重启更新',
+      applyNow: '立即更新',
+      updating: '更新中，请稍候...',
+      downloadFailed: '下载失败',
     },
   },
 }

@@ -195,6 +195,12 @@ export default {
       download: 'Download Update',
       upToDate: 'Up to date',
       autoCheck: 'Auto-check for updates',
+      downloading: 'Downloading...',
+      verifying: 'Verifying...',
+      ready: 'Ready to restart and update',
+      applyNow: 'Apply Now',
+      updating: 'Updating, please wait...',
+      downloadFailed: 'Download failed',
     },
   },
 }

@@ -22,6 +22,12 @@ export interface AgentVersionInfo {
   last_seen_at: string | null
 }
 
+export interface DownloadProgress {
+  status: string // "downloading" | "verifying" | "ready" | "error"
+  percent: number
+  message: string
+}
+
 // ── API 函数 ──────────────────────────────────────────────
 
 /** 获取 Hub 更新状态 */
@@ -37,4 +43,14 @@ export function checkUpdate(): Promise<UpdateStatusResponse> {
 /** 获取所有 Agent 版本信息 */
 export function listAgentVersions(): Promise<AgentVersionInfo[]> {
   return client.get('/update/agents').then((r) => r.data.data)
+}
+
+/** 下载新版本 */
+export function downloadUpdate(version: string): Promise<DownloadProgress> {
+  return client.post('/update/download', { version }).then((r) => r.data.data)
+}
+
+/** 应用更新（触发 supervisor 重启） */
+export function applyUpdate(): Promise<DownloadProgress> {
+  return client.post('/update/apply').then((r) => r.data.data)
 }
