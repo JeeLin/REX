@@ -1,26 +1,48 @@
 <template>
   <div class="settings-page">
-    <h1>{{ t('nav.settings') }}</h1>
-    <UpdateSection />
+    <div class="settings-layout">
+      <AppearanceSection />
+      <TerminalSection />
+      <SecuritySection />
+      <UpdateSection />
+      <div class="version-info">
+        <div class="ver">REX Hub v0.1</div>
+        <div class="version-sub">自托管 · 开源</div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+import AppearanceSection from '@/features/settings/AppearanceSection.vue'
+import TerminalSection from '@/features/settings/TerminalSection.vue'
+import SecuritySection from '@/features/settings/SecuritySection.vue'
 import UpdateSection from '@/features/settings/UpdateSection.vue'
-
-const { t } = useI18n()
 </script>
 
 <style scoped>
 .settings-page {
-  padding: var(--sp-lg);
-  max-width: 800px;
+  padding: 0;
 }
 
-.settings-page h1 {
-  margin: 0 0 var(--sp-lg);
-  font-size: var(--fs-xl);
-  color: var(--text-primary);
+.settings-layout {
+  max-width: 640px;
+}
+
+.version-info {
+  text-align: center;
+  padding: var(--sp-2xl) 0;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.version-info .ver {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.version-sub {
+  margin-top: var(--sp-xs);
 }
 </style>
