@@ -29,16 +29,21 @@
     </div>
 
     <div v-else class="resource-list">
-      <div v-for="res in resources" :key="res.id" class="resource-item">
-        <div class="resource-icon" :style="{ background: protocolColor(res.protocol) + '15', color: protocolColor(res.protocol) }">
-          {{ protocolIcon(res.protocol) }}
+      <button
+        v-for="res in resources"
+        :key="res.id"
+        class="resource-item resource-clickable"
+        @click="connectToResource(res)"
+      >
+        <div class="resource-icon" :style="{ background: getProtocolIcon(res.protocol).color + '15', color: getProtocolIcon(res.protocol).color }">
+          {{ getProtocolIcon(res.protocol).icon }}
         </div>
         <div class="resource-info">
           <div class="resource-name">{{ res.name }}</div>
           <div class="resource-proto">{{ res.protocol.toUpperCase() }}</div>
         </div>
         <span class="resource-status badge badge-success">{{ t('status.online') }}</span>
-      </div>
+      </button>
     </div>
 
     <!-- Agent Status -->
@@ -51,43 +56,21 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import client from '@/api/client'
+import type { Environment, Resource } from '@/api/env'
+import { getProtocolIcon } from '@/composables/useProtocol'
+import { useProtocol } from '@/composables/useProtocol'
 import AgentStatusPanel from '@/features/agents/AgentStatusPanel.vue'
 
 const { t } = useI18n()
 const route = useRoute()
-
-interface Environment {
-  id: string
-  name: string
-  description: string | null
-  connection_mode: string
-  created_at: string
-  updated_at: string
-}
-
-interface Resource {
-  id: string
-  name: string
-  protocol: string
-  connection_mode: string
-  status: string
-}
+const { connectToResource: connect } = useProtocol()
 
 const env = ref<Environment | null>(null)
 const resources = ref<Resource[]>([])
 
-const PROTOCOL_ICONS: Record<string, string> = {
-  ssh: '$', sftp: '📁', mysql: 'dB', postgresql: 'pg',
-  redis: 'R', docker: '🐳', sqlite: 'S', s3: '☁',
+function connectToResource(res: Resource) {
+  connect(res, env.value?.name || '')
 }
-const PROTOCOL_COLORS: Record<string, string> = {
-  ssh: 'var(--success)', sftp: 'var(--accent-purple)', mysql: 'var(--info)',
-  postgresql: 'var(--accent-purple)', redis: 'var(--danger)', docker: 'var(--info)',
-  sqlite: 'var(--warning)', s3: 'var(--accent)',
-}
-
-function protocolIcon(p: string) { return PROTOCOL_ICONS[p] || '·' }
-function protocolColor(p: string) { return PROTOCOL_COLORS[p] || 'var(--text-secondary)' }
 
 onMounted(async () => {
   const id = route.params.id as string
@@ -137,9 +120,16 @@ onMounted(async () => {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   transition: all var(--transition-fast);
+  color: inherit;
+  text-align: left;
+  width: 100%;
 }
 
-.resource-item:hover {
+.resource-clickable {
+  cursor: pointer;
+}
+
+.resource-clickable:hover {
   border-color: rgba(232, 145, 45, 0.2);
   background: var(--bg-elevated);
 }
