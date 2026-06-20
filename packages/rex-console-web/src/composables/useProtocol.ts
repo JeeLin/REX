@@ -1,6 +1,8 @@
 import { useRouter } from 'vue-router'
 import { useRecent } from './useRecent'
 
+export type Protocol = 'ssh' | 'sftp' | 'mysql' | 'postgresql' | 'redis' | 'docker' | 'sqlite' | 's3'
+
 /** Protocol → icon/label mapping */
 const PROTOCOL_ICONS: Record<string, { icon: string; color: string }> = {
   ssh: { icon: '$', color: '#22d3ee' },

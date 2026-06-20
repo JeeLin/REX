@@ -78,6 +78,34 @@ export default {
     clearFilters: '清除筛选条件',
     refresh: '刷新',
   },
+  ws: {
+    empty: {
+      noSessions: '没有打开的会话',
+    },
+    conn: {
+      searchPlaceholder: '搜索资源...',
+    },
+    tab: {
+      close: '关闭',
+      closeOthers: '关闭其他',
+      closeRight: '关闭右侧',
+      closeLeft: '关闭左侧',
+      closeAll: '关闭全部',
+      duplicate: '复制标签',
+      newConnection: '新建连接',
+    },
+    layout: {
+      switch: '切换布局',
+      single: '单面板',
+      leftRight: '左右分屏',
+      topBottom: '上下分屏',
+      quad: '四宫格',
+      sidebarMain: '主+侧边',
+    },
+    shortcuts: {
+      title: '快捷键',
+    },
+  },
   nav: {
     workspace: '工作区',
     dashboard: '仪表盘',

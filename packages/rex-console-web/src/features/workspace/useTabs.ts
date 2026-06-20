@@ -1,0 +1,153 @@
+import { ref, computed } from 'vue'
+import type { Protocol } from '@/composables/useProtocol'
+
+export interface Tab {
+  id: string
+  name: string
+  proto: Protocol
+  resourceId: string
+  panelIndex: number
+  status: 'online' | 'offline' | 'connecting'
+}
+
+let tabCounter = 0
+
+const tabs = ref<Tab[]>([])
+const activeTabId = ref<string | null>(null)
+
+export function useTabs() {
+  const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.value) ?? null)
+
+  function addTab(name: string, proto: Protocol, resourceId: string): string | null {
+    // Dedup: same name + proto → activate existing
+    const existing = tabs.value.find((t) => t.name === name && t.proto === proto)
+    if (existing) {
+      activeTabId.value = existing.id
+      return existing.id
+    }
+
+    tabCounter++
+    const id = `tab-${tabCounter}`
+    const tab: Tab = {
+      id,
+      name,
+      proto,
+      resourceId,
+      panelIndex: 0,
+      status: 'connecting',
+    }
+    tabs.value.push(tab)
+    activeTabId.value = id
+
+    // Simulate connection after a short delay
+    setTimeout(() => {
+      const t = tabs.value.find((x) => x.id === id)
+      if (t) t.status = 'online'
+    }, 800)
+
+    return id
+  }
+
+  function closeTab(id: string) {
+    const idx = tabs.value.findIndex((t) => t.id === id)
+    if (idx === -1) return
+
+    tabs.value.splice(idx, 1)
+
+    if (activeTabId.value === id) {
+      // Activate neighbor or null
+      if (tabs.value.length === 0) {
+        activeTabId.value = null
+      } else {
+        const nextIdx = Math.min(idx, tabs.value.length - 1)
+        activeTabId.value = tabs.value[nextIdx].id
+      }
+    }
+  }
+
+  function closeOtherTabs(id: string) {
+    tabs.value = tabs.value.filter((t) => t.id === id)
+    activeTabId.value = id
+  }
+
+  function closeTabsRight(id: string) {
+    const idx = tabs.value.findIndex((t) => t.id === id)
+    if (idx === -1) return
+    tabs.value = tabs.value.slice(0, idx + 1)
+    if (!tabs.value.find((t) => t.id === activeTabId.value)) {
+      activeTabId.value = id
+    }
+  }
+
+  function closeTabsLeft(id: string) {
+    const idx = tabs.value.findIndex((t) => t.id === id)
+    if (idx === -1) return
+    tabs.value = tabs.value.slice(idx)
+    if (!tabs.value.find((t) => t.id === activeTabId.value)) {
+      activeTabId.value = id
+    }
+  }
+
+  function closeAllTabs() {
+    tabs.value = []
+    activeTabId.value = null
+  }
+
+  function activateTab(id: string) {
+    if (tabs.value.find((t) => t.id === id)) {
+      activeTabId.value = id
+    }
+  }
+
+  function duplicateTab(id: string) {
+    const tab = tabs.value.find((t) => t.id === id)
+    if (tab) {
+      addTab(tab.name, tab.proto, tab.resourceId)
+    }
+  }
+
+  function moveTabToPanel(id: string, panelIndex: number) {
+    const tab = tabs.value.find((t) => t.id === id)
+    if (tab) {
+      tab.panelIndex = panelIndex
+    }
+  }
+
+  function nextTab() {
+    if (tabs.value.length <= 1) return
+    const idx = tabs.value.findIndex((t) => t.id === activeTabId.value)
+    const nextIdx = (idx + 1) % tabs.value.length
+    activeTabId.value = tabs.value[nextIdx].id
+  }
+
+  function prevTab() {
+    if (tabs.value.length <= 1) return
+    const idx = tabs.value.findIndex((t) => t.id === activeTabId.value)
+    const prevIdx = (idx - 1 + tabs.value.length) % tabs.value.length
+    activeTabId.value = tabs.value[prevIdx].id
+  }
+
+  function switchTabByIndex(index: number) {
+    if (index >= 0 && index < tabs.value.length) {
+      activeTabId.value = tabs.value[index].id
+    }
+  }
+
+  return {
+    tabs,
+    activeTabId,
+    activeTab,
+    addTab,
+    closeTab,
+    closeOtherTabs,
+    closeTabsRight,
+    closeTabsLeft,
+    closeAllTabs,
+    activateTab,
+    duplicateTab,
+    moveTabToPanel,
+    nextTab,
+    prevTab,
+    switchTabByIndex,
+  }
+}

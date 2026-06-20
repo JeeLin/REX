@@ -78,6 +78,34 @@ export default {
     clearFilters: 'Clear filters',
     refresh: 'Refresh',
   },
+  ws: {
+    empty: {
+      noSessions: 'No open sessions',
+    },
+    conn: {
+      searchPlaceholder: 'Search resources...',
+    },
+    tab: {
+      close: 'Close',
+      closeOthers: 'Close Others',
+      closeRight: 'Close Right',
+      closeLeft: 'Close Left',
+      closeAll: 'Close All',
+      duplicate: 'Duplicate',
+      newConnection: 'New Connection',
+    },
+    layout: {
+      switch: 'Switch Layout',
+      single: 'Single',
+      leftRight: 'Left-Right',
+      topBottom: 'Top-Bottom',
+      quad: 'Quad',
+      sidebarMain: 'Sidebar-Main',
+    },
+    shortcuts: {
+      title: 'Shortcuts',
+    },
+  },
   nav: {
     workspace: 'Workspace',
     dashboard: 'Dashboard',

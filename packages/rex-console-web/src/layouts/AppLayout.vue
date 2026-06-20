@@ -41,6 +41,10 @@
           <span class="nav-icon">◉</span>
           <span v-show="!collapsed">{{ t('nav.dashboard') }}</span>
         </router-link>
+        <router-link to="/workspace" class="nav-item" :class="{ active: route.name === 'workspace' }" @click="closeMobile">
+          <span class="nav-icon">⊞</span>
+          <span v-show="!collapsed">{{ t('nav.workspace') }}</span>
+        </router-link>
         <router-link to="/environments" class="nav-item" :class="{ active: isEnvPage }" @click="closeMobile">
           <span class="nav-icon">◈</span>
           <span v-show="!collapsed">{{ t('nav.environments') }}</span>
@@ -116,8 +120,8 @@
       </div>
     </aside>
 
-    <main class="main-content">
-      <header class="page-header">
+    <main class="main-content" :class="{ 'no-header': route.meta.noHeader }">
+      <header v-if="!route.meta.noHeader" class="page-header">
         <h1 class="page-title">{{ pageTitle }}</h1>
         <div class="header-actions">
           <button class="btn btn-ghost btn-sm" @click="handleLogout">
@@ -587,6 +591,10 @@ onMounted(() => {
   padding: var(--sp-xl);
   overflow-y: auto;
   flex: 1;
+}
+
+.main-content.no-header .page-body {
+  padding: 0;
 }
 
 /* ── 汉堡菜单（移动端） ──────────────────── */

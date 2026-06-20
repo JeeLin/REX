@@ -53,6 +53,12 @@ const router = createRouter({
           name: 'settings',
           component: () => import('./pages/Settings.vue'),
         },
+        {
+          path: 'workspace',
+          name: 'workspace',
+          component: () => import('./pages/Workspace.vue'),
+          meta: { noHeader: true },
+        },
       ],
     },
     {
