@@ -22,6 +22,7 @@
         :key="env.id"
         :to="`/environments/${env.id}`"
         class="env-card"
+        @contextmenu.prevent="onEnvCardCtx($event, env)"
       >
         <div class="env-card-header">
           <span class="env-card-name">{{ env.name }}</span>
@@ -45,10 +46,14 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useContextMenu } from '@/composables/useContextMenu'
 import client from '@/api/client'
 
+const router = useRouter()
 const { t } = useI18n()
+const { show: showMenu } = useContextMenu()
 
 interface Environment {
   id: string
@@ -61,6 +66,17 @@ interface Environment {
 
 const environments = ref<Environment[]>([])
 const loading = ref(true)
+
+function onEnvCardCtx(e: MouseEvent, env: Environment) {
+  showMenu(e, [
+    { label: t('ctx.openDetail'), action: () => router.push(`/environments/${env.id}`) },
+    { label: t('ctx.newResource'), action: () => router.push(`/environments/${env.id}/resources/new`) },
+    { label: t('ctx.addAgent'), action: () => router.push('/agents') },
+    { separator: true },
+    { label: t('ctx.editEnv') },
+    { label: t('ctx.deleteEnv'), danger: true },
+  ])
+}
 
 onMounted(async () => {
   try {

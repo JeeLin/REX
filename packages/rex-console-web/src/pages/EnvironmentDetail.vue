@@ -34,6 +34,7 @@
         :key="res.id"
         class="resource-item resource-clickable"
         @click="connectToResource(res)"
+        @contextmenu.prevent="onResourceCtx($event, res)"
       >
         <div class="resource-icon" :style="{ background: getProtocolIcon(res.protocol).color + '15', color: getProtocolIcon(res.protocol).color }">
           {{ getProtocolIcon(res.protocol).icon }}
@@ -53,8 +54,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useContextMenu } from '@/composables/useContextMenu'
 import client from '@/api/client'
 import type { Environment, Resource } from '@/api/env'
 import { getProtocolIcon } from '@/composables/useProtocol'
@@ -63,13 +65,27 @@ import AgentStatusPanel from '@/features/agents/AgentStatusPanel.vue'
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const { connectToResource: connect } = useProtocol()
+const { show: showMenu } = useContextMenu()
 
 const env = ref<Environment | null>(null)
 const resources = ref<Resource[]>([])
 
 function connectToResource(res: Resource) {
   connect(res, env.value?.name || '')
+}
+
+function onResourceCtx(e: MouseEvent, res: Resource) {
+  showMenu(e, [
+    { label: t('ctx.connect'), action: () => connectToResource(res) },
+    { label: t('ctx.connectNewTab'), action: () => connectToResource(res) },
+    { separator: true },
+    { label: t('ctx.editResource') },
+    { label: t('ctx.deleteResource'), danger: true },
+    { separator: true },
+    { label: t('ctx.copyAddress'), action: () => navigator.clipboard?.writeText(res.name) },
+  ])
 }
 
 onMounted(async () => {

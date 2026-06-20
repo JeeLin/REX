@@ -85,17 +85,18 @@
               class="log-row"
               :class="{ expanded: expandedId === record.id }"
               @click="toggleDetail(record.id)"
+              @contextmenu.prevent="onLogRowCtx($event, record)"
             >
               <td class="audit-time">{{ record.time }}</td>
               <td class="audit-user">{{ record.user }}</td>
               <td>
-                <span class="audit-env">
+                <span class="audit-env" @contextmenu.stop="onEnvNameCtx($event, record)">
                   <span class="env-dot"></span>
                   {{ record.envName }}
                 </span>
               </td>
               <td>
-                <span class="audit-op" :class="record.operation">
+                <span class="audit-op" :class="record.operation" @contextmenu.stop="onOpTagCtx($event, record)">
                   {{ t(`audit.ops.${record.operation}`) }}
                 </span>
               </td>
@@ -148,8 +149,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useContextMenu } from '@/composables/useContextMenu'
 
 const { t } = useI18n()
+const { show: showMenu } = useContextMenu()
 
 // ── Filter state ──
 const filters = ref({
@@ -203,6 +206,30 @@ interface AuditRecord {
   result: 'ok' | 'fail'
   detailFields: DetailField[]
   detailCommand?: string
+}
+
+// ── Context menus ──
+function onLogRowCtx(e: MouseEvent, record: AuditRecord) {
+  showMenu(e, [
+    { label: t('ctx.viewDetail'), action: () => toggleDetail(record.id) },
+    { separator: true },
+    { label: t('ctx.copySummary'), action: () => navigator.clipboard?.writeText(record.summary) },
+    { label: t('ctx.copyOpType'), action: () => navigator.clipboard?.writeText(t(`audit.ops.${record.operation}`)) },
+    { label: t('ctx.copyTimestamp'), action: () => navigator.clipboard?.writeText(record.time) },
+  ])
+}
+
+function onOpTagCtx(e: MouseEvent, record: AuditRecord) {
+  showMenu(e, [
+    { label: t('ctx.filterByOp'), action: () => { filters.value.operation = record.operation } },
+    { label: t('ctx.copyOpType'), action: () => navigator.clipboard?.writeText(t(`audit.ops.${record.operation}`)) },
+  ])
+}
+
+function onEnvNameCtx(e: MouseEvent, record: AuditRecord) {
+  showMenu(e, [
+    { label: t('ctx.filterByEnv'), action: () => { filters.value.env = record.envId } },
+  ])
 }
 
 const records = ref<AuditRecord[]>([

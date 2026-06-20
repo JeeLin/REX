@@ -58,7 +58,7 @@
         <div v-else-if="filteredEnvs.length === 0" class="tree-empty">{{ t('common.noData') }}</div>
         <template v-else>
           <div v-for="env in filteredEnvs" :key="env.id" class="env-group">
-            <button class="env-group-header" @click="toggleEnvExpand(env.id)">
+            <button class="env-group-header" @click="toggleEnvExpand(env.id)" @contextmenu.prevent="onEnvGroupCtx($event, env)">
               <span class="env-dot" :class="env.resources.length > 0 ? 'online' : 'offline'"></span>
               <span class="env-name">{{ env.name }}</span>
               <span class="env-count">[{{ env.resources.length }}]</span>
@@ -70,6 +70,7 @@
                 :key="res.id"
                 class="resource-item"
                 @click="connectToResource(res, env.name)"
+                @contextmenu.prevent="onResourceItemCtx($event, res, env.name)"
               >
                 <span class="res-dot" :style="{ background: getProtocolIcon(res.protocol).color }"></span>
                 <span class="res-name">{{ res.name }}</span>
@@ -139,12 +140,14 @@ import { useUserStore, type Theme } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import { useSidebar } from '@/composables/useSidebar'
 import { getProtocolIcon } from '@/composables/useProtocol'
+import { useContextMenu } from '@/composables/useContextMenu'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const userStore = useUserStore()
 const authStore = useAuthStore()
+const { show: showMenu } = useContextMenu()
 
 const lang = computed(() => userStore.lang)
 const auditEnabled = ref(localStorage.getItem('rex-audit-enabled') !== 'false')
@@ -206,6 +209,29 @@ function toggleLang() {
 function handleLogout() {
   authStore.logout()
   router.push('/login')
+}
+
+function onResourceItemCtx(e: MouseEvent, res: { id: string; name: string; protocol: string }, envName: string) {
+  showMenu(e, [
+    { label: t('ctx.connect'), action: () => connectToResource(res, envName) },
+    { label: t('ctx.connectNewTab'), action: () => connectToResource(res, envName) },
+    { separator: true },
+    { label: t('ctx.editResource') },
+    { label: t('ctx.deleteResource'), danger: true },
+    { separator: true },
+    { label: t('ctx.copyAddress'), action: () => navigator.clipboard?.writeText(res.name) },
+  ])
+}
+
+function onEnvGroupCtx(e: MouseEvent, env: { id: string; name: string }) {
+  showMenu(e, [
+    { label: t('ctx.openDetail'), action: () => router.push(`/environments/${env.id}`) },
+    { label: t('ctx.openAllWorkspace') },
+    { separator: true },
+    { label: t('ctx.newResource'), action: () => router.push(`/environments/${env.id}/resources/new`) },
+    { label: t('ctx.editEnv') },
+    { label: t('ctx.deleteEnv'), danger: true },
+  ])
 }
 
 onMounted(() => {

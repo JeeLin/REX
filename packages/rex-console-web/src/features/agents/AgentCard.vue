@@ -1,5 +1,5 @@
 <template>
-  <div class="agent-card" :class="{ offline: agent.status !== 'online' }">
+  <div class="agent-card" :class="{ offline: agent.status !== 'online' }" @contextmenu.prevent="onCtx">
     <div class="card-header">
       <div class="status-dot" :class="agent.status === 'online' ? 'online' : 'offline'" />
       <span class="agent-name">{{ agent.name }}</span>
@@ -37,10 +37,25 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { useContextMenu } from '@/composables/useContextMenu'
 import type { Agent } from '@/api/agent'
 import AgentVersionBadge from './AgentVersionBadge.vue'
 
 const props = defineProps<{ agent: Agent; hubVersion?: string }>()
+const { show: showMenu } = useContextMenu()
+
+function onCtx(e: MouseEvent) {
+  showMenu(e, [
+    { label: t('ctx.viewLog') },
+    { label: t('ctx.config') },
+    { separator: true },
+    { label: t('ctx.copyAgentId'), action: () => navigator.clipboard?.writeText(props.agent.id) },
+    { label: t('ctx.copyToken') },
+    { separator: true },
+    { label: t('ctx.restartAgent'), danger: true },
+    { label: t('ctx.resetToken'), danger: true },
+  ])
+}
 
 function needsUpdate(): boolean {
   return !!(props.hubVersion && props.agent.version !== props.hubVersion)
