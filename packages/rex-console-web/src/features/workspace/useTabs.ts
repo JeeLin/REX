@@ -1,6 +1,16 @@
 import { ref, computed } from 'vue'
 import type { Protocol } from '@/composables/useProtocol'
 
+export type PanelComponent = 'terminal' | 'sql' | 'files' | 'unsupported'
+
+const PROTOCOL_COMPONENT: Record<string, PanelComponent> = {
+  ssh: 'terminal',
+  mysql: 'sql',
+  postgresql: 'sql',
+  sqlite: 'sql',
+  sftp: 'files',
+}
+
 export interface Tab {
   id: string
   name: string
@@ -8,6 +18,7 @@ export interface Tab {
   resourceId: string
   panelIndex: number
   status: 'online' | 'offline' | 'connecting'
+  component: PanelComponent
 }
 
 let tabCounter = 0
@@ -35,6 +46,7 @@ export function useTabs() {
       resourceId,
       panelIndex: 0,
       status: 'connecting',
+      component: PROTOCOL_COMPONENT[proto] || 'unsupported',
     }
     tabs.value.push(tab)
     activeTabId.value = id

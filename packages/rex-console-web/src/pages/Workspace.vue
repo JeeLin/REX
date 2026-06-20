@@ -32,13 +32,35 @@
           class="ws-panel"
           :class="{ active: isPanelActive(i - 1) }"
         >
-          <div v-if="getPanelTab(i - 1)" class="panel-content">
-            <div class="panel-placeholder">
+          <template v-if="getPanelTab(i - 1)">
+            <WorkspaceTerminal
+              v-if="getPanelTab(i - 1)!.component === 'terminal'"
+              :resource-id="getPanelTab(i - 1)!.resourceId"
+              :resource-name="getPanelTab(i - 1)!.name"
+              @disconnect="onPanelDisconnect(getPanelTab(i - 1)!.id)"
+              @error="(msg: string) => onPanelError(getPanelTab(i - 1)!.id, msg)"
+            />
+            <WorkspaceSql
+              v-else-if="getPanelTab(i - 1)!.component === 'sql'"
+              :resource-id="getPanelTab(i - 1)!.resourceId"
+              :resource-name="getPanelTab(i - 1)!.name"
+              :protocol="getPanelTab(i - 1)!.proto"
+              @disconnect="onPanelDisconnect(getPanelTab(i - 1)!.id)"
+              @error="(msg: string) => onPanelError(getPanelTab(i - 1)!.id, msg)"
+            />
+            <WorkspaceFiles
+              v-else-if="getPanelTab(i - 1)!.component === 'files'"
+              :resource-id="getPanelTab(i - 1)!.resourceId"
+              :resource-name="getPanelTab(i - 1)!.name"
+              @disconnect="onPanelDisconnect(getPanelTab(i - 1)!.id)"
+              @error="(msg: string) => onPanelError(getPanelTab(i - 1)!.id, msg)"
+            />
+            <div v-else class="panel-unsupported">
               <span :style="{ color: getProtocolIcon(getPanelTab(i - 1)!.proto).color }">{{ getProtocolIcon(getPanelTab(i - 1)!.proto).icon }}</span>
-              {{ getPanelTab(i - 1)!.name }}
-              <span class="panel-status" :class="getPanelTab(i - 1)!.status">{{ getPanelTab(i - 1)!.status }}</span>
+              <div class="panel-unsupported-text">{{ getPanelTab(i - 1)!.name }}</div>
+              <div class="panel-unsupported-hint">暂不支持 {{ getPanelTab(i - 1)!.proto.toUpperCase() }} 协议</div>
             </div>
-          </div>
+          </template>
           <div v-else class="panel-empty">
             <span class="panel-empty-text">面板 {{ i }}</span>
           </div>
@@ -131,6 +153,9 @@ import { getProtocolIcon } from '@/composables/useProtocol'
 import { listEnvsWithResources } from '@/api/env'
 import TabBar from '@/features/workspace/TabBar.vue'
 import { useTabs } from '@/features/workspace/useTabs'
+import WorkspaceTerminal from '@/features/workspace/panels/WorkspaceTerminal.vue'
+import WorkspaceSql from '@/features/workspace/panels/WorkspaceSql.vue'
+import WorkspaceFiles from '@/features/workspace/panels/WorkspaceFiles.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -241,6 +266,17 @@ function connectToResource(res: Resource) {
   showConnMenu.value = false
   connSearchQuery.value = ''
   selectedResourceIdx.value = 0
+}
+
+// ── Panel lifecycle ──
+function onPanelDisconnect(tabId: string) {
+  const tab = tabs.value.find((t) => t.id === tabId)
+  if (tab) tab.status = 'offline'
+}
+
+function onPanelError(tabId: string, _msg: string) {
+  const tab = tabs.value.find((t) => t.id === tabId)
+  if (tab) tab.status = 'offline'
 }
 
 watch(showConnMenu, (val) => {
@@ -444,6 +480,33 @@ function onKeyDown(e: KeyboardEvent) {
 .panel-empty-text {
   color: var(--text-muted);
   font-size: var(--fs-sm);
+}
+
+.panel-unsupported {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-sm);
+  color: var(--text-muted);
+}
+
+.panel-unsupported span:first-child {
+  font-size: 32px;
+  opacity: 0.4;
+}
+
+.panel-unsupported-text {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.panel-unsupported-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
 }
 
 /* ── Empty State ── */
