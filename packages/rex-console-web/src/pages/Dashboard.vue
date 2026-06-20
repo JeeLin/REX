@@ -2,19 +2,19 @@
   <div>
     <!-- Stats -->
     <div class="stats-row">
-      <div class="stat-card">
+      <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
         <div class="stat-label">{{ t('dashboard.envCount') }}</div>
         <div class="stat-value" style="color: var(--accent)">{{ envCount }}</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
         <div class="stat-label">{{ t('dashboard.resCount') }}</div>
         <div class="stat-value" style="color: var(--info)">{{ resourceCount }}</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
         <div class="stat-label">{{ t('dashboard.agentOnline') }}</div>
         <div class="stat-value" style="color: var(--success)">{{ agentOnlineCount }}</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
         <div class="stat-label">{{ t('dashboard.todayOps') }}</div>
         <div class="stat-value">{{ todayOps }}</div>
       </div>
@@ -31,6 +31,7 @@
         :key="env.id"
         :to="`/environments/${env.id}`"
         class="env-card"
+        @contextmenu.prevent="onEnvCardCtx($event, env)"
       >
         <div class="env-card-header">
           <span class="env-card-name">{{ env.name }}</span>
@@ -60,6 +61,7 @@
         :key="item.resource.id"
         class="quick-card"
         @click="connectToResource(item.resource, item.envName)"
+        @contextmenu.prevent="onQuickConnectCtx($event, item)"
       >
         <div class="quick-icon" :style="{ background: getProtocolIcon(item.resource.protocol).color + '20', color: getProtocolIcon(item.resource.protocol).color }">
           {{ getProtocolIcon(item.resource.protocol).icon }}
@@ -93,15 +95,19 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useRecent } from '@/composables/useRecent'
 import { getProtocolIcon, useProtocol } from '@/composables/useProtocol'
+import { useContextMenu } from '@/composables/useContextMenu'
 import type { Environment } from '@/api/env'
 import { listEnvsWithResources } from '@/api/env'
 
+const router = useRouter()
 const { t } = useI18n()
 const { recent } = useRecent()
 const { connectToResource } = useProtocol()
+const { show: showMenu } = useContextMenu()
 
 const environments = ref<Environment[]>([])
 const envCount = ref(0)
@@ -118,6 +124,35 @@ function formatTime(ts: number): string {
   if (hrs < 24) return `${hrs}h ago`
   const days = Math.floor(hrs / 24)
   return `${days}d ago`
+}
+
+function onQuickConnectCtx(e: MouseEvent, item: { resource: { id: string; name: string; protocol: string }; envName: string }) {
+  showMenu(e, [
+    { label: t('ctx.connect'), action: () => connectToResource(item.resource, item.envName) },
+    { label: t('ctx.connectNewTab'), action: () => connectToResource(item.resource, item.envName) },
+    { separator: true },
+    { label: t('ctx.copyAddress'), action: () => navigator.clipboard?.writeText(`${item.resource.name} (${item.envName})`) },
+    { label: t('ctx.addFavorite') },
+    { separator: true },
+    { label: t('ctx.removeRecent'), danger: true },
+  ])
+}
+
+function onEnvCardCtx(e: MouseEvent, env: Environment) {
+  showMenu(e, [
+    { label: t('ctx.openDetail'), action: () => router.push(`/environments/${env.id}`) },
+    { label: t('ctx.newResource'), action: () => router.push(`/environments/${env.id}/resources/new`) },
+    { label: t('ctx.addAgent'), action: () => router.push('/agents') },
+    { separator: true },
+    { label: t('ctx.editEnv') },
+    { label: t('ctx.deleteEnv'), danger: true },
+  ])
+}
+
+function onStatCardCtx(e: MouseEvent) {
+  showMenu(e, [
+    { label: t('ctx.refreshStats'), action: () => location.reload() },
+  ])
 }
 
 onMounted(async () => {
