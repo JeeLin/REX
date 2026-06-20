@@ -82,21 +82,49 @@ jobs:
           name: agent-${{ matrix.arch }}
           path: target/${{ matrix.target }}/release/rex-agent*
 
-  # ── 构建 Hub 二进制（linux/amd64） ────────────────────
+  # ── 构建 Hub 二进制（全平台矩阵） ────────────────────
+  # 产物用于：Docker Hub 镜像内嵌 + Release 发布
   build-hub:
-    needs: [check-rust]
-    runs-on: ubuntu-latest
+    needs: [check-rust, build-frontend]
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            arch: linux-amd64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            arch: linux-arm64
+            cross: true
+          - target: x86_64-apple-darwin
+            os: macos-14
+            arch: mac-amd64
+          - target: aarch64-apple-darwin
+            os: macos-14
+            arch: mac-arm64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            arch: windows-amd64
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
-          key: hub-linux-amd64
-      - run: cargo build --release -p rex-hub
+          key: ${{ matrix.target }}
+      - name: Install cross-compilation tools
+        if: matrix.cross
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Build
+        run: cargo build --release -p rex-hub --target ${{ matrix.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
       - uses: actions/upload-artifact@v4
         with:
-          name: hub-linux-amd64
-          path: target/release/rex-hub
+          name: hub-${{ matrix.arch }}
+          path: target/${{ matrix.target }}/release/rex-hub*
 
   # ── 构建前端 ──────────────────────────────────────────
   build-frontend:
@@ -134,7 +162,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download hub binary
+      - name: Download hub binary (linux-amd64)
         uses: actions/download-artifact@v4
         with:
           name: hub-linux-amd64
@@ -224,9 +252,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ── Release: Agent 二进制 zip 包 ──────────────────────
+  # ── Release: Hub + Agent 二进制 zip + SHA256SUMS ─────
   release:
-    needs: [build-agent]
+    needs: [build-agent, build-hub]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -238,15 +266,30 @@ jobs:
           path: artifacts/
           merge-multiple: false
 
+      - name: Download all hub binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: hub-*
+          path: artifacts/
+          merge-multiple: false
+
       - name: Create zip packages
         run: |
           for dir in artifacts/agent-*/; do
             arch=$(basename "$dir" | sed 's/^agent-//')
             (cd "$dir" && zip -j "../../rex-agent-${arch}.zip" rex-agent*)
           done
+          for dir in artifacts/hub-*/; do
+            arch=$(basename "$dir" | sed 's/^hub-//')
+            (cd "$dir" && zip -j "../../rex-hub-${arch}.zip" rex-hub*)
+          done
+
+      - name: Generate SHA256SUMS
+        run: |
+          sha256sum rex-hub-*.zip rex-agent-*.zip > SHA256SUMS
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: rex-agent-*.zip
+          files: rex-hub-*.zip rex-agent-*.zip SHA256SUMS
           generate_release_notes: true
