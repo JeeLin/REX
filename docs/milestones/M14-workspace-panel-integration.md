@@ -430,7 +430,7 @@ feat: integrate protocol panels into workspace with connection state
 - [x] 步骤5：代码审查
 - [x] 步骤6：测试验证
 - [x] 步骤7：设计再确认
-- [ ] 步骤8：提交
+- [x] 步骤8：提交
 
 ## 打回记录
 
