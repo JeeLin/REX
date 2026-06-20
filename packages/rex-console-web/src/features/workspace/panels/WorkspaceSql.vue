@@ -35,13 +35,13 @@
     <!-- Main Area -->
     <div class="ws-sql-main">
       <SqlSidebar
-        v-if="selectedDb && !sidebarCollapsed"
+        v-if="selectedDb"
         :resource-id="resourceId"
         :database="selectedDb"
         @select-table="insertTableSql"
         @refresh="loadDatabases"
       />
-      <div class="ws-sql-resize-handle" v-if="selectedDb && !sidebarCollapsed"
+      <div class="ws-sql-resize-handle" v-if="selectedDb"
            @mousedown="startResize">
       </div>
       <div class="ws-sql-right">
@@ -108,7 +108,6 @@ const activeTab = computed(() => {
 })
 
 const executing = ref(false)
-const sidebarCollapsed = ref(false)
 
 function addTab() {
   tabCounter++
