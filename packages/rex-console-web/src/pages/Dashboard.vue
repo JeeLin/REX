@@ -49,36 +49,90 @@
         <div>{{ t('dashboard.createEnv') }}</div>
       </router-link>
     </div>
+
+    <!-- Quick Connect -->
+    <div v-if="allResources.length > 0" class="section-header" style="margin-top: var(--sp-xl)">
+      <h2 class="section-title">{{ t('dashboard.quickConnect') }}</h2>
+    </div>
+    <div v-if="allResources.length > 0" class="quick-connect-grid">
+      <button
+        v-for="item in allResources.slice(0, 8)"
+        :key="item.resource.id"
+        class="quick-card"
+        @click="connectToResource(item.resource, item.envName)"
+      >
+        <div class="quick-icon" :style="{ background: getProtocolIcon(item.resource.protocol).color + '20', color: getProtocolIcon(item.resource.protocol).color }">
+          {{ getProtocolIcon(item.resource.protocol).icon }}
+        </div>
+        <div class="quick-info">
+          <div class="quick-name">{{ item.resource.name }}</div>
+          <div class="quick-proto">{{ item.resource.protocol }}</div>
+        </div>
+      </button>
+    </div>
+
+    <!-- Recent Used -->
+    <div v-if="recent.length > 0" class="section-header" style="margin-top: var(--sp-xl)">
+      <h2 class="section-title">{{ t('dashboard.recentUsed') }}</h2>
+    </div>
+    <div v-if="recent.length > 0" class="recent-list">
+      <button
+        v-for="item in recent"
+        :key="item.resourceId"
+        class="recent-item"
+        @click="connectToResource({ id: item.resourceId, protocol: item.protocol, name: item.name }, item.envName)"
+      >
+        <span class="recent-dot" :style="{ background: getProtocolIcon(item.protocol).color }"></span>
+        <span class="recent-name">{{ item.name }}</span>
+        <span class="recent-proto">{{ item.protocol }}</span>
+        <span class="recent-time">{{ formatTime(item.usedAt) }}</span>
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import client from '@/api/client'
+import { useRecent } from '@/composables/useRecent'
+import { getProtocolIcon, useProtocol } from '@/composables/useProtocol'
+import type { Environment } from '@/api/env'
+import { listEnvsWithResources } from '@/api/env'
 
 const { t } = useI18n()
-
-interface Environment {
-  id: string
-  name: string
-  description: string | null
-  connection_mode: string
-  created_at: string
-  updated_at: string
-}
+const { recent } = useRecent()
+const { connectToResource } = useProtocol()
 
 const environments = ref<Environment[]>([])
 const envCount = ref(0)
 const resourceCount = ref(0)
 const agentOnlineCount = ref(0)
 const todayOps = ref(0)
+const allResources = ref<{ resource: { id: string; name: string; protocol: string }; envName: string }[]>([])
+
+function formatTime(ts: number): string {
+  const diff = Date.now() - ts
+  const mins = Math.floor(diff / 60000)
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  return `${days}d ago`
+}
 
 onMounted(async () => {
   try {
-    const { data } = await client.get<{ data: Environment[] }>('/environments')
-    environments.value = data.data
-    envCount.value = data.data.length
+    const envsWithRes = await listEnvsWithResources()
+    environments.value = envsWithRes
+    envCount.value = envsWithRes.length
+    const allRes: { resource: { id: string; name: string; protocol: string }; envName: string }[] = []
+    for (const env of envsWithRes) {
+      for (const res of env.resources) {
+        allRes.push({ resource: res, envName: env.name })
+      }
+    }
+    allResources.value = allRes
+    resourceCount.value = allRes.length
   } catch {
     // 静默处理
   }
@@ -175,15 +229,112 @@ onMounted(async () => {
   box-shadow: 0 0 16px var(--accent-glow);
 }
 
-.badge-info {
-  color: var(--info);
+.badge-info { color: var(--info); }
+.text-sm { font-size: var(--fs-sm); }
+.text-secondary { color: var(--text-secondary); }
+
+/* Quick Connect */
+.quick-connect-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--sp-sm);
 }
 
-.text-sm {
+.quick-card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  padding: var(--sp-md);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+  color: inherit;
+}
+
+.quick-card:hover {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+}
+
+.quick-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: var(--fs-sm);
+  flex-shrink: 0;
+}
+
+.quick-info { min-width: 0; }
+.quick-name {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quick-proto {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+/* Recent */
+.recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recent-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  padding: var(--sp-sm) var(--sp-md);
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast);
+  color: var(--text-secondary);
   font-size: var(--fs-sm);
 }
 
-.text-secondary {
-  color: var(--text-secondary);
+.recent-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.recent-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.recent-name {
+  flex: 1;
+  text-align: left;
+  font-family: var(--font-mono);
+}
+
+.recent-proto {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.recent-time {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 </style>
