@@ -32,6 +32,12 @@
         <span class="info-value mono">{{ agent.environment_id }}</span>
       </div>
     </div>
+
+    <div class="card-actions">
+      <button class="btn btn-ghost btn-sm" @click.stop="$emit('openConfig')">{{ t('ctx.config') }}</button>
+      <button class="btn btn-ghost btn-sm" @click.stop="$emit('openLog')">{{ t('ctx.viewLog') }}</button>
+      <button class="btn btn-danger btn-sm" @click.stop="$emit('resetToken')">{{ t('ctx.resetToken') }}</button>
+    </div>
   </div>
 </template>
 
@@ -42,18 +48,19 @@ import type { Agent } from '@/api/agent'
 import AgentVersionBadge from './AgentVersionBadge.vue'
 
 const props = defineProps<{ agent: Agent; hubVersion?: string }>()
+const emit = defineEmits<{ openConfig: []; openLog: []; resetToken: [] }>()
 const { show: showMenu } = useContextMenu()
 
 function onCtx(e: MouseEvent) {
   showMenu(e, [
-    { label: t('ctx.viewLog') },
-    { label: t('ctx.config') },
+    { label: t('ctx.config'), action: () => emit('openConfig') },
+    { label: t('ctx.viewLog'), action: () => emit('openLog') },
     { separator: true },
     { label: t('ctx.copyAgentId'), action: () => navigator.clipboard?.writeText(props.agent.id) },
     { label: t('ctx.copyToken') },
     { separator: true },
     { label: t('ctx.restartAgent'), danger: true },
-    { label: t('ctx.resetToken'), danger: true },
+    { label: t('ctx.resetToken'), danger: true, action: () => emit('resetToken') },
   ])
 }
 
@@ -158,5 +165,42 @@ function osIcon(os: string): string {
 .badge-offline {
   color: var(--text-muted);
   background: var(--bg-elevated);
+}
+
+.card-actions {
+  display: flex;
+  gap: var(--sp-sm);
+  margin-top: var(--sp-md);
+  padding-top: var(--sp-md);
+  border-top: 1px solid var(--border);
+}
+
+.btn {
+  padding: var(--sp-xs) var(--sp-md);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-secondary);
+}
+
+.btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.btn-sm {
+  padding: var(--sp-xs) var(--sp-sm);
+}
+
+.btn-danger {
+  color: var(--danger);
+  border-color: transparent;
+}
+
+.btn-danger:hover {
+  background: rgba(248, 81, 73, 0.1);
 }
 </style>

@@ -13,11 +13,35 @@
       </div>
 
       <div v-else class="agent-grid">
-        <AgentCard v-for="agent in agents" :key="agent.id" :agent="agent" :hub-version="hubVersion" />
+        <AgentCard
+          v-for="agent in agents"
+          :key="agent.id"
+          :agent="agent"
+          :hub-version="hubVersion"
+          @open-config="openConfig(agent)"
+          @open-log="openLog(agent)"
+          @reset-token="openResetToken(agent)"
+        />
       </div>
     </template>
 
     <DeployGuide />
+
+    <!-- Modals -->
+    <AgentConfigModal
+      :agent="configAgent"
+      :visible="showConfigModal"
+      @close="showConfigModal = false"
+    />
+    <AgentLogModal
+      :visible="showLogModal"
+      @close="showLogModal = false"
+    />
+    <AgentResetTokenModal
+      :agent="resetAgent"
+      :visible="showResetModal"
+      @close="showResetModal = false"
+    />
   </div>
 </template>
 
@@ -29,6 +53,9 @@ import { getUpdateStatus } from '@/api/update'
 import type { Agent } from '@/api/agent'
 import AgentCard from '@/features/agents/AgentCard.vue'
 import DeployGuide from '@/features/agents/DeployGuide.vue'
+import AgentConfigModal from '@/features/agents/AgentConfigModal.vue'
+import AgentLogModal from '@/features/agents/AgentLogModal.vue'
+import AgentResetTokenModal from '@/features/agents/AgentResetTokenModal.vue'
 
 const { t } = useI18n()
 
@@ -36,8 +63,28 @@ const agents = ref<Agent[]>([])
 const hubVersion = ref('')
 const loading = ref(true)
 
+// Modal state
+const showConfigModal = ref(false)
+const configAgent = ref<Agent | null>(null)
+const showLogModal = ref(false)
+const showResetModal = ref(false)
+const resetAgent = ref<Agent | null>(null)
+
+function openConfig(agent: Agent) {
+  configAgent.value = agent
+  showConfigModal.value = true
+}
+
+function openLog(_agent: Agent) {
+  showLogModal.value = true
+}
+
+function openResetToken(agent: Agent) {
+  resetAgent.value = agent
+  showResetModal.value = true
+}
+
 onMounted(async () => {
-  // Fetch update status for hub version
   try {
     const status = await getUpdateStatus()
     hubVersion.value = status.current_version
@@ -45,7 +92,6 @@ onMounted(async () => {
     // ignore
   }
 
-  // Fetch all agents across all environments
   try {
     const envResp = await client.get<{ data: Array<{ id: string }> }>('/environments')
     const envs = envResp.data.data
