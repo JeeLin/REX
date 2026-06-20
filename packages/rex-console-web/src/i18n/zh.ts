@@ -20,6 +20,12 @@ export default {
     create: '创建',
     submit: '提交',
   },
+  sidebar: {
+    searchPlaceholder: '搜索资源...',
+    newEnv: '新建环境',
+    collapse: '折叠',
+    expand: '展开',
+  },
   nav: {
     workspace: '工作区',
     dashboard: '仪表盘',

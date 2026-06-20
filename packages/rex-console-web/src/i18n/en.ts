@@ -20,6 +20,12 @@ export default {
     create: 'Create',
     submit: 'Submit',
   },
+  sidebar: {
+    searchPlaceholder: 'Search resources...',
+    newEnv: 'New Environment',
+    collapse: 'Collapse',
+    expand: 'Expand',
+  },
   nav: {
     workspace: 'Workspace',
     dashboard: 'Dashboard',
