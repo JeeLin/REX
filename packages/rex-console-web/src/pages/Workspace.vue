@@ -125,6 +125,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { getProtocolIcon } from '@/composables/useProtocol'
 import { listEnvsWithResources } from '@/api/env'
@@ -132,9 +133,11 @@ import TabBar from '@/features/workspace/TabBar.vue'
 import { useTabs } from '@/features/workspace/useTabs'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 
 // ── Tabs ──
-const { tabs, activeTabId, addTab } = useTabs()
+const { tabs, activeTabId, addTab, closeTab, nextTab, prevTab, switchTabByIndex } = useTabs()
 
 // ── Layout ──
 type Layout = 'single' | 'left-right' | 'top-bottom' | 'quad' | 'sidebar-main'
@@ -246,9 +249,23 @@ watch(showConnMenu, (val) => {
   }
 })
 
+watch(connSearchQuery, () => {
+  selectedResourceIdx.value = 0
+})
+
 onMounted(async () => {
   try { envsWithRes.value = await listEnvsWithResources() } catch { /* */ }
   window.addEventListener('keydown', onKeyDown)
+
+  // 从路由 query 读取待打开的资源
+  const openId = route.query.open as string
+  if (openId) {
+    const openName = (route.query.name as string) || openId
+    const openProto = (route.query.proto as string) || 'ssh'
+    addTab(openName, openProto as any, openId)
+    // 清除 query 参数，避免刷新重复打开
+    router.replace({ name: 'workspace' })
+  }
 })
 
 onUnmounted(() => {
@@ -295,20 +312,16 @@ function onKeyDown(e: KeyboardEvent) {
   } else if (ctrl && e.key === 'w') {
     e.preventDefault()
     if (activeTabId.value) {
-      const { closeTab } = useTabs()
       closeTab(activeTabId.value)
     }
   } else if (ctrl && !e.shiftKey && e.key === 'Tab') {
     e.preventDefault()
-    const { nextTab } = useTabs()
     nextTab()
   } else if (ctrl && e.shiftKey && e.key === 'Tab') {
     e.preventDefault()
-    const { prevTab } = useTabs()
     prevTab()
   } else if (ctrl && e.key >= '1' && e.key <= '9') {
     e.preventDefault()
-    const { switchTabByIndex } = useTabs()
     switchTabByIndex(parseInt(e.key) - 1)
   } else if (e.altKey && e.key >= '1' && e.key <= '5') {
     e.preventDefault()

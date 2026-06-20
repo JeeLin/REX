@@ -19,8 +19,8 @@ export function useTabs() {
   const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.value) ?? null)
 
   function addTab(name: string, proto: Protocol, resourceId: string): string | null {
-    // Dedup: same name + proto → activate existing
-    const existing = tabs.value.find((t) => t.name === name && t.proto === proto)
+    // Dedup: same resourceId → activate existing
+    const existing = tabs.value.find((t) => t.resourceId === resourceId)
     if (existing) {
       activeTabId.value = existing.id
       return existing.id
@@ -133,6 +133,15 @@ export function useTabs() {
     }
   }
 
+  function reorderTab(fromId: string, toId: string) {
+    const allTabs = tabs.value
+    const srcIdx = allTabs.findIndex((t) => t.id === fromId)
+    const dstIdx = allTabs.findIndex((t) => t.id === toId)
+    if (srcIdx === -1 || dstIdx === -1 || srcIdx === dstIdx) return
+    const [moved] = allTabs.splice(srcIdx, 1)
+    allTabs.splice(dstIdx, 0, moved)
+  }
+
   return {
     tabs,
     activeTabId,
@@ -149,5 +158,6 @@ export function useTabs() {
     nextTab,
     prevTab,
     switchTabByIndex,
+    reorderTab,
   }
 }

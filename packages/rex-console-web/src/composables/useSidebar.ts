@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import type { EnvWithResources } from '@/api/env'
 import { listEnvsWithResources } from '@/api/env'
 import { useProtocol } from './useProtocol'
@@ -7,6 +8,7 @@ const COLLAPSED_KEY = 'rex-sidebar-collapsed'
 const EXPANDED_ENVS_KEY = 'rex-sidebar-expanded-envs'
 
 export function useSidebar() {
+  const router = useRouter()
   const { connectToResource: connect } = useProtocol()
 
   const collapsed = ref(loadCollapsed())
@@ -70,7 +72,18 @@ export function useSidebar() {
   }
 
   function connectToResource(resource: { id: string; protocol: string; name: string }, envName: string) {
-    connect(resource, envName)
+    // 如果已在工作空间页面，直接通知
+    if (router.currentRoute.value.name === 'workspace') {
+      window.dispatchEvent(new CustomEvent('open-in-workspace', {
+        detail: { resource },
+      }))
+    } else {
+      // 导航到工作空间，通过 query 传递资源信息
+      router.push({
+        name: 'workspace',
+        query: { open: resource.id, name: resource.name, proto: resource.protocol },
+      })
+    }
     mobileOpen.value = false
   }
 

@@ -328,7 +328,7 @@ export default {
   },
   audit: {
     title: '审计日志',
-    back: '← 返回设置',
+    back: '返回设置',
     exportCsv: '导出 CSV',
     filters: {
       time: '时间',

@@ -38,7 +38,7 @@ import { useTabs } from './useTabs'
 
 const { t } = useI18n()
 const { show: showMenu } = useContextMenu()
-const { tabs, activeTabId, activateTab, closeTab, closeOtherTabs, closeTabsRight, closeTabsLeft, closeAllTabs, duplicateTab } = useTabs()
+const { tabs, activeTabId, activateTab, closeTab, closeOtherTabs, closeTabsRight, closeTabsLeft, closeAllTabs, duplicateTab, reorderTab } = useTabs()
 
 defineEmits<{
   newConnection: []
@@ -78,14 +78,7 @@ function onDrop(e: DragEvent, targetId: string) {
   const el = e.currentTarget as HTMLElement
   el.classList.remove('drag-over-left', 'drag-over-right')
   if (!dragId.value || dragId.value === targetId) return
-
-  const allTabs = tabs.value
-  const srcIdx = allTabs.findIndex((t) => t.id === dragId.value)
-  const dstIdx = allTabs.findIndex((t) => t.id === targetId)
-  if (srcIdx === -1 || dstIdx === -1) return
-
-  const [moved] = allTabs.splice(srcIdx, 1)
-  allTabs.splice(dstIdx, 0, moved)
+  reorderTab(dragId.value, targetId)
 }
 
 function onTabDblclick() {

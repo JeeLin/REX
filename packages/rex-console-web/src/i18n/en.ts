@@ -328,7 +328,7 @@ export default {
   },
   audit: {
     title: 'Audit Log',
-    back: '← Back to Settings',
+    back: 'Back to Settings',
     exportCsv: 'Export CSV',
     filters: {
       time: 'Time',
