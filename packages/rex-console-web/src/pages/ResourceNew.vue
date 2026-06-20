@@ -190,7 +190,19 @@ function prevStep() {
 }
 
 async function submitResource() {
-  form.config_json = JSON.stringify(sshConfig)
+  // Transform sshConfig to match backend SshResourceConfig format
+  const config = {
+    host: sshConfig.host,
+    port: parseInt(sshConfig.port) || 22,
+    username: sshConfig.user,
+    auth: {
+      type: sshConfig.auth,
+      ...(sshConfig.auth === 'password'
+        ? { password: sshConfig.password }
+        : { private_key_path: sshConfig.keyFile }),
+    },
+  }
+  form.config_json = JSON.stringify(config)
   try {
     await client.post(`/environments/${envId}/resources`, form)
     step.value = 3

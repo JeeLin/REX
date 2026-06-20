@@ -1,4 +1,26 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+/// 将字符串或数字反序列化为 u16，兼容前端可能发送字符串端口
+fn deserialize_port<'de, D>(deserializer: D) -> Result<u16, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de;
+    struct PortVisitor;
+    impl<'de> de::Visitor<'de> for PortVisitor {
+        type Value = u16;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("u16 or string representing u16")
+        }
+        fn visit_u64<E: de::Error>(self, v: u64) -> Result<u16, E> {
+            u16::try_from(v).map_err(de::Error::custom)
+        }
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<u16, E> {
+            v.parse::<u16>().map_err(de::Error::custom)
+        }
+    }
+    deserializer.deserialize_any(PortVisitor)
+}
 
 /// SSH 认证配置（来自前端）
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,8 +78,8 @@ fn default_keep_alive() -> u32 {
 pub struct SshResourceConfig {
     /// 服务器地址（必填）
     pub host: String,
-    /// 端口，默认 22
-    #[serde(default = "default_port")]
+    /// 端口，默认 22（兼容字符串和数字格式）
+    #[serde(default = "default_port", deserialize_with = "deserialize_port")]
     pub port: u16,
     /// 用户名（必填）
     pub username: String,
@@ -349,5 +371,19 @@ mod tests {
         let config = SshResourceConfig::from_json(json).unwrap();
         assert_eq!(config.terminal.encoding, "utf-8");
         assert_eq!(config.terminal.keep_alive_seconds, 60);
+    }
+
+    #[test]
+    fn parse_string_port() {
+        let json = r#"{"host": "1.2.3.4", "port": "22", "username": "root", "auth": {"type": "password", "password": "x"}}"#;
+        let config = SshResourceConfig::from_json(json).unwrap();
+        assert_eq!(config.port, 22);
+    }
+
+    #[test]
+    fn parse_numeric_port() {
+        let json = r#"{"host": "1.2.3.4", "port": 3306, "username": "root", "auth": {"type": "password", "password": "x"}}"#;
+        let config = SshResourceConfig::from_json(json).unwrap();
+        assert_eq!(config.port, 3306);
     }
 }
