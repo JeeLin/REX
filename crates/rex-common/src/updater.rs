@@ -65,10 +65,7 @@ impl UpdateChecker {
 
     /// 检查是否有新版本
     pub async fn check_for_update(&self) -> UpdateStatus {
-        let url = format!(
-            "https://api.github.com/repos/{}/releases/latest",
-            self.repo
-        );
+        let url = format!("https://api.github.com/repos/{}/releases/latest", self.repo);
 
         let resp = match Self::client().get(&url).send().await {
             Ok(r) => r,
@@ -76,10 +73,7 @@ impl UpdateChecker {
         };
 
         if !resp.status().is_success() {
-            return UpdateStatus::CheckFailed(format!(
-                "GitHub API 返回 {}",
-                resp.status()
-            ));
+            return UpdateStatus::CheckFailed(format!("GitHub API 返回 {}", resp.status()));
         }
 
         let release: GitHubRelease = match resp.json().await {
@@ -107,15 +101,25 @@ impl UpdateChecker {
     /// 确定当前平台的 asset 文件名前缀
     pub fn platform_asset_prefix() -> &'static str {
         #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-        { "rex-linux-x86_64" }
+        {
+            "rex-linux-x86_64"
+        }
         #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-        { "rex-linux-aarch64" }
+        {
+            "rex-linux-aarch64"
+        }
         #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-        { "rex-macos-x86_64" }
+        {
+            "rex-macos-x86_64"
+        }
         #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-        { "rex-macos-aarch64" }
+        {
+            "rex-macos-aarch64"
+        }
         #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
-        { "rex-windows-x86_64.exe" }
+        {
+            "rex-windows-x86_64.exe"
+        }
         #[cfg(not(any(
             all(target_os = "linux", target_arch = "x86_64"),
             all(target_os = "linux", target_arch = "aarch64"),
@@ -123,7 +127,9 @@ impl UpdateChecker {
             all(target_os = "macos", target_arch = "aarch64"),
             all(target_os = "windows", target_arch = "x86_64"),
         )))]
-        { "rex-unknown" }
+        {
+            "rex-unknown"
+        }
     }
 
     /// 下载新版本二进制到 staging 目录
@@ -133,16 +139,8 @@ impl UpdateChecker {
         on_progress: Option<ProgressCallback>,
     ) -> anyhow::Result<PathBuf> {
         // 获取 latest release
-        let url = format!(
-            "https://api.github.com/repos/{}/releases/latest",
-            self.repo
-        );
-        let release: GitHubRelease = Self::client()
-            .get(&url)
-            .send()
-            .await?
-            .json()
-            .await?;
+        let url = format!("https://api.github.com/repos/{}/releases/latest", self.repo);
+        let release: GitHubRelease = Self::client().get(&url).send().await?.json().await?;
 
         let prefix = Self::platform_asset_prefix();
         let asset = release
@@ -277,7 +275,10 @@ mod tests {
         tmp.as_file().write_all(b"hello world").unwrap();
         let hash = sha256_file(tmp.path()).unwrap();
         // SHA256("hello world") = b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9
-        assert_eq!(hash, "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
+        assert_eq!(
+            hash,
+            "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+        );
     }
 
     #[test]

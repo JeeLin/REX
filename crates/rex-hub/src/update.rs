@@ -63,16 +63,11 @@ pub async fn get_update_status(
 
     let (latest, last_checked) = {
         let cache = state.update_cache.read().await;
-        (
-            cache.latest_version.clone(),
-            cache.last_checked.clone(),
-        )
+        (cache.latest_version.clone(), cache.last_checked.clone())
     };
 
     let update_available = match (&latest, &current.version) {
-        (Some(latest), current) => {
-            rex_common::version::is_newer(current, latest).unwrap_or(false)
-        }
+        (Some(latest), current) => rex_common::version::is_newer(current, latest).unwrap_or(false),
         _ => false,
     };
 
@@ -98,9 +93,9 @@ pub async fn check_update(
     let result = checker.check_for_update().await;
 
     let (latest, update_available) = match result {
-        rex_common::updater::UpdateStatus::UpdateAvailable {
-            latest, ..
-        } => (Some(latest.clone()), true),
+        rex_common::updater::UpdateStatus::UpdateAvailable { latest, .. } => {
+            (Some(latest.clone()), true)
+        }
         rex_common::updater::UpdateStatus::UpToDate => (None, false),
         rex_common::updater::UpdateStatus::CheckFailed(e) => {
             return Err(err_resp("UPDATE_CHECK_FAILED", &e));
@@ -136,14 +131,11 @@ pub async fn download_update(
 
     // 检查是否真的是新版本
     if !rex_common::version::is_newer(&current.version, &input.version).unwrap_or(false) {
-        return Err(err_resp(
-            "NOT_NEWER",
-            "指定版本不比当前版本新",
-        ));
+        return Err(err_resp("NOT_NEWER", "指定版本不比当前版本新"));
     }
 
-    let data_dir = std::env::current_dir()
-        .map_err(|_| err_resp("INTERNAL_ERROR", "无法获取工作目录"))?;
+    let data_dir =
+        std::env::current_dir().map_err(|_| err_resp("INTERNAL_ERROR", "无法获取工作目录"))?;
 
     let checker = rex_common::updater::UpdateChecker::new("user/rex", &current.version);
 
@@ -158,16 +150,9 @@ pub async fn download_update(
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
-    let checksums_url = format!(
-        "https://api.github.com/repos/user/rex/releases/latest",
-    );
+    let checksums_url = format!("https://api.github.com/repos/user/rex/releases/latest",);
     // 尝试获取 checksums，但不强制要求
-    let _ = rex_common::updater::verify_download(
-        &staged_path,
-        &checksums_url,
-        &binary_name,
-    )
-    .await;
+    let _ = rex_common::updater::verify_download(&staged_path, &checksums_url, &binary_name).await;
 
     // 写入 update-state.json
     let state_path = data_dir.join("update-state.json");
@@ -202,17 +187,14 @@ pub async fn download_update(
 pub async fn apply_update(
     State(_state): State<Arc<AppState>>,
 ) -> Result<Json<ApiResponse<DownloadProgress>>, (StatusCode, Json<ErrorResponse>)> {
-    let data_dir = std::env::current_dir()
-        .map_err(|_| err_resp("INTERNAL_ERROR", "无法获取工作目录"))?;
+    let data_dir =
+        std::env::current_dir().map_err(|_| err_resp("INTERNAL_ERROR", "无法获取工作目录"))?;
 
     let state_path = data_dir.join("update-state.json");
     let update_state = rex_common::update_state::UpdateState::read(&state_path);
 
     if update_state.phase != rex_common::update_state::UpdatePhase::Requested {
-        return Err(err_resp(
-            "NO_UPDATE_PENDING",
-            "没有待应用的更新",
-        ));
+        return Err(err_resp("NO_UPDATE_PENDING", "没有待应用的更新"));
     }
 
     // worker 以 exit code 10 退出，通知 supervisor 执行替换
@@ -278,8 +260,8 @@ mod tests {
     use tower::ServiceExt;
 
     use crate::routes::AppState;
-    use crate::ws::new_connections;
     use crate::terminal::SessionManager;
+    use crate::ws::new_connections;
     use rex_transfer::task::TransferManager;
 
     fn test_state() -> Arc<AppState> {

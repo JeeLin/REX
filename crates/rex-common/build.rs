@@ -16,7 +16,11 @@ fn main() {
         .output()
         .map(|o| {
             let raw = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            if raw.is_empty() { "unknown".to_string() } else { raw }
+            if raw.is_empty() {
+                "unknown".to_string()
+            } else {
+                raw
+            }
         })
         .unwrap_or_else(|_| "unknown".to_string());
     println!("cargo:rustc-env=BUILD_TIME={}", build_time);

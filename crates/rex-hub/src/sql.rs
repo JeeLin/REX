@@ -331,5 +331,4 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
-
 }
