@@ -94,6 +94,16 @@
           <span class="nav-icon">+</span>
           <span>{{ t('sidebar.newEnv') }}</span>
         </router-link>
+        <router-link
+          v-if="auditEnabled"
+          to="/audit-log"
+          class="nav-item"
+          :class="{ active: route.name === 'audit-log' }"
+          @click="closeMobile"
+        >
+          <span class="nav-icon">📋</span>
+          <span v-show="!collapsed">{{ t('nav.auditLog') }}</span>
+        </router-link>
         <router-link to="/settings" class="nav-item" :class="{ active: route.name === 'settings' }" @click="closeMobile">
           <span class="nav-icon">⚙</span>
           <span v-show="!collapsed">{{ t('nav.settings') }}</span>
@@ -122,7 +132,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useUserStore, type Theme } from '@/stores/user'
@@ -137,6 +147,7 @@ const userStore = useUserStore()
 const authStore = useAuthStore()
 
 const lang = computed(() => userStore.lang)
+const auditEnabled = ref(localStorage.getItem('rex-audit-enabled') !== 'false')
 
 const {
   collapsed,
@@ -199,6 +210,9 @@ function handleLogout() {
 
 onMounted(() => {
   fetchEnvs()
+  window.addEventListener('audit-toggle', ((e: CustomEvent) => {
+    auditEnabled.value = e.detail.enabled
+  }) as EventListener)
 })
 </script>
 
