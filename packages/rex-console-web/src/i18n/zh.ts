@@ -108,6 +108,19 @@ export default {
     shortcuts: {
       title: '快捷键',
     },
+    terminal: {
+      ctx: {
+        copy: '复制',
+        paste: '粘贴',
+        selectAll: '全选',
+        clear: '清屏',
+        reconnect: '重连',
+        openSftp: '打开 SFTP 面板',
+        newConnection: '新建 SSH 连接',
+        copyAddress: '复制连接地址',
+        disconnect: '断开连接',
+      },
+    },
   },
   nav: {
     workspace: '工作区',
@@ -283,6 +296,10 @@ export default {
     error: '加载失败',
     paste: '粘贴',
     selectAll: '全选',
+    sftp: {
+      title: 'SFTP',
+      toggle: '切换 SFTP 面板',
+    },
   },
   sql: {
     title: 'SQL 控制台',
@@ -299,6 +316,40 @@ export default {
     noResult: '执行查询以查看结果',
     executing: '执行中...',
     emptySql: 'SQL 不能为空',
+    ctx: {
+      executeSelection: '执行选中 SQL',
+      executeAll: '执行全部 SQL',
+      cut: '剪切',
+      copy: '复制',
+      paste: '粘贴',
+      format: '格式化 SQL',
+      caseConvert: '大小写转换',
+      caseUpper: '全部大写',
+      caseLower: '全部小写',
+      caseTitle: '首字母大写',
+      toggleComment: '注释/取消注释',
+      save: '保存为查询文件',
+      insertTemplate: '插入模板',
+      templateSelect: 'SELECT',
+      templateInsert: 'INSERT',
+      templateUpdate: 'UPDATE',
+      templateDelete: 'DELETE',
+      templateCreateTable: 'CREATE TABLE',
+      history: '历史记录',
+    },
+    result: {
+      ctx: {
+        copyRow: '复制行',
+        copyCell: '复制单元格',
+        copyColumn: '复制整列',
+        copyJson: '复制为 JSON',
+        sortAsc: '按此列升序排列',
+        sortDesc: '按此列降序排列',
+        exportRow: '导出当前行',
+        generateUpdate: '在编辑器中生成 UPDATE',
+        generateDelete: '在编辑器中生成 DELETE',
+      },
+    },
   },
   settings: {
     appearance: {

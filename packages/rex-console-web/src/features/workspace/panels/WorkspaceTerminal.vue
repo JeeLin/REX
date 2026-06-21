@@ -1,5 +1,5 @@
 <template>
-  <div class="ws-terminal">
+  <div class="ws-terminal" @drop.prevent="handleDrop" @dragover.prevent="handleDragOver" @dragleave="dragOver = false">
     <!-- 工具栏 -->
     <div class="ws-term-toolbar">
       <div class="ws-term-info">
@@ -10,18 +10,49 @@
       <div class="ws-term-actions">
         <button class="btn btn-ghost btn-xs" @click="clearTerminal">清屏</button>
         <button class="btn btn-ghost btn-xs" @click="handlePaste">粘贴</button>
+        <button class="btn btn-ghost btn-xs" :class="{ active: showSftp }" @click="toggleSftp">📁 SFTP</button>
         <button class="btn btn-xs btn-danger" @click="showDisconnectDialog = true">断开</button>
       </div>
     </div>
 
-    <!-- 终端容器 -->
-    <div ref="terminalContainer" class="ws-term-container"></div>
+    <!-- 主体区域 -->
+    <div class="ws-term-body">
+      <!-- 终端区域 -->
+      <div class="ws-term-main" :style="showSftp ? { flex: 1 } : { flex: '1 1 100%' }">
+        <div ref="terminalContainer" class="ws-term-container" @contextmenu.prevent="handleContextMenu"></div>
 
-    <!-- 未连接时显示重连提示 -->
-    <div v-if="connectionStatus === 'disconnected'" class="ws-term-reconnect">
-      <div class="reconnect-icon">⚡</div>
-      <div class="reconnect-text">连接已断开</div>
-      <button class="btn btn-sm btn-primary" @click="connectSession">重新连接</button>
+        <!-- 拖拽高亮 -->
+        <div v-if="dragOver" class="ws-term-dropzone">
+          <span>释放以粘贴路径到终端</span>
+        </div>
+
+        <!-- 未连接时显示重连提示 -->
+        <div v-if="connectionStatus === 'disconnected'" class="ws-term-reconnect">
+          <div class="reconnect-icon">⚡</div>
+          <div class="reconnect-text">连接已断开</div>
+          <button class="btn btn-sm btn-primary" @click="connectSession">重新连接</button>
+        </div>
+      </div>
+
+      <!-- 拖拽分隔条 -->
+      <div v-if="showSftp" class="ws-term-divider" @mousedown="startResize"></div>
+
+      <!-- SFTP 面板 -->
+      <div v-if="showSftp" class="ws-term-sftp" :style="{ width: sftpWidth + 'px' }">
+        <div class="sftp-header">
+          <span class="sftp-path">{{ sftpPath }}</span>
+          <button class="btn btn-ghost btn-xs" @click="showSftp = false">✕</button>
+        </div>
+        <FileList
+          :entries="sftpEntries"
+          :current-path="sftpPath"
+          :selected-paths="[]"
+          :loading="sftpLoading"
+          @go-up="sftpGoUp"
+          @open="sftpOpenDir"
+          @context-menu="() => {}"
+        />
+      </div>
     </div>
 
     <!-- 状态栏 -->
@@ -51,10 +82,18 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { createSession, deleteSession } from '@/api/terminal'
+import { useContextMenu } from '@/composables/useContextMenu'
+import { listFiles } from '@/api/files'
+import type { FileEntry } from '@/api/files'
+import FileList from '@/features/files/FileList.vue'
+
+const { t } = useI18n()
+const { show: showMenu } = useContextMenu()
 
 const props = defineProps<{
   resourceId: string
@@ -64,11 +103,22 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'disconnect'): void
   (e: 'error', msg: string): void
+  (e: 'newConnection'): void
 }>()
 
 const terminalContainer = ref<HTMLElement>()
 const connectionStatus = ref<'connecting' | 'connected' | 'disconnected'>('disconnected')
 const showDisconnectDialog = ref(false)
+
+// SFTP panel state
+const showSftp = ref(false)
+const sftpWidth = ref(280)
+const sftpPath = ref('/')
+const sftpEntries = ref<FileEntry[]>([])
+const sftpLoading = ref(false)
+
+// Drag to terminal
+const dragOver = ref(false)
 
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
@@ -206,6 +256,140 @@ async function doDisconnect() {
   emit('disconnect')
 }
 
+// ── SFTP 面板 ──────────────────────────────────────
+
+function toggleSftp() {
+  showSftp.value = !showSftp.value
+  if (showSftp.value && sftpEntries.value.length === 0) {
+    loadSftpFiles('/')
+  }
+  // Wait for layout to settle, then refit terminal
+  nextTick(() => { fitAddon?.fit() })
+}
+
+async function loadSftpFiles(path: string) {
+  sftpLoading.value = true
+  try {
+    const result = await listFiles(props.resourceId, path)
+    sftpPath.value = result.path
+    sftpEntries.value = result.entries
+  } catch {
+    sftpEntries.value = []
+  } finally {
+    sftpLoading.value = false
+  }
+}
+
+function sftpGoUp() {
+  const parts = sftpPath.value.split('/').filter(Boolean)
+  parts.pop()
+  loadSftpFiles('/' + parts.join('/') || '/')
+}
+
+function sftpOpenDir(name: string) {
+  const base = sftpPath.value.endsWith('/') ? sftpPath.value : sftpPath.value + '/'
+  loadSftpFiles(base + name)
+}
+
+// ── 拖拽分隔条 ──────────────────────────────────────
+
+let resizeStartX = 0
+let resizeStartWidth = 0
+
+function startResize(e: MouseEvent) {
+  resizeStartX = e.clientX
+  resizeStartWidth = sftpWidth.value
+  document.addEventListener('mousemove', onResize)
+  document.addEventListener('mouseup', stopResize)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+}
+
+function onResize(e: MouseEvent) {
+  const delta = resizeStartX - e.clientX
+  sftpWidth.value = Math.max(200, Math.min(500, resizeStartWidth + delta))
+}
+
+function stopResize() {
+  document.removeEventListener('mousemove', onResize)
+  document.removeEventListener('mouseup', stopResize)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  fitAddon?.fit()
+}
+
+// ── 拖拽文件到终端 ──────────────────────────────────────
+
+function handleDragOver(e: DragEvent) {
+  e.preventDefault()
+  dragOver.value = true
+}
+
+function handleDrop(e: DragEvent) {
+  dragOver.value = false
+  const path = e.dataTransfer?.getData('text/plain')
+  if (path && ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'terminal.input',
+      payload: { data: btoa(path) },
+    }))
+    terminal?.focus()
+  }
+}
+
+// ── 右键菜单 ──────────────────────────────────────
+
+function handleContextMenu(event: MouseEvent) {
+  if (!terminal) return
+  const selection = terminal.getSelection()
+  showMenu(event, [
+    {
+      label: t('ws.terminal.ctx.copy'),
+      action: () => { navigator.clipboard.writeText(selection) },
+      disabled: !selection,
+    },
+    {
+      label: t('ws.terminal.ctx.paste'),
+      action: () => { handlePaste() },
+    },
+    {
+      label: t('ws.terminal.ctx.selectAll'),
+      action: () => { terminal?.selectAll() },
+    },
+    { separator: true },
+    {
+      label: t('ws.terminal.ctx.clear'),
+      action: () => { clearTerminal() },
+    },
+    {
+      label: t('ws.terminal.ctx.reconnect'),
+      action: async () => {
+        await doDisconnect()
+        await connectSession()
+      },
+    },
+    { separator: true },
+    {
+      label: t('ws.terminal.ctx.openSftp'),
+      action: () => { toggleSftp() },
+    },
+    {
+      label: t('ws.terminal.ctx.newConnection'),
+      action: () => { emit('newConnection') },
+    },
+    {
+      label: t('ws.terminal.ctx.copyAddress'),
+      action: () => { navigator.clipboard.writeText(props.resourceName) },
+    },
+    { separator: true },
+    {
+      label: t('ws.terminal.ctx.disconnect'),
+      danger: true,
+      action: () => { showDisconnectDialog.value = true },
+    },
+  ])
+}
+
 onMounted(async () => {
   await nextTick()
   initTerminal()
@@ -219,6 +403,8 @@ onBeforeUnmount(() => {
   }
   resizeObserver?.disconnect()
   terminal?.dispose()
+  document.removeEventListener('mousemove', onResize)
+  document.removeEventListener('mouseup', stopResize)
 })
 </script>
 
@@ -267,12 +453,94 @@ onBeforeUnmount(() => {
   gap: 2px;
 }
 
+.ws-term-actions .active {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+/* ── 主体区域（split view） ── */
+.ws-term-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.ws-term-main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
 .ws-term-container {
   flex: 1;
   padding: 4px;
   overflow: hidden;
 }
 
+/* 拖拽高亮 */
+.ws-term-dropzone {
+  position: absolute;
+  inset: 4px;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-md);
+  background: rgba(37, 99, 235, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* ── 拖拽分隔条 ── */
+.ws-term-divider {
+  width: 4px;
+  cursor: col-resize;
+  background: var(--border);
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.ws-term-divider:hover {
+  background: var(--accent);
+}
+
+/* ── SFTP 面板 ── */
+.ws-term-sftp {
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--bg-surface);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sftp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--sp-sm);
+  height: 28px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sftp-path {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+/* ── 重连提示 ── */
 .ws-term-reconnect {
   position: absolute;
   inset: 32px 0 22px 0;
@@ -295,6 +563,7 @@ onBeforeUnmount(() => {
   font-size: var(--fs-sm);
 }
 
+/* ── 状态栏 ── */
 .ws-term-statusbar {
   display: flex;
   align-items: center;
@@ -311,7 +580,7 @@ onBeforeUnmount(() => {
 
 .ws-term-statusbar .spacer { flex: 1; }
 
-/* Modal */
+/* ── Modal ── */
 .ws-term-modal-overlay {
   position: absolute;
   inset: 0;

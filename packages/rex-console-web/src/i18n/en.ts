@@ -108,6 +108,19 @@ export default {
     shortcuts: {
       title: 'Shortcuts',
     },
+    terminal: {
+      ctx: {
+        copy: 'Copy',
+        paste: 'Paste',
+        selectAll: 'Select All',
+        clear: 'Clear',
+        reconnect: 'Reconnect',
+        openSftp: 'Open SFTP Panel',
+        newConnection: 'New SSH Connection',
+        copyAddress: 'Copy Connection Address',
+        disconnect: 'Disconnect',
+      },
+    },
   },
   nav: {
     workspace: 'Workspace',
@@ -281,6 +294,10 @@ export default {
     error: 'Failed to load',
     paste: 'Paste',
     selectAll: 'Select All',
+    sftp: {
+      title: 'SFTP',
+      toggle: 'Toggle SFTP Panel',
+    },
   },
   sql: {
     title: 'SQL Console',
@@ -297,6 +314,40 @@ export default {
     noResult: 'Execute a query to see results',
     executing: 'Executing...',
     emptySql: 'SQL cannot be empty',
+    ctx: {
+      executeSelection: 'Execute Selection',
+      executeAll: 'Execute All',
+      cut: 'Cut',
+      copy: 'Copy',
+      paste: 'Paste',
+      format: 'Format SQL',
+      caseConvert: 'Case Convert',
+      caseUpper: 'UPPERCASE',
+      caseLower: 'lowercase',
+      caseTitle: 'Title Case',
+      toggleComment: 'Toggle Comment',
+      save: 'Save as Query File',
+      insertTemplate: 'Insert Template',
+      templateSelect: 'SELECT',
+      templateInsert: 'INSERT',
+      templateUpdate: 'UPDATE',
+      templateDelete: 'DELETE',
+      templateCreateTable: 'CREATE TABLE',
+      history: 'History',
+    },
+    result: {
+      ctx: {
+        copyRow: 'Copy Row',
+        copyCell: 'Copy Cell',
+        copyColumn: 'Copy Column',
+        copyJson: 'Copy as JSON',
+        sortAsc: 'Sort Ascending',
+        sortDesc: 'Sort Descending',
+        exportRow: 'Export Row',
+        generateUpdate: 'Generate UPDATE',
+        generateDelete: 'Generate DELETE',
+      },
+    },
   },
   settings: {
     appearance: {
