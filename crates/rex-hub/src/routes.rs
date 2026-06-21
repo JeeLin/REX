@@ -172,6 +172,12 @@ pub fn app_with_static(
             get(crate::sql::list_columns),
         )
         .route(
+            "/api/resources/:resource_id/sql/history",
+            get(crate::history::list_history)
+                .post(crate::history::record_history)
+                .delete(crate::history::clear_history),
+        )
+        .route(
             "/api/resources/:resource_id/queries",
             get(crate::queries::list_queries).post(crate::queries::save_query),
         )
