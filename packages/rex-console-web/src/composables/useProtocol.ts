@@ -1,5 +1,6 @@
 import { useRouter } from 'vue-router'
 import { useRecent } from './useRecent'
+import { useTabs } from '@/features/workspace/useTabs'
 
 export type Protocol = 'ssh' | 'sftp' | 'mysql' | 'postgresql' | 'redis' | 'docker' | 'sqlite' | 's3'
 
@@ -19,31 +20,18 @@ export function getProtocolIcon(protocol: string) {
   return PROTOCOL_ICONS[protocol] ?? { icon: '?', color: '#888' }
 }
 
-/** Protocol routing: resource click → navigate to correct page */
+/** Connect resource → workspace tab */
 export function useProtocol() {
   const router = useRouter()
   const { addToRecent } = useRecent()
+  const { addTab } = useTabs()
 
   function connectToResource(
     resource: { id: string; protocol: string; name: string },
     envName: string,
   ) {
-    switch (resource.protocol) {
-      case 'ssh':
-        router.push(`/terminal/${resource.id}`)
-        break
-      case 'sftp':
-        router.push(`/files/${resource.id}`)
-        break
-      case 'mysql':
-      case 'postgresql':
-      case 'redis':
-      case 'sqlite':
-        router.push(`/sql/${resource.id}`)
-        break
-      default:
-        return // docker, s3 — not yet supported, skip recent recording
-    }
+    addTab(resource.name, resource.protocol as Protocol, resource.id)
+    router.push('/workspace')
     addToRecent({ resourceId: resource.id, name: resource.name, protocol: resource.protocol, envName })
   }
 
