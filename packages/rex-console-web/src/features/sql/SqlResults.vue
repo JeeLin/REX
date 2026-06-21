@@ -37,6 +37,18 @@
     </div>
     <div v-if="result" class="results-footer">
       <span>{{ t('sql.rows', { count: result.rows.length }) }} · {{ t('sql.elapsed', { time: (result.elapsed_ms / 1000).toFixed(3) }) }}</span>
+      <div class="results-footer-actions">
+        <button
+          v-if="result.rows.length > 0"
+          class="btn btn-ghost btn-xs"
+          @click="handleExportCsv"
+        >⬇ CSV</button>
+        <button
+          v-if="result.rows.length > 0"
+          class="btn btn-ghost btn-xs"
+          @click="handleExportJson"
+        >⬇ JSON</button>
+      </div>
     </div>
   </div>
 </template>
@@ -45,6 +57,7 @@
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
 import type { SqlResult } from '@/api/sql'
+import { exportCsv, exportJson } from './result-export'
 
 const { t } = useI18n()
 const { show: showMenu } = useContextMenu()
@@ -98,6 +111,16 @@ function generateUpdateSql(row: unknown[], columns: { name: string }[]): string 
 
 function generateDeleteSql(row: unknown[]): string {
   return `DELETE FROM table_name\nWHERE id = ${row[0] ?? '...'};`
+}
+
+function handleExportCsv() {
+  if (!props.result) return
+  exportCsv(props.result.columns, props.result.rows)
+}
+
+function handleExportJson() {
+  if (!props.result) return
+  exportJson(props.result.columns, props.result.rows)
 }
 
 function handleCellContextMenu(event: MouseEvent, rowIdx: number, colIdx: number) {
@@ -257,5 +280,16 @@ function handleRowContextMenu(event: MouseEvent, rowIdx: number) {
   font-size: var(--fs-xs);
   color: var(--text-muted);
   flex-shrink: 0;
+}
+
+.results-footer-actions {
+  display: flex;
+  gap: var(--sp-xs);
+}
+
+.btn-xs {
+  height: 22px;
+  padding: 0 var(--sp-sm);
+  font-size: 11px;
 }
 </style>
