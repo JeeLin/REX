@@ -41,6 +41,7 @@
           <template v-if="getPanelTab(i - 1)">
             <WorkspaceTerminal
               v-if="getPanelTab(i - 1)!.component === 'terminal'"
+              :key="getPanelTab(i - 1)!.id"
               :resource-id="getPanelTab(i - 1)!.resourceId"
               :resource-name="getPanelTab(i - 1)!.name"
               :connection-mode="getConnectionMode(getPanelTab(i - 1)!.resourceId)"
@@ -49,6 +50,7 @@
             />
             <WorkspaceSql
               v-else-if="getPanelTab(i - 1)!.component === 'sql'"
+              :key="getPanelTab(i - 1)!.id"
               :resource-id="getPanelTab(i - 1)!.resourceId"
               :resource-name="getPanelTab(i - 1)!.name"
               :protocol="getPanelTab(i - 1)!.proto"
@@ -57,6 +59,7 @@
             />
             <WorkspaceFiles
               v-else-if="getPanelTab(i - 1)!.component === 'files'"
+              :key="getPanelTab(i - 1)!.id"
               :resource-id="getPanelTab(i - 1)!.resourceId"
               :resource-name="getPanelTab(i - 1)!.name"
               @disconnect="onPanelDisconnect(getPanelTab(i - 1)!.id)"
