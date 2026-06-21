@@ -29,6 +29,10 @@ export function listTransfers(): Promise<TransferTask[]> {
   return client.get('/transfers').then(r => r.data.data)
 }
 
+export function createTransfer(source: TransferEndpoint, target: TransferEndpoint): Promise<TransferTask> {
+  return client.post('/transfers', { source, target }).then(r => r.data.data)
+}
+
 export function getTransfer(id: string): Promise<TransferTask> {
   return client.get(`/transfers/${id}`).then(r => r.data.data)
 }

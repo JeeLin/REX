@@ -1,10 +1,13 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::body::Body;
+use axum::extract::{Multipart, Path, Query, State};
+use axum::http::{header, StatusCode};
+use axum::response::Response;
 use axum::Json;
 use serde::{Deserialize, Serialize};
+use tracing::info;
 
 use crate::helpers::{bad_request, err_resp, not_found, ApiResponse, ErrorResponse};
 use crate::routes::AppState;
@@ -126,6 +129,85 @@ pub async fn rename_file(
         .map_err(|e| err_resp("RENAME_FAILED", &format!("重命名失败: {e}")))?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// GET /api/resources/:resource_id/files/download — 下载文件
+pub async fn download_file(
+    State(state): State<Arc<AppState>>,
+    Path(resource_id): Path<String>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+    let path = params
+        .get("path")
+        .ok_or_else(|| bad_request("缺少 path 参数"))?;
+    let connector = get_connector(&state, &resource_id).await?;
+
+    let file_read = connector
+        .read(path.as_ref())
+        .await
+        .map_err(|e| err_resp("FILE_READ_FAILED", &format!("读取文件失败: {e}")))?;
+
+    let filename = file_read
+        .entry
+        .path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "download".to_string());
+
+    let body = Body::from(file_read.bytes);
+    let resp = Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/octet-stream")
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{filename}\""),
+        )
+        .body(body)
+        .unwrap();
+
+    Ok(resp)
+}
+
+/// POST /api/resources/:resource_id/files/upload — 上传文件
+pub async fn upload_file(
+    State(state): State<Arc<AppState>>,
+    Path(resource_id): Path<String>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+    mut multipart: Multipart,
+) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+    let dir_path = params.get("path").map(|s| s.as_str()).unwrap_or("/");
+    let connector = get_connector(&state, &resource_id).await?;
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| bad_request(&format!("读取上传数据失败: {e}")))?
+    {
+        let filename = field
+            .file_name()
+            .ok_or_else(|| bad_request("缺少文件名"))?
+            .to_string();
+
+        let data = field
+            .bytes()
+            .await
+            .map_err(|e| bad_request(&format!("读取文件内容失败: {e}")))?;
+
+        let file_path = if dir_path.ends_with('/') {
+            format!("{dir_path}{filename}")
+        } else {
+            format!("{dir_path}/{filename}")
+        };
+
+        connector
+            .write(PathBuf::from(&file_path).as_path(), &data)
+            .await
+            .map_err(|e| err_resp("FILE_WRITE_FAILED", &format!("写入文件失败: {e}")))?;
+
+        info!(resource_id = %resource_id, path = %file_path, size = data.len(), "file uploaded");
+    }
+
+    Ok(StatusCode::CREATED)
 }
 
 /// 根据资源 ID 获取 FileConnector

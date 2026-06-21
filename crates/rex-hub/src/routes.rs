@@ -140,6 +140,14 @@ pub fn app_with_static(
             put(crate::files::rename_file),
         )
         .route(
+            "/api/resources/:resource_id/files/download",
+            get(crate::files::download_file),
+        )
+        .route(
+            "/api/resources/:resource_id/files/upload",
+            post(crate::files::upload_file),
+        )
+        .route(
             "/api/resources/:resource_id/sql/info",
             get(crate::sql::get_resource_info),
         )

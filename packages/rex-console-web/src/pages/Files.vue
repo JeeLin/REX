@@ -14,6 +14,15 @@
       <button class="btn btn-ghost btn-sm" @click="showMkdirDialog = true">📁 新建</button>
       <button class="btn btn-ghost btn-sm" @click="showTouchDialog = true">📄 新建文件</button>
       <div class="toolbar-sep"></div>
+      <button class="btn btn-ghost btn-sm" @click="triggerUpload">⬆ 上传</button>
+      <button
+        class="btn btn-ghost btn-sm"
+        :disabled="selectedPaths.length !== 1 || isDirectorySelected"
+        @click="handleDownload"
+      >
+        ⬇ 下载
+      </button>
+      <div class="toolbar-sep"></div>
       <button
         class="btn btn-ghost btn-sm"
         :disabled="selectedPaths.length === 0"
@@ -26,7 +35,12 @@
     </div>
 
     <!-- Main Content -->
-    <div class="files-main">
+    <div
+      class="files-main"
+      @dragover.prevent="onDragOver"
+      @dragleave.prevent="onDragLeave"
+      @drop.prevent="onDrop"
+    >
       <FileList
         :entries="entries"
         :current-path="currentPath"
@@ -39,10 +53,26 @@
       />
       <TransferQueuePanel
         :tasks="transferTasks"
-        @cancel="handleCancelTransfer"
-        @remove="handleRemoveTransfer"
+        @cancel="cancelTransfer"
+        @remove="removeTransfer"
       />
+      <!-- Drag-drop overlay -->
+      <div v-if="isDragging" class="drop-overlay">
+        <div class="drop-overlay-content">
+          <span class="drop-icon">⬆</span>
+          <span>拖放文件到此处上传</span>
+        </div>
+      </div>
     </div>
+
+    <!-- Hidden file input for upload -->
+    <input
+      ref="fileInput"
+      type="file"
+      multiple
+      style="display: none"
+      @change="onFileSelect"
+    />
 
     <!-- Status Bar -->
     <div class="files-statusbar">
@@ -111,11 +141,17 @@
         <div v-if="contextMenuEntry.file_type === 'directory'" class="context-menu-item" @click="enterDirectory(contextMenuEntry.name); showContextMenu = false">
           打开
         </div>
+        <div v-if="contextMenuEntry.file_type !== 'directory'" class="context-menu-item" @click="downloadFile(resourceId, contextMenuEntry.path); showContextMenu = false">
+          ⬇ 下载
+        </div>
         <div class="context-menu-item" @click="handleCopyPath(contextMenuEntry.path); showContextMenu = false">
           复制路径
         </div>
         <div class="context-menu-item" @click="handleRename(contextMenuEntry); showContextMenu = false">
           重命名
+        </div>
+        <div v-if="sendToTargets.length > 0" class="context-menu-item" @click="handleSendTo(contextMenuEntry); showContextMenu = false">
+          发送到…
         </div>
         <div class="context-menu-divider"></div>
         <div class="context-menu-item danger" @click="selectedPaths = [contextMenuEntry.path]; showDeleteDialog = true; showContextMenu = false">
@@ -128,6 +164,9 @@
         </div>
         <div class="context-menu-item" @click="showTouchDialog = true; showContextMenu = false">
           新建文件
+        </div>
+        <div class="context-menu-item" @click="triggerUpload(); showContextMenu = false">
+          ⬆ 上传文件
         </div>
         <div class="context-menu-divider"></div>
         <div class="context-menu-item" @click="loadFiles(); showContextMenu = false">
@@ -157,14 +196,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useFileManager } from '@/features/files/useFileManager'
 import { useTransferQueue } from '@/features/files/useTransferQueue'
+import { downloadFile, uploadFile } from '@/api/files'
+import { createTransfer } from '@/api/transfer'
+import { useTabs } from '@/features/workspace/useTabs'
 import FileBreadcrumb from '@/features/files/FileBreadcrumb.vue'
 import FileList from '@/features/files/FileList.vue'
 import TransferQueuePanel from '@/features/files/TransferQueuePanel.vue'
 import type { FileEntry } from '@/api/files'
+import type { TransferEndpoint } from '@/api/transfer'
 
 const route = useRoute()
 const router = useRouter()
@@ -187,15 +230,99 @@ const {
 } = useFileManager(resourceId)
 
 const selectedPaths = ref<string[]>([])
+const isDirectorySelected = computed(() => {
+  if (selectedPaths.value.length !== 1) return false
+  const entry = entries.value.find(e => e.path === selectedPaths.value[0])
+  return entry?.file_type === 'directory'
+})
 
 const { tasks: transferTasks, cancel: cancelTransfer, remove: removeTransfer } = useTransferQueue()
 
-function handleCancelTransfer(id: string) {
-  cancelTransfer(id)
+// Download
+async function handleDownload() {
+  if (selectedPaths.value.length !== 1) return
+  await downloadFile(resourceId, selectedPaths.value[0])
 }
 
-function handleRemoveTransfer(id: string) {
-  removeTransfer(id)
+// Upload
+const fileInput = ref<HTMLInputElement>()
+const uploading = ref(false)
+
+function triggerUpload() {
+  fileInput.value?.click()
+}
+
+async function uploadFiles(fileList: FileList | File[]) {
+  uploading.value = true
+  try {
+    for (const file of Array.from(fileList)) {
+      await uploadFile(resourceId, currentPath.value, file)
+    }
+    await loadFiles()
+  } finally {
+    uploading.value = false
+  }
+}
+
+async function onFileSelect() {
+  const input = fileInput.value
+  if (!input?.files?.length) return
+  await uploadFiles(input.files)
+  input.value = ''
+}
+
+// Drag-drop
+const isDragging = ref(false)
+let dragCounter = 0
+
+function onDragOver(e: DragEvent) {
+  if (e.dataTransfer?.types.includes('Files')) {
+    isDragging.value = true
+    dragCounter++
+  }
+}
+
+function onDragLeave() {
+  dragCounter--
+  if (dragCounter <= 0) {
+    isDragging.value = false
+    dragCounter = 0
+  }
+}
+
+async function onDrop(e: DragEvent) {
+  isDragging.value = false
+  dragCounter = 0
+  const files = e.dataTransfer?.files
+  if (!files?.length) return
+  await uploadFiles(files)
+}
+
+// Send-to (cross-connection transfer)
+const { tabs } = useTabs()
+
+const sendToTargets = computed(() => {
+  return tabs.value.filter(t =>
+    t.id !== route.params.resourceId as string &&
+    (t.proto === 'ssh' || t.proto === 'sftp')
+  )
+})
+
+async function handleSendTo(entry: FileEntry) {
+  if (sendToTargets.value.length === 0) return
+  // Use first available target (TODO: show target selection dialog)
+  const target = sendToTargets.value[0]
+  const source: TransferEndpoint = {
+    connector_type: 'sftp',
+    resource_id: resourceId,
+    path: entry.path,
+  }
+  const dest: TransferEndpoint = {
+    connector_type: 'sftp',
+    resource_id: target.resourceId,
+    path: currentPath.value,
+  }
+  await createTransfer(source, dest)
 }
 
 // Context menu
@@ -301,8 +428,6 @@ onMounted(async () => {
   await loadFiles()
 })
 
-// Clean up event listener
-import { onBeforeUnmount } from 'vue'
 onBeforeUnmount(() => {
   document.removeEventListener('click', closeContextMenu)
 })
@@ -476,5 +601,37 @@ onBeforeUnmount(() => {
   height: 1px;
   background: var(--border);
   margin: var(--sp-xs) 0;
+}
+
+/* Drop overlay */
+.files-main {
+  position: relative;
+}
+
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(232, 145, 45, 0.08);
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.drop-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-sm);
+  color: var(--accent);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+.drop-icon {
+  font-size: 32px;
 }
 </style>
