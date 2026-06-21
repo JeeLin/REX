@@ -246,9 +246,9 @@ function handleTabDblclick(tabId: string) {
   currentLayout.value = 'left-right'
   moveTabToPanel(tabId, 0)
   const currentIdx = tabs.value.findIndex((t) => t.id === tabId)
-  const nextTab = tabs.value.find((t, i) => i !== currentIdx && t.panelIndex !== 0)
-  if (nextTab) {
-    moveTabToPanel(nextTab.id, 1)
+  const candidate = tabs.value.find((t, i) => i !== currentIdx && t.panelIndex !== 0)
+  if (candidate) {
+    moveTabToPanel(candidate.id, 1)
   } else if (tabs.value.length > 1) {
     const fallback = tabs.value[(currentIdx + 1) % tabs.value.length]
     if (fallback.id !== tabId) moveTabToPanel(fallback.id, 1)

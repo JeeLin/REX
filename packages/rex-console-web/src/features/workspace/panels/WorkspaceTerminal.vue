@@ -349,7 +349,8 @@ function handleToolbarContextMenu(event: MouseEvent) {
     },
     {
       label: t('ws.terminal.toolbar.ctx.openConnectionDetail'),
-      action: () => { router.push({ name: 'resource', params: { id: props.resourceId } }) },
+      // TODO: 需要资源详情页（ResourceDetail）和对应路由后启用
+      action: () => { router.push({ name: 'environments' }) },
     },
     { separator: true },
     {
