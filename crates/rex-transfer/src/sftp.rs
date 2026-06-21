@@ -87,12 +87,26 @@ impl FileConnector for SftpConnector {
             .await
             .context("SFTP read_dir failed")?;
 
-        let entries = read_dir
-            .map(|entry| {
+        let mut entries: Vec<FileEntry> = read_dir
+            .filter_map(|entry| {
+                let name = entry.file_name();
+                // 过滤掉 . 和 .. 条目
+                if name == "." || name == ".." {
+                    return None;
+                }
                 let attrs = entry.metadata();
-                build_entry(&entry.file_name(), &path_str, &attrs)
+                Some(build_entry(&name, &path_str, &attrs))
             })
             .collect();
+
+        // 目录优先排序，同类型按名称字母序
+        entries.sort_by(|a, b| {
+            let a_is_dir = a.file_type == FileType::Directory;
+            let b_is_dir = b.file_type == FileType::Directory;
+            b_is_dir
+                .cmp(&a_is_dir)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
 
         Ok(entries)
     }

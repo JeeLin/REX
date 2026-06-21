@@ -226,26 +226,24 @@ async fn get_connector(
         .map_err(|e| bad_request(&format!("资源配置格式错误: {e}")))?;
 
     match resource.protocol.as_str() {
-        "sftp" => {
-            let host = config
-                .get("host")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| bad_request("SFTP 资源缺少 host 配置"))?;
-            let port = config.get("port").and_then(|v| v.as_u64()).unwrap_or(22) as u16;
-            let username = config
-                .get("username")
-                .and_then(|v| v.as_str())
-                .unwrap_or("root");
-            let password = config
-                .get("password")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+        "sftp" | "ssh" => {
+            // SSH 终端内置 SFTP 面板和独立 SFTP 资源共用同一个 connector 创建逻辑
+            // 使用 SshResourceConfig 解析配置并提取认证信息
+            let ssh_config = crate::ssh_config::SshResourceConfig::from_encrypted_json(
+                &resource.config_json,
+                &state.secret_key,
+            )
+            .map_err(|e| bad_request(&format!("资源配置解析失败: {e}")))?;
+
+            let auth_method = ssh_config
+                .to_auth_method(&state.secret_key)
+                .map_err(|e| bad_request(&format!("认证配置错误: {e}")))?;
 
             let connector = rex_transfer::sftp::SftpConnector::connect(
-                host,
-                port,
-                username,
-                rex_ssh::auth::AuthMethod::Password(password.to_string()),
+                &ssh_config.host,
+                ssh_config.port,
+                &ssh_config.username,
+                auth_method,
             )
             .await
             .map_err(|e| err_resp("SFTP_CONNECT_FAILED", &format!("SFTP 连接失败: {e}")))?;

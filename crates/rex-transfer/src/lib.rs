@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 // ── 文件类型 ──────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum FileType {
     File,
     Directory,
