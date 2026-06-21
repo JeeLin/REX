@@ -43,6 +43,7 @@
               v-if="getPanelTab(i - 1)!.component === 'terminal'"
               :resource-id="getPanelTab(i - 1)!.resourceId"
               :resource-name="getPanelTab(i - 1)!.name"
+              :connection-mode="getConnectionMode(getPanelTab(i - 1)!.resourceId)"
               @disconnect="onPanelDisconnect(getPanelTab(i - 1)!.id)"
               @error="(msg: string) => onPanelError(getPanelTab(i - 1)!.id, msg)"
             />
@@ -261,7 +262,7 @@ const connSearchQuery = ref('')
 const connSearchInput = ref<HTMLInputElement | null>(null)
 const selectedResourceIdx = ref(0)
 
-interface Resource { id: string; name: string; address: string; protocol: string; envName: string }
+interface Resource { id: string; name: string; address: string; protocol: string; envName: string; connectionMode: 'direct' | 'agent' }
 
 const envsWithRes = ref<any[]>([])
 
@@ -271,7 +272,7 @@ const flatFilteredResources = computed<Resource[]>(() => {
     for (const r of env.resources) {
       const q = connSearchQuery.value.toLowerCase()
       if (!q || r.name.toLowerCase().includes(q) || r.protocol.includes(q)) {
-        all.push({ id: r.id, name: r.name, address: r.address || '', protocol: r.protocol, envName: env.name })
+        all.push({ id: r.id, name: r.name, address: r.address || '', protocol: r.protocol, envName: env.name, connectionMode: (env.connection_mode === 'agent' ? 'agent' : 'direct') as 'direct' | 'agent' })
       }
     }
   }
@@ -315,6 +316,14 @@ function connectToResource(res: Resource) {
   showConnMenu.value = false
   connSearchQuery.value = ''
   selectedResourceIdx.value = 0
+}
+
+function getConnectionMode(resourceId: string): 'direct' | 'agent' {
+  for (const env of envsWithRes.value) {
+    const r = env.resources?.find((x: any) => x.id === resourceId)
+    if (r) return env.connection_mode === 'agent' ? 'agent' : 'direct'
+  }
+  return 'direct'
 }
 
 // ── Panel lifecycle ──

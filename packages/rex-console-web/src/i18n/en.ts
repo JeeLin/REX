@@ -114,11 +114,39 @@ export default {
     },
     terminal: {
       toolbar: {
+        clear: 'Clear',
+        paste: 'Paste',
+        sftp: 'SFTP',
+        disconnect: 'Disconnect',
         ctx: {
           copyLatency: 'Copy Latency Info',
           openConnectionDetail: 'Open Connection Detail',
           toggleFullscreen: 'Toggle Fullscreen',
         },
+      },
+      statusbar: {
+        encoding: 'UTF-8',
+        direct: 'Direct',
+        agent: 'Via Agent',
+        hint: 'Ctrl+Shift+C to copy',
+      },
+      reconnect: {
+        title: 'Disconnected',
+        btn: 'Reconnect',
+      },
+      disconnect: {
+        title: 'Disconnect?',
+        desc: 'The current session will be terminated. Unsaved work may be lost.',
+      },
+      mobile: {
+        history: 'History',
+        paste: 'Paste',
+        more: 'More',
+        pasteTitle: 'Paste Text',
+        pastePlaceholder: 'Type or paste text here...',
+        clear: 'Clear',
+        reconnect: 'Reconnect',
+        disconnect: 'Disconnect',
       },
       ctx: {
         copy: 'Copy',

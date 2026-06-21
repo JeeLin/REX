@@ -8,10 +8,10 @@
       </div>
       <div class="ws-term-spacer"></div>
       <div class="ws-term-actions">
-        <button class="btn btn-ghost btn-xs" @click="clearTerminal">清屏</button>
-        <button class="btn btn-ghost btn-xs" @click="handlePaste">粘贴</button>
-        <button class="btn btn-ghost btn-xs" :class="{ active: showSftp }" @click="toggleSftp">📁 SFTP</button>
-        <button class="btn btn-xs btn-danger" @click="showDisconnectDialog = true">断开</button>
+        <button class="btn btn-ghost btn-xs" @click="clearTerminal">{{ t('ws.terminal.toolbar.clear') }}</button>
+        <button class="btn btn-ghost btn-xs" @click="handlePaste">{{ t('ws.terminal.toolbar.paste') }}</button>
+        <button class="btn btn-ghost btn-xs" :class="{ active: showSftp }" @click="toggleSftp">📁 {{ t('ws.terminal.toolbar.sftp') }}</button>
+        <button class="btn btn-xs btn-danger" @click="showDisconnectDialog = true">{{ t('ws.terminal.toolbar.disconnect') }}</button>
       </div>
     </div>
 
@@ -29,8 +29,8 @@
         <!-- 未连接时显示重连提示 -->
         <div v-if="connectionStatus === 'disconnected'" class="ws-term-reconnect">
           <div class="reconnect-icon">⚡</div>
-          <div class="reconnect-text">连接已断开</div>
-          <button class="btn btn-sm btn-primary" @click="connectSession">重新连接</button>
+          <div class="reconnect-text">{{ t('ws.terminal.reconnect.title') }}</div>
+          <button class="btn btn-sm btn-primary" @click="connectSession">{{ t('ws.terminal.reconnect.btn') }}</button>
         </div>
       </div>
 
@@ -59,21 +59,71 @@
     <div class="ws-term-statusbar">
       <span>SSH</span>
       <span>·</span>
-      <span>UTF-8</span>
+      <span>{{ t('ws.terminal.statusbar.encoding') }}</span>
+      <span>·</span>
+      <span>{{ termSize.cols }}×{{ termSize.rows }}</span>
       <span class="spacer"></span>
-      <span v-if="connectionStatus === 'connected'" style="color: #000">已连接</span>
-      <span v-else-if="connectionStatus === 'connecting'" style="color: #000">连接中...</span>
-      <span v-else style="color: #000">未连接</span>
+      <span v-if="props.connectionMode === 'agent'">{{ t('ws.terminal.statusbar.agent') }}</span>
+      <span v-else>{{ t('ws.terminal.statusbar.direct') }}</span>
+      <span>·</span>
+      <span>{{ t('ws.terminal.statusbar.hint') }}</span>
+    </div>
+
+    <!-- 移动端浮动工具栏 -->
+    <div v-if="isMobile" class="ws-term-mobile-bar">
+      <div class="mobile-row">
+        <button class="mobile-btn" @click="sendKey('\x1b[A')">↑</button>
+        <button class="mobile-btn" @click="sendKey('\x1b[D')">←</button>
+        <button class="mobile-btn" @click="sendKey('\x1b[B')">↓</button>
+        <button class="mobile-btn" @click="sendKey('\x1b[C')">→</button>
+        <button class="mobile-btn" @click="sendKey('\t')">Tab</button>
+        <button class="mobile-btn" @click="sendKey('\r')">⏎</button>
+        <button class="mobile-btn" @click="sendKey('\x03')">^C</button>
+        <button class="mobile-btn" @click="sendKey('\x0c')">^L</button>
+      </div>
+      <div class="mobile-row">
+        <button class="mobile-btn mobile-btn-fn" @click="showMobileMore = true">📜 {{ t('ws.terminal.mobile.history') }}</button>
+        <button class="mobile-btn mobile-btn-fn" @click="showPasteDialog = true">📋 {{ t('ws.terminal.mobile.paste') }}</button>
+        <button class="mobile-btn" @click="adjustFontSize(-1)">A-</button>
+        <button class="mobile-btn" @click="adjustFontSize(1)">A+</button>
+        <button class="mobile-btn mobile-btn-fn" @click="showMobileMore = true">⚙ {{ t('ws.terminal.mobile.more') }}</button>
+      </div>
+    </div>
+
+    <!-- 移动端粘贴弹窗 -->
+    <div v-if="showPasteDialog" class="ws-term-modal-overlay" @click.self="showPasteDialog = false">
+      <div class="ws-term-modal">
+        <div class="ws-term-modal-title">{{ t('ws.terminal.mobile.pasteTitle') }}</div>
+        <textarea v-model="pasteText" rows="4" :placeholder="t('ws.terminal.mobile.pastePlaceholder')" class="ws-term-textarea"></textarea>
+        <div class="ws-term-modal-actions">
+          <button class="btn" @click="showPasteDialog = false">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" @click="doPasteText">{{ t('ws.terminal.mobile.paste') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 移动端更多菜单 -->
+    <div v-if="showMobileMore" class="ws-term-modal-overlay" @click.self="showMobileMore = false">
+      <div class="ws-term-modal">
+        <div class="ws-term-modal-title">{{ t('ws.terminal.mobile.more') }}</div>
+        <div class="mobile-more-list">
+          <button class="mobile-more-item" @click="clearTerminal(); showMobileMore = false">{{ t('ws.terminal.mobile.clear') }}</button>
+          <button class="mobile-more-item" @click="doDisconnect(); showMobileMore = false">{{ t('ws.terminal.mobile.disconnect') }}</button>
+        </div>
+        <div class="ws-term-modal-actions" style="margin-top: var(--sp-md)">
+          <button class="btn" @click="showMobileMore = false">{{ t('common.cancel') }}</button>
+        </div>
+      </div>
     </div>
 
     <!-- 断开确认弹窗 -->
     <div v-if="showDisconnectDialog" class="ws-term-modal-overlay" @click.self="showDisconnectDialog = false">
       <div class="ws-term-modal">
-        <div class="ws-term-modal-title">断开连接？</div>
-        <p class="ws-term-modal-desc">断开后当前会话将终止，未保存的工作可能会丢失。</p>
+        <div class="ws-term-modal-title">{{ t('ws.terminal.disconnect.title') }}</div>
+        <p class="ws-term-modal-desc">{{ t('ws.terminal.disconnect.desc') }}</p>
         <div class="ws-term-modal-actions">
-          <button class="btn" @click="showDisconnectDialog = false">取消</button>
-          <button class="btn btn-danger" @click="doDisconnect">断开</button>
+          <button class="btn" @click="showDisconnectDialog = false">{{ t('common.cancel') }}</button>
+          <button class="btn btn-danger" @click="doDisconnect">{{ t('common.confirm') }}</button>
         </div>
       </div>
     </div>
@@ -100,6 +150,7 @@ const { show: showMenu } = useContextMenu()
 const props = defineProps<{
   resourceId: string
   resourceName: string
+  connectionMode?: 'direct' | 'agent'
 }>()
 
 const emit = defineEmits<{
@@ -111,6 +162,16 @@ const emit = defineEmits<{
 const terminalContainer = ref<HTMLElement>()
 const connectionStatus = ref<'connecting' | 'connected' | 'disconnected'>('disconnected')
 const showDisconnectDialog = ref(false)
+
+// Status bar
+const termSize = ref({ cols: 80, rows: 24 })
+
+// Mobile toolbar
+const isMobile = ref(false)
+const showPasteDialog = ref(false)
+const pasteText = ref('')
+const showMobileMore = ref(false)
+const terminalFontSize = ref(13)
 
 // SFTP panel state
 const showSftp = ref(false)
@@ -164,6 +225,7 @@ function initTerminal() {
   })
 
   terminal.onResize(({ cols, rows }: { cols: number; rows: number }) => {
+    termSize.value = { cols, rows }
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
         type: 'terminal.resize',
@@ -256,6 +318,39 @@ async function doDisconnect() {
   }
   connectionStatus.value = 'disconnected'
   emit('disconnect')
+}
+
+// ── Mobile toolbar ──────────────────────────────────────
+
+function sendKey(seq: string) {
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'terminal.input',
+      payload: { data: btoa(seq) },
+    }))
+  }
+}
+
+function adjustFontSize(delta: number) {
+  const newSize = Math.max(10, Math.min(20, terminalFontSize.value + delta))
+  terminalFontSize.value = newSize
+  terminal!.options.fontSize = newSize
+  fitAddon?.fit()
+}
+
+function doPasteText() {
+  if (pasteText.value && ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'terminal.input',
+      payload: { data: btoa(pasteText.value) },
+    }))
+  }
+  pasteText.value = ''
+  showPasteDialog.value = false
+}
+
+function isMobileDevice() {
+  return window.matchMedia('(max-width: 768px)').matches
 }
 
 // ── SFTP 面板 ──────────────────────────────────────
@@ -420,6 +515,14 @@ onMounted(async () => {
   await nextTick()
   initTerminal()
   await connectSession()
+
+  // Mobile detection
+  isMobile.value = isMobileDevice()
+  const mq = window.matchMedia('(max-width: 768px)')
+  const mqHandler = (e: MediaQueryListEvent) => { isMobile.value = e.matches }
+  mq.addEventListener('change', mqHandler)
+  // Store cleanup
+  onBeforeUnmount(() => mq.removeEventListener('change', mqHandler))
 })
 
 onBeforeUnmount(() => {
@@ -642,5 +745,98 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: flex-end;
   gap: var(--sp-sm);
+}
+
+.ws-term-textarea {
+  width: 100%;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  padding: var(--sp-sm);
+  resize: vertical;
+  margin-bottom: var(--sp-md);
+}
+
+.ws-term-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ── 移动端浮动工具栏 ── */
+.ws-term-mobile-bar {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .ws-term-mobile-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+}
+
+.mobile-row {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+.mobile-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 32px;
+  padding: 0 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-btn:active {
+  background: var(--accent-muted);
+  border-color: var(--accent);
+}
+
+.mobile-btn-fn {
+  min-width: auto;
+  font-family: inherit;
+}
+
+/* ── 移动端更多菜单 ── */
+.mobile-more-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-xs);
+}
+
+.mobile-more-item {
+  display: flex;
+  align-items: center;
+  padding: var(--sp-sm) var(--sp-md);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  text-align: left;
+}
+
+.mobile-more-item:active {
+  background: var(--accent-muted);
 }
 </style>

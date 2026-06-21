@@ -114,11 +114,39 @@ export default {
     },
     terminal: {
       toolbar: {
+        clear: '清屏',
+        paste: '粘贴',
+        sftp: 'SFTP',
+        disconnect: '断开',
         ctx: {
           copyLatency: '复制延迟信息',
           openConnectionDetail: '打开连接详情',
           toggleFullscreen: '切换全屏',
         },
+      },
+      statusbar: {
+        encoding: 'UTF-8',
+        direct: '直连',
+        agent: '通过 Agent 代理',
+        hint: 'Ctrl+Shift+C 复制',
+      },
+      reconnect: {
+        title: '连接已断开',
+        btn: '重新连接',
+      },
+      disconnect: {
+        title: '断开连接？',
+        desc: '断开后当前会话将终止，未保存的工作可能会丢失。',
+      },
+      mobile: {
+        history: '历史',
+        paste: '粘贴',
+        more: '更多',
+        pasteTitle: '粘贴文本',
+        pastePlaceholder: '在此输入要粘贴的文本...',
+        clear: '清屏',
+        reconnect: '重连',
+        disconnect: '断开连接',
       },
       ctx: {
         copy: '复制',
