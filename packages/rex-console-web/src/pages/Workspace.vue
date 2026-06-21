@@ -16,7 +16,7 @@
     <div class="ws-content" :class="layoutClass">
       <!-- 空状态 -->
       <div v-if="tabs.length === 0" class="ws-empty">
-        <div class="ws-empty-icon">⊞</div>
+        <div class="ws-empty-icon">💻</div>
         <div class="ws-empty-text">{{ t('ws.empty.noSessions') }}</div>
         <div class="ws-empty-hint">
           从侧边栏选择资源开始连接<br />
@@ -222,7 +222,7 @@ const LAYOUT_PANELS: Record<Layout, number> = {
   single: 1, 'left-right': 2, 'top-bottom': 2, quad: 4, 'sidebar-main': 2,
 }
 const LAYOUT_ICONS: Record<Layout, string> = {
-  single: '☐', 'left-right': '◧', 'top-bottom': '▤', quad: '⊞', 'sidebar-main': '◫',
+  single: '⬜', 'left-right': '🔲', 'top-bottom': '🔳', quad: '🔲🔲', 'sidebar-main': '📐',
 }
 const LAYOUT_LABELS: Record<Layout, string> = {
   single: '单面板', 'left-right': '左右分屏', 'top-bottom': '上下分屏', quad: '四宫格', 'sidebar-main': '主+侧边',

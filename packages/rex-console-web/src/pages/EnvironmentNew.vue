@@ -36,7 +36,7 @@
             :class="{ active: form.connection_mode === 'agent_proxy' }"
             @click="form.connection_mode = 'agent_proxy'"
           >
-            <div class="mode-icon">⬡</div>
+            <div class="mode-icon">🔗</div>
             <div class="mode-title">{{ t('env.agentProxy') }}</div>
             <div class="mode-desc">{{ t('env.agentProxyDesc') }}</div>
           </div>

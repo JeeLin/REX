@@ -11,7 +11,7 @@
       <div v-for="table in filteredTables" :key="table.name" class="tree-group">
         <div class="tree-group-header" @click="toggleTable(table.name)" @contextmenu.prevent="handleTableContextMenu($event, table)">
           <span class="tree-icon">{{ expanded.has(table.name) ? '▾' : '▸' }}</span>
-          <span>⊞</span>
+          <span>📊</span>
           <span>{{ table.name }}</span>
           <span class="tree-count" v-if="table.row_count != null">{{ table.row_count.toLocaleString() }}</span>
         </div>

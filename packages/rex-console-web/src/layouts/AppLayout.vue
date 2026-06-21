@@ -38,19 +38,19 @@
       <!-- 导航 -->
       <nav class="sidebar-nav">
         <router-link to="/" class="nav-item" :class="{ active: route.name === 'dashboard' }" @click="closeMobile">
-          <span class="nav-icon">◉</span>
+          <span class="nav-icon">🏠</span>
           <span v-show="!collapsed">{{ t('nav.dashboard') }}</span>
         </router-link>
         <router-link to="/workspace" class="nav-item" :class="{ active: route.name === 'workspace' }" @click="closeMobile">
-          <span class="nav-icon">⊞</span>
+          <span class="nav-icon">💻</span>
           <span v-show="!collapsed">{{ t('nav.workspace') }}</span>
         </router-link>
         <router-link to="/environments" class="nav-item" :class="{ active: isEnvPage }" @click="closeMobile">
-          <span class="nav-icon">◈</span>
+          <span class="nav-icon">🖥</span>
           <span v-show="!collapsed">{{ t('nav.environments') }}</span>
         </router-link>
         <router-link to="/agents" class="nav-item" :class="{ active: route.name === 'agents' }" @click="closeMobile">
-          <span class="nav-icon">⬡</span>
+          <span class="nav-icon">🔌</span>
           <span v-show="!collapsed">{{ t('nav.agents') }}</span>
         </router-link>
       </nav>
@@ -96,7 +96,7 @@
       <!-- 收藏 -->
       <div class="sidebar-section" v-show="!collapsed">
         <div class="section-header">
-          <span class="section-label">★ {{ t('sidebar.favorites') }}</span>
+          <span class="section-label">⭐ {{ t('sidebar.favorites') }}</span>
           <span class="section-count" v-if="favoriteResources.length">({{ favoriteResources.length }})</span>
         </div>
         <div v-if="favoriteResources.length === 0" class="section-empty">{{ t('sidebar.favoritesEmpty') }}</div>
@@ -119,7 +119,7 @@
       <!-- 最近使用 -->
       <div class="sidebar-section" v-show="!collapsed">
         <div class="section-header">
-          <span class="section-label">⏱ {{ t('sidebar.recent') }}</span>
+          <span class="section-label">🕐 {{ t('sidebar.recent') }}</span>
           <button v-if="recent.length > 0" class="section-action" @click="clearRecent" :title="t('sidebar.clearRecent')">🗑</button>
         </div>
         <div v-if="recent.length === 0" class="section-empty">{{ t('sidebar.recentEmpty') }}</div>
