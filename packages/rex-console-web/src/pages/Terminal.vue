@@ -98,9 +98,22 @@ function initTerminal() {
   terminal.open(terminalContainer.value)
   fitAddon.fit()
 
-  // 注册键盘快捷键（Ctrl+Shift+C/V）和粘贴事件
+  // 注册键盘快捷键（Ctrl+Shift+C/V）
   window.addEventListener('keydown', handleKeydown)
-  terminalContainer.value?.addEventListener('paste', handlePasteEvent as any)
+
+  // 在 xterm 内部 textarea 上拦截 paste 事件
+  // 绕过 xterm.js 内部 navigator.clipboard.readText() 的 HTTPS 限制
+  terminal.textarea?.addEventListener('paste', (e: ClipboardEvent) => {
+    const text = e.clipboardData?.getData('text')
+    if (text && ws?.readyState === WebSocket.OPEN) {
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      ws.send(JSON.stringify({
+        type: 'terminal.input',
+        payload: { data: btoa(text) },
+      }))
+    }
+  }, true) // capture 阶段拦截，优先于 xterm 内部处理
 
   terminal.onData((data: string) => {
     if (ws?.readyState === WebSocket.OPEN) {
