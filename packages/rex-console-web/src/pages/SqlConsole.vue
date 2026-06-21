@@ -20,6 +20,11 @@
       :active-id="activeTabId"
       @select="activeTabId = $event"
       @close="closeTab"
+      @close-others="closeOthers"
+      @save="handleTabSave"
+      @rename="handleTabRename"
+      @copy-sql="handleTabCopySql"
+      @execute-sql="handleTabExecuteSql"
       @add="addTab"
     />
 
@@ -86,7 +91,8 @@ const resourceId = route.params.resourceId as string
 
 const {
   tabs, activeTabId, executing, tabList, activeTab,
-  addTab, closeTab, clearEditor, execute, handleSort, handleGenerateSql,
+  addTab, closeTab, closeOthers, renameTab, getTabSql,
+  clearEditor, execute, handleSort, handleGenerateSql,
 } = useSqlTabActions(resourceId, (msg) => alert(msg))
 
 // Resource info
@@ -97,6 +103,26 @@ const selectedDb = ref('')
 function insertTableSql(tableName: string) {
   const tab = tabs.value.find((t) => t.id === activeTabId.value)
   if (tab) tab.sql = `SELECT * FROM ${tableName} LIMIT 100;`
+}
+
+function handleTabSave(id: string) {
+  // TODO: implement save query file flow
+  console.log('save tab', id)
+}
+
+function handleTabRename(id: string) {
+  const newTitle = prompt('输入新名称:')
+  if (newTitle) renameTab(id, newTitle)
+}
+
+function handleTabCopySql(id: string) {
+  const sql = getTabSql(id)
+  if (sql) navigator.clipboard.writeText(sql)
+}
+
+function handleTabExecuteSql(id: string) {
+  const tab = tabs.value.find((t) => t.id === id)
+  if (tab) execute(tab.sql)
 }
 
 async function loadDatabases() {

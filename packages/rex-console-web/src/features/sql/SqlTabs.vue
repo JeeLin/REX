@@ -6,6 +6,7 @@
       class="sql-tab"
       :class="{ active: tab.id === activeId }"
       @click="$emit('select', tab.id)"
+      @contextmenu.prevent="handleContextMenu($event, tab)"
     >
       <span class="tab-icon">📄</span> {{ tab.title }}
       <span
@@ -19,16 +20,40 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+import { useContextMenu } from '@/composables/useContextMenu'
+
 defineProps<{
   tabs: Array<{ id: string; title: string }>
   activeId: string
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   select: [id: string]
   close: [id: string]
+  closeOthers: [id: string]
+  save: [id: string]
+  rename: [id: string]
+  copySql: [id: string]
+  executeSql: [id: string]
   add: []
 }>()
+
+const { t } = useI18n()
+const ctxMenu = useContextMenu()
+
+function handleContextMenu(event: MouseEvent, tab: { id: string; title: string }) {
+  ctxMenu.show(event, [
+    { label: t('sql.tab.ctx.close'), action: () => emit('close', tab.id) },
+    { label: t('sql.tab.ctx.closeOthers'), action: () => emit('closeOthers', tab.id) },
+    { separator: true },
+    { label: t('sql.tab.ctx.save'), action: () => emit('save', tab.id) },
+    { label: t('sql.tab.ctx.rename'), action: () => emit('rename', tab.id) },
+    { separator: true },
+    { label: t('sql.tab.ctx.copySql'), action: () => emit('copySql', tab.id) },
+    { label: t('sql.tab.ctx.executeSql'), action: () => emit('executeSql', tab.id) },
+  ])
+}
 </script>
 
 <style scoped>

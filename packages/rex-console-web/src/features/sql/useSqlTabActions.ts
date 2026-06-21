@@ -41,6 +41,22 @@ export function useSqlTabActions(resourceId: string, onError?: (msg: string) => 
     }
   }
 
+  function closeOthers(id: string) {
+    const tab = tabs.value.find((t) => t.id === id)
+    if (!tab) return
+    tabs.value = [tab]
+    activeTabId.value = id
+  }
+
+  function renameTab(id: string, newTitle: string) {
+    const tab = tabs.value.find((t) => t.id === id)
+    if (tab) tab.title = newTitle
+  }
+
+  function getTabSql(id: string): string {
+    return tabs.value.find((t) => t.id === id)?.sql ?? ''
+  }
+
   function clearEditor() {
     const tab = tabs.value.find((t) => t.id === activeTabId.value)
     if (tab) tab.sql = ''
@@ -87,6 +103,9 @@ export function useSqlTabActions(resourceId: string, onError?: (msg: string) => 
     activeTab,
     addTab,
     closeTab,
+    closeOthers,
+    renameTab,
+    getTabSql,
     clearEditor,
     execute,
     handleSort,
