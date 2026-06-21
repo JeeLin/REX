@@ -635,10 +635,13 @@ onMounted(() => {
     transform: translateX(-100%);
     transition: transform var(--transition-normal);
     width: var(--sidebar-width) !important;
+    z-index: calc(var(--z-sticky) + 2);
+    pointer-events: none;
   }
 
   .sidebar.open {
     transform: translateX(0);
+    pointer-events: auto;
   }
 
   .main-content {

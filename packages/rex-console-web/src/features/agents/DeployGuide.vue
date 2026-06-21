@@ -30,20 +30,6 @@
               ⬇ {{ dl.label }}
             </a>
           </div>
-          <div class="code-block">
-            <pre><code><span class="code-comment"># Linux (x86_64)</span>
-curl -fsSL https://get.rexhub.dev/agent/linux-amd64 -o rex-agent
-chmod +x rex-agent
-
-<span class="code-comment"># macOS (Apple Silicon)</span>
-curl -fsSL https://get.rexhub.dev/agent/darwin-arm64 -o rex-agent
-chmod +x rex-agent
-
-<span class="code-comment"># Windows: download .exe from GitHub Releases</span></code></pre>
-            <button class="copy-btn" @click="copyCmd('binary')">
-              {{ copyLabels.binary }}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -256,15 +242,6 @@ const downloads = [
 ]
 
 const CMD_MAP: Record<string, string> = {
-  binary: `# Linux (x86_64)
-curl -fsSL https://get.rexhub.dev/agent/linux-amd64 -o rex-agent
-chmod +x rex-agent
-
-# macOS (Apple Silicon)
-curl -fsSL https://get.rexhub.dev/agent/darwin-arm64 -o rex-agent
-chmod +x rex-agent
-
-# Windows: download .exe from GitHub Releases`,
   token: '',
   startBinary: `./rex-agent \\
   --server https://hub.example.com \\
@@ -490,5 +467,29 @@ function copyCmd(key: string) {
 .copy-btn:hover {
   color: var(--text-primary);
   border-color: var(--accent);
+}
+
+@media (max-width: 767px) {
+  .setup-tabs {
+    flex-wrap: wrap;
+  }
+
+  .download-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-sm);
+  }
+
+  .token-box {
+    flex-wrap: wrap;
+  }
+
+  .code-block {
+    font-size: var(--fs-xs);
+  }
+
+  .code-block code {
+    font-size: var(--fs-xs);
+  }
 }
 </style>

@@ -173,6 +173,8 @@ export default {
     step2: '基本信息',
     step3: '连接详情',
     step4: '完成',
+    env: '所属环境',
+    envPlaceholder: '选择环境',
     protocol: '协议',
     protocolPlaceholder: '选择资源协议',
     name: '资源名称',
@@ -204,6 +206,9 @@ export default {
     },
     createBtn: '创建资源',
     created: '资源创建成功',
+    testConnection: '测试连接',
+    testing: '测试中...',
+    testSuccess: '连接成功',
   },
   agent: {
     title: 'Agent 管理',

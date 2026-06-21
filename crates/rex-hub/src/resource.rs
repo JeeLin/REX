@@ -1,6 +1,7 @@
 use axum::extract::{Path, State};
 use axum::http::{header::HeaderMap, StatusCode};
 use axum::Json;
+use rex_common::sql::SqlConnector;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -240,4 +241,87 @@ pub async fn delete_resource(
     );
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TestConnectionRequest {
+    pub protocol: String,
+    pub config_json: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TestConnectionResponse {
+    pub success: bool,
+    pub message: String,
+    pub latency_ms: Option<u64>,
+}
+
+pub async fn test_connection(
+    State(state): State<Arc<AppState>>,
+    Json(input): Json<TestConnectionRequest>,
+) -> Result<Json<ApiResponse<TestConnectionResponse>>, (StatusCode, Json<ErrorResponse>)> {
+    if !VALID_PROTOCOLS.contains(&input.protocol.as_str()) {
+        return Err(bad_request(&format!("不支持的协议: {}", input.protocol)));
+    }
+
+    let start = std::time::Instant::now();
+    let result = match input.protocol.as_str() {
+        "ssh" | "sftp" => {
+            let config = crate::ssh_config::SshResourceConfig::from_json(&input.config_json)
+                .map_err(|e| bad_request(&format!("配置解析失败: {}", e)))?;
+            let auth = config
+                .to_auth_method(&state.secret_key)
+                .map_err(|e| bad_request(&format!("认证配置错误: {}", e)))?;
+            match rex_ssh::client::SshClient::connect(
+                &config.host,
+                config.port,
+                &config.username,
+                auth,
+            )
+            .await
+            {
+                Ok(mut client) => {
+                    let _ = client.disconnect().await;
+                    Ok(())
+                }
+                Err(e) => Err(e.to_string()),
+            }
+        }
+        "mysql" | "postgresql" => {
+            let connector: Box<dyn SqlConnector> = match input.protocol.as_str() {
+                "mysql" => Box::new(
+                    rex_mysql::MySqlConnector::from_json(&input.config_json)
+                        .map_err(|e| bad_request(&format!("配置解析失败: {}", e)))?,
+                ),
+                _ => Box::new(
+                    rex_postgresql::PostgresConnector::from_json(&input.config_json)
+                        .map_err(|e| bad_request(&format!("配置解析失败: {}", e)))?,
+                ),
+            };
+            test_sql_connector(connector).await
+        }
+        _ => Err(format!("{} 协议暂不支持测试连接", input.protocol)),
+    };
+    let latency = start.elapsed().as_millis() as u64;
+
+    let resp = match result {
+        Ok(()) => TestConnectionResponse {
+            success: true,
+            message: "连接成功".to_string(),
+            latency_ms: Some(latency),
+        },
+        Err(e) => TestConnectionResponse {
+            success: false,
+            message: e,
+            latency_ms: None,
+        },
+    };
+
+    Ok(Json(ApiResponse { data: resp }))
+}
+
+async fn test_sql_connector(mut connector: Box<dyn SqlConnector>) -> Result<(), String> {
+    connector.connect().await.map_err(|e| e.to_string())?;
+    let _ = connector.close().await;
+    Ok(())
 }

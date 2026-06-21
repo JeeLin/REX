@@ -16,7 +16,7 @@
       <div class="step-line" :class="{ active: step > 1 }"></div>
       <div class="step" :class="{ active: step === 2, done: step > 2 }">
         <span class="step-num">{{ step > 2 ? '✓' : '2' }}</span>
-        <span class="step-label">{{ t('resource.step3') }}</span>
+        <span class="step-label">{{ t('resource.step2') }}</span>
       </div>
       <div class="step-line" :class="{ active: step > 2 }"></div>
       <div class="step" :class="{ active: step === 3 }">
@@ -96,6 +96,13 @@
             class="form-input"
             placeholder="~/.ssh/id_rsa"
           />
+        </div>
+        <div class="test-connection-row">
+          <button type="button" class="btn btn-ghost btn-sm" :disabled="testState === 'testing'" @click="testConnection">
+            {{ testState === 'testing' ? t('resource.testing') : t('resource.testConnection') }}
+          </button>
+          <span v-if="testState === 'success'" class="test-success">✓ {{ t('resource.testSuccess') }}</span>
+          <span v-if="testState === 'fail'" class="test-fail">✕ {{ testMessage }}</span>
         </div>
       </form>
     </div>
@@ -189,11 +196,22 @@ function prevStep() {
   if (step.value > 1) step.value--
 }
 
-async function submitResource() {
-  // Transform sshConfig to match backend SshResourceConfig format
-  const config = {
+const testState = ref<'idle' | 'testing' | 'success' | 'fail'>('idle')
+const testMessage = ref('')
+
+function buildConfigJson() {
+  const port = parseInt(sshConfig.port) || (form.protocol === 'mysql' ? 3306 : form.protocol === 'postgresql' ? 5432 : 22)
+  if (form.protocol === 'mysql' || form.protocol === 'postgresql') {
+    return JSON.stringify({
+      host: sshConfig.host,
+      port,
+      user: sshConfig.user,
+      password: sshConfig.password,
+    })
+  }
+  return JSON.stringify({
     host: sshConfig.host,
-    port: parseInt(sshConfig.port) || 22,
+    port,
     username: sshConfig.user,
     auth: {
       type: sshConfig.auth,
@@ -201,8 +219,31 @@ async function submitResource() {
         ? { password: sshConfig.password }
         : { private_key_path: sshConfig.keyFile }),
     },
+  })
+}
+
+async function testConnection() {
+  testState.value = 'testing'
+  testMessage.value = ''
+  try {
+    const resp = await client.post<{ success: boolean; message: string; latency_ms?: number }>(
+      '/resources/test-connection',
+      { protocol: form.protocol, config_json: buildConfigJson() },
+    )
+    if (resp.data.success) {
+      testState.value = 'success'
+    } else {
+      testState.value = 'fail'
+      testMessage.value = resp.data.message
+    }
+  } catch {
+    testState.value = 'fail'
+    testMessage.value = '请求失败'
   }
-  form.config_json = JSON.stringify(config)
+}
+
+async function submitResource() {
+  form.config_json = buildConfigJson()
   try {
     await client.post(`/environments/${envId}/resources`, form)
     step.value = 3
@@ -236,13 +277,8 @@ async function submitResource() {
   color: var(--text-muted);
 }
 
-.step.active {
-  color: var(--accent);
-}
-
-.step.done {
-  color: var(--success);
-}
+.step.active { color: var(--accent); }
+.step.done { color: var(--success); }
 
 .step-num {
   width: 28px;
@@ -282,9 +318,7 @@ async function submitResource() {
   transition: background var(--transition-base);
 }
 
-.step-line.active {
-  background: var(--accent);
-}
+.step-line.active { background: var(--accent); }
 
 .step-content {
   max-width: 640px;
@@ -313,9 +347,7 @@ async function submitResource() {
   text-align: center;
 }
 
-.protocol-card:hover {
-  border-color: var(--accent);
-}
+.protocol-card:hover { border-color: var(--accent); }
 
 .protocol-card.selected {
   border-color: var(--accent);
@@ -418,12 +450,28 @@ async function submitResource() {
   padding: 0 var(--sp-xl);
 }
 
+.test-connection-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-md);
+  padding-top: var(--sp-md);
+  border-top: 1px solid var(--border);
+}
+
+.test-success {
+  color: var(--success);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.test-fail {
+  color: var(--danger);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
 @media (max-width: 767px) {
-  .protocol-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .form-row {
-    flex-direction: column;
-  }
+  .protocol-grid { grid-template-columns: repeat(2, 1fr); }
+  .form-row { flex-direction: column; }
 }
 </style>

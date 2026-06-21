@@ -97,6 +97,10 @@ pub fn app_with_static(
                 .put(resource::update_resource)
                 .delete(resource::delete_resource),
         )
+        .route(
+            "/api/resources/test-connection",
+            post(resource::test_connection),
+        )
         .route("/api/environments/:env_id/agents", get(agent::list_agents))
         .route("/api/audit-log", get(audit::list_audit_log))
         .route(

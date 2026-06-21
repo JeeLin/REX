@@ -204,6 +204,9 @@ export default {
     },
     createBtn: 'Create Resource',
     created: 'Resource created successfully',
+    testConnection: 'Test Connection',
+    testing: 'Testing...',
+    testSuccess: 'Connected',
   },
   agent: {
     title: 'Agent Management',
