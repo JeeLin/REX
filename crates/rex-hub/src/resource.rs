@@ -186,6 +186,24 @@ pub async fn update_resource(
         ).map_err(|_| not_found("RESOURCE_NOT_FOUND", "资源不存在"))?;
         let name = input.name.unwrap_or(existing.name);
         let config_json = input.config_json.unwrap_or(existing.config_json);
+
+        // 校验更新后的 config_json 格式
+        match existing.protocol.as_str() {
+            "ssh" | "sftp" => {
+                crate::ssh_config::SshResourceConfig::from_json(&config_json)
+                    .map_err(|e| bad_request(&format!("SSH 配置无效: {}", e)))?;
+            }
+            "mysql" => {
+                rex_mysql::MySqlConnector::from_json(&config_json)
+                    .map_err(|e| bad_request(&format!("MySQL 配置无效: {}", e)))?;
+            }
+            "postgresql" => {
+                rex_postgresql::PostgresConnector::from_json(&config_json)
+                    .map_err(|e| bad_request(&format!("PostgreSQL 配置无效: {}", e)))?;
+            }
+            _ => {}
+        }
+
         let now = now_iso();
         conn.execute(
             "UPDATE resources SET name = ?1, config_json = ?2, updated_at = ?3 WHERE id = ?4",
