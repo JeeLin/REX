@@ -11,7 +11,11 @@ export interface QueryTab {
   queryId: string | null
 }
 
-export function useSqlTabActions(resourceId: string, onError?: (msg: string) => void) {
+export function useSqlTabActions(
+  resourceId: string,
+  onError?: (msg: string) => void,
+  onExecuted?: (sql: string, result: SqlResult) => void,
+) {
   const tabs = ref<QueryTab[]>([])
   const activeTabId = ref('')
   const executing = ref(false)
@@ -93,7 +97,9 @@ export function useSqlTabActions(resourceId: string, onError?: (msg: string) => 
     if (!sql.trim() || executing.value) return
     executing.value = true
     try {
-      activeTab.value.result = await executeSql(resourceId, sql)
+      const result = await executeSql(resourceId, sql)
+      activeTab.value.result = result
+      onExecuted?.(sql, result)
     } catch (e: any) {
       activeTab.value.result = { columns: [], rows: [], affected_rows: 0, elapsed_ms: 0 }
       const msg = e.response?.data?.error?.message || e.message || '执行失败'

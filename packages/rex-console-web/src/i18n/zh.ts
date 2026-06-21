@@ -428,6 +428,14 @@ export default {
       },
     },
     savePrompt: '输入查询名称:',
+    history: {
+      title: '执行历史',
+      search: '搜索 SQL...',
+      clear: '清空历史',
+      empty: '暂无执行历史',
+      copy: '📋 复制',
+      copySuccess: '已复制到剪贴板',
+    },
     tab: {
       ctx: {
         close: '关闭',

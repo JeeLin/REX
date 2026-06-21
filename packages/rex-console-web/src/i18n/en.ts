@@ -426,6 +426,14 @@ export default {
       },
     },
     savePrompt: 'Enter query name:',
+    history: {
+      title: 'Execution History',
+      search: 'Search SQL...',
+      clear: 'Clear History',
+      empty: 'No execution history',
+      copy: '📋 Copy',
+      copySuccess: 'Copied to clipboard',
+    },
     tab: {
       ctx: {
         close: 'Close',

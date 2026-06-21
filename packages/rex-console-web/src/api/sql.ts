@@ -141,3 +141,46 @@ export function renameQuery(
     .put(`/resources/${resourceId}/queries/${id}/rename`, { name })
     .then((r) => r.data.data)
 }
+
+// ── 历史记录 API ──────────────────────────────────────────
+
+export interface HistoryRecord {
+  id: string
+  sql: string
+  database: string
+  executed_at: string
+  elapsed_ms: number
+  row_count: number
+}
+
+/** 列出 SQL 执行历史 */
+export function listHistory(resourceId: string): Promise<HistoryRecord[]> {
+  return client
+    .get(`/resources/${resourceId}/sql/history`)
+    .then((r) => r.data.data)
+}
+
+/** 清空 SQL 执行历史 */
+export function clearHistory(resourceId: string): Promise<void> {
+  return client
+    .delete(`/resources/${resourceId}/sql/history`)
+    .then(() => undefined)
+}
+
+/** 记录一条 SQL 执行历史 */
+export function recordHistory(
+  resourceId: string,
+  sql: string,
+  database: string,
+  elapsedMs: number,
+  rowCount: number,
+): Promise<void> {
+  return client
+    .post(`/resources/${resourceId}/sql/history`, {
+      sql,
+      database,
+      elapsed_ms: elapsedMs,
+      row_count: rowCount,
+    })
+    .then(() => undefined)
+}

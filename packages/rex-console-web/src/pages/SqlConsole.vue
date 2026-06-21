@@ -62,13 +62,19 @@
           @execute="execute(activeTab.sql)"
           @execute-selection="execute"
           @save="handleToolbarSave"
-          @show-history="() => {}"
+          @show-history="showHistoryPanel = true"
         />
         <SqlResults
           :result="activeTab.result"
           :loading="executing"
           @sort="handleSort"
           @generate-sql="handleGenerateSql"
+        />
+        <SqlHistoryPanel
+          :resource-id="resourceId"
+          :visible="showHistoryPanel"
+          @close="showHistoryPanel = false"
+          @select="handleHistorySelect"
         />
       </div>
     </div>
@@ -84,8 +90,9 @@ import SqlTabs from '@/features/sql/SqlTabs.vue'
 import SqlSidebar from '@/features/sql/SqlSidebar.vue'
 import SqlEditor from '@/features/sql/SqlEditor.vue'
 import SqlResults from '@/features/sql/SqlResults.vue'
-import { listDatabases, getResourceInfo, getQuery, saveQuery, updateQuery } from '@/api/sql'
-import type { DatabaseInfo, QueryFileMeta } from '@/api/sql'
+import SqlHistoryPanel from '@/features/sql/SqlHistoryPanel.vue'
+import { listDatabases, getResourceInfo, getQuery, saveQuery, updateQuery, recordHistory } from '@/api/sql'
+import type { DatabaseInfo, QueryFileMeta, HistoryRecord, SqlResult } from '@/api/sql'
 import { useSqlTabActions } from '@/features/sql/useSqlTabActions'
 
 const { t } = useI18n()
@@ -98,13 +105,21 @@ const {
   addTab, closeTab, closeOthers, renameTab, getTabSql,
   clearEditor, openQueryFile, markSaved, getQueryId,
   execute, handleSort, handleGenerateSql,
-} = useSqlTabActions(resourceId, (msg) => alert(msg))
+} = useSqlTabActions(
+  resourceId,
+  (msg) => alert(msg),
+  (sql: string, result: SqlResult) => {
+    // 自动记录执行历史
+    recordHistory(resourceId, sql, selectedDb.value, result.elapsed_ms, result.rows.length)
+  },
+)
 
 // Resource info
 const resource = ref<{ name: string; protocol: string } | null>(null)
 const databases = ref<DatabaseInfo[]>([])
 const selectedDb = ref('')
 const sidebarRef = ref<InstanceType<typeof SqlSidebar>>()
+const showHistoryPanel = ref(false)
 
 function insertTableSql(tableName: string) {
   const tab = tabs.value.find((t) => t.id === activeTabId.value)
@@ -149,7 +164,7 @@ function handleToolbarSave() {
 }
 
 function handleTabRename(id: string) {
-  const newTitle = prompt('输入新名称:')
+  const newTitle = prompt(t('sql.sidebar.renamePrompt'))
   if (newTitle) renameTab(id, newTitle)
 }
 
@@ -164,11 +179,20 @@ function handleTabExecuteSql(id: string) {
 }
 
 function handleQueryDeleted() {
-  // 如果当前标签是已删除的查询文件，可以清空 queryId
+  const tab = tabs.value.find((t) => t.id === activeTabId.value)
+  if (tab) tab.queryId = null
 }
 
 function handleQueryRenamed() {
-  // 侧边栏会自动刷新
+  // 侧边栏自动刷新，无需额外处理
+}
+
+function handleHistorySelect(record: HistoryRecord) {
+  const tab = tabs.value.find((t) => t.id === activeTabId.value)
+  if (tab) {
+    tab.sql = record.sql
+  }
+  showHistoryPanel.value = false
 }
 
 async function loadDatabases() {
