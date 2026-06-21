@@ -1,5 +1,5 @@
 <template>
-  <div class="terminal-layout">
+  <div class="terminal-layout" @contextmenu.prevent="showContextMenu">
     <!-- 工具栏 -->
     <div class="terminal-toolbar">
       <div class="toolbar-info">
@@ -9,13 +9,14 @@
       <div class="toolbar-spacer"></div>
       <div class="toolbar-actions">
         <button class="btn btn-ghost btn-sm" @click="clearTerminal">清屏</button>
+        <button class="btn btn-ghost btn-sm" @click="handleCopy">复制</button>
         <button class="btn btn-ghost btn-sm" @click="handlePaste">粘贴</button>
         <button class="btn btn-sm btn-danger" @click="confirmDisconnect">断开</button>
       </div>
     </div>
 
     <!-- 终端容器 -->
-    <div ref="terminalContainer" class="terminal-container"></div>
+    <div ref="terminalContainer" class="terminal-container" @contextmenu.prevent="showContextMenu"></div>
 
     <!-- 状态栏 -->
     <div class="terminal-statusbar">
@@ -23,9 +24,21 @@
       <span>·</span>
       <span>UTF-8</span>
       <span class="spacer"></span>
+      <span style="font-size: 11px; opacity: 0.7">Ctrl+Shift+C 复制 · Ctrl+Shift+V 粘贴</span>
+      <span class="spacer"></span>
       <span v-if="connectionStatus === 'connected'" style="color: var(--success)">已连接</span>
       <span v-else-if="connectionStatus === 'connecting'" style="color: var(--warning)">连接中...</span>
       <span v-else style="color: var(--danger)">未连接</span>
+    </div>
+
+    <!-- 右键菜单 -->
+    <div
+      v-if="contextMenu.visible"
+      class="ctx-menu"
+      :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+    >
+      <button class="ctx-menu-item" @click="handleCopy">复制</button>
+      <button class="ctx-menu-item" @click="handlePaste">粘贴</button>
     </div>
 
     <!-- 断开确认弹窗 -->
@@ -58,6 +71,7 @@ const terminalContainer = ref<HTMLElement>()
 const connectionStatus = ref<'connecting' | 'connected' | 'disconnected'>('disconnected')
 const showDisconnectDialog = ref(false)
 const resourceName = ref(resourceId)
+const contextMenu = ref({ visible: false, x: 0, y: 0 })
 
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
@@ -83,6 +97,10 @@ function initTerminal() {
   terminal.loadAddon(fitAddon)
   terminal.open(terminalContainer.value)
   fitAddon.fit()
+
+  // 注册键盘快捷键（Ctrl+Shift+C/V）和粘贴事件
+  window.addEventListener('keydown', handleKeydown)
+  terminalContainer.value?.addEventListener('paste', handlePasteEvent as any)
 
   terminal.onData((data: string) => {
     if (ws?.readyState === WebSocket.OPEN) {
@@ -166,8 +184,17 @@ function clearTerminal() {
   terminal?.clear()
 }
 
+function handleCopy() {
+  if (!terminal) return
+  const text = terminal.getSelection()
+  if (text) {
+    navigator.clipboard.writeText(text).catch(() => {})
+  }
+}
+
 async function handlePaste() {
   try {
+    // 优先尝试 Clipboard API（需要 HTTPS 或 localhost）
     const text = await navigator.clipboard.readText()
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
@@ -176,7 +203,45 @@ async function handlePaste() {
       }))
     }
   } catch {
-    // clipboard access denied
+    // HTTP 环境下 Clipboard API 不可用，提示用户使用 Ctrl+V 粘贴
+    terminal?.write('\r\n\x1b[33m提示: 请使用 Ctrl+V 粘贴内容\x1b[0m')
+  }
+}
+
+function handlePasteEvent(e: ClipboardEvent) {
+  const text = e.clipboardData?.getData('text')
+  if (text && ws?.readyState === WebSocket.OPEN) {
+    e.preventDefault()
+    ws.send(JSON.stringify({
+      type: 'terminal.input',
+      payload: { data: btoa(text) },
+    }))
+  }
+}
+
+function showContextMenu(e: MouseEvent) {
+  contextMenu.value = { visible: true, x: e.clientX, y: e.clientY }
+
+  const close = () => {
+    contextMenu.value.visible = false
+    document.removeEventListener('click', close)
+  }
+  // 延迟绑定，避免当前点击立即关闭
+  setTimeout(() => document.addEventListener('click', close), 0)
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  // Ctrl+Shift+C → 复制
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
+    e.preventDefault()
+    handleCopy()
+    return
+  }
+  // Ctrl+Shift+V → 粘贴
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'V') {
+    e.preventDefault()
+    handlePaste()
+    return
   }
 }
 
@@ -204,6 +269,7 @@ onBeforeUnmount(() => {
     deleteSession(sessionId).catch(() => {})
   }
   window.removeEventListener('resize', handleResize)
+  window.removeEventListener('keydown', handleKeydown)
   terminal?.dispose()
 })
 </script>
@@ -310,5 +376,33 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: flex-end;
   gap: var(--sp-sm);
+}
+
+.ctx-menu {
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 4px 0;
+  min-width: 120px;
+}
+
+.ctx-menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ctx-menu-item:hover {
+  background: var(--bg-hover);
 }
 </style>
