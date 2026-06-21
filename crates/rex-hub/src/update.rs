@@ -124,7 +124,7 @@ pub async fn check_update(
 
 /// POST /api/update/download — 下载新版本
 pub async fn download_update(
-    State(state): State<Arc<AppState>>,
+    State(_state): State<Arc<AppState>>,
     Json(input): Json<DownloadRequest>,
 ) -> Result<Json<ApiResponse<DownloadProgress>>, (StatusCode, Json<ErrorResponse>)> {
     let current = rex_common::version::VersionInfo::current();

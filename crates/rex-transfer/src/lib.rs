@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 // ── 文件类型 ──────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum FileType {
     File,
     Directory,
@@ -81,8 +82,8 @@ mod tests {
     fn file_type_serializes_as_expected() {
         let file = FileType::File;
         let dir = FileType::Directory;
-        assert_eq!(serde_json::to_string(&file).unwrap(), "\"File\"");
-        assert_eq!(serde_json::to_string(&dir).unwrap(), "\"Directory\"");
+        assert_eq!(serde_json::to_string(&file).unwrap(), "\"file\"");
+        assert_eq!(serde_json::to_string(&dir).unwrap(), "\"directory\"");
     }
 
     #[test]
