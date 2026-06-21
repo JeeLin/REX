@@ -1,0 +1,69 @@
+# M20 步骤5：代码审查报告
+
+## 审查范围
+
+M20 共 3 个子任务，涉及 8 个文件的变更（3 个前端源文件 + 2 个 i18n 文件 + 3 个文档文件）。
+
+审查聚焦前端源码变更：
+- `TabBar.vue` — dragId prop + dblclick emit
+- `Workspace.vue` — panel drag-and-drop + double-click split
+- `WorkspaceTerminal.vue` — toolbar context menu
+- `useTabs.ts` — swapPanels method
+- `i18n/zh.ts`, `i18n/en.ts` — 新增 i18n 键
+
+---
+
+## 🔴 必须修复
+
+### CR-1: 路由名不存在导致导航静默失败
+
+**文件**: `WorkspaceTerminal.vue:352`
+**代码**: `router.push({ name: 'resource', params: { id: props.resourceId } })`
+**问题**: `router.ts` 中不存在名为 `resource` 的路由。Vue Router 遇到未知路由名时会静默失败（控制台 warning，页面不跳转）。用户点击"打开连接详情"不会有任何响应。
+**修复方案**: 改为跳转到 `environment-detail` 路由（需要查询资源所属环境），或改为复制资源 ID 到剪贴板作为临时方案。
+
+---
+
+## 🟡 应该修复
+
+### CR-2: 未使用的 i18n 键
+
+**文件**: `i18n/zh.ts:88-89`, `i18n/en.ts:88-89`
+**代码**: `ws.panel.dropHere` 和 `ws.panel.swap`
+**问题**: 这两个键在模板中未被引用。面板拖拽的 drop zone 仅使用 CSS 类 `layout-drop-zone` 提供视觉反馈，没有显示文字标签。
+**建议**: 删除未使用的 i18n 键，或在 drop zone 中添加文字提示（如"放置到此面板"）。
+
+### CR-3: navigator.clipboard.writeText 未处理异常
+
+**文件**: `WorkspaceTerminal.vue:348`
+**代码**: `navigator.clipboard.writeText(...)` 在无 HTTPS 或权限被拒绝时会抛出异常。
+**建议**: 添加 try-catch 包裹，与其他 clipboard 调用保持一致（`handleContextMenu` 中同样缺少，但不在 M20 范围内）。
+
+---
+
+## 🟢 可选改进
+
+### CR-4: onPanelDragOver 中 dragOverPanel 可能闪烁
+
+**文件**: `Workspace.vue:219-223`
+**问题**: `@dragleave` 事件在子元素间移动时也会触发，导致 `dragOverPanel` 在拖拽经过面板内子元素边界时反复设置/清除，造成 drop zone 高亮闪烁。
+**建议**: 可通过在 dragleave 中检查 `e.relatedTarget` 是否仍在当前面板内来避免，或使用计数器模式。当前视觉影响较小，可后续优化。
+
+---
+
+## 审查维度总结
+
+| 维度 | 结果 |
+|------|------|
+| 正确性 | 🔴 CR-1 路由名不存在 |
+| 安全性 | ✅ 无敏感信息泄露，clipboard 操作为用户主动触发 |
+| 架构一致性 | ✅ 使用现有 useContextMenu composable，符合单用户模型 |
+| 测试覆盖 | ✅ 待步骤6验证 |
+| 错误处理 | 🟡 CR-3 clipboard 未处理异常 |
+| 文档一致性 | ✅ 与 M20 里程碑文档一致 |
+
+---
+
+## 结论
+
+🔴 1 项必须修复（CR-1：路由名不存在）。需要修复后重新审查。
