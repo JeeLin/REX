@@ -25,7 +25,7 @@
 
     <!-- Toolbar -->
     <div class="sql-toolbar">
-      <button class="btn btn-run btn-sm" @click="handleExecute">
+      <button class="btn btn-run btn-sm" @click="execute(activeTab.sql)">
         ▶ {{ t('sql.execute') }}
       </button>
       <div class="sql-toolbar-sep"></div>
@@ -48,15 +48,26 @@
 
       <!-- Right: Editor + Results -->
       <div class="sql-right">
-        <SqlEditor v-model="activeTab.sql" @execute="handleExecute" />
-        <SqlResults :result="activeTab.result" :loading="executing" />
+        <SqlEditor
+          v-model="activeTab.sql"
+          @execute="execute(activeTab.sql)"
+          @execute-selection="execute"
+          @save="() => {}"
+          @show-history="() => {}"
+        />
+        <SqlResults
+          :result="activeTab.result"
+          :loading="executing"
+          @sort="handleSort"
+          @generate-sql="handleGenerateSql"
+        />
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import SqlTopbar from '@/features/sql/SqlTopbar.vue'
@@ -64,94 +75,28 @@ import SqlTabs from '@/features/sql/SqlTabs.vue'
 import SqlSidebar from '@/features/sql/SqlSidebar.vue'
 import SqlEditor from '@/features/sql/SqlEditor.vue'
 import SqlResults from '@/features/sql/SqlResults.vue'
-import { listDatabases, executeSql, getResourceInfo } from '@/api/sql'
-import type { DatabaseInfo, SqlResult } from '@/api/sql'
+import { listDatabases, getResourceInfo } from '@/api/sql'
+import type { DatabaseInfo } from '@/api/sql'
+import { useSqlTabActions } from '@/features/sql/useSqlTabActions'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const resourceId = route.params.resourceId as string
 
+const {
+  tabs, activeTabId, executing, tabList, activeTab,
+  addTab, closeTab, clearEditor, execute, handleSort, handleGenerateSql,
+} = useSqlTabActions(resourceId, (msg) => alert(msg))
+
 // Resource info
 const resource = ref<{ name: string; protocol: string } | null>(null)
 const databases = ref<DatabaseInfo[]>([])
 const selectedDb = ref('')
 
-// Tabs
-interface QueryTab {
-  id: string
-  title: string
-  sql: string
-  result: SqlResult | null
-}
-
-let tabCounter = 0
-const tabs = ref<QueryTab[]>([])
-const activeTabId = ref('')
-
-const tabList = computed(() =>
-  tabs.value.map((t) => ({ id: t.id, title: t.title })),
-)
-
-const activeTab = computed(() => {
-  const tab = tabs.value.find((t) => t.id === activeTabId.value)
-  return tab ?? tabs.value[0] ?? { id: '', title: '', sql: '', result: null }
-})
-
-const executing = ref(false)
-
-function addTab() {
-  tabCounter++
-  const id = `tab-${Date.now()}-${tabCounter}`
-  tabs.value.push({
-    id,
-    title: `查询 ${tabCounter}`,
-    sql: '',
-    result: null,
-  })
-  activeTabId.value = id
-}
-
-function closeTab(id: string) {
-  const idx = tabs.value.findIndex((t) => t.id === id)
-  if (idx < 0) return
-  tabs.value.splice(idx, 1)
-  if (tabs.value.length === 0) {
-    addTab()
-  }
-  if (activeTabId.value === id) {
-    activeTabId.value = tabs.value[Math.min(idx, tabs.value.length - 1)].id
-  }
-}
-
-function clearEditor() {
-  const tab = tabs.value.find((t) => t.id === activeTabId.value)
-  if (tab) tab.sql = ''
-}
-
 function insertTableSql(tableName: string) {
   const tab = tabs.value.find((t) => t.id === activeTabId.value)
   if (tab) tab.sql = `SELECT * FROM ${tableName} LIMIT 100;`
-}
-
-async function handleExecute() {
-  const sql = activeTab.value.sql.trim()
-  if (!sql || executing.value) return
-  executing.value = true
-  try {
-    activeTab.value.result = await executeSql(resourceId, sql)
-  } catch (e: any) {
-    activeTab.value.result = {
-      columns: [],
-      rows: [],
-      affected_rows: 0,
-      elapsed_ms: 0,
-    }
-    const msg = e.response?.data?.error?.message || e.message || '执行失败'
-    alert(msg)
-  } finally {
-    executing.value = false
-  }
 }
 
 async function loadDatabases() {

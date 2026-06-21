@@ -14,9 +14,11 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(row, i) in result.rows" :key="i">
+          <tr v-for="(row, i) in result.rows" :key="i" @contextmenu.prevent="handleRowContextMenu($event, i)">
             <td class="text-muted">{{ i + 1 }}</td>
-            <td v-for="(cell, j) in row" :key="j" :class="cellClass(cell)">
+            <td v-for="(cell, j) in row" :key="j"
+              :class="cellClass(cell)"
+              @contextmenu.prevent="handleCellContextMenu($event, i, j)">
               {{ formatCell(cell) }}
             </td>
           </tr>
@@ -41,13 +43,20 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { useContextMenu } from '@/composables/useContextMenu'
 import type { SqlResult } from '@/api/sql'
 
 const { t } = useI18n()
+const { show: showMenu } = useContextMenu()
 
-defineProps<{
+const props = defineProps<{
   result: SqlResult | null
   loading: boolean
+}>()
+
+const emit = defineEmits<{
+  (e: 'sort', column: string, direction: 'asc' | 'desc'): void
+  (e: 'generateSql', sql: string): void
 }>()
 
 function cellClass(cell: unknown): string {
@@ -62,6 +71,69 @@ function formatCell(cell: unknown): string {
     return cell.toLocaleString()
   }
   return String(cell)
+}
+
+function copyToClipboard(text: string) {
+  navigator.clipboard.writeText(text)
+}
+
+function rowToTsv(row: unknown[]): string {
+  return row.map((c) => c === null ? 'NULL' : String(c)).join('\t')
+}
+
+function rowToJson(row: unknown[], columns: { name: string }[]): Record<string, unknown> {
+  const obj: Record<string, unknown> = {}
+  columns.forEach((c, i) => { obj[c.name] = row[i] })
+  return obj
+}
+
+function formatValStr(val: unknown): string {
+  return val === null ? 'NULL' : typeof val === 'string' ? `'${val.replace(/'/g, "''")}'` : String(val)
+}
+
+function generateUpdateSql(row: unknown[], columns: { name: string }[]): string {
+  const setClauses = columns.map((c, i) => `  ${c.name} = ${formatValStr(row[i])}`)
+  return `UPDATE table_name\nSET\n${setClauses.join(',\n')}\nWHERE id = ${row[0] ?? '...'};`
+}
+
+function generateDeleteSql(row: unknown[]): string {
+  return `DELETE FROM table_name\nWHERE id = ${row[0] ?? '...'};`
+}
+
+function handleCellContextMenu(event: MouseEvent, rowIdx: number, colIdx: number) {
+  if (!props.result) return
+  const { columns, rows } = props.result
+  const row = rows[rowIdx]
+  const cell = row[colIdx]
+  const colName = columns[colIdx]?.name ?? `col${colIdx}`
+
+  showMenu(event, [
+    { label: t('sql.result.ctx.copyRow'), action: () => copyToClipboard(rowToTsv(row)) },
+    { label: t('sql.result.ctx.copyCell'), action: () => copyToClipboard(cell === null ? 'NULL' : String(cell)) },
+    { label: t('sql.result.ctx.copyColumn'), action: () => copyToClipboard(rows.map((r) => r[colIdx] === null ? 'NULL' : String(r[colIdx])).join('\n')) },
+    { label: t('sql.result.ctx.copyJson'), action: () => copyToClipboard(JSON.stringify(rowToJson(row, columns), null, 2)) },
+    { separator: true },
+    { label: t('sql.result.ctx.sortAsc'), action: () => emit('sort', colName, 'asc') },
+    { label: t('sql.result.ctx.sortDesc'), action: () => emit('sort', colName, 'desc') },
+    { separator: true },
+    { label: t('sql.result.ctx.exportRow'), action: () => copyToClipboard(JSON.stringify(rowToJson(row, columns))) },
+    { label: t('sql.result.ctx.generateUpdate'), action: () => emit('generateSql', generateUpdateSql(row, columns)) },
+    { label: t('sql.result.ctx.generateDelete'), action: () => emit('generateSql', generateDeleteSql(row)) },
+  ])
+}
+
+function handleRowContextMenu(event: MouseEvent, rowIdx: number) {
+  if (!props.result) return
+  const { columns, rows } = props.result
+  const row = rows[rowIdx]
+
+  showMenu(event, [
+    { label: t('sql.result.ctx.copyRow'), action: () => copyToClipboard(rowToTsv(row)) },
+    { label: t('sql.result.ctx.copyJson'), action: () => copyToClipboard(JSON.stringify(rowToJson(row, columns), null, 2)) },
+    { separator: true },
+    { label: t('sql.result.ctx.generateUpdate'), action: () => emit('generateSql', generateUpdateSql(row, columns)) },
+    { label: t('sql.result.ctx.generateDelete'), action: () => emit('generateSql', generateDeleteSql(row)) },
+  ])
 }
 </script>
 
