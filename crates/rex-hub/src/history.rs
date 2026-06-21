@@ -179,9 +179,7 @@ mod tests {
         let app = Router::new()
             .route(
                 "/api/resources/:resource_id/sql/history",
-                get(list_history)
-                    .post(record_history)
-                    .delete(clear_history),
+                get(list_history).post(record_history).delete(clear_history),
             )
             .with_state(state);
         (app, tmp)
