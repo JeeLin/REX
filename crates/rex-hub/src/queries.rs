@@ -46,6 +46,19 @@ pub struct QueryDetail {
     pub sql: String,
 }
 
+// ── 路径安全 ──────────────────────────────────────────────
+
+/// 构建查询目录路径，校验 resource_id 不含路径注入字符
+fn queries_dir(
+    state: &AppState,
+    resource_id: &str,
+) -> Result<std::path::PathBuf, (StatusCode, Json<ErrorResponse>)> {
+    if resource_id.contains('/') || resource_id.contains('\\') || resource_id.contains("..") {
+        return Err(bad_request("resource_id 包含非法字符"));
+    }
+    Ok(state.data_dir.join("queries").join(resource_id))
+}
+
 // ── 路由处理函数 ──────────────────────────────────────────
 
 /// GET /api/resources/:resource_id/queries — 列出该资源的所有查询文件
@@ -53,8 +66,8 @@ pub async fn list_queries(
     State(state): State<Arc<AppState>>,
     AxPath(resource_id): AxPath<String>,
 ) -> Result<Json<ApiResponse<Vec<QueryFileMeta>>>, (StatusCode, Json<ErrorResponse>)> {
-    let queries_dir = state.data_dir.join("queries").join(&resource_id);
-    let entries = list_query_files(&queries_dir)?;
+    let dir = queries_dir(&state, &resource_id)?;
+    let entries = list_query_files(&dir)?;
     Ok(Json(ApiResponse { data: entries }))
 }
 
@@ -71,8 +84,8 @@ pub async fn save_query(
         return Err(bad_request("SQL 不能为空"));
     }
 
-    let queries_dir = state.data_dir.join("queries").join(&resource_id);
-    std::fs::create_dir_all(&queries_dir)
+    let dir = queries_dir(&state, &resource_id)?;
+    std::fs::create_dir_all(&dir)
         .map_err(|e| err_resp("IO_ERROR", &format!("创建查询目录失败: {e}")))?;
 
     let id = crate::helpers::gen_id("q");
@@ -87,14 +100,14 @@ pub async fn save_query(
     };
 
     // 写入元数据
-    let meta_path = queries_dir.join(format!("{id}.json"));
+    let meta_path = dir.join(format!("{id}.json"));
     let meta_json = serde_json::to_string_pretty(&meta)
         .map_err(|e| err_resp("SERIALIZE_ERROR", &format!("序列化失败: {e}")))?;
     std::fs::write(&meta_path, meta_json)
         .map_err(|e| err_resp("IO_ERROR", &format!("写入元数据失败: {e}")))?;
 
     // 写入 SQL 内容
-    let sql_path = queries_dir.join(format!("{id}.sql"));
+    let sql_path = dir.join(format!("{id}.sql"));
     std::fs::write(&sql_path, &input.sql)
         .map_err(|e| err_resp("IO_ERROR", &format!("写入 SQL 失败: {e}")))?;
 
@@ -107,14 +120,11 @@ pub async fn get_query(
     State(state): State<Arc<AppState>>,
     AxPath((resource_id, id)): AxPath<(String, String)>,
 ) -> Result<Json<ApiResponse<QueryDetail>>, (StatusCode, Json<ErrorResponse>)> {
-    let queries_dir = state.data_dir.join("queries").join(&resource_id);
-
-    let meta = read_meta(&queries_dir, &id)?;
-
-    let sql_path = queries_dir.join(format!("{id}.sql"));
+    let dir = queries_dir(&state, &resource_id)?;
+    let meta = read_meta(&dir, &id)?;
+    let sql_path = dir.join(format!("{id}.sql"));
     let sql = std::fs::read_to_string(&sql_path)
         .map_err(|e| err_resp("IO_ERROR", &format!("读取 SQL 失败: {e}")))?;
-
     Ok(Json(ApiResponse {
         data: QueryDetail { meta, sql },
     }))
@@ -126,9 +136,8 @@ pub async fn update_query(
     AxPath((resource_id, id)): AxPath<(String, String)>,
     Json(input): Json<UpdateQueryRequest>,
 ) -> Result<Json<ApiResponse<QueryFileMeta>>, (StatusCode, Json<ErrorResponse>)> {
-    let queries_dir = state.data_dir.join("queries").join(&resource_id);
-
-    let mut meta = read_meta(&queries_dir, &id)?;
+    let dir = queries_dir(&state, &resource_id)?;
+    let mut meta = read_meta(&dir, &id)?;
 
     if let Some(name) = input.name {
         if name.trim().is_empty() {
@@ -142,7 +151,7 @@ pub async fn update_query(
     meta.updated_at = crate::helpers::now_iso();
 
     // 更新元数据
-    let meta_path = queries_dir.join(format!("{id}.json"));
+    let meta_path = dir.join(format!("{id}.json"));
     let meta_json = serde_json::to_string_pretty(&meta)
         .map_err(|e| err_resp("SERIALIZE_ERROR", &format!("序列化失败: {e}")))?;
     std::fs::write(&meta_path, meta_json)
@@ -150,7 +159,7 @@ pub async fn update_query(
 
     // 更新 SQL 内容（如果提供）
     if let Some(sql) = input.sql {
-        let sql_path = queries_dir.join(format!("{id}.sql"));
+        let sql_path = dir.join(format!("{id}.sql"));
         std::fs::write(&sql_path, &sql)
             .map_err(|e| err_resp("IO_ERROR", &format!("写入 SQL 失败: {e}")))?;
     }
@@ -164,17 +173,15 @@ pub async fn delete_query(
     State(state): State<Arc<AppState>>,
     AxPath((resource_id, id)): AxPath<(String, String)>,
 ) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
-    let queries_dir = state.data_dir.join("queries").join(&resource_id);
+    let dir = queries_dir(&state, &resource_id)?;
+    let _ = read_meta(&dir, &id)?;
 
-    // 验证文件存在
-    let _ = read_meta(&queries_dir, &id)?;
-
-    let meta_path = queries_dir.join(format!("{id}.json"));
-    let sql_path = queries_dir.join(format!("{id}.sql"));
+    let meta_path = dir.join(format!("{id}.json"));
+    let sql_path = dir.join(format!("{id}.sql"));
 
     std::fs::remove_file(&meta_path)
         .map_err(|e| err_resp("IO_ERROR", &format!("删除元数据失败: {e}")))?;
-    let _ = std::fs::remove_file(&sql_path); // SQL 文件可能不存在，忽略错误
+    let _ = std::fs::remove_file(&sql_path);
 
     info!(query_id = %id, resource = %resource_id, "query deleted");
     Ok(StatusCode::NO_CONTENT)
@@ -190,13 +197,12 @@ pub async fn rename_query(
         return Err(bad_request("查询名称不能为空"));
     }
 
-    let queries_dir = state.data_dir.join("queries").join(&resource_id);
-
-    let mut meta = read_meta(&queries_dir, &id)?;
+    let dir = queries_dir(&state, &resource_id)?;
+    let mut meta = read_meta(&dir, &id)?;
     meta.name = input.name;
     meta.updated_at = crate::helpers::now_iso();
 
-    let meta_path = queries_dir.join(format!("{id}.json"));
+    let meta_path = dir.join(format!("{id}.json"));
     let meta_json = serde_json::to_string_pretty(&meta)
         .map_err(|e| err_resp("SERIALIZE_ERROR", &format!("序列化失败: {e}")))?;
     std::fs::write(&meta_path, meta_json)
@@ -361,7 +367,9 @@ mod tests {
                     .method("POST")
                     .uri(queries_uri(""))
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"name":"","sql":"SELECT 1","database":"mydb"}"#))
+                    .body(Body::from(
+                        r#"{"name":"","sql":"SELECT 1","database":"mydb"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -378,7 +386,9 @@ mod tests {
                     .method("POST")
                     .uri(queries_uri(""))
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"name":"test","sql":"  ","database":"mydb"}"#))
+                    .body(Body::from(
+                        r#"{"name":"test","sql":"  ","database":"mydb"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -672,7 +682,9 @@ mod tests {
                     .method("POST")
                     .uri("/api/resources/res_a/queries")
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"name":"q1","sql":"SELECT 1","database":"db1"}"#))
+                    .body(Body::from(
+                        r#"{"name":"q1","sql":"SELECT 1","database":"db1"}"#,
+                    ))
                     .unwrap(),
             )
             .await
