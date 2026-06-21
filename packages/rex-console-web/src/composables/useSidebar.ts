@@ -6,6 +6,7 @@ import { useProtocol } from './useProtocol'
 
 const COLLAPSED_KEY = 'rex-sidebar-collapsed'
 const EXPANDED_ENVS_KEY = 'rex-sidebar-expanded-envs'
+const FAVORITES_KEY = 'rex-sidebar-favorites'
 
 export function useSidebar() {
   const router = useRouter()
@@ -17,6 +18,52 @@ export function useSidebar() {
   const envs = ref<EnvWithResources[]>([])
   const loading = ref(false)
   const mobileOpen = ref(false)
+
+  // ── Favorites ──
+  const favorites = ref<Set<string>>(loadFavorites())
+
+  function loadFavorites(): Set<string> {
+    try {
+      const raw = localStorage.getItem(FAVORITES_KEY)
+      return raw ? new Set(JSON.parse(raw)) : new Set()
+    } catch {
+      return new Set()
+    }
+  }
+
+  function saveFavorites() {
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favorites.value]))
+  }
+
+  function addFavorite(resourceId: string) {
+    if (favorites.value.has(resourceId)) return
+    favorites.value.add(resourceId)
+    favorites.value = new Set(favorites.value)
+    saveFavorites()
+  }
+
+  function removeFavorite(resourceId: string) {
+    if (!favorites.value.has(resourceId)) return
+    favorites.value.delete(resourceId)
+    favorites.value = new Set(favorites.value)
+    saveFavorites()
+  }
+
+  function isFavorite(resourceId: string): boolean {
+    return favorites.value.has(resourceId)
+  }
+
+  const favoriteResources = computed(() => {
+    const result: Array<{ id: string; name: string; protocol: string; envName: string }> = []
+    for (const env of envs.value) {
+      for (const r of env.resources) {
+        if (favorites.value.has(r.id)) {
+          result.push({ id: r.id, name: r.name, protocol: r.protocol, envName: env.name })
+        }
+      }
+    }
+    return result
+  })
 
   function loadCollapsed(): boolean {
     return localStorage.getItem(COLLAPSED_KEY) === 'true'
@@ -110,11 +157,16 @@ export function useSidebar() {
     filteredEnvs,
     loading,
     mobileOpen,
+    favorites,
+    favoriteResources,
     toggleCollapse,
     toggleEnvExpand,
     isEnvExpanded,
     fetchEnvs,
     connectToResource,
+    addFavorite,
+    removeFavorite,
+    isFavorite,
     closeMobile,
   }
 }

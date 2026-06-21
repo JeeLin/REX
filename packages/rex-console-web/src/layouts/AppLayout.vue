@@ -93,6 +93,50 @@
         </template>
       </div>
 
+      <!-- 收藏 -->
+      <div class="sidebar-section" v-show="!collapsed">
+        <div class="section-header">
+          <span class="section-label">★ {{ t('sidebar.favorites') }}</span>
+          <span class="section-count" v-if="favoriteResources.length">({{ favoriteResources.length }})</span>
+        </div>
+        <div v-if="favoriteResources.length === 0" class="section-empty">{{ t('sidebar.favoritesEmpty') }}</div>
+        <div v-else class="section-list">
+          <button
+            v-for="fav in favoriteResources"
+            :key="fav.id"
+            class="resource-item fav-item"
+            @click="connectToResource(fav, fav.envName)"
+            @contextmenu.prevent="onFavItemCtx($event, fav)"
+          >
+            <span class="res-dot" :style="{ background: getProtocolIcon(fav.protocol).color }"></span>
+            <span class="res-name">{{ fav.name }}</span>
+            <span class="res-protocol">{{ fav.protocol }}</span>
+            <button class="fav-remove" @click.stop="removeFavorite(fav.id)" :title="t('ctx.removeFavorite')">✕</button>
+          </button>
+        </div>
+      </div>
+
+      <!-- 最近使用 -->
+      <div class="sidebar-section" v-show="!collapsed">
+        <div class="section-header">
+          <span class="section-label">⏱ {{ t('sidebar.recent') }}</span>
+          <button v-if="recent.length > 0" class="section-action" @click="clearRecent" :title="t('sidebar.clearRecent')">🗑</button>
+        </div>
+        <div v-if="recent.length === 0" class="section-empty">{{ t('sidebar.recentEmpty') }}</div>
+        <div v-else class="section-list">
+          <button
+            v-for="item in recent"
+            :key="item.resourceId"
+            class="resource-item recent-item"
+            @click="connectToResource({ id: item.resourceId, name: item.name, protocol: item.protocol }, item.envName)"
+          >
+            <span class="res-dot" :style="{ background: getProtocolIcon(item.protocol).color }"></span>
+            <span class="res-name">{{ item.name }}</span>
+            <span class="res-time">{{ formatTimeAgo(item.usedAt) }}</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Footer -->
       <div class="sidebar-footer">
         <router-link to="/environments/new" class="nav-item" v-show="!collapsed" @click="closeMobile">
@@ -145,6 +189,9 @@ import { useAuthStore } from '@/stores/auth'
 import { useSidebar } from '@/composables/useSidebar'
 import { getProtocolIcon } from '@/composables/useProtocol'
 import { useContextMenu } from '@/composables/useContextMenu'
+import { useRecent } from '@/composables/useRecent'
+
+const { recent, clearRecent } = useRecent()
 
 const route = useRoute()
 const router = useRouter()
@@ -162,11 +209,15 @@ const {
   filteredEnvs,
   loading,
   mobileOpen,
+  favoriteResources,
   toggleCollapse,
   toggleEnvExpand,
   isEnvExpanded,
   fetchEnvs,
   connectToResource,
+  addFavorite,
+  removeFavorite,
+  isFavorite,
   closeMobile,
 } = useSidebar()
 
@@ -224,7 +275,30 @@ function onResourceItemCtx(e: MouseEvent, res: { id: string; name: string; proto
     { label: t('ctx.deleteResource'), danger: true },
     { separator: true },
     { label: t('ctx.copyAddress'), action: () => navigator.clipboard?.writeText(res.name) },
+    { label: isFavorite(res.id) ? t('ctx.removeFavorite') : t('ctx.addFavorite'), action: () => isFavorite(res.id) ? removeFavorite(res.id) : addFavorite(res.id) },
   ])
+}
+
+function onFavItemCtx(e: MouseEvent, fav: { id: string; name: string; protocol: string; envName: string }) {
+  showMenu(e, [
+    { label: t('ctx.connect'), action: () => connectToResource(fav, fav.envName) },
+    { separator: true },
+    { label: t('ctx.removeFavorite'), action: () => removeFavorite(fav.id) },
+    { label: t('ctx.copyAddress'), action: () => navigator.clipboard?.writeText(fav.name) },
+  ])
+}
+
+function formatTimeAgo(timestamp: number): string {
+  const now = Date.now()
+  const diff = now - timestamp
+  const minutes = Math.floor(diff / 60000)
+  if (minutes < 1) return '刚刚'
+  if (minutes < 60) return `${minutes}分钟前`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}小时前`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days}天前`
+  return new Date(timestamp).toLocaleDateString()
 }
 
 function onEnvGroupCtx(e: MouseEvent, env: { id: string; name: string }) {
@@ -538,6 +612,91 @@ onMounted(() => {
   font-size: 9px;
   color: var(--text-muted);
   text-transform: uppercase;
+}
+
+/* ── Sidebar Sections (Favorites, Recent) ── */
+.sidebar-section {
+  padding: var(--sp-sm);
+  border-top: 1px solid var(--border);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--sp-xs);
+  margin-bottom: var(--sp-xs);
+}
+
+.section-label {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.section-count {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.section-action {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+}
+
+.section-action:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.section-empty {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  padding: var(--sp-xs) var(--sp-sm);
+  text-align: center;
+}
+
+.section-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.fav-item {
+  position: relative;
+}
+
+.fav-remove {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.fav-item:hover .fav-remove {
+  opacity: 1;
+}
+
+.fav-remove:hover {
+  color: var(--danger);
+  background: var(--bg-hover);
+}
+
+.res-time {
+  font-size: 9px;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 /* ── Footer ─────────────────────────────── */
