@@ -85,6 +85,10 @@ export default {
     conn: {
       searchPlaceholder: '搜索资源...',
     },
+    panel: {
+      dropHere: '放置到此面板',
+      swap: '交换面板内容',
+    },
     tab: {
       close: '关闭',
       closeOthers: '关闭其他',
@@ -109,6 +113,13 @@ export default {
       title: '快捷键',
     },
     terminal: {
+      toolbar: {
+        ctx: {
+          copyLatency: '复制延迟信息',
+          openConnectionDetail: '打开连接详情',
+          toggleFullscreen: '切换全屏',
+        },
+      },
       ctx: {
         copy: '复制',
         paste: '粘贴',

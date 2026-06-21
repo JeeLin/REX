@@ -1,7 +1,7 @@
 <template>
   <div class="ws-terminal" @drop.prevent="handleDrop" @dragover.prevent="handleDragOver" @dragleave="dragOver = false">
     <!-- 工具栏 -->
-    <div class="ws-term-toolbar">
+    <div class="ws-term-toolbar" @contextmenu.prevent="handleToolbarContextMenu">
       <div class="ws-term-info">
         <span class="ws-term-status" :class="connectionStatus">●</span>
         <span class="ws-term-name">{{ resourceName }}</span>
@@ -82,6 +82,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -93,6 +94,7 @@ import type { FileEntry } from '@/api/files'
 import FileList from '@/features/files/FileList.vue'
 
 const { t } = useI18n()
+const router = useRouter()
 const { show: showMenu } = useContextMenu()
 
 const props = defineProps<{
@@ -335,6 +337,29 @@ function handleDrop(e: DragEvent) {
     }))
     terminal?.focus()
   }
+}
+
+// ── 工具栏右键菜单 ──────────────────────────────────────
+
+function handleToolbarContextMenu(event: MouseEvent) {
+  showMenu(event, [
+    {
+      label: t('ws.terminal.toolbar.ctx.copyLatency'),
+      action: () => { navigator.clipboard.writeText(`${props.resourceName} · ${connectionStatus.value}`) },
+    },
+    {
+      label: t('ws.terminal.toolbar.ctx.openConnectionDetail'),
+      action: () => { router.push({ name: 'resource', params: { id: props.resourceId } }) },
+    },
+    { separator: true },
+    {
+      label: t('ws.terminal.toolbar.ctx.toggleFullscreen'),
+      action: () => {
+        if (document.fullscreenElement) document.exitFullscreen()
+        else document.documentElement.requestFullscreen()
+      },
+    },
+  ])
 }
 
 // ── 右键菜单 ──────────────────────────────────────

@@ -85,6 +85,10 @@ export default {
     conn: {
       searchPlaceholder: 'Search resources...',
     },
+    panel: {
+      dropHere: 'Drop here',
+      swap: 'Swap panels',
+    },
     tab: {
       close: 'Close',
       closeOthers: 'Close Others',
@@ -109,6 +113,13 @@ export default {
       title: 'Shortcuts',
     },
     terminal: {
+      toolbar: {
+        ctx: {
+          copyLatency: 'Copy Latency Info',
+          openConnectionDetail: 'Open Connection Detail',
+          toggleFullscreen: 'Toggle Fullscreen',
+        },
+      },
       ctx: {
         copy: 'Copy',
         paste: 'Paste',
