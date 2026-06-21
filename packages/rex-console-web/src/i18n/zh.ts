@@ -350,6 +350,31 @@ export default {
         generateDelete: '在编辑器中生成 DELETE',
       },
     },
+    tree: {
+      ctx: {
+        viewStructure: '查看表结构',
+        viewRowCount: '查看行数统计',
+        copyTableName: '复制表名',
+        selectStar: 'SELECT * 查询',
+        copyColumnName: '复制列名',
+        copyColumnType: '复制列类型',
+        copyDbName: '复制数据库名',
+        refresh: '刷新',
+        expandAll: '全部展开',
+        collapseAll: '全部折叠',
+        refreshStructure: '刷新结构',
+      },
+    },
+    tab: {
+      ctx: {
+        close: '关闭',
+        closeOthers: '关闭其他',
+        save: '保存',
+        rename: '重命名',
+        copySql: '复制 SQL',
+        executeSql: '执行 SQL',
+      },
+    },
   },
   settings: {
     appearance: {

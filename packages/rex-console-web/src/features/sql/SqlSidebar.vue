@@ -1,22 +1,22 @@
 <template>
   <div class="sql-sidebar">
-    <div class="sql-sidebar-header">
+    <div class="sql-sidebar-header" @contextmenu.prevent="handleHeaderContextMenu">
       <span>{{ database }}</span>
       <button class="btn btn-ghost btn-sm" @click="$emit('refresh')">↻</button>
     </div>
     <div class="sql-sidebar-search">
       <input type="text" v-model="search" :placeholder="t('sql.searchPlaceholder')" />
     </div>
-    <div class="sql-tree">
+    <div class="sql-tree" @contextmenu.prevent="handleTreeContextMenu">
       <div v-for="table in filteredTables" :key="table.name" class="tree-group">
-        <div class="tree-group-header" @click="toggleTable(table.name)">
+        <div class="tree-group-header" @click="toggleTable(table.name)" @contextmenu.prevent="handleTableContextMenu($event, table)">
           <span class="tree-icon">{{ expanded.has(table.name) ? '▾' : '▸' }}</span>
           <span>⊞</span>
           <span>{{ table.name }}</span>
           <span class="tree-count" v-if="table.row_count != null">{{ table.row_count.toLocaleString() }}</span>
         </div>
         <div v-if="expanded.has(table.name)" class="tree-children">
-          <div v-for="col in columns.get(table.name)" :key="col.name" class="tree-col-item">
+          <div v-for="col in columns.get(table.name)" :key="col.name" class="tree-col-item" @contextmenu.prevent="handleColumnContextMenu($event, col)">
             <span v-if="col.is_primary_key" class="col-key">PK</span>
             <span v-else class="col-key" style="visibility:hidden">_</span>
             <span class="col-name">{{ col.name }}</span>
@@ -31,10 +31,12 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useContextMenu } from '@/composables/useContextMenu'
 import { listTables, listColumns } from '@/api/sql'
 import type { TableInfo, ColumnInfo } from '@/api/sql'
 
 const { t } = useI18n()
+const ctxMenu = useContextMenu()
 
 const props = defineProps<{
   resourceId: string
@@ -77,6 +79,56 @@ async function toggleTable(name: string) {
     }
   }
   emit('select-table', name)
+}
+
+async function expandAll() {
+  for (const table of filteredTables.value) {
+    expanded.value.add(table.name)
+  }
+  // Load columns for all tables
+  for (const table of filteredTables.value) {
+    if (!columns.value.has(table.name)) {
+      const cols = await listColumns(props.resourceId, props.database, table.name)
+      columns.value.set(table.name, cols)
+    }
+  }
+}
+
+function collapseAll() {
+  expanded.value = new Set()
+}
+
+async function handleTableContextMenu(event: MouseEvent, table: TableInfo) {
+  ctxMenu.show(event, [
+    { label: t('sql.tree.ctx.viewStructure'), action: () => toggleTable(table.name) },
+    { label: t('sql.tree.ctx.viewRowCount'), disabled: table.row_count == null },
+    { separator: true },
+    { label: t('sql.tree.ctx.copyTableName'), action: () => navigator.clipboard.writeText(table.name) },
+    { label: t('sql.tree.ctx.selectStar'), action: () => emit('select-table', table.name) },
+  ])
+}
+
+function handleColumnContextMenu(event: MouseEvent, col: ColumnInfo) {
+  ctxMenu.show(event, [
+    { label: t('sql.tree.ctx.copyColumnName'), action: () => navigator.clipboard.writeText(col.name) },
+    { label: t('sql.tree.ctx.copyColumnType'), action: () => navigator.clipboard.writeText(col.data_type) },
+  ])
+}
+
+function handleHeaderContextMenu(event: MouseEvent) {
+  ctxMenu.show(event, [
+    { label: t('sql.tree.ctx.refresh'), action: () => emit('refresh') },
+    { label: t('sql.tree.ctx.copyDbName'), action: () => navigator.clipboard.writeText(props.database) },
+  ])
+}
+
+function handleTreeContextMenu(event: MouseEvent) {
+  ctxMenu.show(event, [
+    { label: t('sql.tree.ctx.expandAll'), action: expandAll },
+    { label: t('sql.tree.ctx.collapseAll'), action: collapseAll },
+    { separator: true },
+    { label: t('sql.tree.ctx.refreshStructure'), action: () => emit('refresh') },
+  ])
 }
 </script>
 

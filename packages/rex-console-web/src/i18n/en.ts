@@ -348,6 +348,31 @@ export default {
         generateDelete: 'Generate DELETE',
       },
     },
+    tree: {
+      ctx: {
+        viewStructure: 'View Structure',
+        viewRowCount: 'View Row Count',
+        copyTableName: 'Copy Table Name',
+        selectStar: 'SELECT * Query',
+        copyColumnName: 'Copy Column Name',
+        copyColumnType: 'Copy Column Type',
+        copyDbName: 'Copy Database Name',
+        refresh: 'Refresh',
+        expandAll: 'Expand All',
+        collapseAll: 'Collapse All',
+        refreshStructure: 'Refresh Structure',
+      },
+    },
+    tab: {
+      ctx: {
+        close: 'Close',
+        closeOthers: 'Close Others',
+        save: 'Save',
+        rename: 'Rename',
+        copySql: 'Copy SQL',
+        executeSql: 'Execute SQL',
+      },
+    },
   },
   settings: {
     appearance: {
