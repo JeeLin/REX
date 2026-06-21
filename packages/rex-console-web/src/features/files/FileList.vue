@@ -23,9 +23,11 @@
         :key="entry.path"
         class="file-row"
         :class="{ selected: selectedPaths.includes(entry.path) }"
+        draggable="true"
         @click.stop="$emit('select', entry, $event)"
         @dblclick="entry.file_type === 'directory' ? $emit('open', entry.name) : $emit('preview', entry)"
         @contextmenu.prevent="$emit('contextMenu', $event, entry)"
+        @dragstart="onDragStart($event, entry)"
       >
         <div class="col col-name">
           <span class="file-icon">{{ entry.file_type === 'directory' ? '📁' : getFileIcon(entry.name) }}</span>
@@ -73,6 +75,13 @@ function getFileIcon(name: string): string {
   if (name.endsWith('.zip') || name.endsWith('.tar.gz') || name.endsWith('.gz')) return '📦'
   if (name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.gif') || name.endsWith('.svg')) return '🖼'
   return '📄'
+}
+
+function onDragStart(event: DragEvent, entry: FileEntry) {
+  if (event.dataTransfer) {
+    event.dataTransfer.setData('text/plain', entry.path)
+    event.dataTransfer.effectAllowed = 'copy'
+  }
 }
 </script>
 
