@@ -1,7 +1,7 @@
 <template>
   <div class="workspace-shell">
     <!-- 标签栏 -->
-    <TabBar @newConnection="showConnMenu = true">
+    <TabBar :panel-count="panelCount" @newConnection="showConnMenu = true">
       <template #right>
         <div class="layout-indicator" @click="cycleLayout" :title="`${t('ws.layout.switch')} (Alt+1~5)`">
           <span>{{ layoutIcon }}</span>

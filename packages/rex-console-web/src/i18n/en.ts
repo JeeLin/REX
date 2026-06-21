@@ -92,6 +92,8 @@ export default {
       closeLeft: 'Close Left',
       closeAll: 'Close All',
       duplicate: 'Duplicate',
+      moveToPanel: 'Move to Panel',
+      disconnectAll: 'Disconnect All',
       newConnection: 'New Connection',
     },
     layout: {
@@ -101,6 +103,7 @@ export default {
       topBottom: 'Top-Bottom',
       quad: 'Quad',
       sidebarMain: 'Sidebar-Main',
+      panelN: 'Panel {n}',
     },
     shortcuts: {
       title: 'Shortcuts',

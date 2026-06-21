@@ -19,8 +19,11 @@
           :class="{
             'ctx-danger': item.danger,
             'ctx-disabled': item.disabled,
+            'ctx-active': openSubIdx === idx,
           }"
           @click="handleClick(item)"
+          @mouseenter="item.children ? (openSubIdx = idx) : undefined"
+          @mouseleave="onItemLeave"
         >
           <span v-if="item.icon" class="ctx-icon">{{ item.icon }}</span>
           <span class="ctx-label">{{ item.label }}</span>
@@ -28,18 +31,74 @@
         </div>
       </template>
     </div>
+    <div
+      v-if="menuVisible && openSubItem"
+      class="ctx-menu ctx-submenu"
+      :style="submenuStyle"
+      @mouseenter="keepSub = true"
+      @mouseleave="openSubIdx = null; keepSub = false"
+    >
+      <template v-for="(child, ci) in openSubItem.children!" :key="ci">
+        <div v-if="child.separator" class="ctx-separator"></div>
+        <div
+          v-else
+          class="ctx-item"
+          :class="{
+            'ctx-danger': child.danger,
+            'ctx-disabled': child.disabled,
+          }"
+          @click="handleSubClick(child)"
+        >
+          <span v-if="child.icon" class="ctx-icon">{{ child.icon }}</span>
+          <span class="ctx-label">{{ child.label }}</span>
+        </div>
+      </template>
+    </div>
   </Teleport>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useContextMenu, type MenuItem } from '@/composables/useContextMenu'
 
 const { visible: menuVisible, x: menuX, y: menuY, items: menuItems, hide: menuHide } = useContextMenu()
 
+const openSubIdx = ref<number | null>(null)
+const keepSub = ref(false)
+
+const openSubItem = computed(() => {
+  if (openSubIdx.value === null) return null
+  return menuItems.value[openSubIdx.value] ?? null
+})
+
+const submenuStyle = computed(() => {
+  if (openSubIdx.value === null) return { display: 'none' }
+  const menuWidth = 180
+  return {
+    left: `${menuX.value + menuWidth + 4}px`,
+    top: `${menuY.value + (openSubIdx.value! * 36)}px`,
+  }
+})
+
+function onItemLeave() {
+  if (!keepSub.value) {
+    openSubIdx.value = null
+  }
+}
+
 function handleClick(item: MenuItem) {
   if (item.disabled) return
+  if (item.children) {
+    openSubIdx.value = null
+    return
+  }
   item.action?.()
+  menuHide()
+}
+
+function handleSubClick(child: MenuItem) {
+  if (child.disabled) return
+  child.action?.()
   menuHide()
 }
 
@@ -125,5 +184,13 @@ onUnmounted(() => {
   height: 1px;
   background: var(--border);
   margin: var(--sp-xs) 0;
+}
+
+.ctx-submenu {
+  position: fixed;
+}
+
+.ctx-active {
+  background: var(--bg-hover);
 }
 </style>

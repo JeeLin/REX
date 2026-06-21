@@ -154,10 +154,19 @@ export function useTabs() {
     allTabs.splice(dstIdx, 0, moved)
   }
 
+  function disconnectAll() {
+    for (const tab of tabs.value) {
+      tab.status = 'offline'
+    }
+  }
+
+  const activePanelIndex = computed(() => activeTab.value?.panelIndex ?? 0)
+
   return {
     tabs,
     activeTabId,
     activeTab,
+    activePanelIndex,
     addTab,
     closeTab,
     closeOtherTabs,
@@ -167,6 +176,7 @@ export function useTabs() {
     activateTab,
     duplicateTab,
     moveTabToPanel,
+    disconnectAll,
     nextTab,
     prevTab,
     switchTabByIndex,

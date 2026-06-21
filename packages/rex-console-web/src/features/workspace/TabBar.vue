@@ -36,9 +36,13 @@ import { useI18n } from 'vue-i18n'
 import type { Tab } from './useTabs'
 import { useTabs } from './useTabs'
 
+const props = defineProps<{
+  panelCount?: number
+}>()
+
 const { t } = useI18n()
 const { show: showMenu } = useContextMenu()
-const { tabs, activeTabId, activateTab, closeTab, closeOtherTabs, closeTabsRight, closeTabsLeft, closeAllTabs, duplicateTab, reorderTab } = useTabs()
+const { tabs, activeTabId, activePanelIndex, activateTab, closeTab, closeOtherTabs, closeTabsRight, closeTabsLeft, closeAllTabs, duplicateTab, moveTabToPanel, disconnectAll, reorderTab } = useTabs()
 
 defineEmits<{
   newConnection: []
@@ -92,6 +96,16 @@ function onTabCtx(e: MouseEvent, tab: Tab) {
   const hasMultiple = tabs.value.length > 1
   const hasLeft = idx > 0
   const hasRight = idx < tabs.value.length - 1
+  const panelCount = props.panelCount ?? 1
+  const isSplit = panelCount > 1
+
+  const panelChildren = isSplit
+    ? Array.from({ length: panelCount }, (_, i) => ({
+        label: t('ws.layout.panelN', { n: i + 1 }),
+        disabled: i === activePanelIndex.value,
+        action: () => moveTabToPanel(tab.id, i),
+      }))
+    : []
 
   const items = [
     { label: t('ws.tab.close'), icon: '✕', action: () => closeTab(tab.id) },
@@ -101,8 +115,13 @@ function onTabCtx(e: MouseEvent, tab: Tab) {
     ...(hasMultiple ? [{ label: t('ws.tab.closeAll'), action: () => closeAllTabs() }] : []),
     { separator: true as const },
     { label: t('ws.tab.duplicate'), icon: '⧉', action: () => duplicateTab(tab.id) },
+    ...(isSplit ? [{
+      label: t('ws.tab.moveToPanel'),
+      children: panelChildren,
+    }] : []),
     { separator: true as const },
     { label: t('ws.tab.newConnection'), icon: '+', action: () => {} },
+    { label: t('ws.tab.disconnectAll'), icon: '⚡', danger: true, action: () => disconnectAll() },
   ]
 
   showMenu(e, items)

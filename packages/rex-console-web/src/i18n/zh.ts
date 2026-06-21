@@ -92,6 +92,8 @@ export default {
       closeLeft: '关闭左侧',
       closeAll: '关闭全部',
       duplicate: '复制标签',
+      moveToPanel: '移动到面板',
+      disconnectAll: '全部断开',
       newConnection: '新建连接',
     },
     layout: {
@@ -101,6 +103,7 @@ export default {
       topBottom: '上下分屏',
       quad: '四宫格',
       sidebarMain: '主+侧边',
+      panelN: '面板 {n}',
     },
     shortcuts: {
       title: '快捷键',
