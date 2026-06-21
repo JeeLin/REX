@@ -148,8 +148,8 @@ async function toggleTable(name: string) {
       const cols = await listColumns(props.resourceId, props.database, name)
       columns.value.set(name, cols)
     }
+    emit('select-table', name)
   }
-  emit('select-table', name)
 }
 
 function formatDate(isoTs: string): string {
@@ -225,8 +225,6 @@ function handleTreeContextMenu(event: MouseEvent) {
 async function expandAll() {
   for (const table of filteredTables.value) {
     expanded.value.add(table.name)
-  }
-  for (const table of filteredTables.value) {
     if (!columns.value.has(table.name)) {
       const cols = await listColumns(props.resourceId, props.database, table.name)
       columns.value.set(table.name, cols)

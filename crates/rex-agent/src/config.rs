@@ -82,6 +82,11 @@ mod tests {
 
     #[test]
     fn load_missing_file_uses_default() {
+        // 清理可能被其他并行测试污染的环境变量
+        env::remove_var("REX_SERVER");
+        env::remove_var("REX_TOKEN");
+        env::remove_var("REX_NAME");
+        env::remove_var("REX_DATA_DIR");
         let config = AgentConfig::load(Some("/nonexistent/path/agent.yaml")).unwrap();
         assert_eq!(config.server, "http://localhost:3000");
         assert_eq!(config.token, "");

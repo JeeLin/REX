@@ -98,22 +98,32 @@ function initTerminal() {
   terminal.open(terminalContainer.value)
   fitAddon.fit()
 
-  // 注册键盘快捷键（Ctrl+Shift+C/V）
-  window.addEventListener('keydown', handleKeydown)
+  // 拦截 Ctrl+V：阻止 xterm.js 内部调用 navigator.clipboard.readText()（需要 HTTPS）
+  // 返回 false 让 xterm 不处理该按键，浏览器原生粘贴行为会在 textarea 上触发 DOM paste 事件
+  terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+    // Ctrl+V / Cmd+V → 不让 xterm 处理，交给浏览器原生 paste
+    if ((event.ctrlKey || event.metaKey) && event.key === 'v' && event.type === 'keydown') {
+      return false
+    }
+    // Ctrl+Shift+C → 由自定义 handleKeydown 处理
+    if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === 'C' || event.key === 'c') && event.type === 'keydown') {
+      return false
+    }
+    return true
+  })
 
-  // 在 xterm 内部 textarea 上拦截 paste 事件
-  // 绕过 xterm.js 内部 navigator.clipboard.readText() 的 HTTPS 限制
+  // 在 xterm 内部 textarea 上监听 paste 事件
+  // 当 xterm 不处理 Ctrl+V 时，浏览器会触发原生 paste 事件
   terminal.textarea?.addEventListener('paste', (e: ClipboardEvent) => {
     const text = e.clipboardData?.getData('text')
     if (text && ws?.readyState === WebSocket.OPEN) {
       e.preventDefault()
-      e.stopImmediatePropagation()
       ws.send(JSON.stringify({
         type: 'terminal.input',
         payload: { data: btoa(text) },
       }))
     }
-  }, true) // capture 阶段拦截，优先于 xterm 内部处理
+  }, true)
 
   terminal.onData((data: string) => {
     if (ws?.readyState === WebSocket.OPEN) {

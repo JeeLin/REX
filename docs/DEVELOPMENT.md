@@ -140,5 +140,7 @@ docs/milestones/
 ├── M21-terminal-mobile-statusbar.md
 ├── M22-sidebar-favorites-recent.md
 ├── M23-file-upload-download.md
-└── M24-docs-restructure.md
+├── M24-docs-restructure.md
+├── M25-sql-query-files.md
+└── M26-sql-history-and-polish.md
 ```
