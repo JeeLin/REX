@@ -32,7 +32,7 @@
           class="ws-panel active layout-single"
         >
           <template v-for="tab in tabs" :key="tab.id">
-            <div v-show="tab.id === activeTabId" style="display: contents;">
+            <div v-show="tab.id === activeTabId" class="ws-tab-content">
               <WorkspaceTerminal
                 v-if="tab.component === 'terminal'"
                 :resource-id="tab.resourceId"
@@ -503,6 +503,13 @@ function onKeyDown(e: KeyboardEvent) {
 
 .ws-content.layout-single .ws-panel.active {
   display: flex;
+}
+
+.ws-tab-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .ws-content.layout-split {
