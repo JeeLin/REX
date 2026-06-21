@@ -17,6 +17,7 @@ use crate::helpers::{ErrorBody, ErrorResponse};
 use crate::resource;
 use crate::terminal::SessionManager;
 use crate::ws::AgentConnections;
+use std::path::PathBuf;
 
 /// 更新检查缓存
 pub struct UpdateCache {
@@ -41,16 +42,18 @@ pub struct AppState {
     pub sessions: Arc<SessionManager>,
     pub transfer: Option<Arc<crate::transfer::TransferState>>,
     pub update_cache: tokio::sync::RwLock<UpdateCache>,
+    pub data_dir: PathBuf,
 }
 
 pub fn app(db: Arc<Database>, secret_key: String) -> axum::Router {
-    app_with_static(db, secret_key, None)
+    app_with_static(db, secret_key, None, std::path::PathBuf::from("./data"))
 }
 
 pub fn app_with_static(
     db: Arc<Database>,
     secret_key: String,
     static_dir: Option<std::path::PathBuf>,
+    data_dir: PathBuf,
 ) -> axum::Router {
     let connections = Arc::new(crate::ws::new_connections());
     let sessions = Arc::new(SessionManager::new(900));
@@ -64,6 +67,7 @@ pub fn app_with_static(
         sessions,
         transfer: Some(transfer_state),
         update_cache: tokio::sync::RwLock::new(UpdateCache::new()),
+        data_dir,
     });
 
     let public_routes = Router::new()
@@ -167,6 +171,17 @@ pub fn app_with_static(
             "/api/resources/:resource_id/sql/columns",
             get(crate::sql::list_columns),
         )
+        .route(
+            "/api/queries",
+            get(crate::queries::list_queries).post(crate::queries::save_query),
+        )
+        .route(
+            "/api/queries/:id",
+            get(crate::queries::get_query)
+                .put(crate::queries::update_query)
+                .delete(crate::queries::delete_query),
+        )
+        .route("/api/queries/:id/rename", put(crate::queries::rename_query))
         .route("/api/update/status", get(crate::update::get_update_status))
         .route("/api/update/check", get(crate::update::check_update))
         .route(

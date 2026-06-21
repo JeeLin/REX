@@ -214,6 +214,7 @@ mod tests {
                 manager: Arc::new(TransferManager::new()),
             })),
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
+            data_dir: std::env::temp_dir(),
         })
     }
 
@@ -442,6 +443,7 @@ mod tests {
             sessions: Arc::new(crate::terminal::SessionManager::new(900)),
             transfer: Some(transfer_state),
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
+            data_dir: std::env::temp_dir(),
         });
 
         use axum::routing::{get, post};

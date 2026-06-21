@@ -32,3 +32,6 @@ rex-transfer = { workspace = true }
 rex-mysql = { workspace = true }
 rex-postgresql = { workspace = true }
 base64 = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

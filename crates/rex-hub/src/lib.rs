@@ -6,6 +6,7 @@ pub mod db;
 pub mod env;
 pub mod files;
 pub mod helpers;
+pub mod queries;
 pub mod resource;
 pub mod routes;
 pub mod sql;

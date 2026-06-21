@@ -286,6 +286,7 @@ mod tests {
                 manager: Arc::new(TransferManager::new()),
             })),
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
+            data_dir: std::env::temp_dir(),
         })
     }
 
