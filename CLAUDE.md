@@ -304,10 +304,10 @@ cargo test --workspace
 
 前端（`packages/rex-console-web/`）：
 ```bash
-npm run dev          # 开发服务器
-npm run build        # 构建
-npm run type-check   # 类型检查
-npm run lint         # lint
+bun run dev          # 开发服务器
+bun run build        # 构建
+bun run type-check   # 类型检查
+bun run lint         # lint
 ```
 
 ---
