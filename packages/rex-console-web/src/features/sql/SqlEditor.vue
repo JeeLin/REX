@@ -42,6 +42,12 @@ function handleKeydown(e: KeyboardEvent) {
     emit('execute')
     return
   }
+  // Ctrl+S / Cmd+S → 保存
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault()
+    emit('save')
+    return
+  }
   // Tab → 插入两个空格
   if (e.key === 'Tab') {
     e.preventDefault()

@@ -37,3 +37,15 @@ export function exportJson(columns: SqlColumn[], rows: unknown[][]): void {
   })
   downloadFile(JSON.stringify(data, null, 2), 'query-result.json', 'application/json')
 }
+
+/** 复制全部结果为 TSV 到剪贴板 */
+export async function copyTsv(columns: SqlColumn[], rows: unknown[][]): Promise<boolean> {
+  const header = columns.map((c) => c.name).join('\t')
+  const body = rows.map((row) => row.map((cell) => (cell === null ? '' : String(cell))).join('\t')).join('\n')
+  try {
+    await navigator.clipboard.writeText(`${header}\n${body}`)
+    return true
+  } catch {
+    return false
+  }
+}

@@ -383,6 +383,8 @@ export default {
       history: '历史记录',
     },
     result: {
+      copy: '复制',
+      copySuccess: '已复制到剪贴板',
       ctx: {
         copyRow: '复制行',
         copyCell: '复制单元格',

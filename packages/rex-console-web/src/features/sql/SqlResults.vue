@@ -41,6 +41,11 @@
         <button
           v-if="result.rows.length > 0"
           class="btn btn-ghost btn-xs"
+          @click="handleCopyAll"
+        >📋 {{ t('sql.result.copy') }}</button>
+        <button
+          v-if="result.rows.length > 0"
+          class="btn btn-ghost btn-xs"
           @click="handleExportCsv"
         >⬇ CSV</button>
         <button
@@ -57,7 +62,7 @@
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
 import type { SqlResult } from '@/api/sql'
-import { exportCsv, exportJson } from './result-export'
+import { exportCsv, exportJson, copyTsv } from './result-export'
 
 const { t } = useI18n()
 const { show: showMenu } = useContextMenu()
@@ -121,6 +126,19 @@ function handleExportCsv() {
 function handleExportJson() {
   if (!props.result) return
   exportJson(props.result.columns, props.result.rows)
+}
+
+async function handleCopyAll() {
+  if (!props.result) return
+  const ok = await copyTsv(props.result.columns, props.result.rows)
+  if (ok) {
+    // Simple toast feedback
+    const msg = document.createElement('div')
+    msg.textContent = t('sql.result.copySuccess')
+    msg.className = 'toast-notification'
+    document.body.appendChild(msg)
+    setTimeout(() => msg.remove(), 1500)
+  }
 }
 
 function handleCellContextMenu(event: MouseEvent, rowIdx: number, colIdx: number) {

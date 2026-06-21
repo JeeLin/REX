@@ -381,6 +381,7 @@ export default {
       history: 'History',
     },
     result: {
+      copySuccess: 'Copied to clipboard',
       ctx: {
         copyRow: 'Copy Row',
         copyCell: 'Copy Cell',
