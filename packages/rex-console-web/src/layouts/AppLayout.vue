@@ -74,7 +74,7 @@
                 :key="res.id"
                 class="resource-item"
                 @click="connectToResource(res, env.name)"
-                @contextmenu.prevent="onResourceItemCtx($event, res, env.name)"
+                @contextmenu.prevent="onResourceItemCtx($event, res, env)"
               >
                 <span class="res-dot" :style="{ background: getProtocolIcon(res.protocol).color }"></span>
                 <span class="res-name">{{ res.name }}</span>
@@ -266,12 +266,12 @@ function handleLogout() {
   router.push('/login')
 }
 
-function onResourceItemCtx(e: MouseEvent, res: { id: string; name: string; protocol: string }, envName: string) {
+function onResourceItemCtx(e: MouseEvent, res: { id: string; name: string; protocol: string }, env: { id: string; name: string }) {
   showMenu(e, [
-    { label: t('ctx.connect'), action: () => connectToResource(res, envName) },
-    { label: t('ctx.connectNewTab'), action: () => connectToResource(res, envName) },
+    { label: t('ctx.connect'), action: () => connectToResource(res, env.name) },
+    { label: t('ctx.connectNewTab'), action: () => connectToResource(res, env.name) },
     { separator: true },
-    { label: t('ctx.editResource') },
+    { label: t('ctx.editResource'), action: () => router.push(`/environments/${env.id}/resources/${res.id}/edit`) },
     { label: t('ctx.deleteResource'), danger: true },
     { separator: true },
     { label: t('ctx.copyAddress'), action: () => navigator.clipboard?.writeText(res.name) },
@@ -304,12 +304,20 @@ function formatTimeAgo(timestamp: number): string {
 function onEnvGroupCtx(e: MouseEvent, env: { id: string; name: string }) {
   showMenu(e, [
     { label: t('ctx.openDetail'), action: () => router.push(`/environments/${env.id}`) },
-    { label: t('ctx.openAllWorkspace') },
+    { label: t('ctx.openAllWorkspace'), action: () => openAllInWorkspace(env) },
     { separator: true },
     { label: t('ctx.newResource'), action: () => router.push(`/environments/${env.id}/resources/new`) },
-    { label: t('ctx.editEnv') },
+    { label: t('ctx.editEnv'), action: () => router.push(`/environments/${env.id}/edit`) },
     { label: t('ctx.deleteEnv'), danger: true },
   ])
+}
+
+function openAllInWorkspace(env: { id: string; name: string }) {
+  const envData = filteredEnvs.value.find((e) => e.id === env.id)
+  if (!envData) return
+  for (const res of envData.resources) {
+    connectToResource(res, env.name)
+  }
 }
 
 onMounted(() => {

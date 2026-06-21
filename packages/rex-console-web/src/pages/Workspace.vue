@@ -26,14 +26,55 @@
 
       <!-- 面板区域 -->
       <template v-else>
+        <!-- 单面板模式：渲染所有 tab，用 v-show 切换，保持连接不中断 -->
+        <div
+          v-if="currentLayout === 'single'"
+          class="ws-panel active layout-single"
+        >
+          <template v-for="tab in tabs" :key="tab.id">
+            <div v-show="tab.id === activeTabId" style="display: contents;">
+              <WorkspaceTerminal
+                v-if="tab.component === 'terminal'"
+                :resource-id="tab.resourceId"
+                :resource-name="tab.name"
+                :connection-mode="getConnectionMode(tab.resourceId)"
+                @disconnect="onPanelDisconnect(tab.id)"
+                @error="(msg: string) => onPanelError(tab.id, msg)"
+              />
+              <WorkspaceSql
+                v-else-if="tab.component === 'sql'"
+                :resource-id="tab.resourceId"
+                :resource-name="tab.name"
+                :protocol="tab.proto"
+                @disconnect="onPanelDisconnect(tab.id)"
+                @error="(msg: string) => onPanelError(tab.id, msg)"
+              />
+              <WorkspaceFiles
+                v-else-if="tab.component === 'files'"
+                :resource-id="tab.resourceId"
+                :resource-name="tab.name"
+                @disconnect="onPanelDisconnect(tab.id)"
+                @error="(msg: string) => onPanelError(tab.id, msg)"
+              />
+              <div v-else class="panel-unsupported">
+                <span :style="{ color: getProtocolIcon(tab.proto).color }">{{ getProtocolIcon(tab.proto).icon }}</span>
+                <div class="panel-unsupported-text">{{ tab.name }}</div>
+                <div class="panel-unsupported-hint">暂不支持 {{ tab.proto.toUpperCase() }} 协议</div>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- 分屏模式：按面板渲染 -->
         <div
           v-for="i in panelCount"
           :key="i"
           class="ws-panel"
           :class="{
             active: isPanelActive(i - 1),
-            'layout-drop-zone': dragId && dragOverPanel === i - 1 && currentLayout !== 'single'
+            'layout-drop-zone': dragId && dragOverPanel === i - 1
           }"
+          v-else
           @dragover="onPanelDragOver($event, i - 1)"
           @dragleave="onPanelDragLeave"
           @drop="onPanelDrop($event, i - 1)"
@@ -41,7 +82,7 @@
           <template v-if="getPanelTab(i - 1)">
             <WorkspaceTerminal
               v-if="getPanelTab(i - 1)!.component === 'terminal'"
-              :key="getPanelTab(i - 1)!.id"
+              :key="'panel-' + (i - 1)"
               :resource-id="getPanelTab(i - 1)!.resourceId"
               :resource-name="getPanelTab(i - 1)!.name"
               :connection-mode="getConnectionMode(getPanelTab(i - 1)!.resourceId)"
@@ -50,7 +91,7 @@
             />
             <WorkspaceSql
               v-else-if="getPanelTab(i - 1)!.component === 'sql'"
-              :key="getPanelTab(i - 1)!.id"
+              :key="'panel-' + (i - 1)"
               :resource-id="getPanelTab(i - 1)!.resourceId"
               :resource-name="getPanelTab(i - 1)!.name"
               :protocol="getPanelTab(i - 1)!.proto"
@@ -59,7 +100,7 @@
             />
             <WorkspaceFiles
               v-else-if="getPanelTab(i - 1)!.component === 'files'"
-              :key="getPanelTab(i - 1)!.id"
+              :key="'panel-' + (i - 1)"
               :resource-id="getPanelTab(i - 1)!.resourceId"
               :resource-name="getPanelTab(i - 1)!.name"
               @disconnect="onPanelDisconnect(getPanelTab(i - 1)!.id)"
