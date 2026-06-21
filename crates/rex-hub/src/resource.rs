@@ -85,6 +85,23 @@ pub async fn create_resource(
         return Err(bad_request(&format!("不支持的协议: {}", input.protocol)));
     }
 
+    // 校验 config_json 格式
+    match input.protocol.as_str() {
+        "ssh" | "sftp" => {
+            crate::ssh_config::SshResourceConfig::from_json(&input.config_json)
+                .map_err(|e| bad_request(&format!("SSH 配置无效: {}", e)))?;
+        }
+        "mysql" => {
+            rex_mysql::MySqlConnector::from_json(&input.config_json)
+                .map_err(|e| bad_request(&format!("MySQL 配置无效: {}", e)))?;
+        }
+        "postgresql" => {
+            rex_postgresql::PostgresConnector::from_json(&input.config_json)
+                .map_err(|e| bad_request(&format!("PostgreSQL 配置无效: {}", e)))?;
+        }
+        _ => {}
+    }
+
     let ip = extract_client_ip(&headers);
     let db = state.db.clone();
     let env_id_clone = env_id.clone();
