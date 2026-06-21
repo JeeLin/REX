@@ -5,11 +5,11 @@
       v-for="tab in tabs"
       :key="tab.id"
       class="ws-tab"
-      :class="{ active: tab.id === activeTabId, dragging: dragId === tab.id }"
+      :class="{ active: tab.id === activeTabId, dragging: localDragId === tab.id }"
       :data-tab-id="tab.id"
       draggable="true"
       @click="activateTab(tab.id)"
-      @dblclick="onTabDblclick"
+      @dblclick="onTabDblclick($event, tab)"
       @contextmenu.prevent="onTabCtx($event, tab)"
       @dragstart="onDragStart($event, tab.id)"
       @dragend="onDragEnd"
@@ -38,30 +38,35 @@ import { useTabs } from './useTabs'
 
 const props = defineProps<{
   panelCount?: number
+  dragId?: string | null
 }>()
 
 const { t } = useI18n()
 const { show: showMenu } = useContextMenu()
 const { tabs, activeTabId, activePanelIndex, activateTab, closeTab, closeOtherTabs, closeTabsRight, closeTabsLeft, closeAllTabs, duplicateTab, moveTabToPanel, disconnectAll, reorderTab } = useTabs()
 
-defineEmits<{
+const emit = defineEmits<{
   newConnection: []
+  'update:dragId': [value: string | null]
+  dblclick: [tabId: string]
 }>()
 
 // ── Tab drag-and-drop ──
-const dragId = ref<string | null>(null)
+const localDragId = ref<string | null>(null)
 
 function onDragStart(e: DragEvent, id: string) {
-  dragId.value = id
+  localDragId.value = id
+  emit('update:dragId', id)
   e.dataTransfer!.effectAllowed = 'move'
 }
 
 function onDragEnd() {
-  dragId.value = null
+  localDragId.value = null
+  emit('update:dragId', null)
 }
 
 function onDragOver(e: DragEvent, targetId: string) {
-  if (!dragId.value || dragId.value === targetId) return
+  if (!localDragId.value || localDragId.value === targetId) return
   const el = e.currentTarget as HTMLElement
   const rect = el.getBoundingClientRect()
   const midX = rect.left + rect.width / 2
@@ -81,13 +86,12 @@ function onDragLeave(e: DragEvent) {
 function onDrop(e: DragEvent, targetId: string) {
   const el = e.currentTarget as HTMLElement
   el.classList.remove('drag-over-left', 'drag-over-right')
-  if (!dragId.value || dragId.value === targetId) return
-  reorderTab(dragId.value, targetId)
+  if (!localDragId.value || localDragId.value === targetId) return
+  reorderTab(localDragId.value, targetId)
 }
 
-function onTabDblclick() {
-  // Double-click to enter left-right split — parent handles this
-  // For now, just emit if we need it
+function onTabDblclick(e: MouseEvent, tab: Tab) {
+  emit('dblclick', tab.id)
 }
 
 // ── Tab context menu ──

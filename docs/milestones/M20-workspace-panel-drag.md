@@ -151,28 +151,23 @@ packages/rex-console-web/src/
 
 终端工具栏右键菜单（右键工具栏区域）：
 ```text
-清屏
-粘贴
+复制延迟信息
+打开连接详情
 ─── 分隔线 ───
-打开 SFTP 面板
-⛶ 全屏
-─── 分隔线 ───
-断开连接
+⛶ 切换全屏
 ```
 
 **WorkspaceTerminal.vue 修改：**
 - 工具栏容器添加 `@contextmenu.prevent` 事件处理
 - 右键时调用 `useContextMenu().show()` 展示菜单
 - 菜单项 action：
-  - 清屏：复用现有 `clearTerminal()` 逻辑
-  - 粘贴：复用现有 `handlePaste()` 逻辑
-  - 打开 SFTP 面板：`showSftp.value = true`
-  - 全屏：调用 `document.documentElement.requestFullscreen()`
-  - 断开连接：`showDisconnectDialog.value = true`
+  - 复制延迟信息：复制连接延迟/状态信息到剪贴板
+  - 打开连接详情：跳转到资源详情页
+  - 切换全屏：调用 `document.documentElement.requestFullscreen()`
 
 **测试标准：**
 - 工具栏右键弹出菜单
-- 菜单项功能与终端右键菜单对应项一致
+- 菜单项功能：复制延迟信息（clipboard）、打开连接详情（路由跳转）、切换全屏
 - 菜单点击后自动关闭
 
 **提交信息：**
@@ -193,11 +188,9 @@ feat: add terminal toolbar context menu
 **终端工具栏（`ws.terminal.toolbar.ctx.*`）：**
 | 键 | 中文 | English |
 |---|------|---------|
-| `ws.terminal.toolbar.ctx.clear` | 清屏 | Clear |
-| `ws.terminal.toolbar.ctx.paste` | 粘贴 | Paste |
-| `ws.terminal.toolbar.ctx.openSftp` | 打开 SFTP 面板 | Open SFTP Panel |
-| `ws.terminal.toolbar.ctx.fullscreen` | 全屏 | Fullscreen |
-| `ws.terminal.toolbar.ctx.disconnect` | 断开连接 | Disconnect |
+| `ws.terminal.toolbar.ctx.copyLatency` | 复制延迟信息 | Copy Latency Info |
+| `ws.terminal.toolbar.ctx.openConnectionDetail` | 打开连接详情 | Open Connection Detail |
+| `ws.terminal.toolbar.ctx.toggleFullscreen` | 切换全屏 | Toggle Fullscreen |
 
 ---
 
@@ -213,7 +206,7 @@ feat: add terminal toolbar context menu
 ## Flow Status
 
 - [x] 步骤1：编写里程碑文档
-- [ ] 步骤2：设计核对
+- [x] 步骤2：设计核对
 - [ ] 步骤3：开发
 - [ ] 步骤4：代码精简
 - [ ] 步骤5：代码审查

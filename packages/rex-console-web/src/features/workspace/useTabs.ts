@@ -125,6 +125,15 @@ export function useTabs() {
     }
   }
 
+  function swapPanels(tabId1: string, tabId2: string) {
+    const t1 = tabs.value.find((t) => t.id === tabId1)
+    const t2 = tabs.value.find((t) => t.id === tabId2)
+    if (!t1 || !t2) return
+    const tmp = t1.panelIndex
+    t1.panelIndex = t2.panelIndex
+    t2.panelIndex = tmp
+  }
+
   function nextTab() {
     if (tabs.value.length <= 1) return
     const idx = tabs.value.findIndex((t) => t.id === activeTabId.value)
@@ -176,6 +185,7 @@ export function useTabs() {
     activateTab,
     duplicateTab,
     moveTabToPanel,
+    swapPanels,
     disconnectAll,
     nextTab,
     prevTab,

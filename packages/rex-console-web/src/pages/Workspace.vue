@@ -1,7 +1,7 @@
 <template>
   <div class="workspace-shell">
     <!-- 标签栏 -->
-    <TabBar :panel-count="panelCount" @newConnection="showConnMenu = true">
+    <TabBar :panel-count="panelCount" :drag-id="dragId" @update:drag-id="dragId = $event" @newConnection="showConnMenu = true" @dblclick="handleTabDblclick">
       <template #right>
         <div class="layout-indicator" @click="cycleLayout" :title="`${t('ws.layout.switch')} (Alt+1~5)`">
           <span>{{ layoutIcon }}</span>
@@ -30,7 +30,13 @@
           v-for="i in panelCount"
           :key="i"
           class="ws-panel"
-          :class="{ active: isPanelActive(i - 1) }"
+          :class="{
+            active: isPanelActive(i - 1),
+            'layout-drop-zone': dragId && dragOverPanel === i - 1 && currentLayout !== 'single'
+          }"
+          @dragover="onPanelDragOver($event, i - 1)"
+          @dragleave="onPanelDragLeave"
+          @drop="onPanelDrop($event, i - 1)"
         >
           <template v-if="getPanelTab(i - 1)">
             <WorkspaceTerminal
@@ -162,7 +168,7 @@ const route = useRoute()
 const router = useRouter()
 
 // ── Tabs ──
-const { tabs, activeTabId, addTab, closeTab, nextTab, prevTab, switchTabByIndex } = useTabs()
+const { tabs, activeTabId, addTab, closeTab, nextTab, prevTab, switchTabByIndex, moveTabToPanel, swapPanels } = useTabs()
 
 // ── Layout ──
 type Layout = 'single' | 'left-right' | 'top-bottom' | 'quad' | 'sidebar-main'
@@ -204,6 +210,49 @@ function getPanelTab(panelIndex: number) {
     return tabs.value.find((t) => t.id === activeTabId.value) ?? null
   }
   return tabs.value.find((t) => t.panelIndex === panelIndex) ?? null
+}
+
+// ── Panel Drag-and-Drop ──
+const dragId = ref<string | null>(null)
+const dragOverPanel = ref<number | null>(null)
+
+function onPanelDragOver(e: DragEvent, panelIndex: number) {
+  if (currentLayout.value === 'single' || !dragId.value) return
+  e.preventDefault()
+  dragOverPanel.value = panelIndex
+}
+
+function onPanelDragLeave() {
+  dragOverPanel.value = null
+}
+
+function onPanelDrop(e: DragEvent, targetPanelIndex: number) {
+  e.preventDefault()
+  dragOverPanel.value = null
+  if (!dragId.value || currentLayout.value === 'single') return
+  const draggedTab = tabs.value.find((t) => t.id === dragId.value)
+  if (!draggedTab) return
+  const existingTab = tabs.value.find((t) => t.panelIndex === targetPanelIndex && t.id !== dragId.value)
+  if (existingTab) {
+    swapPanels(dragId.value, existingTab.id)
+  } else {
+    moveTabToPanel(dragId.value, targetPanelIndex)
+  }
+}
+
+// ── Double-click split ──
+function handleTabDblclick(tabId: string) {
+  if (currentLayout.value !== 'single') return
+  currentLayout.value = 'left-right'
+  moveTabToPanel(tabId, 0)
+  const currentIdx = tabs.value.findIndex((t) => t.id === tabId)
+  const nextTab = tabs.value.find((t, i) => i !== currentIdx && t.panelIndex !== 0)
+  if (nextTab) {
+    moveTabToPanel(nextTab.id, 1)
+  } else if (tabs.value.length > 1) {
+    const fallback = tabs.value[(currentIdx + 1) % tabs.value.length]
+    if (fallback.id !== tabId) moveTabToPanel(fallback.id, 1)
+  }
 }
 
 // ── Connection Menu ──
@@ -420,6 +469,12 @@ function onKeyDown(e: KeyboardEvent) {
 
 .ws-content.layout-split .ws-panel.active {
   display: flex;
+}
+
+.ws-content.layout-split .ws-panel.layout-drop-zone {
+  border: 2px dashed var(--accent);
+  background: rgba(232, 145, 45, 0.06);
+  box-shadow: inset 0 0 20px rgba(232, 145, 45, 0.08);
 }
 
 .ws-content.layout-split.layout-left-right {
