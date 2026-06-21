@@ -7,9 +7,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 REX Hub 是个人自托管远程资源统一管理平台，单用户、自托管、深色优先。不要引入多用户、RBAC、企业协作等概念。
 
 - 产品文档：`docs/PRODUCT.md`
-- 开发文档：`docs/DEVELOPMENT.md`
+- 开发文档：`docs/DEVELOPMENT.md`（索引）
+- 架构文档：`docs/architecture/`
+- 参考文档：`docs/reference/`
+- 里程碑文档：`docs/milestones/`
 
-新增功能前先确认产品文档中的功能边界，再把实现细节写入开发文档。
+新增功能前先确认产品文档中的功能边界，再把实现细节写入里程碑文档。
 
 ---
 
@@ -33,6 +36,8 @@ REX Hub 是个人自托管远程资源统一管理平台，单用户、自托管
 每个里程碑开始前，在 `docs/milestones/` 创建该阶段的里程碑文档（如 `M0-project-skeleton.md`）。
 
 **大功能可以拆成多个子里程碑**，每个子里程碑独立进入 8 步流程。例如 M3（SSH 终端）可以拆为 M3a（后端 SSH crate）和 M3b（前端 terminal 页面）。
+
+每个里程碑文档同时包含后端接口和前端入口的设计。
 
 **里程碑文档必须包含：**
 
@@ -157,7 +162,7 @@ git commit -m 'feat: add agent management'
 
 里程碑完成后：
 1. 保留里程碑文档（`docs/milestones/M{N}*.md`）
-2. 删除 `docs/DEVELOPMENT.md` 中对应阶段的内容
+2. 更新 `docs/DEVELOPMENT.md` 里程碑总览表中对应行的状态
 
 ---
 
@@ -166,9 +171,12 @@ git commit -m 'feat: add agent management'
 ```text
 docs/
   PRODUCT.md              产品功能、架构决策、用户可见流程
-  DEVELOPMENT.md          实现细节、里程碑、开发任务规划
+  DEVELOPMENT.md          开发索引（技术栈、crate 结构、里程碑总览）
+  architecture/           架构文档（进程模型、更新机制、文件传输、连接通道、Docker）
+  reference/              参考文档（数据模型、API 设计、前端工程、配置约定）
   milestones/
     M{N}-{name}.md        里程碑开发文档（完成后保留）
+    M{N}-reports/         里程碑报告（步骤 2/4/5/6/7）
 prototype/
   *.html                  产品交互原型
   css/                    原型样式
