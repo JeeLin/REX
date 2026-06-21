@@ -172,16 +172,19 @@ pub fn app_with_static(
             get(crate::sql::list_columns),
         )
         .route(
-            "/api/queries",
+            "/api/resources/:resource_id/queries",
             get(crate::queries::list_queries).post(crate::queries::save_query),
         )
         .route(
-            "/api/queries/:id",
+            "/api/resources/:resource_id/queries/:id",
             get(crate::queries::get_query)
                 .put(crate::queries::update_query)
                 .delete(crate::queries::delete_query),
         )
-        .route("/api/queries/:id/rename", put(crate::queries::rename_query))
+        .route(
+            "/api/resources/:resource_id/queries/:id/rename",
+            put(crate::queries::rename_query),
+        )
         .route("/api/update/status", get(crate::update::get_update_status))
         .route("/api/update/check", get(crate::update::check_update))
         .route(

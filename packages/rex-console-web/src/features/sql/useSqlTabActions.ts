@@ -7,6 +7,8 @@ export interface QueryTab {
   title: string
   sql: string
   result: SqlResult | null
+  /** 已保存的查询文件 ID，null 表示未保存 */
+  queryId: string | null
 }
 
 export function useSqlTabActions(resourceId: string, onError?: (msg: string) => void) {
@@ -16,18 +18,18 @@ export function useSqlTabActions(resourceId: string, onError?: (msg: string) => 
   let tabCounter = 0
 
   const tabList = computed(() =>
-    tabs.value.map((t) => ({ id: t.id, title: t.title })),
+    tabs.value.map((t) => ({ id: t.id, title: t.title, queryId: t.queryId })),
   )
 
   const activeTab = computed(() => {
     const tab = tabs.value.find((t) => t.id === activeTabId.value)
-    return tab ?? tabs.value[0] ?? { id: '', title: '', sql: '', result: null }
+    return tab ?? tabs.value[0] ?? { id: '', title: '', sql: '', result: null, queryId: null }
   })
 
   function addTab() {
     tabCounter++
     const id = `sql-tab-${Date.now()}-${tabCounter}`
-    tabs.value.push({ id, title: `查询 ${tabCounter}`, sql: '', result: null })
+    tabs.value.push({ id, title: `查询 ${tabCounter}`, sql: '', result: null, queryId: null })
     activeTabId.value = id
   }
 
@@ -60,6 +62,31 @@ export function useSqlTabActions(resourceId: string, onError?: (msg: string) => 
   function clearEditor() {
     const tab = tabs.value.find((t) => t.id === activeTabId.value)
     if (tab) tab.sql = ''
+  }
+
+  /** 打开一个已保存的查询文件到新标签 */
+  function openQueryFile(queryId: string, title: string, sql: string) {
+    // 检查是否已经打开了这个查询文件
+    const existing = tabs.value.find((t) => t.queryId === queryId)
+    if (existing) {
+      activeTabId.value = existing.id
+      return
+    }
+    tabCounter++
+    const id = `sql-tab-${Date.now()}-${tabCounter}`
+    tabs.value.push({ id, title, sql, result: null, queryId })
+    activeTabId.value = id
+  }
+
+  /** 标记当前标签为已保存 */
+  function markSaved(id: string, queryId: string) {
+    const tab = tabs.value.find((t) => t.id === id)
+    if (tab) tab.queryId = queryId
+  }
+
+  /** 获取当前标签的查询文件 ID */
+  function getQueryId(id: string): string | null {
+    return tabs.value.find((t) => t.id === id)?.queryId ?? null
   }
 
   async function execute(sql: string) {
@@ -107,6 +134,9 @@ export function useSqlTabActions(resourceId: string, onError?: (msg: string) => 
     renameTab,
     getTabSql,
     clearEditor,
+    openQueryFile,
+    markSaved,
+    getQueryId,
     execute,
     handleSort,
     handleGenerateSql,

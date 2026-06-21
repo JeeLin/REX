@@ -408,6 +408,24 @@ export default {
         refreshStructure: 'Refresh Structure',
       },
     },
+    sidebar: {
+      schema: 'Schema',
+      queries: 'Queries',
+      savedQueries: 'Saved Queries',
+      searchQueries: 'Search queries...',
+      noQueries: 'No saved queries',
+      today: 'Today',
+      yesterday: 'Yesterday',
+      daysAgo: '{n} days ago',
+      renamePrompt: 'Enter new name:',
+      deleteConfirm: 'Delete query "{name}"?',
+      ctx: {
+        open: 'Open',
+        rename: 'Rename',
+        delete: 'Delete',
+      },
+    },
+    savePrompt: 'Enter query name:',
     tab: {
       ctx: {
         close: 'Close',

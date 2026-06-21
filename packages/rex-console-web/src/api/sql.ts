@@ -72,3 +72,72 @@ export function listColumns(
     .get(`/resources/${resourceId}/sql/columns`, { params: { database, table } })
     .then((r) => r.data.data)
 }
+
+// ── 查询文件 API ──────────────────────────────────────────
+
+export interface QueryFileMeta {
+  id: string
+  name: string
+  database: string
+  created_at: string
+  updated_at: string
+}
+
+export interface QueryFileDetail extends QueryFileMeta {
+  sql: string
+}
+
+/** 列出资源的所有查询文件 */
+export function listQueries(resourceId: string): Promise<QueryFileMeta[]> {
+  return client
+    .get(`/resources/${resourceId}/queries`)
+    .then((r) => r.data.data)
+}
+
+/** 保存查询文件 */
+export function saveQuery(
+  resourceId: string,
+  name: string,
+  sql: string,
+  database: string,
+): Promise<QueryFileMeta> {
+  return client
+    .post(`/resources/${resourceId}/queries`, { name, sql, database })
+    .then((r) => r.data.data)
+}
+
+/** 读取查询文件 */
+export function getQuery(resourceId: string, id: string): Promise<QueryFileDetail> {
+  return client
+    .get(`/resources/${resourceId}/queries/${id}`)
+    .then((r) => r.data.data)
+}
+
+/** 更新查询文件 */
+export function updateQuery(
+  resourceId: string,
+  id: string,
+  data: { name?: string; sql?: string; database?: string },
+): Promise<QueryFileMeta> {
+  return client
+    .put(`/resources/${resourceId}/queries/${id}`, data)
+    .then((r) => r.data.data)
+}
+
+/** 删除查询文件 */
+export function deleteQuery(resourceId: string, id: string): Promise<void> {
+  return client
+    .delete(`/resources/${resourceId}/queries/${id}`)
+    .then(() => undefined)
+}
+
+/** 重命名查询文件 */
+export function renameQuery(
+  resourceId: string,
+  id: string,
+  name: string,
+): Promise<QueryFileMeta> {
+  return client
+    .put(`/resources/${resourceId}/queries/${id}/rename`, { name })
+    .then((r) => r.data.data)
+}

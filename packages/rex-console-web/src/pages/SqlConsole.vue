@@ -45,10 +45,14 @@
       <!-- Sidebar -->
       <SqlSidebar
         v-if="selectedDb"
+        ref="sidebarRef"
         :resource-id="resourceId"
         :database="selectedDb"
         @select-table="insertTableSql"
+        @open-query="handleOpenQuery"
         @refresh="loadDatabases"
+        @query-deleted="handleQueryDeleted"
+        @query-renamed="handleQueryRenamed"
       />
 
       <!-- Right: Editor + Results -->
@@ -57,7 +61,7 @@
           v-model="activeTab.sql"
           @execute="execute(activeTab.sql)"
           @execute-selection="execute"
-          @save="() => {}"
+          @save="handleToolbarSave"
           @show-history="() => {}"
         />
         <SqlResults
@@ -80,8 +84,8 @@ import SqlTabs from '@/features/sql/SqlTabs.vue'
 import SqlSidebar from '@/features/sql/SqlSidebar.vue'
 import SqlEditor from '@/features/sql/SqlEditor.vue'
 import SqlResults from '@/features/sql/SqlResults.vue'
-import { listDatabases, getResourceInfo } from '@/api/sql'
-import type { DatabaseInfo } from '@/api/sql'
+import { listDatabases, getResourceInfo, getQuery, saveQuery, updateQuery } from '@/api/sql'
+import type { DatabaseInfo, QueryFileMeta } from '@/api/sql'
 import { useSqlTabActions } from '@/features/sql/useSqlTabActions'
 
 const { t } = useI18n()
@@ -92,22 +96,56 @@ const resourceId = route.params.resourceId as string
 const {
   tabs, activeTabId, executing, tabList, activeTab,
   addTab, closeTab, closeOthers, renameTab, getTabSql,
-  clearEditor, execute, handleSort, handleGenerateSql,
+  clearEditor, openQueryFile, markSaved, getQueryId,
+  execute, handleSort, handleGenerateSql,
 } = useSqlTabActions(resourceId, (msg) => alert(msg))
 
 // Resource info
 const resource = ref<{ name: string; protocol: string } | null>(null)
 const databases = ref<DatabaseInfo[]>([])
 const selectedDb = ref('')
+const sidebarRef = ref<InstanceType<typeof SqlSidebar>>()
 
 function insertTableSql(tableName: string) {
   const tab = tabs.value.find((t) => t.id === activeTabId.value)
   if (tab) tab.sql = `SELECT * FROM ${tableName} LIMIT 100;`
 }
 
-function handleTabSave(id: string) {
-  // TODO: implement save query file flow
-  console.log('save tab', id)
+function handleOpenQuery(query: QueryFileMeta) {
+  // 加载查询文件内容并打开
+  getQuery(resourceId, query.id).then((detail) => {
+    openQueryFile(query.id, query.name, detail.sql)
+  })
+}
+
+async function handleTabSave(id: string) {
+  const tab = tabs.value.find((t) => t.id === id)
+  if (!tab) return
+
+  const existingQueryId = getQueryId(id)
+  const database = selectedDb.value
+
+  if (existingQueryId) {
+    // 已保存的查询文件，直接更新
+    await updateQuery(resourceId, existingQueryId, {
+      sql: tab.sql,
+      database,
+    })
+  } else {
+    // 新查询文件，弹出命名对话框
+    const name = prompt(t('sql.savePrompt'))
+    if (!name || !name.trim()) return
+    const saved = await saveQuery(resourceId, name.trim(), tab.sql, database)
+    markSaved(id, saved.id)
+    tab.title = saved.name
+  }
+
+  // 刷新侧边栏查询文件列表
+  sidebarRef.value?.loadQueries()
+}
+
+function handleToolbarSave() {
+  handleTabSave(activeTabId.value)
 }
 
 function handleTabRename(id: string) {
@@ -123,6 +161,14 @@ function handleTabCopySql(id: string) {
 function handleTabExecuteSql(id: string) {
   const tab = tabs.value.find((t) => t.id === id)
   if (tab) execute(tab.sql)
+}
+
+function handleQueryDeleted() {
+  // 如果当前标签是已删除的查询文件，可以清空 queryId
+}
+
+function handleQueryRenamed() {
+  // 侧边栏会自动刷新
 }
 
 async function loadDatabases() {

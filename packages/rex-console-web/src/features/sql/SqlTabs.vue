@@ -8,7 +8,8 @@
       @click="$emit('select', tab.id)"
       @contextmenu.prevent="handleContextMenu($event, tab)"
     >
-      <span class="tab-icon">📄</span> {{ tab.title }}
+      <span class="tab-icon">{{ tab.queryId ? '💾' : '📄' }}</span>
+      {{ tab.title }}
       <span
         v-if="tabs.length > 1"
         class="tab-close"
@@ -24,7 +25,7 @@ import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
 
 defineProps<{
-  tabs: Array<{ id: string; title: string }>
+  tabs: Array<{ id: string; title: string; queryId: string | null }>
   activeId: string
 }>()
 
@@ -42,8 +43,8 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const ctxMenu = useContextMenu()
 
-function handleContextMenu(event: MouseEvent, tab: { id: string; title: string }) {
-  ctxMenu.show(event, [
+function handleContextMenu(event: MouseEvent, tab: { id: string; title: string; queryId: string | null }) {
+  const items = [
     { label: t('sql.tab.ctx.close'), action: () => emit('close', tab.id) },
     { label: t('sql.tab.ctx.closeOthers'), action: () => emit('closeOthers', tab.id) },
     { separator: true },
@@ -52,7 +53,8 @@ function handleContextMenu(event: MouseEvent, tab: { id: string; title: string }
     { separator: true },
     { label: t('sql.tab.ctx.copySql'), action: () => emit('copySql', tab.id) },
     { label: t('sql.tab.ctx.executeSql'), action: () => emit('executeSql', tab.id) },
-  ])
+  ]
+  ctxMenu.show(event, items)
 }
 </script>
 

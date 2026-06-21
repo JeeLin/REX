@@ -410,6 +410,24 @@ export default {
         refreshStructure: '刷新结构',
       },
     },
+    sidebar: {
+      schema: '库表结构',
+      queries: '查询文件',
+      savedQueries: '已保存的查询',
+      searchQueries: '搜索查询...',
+      noQueries: '暂无保存的查询',
+      today: '今天',
+      yesterday: '昨天',
+      daysAgo: '{n} 天前',
+      renamePrompt: '输入新名称:',
+      deleteConfirm: '确定删除查询 "{name}" 吗？',
+      ctx: {
+        open: '打开',
+        rename: '重命名',
+        delete: '删除',
+      },
+    },
+    savePrompt: '输入查询名称:',
     tab: {
       ctx: {
         close: '关闭',

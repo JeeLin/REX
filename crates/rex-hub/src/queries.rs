@@ -48,18 +48,20 @@ pub struct QueryDetail {
 
 // ── 路由处理函数 ──────────────────────────────────────────
 
-/// GET /api/queries — 列出所有查询文件
+/// GET /api/resources/:resource_id/queries — 列出该资源的所有查询文件
 pub async fn list_queries(
     State(state): State<Arc<AppState>>,
+    AxPath(resource_id): AxPath<String>,
 ) -> Result<Json<ApiResponse<Vec<QueryFileMeta>>>, (StatusCode, Json<ErrorResponse>)> {
-    let queries_dir = state.data_dir.join("queries");
+    let queries_dir = state.data_dir.join("queries").join(&resource_id);
     let entries = list_query_files(&queries_dir)?;
     Ok(Json(ApiResponse { data: entries }))
 }
 
-/// POST /api/queries — 保存查询文件
+/// POST /api/resources/:resource_id/queries — 保存查询文件
 pub async fn save_query(
     State(state): State<Arc<AppState>>,
+    AxPath(resource_id): AxPath<String>,
     Json(input): Json<SaveQueryRequest>,
 ) -> Result<Json<ApiResponse<QueryFileMeta>>, (StatusCode, Json<ErrorResponse>)> {
     if input.name.trim().is_empty() {
@@ -69,7 +71,7 @@ pub async fn save_query(
         return Err(bad_request("SQL 不能为空"));
     }
 
-    let queries_dir = state.data_dir.join("queries");
+    let queries_dir = state.data_dir.join("queries").join(&resource_id);
     std::fs::create_dir_all(&queries_dir)
         .map_err(|e| err_resp("IO_ERROR", &format!("创建查询目录失败: {e}")))?;
 
@@ -96,16 +98,16 @@ pub async fn save_query(
     std::fs::write(&sql_path, &input.sql)
         .map_err(|e| err_resp("IO_ERROR", &format!("写入 SQL 失败: {e}")))?;
 
-    info!(query_id = %id, name = %meta.name, "query saved");
+    info!(query_id = %id, resource = %resource_id, name = %meta.name, "query saved");
     Ok(Json(ApiResponse { data: meta }))
 }
 
-/// GET /api/queries/:id — 读取查询文件
+/// GET /api/resources/:resource_id/queries/:id — 读取查询文件
 pub async fn get_query(
     State(state): State<Arc<AppState>>,
-    AxPath(id): AxPath<String>,
+    AxPath((resource_id, id)): AxPath<(String, String)>,
 ) -> Result<Json<ApiResponse<QueryDetail>>, (StatusCode, Json<ErrorResponse>)> {
-    let queries_dir = state.data_dir.join("queries");
+    let queries_dir = state.data_dir.join("queries").join(&resource_id);
 
     let meta = read_meta(&queries_dir, &id)?;
 
@@ -118,13 +120,13 @@ pub async fn get_query(
     }))
 }
 
-/// PUT /api/queries/:id — 更新查询文件
+/// PUT /api/resources/:resource_id/queries/:id — 更新查询文件
 pub async fn update_query(
     State(state): State<Arc<AppState>>,
-    AxPath(id): AxPath<String>,
+    AxPath((resource_id, id)): AxPath<(String, String)>,
     Json(input): Json<UpdateQueryRequest>,
 ) -> Result<Json<ApiResponse<QueryFileMeta>>, (StatusCode, Json<ErrorResponse>)> {
-    let queries_dir = state.data_dir.join("queries");
+    let queries_dir = state.data_dir.join("queries").join(&resource_id);
 
     let mut meta = read_meta(&queries_dir, &id)?;
 
@@ -153,16 +155,16 @@ pub async fn update_query(
             .map_err(|e| err_resp("IO_ERROR", &format!("写入 SQL 失败: {e}")))?;
     }
 
-    info!(query_id = %id, name = %meta.name, "query updated");
+    info!(query_id = %id, resource = %resource_id, name = %meta.name, "query updated");
     Ok(Json(ApiResponse { data: meta }))
 }
 
-/// DELETE /api/queries/:id — 删除查询文件
+/// DELETE /api/resources/:resource_id/queries/:id — 删除查询文件
 pub async fn delete_query(
     State(state): State<Arc<AppState>>,
-    AxPath(id): AxPath<String>,
+    AxPath((resource_id, id)): AxPath<(String, String)>,
 ) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
-    let queries_dir = state.data_dir.join("queries");
+    let queries_dir = state.data_dir.join("queries").join(&resource_id);
 
     // 验证文件存在
     let _ = read_meta(&queries_dir, &id)?;
@@ -174,21 +176,21 @@ pub async fn delete_query(
         .map_err(|e| err_resp("IO_ERROR", &format!("删除元数据失败: {e}")))?;
     let _ = std::fs::remove_file(&sql_path); // SQL 文件可能不存在，忽略错误
 
-    info!(query_id = %id, "query deleted");
+    info!(query_id = %id, resource = %resource_id, "query deleted");
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// PUT /api/queries/:id/rename — 重命名查询文件
+/// PUT /api/resources/:resource_id/queries/:id/rename — 重命名查询文件
 pub async fn rename_query(
     State(state): State<Arc<AppState>>,
-    AxPath(id): AxPath<String>,
+    AxPath((resource_id, id)): AxPath<(String, String)>,
     Json(input): Json<RenameQueryRequest>,
 ) -> Result<Json<ApiResponse<QueryFileMeta>>, (StatusCode, Json<ErrorResponse>)> {
     if input.name.trim().is_empty() {
         return Err(bad_request("查询名称不能为空"));
     }
 
-    let queries_dir = state.data_dir.join("queries");
+    let queries_dir = state.data_dir.join("queries").join(&resource_id);
 
     let mut meta = read_meta(&queries_dir, &id)?;
     meta.name = input.name;
@@ -200,7 +202,7 @@ pub async fn rename_query(
     std::fs::write(&meta_path, meta_json)
         .map_err(|e| err_resp("IO_ERROR", &format!("写入元数据失败: {e}")))?;
 
-    info!(query_id = %id, name = %meta.name, "query renamed");
+    info!(query_id = %id, resource = %resource_id, name = %meta.name, "query renamed");
     Ok(Json(ApiResponse { data: meta }))
 }
 
@@ -263,6 +265,8 @@ mod tests {
     use crate::ws::new_connections;
     use rex_transfer::task::TransferManager;
 
+    const RID: &str = "res_00000001";
+
     fn test_state() -> (Arc<AppState>, tempfile::TempDir) {
         let tmp = tempfile::tempdir().unwrap();
         let state = Arc::new(AppState {
@@ -282,14 +286,24 @@ mod tests {
     fn test_app() -> (Router, tempfile::TempDir) {
         let (state, tmp) = test_state();
         let app = Router::new()
-            .route("/api/queries", get(list_queries).post(save_query))
             .route(
-                "/api/queries/:id",
+                "/api/resources/:resource_id/queries",
+                get(list_queries).post(save_query),
+            )
+            .route(
+                "/api/resources/:resource_id/queries/:id",
                 get(get_query).put(update_query).delete(delete_query),
             )
-            .route("/api/queries/:id/rename", put(rename_query))
+            .route(
+                "/api/resources/:resource_id/queries/:id/rename",
+                put(rename_query),
+            )
             .with_state(state);
         (app, tmp)
+    }
+
+    fn queries_uri(path: &str) -> String {
+        format!("/api/resources/{RID}/queries{path}")
     }
 
     #[tokio::test]
@@ -298,7 +312,7 @@ mod tests {
         let resp = app
             .oneshot(
                 Request::builder()
-                    .uri("/api/queries")
+                    .uri(queries_uri(""))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -319,7 +333,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/api/queries")
+                    .uri(queries_uri(""))
                     .header("content-type", "application/json")
                     .body(Body::from(
                         r#"{"name":"test","sql":"SELECT 1","database":"mydb"}"#,
@@ -345,11 +359,9 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/api/queries")
+                    .uri(queries_uri(""))
                     .header("content-type", "application/json")
-                    .body(Body::from(
-                        r#"{"name":"","sql":"SELECT 1","database":"mydb"}"#,
-                    ))
+                    .body(Body::from(r#"{"name":"","sql":"SELECT 1","database":"mydb"}"#))
                     .unwrap(),
             )
             .await
@@ -364,11 +376,9 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/api/queries")
+                    .uri(queries_uri(""))
                     .header("content-type", "application/json")
-                    .body(Body::from(
-                        r#"{"name":"test","sql":"  ","database":"mydb"}"#,
-                    ))
+                    .body(Body::from(r#"{"name":"test","sql":"  ","database":"mydb"}"#))
                     .unwrap(),
             )
             .await
@@ -386,7 +396,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/api/queries")
+                    .uri(queries_uri(""))
                     .header("content-type", "application/json")
                     .body(Body::from(
                         r#"{"name":"test","sql":"SELECT 1","database":"mydb"}"#,
@@ -405,7 +415,7 @@ mod tests {
         let resp = app
             .oneshot(
                 Request::builder()
-                    .uri(format!("/api/queries/{id}"))
+                    .uri(queries_uri(&format!("/{id}")))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -427,7 +437,7 @@ mod tests {
         let resp = app
             .oneshot(
                 Request::builder()
-                    .uri("/api/queries/q_00000000")
+                    .uri(queries_uri("/q_00000000"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -446,7 +456,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/api/queries")
+                    .uri(queries_uri(""))
                     .header("content-type", "application/json")
                     .body(Body::from(
                         r#"{"name":"old","sql":"SELECT 1","database":"mydb"}"#,
@@ -467,7 +477,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("PUT")
-                    .uri(format!("/api/queries/{id}"))
+                    .uri(queries_uri(&format!("/{id}")))
                     .header("content-type", "application/json")
                     .body(Body::from(r#"{"name":"new"}"#))
                     .unwrap(),
@@ -492,7 +502,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/api/queries")
+                    .uri(queries_uri(""))
                     .header("content-type", "application/json")
                     .body(Body::from(
                         r#"{"name":"test","sql":"SELECT 1","database":"mydb"}"#,
@@ -513,7 +523,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("DELETE")
-                    .uri(format!("/api/queries/{id}"))
+                    .uri(queries_uri(&format!("/{id}")))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -525,7 +535,7 @@ mod tests {
         let resp = app
             .oneshot(
                 Request::builder()
-                    .uri(format!("/api/queries/{id}"))
+                    .uri(queries_uri(&format!("/{id}")))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -544,7 +554,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/api/queries")
+                    .uri(queries_uri(""))
                     .header("content-type", "application/json")
                     .body(Body::from(
                         r#"{"name":"old","sql":"SELECT 1","database":"mydb"}"#,
@@ -564,7 +574,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("PUT")
-                    .uri(format!("/api/queries/{id}/rename"))
+                    .uri(queries_uri(&format!("/{id}/rename")))
                     .header("content-type", "application/json")
                     .body(Body::from(r#"{"name":"renamed"}"#))
                     .unwrap(),
@@ -586,14 +596,13 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("PUT")
-                    .uri("/api/queries/q_00000000/rename")
+                    .uri(queries_uri("/q_00000000/rename"))
                     .header("content-type", "application/json")
                     .body(Body::from(r#"{"name":""}"#))
                     .unwrap(),
             )
             .await
             .unwrap();
-        // Empty name should return BAD_REQUEST (validates before checking existence)
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
@@ -607,7 +616,7 @@ mod tests {
                 .oneshot(
                     Request::builder()
                         .method("POST")
-                        .uri("/api/queries")
+                        .uri(queries_uri(""))
                         .header("content-type", "application/json")
                         .body(Body::from(format!(
                             r#"{{"name":"{name}","sql":"SELECT 1","database":"mydb"}}"#
@@ -621,7 +630,7 @@ mod tests {
         let resp = app
             .oneshot(
                 Request::builder()
-                    .uri("/api/queries")
+                    .uri(queries_uri(""))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -632,5 +641,74 @@ mod tests {
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json["data"].as_array().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn queries_are_isolated_by_resource() {
+        let tmp = tempfile::tempdir().unwrap();
+        let state = Arc::new(AppState {
+            db: Arc::new(crate::db::Database::new_in_memory().unwrap()),
+            secret_key: "test-secret".to_string(),
+            connections: Arc::new(new_connections()),
+            sessions: Arc::new(SessionManager::new(900)),
+            transfer: Some(Arc::new(crate::transfer::TransferState {
+                manager: Arc::new(TransferManager::new()),
+            })),
+            update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
+            data_dir: tmp.path().to_path_buf(),
+        });
+
+        let app = Router::new()
+            .route(
+                "/api/resources/:resource_id/queries",
+                get(list_queries).post(save_query),
+            )
+            .with_state(state);
+
+        // Save to res_a
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/resources/res_a/queries")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"name":"q1","sql":"SELECT 1","database":"db1"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // List res_a → 1 item
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/resources/res_a/queries")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["data"].as_array().unwrap().len(), 1);
+
+        // List res_b → 0 items
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/resources/res_b/queries")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["data"].as_array().unwrap().len(), 0);
     }
 }
