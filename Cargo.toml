@@ -14,6 +14,7 @@ rex-mysql = { path = "crates/rex-mysql" }
 rex-postgresql = { path = "crates/rex-postgresql" }
 rex-redis = { path = "crates/rex-redis" }
 rex-docker = { path = "crates/rex-docker" }
+rex-sqlite = { path = "crates/rex-sqlite" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 async-trait = "0.1"

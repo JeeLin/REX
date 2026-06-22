@@ -33,6 +33,7 @@ rex-mysql = { workspace = true }
 rex-postgresql = { workspace = true }
 rex-redis = { workspace = true }
 rex-docker = { workspace = true }
+rex-sqlite = { workspace = true }
 base64 = { workspace = true }
 tokio-rustls = { workspace = true }
 rustls = { workspace = true }
