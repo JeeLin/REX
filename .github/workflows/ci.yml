@@ -233,6 +233,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare agent README for Docker Hub
+        run: cp docs/agent-readme.md README.md
+
       - name: Docker meta
         id: meta-agent
         uses: docker/metadata-action@v5
@@ -259,6 +262,8 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download all agent binaries
         uses: actions/download-artifact@v4
         with:
@@ -288,8 +293,18 @@ jobs:
         run: |
           sha256sum rex-hub-*.zip rex-agent-*.zip > SHA256SUMS
 
+      - name: Extract changelog for release
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          # Extract section between ## [VERSION] and next ## [
+          awk "/^## \[${VERSION}\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md > release-body.md
+          # Ensure non-empty
+          if [ ! -s release-body.md ]; then
+            echo "No changelog entry for v${VERSION}" > release-body.md
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: release-body.md
           files: rex-hub-*.zip rex-agent-*.zip SHA256SUMS
-          generate_release_notes: true
