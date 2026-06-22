@@ -19,6 +19,18 @@ pub struct Cli {
     /// TLS 私钥文件路径（仅 Hub）
     #[arg(long = "tls-key")]
     pub tls_key: Option<String>,
+
+    /// ACME 域名或公网 IP（仅 Hub）
+    #[arg(long = "acme-domain")]
+    pub acme_domain: Option<String>,
+
+    /// ACME Let's Encrypt 账户邮箱（仅 Hub）
+    #[arg(long = "acme-email")]
+    pub acme_email: Option<String>,
+
+    /// ACME 使用 staging 环境（仅 Hub）
+    #[arg(long = "acme-staging")]
+    pub acme_staging: bool,
 }
 
 #[cfg(test)]
@@ -49,5 +61,21 @@ mod tests {
         let cli = Cli::parse_from(["rex", "--worker", "--config", "hub.yaml"]);
         assert!(cli.worker);
         assert_eq!(cli.config.as_deref(), Some("hub.yaml"));
+    }
+
+    #[test]
+    fn parse_acme_flags() {
+        let cli = Cli::parse_from([
+            "rex",
+            "--worker",
+            "--acme-domain",
+            "hub.example.com",
+            "--acme-email",
+            "admin@example.com",
+            "--acme-staging",
+        ]);
+        assert_eq!(cli.acme_domain.as_deref(), Some("hub.example.com"));
+        assert_eq!(cli.acme_email.as_deref(), Some("admin@example.com"));
+        assert!(cli.acme_staging);
     }
 }

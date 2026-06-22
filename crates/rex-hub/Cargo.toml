@@ -36,6 +36,9 @@ tokio-rustls = { workspace = true }
 rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
 hyper-util = { workspace = true }
+rustls-acme = { workspace = true }
+rcgen = { workspace = true }
+time = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

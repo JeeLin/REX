@@ -18,6 +18,9 @@ fn main() -> anyhow::Result<()> {
             cli.config.as_deref(),
             cli.tls_cert.as_deref(),
             cli.tls_key.as_deref(),
+            cli.acme_domain.as_deref(),
+            cli.acme_email.as_deref(),
+            cli.acme_staging,
         )?;
 
         let db_path = config.data_dir.join("hub.db");

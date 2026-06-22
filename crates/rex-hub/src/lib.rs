@@ -1,3 +1,4 @@
+pub mod acme;
 pub mod agent;
 pub mod agent_download;
 pub mod audit;
@@ -11,6 +12,7 @@ pub mod history;
 pub mod queries;
 pub mod resource;
 pub mod routes;
+pub mod self_signed;
 pub mod sql;
 pub mod ssh_config;
 pub mod terminal;
