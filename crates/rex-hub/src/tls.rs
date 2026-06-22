@@ -29,10 +29,13 @@ pub fn create_tls_acceptor(cert_path: &Path, key_path: &Path) -> Result<TlsAccep
         .with_context(|| format!("failed to parse TLS private key: {}", key_path.display()))?
         .context("no private key found in key file")?;
 
-    let config = ServerConfig::builder()
-        .with_no_client_auth()
-        .with_single_cert(certs, key_der.into())
-        .map_err(|e| anyhow::anyhow!("failed to build TLS server config: {e}"))?;
+    let config =
+        ServerConfig::builder_with_provider(rustls::crypto::ring::default_provider().into())
+            .with_safe_default_protocol_versions()
+            .map_err(|e| anyhow::anyhow!("failed to build TLS server config: {e}"))?
+            .with_no_client_auth()
+            .with_single_cert(certs, key_der.into())
+            .map_err(|e| anyhow::anyhow!("failed to build TLS server config: {e}"))?;
 
     Ok(TlsAcceptor::from(Arc::new(config)))
 }

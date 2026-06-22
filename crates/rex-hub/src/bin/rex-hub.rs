@@ -152,10 +152,14 @@ fn main() -> anyhow::Result<()> {
                 };
 
                 let tls_acceptor = rex_hub::tls::create_tls_acceptor_from_config(
-                    rustls::ServerConfig::builder()
-                        .with_no_client_auth()
-                        .with_single_cert(vec![cert.cert_der], cert.key_der)
-                        .map_err(|e| anyhow::anyhow!("failed to build TLS config: {e}"))?,
+                    rustls::ServerConfig::builder_with_provider(
+                        rustls::crypto::ring::default_provider().into(),
+                    )
+                    .with_safe_default_protocol_versions()
+                    .map_err(|e| anyhow::anyhow!("failed to build TLS config: {e}"))?
+                    .with_no_client_auth()
+                    .with_single_cert(vec![cert.cert_der], cert.key_der)
+                    .map_err(|e| anyhow::anyhow!("failed to build TLS config: {e}"))?,
                 );
 
                 tracing::info!(listen = %config.listen, "TLS mode: self-signed — serving HTTPS");
@@ -232,9 +236,9 @@ mod tests {
     }
 
     #[test]
-    fn determine_tls_mode_self_signed() {
+    fn determine_tls_mode_none() {
         let config = HubConfig::default();
-        assert_eq!(acme::determine_tls_mode(&config), TlsMode::SelfSigned);
+        assert_eq!(acme::determine_tls_mode(&config), TlsMode::None);
     }
 
     #[test]

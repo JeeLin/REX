@@ -93,8 +93,8 @@ pub fn determine_tls_mode(config: &HubConfig) -> TlsMode {
         }
     }
 
-    // 3. 自签名证书
-    TlsMode::SelfSigned
+    // 3. 无 TLS 配置 → HTTP only
+    TlsMode::None
 }
 
 /// TLS 模式
