@@ -4,19 +4,22 @@ services:
     container_name: rex-hub
     restart: unless-stopped
     ports:
+      # 端口说明：
+      # - 3000：始终监听。无 TLS 时为 HTTP，启用 TLS 后为 HTTPS
+      # - 80：仅 ACME HTTP-01 验证时需要（Let's Encrypt 验证域名所有权）
+      # - 443：可选，额外的 HTTPS 入口（方便使用标准端口）
       - "3000:3000"
-      - "80:80"      # ACME HTTP-01（启用 ACME 域名证书时需要）
-      # - "443:443"  # HTTPS（启用 TLS 时取消注释）
+      - "80:80"      # ACME HTTP-01（启用 ACME 域名证书时需要，IP 证书不需要）
+      # - "443:443"  # 可选：额外 HTTPS 入口
     volumes:
       - hub-data:/app/data
-      # - ./certs:/app/data/certs:ro  # 手动 TLS 证书目录（优先级最高）
     environment:
       - REX_SECRET_KEY=${REX_SECRET_KEY}
       - DATA_DIR=/app/data
       # 手动 TLS 配置（最高优先级，启用后 ACME 和自签名不生效）
       # - REX_TLS_CERT=/app/data/certs/hub.crt
       # - REX_TLS_KEY=/app/data/certs/hub.key
-      # ACME 自动证书配置（次优先级）
+      # ACME 自动证书配置（次优先级，domain 为域名时需要 80 端口）
       # - REX_ACME_DOMAIN=hub.example.com
       # - REX_ACME_EMAIL=admin@example.com
       # - REX_ACME_STAGING=false
