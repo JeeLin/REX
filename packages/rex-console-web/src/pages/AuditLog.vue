@@ -31,7 +31,7 @@
         <span class="filter-label">{{ t('audit.filters.env') }}</span>
         <select v-model="filters.env">
           <option value="">{{ t('audit.filters.all') }}</option>
-          <option v-for="env in environments" :key="env.id" :value="env.id">{{ env.name }}</option>
+          <option v-for="env in environments" :key="env.id" :value="env.name">{{ env.name }}</option>
         </select>
       </div>
       <div class="filter-sep"></div>
@@ -80,7 +80,7 @@
           </tr>
         </thead>
         <tbody>
-          <template v-for="record in paginatedRecords" :key="record.id">
+          <template v-for="record in filteredRecords" :key="record.id">
             <tr
               class="log-row"
               :class="{ expanded: expandedId === record.id }"
@@ -112,12 +112,13 @@
                 <div class="audit-detail-inner">
                   <div class="detail-title">{{ t(`audit.ops.${record.operation}`) }}</div>
                   <div class="detail-grid">
-                    <template v-for="field in record.detailFields" :key="field.label">
-                      <span class="detail-label">{{ field.label }}</span>
-                      <span class="detail-value">{{ field.value }}</span>
+                    <template v-if="record.detail">
+                      <template v-for="(value, key) in record.detail" :key="String(key)">
+                        <span class="detail-label">{{ String(key) }}</span>
+                        <span class="detail-value">{{ String(value) }}</span>
+                      </template>
                     </template>
                   </div>
-                  <div v-if="record.detailCommand" class="detail-cmd">{{ record.detailCommand }}</div>
                 </div>
               </td>
             </tr>
@@ -147,9 +148,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
+import { listAuditLog } from '@/api/audit'
+import { listEnvironments } from '@/api/env'
+import type { Environment } from '@/api/env'
 
 const { t } = useI18n()
 const { show: showMenu } = useContextMenu()
@@ -162,50 +166,60 @@ const filters = ref({
   operation: '',
 })
 
-const environments = [
-  { id: 'env_ali', name: '阿里云' },
-  { id: 'env_pi', name: '树莓派集群' },
-  { id: 'env_nas', name: '家庭 NAS' },
-]
-
-const operationTypes = [
-  { value: 'connect', label: 'SSH 连接' },
-  { value: 'disconnect', label: '连接断开' },
-  { value: 'query', label: 'SQL 查询' },
-  { value: 'upload', label: '文件上传' },
-  { value: 'download', label: '文件下载' },
-  { value: 'ssh_command', label: 'SSH 命令' },
-  { value: 'login', label: '登录' },
-]
-
 function resetFilters() {
   filters.value = { time: '24h', user: '', env: '', operation: '' }
+  currentPage.value = 1
 }
+
+// ── Environments (fetched from API) ──
+const environments = ref<Environment[]>([])
+
+// ── Operation types (i18n) ──
+const operationTypes = computed(() => [
+  { value: 'connect', label: t('audit.ops.connect') },
+  { value: 'disconnect', label: t('audit.ops.disconnect') },
+  { value: 'query', label: t('audit.ops.query') },
+  { value: 'upload', label: t('audit.ops.upload') },
+  { value: 'download', label: t('audit.ops.download') },
+  { value: 'delete', label: t('audit.ops.delete') },
+  { value: 'ssh_command', label: t('audit.ops.command') },
+  { value: 'login', label: t('audit.ops.login') },
+])
+
+// ── Audit record type ──
+interface AuditRecord {
+  id: string
+  time: string
+  user: string
+  envName: string
+  operation: string
+  summary: string
+  result: 'ok' | 'fail'
+  detail?: Record<string, unknown>
+}
+
+// ── Data state ──
+const records = ref<AuditRecord[]>([])
+const loading = ref(false)
+const currentPage = ref(1)
+const pageSize = 20
+
+// ── Stats computed from filtered records ──
+const stats = computed(() => {
+  const all = filteredRecords.value
+  return {
+    total: all.length,
+    success: all.filter(r => r.result === 'ok').length,
+    failed: all.filter(r => r.result === 'fail').length,
+    activeUsers: new Set(all.map(r => r.user)).size,
+  }
+})
 
 // ── Detail expand ──
 const expandedId = ref<string | null>(null)
 
 function toggleDetail(id: string) {
   expandedId.value = expandedId.value === id ? null : id
-}
-
-// ── Mock data ──
-interface DetailField {
-  label: string
-  value: string
-}
-
-interface AuditRecord {
-  id: string
-  time: string
-  user: string
-  envId: string
-  envName: string
-  operation: string
-  summary: string
-  result: 'ok' | 'fail'
-  detailFields: DetailField[]
-  detailCommand?: string
 }
 
 // ── Context menus ──
@@ -228,252 +242,111 @@ function onOpTagCtx(e: MouseEvent, record: AuditRecord) {
 
 function onEnvNameCtx(e: MouseEvent, record: AuditRecord) {
   showMenu(e, [
-    { label: t('ctx.filterByEnv'), action: () => { filters.value.env = record.envId } },
+    { label: t('ctx.filterByEnv'), action: () => { filters.value.env = record.envName } },
   ])
 }
 
-const records = ref<AuditRecord[]>([
-  {
-    id: 'log_001',
-    time: '16:51:30',
-    user: 'admin',
-    envId: 'env_ali',
-    envName: '阿里云',
-    operation: 'connect',
-    summary: 'root@192.168.1.100:22',
-    result: 'ok',
-    detailFields: [
-      { label: t('audit.detail.protocol'), value: 'SSH' },
-      { label: t('audit.detail.target'), value: '192.168.1.100:22' },
-      { label: t('audit.detail.user'), value: 'root' },
-      { label: t('audit.detail.agent'), value: 'agt_7x8k9m (阿里云 Agent)' },
-      { label: t('audit.detail.duration'), value: '88 秒' },
-      { label: t('audit.detail.transfer'), value: '↑ 1.2KB ↓ 15.6KB' },
-    ],
-    detailCommand: 'root@prod:~$ uptime\n16:45:12 up 14 days,  3:21,  1 user,  load average: 0.12, 0.08, 0.05\n\nroot@prod:~$ docker ps --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"\nNAMES                STATUS          PORTS\nrex-app              Up 2 days       0.0.0.0:3000->3000/tcp',
-  },
-  {
-    id: 'log_002',
-    time: '16:49:01',
-    user: 'admin',
-    envId: 'env_ali',
-    envName: '阿里云',
-    operation: 'query',
-    summary: 'production_db · SELECT 5 行',
-    result: 'ok',
-    detailFields: [
-      { label: t('audit.detail.database'), value: 'production_db (MySQL)' },
-      { label: t('audit.detail.resource'), value: '主数据库 · db.internal:3306' },
-      { label: t('audit.detail.elapsed'), value: '23ms' },
-      { label: t('audit.detail.rows'), value: '5' },
-    ],
-    detailCommand: `SELECT
-  u.id, u.username, u.email,
-  COUNT(o.id) AS order_count,
-  SUM(o.total_amount) AS total_spent
-FROM users u
-LEFT JOIN orders o ON o.user_id = u.id
-WHERE u.created_at >= '2024-01-01'
-GROUP BY u.id, u.username, u.email
-HAVING COUNT(o.id) > 5
-ORDER BY total_spent DESC
-LIMIT 100;`,
-  },
-  {
-    id: 'log_003',
-    time: '16:47:02',
-    user: 'admin',
-    envId: 'env_pi',
-    envName: '树莓派集群',
-    operation: 'upload',
-    summary: 'docker-compose.yml → /opt/rex/',
-    result: 'ok',
-    detailFields: [
-      { label: t('audit.detail.protocol'), value: 'SFTP' },
-      { label: t('audit.detail.resource'), value: 'Web 文件服务器' },
-      { label: t('audit.detail.fileSize'), value: '564 B' },
-      { label: t('audit.detail.targetPath'), value: '/opt/rex/docker-compose.yml' },
-    ],
-  },
-  {
-    id: 'log_004',
-    time: '16:45:13',
-    user: 'admin',
-    envId: 'env_ali',
-    envName: '阿里云',
-    operation: 'login',
-    summary: 'admin · 172.16.0.52',
-    result: 'ok',
-    detailFields: [
-      { label: t('audit.detail.user'), value: 'admin' },
-      { label: t('audit.detail.ip'), value: '172.16.0.52' },
-      { label: t('audit.detail.browser'), value: 'Chrome 125.0 (macOS)' },
-      { label: t('audit.detail.authMethod'), value: '密码登录' },
-    ],
-  },
-  {
-    id: 'log_005',
-    time: '16:43:22',
-    user: 'admin',
-    envId: 'env_ali',
-    envName: '阿里云',
-    operation: 'ssh_command',
-    summary: 'root@192.168.1.100 · docker ps',
-    result: 'ok',
-    detailFields: [
-      { label: t('audit.detail.protocol'), value: 'SSH' },
-      { label: t('audit.detail.resource'), value: '云服务器 · 192.168.1.100:22' },
-      { label: t('audit.detail.execUser'), value: 'root' },
-      { label: t('audit.detail.elapsed'), value: '0.3s' },
-    ],
-    detailCommand: 'docker ps --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"',
-  },
-  {
-    id: 'log_006',
-    time: '16:40:05',
-    user: 'admin',
-    envId: 'env_ali',
-    envName: '阿里云',
-    operation: 'download',
-    summary: 'backup-20240610.tar.gz (23.4 MB)',
-    result: 'ok',
-    detailFields: [
-      { label: t('audit.detail.protocol'), value: 'SFTP' },
-      { label: t('audit.detail.resource'), value: 'Web 文件服务器' },
-      { label: t('audit.detail.fileSize'), value: '23.4 MB' },
-      { label: t('audit.detail.sourcePath'), value: '/opt/rex/backup-20240610.tar.gz' },
-    ],
-  },
-  {
-    id: 'log_007',
-    time: '16:38:12',
-    user: 'admin',
-    envId: 'env_nas',
-    envName: '家庭 NAS',
-    operation: 'connect',
-    summary: 'root@192.168.0.100:22',
-    result: 'fail',
-    detailFields: [
-      { label: t('audit.detail.protocol'), value: 'SSH' },
-      { label: t('audit.detail.target'), value: '192.168.0.100:22' },
-      { label: t('audit.detail.user'), value: 'root' },
-    ],
-  },
-  {
-    id: 'log_008',
-    time: '16:35:00',
-    user: 'admin',
-    envId: 'env_nas',
-    envName: '家庭 NAS',
-    operation: 'disconnect',
-    summary: 'Agent agt_9p2q4r 离线',
-    result: 'fail',
-    detailFields: [
-      { label: t('audit.detail.agent'), value: 'agt_9p2q4r' },
-    ],
-  },
-  {
-    id: 'log_009',
-    time: '16:30:45',
-    user: 'admin',
-    envId: 'env_pi',
-    envName: '树莓派集群',
-    operation: 'query',
-    summary: 'test_db · SELECT 12 行',
-    result: 'ok',
-    detailFields: [
-      { label: t('audit.detail.database'), value: 'test_db (MySQL)' },
-      { label: t('audit.detail.resource'), value: '测试数据库 · db.test:3306' },
-      { label: t('audit.detail.elapsed'), value: '12ms' },
-      { label: t('audit.detail.rows'), value: '12' },
-    ],
-  },
-  {
-    id: 'log_010',
-    time: '16:25:10',
-    user: 'admin',
-    envId: 'env_ali',
-    envName: '阿里云',
-    operation: 'delete',
-    summary: '/tmp/debug.log',
-    result: 'ok',
-    detailFields: [
-      { label: t('audit.detail.protocol'), value: 'SFTP' },
-      { label: t('audit.detail.resource'), value: '云服务器' },
-      { label: t('audit.detail.fileSize'), value: '12 KB' },
-      { label: t('audit.detail.targetPath'), value: '/tmp/debug.log' },
-    ],
-  },
-  {
-    id: 'log_011',
-    time: '16:20:33',
-    user: 'admin',
-    envId: 'env_ali',
-    envName: '阿里云',
-    operation: 'connect',
-    summary: 'root@192.168.1.100:22',
-    result: 'ok',
-    detailFields: [
-      { label: t('audit.detail.protocol'), value: 'SSH' },
-      { label: t('audit.detail.target'), value: '192.168.1.100:22' },
-      { label: t('audit.detail.user'), value: 'root' },
-      { label: t('audit.detail.agent'), value: 'agt_7x8k9m (阿里云 Agent)' },
-      { label: t('audit.detail.duration'), value: '125 秒' },
-      { label: t('audit.detail.transfer'), value: '↑ 2.4KB ↓ 28.1KB' },
-    ],
-  },
-])
+// ── Time range computation ──
+function computeTimeRange(timeFilter: string): { from?: string; to?: string } {
+  const now = Math.floor(Date.now() / 1000)
+  const to = new Date(now * 1000).toISOString()
+  switch (timeFilter) {
+    case '1h': return { from: new Date((now - 3600) * 1000).toISOString(), to }
+    case '24h': return { from: new Date((now - 86400) * 1000).toISOString(), to }
+    case '7d': return { from: new Date((now - 604800) * 1000).toISOString(), to }
+    case '30d': return { from: new Date((now - 2592000) * 1000).toISOString(), to }
+    default: return {}
+  }
+}
 
-// ── Filtered records ──
+// ── Fetch logs from API ──
+async function fetchLogs() {
+  loading.value = true
+  try {
+    const timeRange = computeTimeRange(filters.value.time)
+    const params: Record<string, string | number> = {
+      page: currentPage.value,
+      page_size: pageSize,
+    }
+    if (timeRange.from) params.from = timeRange.from
+    if (timeRange.to) params.to = timeRange.to
+    if (filters.value.operation) params.type = filters.value.operation
+
+    const res = await listAuditLog(params)
+
+    // Map API records to display records
+    const envMap = new Map(environments.value.map(e => [e.id, e.name]))
+    records.value = res.items.map(item => ({
+      id: item.id,
+      time: item.time,
+      user: item.user,
+      envName: envMap.get(item.environment_id ?? '') ?? '—',
+      operation: item.type,
+      summary: item.summary,
+      result: item.result === 'success' ? 'ok' as const : 'fail' as const,
+      detail: item.detail ? (() => { try { return JSON.parse(item.detail) } catch { return undefined } })() : undefined,
+    }))
+  } catch {
+    records.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+// ── Client-side filtered records (user/env are not server-filtered) ──
 const filteredRecords = computed(() => {
   return records.value.filter(r => {
     if (filters.value.user && r.user !== filters.value.user) return false
-    if (filters.value.env && r.envId !== filters.value.env) return false
-    if (filters.value.operation && r.operation !== filters.value.operation) return false
+    if (filters.value.env && r.envName !== filters.value.env) return false
     return true
   })
 })
 
-// ── Stats ──
-const stats = computed(() => {
-  const all = filteredRecords.value
-  return {
-    total: all.length,
-    success: all.filter(r => r.result === 'ok').length,
-    failed: all.filter(r => r.result === 'fail').length,
-    activeUsers: new Set(all.map(r => r.user)).size,
+// ── Watch filters and page changes ──
+watch(filters, () => {
+  currentPage.value = 1
+  fetchLogs()
+}, { deep: true })
+
+watch(currentPage, () => fetchLogs())
+
+onMounted(async () => {
+  try {
+    environments.value = await listEnvironments()
+  } catch {
+    // ignore
   }
+  fetchLogs()
 })
 
-// ── Pagination ──
-const currentPage = ref(1)
-const pageSize = 10
-
+// ── Computed ──
 const totalPages = computed(() => Math.max(1, Math.ceil(filteredRecords.value.length / pageSize)))
-
-const paginatedRecords = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  return filteredRecords.value.slice(start, start + pageSize)
-})
 
 const paginationText = computed(() => {
   const total = filteredRecords.value.length
-  if (total === 0) return '0 条记录'
+  if (total === 0) return t('audit.pagination.showing', { from: 0, to: 0, total: 0 })
   const from = (currentPage.value - 1) * pageSize + 1
   const to = Math.min(currentPage.value * pageSize, total)
-  return `显示 ${from}-${to} / 共 ${total} 条`
+  return t('audit.pagination.showing', { from, to, total })
 })
 
 // ── CSV Export ──
 function exportCsv() {
-  const headers = ['时间', '用户', '环境', '操作', '摘要', '结果']
+  const headers = [
+    t('audit.table.time'),
+    t('audit.table.user'),
+    t('audit.table.environment'),
+    t('audit.table.operation'),
+    t('audit.table.summary'),
+    t('audit.table.result'),
+  ]
   const rows = filteredRecords.value.map(r => [
     r.time,
     r.user,
     r.envName,
     t(`audit.ops.${r.operation}`),
     r.summary,
-    r.result === 'ok' ? '成功' : '失败',
+    r.result === 'ok' ? t('audit.table.success') : t('audit.table.failed'),
   ])
   const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n')
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
