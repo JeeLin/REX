@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-06-22
+
+### Added
+- S3/MinIO 协议支持：新增 `rex-s3` crate，实现 S3 对象存储连接和 S3Connector trait
+- Hub S3 WebSocket 会话管理（`/ws/s3/:resource_id`）
+- 前端 S3 控制台（Bucket 列表、Object 浏览、面包屑导航、右键菜单、属性弹窗）
+- S3 文件上传/下载（通过 WebSocket base64 编码传输）
+- S3 资源创建向导（Endpoint、Access Key、Secret Key、Region、Bucket、Path Style）
+- 工作空间 S3 面板集成
+
+### Fixed
+- 修复 ObjectBrowser.vue 全局事件监听器未清理的内存泄漏
+- 移除 rex-s3 未使用的依赖（rex-common、tracing、reqwest、hmac、sha2、hex、time、base64）
+
 ## [0.10.0] - 2026-06-22
 
 ### Added
