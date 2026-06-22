@@ -49,6 +49,42 @@
           <label class="form-label">{{ t('resource.name') }}</label>
           <input v-model="form.name" class="form-input" :placeholder="t('resource.namePlaceholder')" required />
         </div>
+
+        <!-- Redis 特有表单 -->
+        <template v-if="form.protocol === 'redis'">
+          <div class="form-row">
+            <div class="form-group flex-2">
+              <label class="form-label">{{ t('resource.redis.host') }}</label>
+              <input v-model="redisConfig.host" class="form-input" placeholder="127.0.0.1" required />
+            </div>
+            <div class="form-group flex-1">
+              <label class="form-label">{{ t('resource.redis.port') }}</label>
+              <input v-model="redisConfig.port" class="form-input" placeholder="6379" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t('resource.redis.password') }}</label>
+            <input v-model="redisConfig.password" class="form-input" type="password" :placeholder="t('resource.redis.passwordPlaceholder')" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t('resource.redis.db') }}</label>
+            <input v-model="redisConfig.db" class="form-input" type="number" min="0" max="15" placeholder="0" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t('resource.redis.name') }}</label>
+            <input v-model="redisConfig.name" class="form-input" :placeholder="t('resource.redis.namePlaceholder')" />
+          </div>
+          <div class="test-connection-row">
+            <button type="button" class="btn btn-ghost btn-sm" :disabled="testState === 'testing'" @click="testConnection">
+              {{ testState === 'testing' ? t('resource.testing') : t('resource.testConnection') }}
+            </button>
+            <span v-if="testState === 'success'" class="test-success">✓ {{ t('resource.testSuccess') }}</span>
+            <span v-if="testState === 'fail'" class="test-fail">✕ {{ testMessage }}</span>
+          </div>
+        </template>
+
+        <!-- SSH / SQL 表单 -->
+        <template v-else>
         <div class="form-row">
           <div class="form-group flex-2">
             <label class="form-label">{{ t('resource.ssh.host') }}</label>
@@ -104,6 +140,7 @@
           <span v-if="testState === 'success'" class="test-success">✓ {{ t('resource.testSuccess') }}</span>
           <span v-if="testState === 'fail'" class="test-fail">✕ {{ testMessage }}</span>
         </div>
+        </template>
       </form>
     </div>
 
@@ -176,9 +213,26 @@ const sshConfig = reactive({
   keyFile: '',
 })
 
+const redisConfig = reactive({
+  host: '127.0.0.1',
+  port: '6379',
+  password: '',
+  db: '0',
+  name: '',
+})
+
 const canNext = computed(() => {
   if (step.value === 1) return !!form.protocol
-  if (step.value === 2) return !!form.name.trim() && !!sshConfig.host.trim() && !!sshConfig.user.trim()
+  if (step.value === 2) {
+    if (!form.name.trim()) return false
+    if (form.protocol === 'redis') {
+      return !!redisConfig.host.trim()
+    }
+    if (form.protocol === 'mysql' || form.protocol === 'postgresql') {
+      return !!sshConfig.host.trim() && !!sshConfig.user.trim()
+    }
+    return !!sshConfig.host.trim() && !!sshConfig.user.trim()
+  }
   return false
 })
 
@@ -201,6 +255,16 @@ const testMessage = ref('')
 
 function buildConfigJson() {
   const port = parseInt(sshConfig.port) || (form.protocol === 'mysql' ? 3306 : form.protocol === 'postgresql' ? 5432 : 22)
+  if (form.protocol === 'redis') {
+    const db = Number(redisConfig.db)
+    return JSON.stringify({
+      host: redisConfig.host,
+      port: Number(redisConfig.port) || 6379,
+      password: redisConfig.password || null,
+      db: db >= 0 && db <= 15 ? db : 0,
+      name: redisConfig.name || null,
+    })
+  }
   if (form.protocol === 'mysql' || form.protocol === 'postgresql') {
     return JSON.stringify({
       host: sshConfig.host,

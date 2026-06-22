@@ -1,6 +1,5 @@
-import { ref, shallowRef, onUnmounted } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import type {
-  RedisValue,
   RedisServerMsg,
   RedisHistoryEntry,
 } from '@/api/redis'

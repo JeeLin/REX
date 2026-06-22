@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import type { Protocol } from '@/composables/useProtocol'
 
-export type PanelComponent = 'terminal' | 'sql' | 'files' | 'unsupported'
+export type PanelComponent = 'terminal' | 'sql' | 'files' | 'redis' | 'unsupported'
 
 const PROTOCOL_COMPONENT: Record<string, PanelComponent> = {
   ssh: 'terminal',
@@ -9,6 +9,7 @@ const PROTOCOL_COMPONENT: Record<string, PanelComponent> = {
   postgresql: 'sql',
   sqlite: 'sql',
   sftp: 'files',
+  redis: 'redis',
 }
 
 export interface Tab {
