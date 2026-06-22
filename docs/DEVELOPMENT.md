@@ -25,13 +25,7 @@ crates/
 ├── rex-ssh           SSH/SFTP 协议实现
 ├── rex-mysql         MySQL 协议实现
 ├── rex-postgresql    PostgreSQL 协议实现
-├── rex-redis         Redis 协议实现
-├── rex-docker        Docker 协议实现
-├── rex-sqlite        SQLite 协议实现
-├── rex-s3            S3/MinIO 协议实现
 ├── rex-transfer      文件传输引擎（FileConnector trait）
-├── rex-tunnel        WebSocket 隧道
-├── rex-supervisor    进程 supervisor（启动、监控、状态判断、替换、回滚）
 ├── rex-hub           Hub 二进制入口（整合所有 crate + 前端静态资源）
 └── rex-agent         Agent 二进制入口（整合所有 crate）
 ```
