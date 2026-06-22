@@ -181,7 +181,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useUserStore, type Theme } from '@/stores/user'
@@ -190,6 +190,7 @@ import { useSidebar } from '@/composables/useSidebar'
 import { getProtocolIcon } from '@/composables/useProtocol'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useRecent } from '@/composables/useRecent'
+import { securitySettings } from '@/stores/settings'
 
 const { recent, clearRecent } = useRecent()
 
@@ -201,7 +202,7 @@ const authStore = useAuthStore()
 const { show: showMenu } = useContextMenu()
 
 const lang = computed(() => userStore.lang)
-const auditEnabled = ref(localStorage.getItem('rex-audit-enabled') !== 'false')
+const auditEnabled = computed(() => securitySettings.auditEnabled)
 
 const {
   collapsed,
@@ -322,9 +323,6 @@ function openAllInWorkspace(env: { id: string; name: string }) {
 
 onMounted(() => {
   fetchEnvs()
-  window.addEventListener('audit-toggle', ((e: CustomEvent) => {
-    auditEnabled.value = e.detail.enabled
-  }) as EventListener)
 })
 </script>
 
