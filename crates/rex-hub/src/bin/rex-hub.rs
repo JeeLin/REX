@@ -1,9 +1,12 @@
 use rex_common::app;
 use rex_common::Parser;
+use rex_hub::acme::{self, TlsMode};
 use rex_hub::config::HubConfig;
 use rex_hub::db::Database;
 use rex_hub::routes;
 use std::sync::Arc;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tower::{Service, ServiceExt};
 
 fn main() -> anyhow::Result<()> {
     app::init_tracing();
@@ -27,35 +30,253 @@ fn main() -> anyhow::Result<()> {
         std::fs::create_dir_all(&config.data_dir)?;
         let db = Database::new(&db_path)?;
 
-        let secret_key = config.secret_key;
+        let secret_key = config.secret_key.clone();
         if secret_key.is_empty() {
             tracing::warn!("secret_key is empty, using default - this is insecure in production");
         }
+
+        // 确定 TLS 模式（优先级：manual > acme > self-signed > none）
+        let tls_mode = determine_tls_mode(&config);
 
         let rt = tokio::runtime::Runtime::new()?;
         let static_dir = config.static_dir.clone();
         let data_dir = config.data_dir.clone();
         let app = routes::app_with_static(Arc::new(db), secret_key, static_dir, data_dir);
 
-        if let Some(ref tls) = config.tls {
-            tracing::info!(listen = %config.listen, cert = %tls.cert.display(), key = %tls.key.display(), "TLS enabled, serving HTTPS");
-            let tls_acceptor = rex_hub::tls::create_tls_acceptor(&tls.cert, &tls.key)?;
-            rt.block_on(rex_hub::tls::run_tls_server(
-                &config.listen,
-                tls_acceptor,
-                app,
-            ))?;
-        } else {
-            tracing::info!(listen = %config.listen, "HTTP only, serving without TLS");
-            rt.block_on(async {
-                let listener = tokio::net::TcpListener::bind(&config.listen).await?;
-                axum::serve(listener, app).await?;
-                Ok::<(), anyhow::Error>(())
-            })?;
+        match tls_mode {
+            TlsMode::Manual => {
+                let tls = config.tls.as_ref().unwrap();
+                tracing::info!(
+                    listen = %config.listen,
+                    cert = %tls.cert.display(),
+                    key = %tls.key.display(),
+                    "TLS mode: manual — serving HTTPS"
+                );
+                let tls_acceptor = rex_hub::tls::create_tls_acceptor(&tls.cert, &tls.key)?;
+                rt.block_on(rex_hub::tls::run_tls_server(
+                    &config.listen,
+                    tls_acceptor,
+                    app,
+                ))?;
+            }
+            TlsMode::AcmeDomain | TlsMode::AcmeIp => {
+                let acme_cfg = config.acme.as_ref().unwrap().clone();
+                let challenge = acme::challenge_description(&acme_cfg.domain);
+
+                tracing::info!(
+                    listen = %config.listen,
+                    domain = %acme_cfg.domain,
+                    challenge = challenge,
+                    "TLS mode: acme — requesting cert"
+                );
+
+                let listen = config.listen.clone();
+
+                rt.block_on(async move {
+                    let (default_config, _challenge_config, http01_service) =
+                        acme::start_acme_driver(acme_cfg, config.data_dir.clone()).await?;
+
+                    let tls_acceptor =
+                        rex_hub::tls::create_tls_acceptor_from_config((*default_config).clone());
+
+                    // HTTP-01 需要单独的 80 端口 listener
+                    if let Some(http01_service) = http01_service {
+                        let http01_port = extract_port(&listen).unwrap_or(80);
+                        let http01_addr = format!("0.0.0.0:{http01_port}");
+                        tokio::spawn(async move {
+                            let listener =
+                                tokio::net::TcpListener::bind(&http01_addr).await.unwrap();
+                            tracing::info!(addr = %http01_addr, "HTTP-01 challenge server listening");
+                            loop {
+                                let (mut stream, _) = listener.accept().await.unwrap();
+                                let mut svc = http01_service.clone();
+                                tokio::spawn(async move {
+                                    let mut buf = [0u8; 2048];
+                                    let n = stream.read(&mut buf).await.unwrap_or(0);
+                                    let request = String::from_utf8_lossy(&buf[..n]);
+                                    let path = request
+                                        .lines()
+                                        .next()
+                                        .and_then(|line| line.split_whitespace().nth(1))
+                                        .unwrap_or("/");
+
+                                    let req = axum::http::Request::builder()
+                                        .uri(path)
+                                        .body(String::new())
+                                        .unwrap();
+                                    let resp = <rustls_acme::tower::TowerHttp01ChallengeService as ServiceExt<axum::http::Request<String>>>::ready(&mut svc)
+                                        .await?
+                                        .call(req)
+                                        .await?;
+                                    let (_, body) = resp.into_parts();
+                                    let response = format!(
+                                        "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\n\r\n{}",
+                                        body.len(),
+                                        body
+                                    );
+                                    stream.write_all(response.as_bytes()).await.ok();
+                                    Ok::<(), anyhow::Error>(())
+                                });
+                            }
+                        });
+                    }
+
+                    // 启动主 TLS 服务器
+                    rex_hub::tls::run_tls_server(&listen, tls_acceptor, app).await
+                })?;
+            }
+            TlsMode::SelfSigned => {
+                let sans = rex_hub::self_signed::infer_self_signed_sans(&config.listen);
+                tracing::info!(
+                    listen = %config.listen,
+                    sans = ?sans,
+                    "TLS mode: self-signed — generating certificate"
+                );
+
+                let cert = if let Some(existing) =
+                    rex_hub::self_signed::load_self_signed(&config.data_dir)
+                {
+                    tracing::info!("loaded existing self-signed certificate");
+                    existing
+                } else {
+                    let cert = rex_hub::self_signed::generate_self_signed(&sans)?;
+                    rex_hub::self_signed::save_self_signed(&config.data_dir, &cert)?;
+                    tracing::info!("generated and saved new self-signed certificate");
+                    cert
+                };
+
+                let tls_acceptor = rex_hub::tls::create_tls_acceptor_from_config(
+                    rustls::ServerConfig::builder()
+                        .with_no_client_auth()
+                        .with_single_cert(vec![cert.cert_der], cert.key_der)
+                        .map_err(|e| anyhow::anyhow!("failed to build TLS config: {e}"))?,
+                );
+
+                tracing::info!(listen = %config.listen, "TLS mode: self-signed — serving HTTPS");
+                rt.block_on(rex_hub::tls::run_tls_server(
+                    &config.listen,
+                    tls_acceptor,
+                    app,
+                ))?;
+            }
+            TlsMode::None => {
+                tracing::info!(listen = %config.listen, "TLS mode: none — HTTP only");
+                rt.block_on(async {
+                    let listener = tokio::net::TcpListener::bind(&config.listen).await?;
+                    axum::serve(listener, app).await?;
+                    Ok::<(), anyhow::Error>(())
+                })?;
+            }
         }
     } else {
         app::run_from(args)?;
     }
 
     Ok(())
+}
+
+/// 确定 TLS 模式（优先级：manual > acme > self-signed > none）
+fn determine_tls_mode(config: &HubConfig) -> TlsMode {
+    // 1. 手动证书（最高优先级）
+    if let Some(ref tls) = config.tls {
+        if !tls.cert.as_os_str().is_empty() && !tls.key.as_os_str().is_empty() {
+            return TlsMode::Manual;
+        }
+    }
+
+    // 2. ACME 自动证书
+    if let Some(ref acme) = config.acme {
+        if !acme.domain.is_empty() && !acme.email.is_empty() {
+            if rex_hub::config::is_ip_address(&acme.domain) {
+                return TlsMode::AcmeIp;
+            } else {
+                return TlsMode::AcmeDomain;
+            }
+        }
+    }
+
+    // 3. 自签名证书
+    TlsMode::SelfSigned
+}
+
+/// 从 "host:port" 格式提取端口号
+fn extract_port(addr: &str) -> Option<u16> {
+    addr.rsplit_once(':')
+        .and_then(|(_, port)| port.parse().ok())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rex_hub::config::{AcmeConfig, TlsConfig};
+    use std::path::PathBuf;
+
+    #[test]
+    fn determine_tls_mode_manual() {
+        let config = HubConfig {
+            tls: Some(TlsConfig {
+                cert: PathBuf::from("/path/cert.pem"),
+                key: PathBuf::from("/path/key.pem"),
+            }),
+            ..Default::default()
+        };
+        assert_eq!(determine_tls_mode(&config), TlsMode::Manual);
+    }
+
+    #[test]
+    fn determine_tls_mode_acme_domain() {
+        let config = HubConfig {
+            acme: Some(AcmeConfig {
+                domain: "hub.example.com".to_string(),
+                email: "admin@example.com".to_string(),
+                staging: false,
+            }),
+            ..Default::default()
+        };
+        assert_eq!(determine_tls_mode(&config), TlsMode::AcmeDomain);
+    }
+
+    #[test]
+    fn determine_tls_mode_acme_ip() {
+        let config = HubConfig {
+            acme: Some(AcmeConfig {
+                domain: "203.0.113.1".to_string(),
+                email: "admin@example.com".to_string(),
+                staging: false,
+            }),
+            ..Default::default()
+        };
+        assert_eq!(determine_tls_mode(&config), TlsMode::AcmeIp);
+    }
+
+    #[test]
+    fn determine_tls_mode_self_signed() {
+        let config = HubConfig::default();
+        assert_eq!(determine_tls_mode(&config), TlsMode::SelfSigned);
+    }
+
+    #[test]
+    fn determine_tls_mode_manual_takes_priority_over_acme() {
+        let config = HubConfig {
+            tls: Some(TlsConfig {
+                cert: PathBuf::from("/path/cert.pem"),
+                key: PathBuf::from("/path/key.pem"),
+            }),
+            acme: Some(AcmeConfig {
+                domain: "hub.example.com".to_string(),
+                email: "admin@example.com".to_string(),
+                staging: false,
+            }),
+            ..Default::default()
+        };
+        assert_eq!(determine_tls_mode(&config), TlsMode::Manual);
+    }
+
+    #[test]
+    fn extract_port_from_addr() {
+        assert_eq!(extract_port("0.0.0.0:3000"), Some(3000));
+        assert_eq!(extract_port("127.0.0.1:8080"), Some(8080));
+        assert_eq!(extract_port("hub.example.com:443"), Some(443));
+        assert_eq!(extract_port("no-port"), None);
+    }
 }
