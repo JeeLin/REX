@@ -7,6 +7,18 @@ use std::sync::Arc;
 use crate::helpers::{err_resp, gen_id, now_iso, ApiResponse, ErrorResponse};
 use crate::routes::AppState;
 
+#[derive(Debug, Deserialize)]
+pub struct StatsQuery {
+    pub period: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AuditStats {
+    pub total: i64,
+    pub success: i64,
+    pub failed: i64,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuditLogEntry {
     pub id: String,
@@ -140,6 +152,76 @@ pub async fn list_audit_log(
     Ok(Json(ApiResponse { data: result }))
 }
 
+/// GET /api/audit/stats
+pub async fn get_stats(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<StatsQuery>,
+) -> Result<Json<ApiResponse<AuditStats>>, (StatusCode, Json<ErrorResponse>)> {
+    let db = state.db.clone();
+    let period = query.period.unwrap_or_default();
+
+    let result = tokio::task::spawn_blocking(move || {
+        let conn = db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+
+        // 获取今日日期前缀 (YYYYMMDD)
+        let today_prefix = {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            let days = (now / 86400) as i64;
+            // 简单计算 YYYYMMDD
+            let (year, month, day) = days_to_ymd(days + 719468); // 偏移到 Unix epoch
+            format!("{:04}{:02}{:02}", year, month, day)
+        };
+
+        let (total, success, failed) = if period == "today" {
+            let total: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM audit_log WHERE time >= ?1",
+                rusqlite::params![today_prefix],
+                |row| row.get(0),
+            ).unwrap_or(0);
+            let success: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM audit_log WHERE time >= ?1 AND result = 'success'",
+                rusqlite::params![today_prefix],
+                |row| row.get(0),
+            ).unwrap_or(0);
+            let failed: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM audit_log WHERE time >= ?1 AND result = 'failure'",
+                rusqlite::params![today_prefix],
+                |row| row.get(0),
+            ).unwrap_or(0);
+            (total, success, failed)
+        } else {
+            let total: i64 = conn.query_row("SELECT COUNT(*) FROM audit_log", [], |row| row.get(0)).unwrap_or(0);
+            let success: i64 = conn.query_row("SELECT COUNT(*) FROM audit_log WHERE result = 'success'", [], |row| row.get(0)).unwrap_or(0);
+            let failed: i64 = conn.query_row("SELECT COUNT(*) FROM audit_log WHERE result = 'failure'", [], |row| row.get(0)).unwrap_or(0);
+            (total, success, failed)
+        };
+
+        Ok::<_, (StatusCode, Json<ErrorResponse>)>(AuditStats { total, success, failed })
+    })
+    .await
+    .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
+
+    Ok(Json(ApiResponse { data: result }))
+}
+
+/// 简单的 Unix 日历日转年月日
+fn days_to_ymd(g: i64) -> (i64, i64, i64) {
+    let y = (10000 * g + 14780) / 3652425;
+    let mut doy = g - (365 * y + y / 4 - y / 100 + y / 400);
+    if doy < 0 {
+        let y2 = y - 1;
+        doy = g - (365 * y2 + y2 / 4 - y2 / 100 + y2 / 400);
+    }
+    let mi = (100 * doy + 52) / 3060;
+    let month = (mi + 2) % 12 + 1;
+    let year = y + (mi + 2) / 12;
+    let day = doy - (mi * 306 + 5) / 10 + 1;
+    (year, month, day)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -214,5 +296,28 @@ mod tests {
             .query_row("SELECT ip FROM audit_log", [], |row| row.get(0))
             .unwrap();
         assert_eq!(ip, None);
+    }
+
+    #[tokio::test]
+    async fn get_stats_returns_totals() {
+        let db = Database::new_in_memory().unwrap();
+        write_audit_log(&db, "login", "success", "登录成功", None, None, None, None, None);
+        write_audit_log(&db, "login", "failure", "登录失败", None, None, None, None, None);
+        write_audit_log(&db, "login", "success", "登录成功", None, None, None, None, None);
+
+        let state = Arc::new(crate::routes::AppState {
+            db: Arc::new(db),
+            secret_key: "test".to_string(),
+            connections: Arc::new(crate::ws::new_connections()),
+            sessions: Arc::new(crate::terminal::SessionManager::new(900)),
+            transfer: None,
+            update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
+            data_dir: std::path::PathBuf::from("./data"),
+        });
+
+        let result = get_stats(State(state), Query(StatsQuery { period: None })).await.unwrap();
+        assert_eq!(result.0.data.total, 3);
+        assert_eq!(result.0.data.success, 2);
+        assert_eq!(result.0.data.failed, 1);
     }
 }

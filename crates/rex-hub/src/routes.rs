@@ -107,6 +107,7 @@ pub fn app_with_static(
         )
         .route("/api/environments/:env_id/agents", get(agent::list_agents))
         .route("/api/audit-log", get(audit::list_audit_log))
+        .route("/api/audit/stats", get(audit::get_stats))
         .route(
             "/api/ssh/sessions",
             post(crate::ws_terminal::create_session_handler),
