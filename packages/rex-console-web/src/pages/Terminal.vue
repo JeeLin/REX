@@ -18,6 +18,7 @@
           @click="toggleSftp"
           title="SFTP 面板 (Ctrl+Shift+F)"
         >📁 SFTP</button>
+        <button class="btn btn-sm btn-ghost" @click="toggleFullscreen" :title="isFullscreen ? '退出全屏 (F11)' : '全屏 (F11)'">⛶</button>
         <button class="btn btn-sm btn-danger" @click="confirmDisconnect">断开</button>
       </div>
     </div>
@@ -91,6 +92,7 @@ const connectionStatus = ref<'connecting' | 'connected' | 'disconnected'>('disco
 const showDisconnectDialog = ref(false)
 const resourceName = ref(resourceId)
 const sftpVisible = ref(false)
+const isFullscreen = ref(false)
 const contextMenu = ref({ visible: false, x: 0, y: 0 })
 
 let terminal: Terminal | null = null
@@ -265,6 +267,16 @@ function handleSftpDragPath(path: string) {
   }
 }
 
+function toggleFullscreen() {
+  if (document.fullscreenElement) {
+    document.exitFullscreen()
+    isFullscreen.value = false
+  } else {
+    document.documentElement.requestFullscreen()
+    isFullscreen.value = true
+  }
+}
+
 function showContextMenu(e: MouseEvent) {
   contextMenu.value = { visible: true, x: e.clientX, y: e.clientY }
 
@@ -295,6 +307,12 @@ function handleKeydown(e: KeyboardEvent) {
     toggleSftp()
     return
   }
+  // F11 → 切换全屏
+  if (e.key === 'F11') {
+    e.preventDefault()
+    toggleFullscreen()
+    return
+  }
 }
 
 function confirmDisconnect() {
@@ -310,10 +328,15 @@ async function doDisconnect() {
   router.back()
 }
 
+function handleFullscreenChange() {
+  isFullscreen.value = !!document.fullscreenElement
+}
+
 onMounted(async () => {
   initTerminal()
   await connectSession()
   window.addEventListener('keydown', handleKeydown)
+  document.addEventListener('fullscreenchange', handleFullscreenChange)
 })
 
 onBeforeUnmount(() => {
@@ -323,6 +346,7 @@ onBeforeUnmount(() => {
   }
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('keydown', handleKeydown)
+  document.removeEventListener('fullscreenchange', handleFullscreenChange)
   terminal?.dispose()
 })
 </script>
