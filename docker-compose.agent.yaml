@@ -1,0 +1,16 @@
+services:
+  agent:
+    image: ghcr.io/${GITHUB_REPO_OWNER}/rex-agent:latest
+    container_name: rex-agent
+    restart: unless-stopped
+    volumes:
+      - agent-data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - REX_SERVER=${REX_SERVER}
+      - REX_TOKEN=${REX_TOKEN}
+      - DATA_DIR=/app/data
+
+volumes:
+  agent-data:
+    driver: local
