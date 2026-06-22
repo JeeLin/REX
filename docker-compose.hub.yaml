@@ -1,0 +1,22 @@
+services:
+  hub:
+    image: ghcr.io/${GITHUB_REPO_OWNER}/rex-hub:latest
+    container_name: rex-hub
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - hub-data:/app/data
+    environment:
+      - REX_SECRET_KEY=${REX_SECRET_KEY}
+      - DATA_DIR=/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  hub-data:
+    driver: local
