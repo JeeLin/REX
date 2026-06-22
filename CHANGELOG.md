@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-06-22
+
+### Added
+- Docker 容器管理：新增 `rex-docker` crate，实现 Docker Engine REST API 通信和 DockerConnector trait
+- Hub Docker WebSocket 会话管理（`/ws/docker/:resource_id`）
+- 前端 Docker 容器控制台（容器列表、搜索过滤、状态操作、日志查看、inspect 详情）
+- Docker 资源创建向导（Unix Socket / TCP 连接模式、实例名称）
+- 工作空间 Docker 面板集成
+
 ## [0.8.0] - 2026-06-22
 
 ### Added
