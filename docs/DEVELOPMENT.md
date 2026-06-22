@@ -75,6 +75,8 @@ rex-agent = 所有 crate（无前端）
 | 0.3.0 | UI 打磨与 i18n 补全 | ✅ 完成 |
 | 0.4.0 | 设置项连接实际行为 | ✅ 完成 |
 | 0.5.0 | Docker 部署配置与 CI 调整 | ✅ 完成 |
+| 0.6.0 | Hub HTTPS 支持与 Agent 下载 | ✅ 完成 |
+| 0.7.0 | ACME 自动证书 | ✅ 完成 |
 
 ---
 
@@ -141,4 +143,7 @@ docs/milestones/
 ├── M24-docs-restructure.md
 ├── M25-sql-query-files.md
 └── M26-sql-history-and-polish.md
+├── 0.6.0-hub-https-and-agent-download.md
+├── 0.7.0-hub-acme-auto-cert.md
+└── 0.7.0-reports/
 ```
