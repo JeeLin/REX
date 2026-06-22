@@ -11,12 +11,30 @@
         <button class="btn btn-ghost btn-sm" @click="clearTerminal">清屏</button>
         <button class="btn btn-ghost btn-sm" @click="handleCopy">复制</button>
         <button class="btn btn-ghost btn-sm" @click="handlePaste">粘贴</button>
+        <div class="toolbar-sep"></div>
+        <button
+          class="toolbar-btn-sftp"
+          :class="{ active: sftpVisible }"
+          @click="toggleSftp"
+          title="SFTP 面板 (Ctrl+Shift+F)"
+        >📁 SFTP</button>
         <button class="btn btn-sm btn-danger" @click="confirmDisconnect">断开</button>
       </div>
     </div>
 
-    <!-- 终端容器 -->
-    <div ref="terminalContainer" class="terminal-container" @contextmenu.prevent="showContextMenu"></div>
+    <!-- 终端 + SFTP Split -->
+    <div class="terminal-sftp-wrap">
+      <!-- 终端容器 -->
+      <div ref="terminalContainer" class="terminal-container" @contextmenu.prevent="showContextMenu"></div>
+
+      <!-- SFTP 面板 -->
+      <TerminalSftp
+        v-if="sftpVisible"
+        :resource-id="resourceId"
+        @close="sftpVisible = false"
+        @drag-path="handleSftpDragPath"
+      />
+    </div>
 
     <!-- 状态栏 -->
     <div class="terminal-statusbar">
@@ -62,6 +80,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { createSession, deleteSession } from '@/api/terminal'
+import TerminalSftp from '@/features/terminal/TerminalSftp.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -71,6 +90,7 @@ const terminalContainer = ref<HTMLElement>()
 const connectionStatus = ref<'connecting' | 'connected' | 'disconnected'>('disconnected')
 const showDisconnectDialog = ref(false)
 const resourceName = ref(resourceId)
+const sftpVisible = ref(false)
 const contextMenu = ref({ visible: false, x: 0, y: 0 })
 
 let terminal: Terminal | null = null
@@ -231,14 +251,17 @@ async function handlePaste() {
   }
 }
 
-function handlePasteEvent(e: ClipboardEvent) {
-  const text = e.clipboardData?.getData('text')
-  if (text && ws?.readyState === WebSocket.OPEN) {
-    e.preventDefault()
+function toggleSftp() {
+  sftpVisible.value = !sftpVisible.value
+}
+
+function handleSftpDragPath(path: string) {
+  if (ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({
       type: 'terminal.input',
-      payload: { data: btoa(text) },
+      payload: { data: btoa(path) },
     }))
+    terminal?.focus()
   }
 }
 
@@ -266,6 +289,12 @@ function handleKeydown(e: KeyboardEvent) {
     handlePaste()
     return
   }
+  // Ctrl+Shift+F → 切换 SFTP 面板
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
+    e.preventDefault()
+    toggleSftp()
+    return
+  }
 }
 
 function confirmDisconnect() {
@@ -284,6 +313,7 @@ async function doDisconnect() {
 onMounted(async () => {
   initTerminal()
   await connectSession()
+  window.addEventListener('keydown', handleKeydown)
 })
 
 onBeforeUnmount(() => {
@@ -338,6 +368,48 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: var(--sp-xs);
+}
+
+.toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 var(--sp-xs);
+}
+
+.toolbar-btn-sftp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-sm);
+  height: 30px;
+  padding: 0 var(--sp-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.toolbar-btn-sftp:hover {
+  background: var(--bg-hover);
+  color: var(--accent-purple);
+}
+
+.toolbar-btn-sftp.active {
+  background: rgba(139, 92, 246, 0.12);
+  color: var(--accent-purple);
+  border-color: var(--accent-purple);
+}
+
+.terminal-sftp-wrap {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
 }
 
 .terminal-container {

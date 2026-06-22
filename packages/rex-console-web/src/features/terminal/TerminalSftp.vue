@@ -1,0 +1,448 @@
+<template>
+  <div class="sftp-panel-inline">
+    <!-- Header -->
+    <div class="sftp-inline-header">
+      <span class="sftp-icon">📁</span>
+      <span class="panel-title">SFTP</span>
+      <button class="btn btn-ghost btn-sm btn-icon" @click="$emit('close')" title="关闭 SFTP">✕</button>
+    </div>
+
+    <!-- Breadcrumb -->
+    <div class="sftp-inline-breadcrumb">
+      <template v-for="(part, idx) in breadcrumbParts" :key="idx">
+        <span
+          class="sftp-bc-seg"
+          :class="{ 'sftp-bc-current': idx === breadcrumbParts.length - 1 }"
+          @click="navigateToBreadcrumb(idx)"
+        >{{ part }}</span>
+        <span v-if="idx < breadcrumbParts.length - 1" class="sftp-bc-sep">/</span>
+      </template>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="sftp-inline-toolbar">
+      <button class="btn btn-ghost btn-sm" @click="triggerUpload">⬆ 上传</button>
+      <button
+        class="btn btn-ghost btn-sm"
+        :disabled="!selectedEntry || selectedEntry.file_type === 'directory'"
+        @click="handleDownload"
+      >⬇ 下载</button>
+      <button class="btn btn-ghost btn-sm" @click="showMkdirInput = true">📁 新建</button>
+      <button class="btn btn-ghost btn-sm" @click="() => loadDir()">↻</button>
+    </div>
+
+    <!-- Mkdir input -->
+    <div v-if="showMkdirInput" class="sftp-inline-mkdir">
+      <input
+        ref="mkdirInputRef"
+        v-model="newDirName"
+        class="sftp-mkdir-input"
+        placeholder="文件夹名称"
+        @keydown.enter="confirmMkdir"
+        @keydown.esc="showMkdirInput = false"
+      />
+      <button class="btn btn-ghost btn-xs" @click="confirmMkdir">✓</button>
+      <button class="btn btn-ghost btn-xs" @click="showMkdirInput = false">✕</button>
+    </div>
+
+    <!-- File list -->
+    <div class="sftp-inline-files" @contextmenu.prevent="showBgCtxMenu">
+      <div v-if="loading" class="sftp-loading">加载中...</div>
+      <template v-else>
+        <div
+          v-if="currentPath !== '/'"
+          class="sfile-row"
+          @click="goUp"
+          @dblclick="goUp"
+        >
+          <span class="sfile-icon folder">📁</span>
+          <span class="sfile-name parent">..</span>
+          <span class="sfile-size"></span>
+        </div>
+        <div
+          v-for="entry in sortedEntries"
+          :key="entry.path"
+          class="sfile-row"
+          :class="{ selected: selectedEntry?.path === entry.path }"
+          @click="selectedEntry = entry"
+          @dblclick="handleDblClick(entry)"
+          @contextmenu.prevent.stop="showEntryCtxMenu($event, entry)"
+          draggable="true"
+          @dragstart="onDragStart($event, entry)"
+        >
+          <span class="sfile-icon" :class="getIconClass(entry)">{{ getIcon(entry) }}</span>
+          <span class="sfile-name" :class="{ parent: false }">{{ entry.name }}</span>
+          <span class="sfile-size">{{ entry.file_type === 'directory' ? '' : formatSize(entry.size) }}</span>
+        </div>
+        <div v-if="entries.length === 0 && !loading" class="sftp-empty">此目录为空</div>
+      </template>
+    </div>
+
+    <!-- Status -->
+    <div class="sftp-inline-status">
+      {{ currentPath }} · {{ entries.length }} 项
+    </div>
+
+    <!-- Context Menu -->
+    <div
+      v-if="ctxMenu.visible"
+      class="sftp-ctx-menu"
+      :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
+    >
+      <template v-if="ctxMenu.entry">
+        <button v-if="ctxMenu.entry.file_type === 'directory'" class="ctx-menu-item" @click="handleDblClick(ctxMenu.entry); closeCtxMenu()">📂 打开</button>
+        <button v-else class="ctx-menu-item" @click="downloadEntry(ctxMenu.entry); closeCtxMenu()">⬇ 下载</button>
+        <button class="ctx-menu-item" @click="copyPath(ctxMenu.entry.path); closeCtxMenu()">📋 复制路径</button>
+        <button class="ctx-menu-item" @click="copyFileName(ctxMenu.entry.name); closeCtxMenu()">📎 复制文件名</button>
+        <div class="ctx-menu-divider"></div>
+        <button class="ctx-menu-item danger" @click="deleteEntry(ctxMenu.entry); closeCtxMenu()">🗑 删除</button>
+      </template>
+      <template v-else>
+        <button class="ctx-menu-item" @click="showMkdirInput = true; closeCtxMenu()">📁 新建文件夹</button>
+        <button class="ctx-menu-item" @click="triggerUpload(); closeCtxMenu()">⬆ 上传</button>
+        <div class="ctx-menu-divider"></div>
+        <button class="ctx-menu-item" @click="loadDir(); closeCtxMenu()">↻ 刷新</button>
+      </template>
+    </div>
+
+    <!-- Hidden upload input -->
+    <input ref="fileInputRef" type="file" multiple style="display: none" @change="onFileSelect" />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { listFiles, uploadFile, deleteFile as apiDeleteFile, mkdirFile, downloadFile } from '@/api/files'
+import type { FileEntry } from '@/api/files'
+
+const props = defineProps<{
+  resourceId: string
+}>()
+
+defineEmits<{
+  close: []
+  dragPath: [path: string]
+}>()
+
+const currentPath = ref('/')
+const entries = ref<FileEntry[]>([])
+const loading = ref(false)
+const selectedEntry = ref<FileEntry | null>(null)
+const showMkdirInput = ref(false)
+const newDirName = ref('')
+const mkdirInputRef = ref<HTMLInputElement>()
+const fileInputRef = ref<HTMLInputElement>()
+
+const ctxMenu = ref<{ visible: boolean; x: number; y: number; entry: FileEntry | null }>({
+  visible: false, x: 0, y: 0, entry: null,
+})
+
+const sortedEntries = computed(() => {
+  return [...entries.value].sort((a, b) => {
+    if (a.file_type !== b.file_type) return a.file_type === 'directory' ? -1 : 1
+    return a.name.localeCompare(b.name)
+  })
+})
+
+const breadcrumbParts = computed(() => {
+  if (currentPath.value === '/') return ['/']
+  return currentPath.value.split('/')
+})
+
+async function loadDir(path?: string) {
+  if (path !== undefined) currentPath.value = path
+  loading.value = true
+  selectedEntry.value = null
+  try {
+    const data = await listFiles(props.resourceId, currentPath.value)
+    currentPath.value = data.path
+    entries.value = data.entries
+  } catch {
+    entries.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+function navigateToBreadcrumb(idx: number) {
+  if (idx === 0) {
+    loadDir('/')
+  } else {
+    const parts = currentPath.value.split('/')
+    loadDir(parts.slice(0, idx + 1).join('/'))
+  }
+}
+
+function goUp() {
+  if (currentPath.value === '/') return
+  const parent = currentPath.value.replace(/\/[^/]+\/?$/, '') || '/'
+  loadDir(parent)
+}
+
+function handleDblClick(entry: FileEntry) {
+  if (entry.file_type === 'directory') {
+    loadDir(entry.path)
+  }
+}
+
+function handleDownload() {
+  if (selectedEntry.value && selectedEntry.value.file_type !== 'directory') {
+    downloadEntry(selectedEntry.value)
+  }
+}
+
+async function downloadEntry(entry: FileEntry) {
+  await downloadFile(props.resourceId, entry.path)
+}
+
+async function deleteEntry(entry: FileEntry) {
+  await apiDeleteFile(props.resourceId, entry.path)
+  await loadDir()
+}
+
+function triggerUpload() {
+  fileInputRef.value?.click()
+}
+
+async function onFileSelect() {
+  const input = fileInputRef.value
+  if (!input?.files?.length) return
+  for (const file of Array.from(input.files)) {
+    await uploadFile(props.resourceId, currentPath.value, file)
+  }
+  input.value = ''
+  await loadDir()
+}
+
+async function confirmMkdir() {
+  if (!newDirName.value.trim()) return
+  const base = currentPath.value === '/' ? '/' : currentPath.value + '/'
+  await mkdirFile(props.resourceId, base + newDirName.value.trim())
+  newDirName.value = ''
+  showMkdirInput.value = false
+  await loadDir()
+}
+
+function formatSize(bytes: number | null): string {
+  if (bytes === null || bytes === undefined) return ''
+  if (bytes < 1024) return bytes + 'B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'K'
+  return (bytes / (1024 * 1024)).toFixed(1) + 'M'
+}
+
+function getIcon(entry: FileEntry): string {
+  if (entry.file_type === 'directory') return '📁'
+  if (/\.(js|ts|py|rs|go|java|c|cpp|h|rb|sh|yaml|yml|json|toml|xml|sql)$/i.test(entry.name)) return '📄'
+  if (/\.(png|jpg|jpeg|gif|svg|webp|ico)$/i.test(entry.name)) return '🖼'
+  if (/\.(zip|tar|gz|rar|7z|bz2)$/i.test(entry.name)) return '📦'
+  return '📄'
+}
+
+function getIconClass(entry: FileEntry): string {
+  if (entry.file_type === 'directory') return 'folder'
+  if (/\.(js|ts|py|rs|go|java|c|cpp|h|rb|sh|yaml|yml|json|toml|xml|sql)$/i.test(entry.name)) return 'code'
+  if (/\.(png|jpg|jpeg|gif|svg|webp|ico)$/i.test(entry.name)) return 'image'
+  if (/\.(zip|tar|gz|rar|7z|bz2)$/i.test(entry.name)) return 'archive'
+  return 'file'
+}
+
+function onDragStart(e: DragEvent, entry: FileEntry) {
+  e.dataTransfer?.setData('text/plain', entry.path)
+}
+
+function showEntryCtxMenu(e: MouseEvent, entry: FileEntry) {
+  selectedEntry.value = entry
+  ctxMenu.value = { visible: true, x: e.clientX, y: e.clientY, entry }
+}
+
+function showBgCtxMenu(e: MouseEvent) {
+  ctxMenu.value = { visible: true, x: e.clientX, y: e.clientY, entry: null }
+}
+
+function closeCtxMenu() {
+  ctxMenu.value.visible = false
+}
+
+function copyPath(path: string) {
+  navigator.clipboard.writeText(path).catch(() => {})
+}
+
+function copyFileName(name: string) {
+  navigator.clipboard.writeText(name).catch(() => {})
+}
+
+function closeHandler() {
+  ctxMenu.value.visible = false
+}
+
+watch(showMkdirInput, (v) => {
+  if (v) {
+    newDirName.value = ''
+    nextTick(() => mkdirInputRef.value?.focus())
+  }
+})
+
+onMounted(() => {
+  document.addEventListener('click', closeHandler)
+  loadDir()
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', closeHandler)
+})
+</script>
+
+<style scoped>
+.sftp-panel-inline {
+  width: 400px;
+  border-left: 1px solid var(--border);
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sftp-inline-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  padding: var(--sp-sm) var(--sp-md);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.sftp-icon { color: #8B5CF6; }
+.panel-title { flex: 1; }
+
+.sftp-inline-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: var(--sp-xs) var(--sp-md);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.sftp-bc-seg { cursor: pointer; }
+.sftp-bc-seg:hover { color: var(--text-primary); }
+.sftp-bc-current { color: var(--text-primary); font-weight: 500; cursor: default; }
+
+.sftp-inline-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-xs);
+  padding: var(--sp-xs) var(--sp-md);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sftp-inline-toolbar .btn { height: 24px; font-size: var(--fs-xs); }
+
+.sftp-inline-mkdir {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-xs);
+  padding: var(--sp-xs) var(--sp-md);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sftp-mkdir-input {
+  flex: 1;
+  padding: 2px var(--sp-sm);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  outline: none;
+}
+
+.sftp-mkdir-input:focus { border-color: var(--accent); }
+
+.sftp-inline-files {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.sftp-loading, .sftp-empty {
+  padding: var(--sp-xl);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.sfile-row {
+  display: flex;
+  align-items: center;
+  padding: 4px var(--sp-md);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  font-size: var(--fs-xs);
+}
+
+.sfile-row:hover { background: var(--bg-hover); }
+.sfile-row.selected { background: rgba(88,166,255,0.1); }
+
+.sfile-icon { width: 16px; text-align: center; margin-right: var(--sp-sm); flex-shrink: 0; }
+.sfile-icon.folder { color: var(--info); }
+.sfile-icon.file { color: var(--text-muted); }
+.sfile-icon.code { color: var(--success); }
+.sfile-icon.image { color: #E879F9; }
+.sfile-icon.archive { color: var(--warning); }
+
+.sfile-name { flex: 1; font-family: var(--font-mono); color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sfile-name.parent { color: var(--text-secondary); }
+.sfile-size { width: 60px; text-align: right; color: var(--text-muted); font-family: var(--font-mono); }
+
+.sftp-inline-status {
+  padding: var(--sp-xs) var(--sp-md);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.sftp-ctx-menu {
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 4px 0;
+  min-width: 140px;
+}
+
+.ctx-menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ctx-menu-item:hover { background: var(--bg-hover); }
+.ctx-menu-item.danger { color: var(--danger); }
+
+.ctx-menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+</style>
