@@ -201,6 +201,10 @@ pub fn app_with_static(
         .route("/api/update/download", post(crate::update::download_update))
         .route("/api/update/apply", post(crate::update::apply_update))
         .route(
+            "/api/agent/download",
+            get(crate::agent_download::download_agent),
+        )
+        .route(
             "/api/user/profile",
             get(crate::user::get_profile).put(crate::user::update_profile),
         )

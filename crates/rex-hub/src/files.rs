@@ -293,7 +293,7 @@ mod tests {
     fn test_app() -> axum::Router {
         let state = test_state();
 
-        use axum::routing::{delete, get, post, put};
+        use axum::routing::{get, post, put};
         axum::Router::new()
             .route(
                 "/api/resources/:resource_id/files",

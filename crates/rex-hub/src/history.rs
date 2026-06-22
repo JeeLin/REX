@@ -147,7 +147,7 @@ mod tests {
     use super::*;
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
-    use axum::routing::{delete, get};
+    use axum::routing::get;
     use axum::Router;
     use tower::ServiceExt;
 
