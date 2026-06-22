@@ -203,12 +203,13 @@ const records = ref<AuditRecord[]>([])
 const loading = ref(false)
 const currentPage = ref(1)
 const pageSize = 20
+const apiTotal = ref(0)
 
 // ── Stats computed from filtered records ──
 const stats = computed(() => {
   const all = filteredRecords.value
   return {
-    total: all.length,
+    total: apiTotal.value,
     success: all.filter(r => r.result === 'ok').length,
     failed: all.filter(r => r.result === 'fail').length,
     activeUsers: new Set(all.map(r => r.user)).size,
@@ -273,6 +274,7 @@ async function fetchLogs() {
     if (filters.value.operation) params.type = filters.value.operation
 
     const res = await listAuditLog(params)
+    apiTotal.value = res.total
 
     // Map API records to display records
     const envMap = new Map(environments.value.map(e => [e.id, e.name]))
@@ -320,7 +322,7 @@ onMounted(async () => {
 })
 
 // ── Computed ──
-const totalPages = computed(() => Math.max(1, Math.ceil(filteredRecords.value.length / pageSize)))
+const totalPages = computed(() => Math.max(1, Math.ceil(apiTotal.value / pageSize)))
 
 const paginationText = computed(() => {
   const total = filteredRecords.value.length
