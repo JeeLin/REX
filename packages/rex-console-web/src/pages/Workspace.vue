@@ -63,6 +63,13 @@
                 @disconnect="onPanelDisconnect(tab.id)"
                 @error="(msg: string) => onPanelError(tab.id, msg)"
               />
+              <WorkspaceDocker
+                v-else-if="tab.component === 'docker'"
+                :resource-id="tab.resourceId"
+                :resource-name="tab.name"
+                @disconnect="onPanelDisconnect(tab.id)"
+                @error="(msg: string) => onPanelError(tab.id, msg)"
+              />
               <div v-else class="panel-unsupported">
                 <span :style="{ color: getProtocolIcon(tab.proto).color }">{{ getProtocolIcon(tab.proto).icon }}</span>
                 <div class="panel-unsupported-text">{{ tab.name }}</div>
@@ -115,6 +122,14 @@
             />
             <WorkspaceRedis
               v-else-if="getPanelTab(i - 1)!.component === 'redis'"
+              :key="'panel-' + (i - 1)"
+              :resource-id="getPanelTab(i - 1)!.resourceId"
+              :resource-name="getPanelTab(i - 1)!.name"
+              @disconnect="onPanelDisconnect(getPanelTab(i - 1)!.id)"
+              @error="(msg: string) => onPanelError(getPanelTab(i - 1)!.id, msg)"
+            />
+            <WorkspaceDocker
+              v-else-if="getPanelTab(i - 1)!.component === 'docker'"
               :key="'panel-' + (i - 1)"
               :resource-id="getPanelTab(i - 1)!.resourceId"
               :resource-name="getPanelTab(i - 1)!.name"
@@ -225,6 +240,7 @@ import WorkspaceTerminal from '@/features/workspace/panels/WorkspaceTerminal.vue
 import WorkspaceSql from '@/features/workspace/panels/WorkspaceSql.vue'
 import WorkspaceFiles from '@/features/workspace/panels/WorkspaceFiles.vue'
 import WorkspaceRedis from '@/features/workspace/panels/WorkspaceRedis.vue'
+import WorkspaceDocker from '@/features/workspace/panels/WorkspaceDocker.vue'
 
 const { t } = useI18n()
 const route = useRoute()

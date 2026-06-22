@@ -83,6 +83,65 @@
           </div>
         </template>
 
+        <!-- Docker 特有表单 -->
+        <template v-else-if="form.protocol === 'docker'">
+          <div class="form-group">
+            <label class="form-label">{{ t('resource.docker.mode') }}</label>
+            <div class="auth-toggle">
+              <button
+                type="button"
+                class="auth-btn"
+                :class="{ active: dockerConfig.mode === 'unix' }"
+                @click="dockerConfig.mode = 'unix'"
+              >
+                Unix Socket
+              </button>
+              <button
+                type="button"
+                class="auth-btn"
+                :class="{ active: dockerConfig.mode === 'tcp' }"
+                @click="dockerConfig.mode = 'tcp'"
+              >
+                TCP
+              </button>
+            </div>
+          </div>
+
+          <!-- Unix Socket 模式 -->
+          <template v-if="dockerConfig.mode === 'unix'">
+            <div class="form-group">
+              <label class="form-label">{{ t('resource.docker.socketPath') }}</label>
+              <input v-model="dockerConfig.socketPath" class="form-input" placeholder="/var/run/docker.sock" />
+            </div>
+          </template>
+
+          <!-- TCP 模式 -->
+          <template v-else>
+            <div class="form-row">
+              <div class="form-group flex-2">
+                <label class="form-label">{{ t('resource.docker.host') }}</label>
+                <input v-model="dockerConfig.host" class="form-input" placeholder="127.0.0.1" required />
+              </div>
+              <div class="form-group flex-1">
+                <label class="form-label">{{ t('resource.docker.port') }}</label>
+                <input v-model="dockerConfig.port" class="form-input" placeholder="2375" />
+              </div>
+            </div>
+          </template>
+
+          <div class="form-group">
+            <label class="form-label">{{ t('resource.docker.name') }}</label>
+            <input v-model="dockerConfig.name" class="form-input" :placeholder="t('resource.docker.namePlaceholder')" />
+          </div>
+          <div class="test-connection-row">
+            <button type="button" class="btn btn-ghost btn-sm" :disabled="testState === 'testing'" @click="testConnection">
+              {{ testState === 'testing' ? t('resource.testing') : t('resource.testConnection') }}
+            </button>
+            <span v-if="testState === 'success'" class="test-success">✓ {{ t('resource.testSuccess') }}</span>
+            <span v-if="testState === 'fail'" class="test-fail">✕ {{ testMessage }}</span>
+          </div>
+        </template>
+
         <!-- SSH / SQL 表单 -->
         <template v-else>
         <div class="form-row">
@@ -221,12 +280,26 @@ const redisConfig = reactive({
   name: '',
 })
 
+const dockerConfig = reactive({
+  mode: 'unix' as 'unix' | 'tcp',
+  host: '127.0.0.1',
+  port: '2375',
+  socketPath: '/var/run/docker.sock',
+  name: '',
+})
+
 const canNext = computed(() => {
   if (step.value === 1) return !!form.protocol
   if (step.value === 2) {
     if (!form.name.trim()) return false
     if (form.protocol === 'redis') {
       return !!redisConfig.host.trim()
+    }
+    if (form.protocol === 'docker') {
+      if (dockerConfig.mode === 'unix') {
+        return !!dockerConfig.socketPath.trim()
+      }
+      return !!dockerConfig.host.trim()
     }
     if (form.protocol === 'mysql' || form.protocol === 'postgresql') {
       return !!sshConfig.host.trim() && !!sshConfig.user.trim()
@@ -263,6 +336,15 @@ function buildConfigJson() {
       password: redisConfig.password || null,
       db: db >= 0 && db <= 15 ? db : 0,
       name: redisConfig.name || null,
+    })
+  }
+  if (form.protocol === 'docker') {
+    const host = dockerConfig.mode === 'unix'
+      ? `unix://${dockerConfig.socketPath}`
+      : `tcp://${dockerConfig.host}:${dockerConfig.port || '2375'}`
+    return JSON.stringify({
+      host,
+      name: dockerConfig.name || null,
     })
   }
   if (form.protocol === 'mysql' || form.protocol === 'postgresql') {
