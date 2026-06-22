@@ -97,3 +97,66 @@ supervisor 退出
 - supervisor 不能忽略 Docker stop。
 - worker 必须在 30 秒内退出。
 - 如果 worker 不退出，supervisor 可以发送 `SIGKILL`，然后自身退出。
+
+---
+
+## Docker Compose 部署
+
+### Hub
+
+创建 `.env` 文件：
+
+```bash
+REX_SECRET_KEY=your-secret-key
+GITHUB_REPO_OWNER=rexhub
+```
+
+启动：
+
+```bash
+docker compose -f docker-compose.hub.yaml up -d
+```
+
+停止：
+
+```bash
+docker compose -f docker-compose.hub.yaml down
+```
+
+查看日志：
+
+```bash
+docker compose -f docker-compose.hub.yaml logs -f hub
+```
+
+数据持久化在 Docker 命名卷 `hub-data` 中。
+
+### Agent
+
+创建 `.env` 文件：
+
+```bash
+REX_SERVER=https://your-hub.com
+REX_TOKEN=<环境注册令牌>
+GITHUB_REPO_OWNER=rexhub
+```
+
+启动：
+
+```bash
+docker compose -f docker-compose.agent.yaml up -d
+```
+
+停止：
+
+```bash
+docker compose -f docker-compose.agent.yaml down
+```
+
+查看日志：
+
+```bash
+docker compose -f docker-compose.agent.yaml logs -f agent
+```
+
+数据持久化在 Docker 命名卷 `agent-data` 中（包含 `agent.json` 身份文件）。
