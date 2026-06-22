@@ -77,6 +77,13 @@
                 @disconnect="onPanelDisconnect(tab.id)"
                 @error="(msg: string) => onPanelError(tab.id, msg)"
               />
+              <WorkspaceS3
+                v-else-if="tab.component === 's3'"
+                :resource-id="tab.resourceId"
+                :resource-name="tab.name"
+                @disconnect="onPanelDisconnect(tab.id)"
+                @error="(msg: string) => onPanelError(tab.id, msg)"
+              />
               <div v-else class="panel-unsupported">
                 <span :style="{ color: getProtocolIcon(tab.proto).color }">{{ getProtocolIcon(tab.proto).icon }}</span>
                 <div class="panel-unsupported-text">{{ tab.name }}</div>
@@ -145,6 +152,14 @@
             />
             <WorkspaceSqlite
               v-else-if="getPanelTab(i - 1)!.component === 'sqlite'"
+              :key="'panel-' + (i - 1)"
+              :resource-id="getPanelTab(i - 1)!.resourceId"
+              :resource-name="getPanelTab(i - 1)!.name"
+              @disconnect="onPanelDisconnect(getPanelTab(i - 1)!.id)"
+              @error="(msg: string) => onPanelError(getPanelTab(i - 1)!.id, msg)"
+            />
+            <WorkspaceS3
+              v-else-if="getPanelTab(i - 1)!.component === 's3'"
               :key="'panel-' + (i - 1)"
               :resource-id="getPanelTab(i - 1)!.resourceId"
               :resource-name="getPanelTab(i - 1)!.name"
@@ -257,6 +272,7 @@ import WorkspaceFiles from '@/features/workspace/panels/WorkspaceFiles.vue'
 import WorkspaceRedis from '@/features/workspace/panels/WorkspaceRedis.vue'
 import WorkspaceDocker from '@/features/workspace/panels/WorkspaceDocker.vue'
 import WorkspaceSqlite from '@/features/workspace/panels/WorkspaceSqlite.vue'
+import WorkspaceS3 from '@/features/workspace/panels/WorkspaceS3.vue'
 
 const { t } = useI18n()
 const route = useRoute()

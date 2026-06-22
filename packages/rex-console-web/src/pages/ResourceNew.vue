@@ -161,6 +161,49 @@
           </div>
         </template>
 
+        <!-- S3 特有表单 -->
+        <template v-else-if="form.protocol === 's3'">
+          <div class="form-group">
+            <label class="form-label">{{ t('resource.s3.endpoint') }}</label>
+            <input v-model="s3Config.endpoint" class="form-input" placeholder="https://s3.amazonaws.com" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t('resource.s3.accessKey') }}</label>
+            <input v-model="s3Config.accessKey" class="form-input" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t('resource.s3.secretKey') }}</label>
+            <input v-model="s3Config.secretKey" class="form-input" type="password" required />
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="form-label">{{ t('resource.s3.region') }}</label>
+              <input v-model="s3Config.region" class="form-input" placeholder="us-east-1" />
+            </div>
+            <div class="form-group flex-1">
+              <label class="form-label">{{ t('resource.s3.bucket') }}</label>
+              <input v-model="s3Config.bucket" class="form-input" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">
+              <input type="checkbox" v-model="s3Config.forcePathStyle" />
+              {{ t('resource.s3.forcePathStyle') }}
+            </label>
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t('resource.s3.name') }}</label>
+            <input v-model="s3Config.name" class="form-input" :placeholder="t('resource.s3.namePlaceholder')" />
+          </div>
+          <div class="test-connection-row">
+            <button type="button" class="btn btn-ghost btn-sm" :disabled="testState === 'testing'" @click="testConnection">
+              {{ testState === 'testing' ? t('resource.testing') : t('resource.testConnection') }}
+            </button>
+            <span v-if="testState === 'success'" class="test-success">✓ {{ t('resource.testSuccess') }}</span>
+            <span v-if="testState === 'fail'" class="test-fail">✕ {{ testMessage }}</span>
+          </div>
+        </template>
+
         <!-- SSH / SQL 表单 -->
         <template v-else>
         <div class="form-row">
@@ -312,6 +355,16 @@ const sqliteConfig = reactive({
   name: '',
 })
 
+const s3Config = reactive({
+  endpoint: '',
+  accessKey: '',
+  secretKey: '',
+  region: '',
+  bucket: '',
+  forcePathStyle: true,
+  name: '',
+})
+
 const canNext = computed(() => {
   if (step.value === 1) return !!form.protocol
   if (step.value === 2) {
@@ -327,6 +380,9 @@ const canNext = computed(() => {
     }
     if (form.protocol === 'sqlite') {
       return !!sqliteConfig.dbPath.trim()
+    }
+    if (form.protocol === 's3') {
+      return !!s3Config.endpoint.trim() && !!s3Config.accessKey.trim() && !!s3Config.secretKey.trim()
     }
     if (form.protocol === 'mysql' || form.protocol === 'postgresql') {
       return !!sshConfig.host.trim() && !!sshConfig.user.trim()
@@ -378,6 +434,17 @@ function buildConfigJson() {
     return JSON.stringify({
       db_path: sqliteConfig.dbPath,
       name: sqliteConfig.name || null,
+    })
+  }
+  if (form.protocol === 's3') {
+    return JSON.stringify({
+      endpoint: s3Config.endpoint,
+      access_key: s3Config.accessKey,
+      secret_key: s3Config.secretKey,
+      region: s3Config.region || null,
+      bucket: s3Config.bucket || null,
+      force_path_style: s3Config.forcePathStyle,
+      name: s3Config.name || null,
     })
   }
   if (form.protocol === 'mysql' || form.protocol === 'postgresql') {
