@@ -1,6 +1,7 @@
 <template>
   <div class="settings-page">
     <div class="settings-layout">
+      <ProfileSection />
       <AppearanceSection />
       <TerminalSection />
       <SecuritySection />
@@ -14,6 +15,7 @@
 </template>
 
 <script setup lang="ts">
+import ProfileSection from '@/features/settings/ProfileSection.vue'
 import AppearanceSection from '@/features/settings/AppearanceSection.vue'
 import TerminalSection from '@/features/settings/TerminalSection.vue'
 import SecuritySection from '@/features/settings/SecuritySection.vue'
