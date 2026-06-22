@@ -551,6 +551,17 @@ export default {
       downloadFailed: '下载失败',
     },
   },
+  redis: {
+    title: 'Redis 控制台',
+    connected: '已连接',
+    disconnected: '未连接',
+    connect: '连接',
+    disconnect: '断开',
+    history: '历史记录',
+    placeholder: '输入 Redis 命令...',
+    welcome: '请连接到 Redis 服务器后输入命令',
+    clear: '清屏',
+  },
   audit: {
     title: '审计日志',
     back: '返回设置',

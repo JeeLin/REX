@@ -548,6 +548,17 @@ export default {
       downloadFailed: 'Download failed',
     },
   },
+  redis: {
+    title: 'Redis Console',
+    connected: 'Connected',
+    disconnected: 'Disconnected',
+    connect: 'Connect',
+    disconnect: 'Disconnect',
+    history: 'History',
+    placeholder: 'Enter Redis command...',
+    welcome: 'Connect to a Redis server to start',
+    clear: 'Clear',
+  },
   audit: {
     title: 'Audit Log',
     back: 'Back to Settings',
