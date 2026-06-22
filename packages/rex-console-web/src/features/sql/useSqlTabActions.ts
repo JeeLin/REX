@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import type { AxiosError } from 'axios'
 import { executeSql } from '@/api/sql'
 import type { SqlResult } from '@/api/sql'
 
@@ -118,9 +119,10 @@ export function useSqlTabActions(
       activeTab.value.message = `Query OK, ${result.affected_rows ?? result.rows.length} rows affected (${(result.elapsed_ms / 1000).toFixed(3)}s)`
       activeTab.value.isError = false
       onExecuted?.(sql, result)
-    } catch (e: any) {
+    } catch (e: unknown) {
       activeTab.value.result = { columns: [], rows: [], affected_rows: 0, elapsed_ms: 0 }
-      const msg = e.response?.data?.error?.message || e.message || '执行失败'
+      const axErr = e as AxiosError<{ error?: { message?: string } }>
+      const msg = axErr.response?.data?.error?.message || (e instanceof Error ? e.message : '执行失败')
       activeTab.value.message = `ERROR: ${msg}`
       activeTab.value.isError = true
       onError?.(msg)
@@ -134,8 +136,8 @@ export function useSqlTabActions(
     const colIdx = activeTab.value.result.columns.findIndex((c) => c.name === column)
     if (colIdx < 0) return
     const sorted = [...activeTab.value.result.rows].sort((a, b) => {
-      const va = a[colIdx]
-      const vb = b[colIdx]
+      const va = a[colIdx] as string | number | null
+      const vb = b[colIdx] as string | number | null
       if (va === null) return 1
       if (vb === null) return -1
       if (va === vb) return 0

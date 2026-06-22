@@ -9,7 +9,7 @@ export interface SqlColumn {
 
 export interface SqlResult {
   columns: SqlColumn[]
-  rows: any[][]
+  rows: unknown[][]
   affected_rows: number
   elapsed_ms: number
 }

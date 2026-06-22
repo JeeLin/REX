@@ -201,7 +201,9 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { getProtocolIcon } from '@/composables/useProtocol'
+import type { Protocol } from '@/composables/useProtocol'
 import { listEnvsWithResources } from '@/api/env'
+import type { EnvWithResources } from '@/api/env'
 import TabBar from '@/features/workspace/TabBar.vue'
 import { useTabs } from '@/features/workspace/useTabs'
 import WorkspaceTerminal from '@/features/workspace/panels/WorkspaceTerminal.vue'
@@ -308,7 +310,7 @@ const selectedResourceIdx = ref(0)
 
 interface Resource { id: string; name: string; address: string; protocol: string; envName: string; connectionMode: 'direct' | 'agent' }
 
-const envsWithRes = ref<any[]>([])
+const envsWithRes = ref<EnvWithResources[]>([])
 
 const flatFilteredResources = computed<Resource[]>(() => {
   const all: Resource[] = []
@@ -316,7 +318,7 @@ const flatFilteredResources = computed<Resource[]>(() => {
     for (const r of env.resources) {
       const q = connSearchQuery.value.toLowerCase()
       if (!q || r.name.toLowerCase().includes(q) || r.protocol.includes(q)) {
-        all.push({ id: r.id, name: r.name, address: r.address || '', protocol: r.protocol, envName: env.name, connectionMode: (env.connection_mode === 'agent' ? 'agent' : 'direct') as 'direct' | 'agent' })
+        all.push({ id: r.id, name: r.name, address: '', protocol: r.protocol, envName: env.name, connectionMode: (env.connection_mode === 'agent' ? 'agent' : 'direct') as 'direct' | 'agent' })
       }
     }
   }
@@ -356,7 +358,7 @@ function connectSelected() {
   if (res) connectToResource(res)
 }
 function connectToResource(res: Resource) {
-  addTab(res.name, res.protocol as any, res.id)
+  addTab(res.name, res.protocol as Protocol, res.id)
   showConnMenu.value = false
   connSearchQuery.value = ''
   selectedResourceIdx.value = 0
@@ -364,7 +366,7 @@ function connectToResource(res: Resource) {
 
 function getConnectionMode(resourceId: string): 'direct' | 'agent' {
   for (const env of envsWithRes.value) {
-    const r = env.resources?.find((x: any) => x.id === resourceId)
+    const r = env.resources?.find(x => x.id === resourceId)
     if (r) return env.connection_mode === 'agent' ? 'agent' : 'direct'
   }
   return 'direct'
@@ -400,7 +402,7 @@ onMounted(async () => {
   if (openId) {
     const openName = (route.query.name as string) || openId
     const openProto = (route.query.proto as string) || 'ssh'
-    addTab(openName, openProto as any, openId)
+    addTab(openName, openProto as Protocol, openId)
     // 清除 query 参数，避免刷新重复打开
     router.replace({ name: 'workspace' })
   }

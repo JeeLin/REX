@@ -132,6 +132,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import type { AxiosError } from 'axios'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Terminal } from '@xterm/xterm'
@@ -284,9 +285,10 @@ async function connectSession() {
       connectionStatus.value = 'disconnected'
       emit('error', 'WebSocket 连接失败')
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     connectionStatus.value = 'disconnected'
-    const msg = err?.response?.data?.error?.message ?? err?.message ?? '未知错误'
+    const axErr = err as AxiosError<{ error?: { message?: string } }>
+    const msg = axErr.response?.data?.error?.message ?? (err instanceof Error ? err.message : '未知错误')
     terminal?.write(`\r\n\x1b[31m会话创建失败: ${msg}\x1b[0m\r\n`)
     emit('error', msg)
   }

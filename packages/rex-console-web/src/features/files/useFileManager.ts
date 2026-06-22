@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import type { AxiosError } from 'axios'
 import { listFiles, mkdirFile, touchFile, deleteFile as apiDeleteFile, renameFile } from '@/api/files'
 import type { FileEntry } from '@/api/files'
 
@@ -23,8 +24,9 @@ export function useFileManager(resourceId: string) {
         }
         return a.name.localeCompare(b.name)
       })
-    } catch (e: any) {
-      error.value = e?.response?.data?.error?.message ?? e?.message ?? '加载失败'
+    } catch (e: unknown) {
+      const axErr = e as AxiosError<{ error?: { message?: string } }>
+      error.value = axErr.response?.data?.error?.message ?? (e instanceof Error ? e.message : '加载失败')
     } finally {
       loading.value = false
     }
