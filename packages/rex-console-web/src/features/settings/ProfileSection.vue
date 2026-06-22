@@ -1,42 +1,42 @@
 <template>
   <div class="settings-section">
     <div class="section-header">
-      <h3 class="section-title">👤 个人信息</h3>
+      <h3 class="section-title">👤 {{ t('settings.profile.title') }}</h3>
     </div>
 
     <!-- 用户名 -->
     <div class="settings-row">
       <div class="settings-row-info">
-        <div class="settings-row-label">用户名</div>
+        <div class="settings-row-label">{{ t('settings.profile.username') }}</div>
       </div>
-      <button class="btn btn-ghost btn-sm" @click="showEditUsername = true">编辑</button>
+      <button class="btn btn-ghost btn-sm" @click="showEditUsername = true">{{ t('settings.profile.edit') }}</button>
     </div>
 
     <!-- 密码 -->
     <div class="settings-row">
       <div class="settings-row-info">
-        <div class="settings-row-label">密码</div>
-        <div class="settings-row-desc">上次修改时间未知</div>
+        <div class="settings-row-label">{{ t('settings.profile.password') }}</div>
+        <div class="settings-row-desc">{{ t('settings.profile.lastChanged') }}</div>
       </div>
-      <button class="btn btn-ghost btn-sm" @click="showChangePassword = true">修改</button>
+      <button class="btn btn-ghost btn-sm" @click="showChangePassword = true">{{ t('settings.profile.change') }}</button>
     </div>
 
     <!-- 编辑用户名弹窗 -->
     <div v-if="showEditUsername" class="modal-overlay" @click.self="showEditUsername = false">
       <div class="modal">
-        <div class="modal-title">编辑用户名</div>
+        <div class="modal-title">{{ t('settings.profile.editTitle') }}</div>
         <div class="form-group">
-          <label class="form-label">用户名</label>
+          <label class="form-label">{{ t('settings.profile.username') }}</label>
           <input
             v-model="newUsername"
             class="form-input"
-            placeholder="输入新用户名"
+            :placeholder="t('settings.profile.usernamePlaceholder')"
             @keydown.enter="saveUsername"
           />
         </div>
         <div class="modal-actions">
-          <button class="btn" @click="showEditUsername = false">取消</button>
-          <button class="btn btn-primary" @click="saveUsername" :disabled="!newUsername.trim()">保存</button>
+          <button class="btn" @click="showEditUsername = false">{{ t('settings.profile.cancel') }}</button>
+          <button class="btn btn-primary" @click="saveUsername" :disabled="!newUsername.trim()">{{ t('settings.profile.save') }}</button>
         </div>
       </div>
     </div>
@@ -44,33 +44,33 @@
     <!-- 修改密码弹窗 -->
     <div v-if="showChangePassword" class="modal-overlay" @click.self="showChangePassword = false">
       <div class="modal">
-        <div class="modal-title">修改密码</div>
+        <div class="modal-title">{{ t('settings.profile.changeTitle') }}</div>
         <div class="form-group">
-          <label class="form-label">当前密码</label>
+          <label class="form-label">{{ t('settings.profile.currentPassword') }}</label>
           <input
             v-model="currentPassword"
             type="password"
             class="form-input"
-            placeholder="输入当前密码"
+            :placeholder="t('settings.profile.currentPasswordPlaceholder')"
           />
         </div>
         <div class="form-group" style="margin-top: var(--sp-md)">
-          <label class="form-label">新密码</label>
+          <label class="form-label">{{ t('settings.profile.newPassword') }}</label>
           <input
             v-model="newPassword"
             type="password"
             class="form-input"
-            placeholder="输入新密码（至少 6 位）"
+            :placeholder="t('settings.profile.newPasswordPlaceholder')"
             @keydown.enter="savePassword"
           />
         </div>
         <div class="modal-actions">
-          <button class="btn" @click="showChangePassword = false">取消</button>
+          <button class="btn" @click="showChangePassword = false">{{ t('settings.profile.cancel') }}</button>
           <button
             class="btn btn-primary"
             @click="savePassword"
             :disabled="!currentPassword || newPassword.length < 6"
-          >保存</button>
+          >{{ t('settings.profile.save') }}</button>
         </div>
       </div>
     </div>
@@ -79,7 +79,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getUserProfile, updateUserProfile, changePassword } from '@/api/settings'
+
+const { t } = useI18n()
 
 const username = ref('admin')
 const showEditUsername = ref(false)
@@ -104,7 +107,7 @@ async function saveUsername() {
     username.value = profile.username
     showEditUsername.value = false
   } catch (err: any) {
-    alert(err?.response?.data?.error?.message ?? '保存失败')
+    alert(err?.response?.data?.error?.message ?? t('settings.profile.saveFailed'))
   }
 }
 
@@ -118,9 +121,9 @@ async function savePassword() {
     showChangePassword.value = false
     currentPassword.value = ''
     newPassword.value = ''
-    alert('密码修改成功')
+    alert(t('settings.profile.saveSuccess'))
   } catch (err: any) {
-    alert(err?.response?.data?.error?.message ?? '密码修改失败')
+    alert(err?.response?.data?.error?.message ?? t('settings.profile.passwordFailed'))
   }
 }
 
