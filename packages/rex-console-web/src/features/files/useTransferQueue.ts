@@ -1,7 +1,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
-import type { AxiosError } from 'axios'
 import { listTransfers, cancelTransfer, removeTransfer } from '@/api/transfer'
 import type { TransferTask } from '@/api/transfer'
+import { getErrorMessage } from '@/utils/error'
 
 const POLL_INTERVAL = 3000
 
@@ -17,8 +17,7 @@ export function useTransferQueue() {
     try {
       tasks.value = await listTransfers()
     } catch (e: unknown) {
-      const axErr = e as AxiosError<{ error?: { message?: string } }>
-      error.value = axErr.response?.data?.error?.message ?? (e instanceof Error ? e.message : '加载失败')
+      error.value = getErrorMessage(e, '加载失败')
     } finally {
       loading.value = false
     }

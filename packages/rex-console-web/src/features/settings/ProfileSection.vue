@@ -80,8 +80,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { AxiosError } from 'axios'
 import { getUserProfile, updateUserProfile, changePassword } from '@/api/settings'
+import { getErrorMessage } from '@/utils/error'
 
 const { t } = useI18n()
 
@@ -108,8 +108,7 @@ async function saveUsername() {
     username.value = profile.username
     showEditUsername.value = false
   } catch (err: unknown) {
-    const axErr = err as AxiosError<{ error?: { message?: string } }>
-    alert(axErr.response?.data?.error?.message ?? t('settings.profile.saveFailed'))
+    alert(getErrorMessage(err, t('settings.profile.saveFailed')))
   }
 }
 
@@ -125,8 +124,7 @@ async function savePassword() {
     newPassword.value = ''
     alert(t('settings.profile.saveSuccess'))
   } catch (err: unknown) {
-    const axErr = err as AxiosError<{ error?: { message?: string } }>
-    alert(axErr.response?.data?.error?.message ?? t('settings.profile.passwordFailed'))
+    alert(getErrorMessage(err, t('settings.profile.passwordFailed')))
   }
 }
 

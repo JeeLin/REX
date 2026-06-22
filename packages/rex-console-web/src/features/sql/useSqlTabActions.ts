@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
-import type { AxiosError } from 'axios'
 import { executeSql } from '@/api/sql'
 import type { SqlResult } from '@/api/sql'
+import { getErrorMessage } from '@/utils/error'
 
 export interface QueryTab {
   id: string
@@ -121,8 +121,7 @@ export function useSqlTabActions(
       onExecuted?.(sql, result)
     } catch (e: unknown) {
       activeTab.value.result = { columns: [], rows: [], affected_rows: 0, elapsed_ms: 0 }
-      const axErr = e as AxiosError<{ error?: { message?: string } }>
-      const msg = axErr.response?.data?.error?.message || (e instanceof Error ? e.message : '执行失败')
+      const msg = getErrorMessage(e, '执行失败')
       activeTab.value.message = `ERROR: ${msg}`
       activeTab.value.isError = true
       onError?.(msg)

@@ -132,7 +132,6 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import type { AxiosError } from 'axios'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Terminal } from '@xterm/xterm'
@@ -140,6 +139,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { createSession, deleteSession } from '@/api/terminal'
 import { useContextMenu } from '@/composables/useContextMenu'
+import { getErrorMessage } from '@/utils/error'
 import { listFiles } from '@/api/files'
 import type { FileEntry } from '@/api/files'
 import FileList from '@/features/files/FileList.vue'
@@ -287,8 +287,7 @@ async function connectSession() {
     }
   } catch (err: unknown) {
     connectionStatus.value = 'disconnected'
-    const axErr = err as AxiosError<{ error?: { message?: string } }>
-    const msg = axErr.response?.data?.error?.message ?? (err instanceof Error ? err.message : '未知错误')
+    const msg = getErrorMessage(err, '未知错误')
     terminal?.write(`\r\n\x1b[31m会话创建失败: ${msg}\x1b[0m\r\n`)
     emit('error', msg)
   }
