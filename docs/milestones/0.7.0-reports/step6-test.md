@@ -28,14 +28,12 @@ cargo clippy --workspace --all-targets
 cargo test --workspace
 ```
 
-- rex-common: 16 passed ✅
-- rex-ssh: 0 passed ✅
-- rex-hub: 135 passed, 1 failed ❌
+- rex-common: 全部通过 ✅
+- rex-ssh: 全部通过 ✅
+- rex-hub: 全部通过 ✅
 - 其他 crate: 全部通过 ✅
 
-**失败测试**：`update::tests::get_update_status_returns_version`
-- 原因：预存在的网络依赖测试（需要访问 GitHub API）
-- 非本次里程碑引入，不影响 0.7.0 功能
+**修复**：`update::tests::get_update_status_returns_version` 版本号硬编码 `"0.1.0"` 与实际版本不匹配，改为 `env!("CARGO_PKG_VERSION")` 动态获取。
 
 ### 4. 前端类型检查
 
@@ -74,4 +72,4 @@ npm run build
 
 ## 结论
 
-✅ 测试验证通过。1 个预存在的网络依赖测试失败，非本次变更引入。
+✅ 测试验证通过，0 失败。
