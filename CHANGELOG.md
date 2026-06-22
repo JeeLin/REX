@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-22
+
+### Added
+- Hub TLS/HTTPS 支持：通过配置文件、环境变量或 CLI 参数指定证书和私钥
+- Agent 二进制下载端点 `GET /api/agent/download?os={os}&arch={arch}`
+- Agent 更新流程支持从 Hub 下载二进制（`update.source: hub`）
+- Docker 镜像 TLS 配置支持（443 端口、证书目录、环境变量）
+
+### Changed
+- CLI 新增 `--tls-cert` 和 `--tls-key` 参数
+- HubConfig 新增 `tls` 配置段
+- AgentConfig 新增 `update.source` 配置项
+
 ## [0.5.0] - 2026-06-22
 
 ### Added
