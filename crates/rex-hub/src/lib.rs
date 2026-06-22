@@ -22,5 +22,6 @@ pub mod transfer;
 pub mod update;
 pub mod user;
 pub mod ws;
+pub mod ws_docker;
 pub mod ws_redis;
 pub mod ws_terminal;
