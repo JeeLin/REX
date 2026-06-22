@@ -381,9 +381,7 @@ mod tests {
     #[test]
     fn encode_single_word() {
         let mut buf = BytesMut::new();
-        RespEncoder::new()
-            .encode("PING".into(), &mut buf)
-            .unwrap();
+        RespEncoder::new().encode("PING".into(), &mut buf).unwrap();
         assert_eq!(&buf[..], b"*1\r\n$4\r\nPING\r\n");
     }
 
@@ -393,7 +391,10 @@ mod tests {
         RespEncoder::new()
             .encode("SET key hello world".into(), &mut buf)
             .unwrap();
-        assert_eq!(&buf[..], b"*4\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nhello\r\n$5\r\nworld\r\n");
+        assert_eq!(
+            &buf[..],
+            b"*4\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nhello\r\n$5\r\nworld\r\n"
+        );
     }
 
     // ── RedisValue serialization ────────────────────────

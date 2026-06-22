@@ -118,10 +118,8 @@ async fn handle_redis_socket(socket: WebSocket, resource_id: String, state: Arc<
     }
 
     // 4. 获取服务器信息
-    let server_info = match connector.info().await {
-        Ok(info) => info,
-        Err(_) => std::collections::HashMap::new(),
-    };
+    let server_info: std::collections::HashMap<String, String> =
+        connector.info().await.unwrap_or_default();
 
     // 5. 发送 connected 消息
     let connected = RedisServerMsg::Connected {

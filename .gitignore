@@ -25,6 +25,7 @@ dist/
 Thumbs.db
 
 # Database
+/data/
 *.db
 *.db-journal
 *.db-wal

@@ -303,10 +303,7 @@ mod tests {
             .await
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(
-            json["data"]["current_version"],
-            env!("CARGO_PKG_VERSION")
-        );
+        assert_eq!(json["data"]["current_version"], env!("CARGO_PKG_VERSION"));
         assert_eq!(json["data"]["update_available"], false);
         assert_eq!(json["data"]["auto_check_enabled"], true);
     }
