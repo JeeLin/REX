@@ -35,10 +35,7 @@ pub enum DockerClientMsg {
 pub enum DockerServerMsg {
     /// 操作结果
     #[serde(rename = "response")]
-    Response {
-        id: String,
-        data: serde_json::Value,
-    },
+    Response { id: String, data: serde_json::Value },
     /// 操作错误
     #[serde(rename = "error")]
     Error { id: String, message: String },
@@ -73,9 +70,7 @@ pub async fn docker_ws_handler(
     if !auth::verify_token(&state.secret_key, &token) {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    Ok(ws.on_upgrade(move |socket| {
-        handle_docker_socket(socket, resource_id, state)
-    }))
+    Ok(ws.on_upgrade(move |socket| handle_docker_socket(socket, resource_id, state)))
 }
 
 async fn handle_docker_socket(socket: WebSocket, resource_id: String, state: Arc<AppState>) {
@@ -187,10 +182,7 @@ async fn handle_docker_action(
 ) -> anyhow::Result<serde_json::Value> {
     match action {
         "list" => {
-            let all = params
-                .get("all")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
+            let all = params.get("all").and_then(|v| v.as_bool()).unwrap_or(false);
             let containers = connector.list_containers(all).await?;
             Ok(serde_json::to_value(containers)?)
         }
@@ -239,10 +231,7 @@ async fn handle_docker_action(
                 .get("id")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| anyhow::anyhow!("missing 'id' param"))?;
-            let tail = params
-                .get("tail")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(100) as u32;
+            let tail = params.get("tail").and_then(|v| v.as_u64()).unwrap_or(100) as u32;
             let logs = connector.logs(id, tail).await?;
             Ok(serde_json::json!({ "logs": logs }))
         }
@@ -318,10 +307,7 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed["type"].as_str().unwrap(), "error");
-        assert_eq!(
-            parsed["message"].as_str().unwrap(),
-            "container not found"
-        );
+        assert_eq!(parsed["message"].as_str().unwrap(), "container not found");
     }
 
     #[test]
