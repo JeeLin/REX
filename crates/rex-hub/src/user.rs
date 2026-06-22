@@ -1,5 +1,5 @@
-use argon2::password_hash::{PasswordHash, SaltString};
 use argon2::password_hash::PasswordVerifier;
+use argon2::password_hash::{PasswordHash, SaltString};
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Json;
@@ -165,7 +165,14 @@ mod tests {
     #[tokio::test]
     async fn update_profile_saves_username() {
         let state = test_state();
-        let result = update_profile(State(state.clone()), Json(UpdateUsernameRequest { username: "test_user".to_string() })).await.unwrap();
+        let result = update_profile(
+            State(state.clone()),
+            Json(UpdateUsernameRequest {
+                username: "test_user".to_string(),
+            }),
+        )
+        .await
+        .unwrap();
         assert_eq!(result.0.data.username, "test_user");
 
         let result = get_profile(State(state)).await.unwrap();
@@ -175,7 +182,13 @@ mod tests {
     #[tokio::test]
     async fn update_profile_rejects_empty_username() {
         let state = test_state();
-        let result = update_profile(State(state), Json(UpdateUsernameRequest { username: "".to_string() })).await;
+        let result = update_profile(
+            State(state),
+            Json(UpdateUsernameRequest {
+                username: "".to_string(),
+            }),
+        )
+        .await;
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().0, StatusCode::BAD_REQUEST);
     }
@@ -183,7 +196,14 @@ mod tests {
     #[tokio::test]
     async fn change_password_wrong_current_password() {
         let state = test_state();
-        let result = change_password(State(state), Json(ChangePasswordRequest { current_password: "wrong".to_string(), new_password: "newpass123".to_string() })).await;
+        let result = change_password(
+            State(state),
+            Json(ChangePasswordRequest {
+                current_password: "wrong".to_string(),
+                new_password: "newpass123".to_string(),
+            }),
+        )
+        .await;
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().0, StatusCode::UNAUTHORIZED);
     }
@@ -191,7 +211,14 @@ mod tests {
     #[tokio::test]
     async fn change_password_rejects_short_password() {
         let state = test_state();
-        let result = change_password(State(state), Json(ChangePasswordRequest { current_password: "admin".to_string(), new_password: "123".to_string() })).await;
+        let result = change_password(
+            State(state),
+            Json(ChangePasswordRequest {
+                current_password: "admin".to_string(),
+                new_password: "123".to_string(),
+            }),
+        )
+        .await;
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().0, StatusCode::BAD_REQUEST);
     }
@@ -199,7 +226,14 @@ mod tests {
     #[tokio::test]
     async fn change_password_success() {
         let state = test_state();
-        let result = change_password(State(state), Json(ChangePasswordRequest { current_password: "admin".to_string(), new_password: "newpass123".to_string() })).await;
+        let result = change_password(
+            State(state),
+            Json(ChangePasswordRequest {
+                current_password: "admin".to_string(),
+                new_password: "newpass123".to_string(),
+            }),
+        )
+        .await;
         assert!(result.is_ok());
     }
 }

@@ -37,7 +37,11 @@ fn main() -> anyhow::Result<()> {
         if let Some(ref tls) = config.tls {
             tracing::info!(listen = %config.listen, cert = %tls.cert.display(), key = %tls.key.display(), "TLS enabled, serving HTTPS");
             let tls_acceptor = rex_hub::tls::create_tls_acceptor(&tls.cert, &tls.key)?;
-            rt.block_on(rex_hub::tls::run_tls_server(&config.listen, tls_acceptor, app))?;
+            rt.block_on(rex_hub::tls::run_tls_server(
+                &config.listen,
+                tls_acceptor,
+                app,
+            ))?;
         } else {
             tracing::info!(listen = %config.listen, "HTTP only, serving without TLS");
             rt.block_on(async {

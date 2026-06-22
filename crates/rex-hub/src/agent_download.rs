@@ -30,7 +30,11 @@ pub async fn download_agent(
             Json(ErrorResponse {
                 error: ErrorBody {
                     code: "INVALID_OS".to_string(),
-                    message: format!("invalid os '{}', supported: {}", query.os, VALID_OS.join(", ")),
+                    message: format!(
+                        "invalid os '{}', supported: {}",
+                        query.os,
+                        VALID_OS.join(", ")
+                    ),
                 },
             }),
         )
@@ -82,7 +86,8 @@ pub async fn download_agent(
             hasher.update(&data);
             let sha256 = format!("{:x}", hasher.finalize());
 
-            let version = std::env::var("REX_AGENT_VERSION").unwrap_or_else(|_| "unknown".to_string());
+            let version =
+                std::env::var("REX_AGENT_VERSION").unwrap_or_else(|_| "unknown".to_string());
 
             let mut headers = header::HeaderMap::new();
             headers.insert(
@@ -91,10 +96,8 @@ pub async fn download_agent(
             );
             headers.insert(
                 header::CONTENT_DISPOSITION,
-                header::HeaderValue::from_str(&format!(
-                    "attachment; filename=\"{filename}\""
-                ))
-                .unwrap(),
+                header::HeaderValue::from_str(&format!("attachment; filename=\"{filename}\""))
+                    .unwrap(),
             );
             headers.insert(
                 "X-Agent-Version".parse::<header::HeaderName>().unwrap(),

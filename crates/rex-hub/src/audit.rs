@@ -288,9 +288,39 @@ mod tests {
     #[tokio::test]
     async fn get_stats_returns_totals() {
         let db = Database::new_in_memory().unwrap();
-        write_audit_log(&db, "login", "success", "登录成功", None, None, None, None, None);
-        write_audit_log(&db, "login", "failure", "登录失败", None, None, None, None, None);
-        write_audit_log(&db, "login", "success", "登录成功", None, None, None, None, None);
+        write_audit_log(
+            &db,
+            "login",
+            "success",
+            "登录成功",
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        write_audit_log(
+            &db,
+            "login",
+            "failure",
+            "登录失败",
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        write_audit_log(
+            &db,
+            "login",
+            "success",
+            "登录成功",
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
 
         let state = Arc::new(crate::routes::AppState {
             db: Arc::new(db),
@@ -302,7 +332,9 @@ mod tests {
             data_dir: std::path::PathBuf::from("./data"),
         });
 
-        let result = get_stats(State(state), Query(StatsQuery { period: None })).await.unwrap();
+        let result = get_stats(State(state), Query(StatsQuery { period: None }))
+            .await
+            .unwrap();
         assert_eq!(result.0.data.total, 3);
         assert_eq!(result.0.data.success, 2);
         assert_eq!(result.0.data.failed, 1);

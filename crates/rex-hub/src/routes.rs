@@ -208,10 +208,7 @@ pub fn app_with_static(
             "/api/user/profile",
             get(crate::user::get_profile).put(crate::user::update_profile),
         )
-        .route(
-            "/api/user/password",
-            put(crate::user::change_password),
-        )
+        .route("/api/user/password", put(crate::user::change_password))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,

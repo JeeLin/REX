@@ -149,25 +149,41 @@ impl UpdateChecker {
     /// 当前平台 os 名称
     pub fn current_os() -> &'static str {
         #[cfg(target_os = "linux")]
-        { "linux" }
+        {
+            "linux"
+        }
         #[cfg(target_os = "macos")]
-        { "darwin" }
+        {
+            "darwin"
+        }
         #[cfg(target_os = "windows")]
-        { "windows" }
+        {
+            "windows"
+        }
         #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-        { "unknown" }
+        {
+            "unknown"
+        }
     }
 
     /// 当前平台 arch 名称
     pub fn current_arch() -> &'static str {
         #[cfg(target_arch = "x86_64")]
-        { "amd64" }
+        {
+            "amd64"
+        }
         #[cfg(target_arch = "aarch64")]
-        { "arm64" }
+        {
+            "arm64"
+        }
         #[cfg(target_arch = "arm")]
-        { "armv7l" }
+        {
+            "armv7l"
+        }
         #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "arm")))]
-        { "unknown" }
+        {
+            "unknown"
+        }
     }
 
     /// 从 Hub 下载 Agent 二进制
@@ -181,11 +197,7 @@ impl UpdateChecker {
         let arch = Self::current_arch();
         let url = format!("{hub_url}/api/agent/download?os={os}&arch={arch}");
 
-        let resp = Self::client()
-            .get(&url)
-            .bearer_auth(token)
-            .send()
-            .await?;
+        let resp = Self::client().get(&url).bearer_auth(token).send().await?;
 
         if !resp.status().is_success() {
             anyhow::bail!("Hub 下载失败: HTTP {}", resp.status());
@@ -224,9 +236,7 @@ impl UpdateChecker {
             hasher.update(&bytes);
             let actual = format!("{:x}", hasher.finalize());
             if actual != *expected {
-                anyhow::bail!(
-                    "SHA256 校验失败: 期望 {expected}, 实际 {actual}"
-                );
+                anyhow::bail!("SHA256 校验失败: 期望 {expected}, 实际 {actual}");
             }
         }
 

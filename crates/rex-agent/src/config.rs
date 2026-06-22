@@ -171,20 +171,14 @@ mod tests {
         .unwrap();
 
         let config = AgentConfig::load(Some(config_path.to_str().unwrap())).unwrap();
-        assert_eq!(
-            config.update.source,
-            rex_common::updater::UpdateSource::Hub
-        );
+        assert_eq!(config.update.source, rex_common::updater::UpdateSource::Hub);
     }
 
     #[test]
     fn load_update_source_from_env() {
         env::set_var("REX_UPDATE_SOURCE", "hub");
         let config = AgentConfig::load(Some("/nonexistent")).unwrap();
-        assert_eq!(
-            config.update.source,
-            rex_common::updater::UpdateSource::Hub
-        );
+        assert_eq!(config.update.source, rex_common::updater::UpdateSource::Hub);
         env::remove_var("REX_UPDATE_SOURCE");
     }
 }
