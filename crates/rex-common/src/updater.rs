@@ -40,6 +40,20 @@ pub enum UpdateStatus {
 /// 下载进度回调
 pub type ProgressCallback = Box<dyn Fn(u32) + Send + Sync>;
 
+/// 更新下载源
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum UpdateSource {
+    GitHub,
+    Hub,
+}
+
+impl Default for UpdateSource {
+    fn default() -> Self {
+        Self::GitHub
+    }
+}
+
 /// 更新检查器
 pub struct UpdateChecker {
     repo: String,
@@ -130,6 +144,110 @@ impl UpdateChecker {
         {
             "rex-unknown"
         }
+    }
+
+    /// 当前平台 os 名称
+    pub fn current_os() -> &'static str {
+        #[cfg(target_os = "linux")]
+        { "linux" }
+        #[cfg(target_os = "macos")]
+        { "darwin" }
+        #[cfg(target_os = "windows")]
+        { "windows" }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        { "unknown" }
+    }
+
+    /// 当前平台 arch 名称
+    pub fn current_arch() -> &'static str {
+        #[cfg(target_arch = "x86_64")]
+        { "amd64" }
+        #[cfg(target_arch = "aarch64")]
+        { "arm64" }
+        #[cfg(target_arch = "arm")]
+        { "armv7l" }
+        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "arm")))]
+        { "unknown" }
+    }
+
+    /// 从 Hub 下载 Agent 二进制
+    pub async fn download_from_hub(
+        hub_url: &str,
+        token: &str,
+        data_dir: &Path,
+        on_progress: Option<ProgressCallback>,
+    ) -> anyhow::Result<PathBuf> {
+        let os = Self::current_os();
+        let arch = Self::current_arch();
+        let url = format!("{hub_url}/api/agent/download?os={os}&arch={arch}");
+
+        let resp = Self::client()
+            .get(&url)
+            .bearer_auth(token)
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            anyhow::bail!("Hub 下载失败: HTTP {}", resp.status());
+        }
+
+        // 读取 SHA256 校验和
+        let expected_sha256 = resp
+            .headers()
+            .get("X-Agent-SHA256")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+
+        let total = resp.content_length().unwrap_or(0);
+        let mut downloaded: u64 = 0;
+        let mut bytes = Vec::with_capacity(total as usize);
+
+        let mut stream = resp.bytes_stream();
+        use futures_util::StreamExt;
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk?;
+            downloaded += chunk.len() as u64;
+            bytes.extend_from_slice(&chunk);
+            if let Some(ref cb) = on_progress {
+                let percent = if total > 0 {
+                    (downloaded * 100 / total) as u32
+                } else {
+                    0
+                };
+                cb(percent);
+            }
+        }
+
+        // SHA256 校验
+        if let Some(ref expected) = expected_sha256 {
+            let mut hasher = Sha256::new();
+            hasher.update(&bytes);
+            let actual = format!("{:x}", hasher.finalize());
+            if actual != *expected {
+                anyhow::bail!(
+                    "SHA256 校验失败: 期望 {expected}, 实际 {actual}"
+                );
+            }
+        }
+
+        // 写入 staging 目录
+        let staging_dir = data_dir.join("updates").join("staging");
+        std::fs::create_dir_all(&staging_dir)?;
+
+        let filename = format!("agent-{os}-{arch}");
+        let staged_path = staging_dir.join(&filename);
+        std::fs::write(&staged_path, &bytes)?;
+
+        // chmod +x (Unix)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&staged_path)?.permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&staged_path, perms)?;
+        }
+
+        Ok(staged_path)
     }
 
     /// 下载新版本二进制到 staging 目录
@@ -288,5 +406,28 @@ mod tests {
         assert!(result.is_ok());
         let path = result.unwrap();
         assert!(path.exists());
+    }
+
+    #[test]
+    fn current_os_is_nonempty() {
+        assert!(!UpdateChecker::current_os().is_empty());
+    }
+
+    #[test]
+    fn current_arch_is_nonempty() {
+        assert!(!UpdateChecker::current_arch().is_empty());
+    }
+
+    #[test]
+    fn update_source_default_is_github() {
+        assert_eq!(UpdateSource::default(), UpdateSource::GitHub);
+    }
+
+    #[test]
+    fn update_source_deserialize() {
+        let github: UpdateSource = serde_json::from_str("\"github\"").unwrap();
+        assert_eq!(github, UpdateSource::GitHub);
+        let hub: UpdateSource = serde_json::from_str("\"hub\"").unwrap();
+        assert_eq!(hub, UpdateSource::Hub);
     }
 }

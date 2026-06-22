@@ -3,11 +3,19 @@ use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct UpdateConfig {
+    #[serde(default)]
+    pub source: rex_common::updater::UpdateSource,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct AgentConfig {
     pub server: String,
     pub token: String,
     pub name: String,
     pub data_dir: PathBuf,
+    #[serde(default)]
+    pub update: UpdateConfig,
 }
 
 impl Default for AgentConfig {
@@ -17,6 +25,15 @@ impl Default for AgentConfig {
             token: String::new(),
             name: "unnamed-agent".to_string(),
             data_dir: PathBuf::from("./data"),
+            update: UpdateConfig::default(),
+        }
+    }
+}
+
+impl Default for UpdateConfig {
+    fn default() -> Self {
+        Self {
+            source: rex_common::updater::UpdateSource::GitHub,
         }
     }
 }
@@ -60,6 +77,12 @@ impl AgentConfig {
         }
         if let Ok(val) = std::env::var("REX_DATA_DIR") {
             config.data_dir = PathBuf::from(val);
+        }
+        if let Ok(val) = std::env::var("REX_UPDATE_SOURCE") {
+            config.update.source = match val.to_lowercase().as_str() {
+                "hub" => rex_common::updater::UpdateSource::Hub,
+                _ => rex_common::updater::UpdateSource::GitHub,
+            };
         }
 
         Ok(config)
@@ -126,5 +149,42 @@ mod tests {
         assert_eq!(config.token, "my-token");
         assert_eq!(config.name, "my-agent");
         assert_eq!(config.data_dir, PathBuf::from("/custom/data"));
+    }
+
+    #[test]
+    fn default_update_source_is_github() {
+        let config = AgentConfig::default();
+        assert_eq!(
+            config.update.source,
+            rex_common::updater::UpdateSource::GitHub
+        );
+    }
+
+    #[test]
+    fn load_update_source_from_yaml() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("agent.yaml");
+        std::fs::write(
+            &config_path,
+            "server: http://localhost:3000\ntoken: t\nname: a\ndata_dir: /tmp/d\nupdate:\n  source: hub\n",
+        )
+        .unwrap();
+
+        let config = AgentConfig::load(Some(config_path.to_str().unwrap())).unwrap();
+        assert_eq!(
+            config.update.source,
+            rex_common::updater::UpdateSource::Hub
+        );
+    }
+
+    #[test]
+    fn load_update_source_from_env() {
+        env::set_var("REX_UPDATE_SOURCE", "hub");
+        let config = AgentConfig::load(Some("/nonexistent")).unwrap();
+        assert_eq!(
+            config.update.source,
+            rex_common::updater::UpdateSource::Hub
+        );
+        env::remove_var("REX_UPDATE_SOURCE");
     }
 }
