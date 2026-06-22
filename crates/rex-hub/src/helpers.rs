@@ -84,7 +84,6 @@ pub fn get_or_create_password_hash(db: &crate::db::Database) -> String {
 
     stored.unwrap_or_else(|| {
         use argon2::password_hash::SaltString;
-        use argon2::PasswordHasher;
         use rand_core::OsRng;
         let default_password =
             std::env::var("REX_DEFAULT_PASSWORD").unwrap_or_else(|_| "admin".to_string());

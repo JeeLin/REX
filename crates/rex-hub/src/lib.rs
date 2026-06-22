@@ -13,6 +13,7 @@ pub mod routes;
 pub mod sql;
 pub mod ssh_config;
 pub mod terminal;
+pub mod tls;
 pub mod transfer;
 pub mod update;
 pub mod user;

@@ -11,6 +11,14 @@ pub struct Cli {
     /// 配置文件路径（仅 Hub）
     #[arg(long)]
     pub config: Option<String>,
+
+    /// TLS 证书文件路径（仅 Hub）
+    #[arg(long = "tls-cert")]
+    pub tls_cert: Option<String>,
+
+    /// TLS 私钥文件路径（仅 Hub）
+    #[arg(long = "tls-key")]
+    pub tls_key: Option<String>,
 }
 
 #[cfg(test)]

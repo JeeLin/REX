@@ -1,10 +1,9 @@
-use argon2::password_hash::{PasswordHash, SaltString};
+use argon2::password_hash::PasswordHash;
 use argon2::PasswordVerifier;
 use axum::extract::State;
 use axum::http::{header::HeaderMap, StatusCode};
 use axum::Json;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
-use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 

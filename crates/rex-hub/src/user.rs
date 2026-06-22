@@ -1,6 +1,5 @@
 use argon2::password_hash::{PasswordHash, SaltString};
 use argon2::password_hash::PasswordVerifier;
-use argon2::PasswordHasher as _;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Json;

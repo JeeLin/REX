@@ -32,6 +32,10 @@ rex-transfer = { workspace = true }
 rex-mysql = { workspace = true }
 rex-postgresql = { workspace = true }
 base64 = { workspace = true }
+tokio-rustls = { workspace = true }
+rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
+hyper-util = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
