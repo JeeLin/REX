@@ -15,5 +15,6 @@ pub mod ssh_config;
 pub mod terminal;
 pub mod transfer;
 pub mod update;
+pub mod user;
 pub mod ws;
 pub mod ws_terminal;
