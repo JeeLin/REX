@@ -79,50 +79,64 @@ fn main() -> anyhow::Result<()> {
                 let listen = config.listen.clone();
 
                 rt.block_on(async move {
-                    let (default_config, _challenge_config, http01_service) =
+                    let (default_config, challenge_config, http01_service) =
                         acme::start_acme_driver(acme_cfg, config.data_dir.clone()).await?;
 
+                    // TLS-ALPN-01：使用 challenge config 接受连接（支持 ALPN 协商）
+                    // HTTP-01：使用 default config（普通 TLS 连接）
+                    let server_config = challenge_config.unwrap_or(default_config);
                     let tls_acceptor =
-                        rex_hub::tls::create_tls_acceptor_from_config((*default_config).clone());
+                        rex_hub::tls::create_tls_acceptor_from_config((*server_config).clone());
 
                     // HTTP-01 需要单独的 80 端口 listener
                     if let Some(http01_service) = http01_service {
-                        let http01_port = extract_port(&listen).unwrap_or(80);
-                        let http01_addr = format!("0.0.0.0:{http01_port}");
                         tokio::spawn(async move {
                             let listener =
-                                tokio::net::TcpListener::bind(&http01_addr).await.unwrap();
-                            tracing::info!(addr = %http01_addr, "HTTP-01 challenge server listening");
-                            loop {
-                                let (mut stream, _) = listener.accept().await.unwrap();
-                                let mut svc = http01_service.clone();
-                                tokio::spawn(async move {
-                                    let mut buf = [0u8; 2048];
-                                    let n = stream.read(&mut buf).await.unwrap_or(0);
-                                    let request = String::from_utf8_lossy(&buf[..n]);
-                                    let path = request
-                                        .lines()
-                                        .next()
-                                        .and_then(|line| line.split_whitespace().nth(1))
-                                        .unwrap_or("/");
+                                tokio::net::TcpListener::bind("0.0.0.0:80").await;
+                            match listener {
+                                Ok(listener) => {
+                                    tracing::info!("HTTP-01 challenge server listening on port 80");
+                                    loop {
+                                        let (mut stream, _) = match listener.accept().await {
+                                            Ok(s) => s,
+                                            Err(e) => {
+                                                tracing::error!(error = %e, "HTTP-01 accept error");
+                                                continue;
+                                            }
+                                        };
+                                        let mut svc = http01_service.clone();
+                                        tokio::spawn(async move {
+                                            let mut buf = [0u8; 2048];
+                                            let n = stream.read(&mut buf).await.unwrap_or(0);
+                                            let request = String::from_utf8_lossy(&buf[..n]);
+                                            let path = request
+                                                .lines()
+                                                .next()
+                                                .and_then(|line| line.split_whitespace().nth(1))
+                                                .unwrap_or("/");
 
-                                    let req = axum::http::Request::builder()
-                                        .uri(path)
-                                        .body(String::new())
-                                        .unwrap();
-                                    let resp = <rustls_acme::tower::TowerHttp01ChallengeService as ServiceExt<axum::http::Request<String>>>::ready(&mut svc)
-                                        .await?
-                                        .call(req)
-                                        .await?;
-                                    let (_, body) = resp.into_parts();
-                                    let response = format!(
-                                        "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\n\r\n{}",
-                                        body.len(),
-                                        body
-                                    );
-                                    stream.write_all(response.as_bytes()).await.ok();
-                                    Ok::<(), anyhow::Error>(())
-                                });
+                                            let req = axum::http::Request::builder()
+                                                .uri(path)
+                                                .body(String::new())
+                                                .unwrap();
+                                            let resp = <rustls_acme::tower::TowerHttp01ChallengeService as ServiceExt<axum::http::Request<String>>>::ready(&mut svc)
+                                                .await?
+                                                .call(req)
+                                                .await?;
+                                            let (_, body) = resp.into_parts();
+                                            let response = format!(
+                                                "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\n\r\n{}",
+                                                body.len(),
+                                                body
+                                            );
+                                            stream.write_all(response.as_bytes()).await.ok();
+                                            Ok::<(), anyhow::Error>(())
+                                        });
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::error!(error = %e, "failed to bind HTTP-01 challenge server on port 80");
+                                }
                             }
                         });
                     }

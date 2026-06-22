@@ -6,17 +6,6 @@ use std::sync::Arc;
 
 use crate::config::{is_ip_address, AcmeConfig as HubAcmeConfig, HubConfig};
 
-/// 验证 ACME 配置
-pub fn validate_acme_config(acme_cfg: &HubAcmeConfig) -> Result<()> {
-    if acme_cfg.domain.is_empty() {
-        anyhow::bail!("ACME domain is empty");
-    }
-    if acme_cfg.email.is_empty() {
-        anyhow::bail!("ACME email is empty");
-    }
-    Ok(())
-}
-
 /// 构建 ACME AcmeState（用于 tokio::spawn 驱动证书申请）
 pub fn build_acme_state(
     acme_cfg: &HubAcmeConfig,
@@ -41,27 +30,6 @@ pub fn build_acme_state(
         .cache(DirCache::new(cache_dir));
 
     Ok(config.state())
-}
-
-/// 从 AcmeState 构建 ServerConfig（使用 ACME resolver）
-pub fn build_server_config_from_state(
-    state: &AcmeState<std::io::Error, std::io::Error>,
-) -> Arc<ServerConfig> {
-    state.default_rustls_config()
-}
-
-/// 获取 TLS-ALPN-01 challenge ServerConfig
-pub fn build_challenge_server_config(
-    state: &AcmeState<std::io::Error, std::io::Error>,
-) -> Arc<ServerConfig> {
-    state.challenge_rustls_config()
-}
-
-/// 获取 HTTP-01 challenge tower service
-pub fn get_http01_service(
-    state: &AcmeState<std::io::Error, std::io::Error>,
-) -> rustls_acme::tower::TowerHttp01ChallengeService {
-    state.http01_challenge_tower_service()
 }
 
 /// 获取 domain 的 challenge 类型描述
@@ -179,36 +147,6 @@ pub async fn start_acme_driver(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn validate_acme_config_empty_domain() {
-        let cfg = HubAcmeConfig {
-            domain: String::new(),
-            email: "test@example.com".to_string(),
-            staging: true,
-        };
-        assert!(validate_acme_config(&cfg).is_err());
-    }
-
-    #[test]
-    fn validate_acme_config_empty_email() {
-        let cfg = HubAcmeConfig {
-            domain: "example.com".to_string(),
-            email: String::new(),
-            staging: true,
-        };
-        assert!(validate_acme_config(&cfg).is_err());
-    }
-
-    #[test]
-    fn validate_acme_config_valid() {
-        let cfg = HubAcmeConfig {
-            domain: "example.com".to_string(),
-            email: "admin@example.com".to_string(),
-            staging: true,
-        };
-        assert!(validate_acme_config(&cfg).is_ok());
-    }
 
     #[test]
     fn challenge_description_domain() {
