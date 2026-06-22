@@ -5,11 +5,16 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+      # - "443:443"  # 启用 TLS 时取消注释
     volumes:
       - hub-data:/app/data
+      # - ./certs:/app/data/certs:ro  # TLS 证书目录，取消注释并放入证书文件
     environment:
       - REX_SECRET_KEY=${REX_SECRET_KEY}
       - DATA_DIR=/app/data
+      # TLS 配置（可选，启用 HTTPS 时取消注释）
+      # - REX_TLS_CERT=/app/data/certs/hub.crt
+      # - REX_TLS_KEY=/app/data/certs/hub.key
 
 volumes:
   hub-data:
