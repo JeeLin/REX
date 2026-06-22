@@ -68,3 +68,38 @@ pub fn bad_request(msg: &str) -> (StatusCode, Json<ErrorResponse>) {
 pub fn conflict(code: &str, msg: &str) -> (StatusCode, Json<ErrorResponse>) {
     make_error(StatusCode::CONFLICT, code, msg)
 }
+
+/// 从数据库获取密码哈希，不存在时用默认密码生成
+pub fn get_or_create_password_hash(db: &crate::db::Database) -> String {
+    let stored: Option<String> = db
+        .pool
+        .get()
+        .unwrap()
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'password_hash'",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
+
+    stored.unwrap_or_else(|| {
+        use argon2::password_hash::SaltString;
+        use argon2::PasswordHasher;
+        use rand_core::OsRng;
+        let default_password =
+            std::env::var("REX_DEFAULT_PASSWORD").unwrap_or_else(|_| "admin".to_string());
+        let salt = SaltString::generate(&mut OsRng);
+        let hash = argon2::password_hash::PasswordHasher::hash_password(
+            &argon2::Argon2::default(),
+            default_password.as_bytes(),
+            &salt,
+        )
+        .unwrap()
+        .to_string();
+        let _ = db.pool.get().unwrap().execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('password_hash', ?1)",
+            rusqlite::params![hash],
+        );
+        hash
+    })
+}

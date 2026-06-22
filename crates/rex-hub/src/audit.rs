@@ -163,40 +163,27 @@ pub async fn get_stats(
     let result = tokio::task::spawn_blocking(move || {
         let conn = db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
 
-        // 获取今日日期前缀 (YYYYMMDD)
-        let today_prefix = {
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
-            let days = (now / 86400) as i64;
-            // 简单计算 YYYYMMDD
-            let (year, month, day) = days_to_ymd(days + 719468); // 偏移到 Unix epoch
-            format!("{:04}{:02}{:02}", year, month, day)
-        };
-
         let (total, success, failed) = if period == "today" {
-            let total: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM audit_log WHERE time >= ?1",
+            let today_prefix = {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+                let days = (now / 86400) as i64;
+                let (year, month, day) = days_to_ymd(days + 719468);
+                format!("{:04}{:02}{:02}", year, month, day)
+            };
+            conn.query_row(
+                "SELECT COUNT(*), SUM(CASE WHEN result='success' THEN 1 ELSE 0 END), SUM(CASE WHEN result='failure' THEN 1 ELSE 0 END) FROM audit_log WHERE time >= ?1",
                 rusqlite::params![today_prefix],
-                |row| row.get(0),
-            ).unwrap_or(0);
-            let success: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM audit_log WHERE time >= ?1 AND result = 'success'",
-                rusqlite::params![today_prefix],
-                |row| row.get(0),
-            ).unwrap_or(0);
-            let failed: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM audit_log WHERE time >= ?1 AND result = 'failure'",
-                rusqlite::params![today_prefix],
-                |row| row.get(0),
-            ).unwrap_or(0);
-            (total, success, failed)
+                |row| Ok((row.get(0).unwrap_or(0), row.get(1).unwrap_or(0), row.get(2).unwrap_or(0))),
+            ).unwrap_or((0, 0, 0))
         } else {
-            let total: i64 = conn.query_row("SELECT COUNT(*) FROM audit_log", [], |row| row.get(0)).unwrap_or(0);
-            let success: i64 = conn.query_row("SELECT COUNT(*) FROM audit_log WHERE result = 'success'", [], |row| row.get(0)).unwrap_or(0);
-            let failed: i64 = conn.query_row("SELECT COUNT(*) FROM audit_log WHERE result = 'failure'", [], |row| row.get(0)).unwrap_or(0);
-            (total, success, failed)
+            conn.query_row(
+                "SELECT COUNT(*), SUM(CASE WHEN result='success' THEN 1 ELSE 0 END), SUM(CASE WHEN result='failure' THEN 1 ELSE 0 END) FROM audit_log",
+                [],
+                |row| Ok((row.get(0).unwrap_or(0), row.get(1).unwrap_or(0), row.get(2).unwrap_or(0))),
+            ).unwrap_or((0, 0, 0))
         };
 
         Ok::<_, (StatusCode, Json<ErrorResponse>)>(AuditStats { total, success, failed })

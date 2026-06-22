@@ -47,37 +47,7 @@ pub async fn login(
 ) -> Result<Json<ApiResponse<LoginResponse>>, (StatusCode, Json<ErrorResponse>)> {
     let ip = extract_client_ip(&headers);
 
-    // 获取密码哈希，没有则用默认密码 admin
-    let stored_hash: Option<String> = state
-        .db
-        .pool
-        .get()
-        .unwrap()
-        .query_row(
-            "SELECT value FROM settings WHERE key = 'password_hash'",
-            [],
-            |row| row.get(0),
-        )
-        .ok();
-
-    let default_password =
-        std::env::var("REX_DEFAULT_PASSWORD").unwrap_or_else(|_| "admin".to_string());
-
-    let password_hash = stored_hash.unwrap_or_else(|| {
-        let salt = SaltString::generate(&mut OsRng);
-        let hash = argon2::password_hash::PasswordHasher::hash_password(
-            &argon2::Argon2::default(),
-            default_password.as_bytes(),
-            &salt,
-        )
-        .unwrap()
-        .to_string();
-        let _ = state.db.pool.get().unwrap().execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES ('password_hash', ?1)",
-            rusqlite::params![hash],
-        );
-        hash
-    });
+    let password_hash = crate::helpers::get_or_create_password_hash(&state.db);
 
     let parsed_hash =
         PasswordHash::new(&password_hash).map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;

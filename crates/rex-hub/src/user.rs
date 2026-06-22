@@ -90,32 +90,7 @@ pub async fn change_password(
         return Err(bad_request("新密码长度不能少于 6 个字符"));
     }
 
-    // 获取当前密码哈希
-    let stored_hash: Option<String> = state
-        .db
-        .pool
-        .get()
-        .unwrap()
-        .query_row(
-            "SELECT value FROM settings WHERE key = 'password_hash'",
-            [],
-            |row| row.get(0),
-        )
-        .ok();
-
-    let default_password =
-        std::env::var("REX_DEFAULT_PASSWORD").unwrap_or_else(|_| "admin".to_string());
-
-    let password_hash = stored_hash.unwrap_or_else(|| {
-        let salt = SaltString::generate(&mut OsRng);
-        argon2::password_hash::PasswordHasher::hash_password(
-            &argon2::Argon2::default(),
-            default_password.as_bytes(),
-            &salt,
-        )
-        .unwrap()
-        .to_string()
-    });
+    let password_hash = crate::helpers::get_or_create_password_hash(&state.db);
 
     // 验证当前密码
     let parsed_hash =
