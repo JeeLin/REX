@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-06-22
+
+### Added
+- Redis 协议支持：新增 `rex-redis` crate，实现 RESP 协议解析和 RedisConnector trait
+- Hub Redis WebSocket 会话管理（`/ws/redis/:resource_id`）
+- 前端 Redis 命令控制台（命令输入、结果展示、历史记录）
+- Redis 资源创建向导（host/port/password/db/name 表单）
+- 工作空间 Redis 面板集成
+
 ## [0.7.0] - 2026-06-22
 
 ### Added
