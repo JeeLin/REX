@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-06-22
+
+### Added
+- SQLite 协议支持：新增 `rex-sqlite` crate，实现 SQLite 数据库连接和 SqliteConnector trait
+- Hub SQLite WebSocket 会话管理（`/ws/sqlite/:resource_id`）
+- 前端 SQLite 控制台（SQL 编辑器、表列表侧边栏、结果表格）
+- SQLite 资源创建向导（数据库文件路径、实例名称）
+- 工作空间 SQLite 面板集成
+
 ## [0.9.0] - 2026-06-22
 
 ### Added
