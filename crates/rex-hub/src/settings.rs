@@ -1,11 +1,9 @@
-use axum::extract::State;
 use axum::Json;
 use serde::Serialize;
 
-use crate::acme::TlsMode;
-use crate::config::{is_ip_address, HubConfig};
+use crate::acme::{self, TlsMode};
+use crate::config::HubConfig;
 use crate::helpers::ErrorResponse;
-use crate::routes::AppState;
 
 /// TLS 状态响应
 #[derive(Serialize)]
@@ -29,23 +27,20 @@ pub struct TlsStatus {
 
 /// GET /api/settings/tls
 pub async fn get_tls_status(
-    State(_state): State<std::sync::Arc<AppState>>,
     axum::extract::Extension(config): axum::extract::Extension<HubConfig>,
 ) -> Result<Json<TlsStatus>, (axum::http::StatusCode, Json<ErrorResponse>)> {
-    let mode = determine_tls_mode(&config);
+    let mode = acme::determine_tls_mode(&config);
 
-    let (mode_str, domain, port_80_required) = match &mode {
-        TlsMode::Manual => ("manual".to_string(), None, false),
+    let (domain, port_80_required) = match &mode {
         TlsMode::AcmeDomain => {
             let domain = config.acme.as_ref().map(|a| a.domain.clone());
-            ("acme-domain".to_string(), domain, true)
+            (domain, true)
         }
         TlsMode::AcmeIp => {
             let domain = config.acme.as_ref().map(|a| a.domain.clone());
-            ("acme-ip".to_string(), domain, false)
+            (domain, false)
         }
-        TlsMode::SelfSigned => ("self-signed".to_string(), None, false),
-        TlsMode::None => ("none".to_string(), None, false),
+        _ => (None, false),
     };
 
     // 检查证书是否存在
@@ -75,31 +70,13 @@ pub async fn get_tls_status(
     };
 
     Ok(Json(TlsStatus {
-        mode: mode_str,
+        mode: mode.to_string(),
         domain,
         cert_ready,
         cert_expires_at,
         cert_issuer,
         port_80_required,
     }))
-}
-
-fn determine_tls_mode(config: &HubConfig) -> TlsMode {
-    if let Some(ref tls) = config.tls {
-        if !tls.cert.as_os_str().is_empty() && !tls.key.as_os_str().is_empty() {
-            return TlsMode::Manual;
-        }
-    }
-    if let Some(ref acme) = config.acme {
-        if !acme.domain.is_empty() && !acme.email.is_empty() {
-            if is_ip_address(&acme.domain) {
-                return TlsMode::AcmeIp;
-            } else {
-                return TlsMode::AcmeDomain;
-            }
-        }
-    }
-    TlsMode::SelfSigned
 }
 
 #[cfg(test)]
@@ -116,12 +93,12 @@ mod tests {
             }),
             ..Default::default()
         };
-        assert_eq!(determine_tls_mode(&config), TlsMode::Manual);
+        assert_eq!(acme::determine_tls_mode(&config), TlsMode::Manual);
     }
 
     #[test]
     fn tls_status_self_signed_mode() {
         let config = HubConfig::default();
-        assert_eq!(determine_tls_mode(&config), TlsMode::SelfSigned);
+        assert_eq!(acme::determine_tls_mode(&config), TlsMode::SelfSigned);
     }
 }

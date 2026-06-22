@@ -4,7 +4,7 @@ use rustls_acme::caches::DirCache;
 use rustls_acme::{AcmeConfig, AcmeState, UseChallenge};
 use std::sync::Arc;
 
-use crate::config::{is_ip_address, AcmeConfig as HubAcmeConfig};
+use crate::config::{is_ip_address, AcmeConfig as HubAcmeConfig, HubConfig};
 
 /// 验证 ACME 配置
 pub fn validate_acme_config(acme_cfg: &HubAcmeConfig) -> Result<()> {
@@ -71,6 +71,30 @@ pub fn challenge_description(domain: &str) -> &'static str {
     } else {
         "HTTP-01"
     }
+}
+
+/// 确定 TLS 模式（优先级：manual > acme > self-signed > none）
+pub fn determine_tls_mode(config: &HubConfig) -> TlsMode {
+    // 1. 手动证书（最高优先级）
+    if let Some(ref tls) = config.tls {
+        if !tls.cert.as_os_str().is_empty() && !tls.key.as_os_str().is_empty() {
+            return TlsMode::Manual;
+        }
+    }
+
+    // 2. ACME 自动证书
+    if let Some(ref acme) = config.acme {
+        if !acme.domain.is_empty() && !acme.email.is_empty() {
+            if is_ip_address(&acme.domain) {
+                return TlsMode::AcmeIp;
+            } else {
+                return TlsMode::AcmeDomain;
+            }
+        }
+    }
+
+    // 3. 自签名证书
+    TlsMode::SelfSigned
 }
 
 /// TLS 模式

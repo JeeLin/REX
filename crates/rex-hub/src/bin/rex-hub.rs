@@ -36,7 +36,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         // 确定 TLS 模式（优先级：manual > acme > self-signed > none）
-        let tls_mode = determine_tls_mode(&config);
+        let tls_mode = acme::determine_tls_mode(&config);
 
         let rt = tokio::runtime::Runtime::new()?;
         let static_dir = config.static_dir.clone();
@@ -181,30 +181,6 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// 确定 TLS 模式（优先级：manual > acme > self-signed > none）
-fn determine_tls_mode(config: &HubConfig) -> TlsMode {
-    // 1. 手动证书（最高优先级）
-    if let Some(ref tls) = config.tls {
-        if !tls.cert.as_os_str().is_empty() && !tls.key.as_os_str().is_empty() {
-            return TlsMode::Manual;
-        }
-    }
-
-    // 2. ACME 自动证书
-    if let Some(ref acme) = config.acme {
-        if !acme.domain.is_empty() && !acme.email.is_empty() {
-            if rex_hub::config::is_ip_address(&acme.domain) {
-                return TlsMode::AcmeIp;
-            } else {
-                return TlsMode::AcmeDomain;
-            }
-        }
-    }
-
-    // 3. 自签名证书
-    TlsMode::SelfSigned
-}
-
 /// 从 "host:port" 格式提取端口号
 fn extract_port(addr: &str) -> Option<u16> {
     addr.rsplit_once(':')
@@ -226,7 +202,7 @@ mod tests {
             }),
             ..Default::default()
         };
-        assert_eq!(determine_tls_mode(&config), TlsMode::Manual);
+        assert_eq!(acme::determine_tls_mode(&config), TlsMode::Manual);
     }
 
     #[test]
@@ -239,7 +215,7 @@ mod tests {
             }),
             ..Default::default()
         };
-        assert_eq!(determine_tls_mode(&config), TlsMode::AcmeDomain);
+        assert_eq!(acme::determine_tls_mode(&config), TlsMode::AcmeDomain);
     }
 
     #[test]
@@ -252,13 +228,13 @@ mod tests {
             }),
             ..Default::default()
         };
-        assert_eq!(determine_tls_mode(&config), TlsMode::AcmeIp);
+        assert_eq!(acme::determine_tls_mode(&config), TlsMode::AcmeIp);
     }
 
     #[test]
     fn determine_tls_mode_self_signed() {
         let config = HubConfig::default();
-        assert_eq!(determine_tls_mode(&config), TlsMode::SelfSigned);
+        assert_eq!(acme::determine_tls_mode(&config), TlsMode::SelfSigned);
     }
 
     #[test]
@@ -275,7 +251,7 @@ mod tests {
             }),
             ..Default::default()
         };
-        assert_eq!(determine_tls_mode(&config), TlsMode::Manual);
+        assert_eq!(acme::determine_tls_mode(&config), TlsMode::Manual);
     }
 
     #[test]
