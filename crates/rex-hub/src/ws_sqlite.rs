@@ -70,9 +70,7 @@ pub async fn sqlite_ws_handler(
     if !auth::verify_token(&state.secret_key, &token) {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    Ok(ws.on_upgrade(move |socket| {
-        handle_sqlite_socket(socket, resource_id, state)
-    }))
+    Ok(ws.on_upgrade(move |socket| handle_sqlite_socket(socket, resource_id, state)))
 }
 
 async fn handle_sqlite_socket(socket: WebSocket, resource_id: String, state: Arc<AppState>) {
@@ -237,7 +235,8 @@ mod tests {
 
     #[test]
     fn sqlite_client_msg_command_deserialize() {
-        let json = r#"{"type":"command","id":"cmd-1","action":"execute","params":{"sql":"SELECT 1"}}"#;
+        let json =
+            r#"{"type":"command","id":"cmd-1","action":"execute","params":{"sql":"SELECT 1"}}"#;
         let msg: SqliteClientMsg = serde_json::from_str(json).unwrap();
         match msg {
             SqliteClientMsg::Command { id, action, params } => {
