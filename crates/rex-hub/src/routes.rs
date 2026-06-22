@@ -98,10 +98,7 @@ pub fn app_with_static(
             "/ws/sqlite/:resource_id",
             get(crate::ws_sqlite::sqlite_ws_handler),
         )
-        .route(
-            "/ws/s3/:resource_id",
-            get(crate::ws_s3::s3_ws_handler),
-        );
+        .route("/ws/s3/:resource_id", get(crate::ws_s3::s3_ws_handler));
 
     let protected_routes = Router::new()
         .route(

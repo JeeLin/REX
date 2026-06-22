@@ -196,10 +196,7 @@ async fn handle_s3_action(
                 .get("bucket")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| anyhow::anyhow!("missing 'bucket' param"))?;
-            let prefix = params
-                .get("prefix")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let prefix = params.get("prefix").and_then(|v| v.as_str()).unwrap_or("");
             let objects = connector.list_objects(bucket, prefix).await?;
             Ok(serde_json::to_value(objects)?)
         }
@@ -228,11 +225,8 @@ async fn handle_s3_action(
                 .get("data")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| anyhow::anyhow!("missing 'data' param"))?;
-            let data = base64::Engine::decode(
-                &base64::engine::general_purpose::STANDARD,
-                data_b64,
-            )
-            .map_err(|e| anyhow::anyhow!("invalid base64 data: {e}"))?;
+            let data = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data_b64)
+                .map_err(|e| anyhow::anyhow!("invalid base64 data: {e}"))?;
             connector.upload_object(bucket, key, data).await?;
             Ok(serde_json::json!({ "ok": true }))
         }
@@ -246,10 +240,8 @@ async fn handle_s3_action(
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| anyhow::anyhow!("missing 'key' param"))?;
             let data = connector.download_object(bucket, key).await?;
-            let data_b64 = base64::Engine::encode(
-                &base64::engine::general_purpose::STANDARD,
-                &data,
-            );
+            let data_b64 =
+                base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data);
             Ok(serde_json::json!({ "data": data_b64 }))
         }
         "delete" => {
@@ -297,8 +289,7 @@ mod tests {
 
     #[test]
     fn s3_client_msg_command_deserialize() {
-        let json =
-            r#"{"type":"command","id":"cmd-1","action":"buckets","params":{}}"#;
+        let json = r#"{"type":"command","id":"cmd-1","action":"buckets","params":{}}"#;
         let msg: S3ClientMsg = serde_json::from_str(json).unwrap();
         match msg {
             S3ClientMsg::Command { id, action, params } => {

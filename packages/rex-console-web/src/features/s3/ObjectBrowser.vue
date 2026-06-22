@@ -119,7 +119,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, reactive, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { S3ObjectInfo } from './useS3Session'
 
@@ -208,6 +208,9 @@ function hideCtxMenu() {
 }
 
 // 全局点击关闭菜单
+onUnmounted(() => {
+  document.removeEventListener('click', hideCtxMenu)
+})
 document.addEventListener('click', hideCtxMenu)
 
 // ── 格式化 ──────────────────────────────────────────────
