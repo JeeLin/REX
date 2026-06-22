@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-22
+
+### Added
+- ACME 自动证书：支持 Let's Encrypt 域名证书（HTTP-01）和 IP 证书（TLS-ALPN-01）
+- 自签名证书生成（手动启用，适用于内网）
+- TLS 模式优先级选择：manual > acme > none
+- 前端设置页 TLS 状态面板（模式、证书状态、颁发者）
+- Docker 镜像 ACME 支持（80 端口映射）
+- `GET /api/settings/tls` API
+
+### Changed
+- CLI 新增 `--acme-domain`、`--acme-email`、`--acme-staging` 参数
+- HubConfig 新增 `acme` 配置段
+- 无 TLS 配置时默认 HTTP（不再自动生成自签名证书）
+
 ## [0.6.0] - 2026-06-22
 
 ### Added
