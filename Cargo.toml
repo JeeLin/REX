@@ -12,6 +12,7 @@ rex-ssh = { path = "crates/rex-ssh" }
 rex-transfer = { path = "crates/rex-transfer" }
 rex-mysql = { path = "crates/rex-mysql" }
 rex-postgresql = { path = "crates/rex-postgresql" }
+rex-redis = { path = "crates/rex-redis" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 async-trait = "0.1"
@@ -49,3 +50,5 @@ hyper-util = { version = "0.1", features = ["tokio", "server-auto", "http1"] }
 rustls-acme = { version = "0.15", features = ["ring", "tokio", "tower"] }
 rcgen = { version = "0.13", features = ["pem"] }
 time = "0.3"
+tokio-util = { version = "0.7", features = ["codec"] }
+bytes = "1"
