@@ -82,6 +82,10 @@ impl RedisConnectorImpl {
     pub fn config(&self) -> &RedisConfig {
         &self.config
     }
+
+    pub fn into_config(self) -> RedisConfig {
+        self.config
+    }
 }
 
 #[async_trait]

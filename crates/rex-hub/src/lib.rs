@@ -23,3 +23,4 @@ pub mod update;
 pub mod user;
 pub mod ws;
 pub mod ws_terminal;
+pub mod ws_redis;

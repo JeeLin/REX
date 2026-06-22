@@ -85,6 +85,10 @@ pub fn app_with_static(
         .route(
             "/ws/terminal/:session_id",
             get(crate::ws_terminal::terminal_ws_handler),
+        )
+        .route(
+            "/ws/redis/:resource_id",
+            get(crate::ws_redis::redis_ws_handler),
         );
 
     let protected_routes = Router::new()
