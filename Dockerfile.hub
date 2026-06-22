@@ -20,12 +20,13 @@ RUN chmod +x /app/rex-hub
 # 前端静态资源
 COPY dist/static/ /app/static/
 
-RUN mkdir -p /app/data /app/data/certs
+RUN mkdir -p /app/data /app/data/certs /app/data/acme /app/data/self-signed
 
 ENV DATA_DIR=/app/data
 ENV REX_STATIC_DIR=/app/static
 
 EXPOSE 3000
+EXPOSE 80
 EXPOSE 443
 
 CMD ["/app/rex-hub", "--worker"]

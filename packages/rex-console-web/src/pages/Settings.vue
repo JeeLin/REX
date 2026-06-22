@@ -5,6 +5,7 @@
       <AppearanceSection />
       <TerminalSection />
       <SecuritySection />
+      <TlsSection />
       <UpdateSection />
       <div class="version-info">
         <div class="ver">REX Hub v0.1</div>
@@ -19,6 +20,7 @@ import ProfileSection from '@/features/settings/ProfileSection.vue'
 import AppearanceSection from '@/features/settings/AppearanceSection.vue'
 import TerminalSection from '@/features/settings/TerminalSection.vue'
 import SecuritySection from '@/features/settings/SecuritySection.vue'
+import TlsSection from '@/features/settings/TlsSection.vue'
 import UpdateSection from '@/features/settings/UpdateSection.vue'
 </script>
 

@@ -46,7 +46,13 @@ pub struct AppState {
 }
 
 pub fn app(db: Arc<Database>, secret_key: String) -> axum::Router {
-    app_with_static(db, secret_key, None, std::path::PathBuf::from("./data"))
+    app_with_static(
+        db,
+        secret_key,
+        None,
+        std::path::PathBuf::from("./data"),
+        crate::config::HubConfig::default(),
+    )
 }
 
 pub fn app_with_static(
@@ -54,6 +60,7 @@ pub fn app_with_static(
     secret_key: String,
     static_dir: Option<std::path::PathBuf>,
     data_dir: PathBuf,
+    hub_config: crate::config::HubConfig,
 ) -> axum::Router {
     let connections = Arc::new(crate::ws::new_connections());
     let sessions = Arc::new(SessionManager::new(900));
@@ -209,12 +216,16 @@ pub fn app_with_static(
             get(crate::user::get_profile).put(crate::user::update_profile),
         )
         .route("/api/user/password", put(crate::user::change_password))
+        .route("/api/settings/tls", get(crate::settings::get_tls_status))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
         ));
 
-    let mut router = public_routes.merge(protected_routes).with_state(state);
+    let mut router = public_routes
+        .merge(protected_routes)
+        .with_state(state)
+        .layer(axum::extract::Extension(hub_config));
 
     // 前端静态文件服务：不经过鉴权
     if let Some(dir) = static_dir {

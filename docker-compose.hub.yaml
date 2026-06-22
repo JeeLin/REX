@@ -5,16 +5,21 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
-      # - "443:443"  # 启用 TLS 时取消注释
+      - "80:80"      # ACME HTTP-01（启用 ACME 域名证书时需要）
+      # - "443:443"  # HTTPS（启用 TLS 时取消注释）
     volumes:
       - hub-data:/app/data
-      # - ./certs:/app/data/certs:ro  # TLS 证书目录，取消注释并放入证书文件
+      # - ./certs:/app/data/certs:ro  # 手动 TLS 证书目录（优先级最高）
     environment:
       - REX_SECRET_KEY=${REX_SECRET_KEY}
       - DATA_DIR=/app/data
-      # TLS 配置（可选，启用 HTTPS 时取消注释）
+      # 手动 TLS 配置（最高优先级，启用后 ACME 和自签名不生效）
       # - REX_TLS_CERT=/app/data/certs/hub.crt
       # - REX_TLS_KEY=/app/data/certs/hub.key
+      # ACME 自动证书配置（次优先级）
+      # - REX_ACME_DOMAIN=hub.example.com
+      # - REX_ACME_EMAIL=admin@example.com
+      # - REX_ACME_STAGING=false
 
 volumes:
   hub-data:

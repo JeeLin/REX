@@ -41,7 +41,13 @@ fn main() -> anyhow::Result<()> {
         let rt = tokio::runtime::Runtime::new()?;
         let static_dir = config.static_dir.clone();
         let data_dir = config.data_dir.clone();
-        let app = routes::app_with_static(Arc::new(db), secret_key, static_dir, data_dir);
+        let app = routes::app_with_static(
+            Arc::new(db),
+            secret_key,
+            static_dir,
+            data_dir,
+            config.clone(),
+        );
 
         match tls_mode {
             TlsMode::Manual => {
