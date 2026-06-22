@@ -33,6 +33,8 @@ const emit = defineEmits<{
   select: [id: string]
   close: [id: string]
   closeOthers: [id: string]
+  closeAll: []
+  closeSaved: []
   save: [id: string]
   rename: [id: string]
   copySql: [id: string]
@@ -47,6 +49,8 @@ function handleContextMenu(event: MouseEvent, tab: { id: string; title: string; 
   const items = [
     { label: t('sql.tab.ctx.close'), action: () => emit('close', tab.id) },
     { label: t('sql.tab.ctx.closeOthers'), action: () => emit('closeOthers', tab.id) },
+    { label: t('sql.tab.ctx.closeAll'), action: () => emit('closeAll') },
+    { label: t('sql.tab.ctx.closeSaved'), action: () => emit('closeSaved') },
     { separator: true },
     { label: t('sql.tab.ctx.save'), action: () => emit('save', tab.id) },
     { label: t('sql.tab.ctx.rename'), action: () => emit('rename', tab.id) },

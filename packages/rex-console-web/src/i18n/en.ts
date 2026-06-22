@@ -439,12 +439,15 @@ export default {
       ctx: {
         close: 'Close',
         closeOthers: 'Close Others',
+        closeAll: 'Close All',
+        closeSaved: 'Close Saved',
         save: 'Save',
         rename: 'Rename',
         copySql: 'Copy SQL',
         executeSql: 'Execute SQL',
       },
     },
+    noMessage: 'No messages',
   },
   settings: {
     appearance: {

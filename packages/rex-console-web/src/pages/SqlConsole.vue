@@ -21,6 +21,8 @@
       @select="activeTabId = $event"
       @close="closeTab"
       @close-others="closeOthers"
+      @close-all="closeAll"
+      @close-saved="closeSaved"
       @save="handleTabSave"
       @rename="handleTabRename"
       @copy-sql="handleTabCopySql"
@@ -67,6 +69,8 @@
         <SqlResults
           :result="activeTab.result"
           :loading="executing"
+          :message="activeTab.message"
+          :is-error="activeTab.isError"
           @sort="handleSort"
           @generate-sql="handleGenerateSql"
         />
@@ -102,7 +106,7 @@ const resourceId = route.params.resourceId as string
 
 const {
   tabs, activeTabId, executing, tabList, activeTab,
-  addTab, closeTab, closeOthers, renameTab, getTabSql,
+  addTab, closeTab, closeOthers, closeAll, closeSaved, renameTab, getTabSql,
   clearEditor, openQueryFile, markSaved, getQueryId,
   execute, handleSort, handleGenerateSql,
 } = useSqlTabActions(

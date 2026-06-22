@@ -2,10 +2,27 @@
   <div class="sql-results">
     <div class="results-header">
       <div class="results-tabs">
-        <span class="results-tab active">{{ t('sql.resultTab') }}</span>
+        <span
+          class="results-tab"
+          :class="{ active: activeTab === 'results' }"
+          @click="activeTab = 'results'"
+        >{{ t('sql.resultTab') }}</span>
+        <span
+          class="results-tab"
+          :class="{ active: activeTab === 'message' }"
+          @click="activeTab = 'message'"
+        >{{ t('sql.messageTab') }}</span>
       </div>
     </div>
-    <div class="results-table-wrap">
+
+    <!-- Message Tab -->
+    <div v-if="activeTab === 'message'" class="results-message-wrap">
+      <div v-if="message" class="results-message" :class="{ 'is-error': isError }">{{ message }}</div>
+      <div v-else class="results-empty">{{ t('sql.noMessage') }}</div>
+    </div>
+
+    <!-- Results Tab -->
+    <div v-if="activeTab === 'results'" class="results-table-wrap">
       <table v-if="result && result.rows.length > 0" class="results-table">
         <thead>
           <tr>
@@ -35,6 +52,7 @@
         {{ t('sql.noResult') }}
       </div>
     </div>
+
     <div v-if="result" class="results-footer">
       <span>{{ t('sql.rows', { count: result.rows.length }) }} · {{ t('sql.elapsed', { time: (result.elapsed_ms / 1000).toFixed(3) }) }}</span>
       <div class="results-footer-actions">
@@ -59,6 +77,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
 import type { SqlResult } from '@/api/sql'
@@ -70,12 +89,23 @@ const { show: showMenu } = useContextMenu()
 const props = defineProps<{
   result: SqlResult | null
   loading: boolean
+  message?: string
+  isError?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'sort', column: string, direction: 'asc' | 'desc'): void
   (e: 'generateSql', sql: string): void
 }>()
+
+const activeTab = ref<'results' | 'message'>('results')
+
+// 执行完成后自动切换到消息标签（有错误时）
+watch(() => props.result, () => {
+  if (props.isError) {
+    activeTab.value = 'message'
+  }
+})
 
 function cellClass(cell: unknown): string {
   if (cell === null || cell === undefined) return 'cell-null'
@@ -309,5 +339,23 @@ function handleRowContextMenu(event: MouseEvent, rowIdx: number) {
   height: 22px;
   padding: 0 var(--sp-sm);
   font-size: 11px;
+}
+
+.results-message-wrap {
+  flex: 1;
+  overflow: auto;
+  padding: var(--sp-md);
+}
+
+.results-message {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--success);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.results-message.is-error {
+  color: var(--danger);
 }
 </style>

@@ -7,6 +7,8 @@ export interface QueryTab {
   title: string
   sql: string
   result: SqlResult | null
+  message: string
+  isError: boolean
   /** 已保存的查询文件 ID，null 表示未保存 */
   queryId: string | null
 }
@@ -33,7 +35,7 @@ export function useSqlTabActions(
   function addTab() {
     tabCounter++
     const id = `sql-tab-${Date.now()}-${tabCounter}`
-    tabs.value.push({ id, title: `查询 ${tabCounter}`, sql: '', result: null, queryId: null })
+    tabs.value.push({ id, title: `查询 ${tabCounter}`, sql: '', result: null, message: '', isError: false, queryId: null })
     activeTabId.value = id
   }
 
@@ -52,6 +54,20 @@ export function useSqlTabActions(
     if (!tab) return
     tabs.value = [tab]
     activeTabId.value = id
+  }
+
+  function closeAll() {
+    tabs.value = []
+    addTab()
+  }
+
+  function closeSaved() {
+    // 关闭所有已保存的查询标签（queryId 不为 null），保留未保存的
+    tabs.value = tabs.value.filter((t) => t.queryId === null)
+    if (tabs.value.length === 0) addTab()
+    if (!tabs.value.find((t) => t.id === activeTabId.value)) {
+      activeTabId.value = tabs.value[0].id
+    }
   }
 
   function renameTab(id: string, newTitle: string) {
@@ -78,7 +94,7 @@ export function useSqlTabActions(
     }
     tabCounter++
     const id = `sql-tab-${Date.now()}-${tabCounter}`
-    tabs.value.push({ id, title, sql, result: null, queryId })
+    tabs.value.push({ id, title, sql, result: null, message: '', isError: false, queryId })
     activeTabId.value = id
   }
 
@@ -99,10 +115,14 @@ export function useSqlTabActions(
     try {
       const result = await executeSql(resourceId, sql)
       activeTab.value.result = result
+      activeTab.value.message = `Query OK, ${result.affected_rows ?? result.rows.length} rows affected (${(result.elapsed_ms / 1000).toFixed(3)}s)`
+      activeTab.value.isError = false
       onExecuted?.(sql, result)
     } catch (e: any) {
       activeTab.value.result = { columns: [], rows: [], affected_rows: 0, elapsed_ms: 0 }
       const msg = e.response?.data?.error?.message || e.message || '执行失败'
+      activeTab.value.message = `ERROR: ${msg}`
+      activeTab.value.isError = true
       onError?.(msg)
     } finally {
       executing.value = false
@@ -137,6 +157,8 @@ export function useSqlTabActions(
     addTab,
     closeTab,
     closeOthers,
+    closeAll,
+    closeSaved,
     renameTab,
     getTabSql,
     clearEditor,

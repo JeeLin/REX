@@ -442,12 +442,15 @@ export default {
       ctx: {
         close: '关闭',
         closeOthers: '关闭其他',
+        closeAll: '关闭全部',
+        closeSaved: '关闭已保存的',
         save: '保存',
         rename: '重命名',
         copySql: '复制 SQL',
         executeSql: '执行 SQL',
       },
     },
+    noMessage: '暂无消息',
   },
   settings: {
     appearance: {

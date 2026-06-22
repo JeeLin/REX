@@ -102,6 +102,7 @@ import { getProtocolIcon, useProtocol } from '@/composables/useProtocol'
 import { useContextMenu } from '@/composables/useContextMenu'
 import type { Environment } from '@/api/env'
 import { listEnvsWithResources } from '@/api/env'
+import { getAuditStats } from '@/api/audit'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -168,6 +169,13 @@ onMounted(async () => {
     }
     allResources.value = allRes
     resourceCount.value = allRes.length
+  } catch {
+    // 静默处理
+  }
+
+  try {
+    const stats = await getAuditStats('today')
+    todayOps.value = stats.total
   } catch {
     // 静默处理
   }
