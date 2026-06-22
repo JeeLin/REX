@@ -14,7 +14,8 @@ RUN apt-get update && \
 WORKDIR /app
 
 # Hub 二进制
-COPY dist/rex-hub /usr/local/bin/
+COPY dist/rex-hub /app/rex-hub
+RUN chmod +x /app/rex-hub
 
 # 前端静态资源
 COPY dist/static/ /app/static/
@@ -26,4 +27,4 @@ ENV REX_STATIC_DIR=/app/static
 
 EXPOSE 3000
 
-CMD ["rex-hub", "--worker"]
+CMD ["/app/rex-hub", "--worker"]

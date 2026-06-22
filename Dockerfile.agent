@@ -17,9 +17,10 @@ RUN useradd -r -s /bin/false agent
 WORKDIR /app
 RUN mkdir -p /app/data && chown agent:agent /app/data
 
-COPY --from=builder /app/target/release/rex-agent /usr/local/bin/rex-agent
+COPY --from=builder /app/target/release/rex-agent /app/rex-agent
+RUN chmod +x /app/rex-agent
 
 USER agent
 ENV DATA_DIR=/app/data
 
-CMD ["rex-agent", "--worker"]
+CMD ["/app/rex-agent", "--worker"]
