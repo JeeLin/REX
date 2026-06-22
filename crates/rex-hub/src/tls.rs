@@ -6,6 +6,7 @@ use rustls::ServerConfig;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
+use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 
@@ -33,7 +34,12 @@ pub fn create_tls_acceptor(cert_path: &Path, key_path: &Path) -> Result<TlsAccep
         .with_single_cert(certs, key_der.into())
         .map_err(|e| anyhow::anyhow!("failed to build TLS server config: {e}"))?;
 
-    Ok(TlsAcceptor::from(std::sync::Arc::new(config)))
+    Ok(TlsAcceptor::from(Arc::new(config)))
+}
+
+/// 从 rustls ServerConfig 构建 TLS acceptor（用于 ACME 或自签名）
+pub fn create_tls_acceptor_from_config(config: ServerConfig) -> TlsAcceptor {
+    TlsAcceptor::from(Arc::new(config))
 }
 
 /// 运行 TLS HTTP 服务器：接受 TCP 连接 → TLS 握手 → hyper 处理 HTTP

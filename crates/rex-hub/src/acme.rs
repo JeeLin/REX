@@ -73,6 +73,85 @@ pub fn challenge_description(domain: &str) -> &'static str {
     }
 }
 
+/// TLS 模式
+#[derive(Debug, Clone, PartialEq)]
+pub enum TlsMode {
+    /// 手动证书（tls.cert + tls.key）
+    Manual,
+    /// ACME 域名证书（HTTP-01）
+    AcmeDomain,
+    /// ACME IP 证书（TLS-ALPN-01）
+    AcmeIp,
+    /// 自签名证书
+    SelfSigned,
+    /// 无 TLS（HTTP only）
+    None,
+}
+
+impl std::fmt::Display for TlsMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TlsMode::Manual => write!(f, "manual"),
+            TlsMode::AcmeDomain => write!(f, "acme-domain"),
+            TlsMode::AcmeIp => write!(f, "acme-ip"),
+            TlsMode::SelfSigned => write!(f, "self-signed"),
+            TlsMode::None => write!(f, "none"),
+        }
+    }
+}
+
+/// 启动 ACME 后台驱动任务
+///
+/// 驱动 AcmeState stream，处理证书申请和续期。
+/// 返回 `(default_config, challenge_config)` 用于构建 TLS 服务器。
+pub async fn start_acme_driver(
+    acme_cfg: HubAcmeConfig,
+    data_dir: std::path::PathBuf,
+) -> Result<(
+    Arc<ServerConfig>,
+    Option<Arc<ServerConfig>>,
+    Option<rustls_acme::tower::TowerHttp01ChallengeService>,
+)> {
+    let state = build_acme_state(&acme_cfg, &data_dir)?;
+
+    let default_config = state.default_rustls_config();
+    let is_ip = is_ip_address(&acme_cfg.domain);
+
+    let challenge_config = if is_ip {
+        Some(state.challenge_rustls_config())
+    } else {
+        None
+    };
+
+    let http01_service = if !is_ip {
+        Some(state.http01_challenge_tower_service())
+    } else {
+        None
+    };
+
+    // 后台驱动 AcmeState stream（处理证书申请和续期）
+    tokio::spawn(async move {
+        use futures_util::StreamExt;
+        let mut state = state;
+        loop {
+            match state.next().await {
+                Some(Ok(event)) => {
+                    tracing::info!(?event, "ACME event");
+                }
+                Some(Err(e)) => {
+                    tracing::error!(error = %e, "ACME error");
+                }
+                None => {
+                    tracing::warn!("ACME stream ended unexpectedly");
+                    break;
+                }
+            }
+        }
+    });
+
+    Ok((default_config, challenge_config, http01_service))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
