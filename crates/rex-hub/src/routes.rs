@@ -93,6 +93,10 @@ pub fn app_with_static(
         .route(
             "/ws/docker/:resource_id",
             get(crate::ws_docker::docker_ws_handler),
+        )
+        .route(
+            "/ws/sqlite/:resource_id",
+            get(crate::ws_sqlite::sqlite_ws_handler),
         );
 
     let protected_routes = Router::new()
