@@ -1,7 +1,6 @@
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tracing::info;
 
 // ── 数据模型 ─────────────────────────────────────────────
 
@@ -98,10 +97,6 @@ impl SqliteConnectorImpl {
 #[async_trait]
 impl SqliteConnector for SqliteConnectorImpl {
     async fn connect(&mut self) -> Result<()> {
-        info!(
-            db_path = %self.config.db_path,
-            "connecting to SQLite database"
-        );
         // TODO: 实际连接 SQLite 数据库文件
         self.connected = true;
         Ok(())
@@ -111,7 +106,6 @@ impl SqliteConnector for SqliteConnectorImpl {
         if !self.connected {
             bail!("not connected");
         }
-        info!("executing SQL query");
         // TODO: 执行 SQL 查询
         Ok(SqliteResult {
             columns: vec![],
@@ -125,7 +119,6 @@ impl SqliteConnector for SqliteConnectorImpl {
         if !self.connected {
             bail!("not connected");
         }
-        info!("listing tables");
         // TODO: SELECT name FROM sqlite_master WHERE type='table'
         Ok(vec![])
     }
@@ -134,13 +127,11 @@ impl SqliteConnector for SqliteConnectorImpl {
         if !self.connected {
             bail!("not connected");
         }
-        info!("getting table info");
         // TODO: PRAGMA table_info(table)
         Ok(vec![])
     }
 
     async fn close(&self) -> Result<()> {
-        info!("closing SQLite connection");
         // TODO: 关闭数据库连接
         Ok(())
     }
