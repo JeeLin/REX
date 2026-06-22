@@ -131,13 +131,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { createSession, deleteSession } from '@/api/terminal'
+import { terminalSettings } from '@/stores/settings'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { getErrorMessage } from '@/utils/error'
 import { listFiles } from '@/api/files'
@@ -194,15 +195,15 @@ function initTerminal() {
   if (!terminalContainer.value) return
 
   terminal = new Terminal({
-    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-    fontSize: 13,
+    fontFamily: `'${terminalSettings.fontFamily}', 'Fira Code', monospace`,
+    fontSize: terminalSettings.fontSize,
     theme: {
       background: '#0D1117',
       foreground: '#E6EDF3',
       cursor: '#E8912D',
       cursorAccent: '#0D1117',
     },
-    cursorBlink: true,
+    cursorBlink: terminalSettings.cursorBlink,
   })
 
   fitAddon = new FitAddon()
@@ -511,6 +512,17 @@ function handleContextMenu(event: MouseEvent) {
     },
   ])
 }
+
+// ── Watch terminal settings ──
+watch(() => terminalSettings.fontSize, (val) => {
+  if (terminal) terminal.options.fontSize = val
+})
+watch(() => terminalSettings.fontFamily, (val) => {
+  if (terminal) terminal.options.fontFamily = `'${val}', 'Fira Code', monospace`
+})
+watch(() => terminalSettings.cursorBlink, (val) => {
+  if (terminal) terminal.options.cursorBlink = val
+})
 
 onMounted(async () => {
   await nextTick()
