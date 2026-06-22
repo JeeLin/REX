@@ -285,6 +285,11 @@ export default {
       name: 'Instance Name',
       namePlaceholder: 'e.g. production server, dev environment',
     },
+    sqlite: {
+      dbPath: 'Database Path',
+      name: 'Instance Name',
+      namePlaceholder: 'e.g. local app database',
+    },
     createBtn: 'Create Resource',
     created: 'Resource created successfully',
     testConnection: 'Test Connection',
@@ -607,6 +612,12 @@ export default {
       inspect: 'Inspect',
       remove: 'Remove',
     },
+  },
+  sqlite: {
+    title: 'SQLite Database',
+    welcome: 'Connect to a SQLite database',
+    tables: 'Tables',
+    noTables: 'No tables',
   },
   redis: {
     title: 'Redis Console',

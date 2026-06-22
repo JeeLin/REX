@@ -142,6 +142,25 @@
           </div>
         </template>
 
+        <!-- SQLite 特有表单 -->
+        <template v-else-if="form.protocol === 'sqlite'">
+          <div class="form-group">
+            <label class="form-label">{{ t('resource.sqlite.dbPath') }}</label>
+            <input v-model="sqliteConfig.dbPath" class="form-input" placeholder="/path/to/database.db" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t('resource.sqlite.name') }}</label>
+            <input v-model="sqliteConfig.name" class="form-input" :placeholder="t('resource.sqlite.namePlaceholder')" />
+          </div>
+          <div class="test-connection-row">
+            <button type="button" class="btn btn-ghost btn-sm" :disabled="testState === 'testing'" @click="testConnection">
+              {{ testState === 'testing' ? t('resource.testing') : t('resource.testConnection') }}
+            </button>
+            <span v-if="testState === 'success'" class="test-success">✓ {{ t('resource.testSuccess') }}</span>
+            <span v-if="testState === 'fail'" class="test-fail">✕ {{ testMessage }}</span>
+          </div>
+        </template>
+
         <!-- SSH / SQL 表单 -->
         <template v-else>
         <div class="form-row">
@@ -288,6 +307,11 @@ const dockerConfig = reactive({
   name: '',
 })
 
+const sqliteConfig = reactive({
+  dbPath: '',
+  name: '',
+})
+
 const canNext = computed(() => {
   if (step.value === 1) return !!form.protocol
   if (step.value === 2) {
@@ -300,6 +324,9 @@ const canNext = computed(() => {
         return !!dockerConfig.socketPath.trim()
       }
       return !!dockerConfig.host.trim()
+    }
+    if (form.protocol === 'sqlite') {
+      return !!sqliteConfig.dbPath.trim()
     }
     if (form.protocol === 'mysql' || form.protocol === 'postgresql') {
       return !!sshConfig.host.trim() && !!sshConfig.user.trim()
@@ -345,6 +372,12 @@ function buildConfigJson() {
     return JSON.stringify({
       host,
       name: dockerConfig.name || null,
+    })
+  }
+  if (form.protocol === 'sqlite') {
+    return JSON.stringify({
+      db_path: sqliteConfig.dbPath,
+      name: sqliteConfig.name || null,
     })
   }
   if (form.protocol === 'mysql' || form.protocol === 'postgresql') {

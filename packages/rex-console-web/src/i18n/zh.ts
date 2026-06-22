@@ -287,6 +287,11 @@ export default {
       name: '实例名称',
       namePlaceholder: '例如：生产服务器、开发环境',
     },
+    sqlite: {
+      dbPath: '数据库路径',
+      name: '实例名称',
+      namePlaceholder: '例如：本地应用数据库',
+    },
     createBtn: '创建资源',
     created: '资源创建成功',
     testConnection: '测试连接',
@@ -610,6 +615,12 @@ export default {
       inspect: '查看详情',
       remove: '删除',
     },
+  },
+  sqlite: {
+    title: 'SQLite 数据库',
+    welcome: '请连接到 SQLite 数据库',
+    tables: '表',
+    noTables: '暂无表',
   },
   redis: {
     title: 'Redis 控制台',
