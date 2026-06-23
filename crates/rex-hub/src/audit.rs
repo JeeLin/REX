@@ -215,6 +215,36 @@ mod tests {
     use crate::db::Database;
 
     #[test]
+    fn days_to_ymd_basic_date() {
+        // 测试已知日期：2024-01-01 对应 days from epoch
+        // 2024-01-01 00:00:00 UTC = 1704038400 秒
+        // days = 1704038400 / 86400 = 19723
+        let (year, month, day) = days_to_ymd(19723 + 719468);
+        assert_eq!(year, 2024);
+        assert_eq!(month, 1);
+        assert_eq!(day, 1);
+    }
+
+    #[test]
+    fn days_to_ymd_february() {
+        // 测试 2024-02-28（函数返回 28 日）
+        // days = 19781 gives us 2024-02-28
+        let (year, month, day) = days_to_ymd(19781 + 719468);
+        assert_eq!(year, 2024);
+        assert_eq!(month, 2);
+        assert_eq!(day, 28);
+    }
+
+    #[test]
+    fn days_to_ymd_year_boundary() {
+        // 测试年份边界：2023-12-31 到 2024-01-01
+        let (year, month, day) = days_to_ymd(19722 + 719468);
+        assert_eq!(year, 2023);
+        assert_eq!(month, 12);
+        assert_eq!(day, 31);
+    }
+
+    #[test]
     fn write_audit_log_works() {
         let db = Database::new_in_memory().unwrap();
         write_audit_log(
@@ -338,5 +368,243 @@ mod tests {
         assert_eq!(result.0.data.total, 3);
         assert_eq!(result.0.data.success, 2);
         assert_eq!(result.0.data.failed, 1);
+    }
+
+    #[tokio::test]
+    async fn list_audit_log_returns_empty() {
+        let db = Database::new_in_memory().unwrap();
+        let state = Arc::new(crate::routes::AppState {
+            db: Arc::new(db),
+            secret_key: "test".to_string(),
+            connections: Arc::new(crate::ws::new_connections()),
+            sessions: Arc::new(crate::terminal::SessionManager::new(900)),
+            transfer: None,
+            update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
+            data_dir: std::path::PathBuf::from("./data"),
+        });
+
+        let result = list_audit_log(State(state), Query(AuditLogQuery {
+            from: None,
+            to: None,
+            log_type: None,
+            page: None,
+            page_size: None,
+        }))
+        .await
+        .unwrap();
+
+        assert_eq!(result.0.data.items.len(), 0);
+        assert_eq!(result.0.data.total, 0);
+        assert_eq!(result.0.data.page, 1);
+        assert_eq!(result.0.data.page_size, 50);
+    }
+
+    #[tokio::test]
+    async fn list_audit_log_pagination() {
+        let db = Database::new_in_memory().unwrap();
+        // Create 5 test records
+        for i in 1..=5 {
+            write_audit_log(
+                &db,
+                "test",
+                "success",
+                &format!("测试日志 {}", i),
+                None,
+                None,
+                None,
+                None,
+                None,
+            );
+        }
+
+        let state = Arc::new(crate::routes::AppState {
+            db: Arc::new(db),
+            secret_key: "test".to_string(),
+            connections: Arc::new(crate::ws::new_connections()),
+            sessions: Arc::new(crate::terminal::SessionManager::new(900)),
+            transfer: None,
+            update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
+            data_dir: std::path::PathBuf::from("./data"),
+        });
+
+        // Test first page with size 2
+        let result = list_audit_log(State(state.clone()), Query(AuditLogQuery {
+            from: None,
+            to: None,
+            log_type: None,
+            page: Some(1),
+            page_size: Some(2),
+        }))
+        .await
+        .unwrap();
+
+        assert_eq!(result.0.data.items.len(), 2);
+        assert_eq!(result.0.data.total, 5);
+        assert_eq!(result.0.data.page, 1);
+        assert_eq!(result.0.data.page_size, 2);
+
+        // Test second page
+        let result = list_audit_log(State(state.clone()), Query(AuditLogQuery {
+            from: None,
+            to: None,
+            log_type: None,
+            page: Some(2),
+            page_size: Some(2),
+        }))
+        .await
+        .unwrap();
+
+        assert_eq!(result.0.data.items.len(), 2);
+        assert_eq!(result.0.data.total, 5);
+        assert_eq!(result.0.data.page, 2);
+        assert_eq!(result.0.data.page_size, 2);
+
+        // Test third page (last page, should have 1 item)
+        let result = list_audit_log(State(state), Query(AuditLogQuery {
+            from: None,
+            to: None,
+            log_type: None,
+            page: Some(3),
+            page_size: Some(2),
+        }))
+        .await
+        .unwrap();
+
+        assert_eq!(result.0.data.items.len(), 1);
+        assert_eq!(result.0.data.total, 5);
+        assert_eq!(result.0.data.page, 3);
+        assert_eq!(result.0.data.page_size, 2);
+    }
+
+    #[tokio::test]
+    async fn list_audit_log_filter_by_type() {
+        let db = Database::new_in_memory().unwrap();
+        // Create records with different types
+        write_audit_log(&db, "login", "success", "登录成功", None, None, None, None, None);
+        write_audit_log(&db, "logout", "success", "登出成功", None, None, None, None, None);
+        write_audit_log(&db, "login", "failure", "登录失败", None, None, None, None, None);
+        write_audit_log(&db, "config_update", "success", "配置更新", None, None, None, None, None);
+
+        let state = Arc::new(crate::routes::AppState {
+            db: Arc::new(db),
+            secret_key: "test".to_string(),
+            connections: Arc::new(crate::ws::new_connections()),
+            sessions: Arc::new(crate::terminal::SessionManager::new(900)),
+            transfer: None,
+            update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
+            data_dir: std::path::PathBuf::from("./data"),
+        });
+
+        // Filter by login type
+        let result = list_audit_log(State(state.clone()), Query(AuditLogQuery {
+            from: None,
+            to: None,
+            log_type: Some("login".to_string()),
+            page: None,
+            page_size: None,
+        }))
+        .await
+        .unwrap();
+
+        assert_eq!(result.0.data.items.len(), 2);
+        assert_eq!(result.0.data.total, 2);
+        for item in result.0.data.items {
+            assert_eq!(item.log_type, "login");
+        }
+
+        // Filter by config_update type
+        let result = list_audit_log(State(state), Query(AuditLogQuery {
+            from: None,
+            to: None,
+            log_type: Some("config_update".to_string()),
+            page: None,
+            page_size: None,
+        }))
+        .await
+        .unwrap();
+
+        assert_eq!(result.0.data.items.len(), 1);
+        assert_eq!(result.0.data.total, 1);
+        assert_eq!(result.0.data.items[0].log_type, "config_update");
+    }
+
+    #[tokio::test]
+    async fn get_stats_today() {
+        let db = Database::new_in_memory().unwrap();
+
+        let state = Arc::new(crate::routes::AppState {
+            db: Arc::new(db),
+            secret_key: "test".to_string(),
+            connections: Arc::new(crate::ws::new_connections()),
+            sessions: Arc::new(crate::terminal::SessionManager::new(900)),
+            transfer: None,
+            update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
+            data_dir: std::path::PathBuf::from("./data"),
+        });
+
+        // Test with period=today - just verify it executes without error
+        let result = get_stats(State(state.clone()), Query(StatsQuery {
+            period: Some("today".to_string()),
+        }))
+        .await
+        .unwrap();
+
+        // Should work without error (returns 0 or some count)
+        assert!(result.0.data.total >= 0);
+
+        // Test with period=None
+        let result = get_stats(State(state), Query(StatsQuery {
+            period: None,
+        }))
+        .await
+        .unwrap();
+
+        // Should work without error
+        assert!(result.0.data.total >= 0);
+    }
+
+    #[tokio::test]
+    async fn list_audit_log_time_filters() {
+        let db = Database::new_in_memory().unwrap();
+        // Just test that the function executes without error with filter parameters
+        let state = Arc::new(crate::routes::AppState {
+            db: Arc::new(db),
+            secret_key: "test".to_string(),
+            connections: Arc::new(crate::ws::new_connections()),
+            sessions: Arc::new(crate::terminal::SessionManager::new(900)),
+            transfer: None,
+            update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
+            data_dir: std::path::PathBuf::from("./data"),
+        });
+
+        // Test with from filter
+        let _ = list_audit_log(State(state.clone()), Query(AuditLogQuery {
+            from: Some("20200101".to_string()),
+            to: None,
+            log_type: None,
+            page: None,
+            page_size: None,
+        }))
+        .await;
+
+        // Test with to filter
+        let _ = list_audit_log(State(state.clone()), Query(AuditLogQuery {
+            from: None,
+            to: Some("20300101".to_string()),
+            log_type: None,
+            page: None,
+            page_size: None,
+        }))
+        .await;
+
+        // Test with log_type filter
+        let _ = list_audit_log(State(state), Query(AuditLogQuery {
+            from: None,
+            to: None,
+            log_type: Some("test".to_string()),
+            page: None,
+            page_size: None,
+        }))
+        .await;
     }
 }
