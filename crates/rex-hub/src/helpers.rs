@@ -102,3 +102,67 @@ pub fn get_or_create_password_hash(db: &crate::db::Database) -> String {
         hash
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn now_iso_returns_timestamp_string() {
+        let ts = now_iso();
+        assert!(!ts.is_empty());
+        assert!(ts.len() >= 10);
+    }
+
+    #[test]
+    fn gen_id_has_prefix() {
+        let id = gen_id("res");
+        assert!(id.starts_with("res_"));
+        assert_eq!(id.len(), 12); // "res_" + 8 hex chars
+    }
+
+    #[test]
+    fn gen_id_unique() {
+        let id1 = gen_id("test");
+        let id2 = gen_id("test");
+        assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn err_resp_returns_500() {
+        let (status, _json) = err_resp("TEST_ERROR", "test message");
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn not_found_returns_404() {
+        let (status, _json) = not_found("NOT_FOUND", "not found message");
+        assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn bad_request_returns_400() {
+        let (status, json) = bad_request("bad request message");
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(json.error.code, "VALIDATION_ERROR");
+        assert_eq!(json.error.message, "bad request message");
+    }
+
+    #[test]
+    fn conflict_returns_409() {
+        let (status, _json) = conflict("CONFLICT", "conflict message");
+        assert_eq!(status, StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn error_response_serializes() {
+        let err = ErrorResponse {
+            error: ErrorBody {
+                code: "TEST".to_string(),
+                message: "test".to_string(),
+            },
+        };
+        let json = serde_json::to_string(&err).unwrap();
+        assert!(json.contains("TEST"));
+    }
+}

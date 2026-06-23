@@ -130,4 +130,80 @@ mod tests {
             assert_eq!(count, 0, "table {table} should exist and be empty");
         }
     }
+
+    #[test]
+    fn new_in_memory_returns_empty_resource() {
+        let db = Database::new_in_memory().unwrap();
+        let result = db.get_resource_by_id("nonexistent").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn new_in_memory_insert_and_get_resource() {
+        let db = Database::new_in_memory().unwrap();
+        {
+            let conn = db.pool.get().unwrap();
+            // First create an environment (required by foreign key)
+            conn.execute(
+                "INSERT INTO environments (id, name, description, connection_mode, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                rusqlite::params!["env_001", "test-env", "test", "direct", "2024-01-01", "2024-01-01"],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO resources (id, environment_id, name, protocol, agent_id, config_json, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                rusqlite::params![
+                    "res_001",
+                    "env_001",
+                    "test-resource",
+                    "ssh",
+                    None::<String>,
+                    "{}",
+                    "ready",
+                    "2024-01-01",
+                    "2024-01-01"
+                ],
+            )
+            .unwrap();
+        }
+        let resource = db.get_resource_by_id("res_001").unwrap();
+        assert!(resource.is_some());
+        let resource = resource.unwrap();
+        assert_eq!(resource.id, "res_001");
+        assert_eq!(resource.name, "test-resource");
+    }
+
+    #[test]
+    fn new_in_memory_insert_and_delete_resource() {
+        let db = Database::new_in_memory().unwrap();
+        {
+            let conn = db.pool.get().unwrap();
+            // First create an environment (required by foreign key)
+            conn.execute(
+                "INSERT INTO environments (id, name, description, connection_mode, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                rusqlite::params!["env_001", "test-env", "test", "direct", "2024-01-01", "2024-01-01"],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO resources (id, environment_id, name, protocol, agent_id, config_json, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                rusqlite::params![
+                    "res_002",
+                    "env_001",
+                    "test-resource-2",
+                    "mysql",
+                    None::<String>,
+                    "{}",
+                    "ready",
+                    "2024-01-01",
+                    "2024-01-01"
+                ],
+            )
+            .unwrap();
+            let deleted = conn
+                .execute("DELETE FROM resources WHERE id = ?1", rusqlite::params!["res_002"])
+                .unwrap();
+            assert_eq!(deleted, 1);
+        }
+        let resource = db.get_resource_by_id("res_002").unwrap();
+        assert!(resource.is_none());
+    }
 }
