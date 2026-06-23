@@ -101,4 +101,60 @@ mod tests {
         let config = HubConfig::default();
         assert_eq!(acme::determine_tls_mode(&config), TlsMode::None);
     }
+
+    #[test]
+    fn tls_status_struct_serializes() {
+        let status = TlsStatus {
+            mode: "none".to_string(),
+            domain: None,
+            cert_ready: false,
+            cert_expires_at: None,
+            cert_issuer: None,
+            port_80_required: false,
+        };
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("none"));
+        assert!(!json.contains("domain"));
+    }
+
+    #[test]
+    fn tls_status_acme_domain_mode() {
+        let config = HubConfig {
+            acme: Some(crate::config::AcmeConfig {
+                domain: "hub.example.com".to_string(),
+                email: "admin@example.com".to_string(),
+                staging: false,
+            }),
+            ..Default::default()
+        };
+        assert_eq!(acme::determine_tls_mode(&config), TlsMode::AcmeDomain);
+    }
+
+    #[test]
+    fn tls_status_acme_ip_mode() {
+        let config = HubConfig {
+            acme: Some(crate::config::AcmeConfig {
+                domain: "203.0.113.1".to_string(),
+                email: "admin@example.com".to_string(),
+                staging: false,
+            }),
+            ..Default::default()
+        };
+        assert_eq!(acme::determine_tls_mode(&config), TlsMode::AcmeIp);
+    }
+
+    #[test]
+    fn tls_status_struct_with_domain() {
+        let status = TlsStatus {
+            mode: "acme_domain".to_string(),
+            domain: Some("hub.example.com".to_string()),
+            cert_ready: true,
+            cert_expires_at: Some("2025-12-31".to_string()),
+            cert_issuer: Some("Let's Encrypt".to_string()),
+            port_80_required: true,
+        };
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("hub.example.com"));
+        assert!(json.contains("Let's Encrypt"));
+    }
 }

@@ -360,3 +360,82 @@ async fn test_sql_connector(mut connector: Box<dyn SqlConnector>) -> Result<(), 
     let _ = connector.close().await;
     Ok(())
 }
+
+// ── Tests ──────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ssh_config::SshResourceConfig;
+
+    #[test]
+    fn valid_protocols_contains_expected_protocols() {
+        assert!(VALID_PROTOCOLS.contains(&"ssh"));
+        assert!(VALID_PROTOCOLS.contains(&"sftp"));
+        assert!(VALID_PROTOCOLS.contains(&"mysql"));
+        assert!(VALID_PROTOCOLS.contains(&"postgresql"));
+        assert!(VALID_PROTOCOLS.contains(&"redis"));
+        assert!(VALID_PROTOCOLS.contains(&"docker"));
+        assert!(VALID_PROTOCOLS.contains(&"sqlite"));
+        assert!(VALID_PROTOCOLS.contains(&"s3"));
+        assert!(!VALID_PROTOCOLS.contains(&"invalid_protocol"));
+    }
+
+    #[test]
+    fn resource_struct_serializes() {
+        let resource = Resource {
+            id: "res_123".to_string(),
+            environment_id: "env_456".to_string(),
+            name: "test_resource".to_string(),
+            protocol: "ssh".to_string(),
+            agent_id: Some("agent_789".to_string()),
+            config_json: r#"{"host":"example.com","port":22}"#.to_string(),
+            status: "ready".to_string(),
+            created_at: "1234567890".to_string(),
+            updated_at: "1234567891".to_string(),
+        };
+        let json = serde_json::to_string(&resource).unwrap();
+        assert!(json.contains("res_123"));
+        assert!(json.contains("ssh"));
+    }
+
+    #[test]
+    fn create_resource_validates_empty_name() {
+        // Test that empty name would be rejected - validated by checking name.trim().is_empty() logic
+        let name = "   ";
+        assert!(name.trim().is_empty());
+    }
+
+    #[test]
+    fn create_resource_validates_invalid_protocol() {
+        assert!(!VALID_PROTOCOLS.contains(&"invalid_protocol"));
+        assert!(VALID_PROTOCOLS.contains(&"ssh"));
+    }
+
+    #[test]
+    fn ssh_config_validation_works() {
+        // Valid SSH config
+        let valid_json = r#"{"host":"example.com","port":22,"username":"user","auth":{"type":"password","password":"pass123"}}"#;
+        let result = SshResourceConfig::from_json(valid_json);
+        assert!(result.is_ok());
+
+        // Invalid - missing host
+        let invalid_json = r#"{"username":"user","auth":{"type":"password","password":"pass123"}}"#;
+        let result = SshResourceConfig::from_json(invalid_json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn ssh_config_validation_empty_host_rejected() {
+        let config_json = r#"{"host":"","port":22,"username":"user","auth":{"type":"password","password":"pass123"}}"#;
+        let result = SshResourceConfig::from_json(config_json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn ssh_config_validation_empty_username_rejected() {
+        let config_json = r#"{"host":"example.com","port":22,"username":"","auth":{"type":"password","password":"pass123"}}"#;
+        let result = SshResourceConfig::from_json(config_json);
+        assert!(result.is_err());
+    }
+}

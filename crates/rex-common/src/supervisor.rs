@@ -344,4 +344,25 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(call_count.load(Ordering::SeqCst), 4);
     }
+
+    #[test]
+    fn exit_code_constants_are_correct() {
+        assert_eq!(EXIT_NORMAL, 0);
+        assert_eq!(EXIT_UPDATE_REQUESTED, 10);
+        assert_eq!(EXIT_HEALTH_FAILED, 11);
+        assert_eq!(EXIT_CRASHED, 12);
+        assert_eq!(MAX_ATTEMPTS, 3);
+    }
+
+    #[test]
+    fn update_supervisor_config_holds_restart_delay() {
+        let config = UpdateSupervisorConfig {
+            restart_delay: Duration::from_secs(3),
+            data_dir: PathBuf::from("/tmp"),
+            health_check_timeout: Duration::from_secs(30),
+        };
+        assert_eq!(config.restart_delay, Duration::from_secs(3));
+        assert_eq!(config.data_dir, PathBuf::from("/tmp"));
+        assert_eq!(config.health_check_timeout, Duration::from_secs(30));
+    }
 }

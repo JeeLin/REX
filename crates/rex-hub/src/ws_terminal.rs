@@ -398,4 +398,33 @@ mod tests {
         assert_eq!(parsed["type"].as_str().unwrap(), "terminal.closed");
         assert_eq!(parsed["payload"]["exit_status"].as_i64().unwrap(), 0);
     }
+
+    #[test]
+    fn create_session_request_deserialize() {
+        let json = r#"{"resource_id":"res_123","cols":80,"rows":24}"#;
+        let req: CreateSessionRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.resource_id, "res_123");
+        assert_eq!(req.cols, 80);
+        assert_eq!(req.rows, 24);
+    }
+
+    #[test]
+    fn create_session_response_serialize() {
+        let resp = CreateSessionResponse {
+            session_id: "sess_abc".to_string(),
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("sess_abc"));
+    }
+
+    #[test]
+    fn terminal_closed_non_zero_exit_status() {
+        let closed = TerminalClosed {
+            msg_type: "terminal.closed".to_string(),
+            payload: ClosedPayload { exit_status: 1 },
+        };
+        let json = serde_json::to_string(&closed).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["payload"]["exit_status"].as_i64().unwrap(), 1);
+    }
 }

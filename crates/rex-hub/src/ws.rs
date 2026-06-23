@@ -282,4 +282,62 @@ mod tests {
         let conns = new_connections();
         assert!(conns.blocking_read().is_empty());
     }
+
+    #[test]
+    fn heartbeat_message_parsing() {
+        let msg = WsMessage {
+            msg_type: "heartbeat".to_string(),
+            payload: serde_json::json!({
+                "version": "0.11.0",
+                "sha256": "abc123"
+            }),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let parsed: WsMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.msg_type, "heartbeat");
+        assert_eq!(parsed.payload["version"].as_str().unwrap(), "0.11.0");
+        assert_eq!(parsed.payload["sha256"].as_str().unwrap(), "abc123");
+    }
+
+    #[test]
+    fn disconnect_message_parsing() {
+        let msg = WsMessage {
+            msg_type: "disconnect".to_string(),
+            payload: serde_json::json!({}),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let parsed: WsMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.msg_type, "disconnect");
+    }
+
+    #[test]
+    fn agent_connection_fields() {
+        use tokio::sync::oneshot;
+        let (tx, _rx) = oneshot::channel();
+        let conn = AgentConnection {
+            agent_id: "agt_123".to_string(),
+            environment_id: "env_456".to_string(),
+            version: "0.11.0".to_string(),
+            shutdown_tx: tx,
+        };
+        assert_eq!(conn.agent_id, "agt_123");
+        assert_eq!(conn.environment_id, "env_456");
+        assert_eq!(conn.version, "0.11.0");
+    }
+
+    #[test]
+    fn new_connections_can_insert_and_read() {
+        let conns = new_connections();
+        use tokio::sync::oneshot;
+        let (tx, _rx) = oneshot::channel();
+        let conn = AgentConnection {
+            agent_id: "agt_123".to_string(),
+            environment_id: "env_456".to_string(),
+            version: "0.11.0".to_string(),
+            shutdown_tx: tx,
+        };
+        conns.blocking_write().insert("agt_123".to_string(), conn);
+        assert_eq!(conns.blocking_read().len(), 1);
+        assert!(conns.blocking_read().contains_key("agt_123"));
+    }
 }
