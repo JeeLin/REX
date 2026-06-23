@@ -191,6 +191,12 @@ async function handleKeydown(e: KeyboardEvent) {
 
 onMounted(() => {
   inputRef.value?.focus()
+  // 自动连接（如果尚未连接）
+  if (!session.connected.value) {
+    session.connect().catch(() => {
+      // 连接失败时静默处理，用户可手动点击连接按钮
+    })
+  }
 })
 </script>
 

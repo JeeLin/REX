@@ -301,9 +301,11 @@ import { reactive, ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import client from '@/api/client'
+import { useSidebar } from '@/composables/useSidebar'
 
 const { t } = useI18n()
 const route = useRoute()
+const { fetchEnvs } = useSidebar()
 
 const envId = route.params.envId as string
 const step = ref(1)
@@ -493,6 +495,8 @@ async function submitResource() {
   try {
     await client.post(`/environments/${envId}/resources`, form)
     step.value = 3
+    // 资源创建成功后刷新侧边栏环境列表
+    fetchEnvs()
   } catch {
     // 静默处理
   }
