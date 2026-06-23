@@ -199,7 +199,10 @@ mod tests {
             )
             .unwrap();
             let deleted = conn
-                .execute("DELETE FROM resources WHERE id = ?1", rusqlite::params!["res_002"])
+                .execute(
+                    "DELETE FROM resources WHERE id = ?1",
+                    rusqlite::params!["res_002"],
+                )
                 .unwrap();
             assert_eq!(deleted, 1);
         }
