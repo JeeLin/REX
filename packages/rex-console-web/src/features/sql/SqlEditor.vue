@@ -65,12 +65,6 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-function getSelectedText(): string {
-  const el = editorRef.value
-  if (!el) return ''
-  return el.value.substring(el.selectionStart, el.selectionEnd)
-}
-
 function replaceSelection(newText: string) {
   const el = editorRef.value
   if (!el) return

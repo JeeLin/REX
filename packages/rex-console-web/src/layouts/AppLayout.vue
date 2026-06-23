@@ -1,32 +1,32 @@
 <template>
   <div class="app-layout" :class="{ 'sidebar-collapsed': collapsed }">
     <!-- 移动端汉堡按钮 -->
-    <button class="hamburger" @click="mobileOpen = !mobileOpen" v-if="!mobileOpen">
+    <button v-if="!mobileOpen" class="hamburger" @click="mobileOpen = !mobileOpen">
       <span></span>
       <span></span>
       <span></span>
     </button>
 
     <!-- 移动端遮罩 -->
-    <div class="mobile-overlay" v-if="mobileOpen" @click="closeMobile"></div>
+    <div v-if="mobileOpen" class="mobile-overlay" @click="closeMobile"></div>
 
     <aside class="sidebar" :class="{ open: mobileOpen }">
       <!-- Header -->
       <div class="sidebar-header">
         <div class="sidebar-logo">R</div>
-        <span class="sidebar-brand" v-show="!collapsed">REX Hub</span>
-        <div class="sidebar-header-actions" v-show="!collapsed">
-          <button class="sidebar-icon-btn" @click="toggleTheme" :title="themeLabel">
+        <span v-show="!collapsed" class="sidebar-brand">REX Hub</span>
+        <div v-show="!collapsed" class="sidebar-header-actions">
+          <button class="sidebar-icon-btn" :title="themeLabel" @click="toggleTheme">
             {{ themeIcon }}
           </button>
-          <button class="sidebar-icon-btn" @click="toggleLang" :title="lang === 'zh' ? '中文' : 'English'">
+          <button class="sidebar-icon-btn" :title="lang === 'zh' ? '中文' : 'English'" @click="toggleLang">
             {{ lang === 'zh' ? '中' : 'EN' }}
           </button>
         </div>
       </div>
 
       <!-- 搜索框 -->
-      <div class="sidebar-search" v-show="!collapsed">
+      <div v-show="!collapsed" class="sidebar-search">
         <input
           v-model="searchQuery"
           type="text"
@@ -56,7 +56,7 @@
       </nav>
 
       <!-- 环境资源树 -->
-      <div class="sidebar-tree" v-show="!collapsed">
+      <div v-show="!collapsed" class="sidebar-tree">
         <div class="tree-label">{{ t('nav.environments') }}</div>
         <div v-if="loading" class="tree-loading">{{ t('common.loading') }}...</div>
         <div v-else-if="filteredEnvs.length === 0" class="tree-empty">{{ t('common.noData') }}</div>
@@ -94,10 +94,10 @@
       </div>
 
       <!-- 收藏 -->
-      <div class="sidebar-section" v-show="!collapsed">
+      <div v-show="!collapsed" class="sidebar-section">
         <div class="section-header">
           <span class="section-label">⭐ {{ t('sidebar.favorites') }}</span>
-          <span class="section-count" v-if="favoriteResources.length">({{ favoriteResources.length }})</span>
+          <span v-if="favoriteResources.length" class="section-count">({{ favoriteResources.length }})</span>
         </div>
         <div v-if="favoriteResources.length === 0" class="section-empty">{{ t('sidebar.favoritesEmpty') }}</div>
         <div v-else class="section-list">
@@ -111,16 +111,16 @@
             <span class="res-dot" :style="{ background: getProtocolIcon(fav.protocol).color }"></span>
             <span class="res-name">{{ fav.name }}</span>
             <span class="res-protocol">{{ fav.protocol }}</span>
-            <button class="fav-remove" @click.stop="removeFavorite(fav.id)" :title="t('ctx.removeFavorite')">✕</button>
+            <button class="fav-remove" :title="t('ctx.removeFavorite')" @click.stop="removeFavorite(fav.id)">✕</button>
           </button>
         </div>
       </div>
 
       <!-- 最近使用 -->
-      <div class="sidebar-section" v-show="!collapsed">
+      <div v-show="!collapsed" class="sidebar-section">
         <div class="section-header">
           <span class="section-label">🕐 {{ t('sidebar.recent') }}</span>
-          <button v-if="recent.length > 0" class="section-action" @click="clearRecent" :title="t('sidebar.clearRecent')">🗑</button>
+          <button v-if="recent.length > 0" class="section-action" :title="t('sidebar.clearRecent')" @click="clearRecent">🗑</button>
         </div>
         <div v-if="recent.length === 0" class="section-empty">{{ t('sidebar.recentEmpty') }}</div>
         <div v-else class="section-list">
@@ -139,7 +139,7 @@
 
       <!-- Footer -->
       <div class="sidebar-footer">
-        <router-link to="/environments/new" class="nav-item" v-show="!collapsed" @click="closeMobile">
+        <router-link v-show="!collapsed" to="/environments/new" class="nav-item" @click="closeMobile">
           <span class="nav-icon">+</span>
           <span>{{ t('sidebar.newEnv') }}</span>
         </router-link>

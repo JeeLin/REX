@@ -1,6 +1,6 @@
 <template>
   <div class="ws-tabbar" @contextmenu.prevent>
-    <button class="ws-tab-add" @click="$emit('newConnection')" title="新建连接 (Ctrl+N)">+</button>
+    <button class="ws-tab-add" title="新建连接 (Ctrl+N)" @click="$emit('newConnection')">+</button>
     <div
       v-for="tab in tabs"
       :key="tab.id"

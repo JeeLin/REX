@@ -19,7 +19,7 @@
     <div class="s3-toolbar">
       <button class="s3-btn s3-btn-sm" @click="$emit('upload')">{{ t('s3.upload') }}</button>
       <div class="s3-toolbar-spacer" />
-      <span class="s3-toolbar-count" v-if="!loading">
+      <span v-if="!loading" class="s3-toolbar-count">
         {{ t('s3.itemCount', { total: items.length, dirs: dirCount, files: fileCount }) }}
       </span>
     </div>
@@ -70,8 +70,8 @@
         <span class="s3-col-size">{{ item.is_dir ? '—' : formatSize(item.size) }}</span>
         <span class="s3-col-modified">{{ formatDate(item.last_modified) }}</span>
         <span class="s3-col-actions">
-          <button v-if="!item.is_dir" class="s3-action-btn" @click.stop="downloadItem(item)" :title="t('s3.download')">⬇</button>
-          <button class="s3-action-btn s3-action-danger" @click.stop="deleteItem(item)" :title="t('s3.delete')">🗑</button>
+          <button v-if="!item.is_dir" class="s3-action-btn" :title="t('s3.download')" @click.stop="downloadItem(item)">⬇</button>
+          <button class="s3-action-btn s3-action-danger" :title="t('s3.delete')" @click.stop="deleteItem(item)">🗑</button>
         </span>
       </div>
     </div>
@@ -104,13 +104,13 @@
             <span>{{ t('s3.properties') }}</span>
             <button class="s3-btn s3-btn-sm" @click="infoModal.visible = false">✕</button>
           </div>
-          <div class="s3-modal-body" v-if="infoModal.item">
+          <div v-if="infoModal.item" class="s3-modal-body">
             <div class="s3-info-row"><span class="s3-info-label">{{ t('s3.name') }}</span><span>{{ infoModal.item.key }}</span></div>
             <div class="s3-info-row"><span class="s3-info-label">{{ t('s3.size') }}</span><span>{{ formatSize(infoModal.item.size) }}</span></div>
-            <div class="s3-info-row" v-if="infoModal.item.content_type"><span class="s3-info-label">Type</span><span>{{ infoModal.item.content_type }}</span></div>
-            <div class="s3-info-row" v-if="infoModal.item.etag"><span class="s3-info-label">ETag</span><span>{{ infoModal.item.etag }}</span></div>
-            <div class="s3-info-row" v-if="infoModal.item.storage_class"><span class="s3-info-label">Class</span><span>{{ infoModal.item.storage_class }}</span></div>
-            <div class="s3-info-row" v-if="infoModal.item.last_modified"><span class="s3-info-label">{{ t('s3.modified') }}</span><span>{{ infoModal.item.last_modified }}</span></div>
+            <div v-if="infoModal.item.content_type" class="s3-info-row"><span class="s3-info-label">Type</span><span>{{ infoModal.item.content_type }}</span></div>
+            <div v-if="infoModal.item.etag" class="s3-info-row"><span class="s3-info-label">ETag</span><span>{{ infoModal.item.etag }}</span></div>
+            <div v-if="infoModal.item.storage_class" class="s3-info-row"><span class="s3-info-label">Class</span><span>{{ infoModal.item.storage_class }}</span></div>
+            <div v-if="infoModal.item.last_modified" class="s3-info-row"><span class="s3-info-label">{{ t('s3.modified') }}</span><span>{{ infoModal.item.last_modified }}</span></div>
           </div>
         </div>
       </div>

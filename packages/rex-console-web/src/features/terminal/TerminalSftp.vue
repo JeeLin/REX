@@ -4,7 +4,7 @@
     <div class="sftp-inline-header">
       <span class="sftp-icon">📁</span>
       <span class="panel-title">SFTP</span>
-      <button class="btn btn-ghost btn-sm btn-icon" @click="$emit('close')" title="关闭 SFTP">✕</button>
+      <button class="btn btn-ghost btn-sm btn-icon" title="关闭 SFTP" @click="$emit('close')">✕</button>
     </div>
 
     <!-- Breadcrumb -->
@@ -26,7 +26,9 @@
         class="btn btn-ghost btn-sm"
         :disabled="!selectedEntry || selectedEntry.file_type === 'directory'"
         @click="handleDownload"
-      >⬇ 下载</button>
+      >
+        ⬇ 下载
+      </button>
       <button class="btn btn-ghost btn-sm" @click="showMkdirInput = true">📁 新建</button>
       <button class="btn btn-ghost btn-sm" @click="() => loadDir()">↻</button>
     </div>
@@ -64,10 +66,10 @@
           :key="entry.path"
           class="sfile-row"
           :class="{ selected: selectedEntry?.path === entry.path }"
+          draggable="true"
           @click="selectedEntry = entry"
           @dblclick="handleDblClick(entry)"
           @contextmenu.prevent.stop="showEntryCtxMenu($event, entry)"
-          draggable="true"
           @dragstart="onDragStart($event, entry)"
         >
           <span class="sfile-icon" :class="getIconClass(entry)">{{ getIcon(entry) }}</span>

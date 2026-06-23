@@ -5,7 +5,7 @@
       <span class="s3-status-dot" :class="{ connected: session.connected.value }" />
       <span class="s3-topbar-label">S3</span>
       <span class="s3-topbar-name">{{ resourceName }}</span>
-      <span class="s3-topbar-state" v-if="endpoint">{{ endpoint }}</span>
+      <span v-if="endpoint" class="s3-topbar-state">{{ endpoint }}</span>
       <div class="s3-topbar-spacer" />
       <button
         v-if="!session.connected.value"

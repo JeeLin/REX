@@ -100,17 +100,23 @@
       :style="{ top: contextMenuY + 'px', left: contextMenuX + 'px' }"
     >
       <div v-if="contextMenuEntry" class="ws-files-context-items">
-        <div v-if="contextMenuEntry.file_type === 'directory'" class="ws-files-context-item"
-             @click="enterDirectory(contextMenuEntry.name); showContextMenu = false">
+        <div
+          v-if="contextMenuEntry.file_type === 'directory'" class="ws-files-context-item"
+          @click="enterDirectory(contextMenuEntry.name); showContextMenu = false"
+        >
           打开
         </div>
-        <div class="ws-files-context-item"
-             @click="handleCopyPath(contextMenuEntry.path); showContextMenu = false">
+        <div
+          class="ws-files-context-item"
+          @click="handleCopyPath(contextMenuEntry.path); showContextMenu = false"
+        >
           复制路径
         </div>
         <div class="ws-files-context-divider"></div>
-        <div class="ws-files-context-item danger"
-             @click="selectedPaths = [contextMenuEntry.path]; showDeleteDialog = true; showContextMenu = false">
+        <div
+          class="ws-files-context-item danger"
+          @click="selectedPaths = [contextMenuEntry.path]; showDeleteDialog = true; showContextMenu = false"
+        >
           删除
         </div>
       </div>
@@ -142,7 +148,7 @@ const props = defineProps<{
   resourceName: string
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   (e: 'disconnect'): void
   (e: 'error', msg: string): void
 }>()

@@ -11,7 +11,7 @@
         </p>
         <div class="confirm-checkbox">
           <label>
-            <input type="checkbox" v-model="confirmed" style="accent-color: var(--danger)">
+            <input v-model="confirmed" type="checkbox" style="accent-color: var(--danger)">
             {{ t('ctx.resetTokenConfirm') }}
           </label>
         </div>

@@ -8,22 +8,22 @@
     <div v-if="status?.last_checked" class="last-checked">
       {{ t('settings.update.lastChecked') }}: {{ formatTime(status.last_checked) }}
     </div>
-    <button class="btn btn-primary" @click="handleCheck" :disabled="checking || downloading">
+    <button class="btn btn-primary" :disabled="checking || downloading" @click="handleCheck">
       {{ checking ? t('settings.update.checking') : t('settings.update.checkNow') }}
     </button>
     <div v-if="status?.update_available" class="update-available">
       ⚠ {{ t('settings.update.foundNew') }} {{ status.latest_version }}
       <button
         class="btn btn-download"
-        @click="handleDownload"
         :disabled="downloading || applying"
+        @click="handleDownload"
       >
         {{ downloading ? t('settings.update.downloading') + ' ' + downloadPercent + '%' : t('settings.update.download') }}
       </button>
     </div>
     <div v-if="downloadReady" class="download-ready">
       ✓ {{ t('settings.update.ready') }}
-      <button class="btn btn-apply" @click="handleApply" :disabled="applying">
+      <button class="btn btn-apply" :disabled="applying" @click="handleApply">
         {{ applying ? t('settings.update.updating') : t('settings.update.applyNow') }}
       </button>
     </div>

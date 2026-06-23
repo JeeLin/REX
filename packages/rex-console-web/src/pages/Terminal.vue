@@ -15,10 +15,12 @@
         <button
           class="toolbar-btn-sftp"
           :class="{ active: sftpVisible }"
-          @click="toggleSftp"
           title="SFTP 面板 (Ctrl+Shift+F)"
-        >📁 SFTP</button>
-        <button class="btn btn-sm btn-ghost" @click="toggleFullscreen" :title="isFullscreen ? '退出全屏 (F11)' : '全屏 (F11)'">⛶</button>
+          @click="toggleSftp"
+        >
+          📁 SFTP
+        </button>
+        <button class="btn btn-sm btn-ghost" :title="isFullscreen ? '退出全屏 (F11)' : '全屏 (F11)'" @click="toggleFullscreen">⛶</button>
         <button class="btn btn-sm btn-danger" @click="confirmDisconnect">断开</button>
       </div>
     </div>
@@ -220,9 +222,10 @@ async function connectSession() {
       connectionStatus.value = 'disconnected'
       terminal?.write('\r\n\x1b[31mWebSocket 连接失败\x1b[0m\r\n')
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     connectionStatus.value = 'disconnected'
-    terminal?.write(`\r\n\x1b[31m会话创建失败: ${err?.response?.data?.error?.message ?? err?.message ?? '未知错误'}\x1b[0m\r\n`)
+    const error = err as { response?: { data?: { error?: { message?: string } } }; message?: string }
+    terminal?.write(`\r\n\x1b[31m会话创建失败: ${error?.response?.data?.error?.message ?? error?.message ?? '未知错误'}\x1b[0m\r\n`)
   }
 }
 

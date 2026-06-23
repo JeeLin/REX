@@ -46,8 +46,10 @@
         @select-table="insertTableSql"
         @refresh="loadDatabases"
       />
-      <div class="ws-sql-resize-handle" v-if="selectedDb"
-           @mousedown="startResize">
+      <div
+        v-if="selectedDb" class="ws-sql-resize-handle"
+        @mousedown="startResize"
+      >
       </div>
       <div class="ws-sql-right">
         <SqlEditor

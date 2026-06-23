@@ -10,13 +10,17 @@
           class="btn-icon"
           title="取消"
           @click.stop="$emit('cancel', task.id)"
-        >✕</button>
+        >
+          ✕
+        </button>
         <button
           v-if="task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled'"
           class="btn-icon"
           title="移除"
           @click.stop="$emit('remove', task.id)"
-        >🗑</button>
+        >
+          🗑
+        </button>
       </div>
     </div>
     <div v-if="task.status === 'running' || task.status === 'pending'" class="transfer-progress">

@@ -25,8 +25,10 @@
           <div class="step-title">{{ t('agent.step1Download') }}</div>
           <div class="step-desc">{{ t('agent.step1DownloadDesc') }}</div>
           <div class="download-grid">
-            <a v-for="dl in downloads" :key="dl.label" :href="dl.href"
-               class="btn btn-ghost btn-sm download-btn" target="_blank">
+            <a
+              v-for="dl in downloads" :key="dl.label" :href="dl.href"
+              class="btn btn-ghost btn-sm download-btn" target="_blank"
+            >
               ⬇ {{ dl.label }}
             </a>
           </div>

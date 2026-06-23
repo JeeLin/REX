@@ -36,7 +36,7 @@
         </div>
         <div class="modal-actions">
           <button class="btn" @click="showEditUsername = false">{{ t('settings.profile.cancel') }}</button>
-          <button class="btn btn-primary" @click="saveUsername" :disabled="!newUsername.trim()">{{ t('settings.profile.save') }}</button>
+          <button class="btn btn-primary" :disabled="!newUsername.trim()" @click="saveUsername">{{ t('settings.profile.save') }}</button>
         </div>
       </div>
     </div>
@@ -68,9 +68,11 @@
           <button class="btn" @click="showChangePassword = false">{{ t('settings.profile.cancel') }}</button>
           <button
             class="btn btn-primary"
-            @click="savePassword"
             :disabled="!currentPassword || newPassword.length < 6"
-          >{{ t('settings.profile.save') }}</button>
+            @click="savePassword"
+          >
+            {{ t('settings.profile.save') }}
+          </button>
         </div>
       </div>
     </div>

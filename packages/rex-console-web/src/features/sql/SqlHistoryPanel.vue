@@ -75,7 +75,7 @@ watch(
 </script>
 
 <template>
-  <div class="history-panel" v-if="visible">
+  <div v-if="visible" class="history-panel">
     <div class="history-header">
       <span class="history-title">{{ t('sql.history.title') }}</span>
       <div class="history-actions">

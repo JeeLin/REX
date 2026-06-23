@@ -187,7 +187,7 @@
           </div>
           <div class="form-group">
             <label class="form-label">
-              <input type="checkbox" v-model="s3Config.forcePathStyle" />
+              <input v-model="s3Config.forcePathStyle" type="checkbox" />
               {{ t('resource.s3.forcePathStyle') }}
             </label>
           </div>
@@ -206,61 +206,61 @@
 
         <!-- SSH / SQL 表单 -->
         <template v-else>
-        <div class="form-row">
-          <div class="form-group flex-2">
-            <label class="form-label">{{ t('resource.ssh.host') }}</label>
-            <input v-model="sshConfig.host" class="form-input" :placeholder="t('resource.ssh.hostPlaceholder')" required />
+          <div class="form-row">
+            <div class="form-group flex-2">
+              <label class="form-label">{{ t('resource.ssh.host') }}</label>
+              <input v-model="sshConfig.host" class="form-input" :placeholder="t('resource.ssh.hostPlaceholder')" required />
+            </div>
+            <div class="form-group flex-1">
+              <label class="form-label">{{ t('resource.ssh.port') }}</label>
+              <input v-model="sshConfig.port" class="form-input" :placeholder="t('resource.ssh.portPlaceholder')" />
+            </div>
           </div>
-          <div class="form-group flex-1">
-            <label class="form-label">{{ t('resource.ssh.port') }}</label>
-            <input v-model="sshConfig.port" class="form-input" :placeholder="t('resource.ssh.portPlaceholder')" />
+          <div class="form-group">
+            <label class="form-label">{{ t('resource.ssh.user') }}</label>
+            <input v-model="sshConfig.user" class="form-input" :placeholder="t('resource.ssh.userPlaceholder')" required />
           </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">{{ t('resource.ssh.user') }}</label>
-          <input v-model="sshConfig.user" class="form-input" :placeholder="t('resource.ssh.userPlaceholder')" required />
-        </div>
-        <div class="form-group">
-          <label class="form-label">{{ t('resource.ssh.auth') }}</label>
-          <div class="auth-toggle">
-            <button
-              type="button"
-              class="auth-btn"
-              :class="{ active: sshConfig.auth === 'password' }"
-              @click="sshConfig.auth = 'password'"
-            >
-              {{ t('resource.ssh.password') }}
+          <div class="form-group">
+            <label class="form-label">{{ t('resource.ssh.auth') }}</label>
+            <div class="auth-toggle">
+              <button
+                type="button"
+                class="auth-btn"
+                :class="{ active: sshConfig.auth === 'password' }"
+                @click="sshConfig.auth = 'password'"
+              >
+                {{ t('resource.ssh.password') }}
+              </button>
+              <button
+                type="button"
+                class="auth-btn"
+                :class="{ active: sshConfig.auth === 'key' }"
+                @click="sshConfig.auth = 'key'"
+              >
+                {{ t('resource.ssh.keyFile') }}
+              </button>
+            </div>
+            <input
+              v-if="sshConfig.auth === 'password'"
+              v-model="sshConfig.password"
+              class="form-input"
+              type="password"
+              placeholder="••••••••"
+            />
+            <input
+              v-else
+              v-model="sshConfig.keyFile"
+              class="form-input"
+              placeholder="~/.ssh/id_rsa"
+            />
+          </div>
+          <div class="test-connection-row">
+            <button type="button" class="btn btn-ghost btn-sm" :disabled="testState === 'testing'" @click="testConnection">
+              {{ testState === 'testing' ? t('resource.testing') : t('resource.testConnection') }}
             </button>
-            <button
-              type="button"
-              class="auth-btn"
-              :class="{ active: sshConfig.auth === 'key' }"
-              @click="sshConfig.auth = 'key'"
-            >
-              {{ t('resource.ssh.keyFile') }}
-            </button>
+            <span v-if="testState === 'success'" class="test-success">✓ {{ t('resource.testSuccess') }}</span>
+            <span v-if="testState === 'fail'" class="test-fail">✕ {{ testMessage }}</span>
           </div>
-          <input
-            v-if="sshConfig.auth === 'password'"
-            v-model="sshConfig.password"
-            class="form-input"
-            type="password"
-            placeholder="••••••••"
-          />
-          <input
-            v-else
-            v-model="sshConfig.keyFile"
-            class="form-input"
-            placeholder="~/.ssh/id_rsa"
-          />
-        </div>
-        <div class="test-connection-row">
-          <button type="button" class="btn btn-ghost btn-sm" :disabled="testState === 'testing'" @click="testConnection">
-            {{ testState === 'testing' ? t('resource.testing') : t('resource.testConnection') }}
-          </button>
-          <span v-if="testState === 'success'" class="test-success">✓ {{ t('resource.testSuccess') }}</span>
-          <span v-if="testState === 'fail'" class="test-fail">✕ {{ testMessage }}</span>
-        </div>
         </template>
       </form>
     </div>

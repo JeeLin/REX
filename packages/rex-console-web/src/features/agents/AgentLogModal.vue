@@ -21,11 +21,11 @@
           </button>
           <span class="log-spacer"></span>
           <label class="log-auto-scroll">
-            <input type="checkbox" v-model="autoScroll" style="accent-color: var(--accent)">
+            <input v-model="autoScroll" type="checkbox" style="accent-color: var(--accent)">
             {{ t('ctx.autoScroll') }}
           </label>
         </div>
-        <div class="log-body" ref="logBodyRef">
+        <div ref="logBodyRef" class="log-body">
           <div
             v-for="(log, idx) in filteredLogs"
             :key="idx"

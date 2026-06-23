@@ -1,14 +1,14 @@
 <template>
   <div class="workspace-shell">
     <!-- 标签栏 -->
-    <TabBar :panel-count="panelCount" :drag-id="dragId" @update:drag-id="dragId = $event" @newConnection="showConnMenu = true" @dblclick="handleTabDblclick">
+    <TabBar :panel-count="panelCount" :drag-id="dragId" @update:drag-id="dragId = $event" @new-connection="showConnMenu = true" @dblclick="handleTabDblclick">
       <template #right>
-        <div class="layout-indicator" @click="cycleLayout" :title="`${t('ws.layout.switch')} (Alt+1~5)`">
+        <div class="layout-indicator" :title="`${t('ws.layout.switch')} (Alt+1~5)`" @click="cycleLayout">
           <span>{{ layoutIcon }}</span>
           <span class="layout-label">{{ layoutLabel }}</span>
         </div>
-        <button class="ws-tab-add" @click="toggleFullscreen" title="全屏 (F11)" style="font-size: 13px">⛶</button>
-        <button class="ws-tab-add" @click="showShortcutsPanel = true" title="快捷键 (F1)" style="font-size: 12px">⌨</button>
+        <button class="ws-tab-add" title="全屏 (F11)" style="font-size: 13px" @click="toggleFullscreen">⛶</button>
+        <button class="ws-tab-add" title="快捷键 (F1)" style="font-size: 12px" @click="showShortcutsPanel = true">⌨</button>
       </template>
     </TabBar>
 
@@ -96,13 +96,13 @@
         <!-- 分屏模式：按面板渲染 -->
         <div
           v-for="i in panelCount"
+          v-else
           :key="i"
           class="ws-panel"
           :class="{
             active: isPanelActive(i - 1),
             'layout-drop-zone': dragId && dragOverPanel === i - 1
           }"
-          v-else
           @dragover="onPanelDragOver($event, i - 1)"
           @dragleave="onPanelDragLeave"
           @drop="onPanelDrop($event, i - 1)"

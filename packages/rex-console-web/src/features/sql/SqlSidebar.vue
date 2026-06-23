@@ -25,7 +25,7 @@
         <button class="btn btn-ghost btn-sm" @click="$emit('refresh')">↻</button>
       </div>
       <div class="sql-sidebar-search">
-        <input type="text" v-model="search" :placeholder="t('sql.searchPlaceholder')" />
+        <input v-model="search" type="text" :placeholder="t('sql.searchPlaceholder')" />
       </div>
       <div class="sql-tree" @contextmenu.prevent="handleTreeContextMenu">
         <div v-for="table in filteredTables" :key="table.name" class="tree-group">
@@ -33,7 +33,7 @@
             <span class="tree-icon">{{ expanded.has(table.name) ? '▾' : '▸' }}</span>
             <span>📊</span>
             <span>{{ table.name }}</span>
-            <span class="tree-count" v-if="table.row_count != null">{{ table.row_count.toLocaleString() }}</span>
+            <span v-if="table.row_count != null" class="tree-count">{{ table.row_count.toLocaleString() }}</span>
           </div>
           <div v-if="expanded.has(table.name)" class="tree-children">
             <div v-for="col in columns.get(table.name)" :key="col.name" class="tree-col-item" @contextmenu.prevent="handleColumnContextMenu($event, col)">
@@ -54,7 +54,7 @@
         <button class="btn btn-ghost btn-sm" @click="loadQueries">↻</button>
       </div>
       <div class="sql-sidebar-search">
-        <input type="text" v-model="querySearch" :placeholder="t('sql.sidebar.searchQueries')" />
+        <input v-model="querySearch" type="text" :placeholder="t('sql.sidebar.searchQueries')" />
       </div>
       <div class="sql-tree">
         <div

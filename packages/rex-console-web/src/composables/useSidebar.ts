@@ -10,7 +10,7 @@ const FAVORITES_KEY = 'rex-sidebar-favorites'
 
 export function useSidebar() {
   const router = useRouter()
-  const { connectToResource: connect } = useProtocol()
+  useProtocol()
 
   const collapsed = ref(loadCollapsed())
   const searchQuery = ref('')
@@ -118,7 +118,7 @@ export function useSidebar() {
     }
   }
 
-  function connectToResource(resource: { id: string; protocol: string; name: string }, envName: string) {
+  function connectToResource(resource: { id: string; protocol: string; name: string }, _envName: string) {
     // 如果已在工作空间页面，直接通知
     if (router.currentRoute.value.name === 'workspace') {
       window.dispatchEvent(new CustomEvent('open-in-workspace', {

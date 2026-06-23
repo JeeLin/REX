@@ -54,7 +54,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
 import client from '@/api/client'
@@ -65,7 +65,6 @@ import AgentStatusPanel from '@/features/agents/AgentStatusPanel.vue'
 
 const { t } = useI18n()
 const route = useRoute()
-const router = useRouter()
 const { connectToResource: connect } = useProtocol()
 const { show: showMenu } = useContextMenu()
 

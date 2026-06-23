@@ -5,7 +5,7 @@
       <div class="col col-size">大小</div>
       <div class="col col-actions"></div>
     </div>
-    <div class="file-list-body" ref="listBody">
+    <div ref="listBody" class="file-list-body">
       <div
         v-if="currentPath !== '/'"
         class="file-row file-row-parent"

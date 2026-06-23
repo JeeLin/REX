@@ -54,7 +54,6 @@ const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
 
-const username = ref('')
 const password = ref('')
 const rememberMe = ref(true)
 const loading = ref(false)

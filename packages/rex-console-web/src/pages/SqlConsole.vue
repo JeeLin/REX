@@ -10,7 +10,7 @@
       @update:selected-db="onDbChange"
       @refresh="loadDatabases"
     />
-    <div class="sql-topbar" v-else>
+    <div v-else class="sql-topbar">
       <button class="btn btn-ghost btn-sm" @click="goBack">← {{ t('common.back') }}</button>
     </div>
 

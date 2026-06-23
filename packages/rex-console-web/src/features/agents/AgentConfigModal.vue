@@ -6,7 +6,7 @@
           <div class="modal-title">{{ t('ctx.configTitle') }}</div>
           <button class="modal-close" @click="$emit('close')">×</button>
         </div>
-        <div class="modal-body" v-if="agent">
+        <div v-if="agent" class="modal-body">
           <div class="config-section">{{ t('ctx.basicInfo') }}</div>
           <div class="config-row">
             <span class="config-label">{{ t('ctx.environment') }}</span>

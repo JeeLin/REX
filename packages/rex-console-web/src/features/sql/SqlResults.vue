@@ -33,9 +33,11 @@
         <tbody>
           <tr v-for="(row, i) in result.rows" :key="i" @contextmenu.prevent="handleRowContextMenu($event, i)">
             <td class="text-muted">{{ i + 1 }}</td>
-            <td v-for="(cell, j) in row" :key="j"
+            <td
+              v-for="(cell, j) in row" :key="j"
               :class="cellClass(cell)"
-              @contextmenu.prevent="handleCellContextMenu($event, i, j)">
+              @contextmenu.prevent="handleCellContextMenu($event, i, j)"
+            >
               {{ formatCell(cell) }}
             </td>
           </tr>
@@ -60,24 +62,30 @@
           v-if="result.rows.length > 0"
           class="btn btn-ghost btn-xs"
           @click="handleCopyAll"
-        >📋 {{ t('sql.result.copy') }}</button>
+        >
+          📋 {{ t('sql.result.copy') }}
+        </button>
         <button
           v-if="result.rows.length > 0"
           class="btn btn-ghost btn-xs"
           @click="handleExportCsv"
-        >⬇ CSV</button>
+        >
+          ⬇ CSV
+        </button>
         <button
           v-if="result.rows.length > 0"
           class="btn btn-ghost btn-xs"
           @click="handleExportJson"
-        >⬇ JSON</button>
+        >
+          ⬇ JSON
+        </button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
 import type { SqlResult } from '@/api/sql'
