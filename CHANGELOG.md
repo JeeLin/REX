@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-06-24
+
+### Fixed
+- 修复前端 ESLint 警告（146 → 0）
+  - 移除未使用变量
+  - 修复 vue/attributes-order
+  - 修复 vue/multiline-html-element-content-newline
+  - 修复 vue/v-on-event-hyphenation
+
+### Changed
+- 提升后端测试覆盖率 63.43% → 69.45%
+  - 新增 audit 模块单元测试（审计日志写入、查询、统计）
+  - 新增 files 模块错误处理测试
+
 ## [0.11.0] - 2026-06-22
 
 ### Added
