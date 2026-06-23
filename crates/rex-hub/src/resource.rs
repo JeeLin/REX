@@ -439,3 +439,268 @@ mod tests {
         assert!(result.is_err());
     }
 }
+
+// ── HTTP Handler Tests ─────────────────────────────────────
+
+#[cfg(test)]
+mod handler_tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use axum::routing::{delete, get, post, put};
+    use axum::Router;
+    use tower::ServiceExt;
+
+    use crate::routes::AppState;
+    use rex_transfer::task::TransferManager;
+
+    fn test_state() -> Arc<AppState> {
+        Arc::new(AppState {
+            db: Arc::new(crate::db::Database::new_in_memory().unwrap()),
+            secret_key: "test-secret".to_string(),
+            connections: Arc::new(crate::ws::new_connections()),
+            sessions: Arc::new(crate::terminal::SessionManager::new(900)),
+            transfer: Some(Arc::new(crate::transfer::TransferState {
+                manager: Arc::new(TransferManager::new()),
+            })),
+            update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
+            data_dir: std::env::temp_dir(),
+        })
+    }
+
+    fn test_app() -> Router {
+        let state = test_state();
+        Router::new()
+            .route(
+                "/api/environments/:env_id/resources",
+                get(list_resources).post(create_resource),
+            )
+            .route(
+                "/api/environments/:env_id/resources/:id",
+                get(get_resource)
+                    .put(update_resource)
+                    .delete(delete_resource),
+            )
+            .with_state(state)
+    }
+
+    fn auth_header() -> axum::http::header::HeaderValue {
+        use jsonwebtoken::{encode, EncodingKey, Header};
+        let exp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as usize
+            + 3600;
+        let claims = crate::auth::Claims {
+            sub: "admin".to_string(),
+            exp,
+        };
+        let token = encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret("test-secret".as_bytes()),
+        )
+        .unwrap();
+        axum::http::header::HeaderValue::from_str(&format!("Bearer {token}")).unwrap()
+    }
+
+    fn create_test_env(state: &AppState) {
+        let conn = state.db.pool.get().unwrap();
+        conn.execute(
+            "INSERT INTO environments (id, name, description, connection_mode, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params!["env_test", "test-env", "test", "direct", "2024-01-01", "2024-01-01"],
+        )
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn list_resources_returns_empty_for_new_env() {
+        let state = test_state();
+        create_test_env(&state);
+        let app = Router::new()
+            .route("/api/environments/:env_id/resources", get(list_resources))
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/environments/env_test/resources")
+                    .header("authorization", auth_header())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json["data"].as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn create_resource_validates_empty_name() {
+        let state = test_state();
+        create_test_env(&state);
+        let app = Router::new()
+            .route("/api/environments/:env_id/resources", post(create_resource))
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/environments/env_test/resources")
+                    .header("authorization", auth_header())
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"name":"  ","protocol":"ssh","config_json":"{}"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn create_resource_validates_invalid_protocol() {
+        let state = test_state();
+        create_test_env(&state);
+        let app = Router::new()
+            .route("/api/environments/:env_id/resources", post(create_resource))
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/environments/env_test/resources")
+                    .header("authorization", auth_header())
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"name":"test","protocol":"invalid","config_json":"{}"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn create_resource_fails_for_nonexistent_env() {
+        let state = test_state();
+        let app = Router::new()
+            .route("/api/environments/:env_id/resources", post(create_resource))
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/environments/nonexistent/resources")
+                    .header("authorization", auth_header())
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"name":"test","protocol":"docker","config_json":"{}"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn get_resource_returns_not_found() {
+        let state = test_state();
+        create_test_env(&state);
+        let app = Router::new()
+            .route("/api/environments/:env_id/resources/:id", get(get_resource))
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/environments/env_test/resources/nonexistent")
+                    .header("authorization", auth_header())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn delete_resource_returns_not_found() {
+        let state = test_state();
+        create_test_env(&state);
+        let app = Router::new()
+            .route(
+                "/api/environments/:env_id/resources/:id",
+                delete(delete_resource),
+            )
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/api/environments/env_test/resources/nonexistent")
+                    .header("authorization", auth_header())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn update_resource_returns_not_found() {
+        let state = test_state();
+        create_test_env(&state);
+        let app = Router::new()
+            .route(
+                "/api/environments/:env_id/resources/:id",
+                put(update_resource),
+            )
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/environments/env_test/resources/nonexistent")
+                    .header("authorization", auth_header())
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"name":"updated"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_connection_rejects_invalid_protocol() {
+        let state = test_state();
+        let app = Router::new()
+            .route(
+                "/api/resources/test-connection",
+                post(test_connection),
+            )
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/resources/test-connection")
+                    .header("authorization", auth_header())
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"protocol":"invalid","config_json":"{}"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+}

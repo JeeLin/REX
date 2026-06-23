@@ -428,4 +428,255 @@ mod tests {
         .filter_map(|r| r.ok())
         .collect()
     }
+
+    #[test]
+    fn hash_token_produces_consistent_hash() {
+        let hash1 = hash_token("test_token");
+        let hash2 = hash_token("test_token");
+        assert_eq!(hash1, hash2);
+        assert_eq!(hash1.len(), 64); // SHA256 hex string
+    }
+
+    #[test]
+    fn hash_token_different_for_different_inputs() {
+        let hash1 = hash_token("token1");
+        let hash2 = hash_token("token2");
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn update_heartbeat_works() {
+        let db = test_db();
+        let hash = "abc123";
+        setup_env(&db, "env_test1", hash);
+        upsert_agent(
+            &db,
+            "agt_001",
+            "env_test1",
+            "agent1",
+            hash,
+            "0.1.0",
+            "",
+            "linux",
+            "amd64",
+            None,
+            None,
+        );
+        update_heartbeat(&db, "agt_001", "0.2.0", "newsha256");
+        let agents = list_agents_sync(&db, "env_test1");
+        assert_eq!(agents[0].version, "0.2.0");
+    }
+
+    #[test]
+    fn agent_struct_serializes() {
+        let agent = Agent {
+            id: "agt_123".to_string(),
+            environment_id: "env_456".to_string(),
+            name: "test-agent".to_string(),
+            version: "0.1.0".to_string(),
+            sha256: "abc123".to_string(),
+            os: "linux".to_string(),
+            arch: "amd64".to_string(),
+            hostname: Some("host1".to_string()),
+            os_version: Some("22.04".to_string()),
+            status: "online".to_string(),
+            last_seen_at: Some("2024-01-01".to_string()),
+            created_at: "2024-01-01".to_string(),
+            updated_at: "2024-01-01".to_string(),
+        };
+        let json = serde_json::to_string(&agent).unwrap();
+        assert!(json.contains("agt_123"));
+        assert!(json.contains("linux"));
+    }
+
+    #[test]
+    fn register_request_deserializes() {
+        let json = r#"{
+            "id": "agt_123",
+            "token": "mytoken",
+            "name": "agent1",
+            "version": "0.1.0",
+            "os": "linux",
+            "arch": "amd64"
+        }"#;
+        let req: RegisterRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.id, "agt_123");
+        assert_eq!(req.token, "mytoken");
+        assert_eq!(req.name, "agent1");
+    }
+
+    #[test]
+    fn agent_list_item_serializes() {
+        let item = AgentListItem {
+            id: "agt_123".to_string(),
+            environment_id: "env_456".to_string(),
+            name: "test-agent".to_string(),
+            version: "0.1.0".to_string(),
+            os: "linux".to_string(),
+            arch: "amd64".to_string(),
+            hostname: Some("host1".to_string()),
+            os_version: Some("22.04".to_string()),
+            status: "online".to_string(),
+            last_seen_at: Some("2024-01-01".to_string()),
+        };
+        let json = serde_json::to_string(&item).unwrap();
+        assert!(json.contains("agt_123"));
+        assert!(json.contains("online"));
+    }
+
+    #[test]
+    fn register_response_serializes() {
+        let resp = RegisterResponse {
+            id: "agt_123".to_string(),
+            environment_id: "env_456".to_string(),
+            status: "online".to_string(),
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("agt_123"));
+        assert!(json.contains("online"));
+    }
+}
+
+// ── HTTP Handler Tests ─────────────────────────────────────
+
+#[cfg(test)]
+mod handler_tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use axum::routing::{get, post};
+    use axum::Router;
+    use tower::ServiceExt;
+
+    use crate::routes::AppState;
+    use rex_transfer::task::TransferManager;
+
+    fn test_state() -> Arc<AppState> {
+        Arc::new(AppState {
+            db: Arc::new(crate::db::Database::new_in_memory().unwrap()),
+            secret_key: "test-secret".to_string(),
+            connections: Arc::new(crate::ws::new_connections()),
+            sessions: Arc::new(crate::terminal::SessionManager::new(900)),
+            transfer: Some(Arc::new(crate::transfer::TransferState {
+                manager: Arc::new(TransferManager::new()),
+            })),
+            update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
+            data_dir: std::env::temp_dir(),
+        })
+    }
+
+    fn auth_header() -> axum::http::header::HeaderValue {
+        use jsonwebtoken::{encode, EncodingKey, Header};
+        let exp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as usize
+            + 3600;
+        let claims = crate::auth::Claims {
+            sub: "admin".to_string(),
+            exp,
+        };
+        let token = encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret("test-secret".as_bytes()),
+        )
+        .unwrap();
+        axum::http::header::HeaderValue::from_str(&format!("Bearer {token}")).unwrap()
+    }
+
+    fn setup_env(state: &AppState, env_id: &str, token_hash: &str) {
+        let conn = state.db.pool.get().unwrap();
+        conn.execute(
+            "INSERT INTO environments (id, name, connection_mode, agent_token_hash, created_at, updated_at) VALUES (?1, 'test', 'agent_proxy', ?2, '2024-01-01', '2024-01-01')",
+            rusqlite::params![env_id, token_hash],
+        )
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn register_rejects_empty_token() {
+        let state = test_state();
+        let app = Router::new()
+            .route("/api/agents/register", post(register))
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/agents/register")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"id":"agt_001","token":"","name":"agent1","version":"0.1.0"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn register_rejects_invalid_token() {
+        let state = test_state();
+        let app = Router::new()
+            .route("/api/agents/register", post(register))
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/agents/register")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"id":"agt_001","token":"invalid_token","name":"agent1","version":"0.1.0"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn list_agents_returns_empty_for_new_env() {
+        let state = test_state();
+        setup_env(&state, "env_test", "hash123");
+        let app = Router::new()
+            .route("/api/environments/:env_id/agents", get(list_agents))
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/environments/env_test/agents")
+                    .header("authorization", auth_header())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json["data"].as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn list_agents_returns_not_found_for_unknown_env() {
+        let state = test_state();
+        let app = Router::new()
+            .route("/api/environments/:env_id/agents", get(list_agents))
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/environments/nonexistent/agents")
+                    .header("authorization", auth_header())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
 }
