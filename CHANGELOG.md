@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-06-24
+
+### Added
+- 传输执行引擎：`rex-transfer` crate 新增 `executor.rs`，支持 local↔local 文件传输
+- 连接器解析器：`transfer.rs` 新增 `resolve_connector`，根据端点类型创建 LocalConnector/SftpConnector
+- `create_transfer` API 现在自动启动异步传输执行（`tokio::spawn`）
+- Executor panic 监控：避免任务永久卡在 Running 状态
+
+### Fixed
+- 移除未使用的测试辅助函数
+- 修复 executor 中重复的 progress 更新
+
 ## [0.14.0] - 2026-06-24
 
 ### Added
