@@ -161,6 +161,11 @@ pub fn app_with_static(
             delete(crate::transfer::remove_transfer),
         )
         .route(
+            "/api/ai/config",
+            get(crate::ai::get_config).put(crate::ai::update_config),
+        )
+        .route("/api/ai/chat", post(crate::ai::chat))
+        .route(
             "/api/resources/:resource_id/files",
             get(crate::files::list_files).delete(crate::files::delete_file),
         )

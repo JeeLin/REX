@@ -57,3 +57,12 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS ai_config (
+    id TEXT PRIMARY KEY DEFAULT 'default',
+    provider TEXT NOT NULL DEFAULT 'openai',
+    api_key_encrypted TEXT NOT NULL DEFAULT '',
+    model TEXT NOT NULL DEFAULT 'gpt-4o',
+    base_url TEXT NOT NULL DEFAULT 'https://api.openai.com/v1',
+    updated_at TEXT NOT NULL
+);

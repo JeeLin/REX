@@ -1,4 +1,5 @@
 pub mod acme;
+pub mod ai;
 pub mod agent;
 pub mod agent_download;
 pub mod audit;
