@@ -41,6 +41,7 @@
       :agent="resetAgent"
       :visible="showResetModal"
       @close="showResetModal = false"
+      @success="loadAgents"
     />
   </div>
 </template>
@@ -92,6 +93,10 @@ onMounted(async () => {
     // ignore
   }
 
+  await loadAgents()
+})
+
+async function loadAgents() {
   try {
     const envResp = await client.get<{ data: Array<{ id: string }> }>('/environments')
     const envs = envResp.data.data
@@ -111,7 +116,7 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
 </script>
 
 <style scoped>

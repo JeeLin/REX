@@ -145,6 +145,61 @@ pub async fn register(
     ))
 }
 
+// ── 重置令牌 ──────────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct ResetTokenResponse {
+    pub token: String,
+}
+
+/// 为指定 Agent 所在环境生成新的注册令牌。
+/// 返回明文 token，由前端展示给用户。
+pub async fn reset_token(
+    State(state): State<Arc<AppState>>,
+    Path(agent_id): Path<String>,
+) -> Result<Json<ApiResponse<ResetTokenResponse>>, (StatusCode, Json<ErrorResponse>)> {
+    let db = state.db.clone();
+    let id = agent_id.clone();
+
+    let result = tokio::task::spawn_blocking(move || {
+        let conn = db
+            .pool
+            .get()
+            .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+
+        // 查找 agent 所属 environment_id
+        let environment_id: String = conn
+            .query_row(
+                "SELECT environment_id FROM agents WHERE id = ?1",
+                rusqlite::params![id],
+                |row| row.get(0),
+            )
+            .map_err(|_| not_found("AGENT_NOT_FOUND", "Agent 不存在"))?;
+
+        // 生成新 token（16 字节随机 → 32 字符 hex）
+        let mut buf = [0u8; 16];
+        use rand_core::RngCore;
+        rand_core::OsRng.fill_bytes(&mut buf);
+        let token = hex::encode(buf);
+        let token_hash = hash_token(&token);
+
+        let now = now_iso();
+        conn.execute(
+            "UPDATE environments SET agent_token_hash = ?1, updated_at = ?2 WHERE id = ?3",
+            rusqlite::params![token_hash, now, environment_id],
+        )
+        .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+
+        Ok::<_, (StatusCode, Json<ErrorResponse>)>(token)
+    })
+    .await
+    .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
+
+    Ok(Json(ApiResponse {
+        data: ResetTokenResponse { token: result },
+    }))
+}
+
 // ── Agent 列表 ───────────────────────────────────────────
 
 #[derive(Debug, Serialize)]

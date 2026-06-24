@@ -17,7 +17,7 @@
         </div>
         <div class="confirm-actions">
           <button class="btn btn-ghost" @click="$emit('close')">{{ t('common.cancel') }}</button>
-          <button class="btn btn-danger" :disabled="!confirmed" @click="handleReset">
+          <button class="btn btn-danger" :disabled="!confirmed || loading" @click="handleReset">
             {{ t('ctx.confirmReset') }}
           </button>
         </div>
@@ -29,17 +29,29 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { resetAgentToken } from '@/api/agent'
 import type { Agent } from '@/api/agent'
 
-defineProps<{ agent: Agent | null; visible: boolean }>()
-defineEmits<{ close: [] }>()
+const props = defineProps<{ agent: Agent | null; visible: boolean }>()
+const emit = defineEmits<{ close: []; success: [] }>()
 
 const { t } = useI18n()
 const confirmed = ref(false)
+const loading = ref(false)
 
-function handleReset() {
-  // TODO: call API to reset token
-  confirmed.value = false
+async function handleReset() {
+  if (!props.agent) return
+  loading.value = true
+  try {
+    await resetAgentToken(props.agent.id)
+    emit('success')
+    emit('close')
+  } catch (e) {
+    alert(String(e))
+  } finally {
+    loading.value = false
+    confirmed.value = false
+  }
 }
 </script>
 
