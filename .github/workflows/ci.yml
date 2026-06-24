@@ -27,15 +27,13 @@ jobs:
   check-web:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
         working-directory: packages/rex-console-web
       - run: bun run type-check
         working-directory: packages/rex-console-web
       - run: bun run lint
-        working-directory: packages/rex-console-web
-      - run: bun run build
         working-directory: packages/rex-console-web
 
   # ── 构建 Agent 二进制（全平台矩阵） ──────────────────
@@ -63,7 +61,7 @@ jobs:
             arch: windows-amd64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -77,7 +75,7 @@ jobs:
         run: cargo build --release -p rex-agent --target ${{ matrix.target }}
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: agent-${{ matrix.arch }}
           path: target/${{ matrix.target }}/release/rex-agent*
@@ -107,7 +105,7 @@ jobs:
             arch: windows-amd64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -121,23 +119,23 @@ jobs:
         run: cargo build --release -p rex-hub --target ${{ matrix.target }}
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: hub-${{ matrix.arch }}
           path: target/${{ matrix.target }}/release/rex-hub*
 
-  # ── 构建前端 ──────────────────────────────────────────
+  # ── 构建前端 ──────────
   build-frontend:
     needs: [check-web]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
         working-directory: packages/rex-console-web
       - run: bun run build
         working-directory: packages/rex-console-web
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: frontend
           path: packages/rex-console-web/dist/
@@ -150,7 +148,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -218,7 +216,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -262,7 +260,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download all agent binaries
         uses: actions/download-artifact@v4
