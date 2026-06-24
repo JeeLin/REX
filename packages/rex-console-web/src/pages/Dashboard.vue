@@ -40,6 +40,16 @@
           </span>
         </div>
         <div class="env-card-desc">{{ env.description || '—' }}</div>
+        <div v-if="env.resources.length > 0" class="env-card-badges">
+          <span
+            v-for="(count, proto) in getResourceStats(env)"
+            :key="proto"
+            class="res-badge"
+            :style="{ background: getProtocolIcon(proto as string).color + '18', color: getProtocolIcon(proto as string).color }"
+          >
+            {{ getProtocolIcon(proto as string).icon }} {{ proto.toUpperCase() }} ×{{ count }}
+          </span>
+        </div>
         <div class="env-card-footer">
           <span>{{ env.connection_mode === 'direct' ? t('env.direct') : t('env.agentProxy') }}</span>
         </div>
@@ -100,7 +110,7 @@ import { useI18n } from 'vue-i18n'
 import { useRecent } from '@/composables/useRecent'
 import { getProtocolIcon, useProtocol } from '@/composables/useProtocol'
 import { useContextMenu } from '@/composables/useContextMenu'
-import type { Environment } from '@/api/env'
+import type { EnvWithResources } from '@/api/env'
 import { listEnvsWithResources } from '@/api/env'
 import { getAuditStats } from '@/api/audit'
 
@@ -110,12 +120,20 @@ const { recent } = useRecent()
 const { connectToResource } = useProtocol()
 const { show: showMenu } = useContextMenu()
 
-const environments = ref<Environment[]>([])
+const environments = ref<EnvWithResources[]>([])
 const envCount = ref(0)
 const resourceCount = ref(0)
 const agentOnlineCount = ref(0)
 const todayOps = ref(0)
 const allResources = ref<{ resource: { id: string; name: string; protocol: string }; envName: string }[]>([])
+
+function getResourceStats(env: EnvWithResources): Record<string, number> {
+  const stats: Record<string, number> = {}
+  for (const r of env.resources) {
+    stats[r.protocol] = (stats[r.protocol] || 0) + 1
+  }
+  return stats
+}
 
 function formatTime(ts: number): string {
   const diff = Date.now() - ts
@@ -139,7 +157,7 @@ function onQuickConnectCtx(e: MouseEvent, item: { resource: { id: string; name: 
   ])
 }
 
-function onEnvCardCtx(e: MouseEvent, env: Environment) {
+function onEnvCardCtx(e: MouseEvent, env: EnvWithResources) {
   showMenu(e, [
     { label: t('ctx.openDetail'), action: () => router.push(`/environments/${env.id}`) },
     { label: t('ctx.newResource'), action: () => router.push(`/environments/${env.id}/resources/new`) },
@@ -219,6 +237,25 @@ onMounted(async () => {
   font-size: var(--fs-sm);
   color: var(--text-secondary);
   margin-bottom: var(--sp-lg);
+}
+
+.env-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-xs);
+  margin-bottom: var(--sp-md);
+}
+
+.res-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .env-card-footer {
