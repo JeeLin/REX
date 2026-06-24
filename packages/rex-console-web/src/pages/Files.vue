@@ -130,6 +130,30 @@
       </div>
     </div>
 
+    <!-- Send To Dialog -->
+    <div v-if="showSendToDialog" class="modal-overlay" @click.self="showSendToDialog = false">
+      <div class="modal">
+        <div class="modal-title">选择目标</div>
+        <p class="modal-desc">选择要发送文件到哪个连接</p>
+        <div class="send-to-list">
+          <div
+            v-for="target in sendToTargets"
+            :key="target.resourceId"
+            class="send-to-item"
+            :class="{ active: sendToTargetId === target.resourceId }"
+            @click="sendToTargetId = target.resourceId"
+          >
+            <span class="send-to-name">{{ target.name }}</span>
+            <span class="send-to-proto">{{ target.proto }}</span>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn" @click="showSendToDialog = false">取消</button>
+          <button class="btn btn-primary" :disabled="!sendToTargetId" @click="confirmSendTo">发送</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Context Menu -->
     <div
       v-if="showContextMenu"
@@ -308,20 +332,50 @@ const sendToTargets = computed(() => {
   )
 })
 
+// Send-to dialog state
+const showSendToDialog = ref(false)
+const sendToFile = ref<FileEntry | null>(null)
+const sendToTargetId = ref<string>('')
+
 async function handleSendTo(entry: FileEntry) {
   if (sendToTargets.value.length === 0) return
-  // Use first available target (TODO: show target selection dialog)
-  const target = sendToTargets.value[0]
+  if (sendToTargets.value.length === 1) {
+    // Only one target, send directly
+    const target = sendToTargets.value[0]
+    const source: TransferEndpoint = {
+      connector_type: 'sftp',
+      resource_id: resourceId,
+      path: entry.path,
+    }
+    const dest: TransferEndpoint = {
+      connector_type: 'sftp',
+      resource_id: target.resourceId,
+      path: currentPath.value,
+    }
+    await createTransfer(source, dest)
+  } else {
+    // Multiple targets, show selection dialog
+    sendToFile.value = entry
+    sendToTargetId.value = sendToTargets.value[0].resourceId
+    showSendToDialog.value = true
+  }
+}
+
+async function confirmSendTo() {
+  if (!sendToFile.value || !sendToTargetId.value) return
+  const target = sendToTargets.value.find(t => t.resourceId === sendToTargetId.value)
+  if (!target) return
   const source: TransferEndpoint = {
     connector_type: 'sftp',
     resource_id: resourceId,
-    path: entry.path,
+    path: sendToFile.value.path,
   }
   const dest: TransferEndpoint = {
     connector_type: 'sftp',
     resource_id: target.resourceId,
     path: currentPath.value,
   }
+  showSendToDialog.value = false
   await createTransfer(source, dest)
 }
 
@@ -633,5 +687,46 @@ onBeforeUnmount(() => {
 
 .drop-icon {
   font-size: 32px;
+}
+
+/* Send-to dialog */
+.send-to-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-xs);
+  margin-bottom: var(--sp-lg);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.send-to-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-sm) var(--sp-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+
+.send-to-item:hover {
+  background: var(--bg-hover);
+}
+
+.send-to-item.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.send-to-name {
+  font-weight: 500;
+}
+
+.send-to-proto {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
 }
 </style>
