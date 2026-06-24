@@ -4,8 +4,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use tracing::{info, warn};
 
-use crate::FileConnector;
 use crate::task::{TransferManager, TransferStatus};
+use crate::FileConnector;
 
 /// 执行单个传输任务
 ///
@@ -29,20 +29,38 @@ pub async fn execute_transfer(
     // 设为 Running
     if let Err(e) = manager.set_status(&task_id, TransferStatus::Running).await {
         warn!(task_id = %task_id, error = %e, "failed to set status to Running");
-        let _ = manager.set_status(&task_id, TransferStatus::Failed(format!("状态更新失败: {e}"))).await;
+        let _ = manager
+            .set_status(
+                &task_id,
+                TransferStatus::Failed(format!("状态更新失败: {e}")),
+            )
+            .await;
         return;
     }
 
-    match do_transfer(&source, &target, &source_path, &target_path, &manager, &task_id).await {
+    match do_transfer(
+        &source,
+        &target,
+        &source_path,
+        &target_path,
+        &manager,
+        &task_id,
+    )
+    .await
+    {
         Ok(total) => {
             let _ = manager.set_progress(&task_id, total, total).await;
-            let _ = manager.set_status(&task_id, TransferStatus::Completed).await;
+            let _ = manager
+                .set_status(&task_id, TransferStatus::Completed)
+                .await;
             info!(task_id = %task_id, bytes = total, "transfer completed");
         }
         Err(e) => {
             let msg = format!("{e:#}");
             warn!(task_id = %task_id, error = %msg, "transfer failed");
-            let _ = manager.set_status(&task_id, TransferStatus::Failed(msg)).await;
+            let _ = manager
+                .set_status(&task_id, TransferStatus::Failed(msg))
+                .await;
         }
     }
 }
@@ -57,23 +75,31 @@ async fn do_transfer(
     task_id: &str,
 ) -> Result<u64> {
     // 1. 获取源文件元数据
-    let meta = source.metadata(source_path).await
+    let meta = source
+        .metadata(source_path)
+        .await
         .map_err(|e| anyhow::anyhow!("读取源文件元数据失败: {e}"))?;
 
     let total = meta.size.unwrap_or(0);
 
     // 2. 读取源文件内容
-    let read_result = source.read(source_path).await
+    let read_result = source
+        .read(source_path)
+        .await
         .map_err(|e| anyhow::anyhow!("读取源文件失败: {e}"))?;
 
     let bytes = &read_result.bytes;
     let transferred = bytes.len() as u64;
 
     // 3. 更新进度（读取完成）
-    let _ = manager.set_progress(task_id, total.max(transferred), transferred).await;
+    let _ = manager
+        .set_progress(task_id, total.max(transferred), transferred)
+        .await;
 
     // 4. 写入目标
-    target.write(target_path, bytes).await
+    target
+        .write(target_path, bytes)
+        .await
         .map_err(|e| anyhow::anyhow!("写入目标文件失败: {e}"))?;
 
     Ok(transferred)
@@ -109,15 +135,23 @@ mod tests {
         let dst_conn = Arc::new(LocalConnector::new(dst_dir.path().to_path_buf()).unwrap());
 
         let manager = Arc::new(TransferManager::new());
-        let task_id = manager.create_task(make_ep("/a.txt"), make_ep("/a.txt")).await;
+        let task_id = manager
+            .create_task(make_ep("/a.txt"), make_ep("/a.txt"))
+            .await;
 
         // 写入源文件（通过 connector）
-        src_conn.write(Path::new("/a.txt"), b"hello world").await.unwrap();
+        src_conn
+            .write(Path::new("/a.txt"), b"hello world")
+            .await
+            .unwrap();
 
         execute_transfer(
-            manager.clone(), task_id.clone(),
-            src_conn, dst_conn,
-            "/a.txt".into(), "/a.txt".into(),
+            manager.clone(),
+            task_id.clone(),
+            src_conn,
+            dst_conn,
+            "/a.txt".into(),
+            "/a.txt".into(),
         )
         .await;
 
@@ -140,17 +174,25 @@ mod tests {
         let dst_conn = Arc::new(LocalConnector::new(dst_dir.path().to_path_buf()).unwrap());
 
         let manager = Arc::new(TransferManager::new());
-        let task_id = manager.create_task(make_ep("/missing.txt"), make_ep("/missing.txt")).await;
+        let task_id = manager
+            .create_task(make_ep("/missing.txt"), make_ep("/missing.txt"))
+            .await;
 
         execute_transfer(
-            manager.clone(), task_id.clone(),
-            src_conn, dst_conn,
-            "/missing.txt".into(), "/missing.txt".into(),
+            manager.clone(),
+            task_id.clone(),
+            src_conn,
+            dst_conn,
+            "/missing.txt".into(),
+            "/missing.txt".into(),
         )
         .await;
 
         let task = manager.get_task(&task_id).await.unwrap();
-        assert!(matches!(task.status, crate::task::TransferStatus::Failed(_)));
+        assert!(matches!(
+            task.status,
+            crate::task::TransferStatus::Failed(_)
+        ));
     }
 
     #[tokio::test]
@@ -161,14 +203,19 @@ mod tests {
         let dst_conn = Arc::new(LocalConnector::new(dst_dir.path().to_path_buf()).unwrap());
 
         let manager = Arc::new(TransferManager::new());
-        let task_id = manager.create_task(make_ep("/e.txt"), make_ep("/e.txt")).await;
+        let task_id = manager
+            .create_task(make_ep("/e.txt"), make_ep("/e.txt"))
+            .await;
 
         src_conn.write(Path::new("/e.txt"), b"").await.unwrap();
 
         execute_transfer(
-            manager.clone(), task_id.clone(),
-            src_conn, dst_conn,
-            "/e.txt".into(), "/e.txt".into(),
+            manager.clone(),
+            task_id.clone(),
+            src_conn,
+            dst_conn,
+            "/e.txt".into(),
+            "/e.txt".into(),
         )
         .await;
 
@@ -185,15 +232,20 @@ mod tests {
         let dst_conn = Arc::new(LocalConnector::new(dst_dir.path().to_path_buf()).unwrap());
 
         let manager = Arc::new(TransferManager::new());
-        let task_id = manager.create_task(make_ep("/d.bin"), make_ep("/d.bin")).await;
+        let task_id = manager
+            .create_task(make_ep("/d.bin"), make_ep("/d.bin"))
+            .await;
 
         let data = vec![0u8; 1024];
         src_conn.write(Path::new("/d.bin"), &data).await.unwrap();
 
         execute_transfer(
-            manager.clone(), task_id.clone(),
-            src_conn, dst_conn,
-            "/d.bin".into(), "/d.bin".into(),
+            manager.clone(),
+            task_id.clone(),
+            src_conn,
+            dst_conn,
+            "/d.bin".into(),
+            "/d.bin".into(),
         )
         .await;
 

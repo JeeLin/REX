@@ -90,7 +90,7 @@ pub async fn create_transfer(
     let source_path = input.source.path.clone();
     let target_path = input.target.path.clone();
 
-    tokio::spawn(async move {
+    let handle = tokio::spawn(async move {
         rex_transfer::executor::execute_transfer(
             manager,
             task_id,
@@ -100,6 +100,13 @@ pub async fn create_transfer(
             target_path,
         )
         .await;
+    });
+
+    // 记录 executor panic，避免任务永久卡在 Running 状态
+    tokio::spawn(async move {
+        if let Err(e) = handle.await {
+            tracing::error!("transfer executor panicked: {e}");
+        }
     });
 
     tracing::info!(task_id = %id, "transfer task created and execution started");
@@ -227,7 +234,9 @@ async fn resolve_connector(
         }
         "sftp" => {
             // SFTP：从数据库查找资源凭据，建立 SSH 连接
-            let resource_id = endpoint.resource_id.as_ref()
+            let resource_id = endpoint
+                .resource_id
+                .as_ref()
                 .ok_or_else(|| bad_request("SFTP 端点缺少 resource_id"))?;
 
             let db = state.db.clone();
@@ -348,23 +357,6 @@ mod tests {
             .header("authorization", auth_header())
             .body(Body::from(body.to_string()))
             .unwrap()
-    }
-
-    async fn create_task_via_api(app: &axum::Router) -> String {
-        let body = serde_json::json!({
-            "source": { "connector_type": "local", "path": "/a" },
-            "target": { "connector_type": "local", "path": "/b" }
-        });
-        let resp = app
-            .clone()
-            .oneshot(make_request(&body.to_string()))
-            .await
-            .unwrap();
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
-            .await
-            .unwrap();
-        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        json["data"]["id"].as_str().unwrap().to_string()
     }
 
     #[tokio::test]
@@ -516,12 +508,29 @@ mod tests {
         // 直接通过 manager 创建任务（绕过 API 的 connector 解析）
         let id = manager
             .create_task(
-                TransferEndpoint { connector_type: "local".into(), resource_id: None, sftp_host: None, sftp_port: None, sftp_username: None, path: "/a".into() },
-                TransferEndpoint { connector_type: "local".into(), resource_id: None, sftp_host: None, sftp_port: None, sftp_username: None, path: "/b".into() },
+                TransferEndpoint {
+                    connector_type: "local".into(),
+                    resource_id: None,
+                    sftp_host: None,
+                    sftp_port: None,
+                    sftp_username: None,
+                    path: "/a".into(),
+                },
+                TransferEndpoint {
+                    connector_type: "local".into(),
+                    resource_id: None,
+                    sftp_host: None,
+                    sftp_port: None,
+                    sftp_username: None,
+                    path: "/b".into(),
+                },
             )
             .await;
 
-        manager.set_status(&id, TransferStatus::Completed).await.unwrap();
+        manager
+            .set_status(&id, TransferStatus::Completed)
+            .await
+            .unwrap();
 
         let resp = app
             .oneshot(
