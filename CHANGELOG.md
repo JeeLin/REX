@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-06-24
+
+### Added
+- SQL AI 助手后端：AI 配置存储（数据库加密）、SSE 代理 API
+- SQL AI 助手前端面板：Ctrl+Shift+A 快捷键、抽屉式布局、流式聊天
+- 快捷操作按钮：生成 SQL、分析慢查询、表关系
+- SQL 代码块复制：AI 回复中 SQL 代码一键复制到编辑器
+
 ## [0.15.0] - 2026-06-24
 
 ### Added
