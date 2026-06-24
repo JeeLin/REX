@@ -61,7 +61,41 @@ pub async fn get_tls_status(
         TlsMode::None => false,
     };
 
-    let cert_expires_at = None; // TODO: 解析证书过期时间
+    // 解析证书过期时间
+    let cert_path = match &mode {
+        TlsMode::Manual => config.tls.as_ref().map(|tls| tls.cert.clone()),
+        TlsMode::AcmeDomain | TlsMode::AcmeIp => {
+            let acme_dir = config.data_dir.join("acme");
+            let p0 = acme_dir.join("cached_cert_0");
+            let p1 = acme_dir.join("cached_cert_1");
+            if p0.exists() {
+                Some(p0)
+            } else if p1.exists() {
+                Some(p1)
+            } else {
+                None
+            }
+        }
+        TlsMode::SelfSigned => {
+            let cert_pem = config.data_dir.join("self-signed").join("cert.pem");
+            if cert_pem.exists() {
+                Some(cert_pem)
+            } else {
+                None
+            }
+        }
+        TlsMode::None => None,
+    };
+
+    let cert_expires_at = cert_path.and_then(|path| {
+        let pem_bytes = std::fs::read(&path).ok()?;
+        let mut reader = std::io::BufReader::new(pem_bytes.as_slice());
+        let der_cert = rustls_pemfile::certs(&mut reader)
+            .filter_map(|r| r.ok())
+            .next()?;
+        // 解析 X.509 证书 DER 中的 notAfter 字段
+        parse_cert_not_after(&der_cert)
+    });
     let cert_issuer = match &mode {
         TlsMode::Manual => Some("Manual".to_string()),
         TlsMode::AcmeDomain | TlsMode::AcmeIp => Some("Let's Encrypt".to_string()),
@@ -77,6 +111,82 @@ pub async fn get_tls_status(
         cert_issuer,
         port_80_required,
     }))
+}
+
+/// 从 DER 编码的 X.509 证书中提取 notAfter 时间。
+///
+/// 手动搜索 DER 中的 UTCTime (tag 0x17) 或 GeneralizedTime (tag 0x18)，
+/// 取最后一个出现的时间值（即 notAfter）。
+fn parse_cert_not_after(der: &[u8]) -> Option<String> {
+    // 搜索 validity 区域中最后一个 UTCTime 或 GeneralizedTime
+    let mut last_time: Option<String> = None;
+    let mut i = 0;
+    while i < der.len() {
+        let tag = der[i];
+        i += 1;
+
+        // 解析长度
+        if i >= der.len() {
+            break;
+        }
+        let len_byte = der[i];
+        i += 1;
+
+        let length = if len_byte & 0x80 == 0 {
+            len_byte as usize
+        } else {
+            let num_bytes = (len_byte & 0x7F) as usize;
+            if i + num_bytes > der.len() {
+                break;
+            }
+            let mut len: usize = 0;
+            for j in 0..num_bytes {
+                len = (len << 8) | der[i + j] as usize;
+            }
+            i += num_bytes;
+            len
+        };
+
+        if i + length > der.len() {
+            break;
+        }
+
+        match tag {
+            // UTCTime: 2-digit year
+            0x17 if length == 15 => {
+                let s = std::str::from_utf8(&der[i..i + length]).ok()?;
+                // 格式: YYMMDDHHMMSSZ
+                let yr: i32 = s[0..2].parse().ok()?;
+                let mon: u32 = s[2..4].parse().ok()?;
+                let day: u32 = s[4..6].parse().ok()?;
+                let hr: u32 = s[6..8].parse().ok()?;
+                let min: u32 = s[8..10].parse().ok()?;
+                let sec: u32 = s[10..12].parse().ok()?;
+                let year = if yr >= 50 { 1900 + yr } else { 2000 + yr };
+                last_time = Some(format!(
+                    "{year:04}-{mon:02}-{day:02}T{hr:02}:{min:02}:{sec:02}Z"
+                ));
+            }
+            // GeneralizedTime: 4-digit year
+            0x18 if length >= 15 => {
+                let s = std::str::from_utf8(&der[i..i + length]).ok()?;
+                let yr: i32 = s[0..4].parse().ok()?;
+                let mon: u32 = s[4..6].parse().ok()?;
+                let day: u32 = s[6..8].parse().ok()?;
+                let hr: u32 = s[8..10].parse().ok()?;
+                let min: u32 = s[10..12].parse().ok()?;
+                let sec: u32 = s[12..14].parse().ok()?;
+                last_time = Some(format!(
+                    "{yr:04}-{mon:02}-{day:02}T{hr:02}:{min:02}:{sec:02}Z"
+                ));
+            }
+            _ => {}
+        }
+
+        i += length;
+    }
+
+    last_time
 }
 
 #[cfg(test)]
