@@ -37,13 +37,17 @@ export async function updateAiConfig(
   await client.put("/ai/config", data);
 }
 
-export function sendAiMessage(
+export async function sendAiMessage(
   messages: ChatMessage[],
   context: AiContext,
-): AsyncGenerator<string> {
-  // This is a simplified version - in practice we'd need to handle EventSource properly
-  // For now, returning a mock generator
-  return (async function* () {
-    yield "Mock AI response";
-  })();
+): Promise<Response> {
+  const response = await fetch('/api/ai/chat', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${localStorage.getItem('rex-token') || ''}`
+    },
+    body: JSON.stringify({ messages, context })
+  })
+  return response
 }

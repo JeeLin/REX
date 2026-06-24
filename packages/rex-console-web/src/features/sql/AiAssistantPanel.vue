@@ -27,7 +27,7 @@
         v-for="message in messages"
         :key="message.id"
         :message="message"
-        @copy-sql="copySqlToEditor"
+        @copy-sql="copySql"
       />
     </div>
 
@@ -35,21 +35,21 @@
     <div class="ai-quick-actions">
       <button
         class="ai-quick-btn"
-        @click="quickAction('generate')"
+        @click="handleQuickAction('generate')"
         :disabled="isStreaming"
       >
         生成 SQL
       </button>
       <button
         class="ai-quick-btn"
-        @click="quickAction('analyze')"
+        @click="handleQuickAction('analyze')"
         :disabled="isStreaming"
       >
         分析慢查询
       </button>
       <button
         class="ai-quick-btn"
-        @click="quickAction('relations')"
+        @click="handleQuickAction('relations')"
         :disabled="isStreaming"
       >
         表关系
@@ -61,14 +61,14 @@
       <textarea
         class="ai-input"
         v-model="inputValue"
-        @keydown.enter.exact="sendMessage"
+        @keydown.enter.exact="handleSendMessage"
         placeholder="向 AI 提问..."
         :disabled="isStreaming"
       ></textarea>
       <div class="ai-input-actions">
         <button
           class="ai-send-btn"
-          @click="sendMessage"
+          @click="handleSendMessage"
           :disabled="!inputValue.trim() || isStreaming"
         >
           {{ isStreaming ? "停止" : "发送" }}
@@ -79,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
 import {
   useAiChat,
   type AiConversationMessage,
@@ -100,8 +100,9 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "update:visible"): void;
+  (e: "update:visible", value: boolean): void;
   (e: "close"): void;
+  (e: "copy-sql", sql: string): void;
 }>();
 
 // State
@@ -171,7 +172,10 @@ const contextItems = computed(() => {
   return items;
 });
 
-// Methods
+function copySql(sql: string) {
+  emit("copy-sql", sql);
+}
+
 function closePanel() {
   isOpen.value = false;
   emit("update:visible", false);
@@ -191,6 +195,11 @@ function handleQuickAction(action: "generate" | "analyze" | "relations") {
 
 function handleStopStreaming() {
   aiStopStreaming();
+}
+
+function handleCopySql(sql: string) {
+  // Emit to parent to handle copying to editor
+  emit("copy-sql", sql);
 }
 
 // Lifecycle

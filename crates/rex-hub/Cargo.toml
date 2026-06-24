@@ -27,9 +27,11 @@ rand_core = { workspace = true }
 hex = { workspace = true }
 tokio-tungstenite = { workspace = true }
 futures-util = { workspace = true }
+async-stream = { workspace = true }
 sha2 = { workspace = true }
 rex-ssh = { workspace = true }
 rex-transfer = { workspace = true }
+reqwest = { workspace = true }
 rex-mysql = { workspace = true }
 rex-postgresql = { workspace = true }
 rex-redis = { workspace = true }
