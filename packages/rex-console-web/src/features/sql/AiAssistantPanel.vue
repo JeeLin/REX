@@ -196,6 +196,27 @@ function handleStopStreaming() {
 // Lifecycle
 onMounted(() => {
   loadConfig();
+
+  // Global keyboard shortcuts
+  const handleKeydown = (e: KeyboardEvent) => {
+    // Ctrl+Shift+A to toggle panel
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "a") {
+      e.preventDefault();
+      emit("update:visible", !props.visible);
+    }
+
+    // Escape to close panel
+    if (e.key === "Escape" && isOpen.value) {
+      closePanel();
+    }
+  };
+
+  window.addEventListener("keydown", handleKeydown);
+
+  // Cleanup
+  onUnmounted(() => {
+    window.removeEventListener("keydown", handleKeydown);
+  });
 });
 </script>
 
@@ -381,26 +402,6 @@ onMounted(() => {
 }
 
 .ai-quick-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.ai-send-btn {
-  padding: var(--sp-xs) var(--sp-md);
-  background: var(--accent-primary);
-  color: var(--text-invert);
-  border: none;
-  border-radius: var(--radius-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.ai-send-btn:hover:not(:disabled) {
-  opacity: 0.9;
-}
-
-.ai-send-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

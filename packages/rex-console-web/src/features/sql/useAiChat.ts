@@ -19,6 +19,7 @@ export function useAiChat(context: AiContext) {
   const input = ref("");
   const isStreaming = ref(false);
   const config = ref<AiConfigResponse | null>(null);
+  const abortController = ref<AbortController | null>(null);
 
   const isOpen = computed(() => messages.value.length > 0 || isStreaming.value);
 
@@ -51,6 +52,9 @@ export function useAiChat(context: AiContext) {
     isStreaming.value = true;
     input.value = "";
 
+    // Create abort controller for stop functionality
+    abortController.value = new AbortController();
+
     try {
       const apiMessages: ChatMessage[] = messages.value
         .filter((m) => m.role === "user" || m.role === "assistant")
@@ -58,11 +62,16 @@ export function useAiChat(context: AiContext) {
 
       const response = await sendAiMessage(apiMessages, context);
 
-      // Handle SSE stream
-      const reader = (response as any).getReader();
+      // Handle SSE stream from Response
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("No response body");
+      }
       const decoder = new TextDecoder();
 
       while (true) {
+        if (!isStreaming.value) break;
+
         const { done, value } = await reader.read();
         if (done) break;
 
@@ -79,9 +88,13 @@ export function useAiChat(context: AiContext) {
                 const event = JSON.parse(data);
                 if (event.type === "token") {
                   assistantMsg.content += event.content;
+                } else if (event.type === "error") {
+                  console.error("AI error:", event.content);
+                  assistantMsg.streaming = false;
+                  assistantMsg.content = "AI 请求失败：" + event.content;
                 }
               } catch {
-                // Plain text token
+                // Plain text token (OpenAI format)
                 assistantMsg.content += data;
               }
             }
@@ -94,6 +107,7 @@ export function useAiChat(context: AiContext) {
       assistantMsg.content = "AI 请求失败，请检查配置或重试";
     } finally {
       isStreaming.value = false;
+      abortController.value = null;
     }
   }
 
@@ -103,11 +117,14 @@ export function useAiChat(context: AiContext) {
       analyze: "分析当前查询的性能瓶颈，并提供优化建议",
       relations: "分析当前数据库的表关系（外键、关联），生成 ER 图描述",
     };
-    sendMessage(prompts[action]);
+    void sendMessage(prompts[action]);
   }
 
   function stopStreaming() {
     isStreaming.value = false;
+    if (abortController.value) {
+      abortController.value.abort();
+    }
   }
 
   return {
