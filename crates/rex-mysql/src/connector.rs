@@ -1,7 +1,10 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use async_trait::async_trait;
-use rex_common::sql::{ColumnInfo, DatabaseInfo, SqlConnector, SqlResult, TableInfo};
+use rex_common::sql::{ColumnInfo, DatabaseInfo, SqlColumn, SqlConnector, SqlResult, TableInfo};
 use serde::{Deserialize, Serialize};
+use sqlx::mysql::{MySqlPool, MySqlPoolOptions};
+use sqlx::Column;
+use sqlx::Row;
 use tracing::info;
 
 /// MySQL 连接配置
@@ -17,15 +20,12 @@ pub struct MySqlConfig {
 /// MySQL 连接器
 pub struct MySqlConnector {
     config: MySqlConfig,
-    connected: bool,
+    pool: Option<MySqlPool>,
 }
 
 impl MySqlConnector {
     pub fn new(config: MySqlConfig) -> Self {
-        Self {
-            config,
-            connected: false,
-        }
+        Self { config, pool: None }
     }
 
     pub fn from_json(json: &str) -> Result<Self> {
@@ -37,62 +37,181 @@ impl MySqlConnector {
 #[async_trait]
 impl SqlConnector for MySqlConnector {
     async fn connect(&mut self) -> Result<()> {
+        let url = if let Some(ref db) = self.config.database {
+            format!(
+                "mysql://{}:{}@{}:{}/{}",
+                self.config.user, self.config.password, self.config.host, self.config.port, db
+            )
+        } else {
+            format!(
+                "mysql://{}:{}@{}:{}",
+                self.config.user, self.config.password, self.config.host, self.config.port
+            )
+        };
+
         info!(
             host = %self.config.host,
             port = self.config.port,
             user = %self.config.user,
             "connecting to MySQL"
         );
-        // TODO: 使用 sqlx 或 mysql crate 建立连接
-        self.connected = true;
+
+        let pool = MySqlPoolOptions::new()
+            .max_connections(5)
+            .connect(&url)
+            .await?;
+
+        self.pool = Some(pool);
+        info!("MySQL connection established");
         Ok(())
     }
 
     async fn execute(&self, sql: &str) -> Result<SqlResult> {
-        if !self.connected {
-            bail!("not connected");
+        let pool = self
+            .pool
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("not connected"))?;
+
+        let start = std::time::Instant::now();
+        let rows = sqlx::query(sql).fetch_all(pool).await?;
+        let elapsed_ms = start.elapsed().as_millis() as u64;
+
+        // 获取列信息
+        let columns: Vec<SqlColumn> = if let Some(first_row) = rows.first() {
+            first_row
+                .columns()
+                .iter()
+                .map(|col| SqlColumn {
+                    name: col.name().to_string(),
+                    data_type: format!("{:?}", col.type_info().clone()),
+                })
+                .collect()
+        } else {
+            vec![]
+        };
+
+        // 转换行数据
+        let mut result_rows = Vec::new();
+        for row in &rows {
+            let mut result_row = Vec::new();
+            for (i, _col) in columns.iter().enumerate() {
+                // 尝试将每列转换为 JSON 值
+                let value = try_get_json_value(row, i);
+                result_row.push(value);
+            }
+            result_rows.push(result_row);
         }
-        info!(sql = %sql, "executing MySQL query");
-        // TODO: 实际执行 SQL
+
+        let affected_rows = rows.len() as u64;
+
         Ok(SqlResult {
-            columns: vec![],
-            rows: vec![],
-            affected_rows: 0,
-            elapsed_ms: 0,
+            columns,
+            rows: result_rows,
+            affected_rows,
+            elapsed_ms,
         })
     }
 
     async fn list_databases(&self) -> Result<Vec<DatabaseInfo>> {
-        if !self.connected {
-            bail!("not connected");
+        let pool = self
+            .pool
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("not connected"))?;
+
+        let rows = sqlx::query("SHOW DATABASES").fetch_all(pool).await?;
+
+        let mut databases = Vec::new();
+        for row in rows {
+            let name: String = row.try_get(0)?;
+            databases.push(DatabaseInfo { name });
         }
-        // TODO: SHOW DATABASES
-        Ok(vec![])
+
+        Ok(databases)
     }
 
     async fn list_tables(&self, database: &str) -> Result<Vec<TableInfo>> {
-        if !self.connected {
-            bail!("not connected");
+        let pool = self
+            .pool
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("not connected"))?;
+
+        let query = format!("SHOW TABLES FROM `{}`", database.replace('`', "``"));
+        let rows = sqlx::query(&query).fetch_all(pool).await?;
+
+        let mut tables = Vec::new();
+        for row in rows {
+            let name: String = row.try_get(0)?;
+            tables.push(TableInfo {
+                name,
+                row_count: None,
+            });
         }
-        info!(database = %database, "listing MySQL tables");
-        // TODO: SHOW TABLES
-        Ok(vec![])
+
+        Ok(tables)
     }
 
     async fn list_columns(&self, database: &str, table: &str) -> Result<Vec<ColumnInfo>> {
-        if !self.connected {
-            bail!("not connected");
+        let pool = self
+            .pool
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("not connected"))?;
+
+        let query = format!(
+            "SHOW COLUMNS FROM `{}` FROM `{}`",
+            table.replace('`', "``"),
+            database.replace('`', "``")
+        );
+        let rows = sqlx::query(&query).fetch_all(pool).await?;
+
+        let mut columns = Vec::new();
+        for row in rows {
+            let name: String = row.try_get("Field")?;
+            let data_type: String = row.try_get("Type")?;
+            let nullable: String = row.try_get("Null")?;
+            let key: String = row.try_get("Key")?;
+
+            columns.push(ColumnInfo {
+                name,
+                data_type,
+                is_nullable: nullable == "YES",
+                is_primary_key: key == "PRI",
+            });
         }
-        info!(database = %database, table = %table, "listing MySQL columns");
-        // TODO: SHOW COLUMNS
-        Ok(vec![])
+
+        Ok(columns)
     }
 
     async fn close(&self) -> Result<()> {
-        info!("closing MySQL connection");
-        // TODO: 关闭连接
+        if let Some(pool) = self.pool.as_ref() {
+            info!("closing MySQL connection pool");
+            pool.close().await;
+        }
         Ok(())
     }
+}
+
+/// 尝试从行中获取 JSON 值
+fn try_get_json_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_json::Value {
+    // 尝试不同的类型
+    if let Ok(v) = row.try_get::<i64, _>(index) {
+        return serde_json::json!(v);
+    }
+    if let Ok(v) = row.try_get::<f64, _>(index) {
+        return serde_json::json!(v);
+    }
+    if let Ok(v) = row.try_get::<String, _>(index) {
+        return serde_json::json!(v);
+    }
+    if let Ok(v) = row.try_get::<bool, _>(index) {
+        return serde_json::json!(v);
+    }
+    if let Ok(v) = row.try_get::<sqlx::types::JsonValue, _>(index) {
+        return v;
+    }
+    if let Ok(v) = row.try_get::<Vec<u8>, _>(index) {
+        return serde_json::json!(String::from_utf8_lossy(&v).to_string());
+    }
+    serde_json::Value::Null
 }
 
 // ── Tests ───────────────────────────────────────────────
@@ -100,7 +219,6 @@ impl SqlConnector for MySqlConnector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rex_common::sql::SqlConnector;
 
     #[test]
     fn mysql_config_deserializes() {
@@ -119,7 +237,7 @@ mod tests {
             r#"{"host":"localhost","port":3306,"user":"root","password":"","database":null}"#;
         let connector = MySqlConnector::from_json(json).unwrap();
         assert_eq!(connector.config.host, "localhost");
-        assert!(!connector.connected);
+        assert!(connector.pool.is_none());
     }
 
     #[test]
@@ -128,21 +246,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mysql_connect_sets_connected() {
-        let json =
-            r#"{"host":"localhost","port":3306,"user":"root","password":"","database":null}"#;
-        let mut connector = MySqlConnector::from_json(json).unwrap();
-        assert!(!connector.connected);
-        connector.connect().await.unwrap();
-        assert!(connector.connected);
-    }
-
-    #[tokio::test]
     async fn mysql_execute_fails_when_not_connected() {
         let json =
             r#"{"host":"localhost","port":3306,"user":"root","password":"","database":null}"#;
         let connector = MySqlConnector::from_json(json).unwrap();
         let result = connector.execute("SELECT 1").await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn mysql_list_databases_fails_when_not_connected() {
+        let json =
+            r#"{"host":"localhost","port":3306,"user":"root","password":"","database":null}"#;
+        let connector = MySqlConnector::from_json(json).unwrap();
+        let result = connector.list_databases().await;
         assert!(result.is_err());
     }
 }

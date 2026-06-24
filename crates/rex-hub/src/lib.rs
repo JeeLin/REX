@@ -23,6 +23,8 @@ pub mod update;
 pub mod user;
 pub mod ws;
 pub mod ws_docker;
+pub mod ws_mysql;
+pub mod ws_postgresql;
 pub mod ws_redis;
 pub mod ws_s3;
 pub mod ws_sqlite;

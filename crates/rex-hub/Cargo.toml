@@ -24,6 +24,7 @@ tower = { workspace = true }
 tower-http = { workspace = true }
 r2d2 = { workspace = true }
 rand_core = { workspace = true }
+hex = { workspace = true }
 tokio-tungstenite = { workspace = true }
 futures-util = { workspace = true }
 sha2 = { workspace = true }

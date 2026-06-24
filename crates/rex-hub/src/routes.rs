@@ -98,6 +98,14 @@ pub fn app_with_static(
             "/ws/sqlite/:resource_id",
             get(crate::ws_sqlite::sqlite_ws_handler),
         )
+        .route(
+            "/ws/mysql/:resource_id",
+            get(crate::ws_mysql::mysql_ws_handler),
+        )
+        .route(
+            "/ws/postgresql/:resource_id",
+            get(crate::ws_postgresql::postgresql_ws_handler),
+        )
         .route("/ws/s3/:resource_id", get(crate::ws_s3::s3_ws_handler));
 
     let protected_routes = Router::new()
@@ -126,6 +134,10 @@ pub fn app_with_static(
             post(resource::test_connection),
         )
         .route("/api/environments/:env_id/agents", get(agent::list_agents))
+        .route(
+            "/api/agents/:agent_id/reset-token",
+            post(agent::reset_token),
+        )
         .route("/api/audit-log", get(audit::list_audit_log))
         .route("/api/audit/stats", get(audit::get_stats))
         .route(

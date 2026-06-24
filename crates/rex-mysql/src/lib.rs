@@ -1,3 +1,3 @@
 pub mod connector;
 
-pub use connector::MySqlConnector;
+pub use connector::{MySqlConfig, MySqlConnector};
