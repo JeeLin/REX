@@ -156,5 +156,6 @@ docs/milestones/
 └── M26-sql-history-and-polish.md
 ├── 0.6.0-hub-https-and-agent-download.md
 ├── 0.7.0-hub-acme-auto-cert.md
+├── 0.16.0-sql-ai-assistant.md
 └── 0.7.0-reports/
 ```
