@@ -76,9 +76,6 @@ async fn do_transfer(
     target.write(target_path, bytes).await
         .map_err(|e| anyhow::anyhow!("写入目标文件失败: {e}"))?;
 
-    // 5. 更新进度（写入完成）
-    let _ = manager.set_progress(task_id, transferred, transferred).await;
-
     Ok(transferred)
 }
 

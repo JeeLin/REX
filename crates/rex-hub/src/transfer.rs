@@ -350,50 +350,6 @@ mod tests {
             .unwrap()
     }
 
-    /// 创建一个带真实 temp 目录的 state，用于 local→local 传输测试
-    fn test_state_with_dirs() -> (Arc<AppState>, TempDir, TempDir) {
-        let src_dir = TempDir::new().unwrap();
-        let dst_dir = TempDir::new().unwrap();
-        let state = Arc::new(AppState {
-            db: Arc::new(crate::db::Database::new_in_memory().unwrap()),
-            secret_key: "test-secret".to_string(),
-            connections: Arc::new(crate::ws::new_connections()),
-            sessions: Arc::new(crate::terminal::SessionManager::new(900)),
-            transfer: Some(Arc::new(TransferState {
-                manager: Arc::new(TransferManager::new()),
-            })),
-            update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
-            data_dir: std::env::temp_dir(),
-        });
-        (state, src_dir, dst_dir)
-    }
-
-    fn test_app_with_dirs(src: &TempDir, dst: &TempDir) -> axum::Router {
-        let src_file = src.path().join("test.txt");
-        std::fs::write(&src_file, b"hello").unwrap();
-
-        let state = Arc::new(AppState {
-            db: Arc::new(crate::db::Database::new_in_memory().unwrap()),
-            secret_key: "test-secret".to_string(),
-            connections: Arc::new(crate::ws::new_connections()),
-            sessions: Arc::new(crate::terminal::SessionManager::new(900)),
-            transfer: Some(Arc::new(TransferState {
-                manager: Arc::new(TransferManager::new()),
-            })),
-            update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
-            data_dir: std::env::temp_dir(),
-        });
-
-        use axum::routing::{get, post};
-        axum::Router::new()
-            .route("/api/transfers", post(create_transfer).get(list_transfers))
-            .route(
-                "/api/transfers/:id",
-                get(get_transfer).delete(cancel_transfer),
-            )
-            .with_state(state)
-    }
-
     async fn create_task_via_api(app: &axum::Router) -> String {
         let body = serde_json::json!({
             "source": { "connector_type": "local", "path": "/a" },
