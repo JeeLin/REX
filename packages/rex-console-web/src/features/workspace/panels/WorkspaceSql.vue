@@ -116,9 +116,8 @@ function insertTableSql(tableName: string) {
   if (tab) tab.sql = `SELECT * FROM ${tableName} LIMIT 100;`
 }
 
-function handleTabSave(id: string) {
+function handleTabSave(_id: string) {
   // TODO: implement save query file flow
-  console.log('save tab', id)
 }
 
 function handleTabRename(id: string) {
