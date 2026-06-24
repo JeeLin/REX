@@ -1,17 +1,23 @@
 <template>
-  <div class="ai-message" :class="[message.role, { streaming: message.streaming }]">
+  <div
+    class="ai-message"
+    :class="[message.role, { streaming: message.streaming }]"
+  >
     <div class="ai-message-avatar">
-      {{ message.role === 'user' ? '👤' : '🤖' }}
+      {{ message.role === "user" ? "👤" : "🤖" }}
     </div>
     <div class="ai-message-content">
       <div class="ai-message-header">
         <span class="ai-message-role">
-          {{ message.role === 'user' ? '您' : 'AI 助手' }}
+          {{ message.role === "user" ? "您" : "AI 助手" }}
         </span>
         <span v-if="message.streaming" class="ai-message-streaming">●</span>
       </div>
 
-      <div v-html="renderContent(message.content)" class="ai-message-body"></div>
+      <div
+        v-html="renderContent(message.content)"
+        class="ai-message-body"
+      ></div>
 
       <!-- Copy button for code blocks -->
       <template v-if="!message.streaming && hasCodeBlocks(message.content)">
@@ -32,76 +38,90 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed } from "vue";
 
 const props = defineProps<{
   message: {
-    id: string
-    role: 'user' | 'assistant'
-    content: string
-    streaming?: boolean
-  }
-}>()
+    id: string;
+    role: "user" | "assistant";
+    content: string;
+    streaming?: boolean;
+  };
+}>();
 
 const emit = defineEmits<{
-  (e: 'copy-sql', sql: string): void
-}>()
+  (e: "copy-sql", sql: string): void;
+}>();
 
 // Simple markdown renderer (inline code and code blocks)
 function renderContent(content: string): string {
   let html = content
     // Escape HTML first
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 
   // Code blocks
-  html = html.replace(/```sql([\s\S]*?)```/g, '<pre><code class="language-sql">$1</code></pre>')
-  html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+  html = html.replace(
+    /```sql([\s\S]*?)```/g,
+    '<pre><code class="language-sql">$1</code></pre>',
+  );
+  html = html.replace(/```([\s\S]*?)```/g, "<pre><code>$1</code></pre>");
 
   // Inline code
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
 
   // Bold
-  html = html.replace(/\*\*([^\s]+)\*\*/g, '<strong>$1</strong>')
+  html = html.replace(/\*\*([^\s]+)\*\*/g, "<strong>$1</strong>");
 
   // Newlines to br
-  html = html.replace(/\n/g, '<br>')
+  html = html.replace(/\n/g, "<br>");
 
-  return html
+  return html;
 }
 
 function hasCodeBlocks(content: string): boolean {
-  return content.includes('```') || content.includes('`')
+  return content.includes("```") || content.includes("`");
 }
 
 function extractCodeBlocks(content: string): string[] {
-  const blocks: string[] = []
-  const sqlRegex = /```sql([\s\S]*?)```/g
-  let match
+  const blocks: string[] = [];
+  const sqlRegex = /```sql([\s\S]*?)```/g;
+  let match;
   while ((match = sqlRegex.exec(content)) !== null) {
-    blocks.push(match[1].trim())
+    blocks.push(match[1].trim());
   }
   // Also extract inline code if no blocks
   if (blocks.length === 0) {
-    const inlineRegex = /`([^`]+)`/g
+    const inlineRegex = /`([^`]+)`/g;
     while ((match = inlineRegex.exec(content)) !== null) {
       if (looksLikeSql(match[1])) {
-        blocks.push(match[1])
+        blocks.push(match[1]);
       }
     }
   }
-  return blocks
+  return blocks;
 }
 
 function looksLikeSql(text: string): boolean {
-  const sqlKeywords = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'FROM', 'WHERE', 'JOIN']
-  const upperText = text.toUpperCase()
-  return sqlKeywords.some(kw => upperText.includes(kw))
+  const sqlKeywords = [
+    "SELECT",
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "CREATE",
+    "DROP",
+    "ALTER",
+    "FROM",
+    "WHERE",
+    "JOIN",
+  ];
+  const upperText = text.toUpperCase();
+  return sqlKeywords.some((kw) => upperText.includes(kw));
 }
 
 function copySqlToEditor(sql: string) {
-  emit('copy-sql', sql)
+  emit("copy-sql", sql);
 }
 </script>
 
@@ -149,8 +169,13 @@ function copySqlToEditor(sql: string) {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 .ai-message-body {

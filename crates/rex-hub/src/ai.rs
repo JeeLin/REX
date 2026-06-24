@@ -187,9 +187,7 @@ pub async fn update_config(
         }
         rex_ssh::crypto::encrypt(&key, &state.secret_key)
     } else {
-        existing
-            .map(|c| c.api_key_encrypted)
-            .unwrap_or_default()
+        existing.map(|c| c.api_key_encrypted).unwrap_or_default()
     };
 
     save_ai_config(&state.db, &provider, &api_key_encrypted, &model, &base_url)
