@@ -1,3 +1,3 @@
 pub mod connector;
 
-pub use connector::PostgresConnector;
+pub use connector::{PostgresConfig, PostgresConnector};
