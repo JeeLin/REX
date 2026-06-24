@@ -383,13 +383,16 @@ mod tests {
             data_dir: std::path::PathBuf::from("./data"),
         });
 
-        let result = list_audit_log(State(state), Query(AuditLogQuery {
-            from: None,
-            to: None,
-            log_type: None,
-            page: None,
-            page_size: None,
-        }))
+        let result = list_audit_log(
+            State(state),
+            Query(AuditLogQuery {
+                from: None,
+                to: None,
+                log_type: None,
+                page: None,
+                page_size: None,
+            }),
+        )
         .await
         .unwrap();
 
@@ -428,13 +431,16 @@ mod tests {
         });
 
         // Test first page with size 2
-        let result = list_audit_log(State(state.clone()), Query(AuditLogQuery {
-            from: None,
-            to: None,
-            log_type: None,
-            page: Some(1),
-            page_size: Some(2),
-        }))
+        let result = list_audit_log(
+            State(state.clone()),
+            Query(AuditLogQuery {
+                from: None,
+                to: None,
+                log_type: None,
+                page: Some(1),
+                page_size: Some(2),
+            }),
+        )
         .await
         .unwrap();
 
@@ -444,13 +450,16 @@ mod tests {
         assert_eq!(result.0.data.page_size, 2);
 
         // Test second page
-        let result = list_audit_log(State(state.clone()), Query(AuditLogQuery {
-            from: None,
-            to: None,
-            log_type: None,
-            page: Some(2),
-            page_size: Some(2),
-        }))
+        let result = list_audit_log(
+            State(state.clone()),
+            Query(AuditLogQuery {
+                from: None,
+                to: None,
+                log_type: None,
+                page: Some(2),
+                page_size: Some(2),
+            }),
+        )
         .await
         .unwrap();
 
@@ -460,13 +469,16 @@ mod tests {
         assert_eq!(result.0.data.page_size, 2);
 
         // Test third page (last page, should have 1 item)
-        let result = list_audit_log(State(state), Query(AuditLogQuery {
-            from: None,
-            to: None,
-            log_type: None,
-            page: Some(3),
-            page_size: Some(2),
-        }))
+        let result = list_audit_log(
+            State(state),
+            Query(AuditLogQuery {
+                from: None,
+                to: None,
+                log_type: None,
+                page: Some(3),
+                page_size: Some(2),
+            }),
+        )
         .await
         .unwrap();
 
@@ -480,10 +492,50 @@ mod tests {
     async fn list_audit_log_filter_by_type() {
         let db = Database::new_in_memory().unwrap();
         // Create records with different types
-        write_audit_log(&db, "login", "success", "登录成功", None, None, None, None, None);
-        write_audit_log(&db, "logout", "success", "登出成功", None, None, None, None, None);
-        write_audit_log(&db, "login", "failure", "登录失败", None, None, None, None, None);
-        write_audit_log(&db, "config_update", "success", "配置更新", None, None, None, None, None);
+        write_audit_log(
+            &db,
+            "login",
+            "success",
+            "登录成功",
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        write_audit_log(
+            &db,
+            "logout",
+            "success",
+            "登出成功",
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        write_audit_log(
+            &db,
+            "login",
+            "failure",
+            "登录失败",
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        write_audit_log(
+            &db,
+            "config_update",
+            "success",
+            "配置更新",
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
 
         let state = Arc::new(crate::routes::AppState {
             db: Arc::new(db),
@@ -496,13 +548,16 @@ mod tests {
         });
 
         // Filter by login type
-        let result = list_audit_log(State(state.clone()), Query(AuditLogQuery {
-            from: None,
-            to: None,
-            log_type: Some("login".to_string()),
-            page: None,
-            page_size: None,
-        }))
+        let result = list_audit_log(
+            State(state.clone()),
+            Query(AuditLogQuery {
+                from: None,
+                to: None,
+                log_type: Some("login".to_string()),
+                page: None,
+                page_size: None,
+            }),
+        )
         .await
         .unwrap();
 
@@ -513,13 +568,16 @@ mod tests {
         }
 
         // Filter by config_update type
-        let result = list_audit_log(State(state), Query(AuditLogQuery {
-            from: None,
-            to: None,
-            log_type: Some("config_update".to_string()),
-            page: None,
-            page_size: None,
-        }))
+        let result = list_audit_log(
+            State(state),
+            Query(AuditLogQuery {
+                from: None,
+                to: None,
+                log_type: Some("config_update".to_string()),
+                page: None,
+                page_size: None,
+            }),
+        )
         .await
         .unwrap();
 
@@ -543,9 +601,12 @@ mod tests {
         });
 
         // Test with period=today - just verify it executes without error
-        let result = get_stats(State(state.clone()), Query(StatsQuery {
-            period: Some("today".to_string()),
-        }))
+        let result = get_stats(
+            State(state.clone()),
+            Query(StatsQuery {
+                period: Some("today".to_string()),
+            }),
+        )
         .await
         .unwrap();
 
@@ -553,11 +614,9 @@ mod tests {
         assert!(result.0.data.total >= 0);
 
         // Test with period=None
-        let result = get_stats(State(state), Query(StatsQuery {
-            period: None,
-        }))
-        .await
-        .unwrap();
+        let result = get_stats(State(state), Query(StatsQuery { period: None }))
+            .await
+            .unwrap();
 
         // Should work without error
         assert!(result.0.data.total >= 0);
@@ -578,33 +637,42 @@ mod tests {
         });
 
         // Test with from filter
-        let _ = list_audit_log(State(state.clone()), Query(AuditLogQuery {
-            from: Some("20200101".to_string()),
-            to: None,
-            log_type: None,
-            page: None,
-            page_size: None,
-        }))
+        let _ = list_audit_log(
+            State(state.clone()),
+            Query(AuditLogQuery {
+                from: Some("20200101".to_string()),
+                to: None,
+                log_type: None,
+                page: None,
+                page_size: None,
+            }),
+        )
         .await;
 
         // Test with to filter
-        let _ = list_audit_log(State(state.clone()), Query(AuditLogQuery {
-            from: None,
-            to: Some("20300101".to_string()),
-            log_type: None,
-            page: None,
-            page_size: None,
-        }))
+        let _ = list_audit_log(
+            State(state.clone()),
+            Query(AuditLogQuery {
+                from: None,
+                to: Some("20300101".to_string()),
+                log_type: None,
+                page: None,
+                page_size: None,
+            }),
+        )
         .await;
 
         // Test with log_type filter
-        let _ = list_audit_log(State(state), Query(AuditLogQuery {
-            from: None,
-            to: None,
-            log_type: Some("test".to_string()),
-            page: None,
-            page_size: None,
-        }))
+        let _ = list_audit_log(
+            State(state),
+            Query(AuditLogQuery {
+                from: None,
+                to: None,
+                log_type: Some("test".to_string()),
+                page: None,
+                page_size: None,
+            }),
+        )
         .await;
     }
 }

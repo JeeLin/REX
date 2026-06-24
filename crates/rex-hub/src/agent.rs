@@ -607,7 +607,9 @@ mod handler_tests {
                     .method("POST")
                     .uri("/api/agents/register")
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"id":"agt_001","token":"","name":"agent1","version":"0.1.0"}"#))
+                    .body(Body::from(
+                        r#"{"id":"agt_001","token":"","name":"agent1","version":"0.1.0"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -655,7 +657,9 @@ mod handler_tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(json["data"].as_array().unwrap().is_empty());
     }

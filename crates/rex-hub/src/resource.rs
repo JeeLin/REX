@@ -532,7 +532,9 @@ mod handler_tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(json["data"].as_array().unwrap().is_empty());
     }
@@ -552,7 +554,9 @@ mod handler_tests {
                     .uri("/api/environments/env_test/resources")
                     .header("authorization", auth_header())
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"name":"  ","protocol":"ssh","config_json":"{}"}"#))
+                    .body(Body::from(
+                        r#"{"name":"  ","protocol":"ssh","config_json":"{}"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -575,7 +579,9 @@ mod handler_tests {
                     .uri("/api/environments/env_test/resources")
                     .header("authorization", auth_header())
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"name":"test","protocol":"invalid","config_json":"{}"}"#))
+                    .body(Body::from(
+                        r#"{"name":"test","protocol":"invalid","config_json":"{}"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -597,7 +603,9 @@ mod handler_tests {
                     .uri("/api/environments/nonexistent/resources")
                     .header("authorization", auth_header())
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"name":"test","protocol":"docker","config_json":"{}"}"#))
+                    .body(Body::from(
+                        r#"{"name":"test","protocol":"docker","config_json":"{}"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -681,10 +689,7 @@ mod handler_tests {
     async fn test_connection_rejects_invalid_protocol() {
         let state = test_state();
         let app = Router::new()
-            .route(
-                "/api/resources/test-connection",
-                post(test_connection),
-            )
+            .route("/api/resources/test-connection", post(test_connection))
             .with_state(state);
 
         let resp = app
@@ -694,9 +699,7 @@ mod handler_tests {
                     .uri("/api/resources/test-connection")
                     .header("authorization", auth_header())
                     .header("content-type", "application/json")
-                    .body(Body::from(
-                        r#"{"protocol":"invalid","config_json":"{}"}"#,
-                    ))
+                    .body(Body::from(r#"{"protocol":"invalid","config_json":"{}"}"#))
                     .unwrap(),
             )
             .await
