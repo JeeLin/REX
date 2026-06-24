@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-06-24
+
+### Added
+- 仪表盘环境卡片资源类型统计徽章（按协议分组计数，协议色半透明背景）
+
+### Already Existing (confirmed in 0.14.0 review)
+- SQL 查询结果导出（JSON/CSV）— 确认已在 SqlResults.vue 实现
+- SQL 结果表格右键菜单（复制行/单元格/列、排序、生成 SQL）— 确认已实现
+- 全局连接菜单 Ctrl+N（搜索 + 环境分组 + 键盘导航）— 确认已实现
+
+## [0.13.0] - 2026-06-24
+
 ## [0.12.0] - 2026-06-24
 
 ### Fixed
