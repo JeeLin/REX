@@ -75,7 +75,7 @@ jobs:
         run: cargo build --release -p rex-agent --target ${{ matrix.target }}
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: agent-${{ matrix.arch }}
           path: target/${{ matrix.target }}/release/rex-agent*
@@ -119,7 +119,7 @@ jobs:
         run: cargo build --release -p rex-hub --target ${{ matrix.target }}
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: hub-${{ matrix.arch }}
           path: target/${{ matrix.target }}/release/rex-hub*
@@ -135,7 +135,7 @@ jobs:
         working-directory: packages/rex-console-web
       - run: bun run build
         working-directory: packages/rex-console-web
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: frontend
           path: packages/rex-console-web/dist/
@@ -161,19 +161,19 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download hub binary (linux-amd64)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: hub-linux-amd64
           path: dist/
 
       - name: Download frontend
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: frontend
           path: dist/static/
 
       - name: Download all agent binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: agent-*
           path: dist/agents-tmp/
@@ -263,14 +263,14 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Download all agent binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: agent-*
           path: artifacts/
           merge-multiple: false
 
       - name: Download all hub binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: hub-*
           path: artifacts/
