@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-06-25
+
+### Added
+- 系统指标采集和存储后端：新增 `metrics.rs` 模块，实现性能指标（延迟、吞吐量、错误、连接）的采集、存储和查询
+- 系统健康检查 API：新增 `/api/health` 端点，返回系统运行状态、资源使用情况和数据库状态
+- 指标聚合查询 API：新增 `/api/metrics/summary` 和 `/api/metrics/timeline` 端点，支持按时间段和资源聚合查询
+- 数据库迁移：添加 `metrics` 表及相关索引
+- 前端健康 API 调用：新增 `src/api/health.ts` 用于获取系统健康状态
+- 前端设置页版本显示：修改 `src/pages/Settings.vue` 从 API 动态获取版本号
+
 ## [0.18.0] - 2026-06-25
 
 ### Added
