@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-06-24
+
+### Added
+- 全局查询后端 API：POST /api/sql/global-query，SSE 流式响应，并行执行相同 SQL 于多个资源
+- 同环境 SQL 资源发现 API：GET /api/resources/:resource_id/sql/peers
+- 全局查询前端模态弹窗：Ctrl+Shift+Q 快捷键触发，资源多选、方言验证、进度条、结果标签页
+- 前端 useGlobalQuery composable：fetch + ReadableStream 手动解析 SSE，AbortController 取消支持
+- 后端并行查询：tokio::spawn + 30s 超时 + 部分失败独立处理
+- 安全改进：API 接受 resource_id 而非原始连接详情，密码在服务端读取
+
 ## [0.16.0] - 2026-06-24
 
 ### Added
