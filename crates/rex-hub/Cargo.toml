@@ -43,14 +43,12 @@ tokio-rustls = { workspace = true }
 rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
 hyper-util = { workspace = true }
-rustls-acme = { workspace = true }
-rcgen = { workspace = true }
-time = { workspace = true }
-futures = { workspace = true }
+tempfile = { workspace = true }
 dotenvy = { workspace = true }
 aes-gcm = { workspace = true }
 chrono = { workspace = true }
 getrandom = { workspace = true }
-
-[dev-dependencies]
-tempfile = { workspace = true }
+hmac = { workspace = true }
+rcgen = { workspace = true }
+rustls-acme = { workspace = true }
+time = { workspace = true }

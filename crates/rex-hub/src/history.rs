@@ -170,6 +170,10 @@ mod tests {
             })),
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: tmp.path().to_path_buf(),
+            metrics: Arc::new(crate::metrics::MetricsCollector::new(
+                Arc::new(crate::db::Database::new_in_memory().unwrap()),
+                3600,
+            )),
         });
         (state, tmp)
     }
@@ -392,6 +396,10 @@ mod tests {
             })),
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: tmp.path().to_path_buf(),
+            metrics: Arc::new(crate::metrics::MetricsCollector::new(
+                Arc::new(crate::db::Database::new_in_memory().unwrap()),
+                3600,
+            )),
         });
 
         let app = Router::new()

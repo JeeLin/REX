@@ -320,7 +320,7 @@ pub fn import_backup(
     let data = decode_backup_data(file, password)?;
 
     let conn = db.pool.get()?;
-    let mut tx = conn.unchecked_transaction()?;
+    let tx = conn.unchecked_transaction()?;
     let mut result = ImportResult {
         environments: ImportCounts {
             created: 0,

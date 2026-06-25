@@ -9,6 +9,9 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tower::{Service, ServiceExt};
 
 fn main() -> anyhow::Result<()> {
+    // Load environment variables from .env file if it exists
+    let _ = dotenvy::dotenv();
+
     app::init_tracing();
     tracing::info!("rex-hub starting");
 

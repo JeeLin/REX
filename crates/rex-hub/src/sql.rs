@@ -319,7 +319,7 @@ pub async fn global_query(
         let completed = Arc::new(AtomicUsize::new(0));
         let mut handles = Vec::new();
 
-        for (idx, (conn_id, name, db_type, host, port, username, password, database)) in
+        for (idx, (_conn_id, name, db_type, host, port, username, password, database)) in
             connections_info.into_iter().enumerate()
         {
             let tx = tx.clone();
@@ -573,6 +573,10 @@ mod tests {
             })),
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: std::env::temp_dir(),
+            metrics: Arc::new(crate::metrics::MetricsCollector::new(
+                Arc::new(crate::db::Database::new_in_memory().unwrap()),
+                3600,
+            )),
         })
     }
 

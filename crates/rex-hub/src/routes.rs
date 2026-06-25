@@ -2,7 +2,7 @@ use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Request, StatusCode};
 use axum::middleware::{self, Next};
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use std::sync::Arc;
@@ -15,10 +15,27 @@ use crate::backup;
 use crate::db::Database;
 use crate::env;
 use crate::helpers::{ErrorBody, ErrorResponse};
+use crate::metrics::MetricsCollector;
 use crate::resource;
 use crate::terminal::SessionManager;
 use crate::ws::AgentConnections;
+use axum::extract::Query;
+use serde::Deserialize;
 use std::path::PathBuf;
+
+#[derive(Deserialize)]
+struct MetricsSummaryParams {
+    resource_id: Option<String>,
+    hours: Option<u32>,
+}
+
+#[derive(Deserialize)]
+struct MetricsTimelineParams {
+    resource_id: Option<String>,
+    metric_type: String,
+    hours: Option<u32>,
+    granularity: Option<String>,
+}
 
 /// 更新检查缓存
 pub struct UpdateCache {
@@ -44,6 +61,7 @@ pub struct AppState {
     pub transfer: Option<Arc<crate::transfer::TransferState>>,
     pub update_cache: tokio::sync::RwLock<UpdateCache>,
     pub data_dir: PathBuf,
+    pub metrics: Arc<MetricsCollector>,
 }
 
 pub fn app(db: Arc<Database>, secret_key: String) -> axum::Router {
@@ -68,6 +86,7 @@ pub fn app_with_static(
     let transfer_state = Arc::new(crate::transfer::TransferState {
         manager: Arc::new(rex_transfer::task::TransferManager::new()),
     });
+    let metrics = Arc::new(MetricsCollector::new(db.clone(), 3600)); // Cleanup every hour
     let state = Arc::new(AppState {
         db,
         secret_key,
@@ -76,6 +95,7 @@ pub fn app_with_static(
         transfer: Some(transfer_state),
         update_cache: tokio::sync::RwLock::new(UpdateCache::new()),
         data_dir,
+        metrics,
     });
 
     let public_routes = Router::new()
@@ -249,6 +269,48 @@ pub fn app_with_static(
         .route(
             "/api/agent/download",
             get(crate::agent_download::download_agent),
+        )
+        .route(
+            "/api/health",
+            get(|State(state): State<Arc<AppState>>| async move {
+                match state.metrics.get_health().await {
+                    Ok(health) => (StatusCode::OK, Json(health)).into_response(),
+                    Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse {
+                        error: ErrorBody {
+                            code: "INTERNAL_ERROR".to_string(),
+                            message: e.to_string(),
+                        },
+                    })).into_response(),
+                }
+            }),
+        )
+        .route(
+            "/api/metrics/summary",
+            get(|State(state): State<Arc<AppState>>, Query(params): Query<MetricsSummaryParams>| async move {
+                match state.metrics.get_metrics_summary(params.resource_id, params.hours.unwrap_or(24)).await {
+                    Ok(summary) => (StatusCode::OK, Json(summary)).into_response(),
+                    Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse {
+                        error: ErrorBody {
+                            code: "INTERNAL_ERROR".to_string(),
+                            message: e.to_string(),
+                        },
+                    })).into_response(),
+                }
+            }),
+        )
+        .route(
+            "/api/metrics/timeline",
+            get(|State(state): State<Arc<AppState>>, Query(params): Query<MetricsTimelineParams>| async move {
+                match state.metrics.get_metrics_timeline(params.resource_id, params.metric_type.as_str().into(), params.hours.unwrap_or(24), params.granularity).await {
+                    Ok(timeline) => (StatusCode::OK, Json(timeline)).into_response(),
+                    Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse {
+                        error: ErrorBody {
+                            code: "INTERNAL_ERROR".to_string(),
+                            message: e.to_string(),
+                        },
+                    })).into_response(),
+                }
+            }),
         )
         .route(
             "/api/user/profile",

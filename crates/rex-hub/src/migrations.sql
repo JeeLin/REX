@@ -58,6 +58,19 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    resource_id TEXT NOT NULL,
+    metric_type TEXT NOT NULL,      -- 'latency' | 'throughput' | 'error' | 'connection'
+    value REAL NOT NULL,            -- 指标值（延迟ms、吞吐量bytes/s、错误计数、连接事件
+    tags TEXT,                      -- JSON 扩展标签 '{"db":"mysql","query":"SELECT"}'
+    recorded_at TEXT NOT NULL,      -- ISO 8601 时间戳
+    FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_metrics_resource_type ON metrics(resource_id, metric_type);
+CREATE INDEX IF NOT EXISTS idx_metrics_recorded_at ON metrics(recorded_at);
+
 CREATE TABLE IF NOT EXISTS ai_config (
     id TEXT PRIMARY KEY DEFAULT 'default',
     provider TEXT NOT NULL DEFAULT 'openai',

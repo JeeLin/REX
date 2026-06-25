@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.18.0"
+version = "0.19.0"
 edition = "2021"
 
 [workspace.dependencies]
@@ -60,5 +60,5 @@ dotenvy = "0.15"
 futures = { version = "0.3", features = ["alloc"] }
 futures-util = { version = "0.3", features = ["alloc"] }
 async-stream = { version = "0.3" }
-chrono = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
 getrandom = "0.2"

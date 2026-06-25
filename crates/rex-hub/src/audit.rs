@@ -360,6 +360,10 @@ mod tests {
             transfer: None,
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: std::path::PathBuf::from("./data"),
+            metrics: Arc::new(crate::metrics::MetricsCollector::new(
+                Arc::new(crate::db::Database::new_in_memory().unwrap()),
+                3600,
+            )),
         });
 
         let result = get_stats(State(state), Query(StatsQuery { period: None }))
@@ -381,6 +385,10 @@ mod tests {
             transfer: None,
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: std::path::PathBuf::from("./data"),
+            metrics: Arc::new(crate::metrics::MetricsCollector::new(
+                Arc::new(crate::db::Database::new_in_memory().unwrap()),
+                3600,
+            )),
         });
 
         let result = list_audit_log(
@@ -428,6 +436,10 @@ mod tests {
             transfer: None,
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: std::path::PathBuf::from("./data"),
+            metrics: Arc::new(crate::metrics::MetricsCollector::new(
+                Arc::new(crate::db::Database::new_in_memory().unwrap()),
+                3600,
+            )),
         });
 
         // Test first page with size 2
@@ -545,6 +557,10 @@ mod tests {
             transfer: None,
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: std::path::PathBuf::from("./data"),
+            metrics: Arc::new(crate::metrics::MetricsCollector::new(
+                Arc::new(crate::db::Database::new_in_memory().unwrap()),
+                3600,
+            )),
         });
 
         // Filter by login type
@@ -598,6 +614,10 @@ mod tests {
             transfer: None,
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: std::path::PathBuf::from("./data"),
+            metrics: Arc::new(crate::metrics::MetricsCollector::new(
+                Arc::new(crate::db::Database::new_in_memory().unwrap()),
+                3600,
+            )),
         });
 
         // Test with period=today - just verify it executes without error
@@ -634,6 +654,10 @@ mod tests {
             transfer: None,
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: std::path::PathBuf::from("./data"),
+            metrics: Arc::new(crate::metrics::MetricsCollector::new(
+                Arc::new(crate::db::Database::new_in_memory().unwrap()),
+                3600,
+            )),
         });
 
         // Test with from filter

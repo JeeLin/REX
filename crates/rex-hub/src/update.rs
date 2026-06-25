@@ -275,6 +275,10 @@ mod tests {
             })),
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: std::env::temp_dir(),
+            metrics: Arc::new(crate::metrics::MetricsCollector::new(
+                Arc::new(crate::db::Database::new_in_memory().unwrap()),
+                3600,
+            )),
         })
     }
 

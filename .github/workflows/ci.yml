@@ -14,7 +14,7 @@ jobs:
   check-rust:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -27,7 +27,7 @@ jobs:
   check-web:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
         working-directory: packages/rex-console-web
@@ -61,7 +61,7 @@ jobs:
             arch: windows-amd64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -105,7 +105,7 @@ jobs:
             arch: windows-amd64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -129,7 +129,7 @@ jobs:
     needs: [check-web]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
         working-directory: packages/rex-console-web
@@ -148,32 +148,32 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download hub binary (linux-amd64)
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: hub-linux-amd64
           path: dist/
 
       - name: Download frontend
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: frontend
           path: dist/static/
 
       - name: Download all agent binaries
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           pattern: agent-*
           path: dist/agents-tmp/
@@ -191,13 +191,13 @@ jobs:
 
       - name: Docker meta
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.HUB_IMAGE }}
           tags: type=ref,event=tag
 
       - name: Build and push Hub image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.hub
@@ -216,16 +216,16 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -236,13 +236,13 @@ jobs:
 
       - name: Docker meta
         id: meta-agent
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.AGENT_IMAGE }}
           tags: type=ref,event=tag
 
       - name: Build and push Agent image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.agent
@@ -260,17 +260,17 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Download all agent binaries
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           pattern: agent-*
           path: artifacts/
           merge-multiple: false
 
       - name: Download all hub binaries
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           pattern: hub-*
           path: artifacts/
@@ -302,7 +302,7 @@ jobs:
           fi
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           body_path: release-body.md
           files: rex-hub-*.zip rex-agent-*.zip SHA256SUMS

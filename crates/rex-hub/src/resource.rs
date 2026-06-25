@@ -465,25 +465,14 @@ mod handler_tests {
             })),
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: std::env::temp_dir(),
+            metrics: Arc::new(crate::metrics::MetricsCollector::new(
+                Arc::new(crate::db::Database::new_in_memory().unwrap()),
+                3600,
+            )),
         })
     }
 
-    fn test_app() -> Router {
-        let state = test_state();
-        Router::new()
-            .route(
-                "/api/environments/:env_id/resources",
-                get(list_resources).post(create_resource),
-            )
-            .route(
-                "/api/environments/:env_id/resources/:id",
-                get(get_resource)
-                    .put(update_resource)
-                    .delete(delete_resource),
-            )
-            .with_state(state)
-    }
-
+    
     fn auth_header() -> axum::http::header::HeaderValue {
         use jsonwebtoken::{encode, EncodingKey, Header};
         let exp = std::time::SystemTime::now()

@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use r2d2::{ManageConnection, Pool};
 use rusqlite::Connection;
 use std::path::Path;
+use tempfile::TempDir;
 
 pub type ConnPool = Pool<SqliteManager>;
 
@@ -10,10 +11,6 @@ pub struct SqliteManager {
 }
 
 impl SqliteManager {
-    fn memory() -> Self {
-        Self { db_path: None }
-    }
-
     fn file(path: &Path) -> Self {
         Self {
             db_path: Some(path.to_string_lossy().into_owned()),
@@ -31,7 +28,7 @@ impl ManageConnection for SqliteManager {
         } else {
             Connection::open_in_memory()?
         };
-        conn.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
+        conn.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;")?;
         run_migrations(&conn).map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
         Ok(conn)
     }
@@ -47,6 +44,7 @@ impl ManageConnection for SqliteManager {
 
 pub struct Database {
     pub pool: ConnPool,
+    _tempdir: Option<TempDir>,
 }
 
 impl Database {
@@ -55,7 +53,21 @@ impl Database {
         let pool = Pool::builder()
             .build(manager)
             .context("failed to create connection pool")?;
-        Ok(Self { pool })
+        Ok(Self { pool, _tempdir: None })
+    }
+
+    pub fn new_in_memory() -> Result<Self> {
+        let temp_dir = tempfile::tempdir()?;
+        let db_path = temp_dir.path().join("db.sqlite");
+        let manager = SqliteManager::file(&db_path);
+        let pool = Pool::builder()
+            .max_size(1)
+            .build(manager)
+            .context("failed to create connection pool")?;
+        Ok(Self {
+            pool,
+            _tempdir: Some(temp_dir)
+        })
     }
 
     pub fn get_resource_by_id(&self, id: &str) -> Result<Option<super::resource::Resource>> {
@@ -64,9 +76,15 @@ impl Database {
             "SELECT id, environment_id, name, protocol, agent_id, config_json, status, created_at, updated_at FROM resources WHERE id = ?1",
             rusqlite::params![id],
             |row| Ok(super::resource::Resource {
-                id: row.get(0)?, environment_id: row.get(1)?, name: row.get(2)?,
-                protocol: row.get(3)?, agent_id: row.get(4)?,
-                config_json: row.get(5)?, status: row.get(6)?, created_at: row.get(7)?, updated_at: row.get(8)?,
+                id: row.get(0)?,
+                environment_id: row.get(1)?,
+                name: row.get(2)?,
+                protocol: row.get(3)?,
+                agent_id: row.get(4)?,
+                config_json: row.get(5)?,
+                status: row.get(6)?,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
             }),
         );
         match result {
@@ -76,7 +94,6 @@ impl Database {
         }
     }
 
-    /// 获取同环境下所有 SQL 资源（用于全局查询的资源选择）
     pub fn list_sql_resources(
         &self,
         environment_id: &str,
@@ -103,15 +120,6 @@ impl Database {
             resources.push(row?);
         }
         Ok(resources)
-    }
-
-    pub fn new_in_memory() -> Result<Self> {
-        let manager = SqliteManager::memory();
-        let pool = Pool::builder()
-            .max_size(1)
-            .build(manager)
-            .context("failed to create connection pool")?;
-        Ok(Self { pool })
     }
 }
 
