@@ -198,31 +198,29 @@ pub fn export_backup(
 
     let data_json = serde_json::to_string(&data)?;
 
-    if let Some(pwd) = password {
-        let salt = generate_salt()?;
-        let key = derive_key(pwd, &salt)?;
-        let (ciphertext, nonce) = encrypt_data(&key, &data_json)?;
-
-        Ok(BackupFile {
-            version: "1.0".to_string(),
-            created_at: chrono::Utc::now().to_rfc3339(),
-            hub_version: env!("CARGO_PKG_VERSION").to_string(),
-            encrypted: true,
-            salt: Some(BASE64.encode(&salt)),
-            nonce: Some(BASE64.encode(&nonce)),
-            data: Some(BASE64.encode(&ciphertext)),
-        })
+    let (encrypted, salt, nonce, data) = if let Some(pwd) = password {
+        let salt_bytes = generate_salt()?;
+        let key = derive_key(pwd, &salt_bytes)?;
+        let (ciphertext, nonce_bytes) = encrypt_data(&key, &data_json)?;
+        (
+            true,
+            Some(BASE64.encode(&salt_bytes)),
+            Some(BASE64.encode(&nonce_bytes)),
+            Some(BASE64.encode(&ciphertext)),
+        )
     } else {
-        Ok(BackupFile {
-            version: "1.0".to_string(),
-            created_at: chrono::Utc::now().to_rfc3339(),
-            hub_version: env!("CARGO_PKG_VERSION").to_string(),
-            encrypted: false,
-            salt: None,
-            nonce: None,
-            data: Some(data_json),
-        })
-    }
+        (false, None, None, Some(data_json))
+    };
+
+    Ok(BackupFile {
+        version: "1.0".to_string(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+        hub_version: env!("CARGO_PKG_VERSION").to_string(),
+        encrypted,
+        salt,
+        nonce,
+        data,
+    })
 }
 
 /// 解密备份文件
@@ -246,19 +244,24 @@ pub fn decrypt_backup(file: &BackupFile, password: &str) -> Result<BackupData> {
     Ok(serde_json::from_str(&plaintext)?)
 }
 
+/// 解码备份数据（解密或直接解析）
+fn decode_backup_data(file: &BackupFile, password: Option<&str>) -> Result<BackupData> {
+    if file.encrypted {
+        let pwd = password.context("password required for encrypted backup")?;
+        decrypt_backup(file, pwd)
+    } else {
+        let data_str = file.data.as_ref().context("backup file missing data")?;
+        Ok(serde_json::from_str(data_str)?)
+    }
+}
+
 /// 预览备份文件（检查冲突）
 pub fn preview_backup(
     db: &Database,
     file: &BackupFile,
     password: Option<&str>,
 ) -> Result<PreviewResult> {
-    let data = if file.encrypted {
-        let pwd = password.context("password required for encrypted backup")?;
-        decrypt_backup(file, pwd)?
-    } else {
-        let data_str = file.data.as_ref().context("backup file missing data")?;
-        serde_json::from_str(data_str)?
-    };
+    let data = decode_backup_data(file, password)?;
 
     let conn = db.pool.get()?;
 
@@ -311,13 +314,7 @@ pub fn import_backup(
     password: Option<&str>,
     strategy: &str,
 ) -> Result<ImportResult> {
-    let data = if file.encrypted {
-        let pwd = password.context("password required for encrypted backup")?;
-        decrypt_backup(file, pwd)?
-    } else {
-        let data_str = file.data.as_ref().context("backup file missing data")?;
-        serde_json::from_str(data_str)?
-    };
+    let data = decode_backup_data(file, password)?;
 
     let conn = db.pool.get()?;
     let mut result = ImportResult {

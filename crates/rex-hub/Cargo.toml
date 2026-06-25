@@ -49,8 +49,8 @@ time = { workspace = true }
 futures = { workspace = true }
 dotenvy = { workspace = true }
 aes-gcm = { workspace = true }
-chrono = "0.4"
-getrandom = "0.2"
+chrono = { workspace = true }
+getrandom = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

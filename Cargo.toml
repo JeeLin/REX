@@ -60,3 +60,5 @@ dotenvy = "0.15"
 futures = { version = "0.3", features = ["alloc"] }
 futures-util = { version = "0.3", features = ["alloc"] }
 async-stream = { version = "0.3" }
+chrono = "0.4"
+getrandom = "0.2"
