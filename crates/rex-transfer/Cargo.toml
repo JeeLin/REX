@@ -7,7 +7,7 @@ edition.workspace = true
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-async-trait = "0.1"
+async-trait = { workspace = true }
 tokio = { workspace = true }
 uuid = { workspace = true }
 rex-ssh = { workspace = true }
