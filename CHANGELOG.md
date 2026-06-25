@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-06-25
+
+### Added
+- 配置导出 API：POST /api/backup/export，支持按环境筛选和可选密码加密（PBKDF2-SHA256 + AES-256-GCM）
+- 配置导入 API：POST /api/backup/import，支持 skip_existing / overwrite 合并策略
+- 导入预览 API：POST /api/backup/preview，导入前预览冲突和差异
+- 设置页备份与恢复面板：导出配置、导入上传（拖拽/点击）、加密选项、导入预览弹窗、导入结果统计
+- 导入操作事务保护：失败时自动回滚
+- 备份文件大小限制（50MB）
+
 ## [0.17.0] - 2026-06-24
 
 ### Added
