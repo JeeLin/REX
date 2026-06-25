@@ -11,6 +11,7 @@ use tower_http::services::{ServeDir, ServeFile};
 use crate::agent;
 use crate::audit;
 use crate::auth;
+use crate::backup;
 use crate::db::Database;
 use crate::env;
 use crate::helpers::{ErrorBody, ErrorResponse};
@@ -233,6 +234,18 @@ pub fn app_with_static(
         .route(
             "/api/resources/:resource_id/queries/:id/rename",
             put(crate::queries::rename_query),
+        )
+        .route(
+            "/api/backup/export",
+            post(backup::export_handler),
+        )
+        .route(
+            "/api/backup/preview",
+            post(backup::preview_handler),
+        )
+        .route(
+            "/api/backup/import",
+            post(backup::import_handler),
         )
         .route("/api/update/status", get(crate::update::get_update_status))
         .route("/api/update/check", get(crate::update::check_update))

@@ -48,6 +48,9 @@ rcgen = { workspace = true }
 time = { workspace = true }
 futures = { workspace = true }
 dotenvy = { workspace = true }
+aes-gcm = { workspace = true }
+chrono = "0.4"
+getrandom = "0.2"
 
 [dev-dependencies]
 tempfile = { workspace = true }

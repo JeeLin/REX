@@ -4,6 +4,7 @@ pub mod agent_download;
 pub mod ai;
 pub mod audit;
 pub mod auth;
+pub mod backup;
 pub mod config;
 pub mod db;
 pub mod env;
