@@ -540,9 +540,7 @@ fn decrypt_data(key: &[u8; 32], nonce: &[u8], ciphertext: &[u8]) -> Result<Strin
 // ---- HTTP Handlers ----
 
 /// 从 Multipart 中依次提取 field，返回 (field_name, value) 列表
-async fn extract_multipart(
-    mut multipart: Multipart,
-) -> std::collections::HashMap<String, String> {
+async fn extract_multipart(mut multipart: Multipart) -> std::collections::HashMap<String, String> {
     let mut fields = std::collections::HashMap::new();
     while let Ok(Some(field)) = multipart.next_field().await {
         let name = field.name().unwrap_or("").to_string();
@@ -560,18 +558,17 @@ pub async fn export_handler(
     Json(body): Json<ExportRequest>,
 ) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
     let env_ids = params.get("env_ids").map(|s| s.as_str());
-    let backup = export_backup(&state.db, env_ids, body.password.as_deref())
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: ErrorBody {
-                        code: "BACKUP_EXPORT_FAILED".to_string(),
-                        message: e.to_string(),
-                    },
-                }),
-            )
-        })?;
+    let backup = export_backup(&state.db, env_ids, body.password.as_deref()).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: ErrorBody {
+                    code: "BACKUP_EXPORT_FAILED".to_string(),
+                    message: e.to_string(),
+                },
+            }),
+        )
+    })?;
 
     let filename = format!(
         "rex-backup-{}.json",
@@ -597,11 +594,8 @@ pub async fn export_handler(
     );
     headers.insert(
         header::CONTENT_DISPOSITION,
-        axum::http::HeaderValue::try_from(format!(
-            "attachment; filename=\"{}\"",
-            filename
-        ))
-        .unwrap(),
+        axum::http::HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename))
+            .unwrap(),
     );
     Ok(resp)
 }

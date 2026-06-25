@@ -235,18 +235,9 @@ pub fn app_with_static(
             "/api/resources/:resource_id/queries/:id/rename",
             put(crate::queries::rename_query),
         )
-        .route(
-            "/api/backup/export",
-            post(backup::export_handler),
-        )
-        .route(
-            "/api/backup/preview",
-            post(backup::preview_handler),
-        )
-        .route(
-            "/api/backup/import",
-            post(backup::import_handler),
-        )
+        .route("/api/backup/export", post(backup::export_handler))
+        .route("/api/backup/preview", post(backup::preview_handler))
+        .route("/api/backup/import", post(backup::import_handler))
         .route("/api/update/status", get(crate::update::get_update_status))
         .route("/api/update/check", get(crate::update::check_update))
         .route(
