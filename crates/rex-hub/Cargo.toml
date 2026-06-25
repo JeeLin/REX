@@ -46,6 +46,8 @@ hyper-util = { workspace = true }
 rustls-acme = { workspace = true }
 rcgen = { workspace = true }
 time = { workspace = true }
+futures = { workspace = true }
+dotenvy = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

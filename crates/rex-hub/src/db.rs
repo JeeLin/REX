@@ -76,6 +76,35 @@ impl Database {
         }
     }
 
+    /// 获取同环境下所有 SQL 资源（用于全局查询的资源选择）
+    pub fn list_sql_resources(
+        &self,
+        environment_id: &str,
+    ) -> Result<Vec<super::resource::Resource>> {
+        let conn = self.pool.get().context("failed to get connection")?;
+        let mut stmt = conn.prepare(
+            "SELECT id, environment_id, name, protocol, agent_id, config_json, status, created_at, updated_at FROM resources WHERE environment_id = ?1 AND protocol IN ('mysql', 'postgresql')"
+        )?;
+        let rows = stmt.query_map(rusqlite::params![environment_id], |row| {
+            Ok(super::resource::Resource {
+                id: row.get(0)?,
+                environment_id: row.get(1)?,
+                name: row.get(2)?,
+                protocol: row.get(3)?,
+                agent_id: row.get(4)?,
+                config_json: row.get(5)?,
+                status: row.get(6)?,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
+            })
+        })?;
+        let mut resources = Vec::new();
+        for row in rows {
+            resources.push(row?);
+        }
+        Ok(resources)
+    }
+
     pub fn new_in_memory() -> Result<Self> {
         let manager = SqliteManager::memory();
         let pool = Pool::builder()

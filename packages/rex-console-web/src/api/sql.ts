@@ -30,6 +30,12 @@ export interface ColumnInfo {
   is_primary_key: boolean
 }
 
+export interface SqlResourceInfo {
+  id: string
+  name: string
+  protocol: string
+}
+
 // ── API 函数 ──────────────────────────────────────────────
 
 /** 获取资源基本信息 */
@@ -38,6 +44,13 @@ export function getResourceInfo(
 ): Promise<{ name: string; protocol: string }> {
   return client
     .get(`/resources/${resourceId}/sql/info`)
+    .then((r) => r.data.data)
+}
+
+/** 获取同环境下的 SQL 资源列表（全局查询用） */
+export function listPeerSqlResources(resourceId: string): Promise<SqlResourceInfo[]> {
+  return client
+    .get(`/resources/${resourceId}/sql/peers`)
     .then((r) => r.data.data)
 }
 

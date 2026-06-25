@@ -197,6 +197,11 @@ pub fn app_with_static(
             "/api/resources/:resource_id/sql/execute",
             post(crate::sql::execute_sql),
         )
+        .route("/api/sql/global-query", post(crate::sql::global_query))
+        .route(
+            "/api/resources/:resource_id/sql/peers",
+            get(crate::sql::list_peer_sql_resources),
+        )
         .route(
             "/api/resources/:resource_id/sql/databases",
             get(crate::sql::list_databases),

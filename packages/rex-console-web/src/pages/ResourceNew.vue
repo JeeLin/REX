@@ -474,15 +474,15 @@ async function testConnection() {
   testState.value = 'testing'
   testMessage.value = ''
   try {
-    const resp = await client.post<{ success: boolean; message: string; latency_ms?: number }>(
+    const resp = await client.post<{ data: { success: boolean; message: string; latency_ms?: number } }>(
       '/resources/test-connection',
       { protocol: form.protocol, config_json: buildConfigJson() },
     )
-    if (resp.data.success) {
+    if (resp.data.data.success) {
       testState.value = 'success'
     } else {
       testState.value = 'fail'
-      testMessage.value = resp.data.message
+      testMessage.value = resp.data.data.message
     }
   } catch {
     testState.value = 'fail'

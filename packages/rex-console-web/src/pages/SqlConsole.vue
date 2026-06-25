@@ -40,6 +40,9 @@
       <div class="sql-toolbar-sep"></div>
       <div class="sql-toolbar-spacer"></div>
       <span class="sql-toolbar-info">Ctrl+Enter {{ t('sql.execute') }}</span>
+      <button class="btn btn-ghost btn-sm" @click="openGlobalQuery">
+        ⊞ {{ t('sql.globalQuery') }}
+      </button>
     </div>
 
     <!-- Main Area -->
@@ -83,6 +86,12 @@
       </div>
     </div>
   </div>
+
+  <!-- Global Query Modal -->
+  <GlobalQueryModal
+    v-model:visible="globalQueryVisible"
+    :peer-resources="peerResources"
+  />
 </template>
 
 <script setup lang="ts">
@@ -95,8 +104,9 @@ import SqlSidebar from '@/features/sql/SqlSidebar.vue'
 import SqlEditor from '@/features/sql/SqlEditor.vue'
 import SqlResults from '@/features/sql/SqlResults.vue'
 import SqlHistoryPanel from '@/features/sql/SqlHistoryPanel.vue'
-import { listDatabases, getResourceInfo, getQuery, saveQuery, updateQuery, recordHistory } from '@/api/sql'
-import type { DatabaseInfo, QueryFileMeta, HistoryRecord, SqlResult } from '@/api/sql'
+import GlobalQueryModal from '@/components/GlobalQueryModal.vue'
+import { listDatabases, getResourceInfo, getQuery, saveQuery, updateQuery, recordHistory, listPeerSqlResources } from '@/api/sql'
+import type { DatabaseInfo, SqlResourceInfo, QueryFileMeta, HistoryRecord, SqlResult } from '@/api/sql'
 import { useSqlTabActions } from '@/features/sql/useSqlTabActions'
 
 const { t } = useI18n()
@@ -124,6 +134,8 @@ const databases = ref<DatabaseInfo[]>([])
 const selectedDb = ref('')
 const sidebarRef = ref<InstanceType<typeof SqlSidebar>>()
 const showHistoryPanel = ref(false)
+const globalQueryVisible = ref(false)
+const peerResources = ref<SqlResourceInfo[]>([])
 
 function insertTableSql(tableName: string) {
   const tab = tabs.value.find((t) => t.id === activeTabId.value)
@@ -216,6 +228,19 @@ function onDbChange(db: string) {
 
 function goBack() {
   router.back()
+}
+
+function openGlobalQuery() {
+  loadPeerResources()
+  globalQueryVisible.value = true
+}
+
+async function loadPeerResources() {
+  try {
+    peerResources.value = await listPeerSqlResources(resourceId)
+  } catch {
+    peerResources.value = []
+  }
 }
 
 onMounted(async () => {
