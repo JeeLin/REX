@@ -17,6 +17,9 @@ use crate::db::Database;
 use crate::helpers::{ErrorBody, ErrorResponse};
 use crate::routes::AppState;
 
+/// 备份文件最大 50MB
+const MAX_BACKUP_SIZE: usize = 50 * 1024 * 1024;
+
 /// 备份文件格式
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BackupFile {
@@ -317,6 +320,7 @@ pub fn import_backup(
     let data = decode_backup_data(file, password)?;
 
     let conn = db.pool.get()?;
+    let mut tx = conn.unchecked_transaction()?;
     let mut result = ImportResult {
         environments: ImportCounts {
             created: 0,
@@ -338,7 +342,7 @@ pub fn import_backup(
 
     // 先导入环境
     for env in &data.environments {
-        let exists: bool = conn.query_row(
+        let exists: bool = tx.query_row(
             "SELECT COUNT(*) > 0 FROM environments WHERE id = ?1",
             [&env.id],
             |row| row.get(0),
@@ -353,7 +357,7 @@ pub fn import_backup(
                 ));
             }
             (true, "overwrite") => {
-                conn.execute(
+                tx.execute(
                     "UPDATE environments SET name = ?1, description = ?2, connection_mode = ?3, agent_token_hash = ?4, updated_at = ?5 WHERE id = ?6",
                     rusqlite::params![
                         env.name,
@@ -370,7 +374,7 @@ pub fn import_backup(
                 result.environments.skipped += 1;
             }
             (false, _) => {
-                conn.execute(
+                tx.execute(
                     "INSERT INTO environments (id, name, description, connection_mode, agent_token_hash, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                     rusqlite::params![
                         env.id,
@@ -389,7 +393,7 @@ pub fn import_backup(
 
     // 再导入资源
     for resource in &data.resources {
-        let exists: bool = conn.query_row(
+        let exists: bool = tx.query_row(
             "SELECT COUNT(*) > 0 FROM resources WHERE id = ?1",
             [&resource.id],
             |row| row.get(0),
@@ -404,7 +408,7 @@ pub fn import_backup(
                 ));
             }
             (true, "overwrite") => {
-                conn.execute(
+                tx.execute(
                     "UPDATE resources SET environment_id = ?1, name = ?2, protocol = ?3, agent_id = ?4, config_json = ?5, status = ?6, updated_at = ?7 WHERE id = ?8",
                     rusqlite::params![
                         resource.environment_id,
@@ -423,7 +427,7 @@ pub fn import_backup(
                 result.resources.skipped += 1;
             }
             (false, _) => {
-                conn.execute(
+                tx.execute(
                     "INSERT INTO resources (id, environment_id, name, protocol, agent_id, config_json, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                     rusqlite::params![
                         resource.id,
@@ -444,7 +448,7 @@ pub fn import_backup(
 
     // 导入设置
     for setting in &data.settings {
-        let exists: bool = conn.query_row(
+        let exists: bool = tx.query_row(
             "SELECT COUNT(*) > 0 FROM settings WHERE key = ?1",
             [&setting.key],
             |row| row.get(0),
@@ -455,7 +459,7 @@ pub fn import_backup(
                 result.settings.skipped += 1;
             }
             (true, "overwrite") => {
-                conn.execute(
+                tx.execute(
                     "UPDATE settings SET value = ?1 WHERE key = ?2",
                     rusqlite::params![setting.value, setting.key],
                 )?;
@@ -465,7 +469,7 @@ pub fn import_backup(
                 result.settings.skipped += 1;
             }
             (false, _) => {
-                conn.execute(
+                tx.execute(
                     "INSERT INTO settings (key, value) VALUES (?1, ?2)",
                     rusqlite::params![setting.key, setting.value],
                 )?;
@@ -474,6 +478,7 @@ pub fn import_backup(
         }
     }
 
+    tx.commit()?;
     Ok(result)
 }
 
@@ -549,6 +554,25 @@ async fn extract_multipart(mut multipart: Multipart) -> std::collections::HashMa
         }
     }
     fields
+}
+
+/// 检查文件大小是否在限制内
+fn check_file_size(content: &str) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    if content.len() > MAX_BACKUP_SIZE {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: ErrorBody {
+                    code: "FILE_TOO_LARGE".to_string(),
+                    message: format!(
+                        "Backup file exceeds size limit (max {}MB)",
+                        MAX_BACKUP_SIZE / 1024 / 1024
+                    ),
+                },
+            }),
+        ));
+    }
+    Ok(())
 }
 
 /// POST /api/backup/export
@@ -635,6 +659,8 @@ pub async fn preview_handler(
         )
     })?;
 
+    check_file_size(file_content)?;
+
     let password = fields.get("password").map(|s| s.as_str());
     let result = preview_backup(&state.db, &backup_file, password).map_err(|e| {
         (
@@ -680,6 +706,8 @@ pub async fn import_handler(
             }),
         )
     })?;
+
+    check_file_size(file_content)?;
 
     let password = fields.get("password").map(|s| s.as_str());
     let strategy = fields
