@@ -1,17 +1,17 @@
-use rex_agent::{client, config::AgentConfig, identity::AgentIdentity, ws::AgentWs};
-use rex_common::app;
-use rex_common::Parser;
+use rex_agent::{client, config::AgentConfig, identity::AgentIdentity, log_collector::{self, LogCollector}, ws::AgentWs};
+use rex_common::{app, Parser};
 
 const AGENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() -> anyhow::Result<()> {
-    app::init_tracing();
-    tracing::info!("rex-agent starting");
-
     let args: Vec<String> = std::env::args().collect();
     let cli = rex_common::cli::Cli::parse_from(&args);
 
     if cli.worker {
+        // Worker mode: init tracing with log collector
+        let log_collector = LogCollector::new();
+        log_collector::init_tracing_with_collector(log_collector.clone());
+
         tracing::info!("agent worker started");
         let config = AgentConfig::load(cli.config.as_deref())?;
         tracing::info!(
@@ -58,7 +58,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         let rt = tokio::runtime::Runtime::new()?;
-        rt.block_on(run_agent(config, identity))?;
+        rt.block_on(run_agent(config, identity, log_collector))?;
     } else {
         // Supervisor mode: use update supervisor with data_dir
         let config_path = cli.config.clone();
@@ -72,7 +72,11 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn run_agent(config: AgentConfig, identity: AgentIdentity) -> anyhow::Result<()> {
+async fn run_agent(
+    config: AgentConfig,
+    identity: AgentIdentity,
+    log_collector: LogCollector,
+) -> anyhow::Result<()> {
     let (os, arch, hostname, os_version) = client::platform_info();
 
     // Register with Hub
@@ -109,10 +113,11 @@ async fn run_agent(config: AgentConfig, identity: AgentIdentity) -> anyhow::Resu
     let ws = AgentWs::new(
         hub_client.websocket_url(),
         identity.id,
-        config.token,
+        config.token.clone(),
         AGENT_VERSION.to_string(),
         config.update.auto_update,
         config.data_dir,
+        log_collector.clone(),
     );
     ws.run().await
 }

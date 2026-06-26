@@ -8,6 +8,69 @@ use std::sync::Arc;
 use crate::helpers::{err_resp, not_found, now_iso, ApiResponse, ErrorResponse};
 use crate::routes::AppState;
 
+// ── 日志存储 ─────────────────────────────────────────────
+
+/// 一条日志条目，与 Agent 端 LogCollector 保持一致
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct LogEntry {
+    pub timestamp: String,
+    pub level: String,
+    pub message: String,
+}
+
+/// Agent 日志内存存储（每个 Agent 最多 1000 条）
+pub struct AgentLogStore {
+    logs: tokio::sync::RwLock<std::collections::HashMap<String, std::collections::VecDeque<LogEntry>>>,
+}
+
+impl AgentLogStore {
+    pub fn new() -> Self {
+        Self {
+            logs: tokio::sync::RwLock::new(std::collections::HashMap::new()),
+        }
+    }
+
+    /// 存储 Agent 上报的日志（增量追加）
+    pub async fn append_logs(&self, agent_id: &str, logs: Vec<LogEntry>) {
+        if logs.is_empty() {
+            return;
+        }
+        let mut map = self.logs.write().await;
+        let queue = map
+            .entry(agent_id.to_string())
+            .or_insert_with(|| std::collections::VecDeque::with_capacity(1000));
+        for entry in logs {
+            queue.push_back(entry);
+        }
+        // 保持每个 agent 最多 1000 条
+        while queue.len() > 1000 {
+            queue.pop_front();
+        }
+    }
+
+    /// 获取指定 Agent 的日志
+    pub async fn get_logs(&self, agent_id: &str) -> Vec<LogEntry> {
+        let map = self.logs.read().await;
+        match map.get(agent_id) {
+            Some(queue) => queue.iter().cloned().collect(),
+            None => vec![],
+        }
+    }
+
+    /// 获取指定 Agent 的日志（since 过滤）
+    pub async fn get_logs_since(&self, agent_id: &str, since_ts: &str) -> Vec<LogEntry> {
+        let map = self.logs.read().await;
+        match map.get(agent_id) {
+            Some(queue) => queue
+                .iter()
+                .filter(|e| e.timestamp.as_str() > since_ts)
+                .cloned()
+                .collect(),
+            None => vec![],
+        }
+    }
+}
+
 // ── 工具函数 ─────────────────────────────────────────────
 
 /// SHA256 哈希令牌，用于 token 匹配
@@ -438,6 +501,35 @@ pub async fn update_agent_config_handler(
         .map_err(|e| err_resp("UPDATE_FAILED", &e))?;
 
     Ok(Json(ApiResponse { data: merged }))
+}
+
+// ── 日志查询 API ─────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct LogQueryParams {
+    pub since: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LogResponse {
+    pub logs: Vec<LogEntry>,
+    pub total: usize,
+}
+
+/// GET /api/agents/:agent_id/logs
+pub async fn get_agent_logs(
+    State(state): State<Arc<AppState>>,
+    Path(agent_id): Path<String>,
+    axum::extract::Query(params): axum::extract::Query<LogQueryParams>,
+) -> Result<Json<ApiResponse<LogResponse>>, (StatusCode, Json<ErrorResponse>)> {
+    let logs = match &params.since {
+        Some(since) => state.agent_log_store.get_logs_since(&agent_id, since).await,
+        None => state.agent_log_store.get_logs(&agent_id).await,
+    };
+    let total = logs.len();
+    Ok(Json(ApiResponse {
+        data: LogResponse { logs, total },
+    }))
 }
 
 #[cfg(test)]

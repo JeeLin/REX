@@ -19,6 +19,7 @@ use crate::metrics::MetricsCollector;
 use crate::resource;
 use crate::terminal::SessionManager;
 use crate::ws::AgentConnections;
+use crate::agent::AgentLogStore;
 use axum::extract::Query;
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -62,6 +63,7 @@ pub struct AppState {
     pub update_cache: tokio::sync::RwLock<UpdateCache>,
     pub data_dir: PathBuf,
     pub metrics: Arc<MetricsCollector>,
+    pub agent_log_store: Arc<AgentLogStore>,
 }
 
 pub fn app(db: Arc<Database>, secret_key: String) -> axum::Router {
@@ -87,6 +89,7 @@ pub fn app_with_static(
         manager: Arc::new(rex_transfer::task::TransferManager::new()),
     });
     let metrics = Arc::new(MetricsCollector::new(db.clone(), 3600)); // Cleanup every hour
+    let agent_log_store = Arc::new(AgentLogStore::new());
     let state = Arc::new(AppState {
         db,
         secret_key,
@@ -96,6 +99,7 @@ pub fn app_with_static(
         update_cache: tokio::sync::RwLock::new(UpdateCache::new()),
         data_dir,
         metrics,
+        agent_log_store,
     });
 
     let public_routes = Router::new()
@@ -275,6 +279,10 @@ pub fn app_with_static(
                 "/api/agents/:agent_id/config",
                 get(crate::agent::get_agent_config_handler)
                     .patch(crate::agent::update_agent_config_handler),
+            )
+            .route(
+                "/api/agents/:agent_id/logs",
+                get(crate::agent::get_agent_logs),
             )
             .route(
                 "/api/health",

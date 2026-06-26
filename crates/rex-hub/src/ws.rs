@@ -195,6 +195,12 @@ async fn handle_agent_socket(socket: WebSocket, state: Arc<AppState>) {
                                     } else {
                                         agent::update_heartbeat(&db, &aid, ver, sha);
                                     }
+                                    // 存储上报的日志（如果有）
+                                    if let Some(logs) = ws_msg.payload.get("recent_logs") {
+                                        if let Ok(log_entries) = serde_json::from_value::<Vec<agent::LogEntry>>(logs.clone()) {
+                                            state.agent_log_store.append_logs(&aid, log_entries).await;
+                                        }
+                                    }
                                     // 版本对比：Agent 版本 ≠ Hub 版本 → needs_update
                                     let hub_version = rex_common::version::VERSION;
                                     let needs_update = ver != hub_version;

@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use tokio::time::{interval, Duration};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
+use crate::log_collector::LogCollector;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WsMessage {
     pub msg_type: String,
@@ -18,6 +20,7 @@ pub struct AgentWs {
     version: String,
     auto_update: bool,
     data_dir: PathBuf,
+    log_collector: LogCollector,
 }
 
 impl AgentWs {
@@ -28,6 +31,7 @@ impl AgentWs {
         version: String,
         auto_update: bool,
         data_dir: PathBuf,
+        log_collector: LogCollector,
     ) -> Self {
         Self {
             server_ws_url,
@@ -36,6 +40,7 @@ impl AgentWs {
             version,
             auto_update,
             data_dir,
+            log_collector,
         }
     }
 
@@ -93,17 +98,20 @@ impl AgentWs {
         let version = self.version.clone();
         let agent_id = self.agent_id.clone();
         let auto_update = self.auto_update;
+        let log_collector = self.log_collector.clone();
         let mut heartbeat_timer = interval(Duration::from_secs(30));
 
         loop {
             tokio::select! {
                 _ = heartbeat_timer.tick() => {
+                    let recent_logs = log_collector.drain_since();
                     let heartbeat = WsMessage {
                         msg_type: "heartbeat".to_string(),
                         payload: serde_json::json!({
                             "agent_id": agent_id,
                             "version": version,
                             "auto_update": auto_update,
+                            "recent_logs": recent_logs,
                         }),
                     };
                     let json = serde_json::to_string(&heartbeat)?;
