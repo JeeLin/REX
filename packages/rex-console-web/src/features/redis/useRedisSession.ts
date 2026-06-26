@@ -44,7 +44,7 @@ export function useRedisSession(resourceId: () => string) {
         ws = null
       }
 
-      const token = localStorage.getItem('token') || ''
+      const token = localStorage.getItem('rex-token') || ''
       const rid = resourceId()
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
       const url = `${protocol}//${location.host}/ws/redis/${rid}?token=${token}`
