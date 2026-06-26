@@ -3,6 +3,7 @@ import { useRouter } from 'vue-router'
 import type { EnvWithResources } from '@/api/env'
 import { listEnvsWithResources } from '@/api/env'
 import { useProtocol } from './useProtocol'
+import { useRecent } from './useRecent'
 
 const COLLAPSED_KEY = 'rex-sidebar-collapsed'
 const EXPANDED_ENVS_KEY = 'rex-sidebar-expanded-envs'
@@ -52,6 +53,7 @@ function saveExpandedEnvs() {
 export function useSidebar() {
   const router = useRouter()
   useProtocol()
+  const { addToRecent } = useRecent()
 
   // ── Favorites ──
 
@@ -127,7 +129,8 @@ export function useSidebar() {
 
   // ── Connect ──
 
-  function connectToResource(resource: { id: string; protocol: string; name: string }, _envName: string) {
+  function connectToResource(resource: { id: string; protocol: string; name: string }, envName: string) {
+    addToRecent({ resourceId: resource.id, name: resource.name, protocol: resource.protocol, envName })
     if (router.currentRoute.value.name === 'workspace') {
       window.dispatchEvent(new CustomEvent('open-in-workspace', {
         detail: { resource },
