@@ -113,6 +113,7 @@ import { useContextMenu } from '@/composables/useContextMenu'
 import type { EnvWithResources } from '@/api/env'
 import { listEnvsWithResources } from '@/api/env'
 import { getAuditStats } from '@/api/audit'
+import { fetchHealth } from '@/api/health'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -194,6 +195,13 @@ onMounted(async () => {
   try {
     const stats = await getAuditStats('today')
     todayOps.value = stats.total
+  } catch {
+    // 静默处理
+  }
+
+  try {
+    const health = await fetchHealth()
+    agentOnlineCount.value = health.connections.agents_online
   } catch {
     // 静默处理
   }

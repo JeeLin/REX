@@ -1,6 +1,6 @@
-import { client } from './client'
+import client from './client'
 
-export interface HealthResponse {
+export interface HealthStatus {
   status: string
   uptime_seconds: number
   version: string
@@ -25,6 +25,6 @@ export interface HealthResponse {
   }
 }
 
-export function fetchHealth(): Promise<HealthResponse> {
-  return client.get('/api/health').then((res) => res.data)
+export function fetchHealth(): Promise<HealthStatus> {
+  return client.get('/api/health').then((res: { data: HealthStatus }) => res.data)
 }
