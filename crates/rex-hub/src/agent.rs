@@ -19,15 +19,16 @@ pub struct LogEntry {
 }
 
 /// Agent 日志内存存储（每个 Agent 最多 1000 条）
+#[derive(Default)]
 pub struct AgentLogStore {
-    logs: tokio::sync::RwLock<std::collections::HashMap<String, std::collections::VecDeque<LogEntry>>>,
+    logs: tokio::sync::RwLock<
+        std::collections::HashMap<String, std::collections::VecDeque<LogEntry>>,
+    >,
 }
 
 impl AgentLogStore {
     pub fn new() -> Self {
-        Self {
-            logs: tokio::sync::RwLock::new(std::collections::HashMap::new()),
-        }
+        Self::default()
     }
 
     /// 存储 Agent 上报的日志（增量追加）
@@ -549,7 +550,10 @@ pub async fn restart_agent(
     match connections.get(&agent_id) {
         Some(conn) => {
             if conn.cmd_tx.send("restart".to_string()).await.is_err() {
-                Err(err_resp("AGENT_UNREACHABLE", "Agent 连接已断开，无法发送重启指令"))
+                Err(err_resp(
+                    "AGENT_UNREACHABLE",
+                    "Agent 连接已断开，无法发送重启指令",
+                ))
             } else {
                 Ok(Json(ApiResponse {
                     data: RestartResponse {

@@ -9,6 +9,7 @@ use std::sync::Arc;
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::agent;
+use crate::agent::AgentLogStore;
 use crate::audit;
 use crate::auth;
 use crate::backup;
@@ -19,7 +20,6 @@ use crate::metrics::MetricsCollector;
 use crate::resource;
 use crate::terminal::SessionManager;
 use crate::ws::AgentConnections;
-use crate::agent::AgentLogStore;
 use axum::extract::Query;
 use serde::Deserialize;
 use std::path::PathBuf;

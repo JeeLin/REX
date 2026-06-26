@@ -32,7 +32,7 @@ pub fn init_tracing_with_collector(collector: LogCollector) {
 }
 
 /// Agent 日志收集器，环形缓冲区存储最近 1000 条日志
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct LogCollector {
     entries: Arc<Mutex<VecDeque<LogEntry>>>,
     since: Arc<Mutex<VecDeque<LogEntry>>>,
@@ -40,10 +40,7 @@ pub struct LogCollector {
 
 impl LogCollector {
     pub fn new() -> Self {
-        Self {
-            entries: Arc::new(Mutex::new(VecDeque::with_capacity(1000))),
-            since: Arc::new(Mutex::new(VecDeque::new())),
-        }
+        Self::default()
     }
 
     /// 添加一条日志
@@ -85,11 +82,12 @@ impl LogCollector {
         self.entries.lock().unwrap().len()
     }
 
-    fn expire_old(
-        &self,
-        entries: &mut VecDeque<LogEntry>,
-        since: &mut VecDeque<LogEntry>,
-    ) {
+    /// 是否为空
+    pub fn is_empty(&self) -> bool {
+        self.entries.lock().unwrap().is_empty()
+    }
+
+    fn expire_old(&self, entries: &mut VecDeque<LogEntry>, since: &mut VecDeque<LogEntry>) {
         // 保留最近 1000 条
         while entries.len() > 1000 {
             entries.pop_front();

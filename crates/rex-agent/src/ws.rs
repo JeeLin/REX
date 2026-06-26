@@ -260,7 +260,7 @@ impl AgentWs {
         {
             use std::os::unix::fs::PermissionsExt;
             let mut perms = std::fs::metadata(&staged_path)
-                .and_then(|m| Ok(m.permissions()))
+                .map(|m| m.permissions())
                 .unwrap_or_else(|_| std::fs::Permissions::from_mode(0o755));
             perms.set_mode(0o755);
             let _ = std::fs::set_permissions(&staged_path, perms);

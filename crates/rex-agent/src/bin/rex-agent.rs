@@ -1,4 +1,10 @@
-use rex_agent::{client, config::AgentConfig, identity::AgentIdentity, log_collector::{self, LogCollector}, ws::AgentWs};
+use rex_agent::{
+    client,
+    config::AgentConfig,
+    identity::AgentIdentity,
+    log_collector::{self, LogCollector},
+    ws::AgentWs,
+};
 use rex_common::{app, Parser};
 
 const AGENT_VERSION: &str = env!("CARGO_PKG_VERSION");
