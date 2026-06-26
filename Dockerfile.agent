@@ -1,11 +1,9 @@
-# ── Stage 1: Build ───────────────────────────────────────
-FROM rust:1.87-slim AS builder
-RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
-WORKDIR /app
-COPY . .
-RUN cargo build --release -p rex-agent
+# Agent Docker 镜像：复制 CI 预构建的二进制
+#
+# CI 流程：
+# 1. build-agent → dist/rex-agent (amd64), dist/arm64/rex-agent (arm64)
+# 2. 本 Dockerfile 根据 TARGETARCH 选择对应二进制
 
-# ── Stage 2: Final image ────────────────────────────────
 FROM debian:bookworm-slim
 
 RUN apt-get update && \
@@ -17,8 +15,17 @@ RUN useradd -r -s /bin/false agent
 WORKDIR /app
 RUN mkdir -p /app/data && chown agent:agent /app/data
 
-COPY --from=builder /app/target/release/rex-agent /app/rex-agent
-RUN chmod +x /app/rex-agent
+# 复制两个架构的二进制，根据 TARGETARCH 选择
+COPY dist/rex-agent /tmp/rex-agent-amd64
+COPY dist/arm64/rex-agent /tmp/rex-agent-arm64
+ARG TARGETARCH
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+      cp /tmp/rex-agent-arm64 /app/rex-agent; \
+    else \
+      cp /tmp/rex-agent-amd64 /app/rex-agent; \
+    fi && \
+    rm -f /tmp/rex-agent-amd64 /tmp/rex-agent-arm64 && \
+    chmod +x /app/rex-agent
 
 USER agent
 ENV DATA_DIR=/app/data
