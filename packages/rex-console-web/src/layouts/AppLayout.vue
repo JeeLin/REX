@@ -10,7 +10,7 @@
     <!-- 移动端遮罩 -->
     <div v-if="mobileOpen" class="mobile-overlay" @click="closeMobile"></div>
 
-    <aside class="sidebar" :class="{ open: mobileOpen }">
+    <aside class="sidebar" :class="{ open: mobileOpen }" :style="{ width: collapsed ? '60px' : sidebarWidth + 'px' }">
       <!-- Header -->
       <div class="sidebar-header">
         <div class="sidebar-logo">R</div>
@@ -164,7 +164,15 @@
       </div>
     </aside>
 
-    <main class="main-content" :class="{ 'no-header': route.meta.noHeader }">
+    <!-- 侧边栏拖拽调整宽度 -->
+    <div
+      v-show="!collapsed"
+      class="sidebar-resize-handle"
+      :style="{ left: sidebarWidth + 'px' }"
+      @mousedown="startResize"
+    ></div>
+
+    <main class="main-content" :class="{ 'no-header': route.meta.noHeader }" :style="{ marginLeft: collapsed ? '60px' : sidebarWidth + 'px' }">
       <header v-if="!route.meta.noHeader" class="page-header">
         <h1 class="page-title">{{ pageTitle }}</h1>
         <div class="header-actions">
@@ -188,7 +196,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useUserStore, type Theme } from '@/stores/user'
@@ -337,6 +345,40 @@ function openAllInWorkspace(env: { id: string; name: string }) {
 onMounted(() => {
   fetchEnvs()
 })
+
+// ── 侧边栏拖拽调整宽度 ──────────────────────────────────
+const SIDEBAR_WIDTH_KEY = 'rex-sidebar-width'
+const sidebarWidth = ref(parseInt(localStorage.getItem(SIDEBAR_WIDTH_KEY) || '240'))
+let resizing = false
+
+function startResize(e: MouseEvent) {
+  resizing = true
+  document.addEventListener('mousemove', onResize)
+  document.addEventListener('mouseup', stopResize)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+  e.preventDefault()
+}
+
+function onResize(e: MouseEvent) {
+  if (!resizing) return
+  const newWidth = Math.min(400, Math.max(180, e.clientX))
+  sidebarWidth.value = newWidth
+}
+
+function stopResize() {
+  resizing = false
+  document.removeEventListener('mousemove', onResize)
+  document.removeEventListener('mouseup', stopResize)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth.value))
+}
+
+onUnmounted(() => {
+  document.removeEventListener('mousemove', onResize)
+  document.removeEventListener('mouseup', stopResize)
+})
 </script>
 
 <style scoped>
@@ -348,7 +390,6 @@ onMounted(() => {
 
 /* ── 侧边栏 ─────────────────────────────── */
 .sidebar {
-  width: var(--sidebar-width);
   background: var(--bg-surface);
   border-right: 1px solid var(--border);
   display: flex;
@@ -358,13 +399,24 @@ onMounted(() => {
   left: 0;
   bottom: 0;
   z-index: var(--z-sticky);
-  transition: width var(--transition-normal);
   overflow-y: auto;
   overflow-x: hidden;
 }
 
-.sidebar-collapsed .sidebar {
-  width: 56px;
+.sidebar-resize-handle {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  z-index: calc(var(--z-sticky) + 1);
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle:active {
+  background: var(--accent);
 }
 
 .sidebar-header {
@@ -637,6 +689,9 @@ onMounted(() => {
 .sidebar-section {
   padding: var(--sp-sm);
   border-top: 1px solid var(--border);
+  position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .section-header {
@@ -645,6 +700,7 @@ onMounted(() => {
   justify-content: space-between;
   padding: 0 var(--sp-xs);
   margin-bottom: var(--sp-xs);
+  flex-shrink: 0;
 }
 
 .section-label {
@@ -732,15 +788,10 @@ onMounted(() => {
 /* ── Main Content ───────────────────────── */
 .main-content {
   flex: 1;
-  margin-left: var(--sidebar-width);
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   transition: margin-left var(--transition-normal);
-}
-
-.sidebar-collapsed .main-content {
-  margin-left: 56px;
 }
 
 .page-header {
