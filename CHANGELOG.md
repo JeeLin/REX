@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-06-26
+
+### Added
+- Agent 日志上报：Agent 通过心跳 payload 增量上报近期日志（recent_logs 字段）
+- Hub 日志存储：AgentLogStore 内存存储，每个 Agent 最多 1000 条日志
+- 日志查询 API：GET `/api/agents/:agent_id/logs`，支持 `?since=` 参数增量查询
+- Agent 远程重启 API：POST `/api/agents/:agent_id/restart`，通过 WebSocket 发送 restart 指令
+- Agent 重启响应：收到 restart 消息后 `std::process::exit(10)` 由 supervisor 重启
+- 前端日志查看器对接真实 API：AgentLogModal 替换 mock 数据，5 秒轮询增量日志
+- 前端重启按钮：AgentCard 增加重启操作，带确认提示
+
+### Changed
+- Agent 心跳 payload 新增 `recent_logs` 字段
+- Agent tracing Layer 新增 LogCollector 集成，同时输出到 stdout 和内存缓冲区
+
 ## [0.21.0] - 2026-06-26
 
 ### Added

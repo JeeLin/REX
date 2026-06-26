@@ -3324,6 +3324,7 @@ name = "rex-agent"
 version = "0.21.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "futures-util",
  "hostname",
  "reqwest",
