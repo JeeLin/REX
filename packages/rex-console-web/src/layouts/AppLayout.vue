@@ -177,16 +177,24 @@
         <router-view />
       </div>
     </main>
+
+    <!-- 资源编辑对话框 -->
+    <ResourceEditModal
+      v-model:visible="editModalVisible"
+      :env-id="editModalEnvId"
+      :resource-id="editModalResourceId"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useUserStore, type Theme } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import { useSidebar } from '@/composables/useSidebar'
+import ResourceEditModal from '@/components/ResourceEditModal.vue'
 import { getProtocolIcon } from '@/composables/useProtocol'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useRecent } from '@/composables/useRecent'
@@ -200,6 +208,11 @@ const { t } = useI18n()
 const userStore = useUserStore()
 const authStore = useAuthStore()
 const { show: showMenu } = useContextMenu()
+
+// 资源编辑对话框状态
+const editModalVisible = ref(false)
+const editModalEnvId = ref('')
+const editModalResourceId = ref('')
 
 const lang = computed(() => userStore.lang)
 const auditEnabled = computed(() => securitySettings.auditEnabled)
@@ -272,7 +285,7 @@ function onResourceItemCtx(e: MouseEvent, res: { id: string; name: string; proto
     { label: t('ctx.connect'), action: () => connectToResource(res, env.name) },
     { label: t('ctx.connectNewTab'), action: () => connectToResource(res, env.name) },
     { separator: true },
-    { label: t('ctx.editResource'), action: () => router.push(`/environments/${env.id}/resources/${res.id}/edit`) },
+    { label: t('ctx.editResource'), action: () => { editModalEnvId.value = env.id; editModalResourceId.value = res.id; editModalVisible.value = true } },
     { label: t('ctx.deleteResource'), danger: true },
     { separator: true },
     { label: t('ctx.copyAddress'), action: () => navigator.clipboard?.writeText(res.name) },

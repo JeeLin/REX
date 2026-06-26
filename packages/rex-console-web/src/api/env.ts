@@ -39,6 +39,16 @@ export async function listResources(envId: string): Promise<Resource[]> {
   return res.data.data
 }
 
+export async function getResource(envId: string, id: string): Promise<Resource> {
+  const res = await client.get(`/environments/${envId}/resources/${id}`)
+  return res.data.data
+}
+
+export async function updateResource(envId: string, id: string, data: { name: string; config_json: string }): Promise<Resource> {
+  const res = await client.put(`/environments/${envId}/resources/${id}`, data)
+  return res.data.data
+}
+
 /** Fetch all environments with their resources for sidebar tree */
 export async function listEnvsWithResources(): Promise<EnvWithResources[]> {
   const envs = await listEnvironments()
