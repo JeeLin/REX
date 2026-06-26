@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-06-26
+
+### Added
+- SQLite 连接器完整实现：使用 rusqlite crate 实现真实数据库连接、SQL 查询执行、表结构获取和连接关闭
+- S3/MinIO 连接器完整实现：使用 aws-sdk-s3 crate 实现对象存储操作（列举桶、列举对象、上传、下载、删除），支持自定义端点和凭据配置
+- 真实系统指标采集：替换模拟数据，使用 sysinfo crate 获取真实 CPU、内存、磁盘使用率和系统运行时间
+
+### Fixed
+- S3 凭据传递：修复 S3 连接器配置的 access_key/secret_key 未传递给 AWS SDK 的问题
+- SQLite 错误处理：修复 `row.unwrap()` 在查询解码失败时的 panic
+- 指标系统错误处理：修复 `spawn_blocking().await.unwrap()` 和 `DateTime::parse().unwrap()` 在异常情况下的 panic
+- SQL 类型检测：修复 CTE（WITH）和 EXPLAIN 语句被错误分类为非查询的问题
+
+### Changed
+- 临时文件依赖移动：将 `tempfile` 从 rex-sqlite 运行时依赖移至开发依赖
+- 代码精简：移除 S3 连接器中重复的 `S3Client` trait，简化架构
+
 ## [0.19.0] - 2026-06-25
 
 ### Added
