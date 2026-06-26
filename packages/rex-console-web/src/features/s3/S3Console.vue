@@ -72,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useS3Session, type S3BucketInfo, type S3ObjectInfo } from './useS3Session'
 import BucketList from './BucketList.vue'
@@ -212,6 +212,19 @@ async function deleteFile(item: S3ObjectInfo) {
     session.error.value = err instanceof Error ? err.message : String(err)
   }
 }
+
+// ── 自动连接 ─────────────────────────────────────────────
+onMounted(() => {
+  if (!session.connected.value) {
+    session.connect().then(() => {
+      const info = session.serverInfo.value
+      if (info) {
+        endpoint.value = info['endpoint'] || ''
+      }
+      refreshBuckets()
+    }).catch(() => {})
+  }
+})
 
 onUnmounted(() => {
   session.disconnect()

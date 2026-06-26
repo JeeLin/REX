@@ -106,7 +106,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSqliteSession, type SqliteResult } from '@/features/sqlite/useSqliteSession'
 
@@ -188,6 +188,13 @@ function clearEditor() {
   result.value = null
   resultMessage.value = ''
 }
+
+// ── 自动连接 ─────────────────────────────────────────────
+onMounted(() => {
+  if (!session.connected.value) {
+    session.connect().then(() => refreshTables()).catch(() => {})
+  }
+})
 </script>
 
 <style scoped>

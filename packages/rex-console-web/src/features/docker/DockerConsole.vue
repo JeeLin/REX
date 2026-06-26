@@ -106,7 +106,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useDockerSession } from './useDockerSession'
 import ContainerList from './ContainerList.vue'
@@ -269,6 +269,14 @@ function onGlobalClick() {
 }
 
 document.addEventListener('click', onGlobalClick)
+
+// ── 自动连接 ─────────────────────────────────────────────
+onMounted(() => {
+  if (!session.connected.value) {
+    session.connect().then(() => refreshContainers()).catch(() => {})
+  }
+})
+
 onUnmounted(() => {
   document.removeEventListener('click', onGlobalClick)
 })
