@@ -216,11 +216,13 @@ mod tests {
 
     #[test]
     fn determine_tls_mode_manual() {
+        let dir = tempfile::tempdir().unwrap();
+        let cert = dir.path().join("cert.pem");
+        let key = dir.path().join("key.pem");
+        std::fs::write(&cert, "cert").unwrap();
+        std::fs::write(&key, "key").unwrap();
         let config = HubConfig {
-            tls: Some(TlsConfig {
-                cert: PathBuf::from("/path/cert.pem"),
-                key: PathBuf::from("/path/key.pem"),
-            }),
+            tls: Some(TlsConfig { cert, key }),
             ..Default::default()
         };
         assert_eq!(acme::determine_tls_mode(&config), TlsMode::Manual);
@@ -253,18 +255,20 @@ mod tests {
     }
 
     #[test]
-    fn determine_tls_mode_none() {
+    fn determine_tls_mode_none_falls_back_to_self_signed() {
         let config = HubConfig::default();
-        assert_eq!(acme::determine_tls_mode(&config), TlsMode::None);
+        assert_eq!(acme::determine_tls_mode(&config), TlsMode::SelfSigned);
     }
 
     #[test]
     fn determine_tls_mode_manual_takes_priority_over_acme() {
+        let dir = tempfile::tempdir().unwrap();
+        let cert = dir.path().join("cert.pem");
+        let key = dir.path().join("key.pem");
+        std::fs::write(&cert, "cert").unwrap();
+        std::fs::write(&key, "key").unwrap();
         let config = HubConfig {
-            tls: Some(TlsConfig {
-                cert: PathBuf::from("/path/cert.pem"),
-                key: PathBuf::from("/path/key.pem"),
-            }),
+            tls: Some(TlsConfig { cert, key }),
             acme: Some(AcmeConfig {
                 domain: "hub.example.com".to_string(),
                 email: "admin@example.com".to_string(),
@@ -273,6 +277,18 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(acme::determine_tls_mode(&config), TlsMode::Manual);
+    }
+
+    #[test]
+    fn determine_tls_mode_manual_missing_files_falls_back() {
+        let config = HubConfig {
+            tls: Some(TlsConfig {
+                cert: PathBuf::from("/nonexistent/cert.pem"),
+                key: PathBuf::from("/nonexistent/key.pem"),
+            }),
+            ..Default::default()
+        };
+        assert_eq!(acme::determine_tls_mode(&config), TlsMode::SelfSigned);
     }
 
     #[test]

@@ -43,9 +43,13 @@ pub fn challenge_description(domain: &str) -> &'static str {
 
 /// 确定 TLS 模式（优先级：manual > acme > self-signed > none）
 pub fn determine_tls_mode(config: &HubConfig) -> TlsMode {
-    // 1. 手动证书（最高优先级）
+    // 1. 手动证书（最高优先级）— 需验证文件存在
     if let Some(ref tls) = config.tls {
-        if !tls.cert.as_os_str().is_empty() && !tls.key.as_os_str().is_empty() {
+        if !tls.cert.as_os_str().is_empty()
+            && !tls.key.as_os_str().is_empty()
+            && tls.cert.exists()
+            && tls.key.exists()
+        {
             return TlsMode::Manual;
         }
     }
@@ -61,8 +65,8 @@ pub fn determine_tls_mode(config: &HubConfig) -> TlsMode {
         }
     }
 
-    // 3. 无 TLS 配置 → HTTP only
-    TlsMode::None
+    // 3. 无 TLS 配置 → 自签名证书（始终 HTTPS）
+    TlsMode::SelfSigned
 }
 
 /// TLS 模式

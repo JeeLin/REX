@@ -196,11 +196,13 @@ mod tests {
 
     #[test]
     fn tls_status_manual_mode() {
+        let dir = tempfile::tempdir().unwrap();
+        let cert = dir.path().join("cert.pem");
+        let key = dir.path().join("key.pem");
+        std::fs::write(&cert, "cert").unwrap();
+        std::fs::write(&key, "key").unwrap();
         let config = HubConfig {
-            tls: Some(crate::config::TlsConfig {
-                cert: PathBuf::from("/path/cert.pem"),
-                key: PathBuf::from("/path/key.pem"),
-            }),
+            tls: Some(crate::config::TlsConfig { cert, key }),
             ..Default::default()
         };
         assert_eq!(acme::determine_tls_mode(&config), TlsMode::Manual);
@@ -209,7 +211,7 @@ mod tests {
     #[test]
     fn tls_status_none_mode() {
         let config = HubConfig::default();
-        assert_eq!(acme::determine_tls_mode(&config), TlsMode::None);
+        assert_eq!(acme::determine_tls_mode(&config), TlsMode::SelfSigned);
     }
 
     #[test]
