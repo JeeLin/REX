@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS agents (
     os_version TEXT,
     status TEXT NOT NULL,
     last_seen_at TEXT,
+    config_json TEXT NOT NULL DEFAULT '{}',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (environment_id) REFERENCES environments(id)

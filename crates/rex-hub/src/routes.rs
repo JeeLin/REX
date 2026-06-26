@@ -272,6 +272,11 @@ pub fn app_with_static(
                 get(crate::agent_download::download_agent),
             )
             .route(
+                "/api/agents/:agent_id/config",
+                get(crate::agent::get_agent_config_handler)
+                    .patch(crate::agent::update_agent_config_handler),
+            )
+            .route(
                 "/api/health",
                 get(|State(state): State<Arc<AppState>>| async move {
                     match state.metrics.get_health().await {

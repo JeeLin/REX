@@ -287,6 +287,52 @@ pub fn update_heartbeat(db: &crate::db::Database, agent_id: &str, version: &str,
     }
 }
 
+pub fn update_heartbeat_with_config(
+    db: &crate::db::Database,
+    agent_id: &str,
+    version: &str,
+    sha256: &str,
+    config_json: &str,
+) {
+    let now = now_iso();
+    if let Ok(conn) = db.pool.get() {
+        let _ = conn.execute(
+            "UPDATE agents SET version = ?1, sha256 = ?2, last_seen_at = ?3, status = 'online', config_json = ?4, updated_at = ?3 WHERE id = ?5",
+            rusqlite::params![version, sha256, now, config_json, agent_id],
+        );
+    }
+}
+
+/// 获取 Agent 配置（从 config_json 列解析）
+pub fn get_agent_config(db: &crate::db::Database, agent_id: &str) -> Option<serde_json::Value> {
+    let conn = db.pool.get().ok()?;
+    let config_json: String = conn
+        .query_row(
+            "SELECT config_json FROM agents WHERE id = ?1",
+            rusqlite::params![agent_id],
+            |row| row.get(0),
+        )
+        .ok()?;
+    serde_json::from_str(&config_json).ok()
+}
+
+/// 更新 Agent 配置（写入 config_json 列）
+pub fn update_agent_config(
+    db: &crate::db::Database,
+    agent_id: &str,
+    config: &serde_json::Value,
+) -> Result<(), String> {
+    let now = now_iso();
+    let config_json = serde_json::to_string(config).map_err(|e| e.to_string())?;
+    let conn = db.pool.get().map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE agents SET config_json = ?1, updated_at = ?2 WHERE id = ?3",
+        rusqlite::params![config_json, now, agent_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 pub fn set_agent_status(db: &crate::db::Database, agent_id: &str, status: &str) {
     let now = now_iso();
     if let Ok(conn) = db.pool.get() {
@@ -337,6 +383,61 @@ pub fn upsert_agent(
             ],
         );
     }
+}
+
+// ── Agent 配置 API ─────────────────────────────────────
+
+/// GET /api/agents/:agent_id/config
+pub async fn get_agent_config_handler(
+    State(state): State<Arc<AppState>>,
+    Path(agent_id): Path<String>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, (StatusCode, Json<ErrorResponse>)> {
+    let db = state.db.clone();
+    let aid = agent_id.clone();
+
+    let config = tokio::task::spawn_blocking(move || get_agent_config(&db, &aid))
+        .await
+        .map_err(|_| err_resp("INTERNAL_ERROR", "internal error"))?
+        .unwrap_or_else(|| serde_json::json!({ "auto_update": true }));
+
+    Ok(Json(ApiResponse { data: config }))
+}
+
+/// PATCH /api/agents/:agent_id/config
+pub async fn update_agent_config_handler(
+    State(state): State<Arc<AppState>>,
+    Path(agent_id): Path<String>,
+    Json(input): Json<serde_json::Value>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, (StatusCode, Json<ErrorResponse>)> {
+    let db = state.db.clone();
+    let aid = agent_id.clone();
+
+    // 合并现有配置与新配置
+    let existing = {
+        let db2 = state.db.clone();
+        let aid2 = aid.clone();
+        tokio::task::spawn_blocking(move || get_agent_config(&db2, &aid2))
+            .await
+            .map_err(|_| err_resp("INTERNAL_ERROR", "internal error"))?
+            .unwrap_or_else(|| serde_json::json!({}))
+    };
+
+    let mut merged = existing;
+    if let Some(obj) = input.as_object() {
+        if let Some(merged_obj) = merged.as_object_mut() {
+            for (k, v) in obj {
+                merged_obj.insert(k.clone(), v.clone());
+            }
+        }
+    }
+
+    let final_config = merged.clone();
+    tokio::task::spawn_blocking(move || update_agent_config(&db, &aid, &final_config))
+        .await
+        .map_err(|_| err_resp("INTERNAL_ERROR", "internal error"))?
+        .map_err(|e| err_resp("UPDATE_FAILED", &e))?;
+
+    Ok(Json(ApiResponse { data: merged }))
 }
 
 #[cfg(test)]

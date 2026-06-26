@@ -103,6 +103,7 @@ impl AgentWs {
                         payload: serde_json::json!({
                             "agent_id": agent_id,
                             "version": version,
+                            "auto_update": auto_update,
                         }),
                     };
                     let json = serde_json::to_string(&heartbeat)?;

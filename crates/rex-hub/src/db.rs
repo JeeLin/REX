@@ -133,6 +133,10 @@ fn run_migrations(conn: &Connection) -> Result<()> {
     // Migration: remove connection_mode from resources (it belongs to environment, not resource)
     let _ = conn.execute_batch("ALTER TABLE resources DROP COLUMN connection_mode");
 
+    // Migration: add config_json to agents table for agent configuration
+    let _ =
+        conn.execute_batch("ALTER TABLE agents ADD COLUMN config_json TEXT NOT NULL DEFAULT '{}'");
+
     Ok(())
 }
 

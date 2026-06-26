@@ -186,7 +186,15 @@ async fn handle_agent_socket(socket: WebSocket, state: Arc<AppState>) {
                                 "heartbeat" => {
                                     let ver = ws_msg.payload["version"].as_str().unwrap_or(&version);
                                     let sha = ws_msg.payload["sha256"].as_str().unwrap_or("");
-                                    agent::update_heartbeat(&db, &aid, ver, sha);
+                                    // 存储 auto_update 配置（如果 Agent 上报了）
+                                    if let Some(auto_update) = ws_msg.payload.get("auto_update") {
+                                        let config_json = serde_json::json!({
+                                            "auto_update": auto_update.as_bool().unwrap_or(true),
+                                        });
+                                        agent::update_heartbeat_with_config(&db, &aid, ver, sha, &config_json.to_string());
+                                    } else {
+                                        agent::update_heartbeat(&db, &aid, ver, sha);
+                                    }
                                     // 版本对比：Agent 版本 ≠ Hub 版本 → needs_update
                                     let hub_version = rex_common::version::VERSION;
                                     let needs_update = ver != hub_version;
