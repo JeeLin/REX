@@ -857,7 +857,10 @@ mod handler_tests {
         ).unwrap();
 
         let app = Router::new()
-            .route("/api/agents/:agent_id/config", get(get_agent_config_handler))
+            .route(
+                "/api/agents/:agent_id/config",
+                get(get_agent_config_handler),
+            )
             .with_state(state);
 
         let resp = app
@@ -871,7 +874,9 @@ mod handler_tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json["data"]["auto_update"], true);
     }
@@ -889,7 +894,10 @@ mod handler_tests {
         drop(conn);
 
         let app = Router::new()
-            .route("/api/agents/:agent_id/config", get(get_agent_config_handler).patch(update_agent_config_handler))
+            .route(
+                "/api/agents/:agent_id/config",
+                get(get_agent_config_handler).patch(update_agent_config_handler),
+            )
             .with_state(state);
 
         // PATCH auto_update to false
@@ -906,7 +914,9 @@ mod handler_tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json["data"]["auto_update"], false);
     }
@@ -915,7 +925,10 @@ mod handler_tests {
     async fn get_agent_config_returns_default_for_unknown_agent() {
         let state = test_state();
         let app = Router::new()
-            .route("/api/agents/:agent_id/config", get(get_agent_config_handler))
+            .route(
+                "/api/agents/:agent_id/config",
+                get(get_agent_config_handler),
+            )
             .with_state(state);
 
         let resp = app

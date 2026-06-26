@@ -24,7 +24,7 @@ run = "cargo build --release -p rex-hub"
 
 [tasks.start]
 description = "Build and run rex-hub"
-depends = ["build"]
+depends = ["build-frontend"]
 run = "cargo run --release -p rex-hub"
 
 [tasks.dev-backend]
