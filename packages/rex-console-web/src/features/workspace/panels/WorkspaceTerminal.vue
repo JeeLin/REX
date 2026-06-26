@@ -210,6 +210,29 @@ function initTerminal() {
   terminal.loadAddon(fitAddon)
   terminal.open(terminalContainer.value)
 
+  // 拦截 Ctrl+V / Ctrl+Shift+C：交给浏览器原生处理
+  terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'v' && event.type === 'keydown') {
+      return false
+    }
+    if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === 'C' || event.key === 'c') && event.type === 'keydown') {
+      return false
+    }
+    return true
+  })
+
+  // 监听浏览器原生 paste 事件，转发到 WebSocket
+  terminal.textarea?.addEventListener('paste', (e: ClipboardEvent) => {
+    const text = e.clipboardData?.getData('text')
+    if (text && ws?.readyState === WebSocket.OPEN) {
+      e.preventDefault()
+      ws.send(JSON.stringify({
+        type: 'terminal.input',
+        payload: { data: btoa(text) },
+      }))
+    }
+  }, true)
+
   // Use ResizeObserver instead of window resize for panel-level sizing
   resizeObserver = new ResizeObserver(() => {
     fitAddon?.fit()
