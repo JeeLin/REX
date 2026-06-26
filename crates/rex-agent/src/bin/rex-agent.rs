@@ -2,7 +2,7 @@ use rex_agent::{client, config::AgentConfig, identity::AgentIdentity, ws::AgentW
 use rex_common::app;
 use rex_common::Parser;
 
-const AGENT_VERSION: &str = "0.21.0";
+const AGENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() -> anyhow::Result<()> {
     app::init_tracing();
