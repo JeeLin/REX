@@ -285,6 +285,10 @@ pub fn app_with_static(
                 get(crate::agent::get_agent_logs),
             )
             .route(
+                "/api/agents/:agent_id/restart",
+                post(crate::agent::restart_agent),
+            )
+            .route(
                 "/api/health",
                 get(|State(state): State<Arc<AppState>>| async move {
                     match state.metrics.get_health().await {

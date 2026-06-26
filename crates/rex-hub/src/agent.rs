@@ -532,6 +532,36 @@ pub async fn get_agent_logs(
     }))
 }
 
+// ── Agent 远程重启 API ──────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct RestartResponse {
+    pub message: String,
+}
+
+/// POST /api/agents/:agent_id/restart
+/// 通过 WebSocket 向 Agent 发送重启指令
+pub async fn restart_agent(
+    State(state): State<Arc<AppState>>,
+    Path(agent_id): Path<String>,
+) -> Result<Json<ApiResponse<RestartResponse>>, (StatusCode, Json<ErrorResponse>)> {
+    let connections = state.connections.read().await;
+    match connections.get(&agent_id) {
+        Some(conn) => {
+            if conn.cmd_tx.send("restart".to_string()).await.is_err() {
+                Err(err_resp("AGENT_UNREACHABLE", "Agent 连接已断开，无法发送重启指令"))
+            } else {
+                Ok(Json(ApiResponse {
+                    data: RestartResponse {
+                        message: "restart command sent".to_string(),
+                    },
+                }))
+            }
+        }
+        None => Err(not_found("AGENT_OFFLINE", "Agent 不在线或不存在")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -814,6 +844,7 @@ mod handler_tests {
                 Arc::new(crate::db::Database::new_in_memory().unwrap()),
                 3600,
             )),
+            agent_log_store: Arc::new(crate::agent::AgentLogStore::new()),
         })
     }
 

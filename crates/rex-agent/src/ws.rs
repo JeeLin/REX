@@ -139,6 +139,10 @@ impl AgentWs {
                                     tracing::warn!("received disconnect from hub");
                                     break;
                                 }
+                                "restart" => {
+                                    tracing::info!("received restart command from hub, exiting for supervisor restart");
+                                    std::process::exit(10);
+                                }
                                 _ => {
                                     tracing::debug!(msg_type = %ws_msg.msg_type, "unknown message type");
                                 }

@@ -25,6 +25,7 @@ pub struct AgentConnection {
     pub environment_id: String,
     pub version: String,
     pub shutdown_tx: tokio::sync::oneshot::Sender<()>,
+    pub cmd_tx: tokio::sync::mpsc::Sender<String>,
 }
 
 pub type AgentConnections = RwLock<HashMap<String, AgentConnection>>;
@@ -133,6 +134,9 @@ async fn handle_agent_socket(socket: WebSocket, state: Arc<AppState>) {
     // Create shutdown channel
     let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel::<()>();
 
+    // Create command channel (for restart, etc.)
+    let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::channel::<String>(16);
+
     // Register connection
     let env_id = {
         let db_clone = state.db.clone();
@@ -161,6 +165,7 @@ async fn handle_agent_socket(socket: WebSocket, state: Arc<AppState>) {
                 environment_id: env_id,
                 version: version.to_string(),
                 shutdown_tx,
+                cmd_tx,
             },
         );
     }
@@ -177,6 +182,10 @@ async fn handle_agent_socket(socket: WebSocket, state: Arc<AppState>) {
             _ = &mut shutdown_rx => {
                 tracing::info!(agent_id = %aid, "agent shutdown signal received");
                 break;
+            }
+            Some(cmd) = cmd_rx.recv() => {
+                tracing::info!(agent_id = %aid, cmd = %cmd, "sending command to agent");
+                let _ = send_ws_msg(&mut write, &cmd, serde_json::json!({})).await;
             }
             msg = read.next() => {
                 match msg {
@@ -328,11 +337,13 @@ mod tests {
     fn agent_connection_fields() {
         use tokio::sync::oneshot;
         let (tx, _rx) = oneshot::channel();
+        let (cmd_tx, _cmd_rx) = tokio::sync::mpsc::channel(1);
         let conn = AgentConnection {
             agent_id: "agt_123".to_string(),
             environment_id: "env_456".to_string(),
             version: "0.11.0".to_string(),
             shutdown_tx: tx,
+            cmd_tx,
         };
         assert_eq!(conn.agent_id, "agt_123");
         assert_eq!(conn.environment_id, "env_456");
@@ -344,11 +355,13 @@ mod tests {
         let conns = new_connections();
         use tokio::sync::oneshot;
         let (tx, _rx) = oneshot::channel();
+        let (cmd_tx, _cmd_rx) = tokio::sync::mpsc::channel(1);
         let conn = AgentConnection {
             agent_id: "agt_123".to_string(),
             environment_id: "env_456".to_string(),
             version: "0.11.0".to_string(),
             shutdown_tx: tx,
+            cmd_tx,
         };
         conns.blocking_write().insert("agt_123".to_string(), conn);
         assert_eq!(conns.blocking_read().len(), 1);

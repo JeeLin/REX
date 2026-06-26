@@ -360,6 +360,7 @@ mod tests {
             transfer: None,
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: std::path::PathBuf::from("./data"),
+            agent_log_store: Arc::new(crate::agent::AgentLogStore::new()),
             metrics: Arc::new(crate::metrics::MetricsCollector::new(
                 Arc::new(crate::db::Database::new_in_memory().unwrap()),
                 3600,
@@ -385,6 +386,7 @@ mod tests {
             transfer: None,
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: std::path::PathBuf::from("./data"),
+            agent_log_store: Arc::new(crate::agent::AgentLogStore::new()),
             metrics: Arc::new(crate::metrics::MetricsCollector::new(
                 Arc::new(crate::db::Database::new_in_memory().unwrap()),
                 3600,
@@ -436,6 +438,7 @@ mod tests {
             transfer: None,
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: std::path::PathBuf::from("./data"),
+            agent_log_store: Arc::new(crate::agent::AgentLogStore::new()),
             metrics: Arc::new(crate::metrics::MetricsCollector::new(
                 Arc::new(crate::db::Database::new_in_memory().unwrap()),
                 3600,
@@ -557,6 +560,7 @@ mod tests {
             transfer: None,
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: std::path::PathBuf::from("./data"),
+            agent_log_store: Arc::new(crate::agent::AgentLogStore::new()),
             metrics: Arc::new(crate::metrics::MetricsCollector::new(
                 Arc::new(crate::db::Database::new_in_memory().unwrap()),
                 3600,
@@ -614,6 +618,7 @@ mod tests {
             transfer: None,
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: std::path::PathBuf::from("./data"),
+            agent_log_store: Arc::new(crate::agent::AgentLogStore::new()),
             metrics: Arc::new(crate::metrics::MetricsCollector::new(
                 Arc::new(crate::db::Database::new_in_memory().unwrap()),
                 3600,
@@ -654,6 +659,7 @@ mod tests {
             transfer: None,
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: std::path::PathBuf::from("./data"),
+            agent_log_store: Arc::new(crate::agent::AgentLogStore::new()),
             metrics: Arc::new(crate::metrics::MetricsCollector::new(
                 Arc::new(crate::db::Database::new_in_memory().unwrap()),
                 3600,
