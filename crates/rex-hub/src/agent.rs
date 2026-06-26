@@ -843,4 +843,96 @@ mod handler_tests {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
+
+    #[tokio::test]
+    async fn get_agent_config_returns_default_when_no_config() {
+        let state = test_state();
+        let token_hash = hash_token("test-token");
+        setup_env(&state, "env_001", &token_hash);
+        // Register an agent
+        let conn = state.db.pool.get().unwrap();
+        conn.execute(
+            "INSERT INTO agents (id, environment_id, name, token_hash, version, sha256, os, arch, status, config_json, created_at, updated_at) VALUES (?1, ?2, 'test-agent', ?3, '0.20.0', '', 'linux', 'amd64', 'online', '{}', '2024-01-01', '2024-01-01')",
+            rusqlite::params!["agt_001", "env_001", token_hash],
+        ).unwrap();
+
+        let app = Router::new()
+            .route("/api/agents/:agent_id/config", get(get_agent_config_handler))
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/agents/agt_001/config")
+                    .header("authorization", auth_header())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["data"]["auto_update"], true);
+    }
+
+    #[tokio::test]
+    async fn update_agent_config_persists_auto_update() {
+        let state = test_state();
+        let token_hash = hash_token("test-token");
+        setup_env(&state, "env_001", &token_hash);
+        let conn = state.db.pool.get().unwrap();
+        conn.execute(
+            "INSERT INTO agents (id, environment_id, name, token_hash, version, sha256, os, arch, status, config_json, created_at, updated_at) VALUES (?1, ?2, 'test-agent', ?3, '0.20.0', '', 'linux', 'amd64', 'online', '{}', '2024-01-01', '2024-01-01')",
+            rusqlite::params!["agt_002", "env_001", token_hash],
+        ).unwrap();
+        drop(conn);
+
+        let app = Router::new()
+            .route("/api/agents/:agent_id/config", get(get_agent_config_handler).patch(update_agent_config_handler))
+            .with_state(state);
+
+        // PATCH auto_update to false
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/api/agents/agt_002/config")
+                    .header("authorization", auth_header())
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"auto_update": false}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["data"]["auto_update"], false);
+    }
+
+    #[tokio::test]
+    async fn get_agent_config_returns_default_for_unknown_agent() {
+        let state = test_state();
+        let app = Router::new()
+            .route("/api/agents/:agent_id/config", get(get_agent_config_handler))
+            .with_state(state);
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/agents/nonexistent/config")
+                    .header("authorization", auth_header())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["data"]["auto_update"], true);
+    }
 }
