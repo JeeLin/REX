@@ -53,7 +53,10 @@ impl Database {
         let pool = Pool::builder()
             .build(manager)
             .context("failed to create connection pool")?;
-        Ok(Self { pool, _tempdir: None })
+        Ok(Self {
+            pool,
+            _tempdir: None,
+        })
     }
 
     pub fn new_in_memory() -> Result<Self> {
@@ -66,7 +69,7 @@ impl Database {
             .context("failed to create connection pool")?;
         Ok(Self {
             pool,
-            _tempdir: Some(temp_dir)
+            _tempdir: Some(temp_dir),
         })
     }
 

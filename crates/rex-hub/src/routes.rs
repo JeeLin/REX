@@ -129,199 +129,231 @@ pub fn app_with_static(
         )
         .route("/ws/s3/:resource_id", get(crate::ws_s3::s3_ws_handler));
 
-    let protected_routes = Router::new()
-        .route(
-            "/api/environments",
-            get(env::list_envs).post(env::create_env),
-        )
-        .route(
-            "/api/environments/:id",
-            get(env::get_env)
-                .put(env::update_env)
-                .delete(env::delete_env),
-        )
-        .route(
-            "/api/environments/:env_id/resources",
-            get(resource::list_resources).post(resource::create_resource),
-        )
-        .route(
-            "/api/environments/:env_id/resources/:id",
-            get(resource::get_resource)
-                .put(resource::update_resource)
-                .delete(resource::delete_resource),
-        )
-        .route(
-            "/api/resources/test-connection",
-            post(resource::test_connection),
-        )
-        .route("/api/environments/:env_id/agents", get(agent::list_agents))
-        .route(
-            "/api/agents/:agent_id/reset-token",
-            post(agent::reset_token),
-        )
-        .route("/api/audit-log", get(audit::list_audit_log))
-        .route("/api/audit/stats", get(audit::get_stats))
-        .route(
-            "/api/ssh/sessions",
-            post(crate::ws_terminal::create_session_handler),
-        )
-        .route(
-            "/api/ssh/sessions/:session_id",
-            delete(crate::ws_terminal::delete_session_handler),
-        )
-        .route(
-            "/api/transfers",
-            get(crate::transfer::list_transfers).post(crate::transfer::create_transfer),
-        )
-        .route(
-            "/api/transfers/:id",
-            get(crate::transfer::get_transfer).delete(crate::transfer::cancel_transfer),
-        )
-        .route(
-            "/api/transfers/:id/remove",
-            delete(crate::transfer::remove_transfer),
-        )
-        .route(
-            "/api/ai/config",
-            get(crate::ai::get_config).put(crate::ai::update_config),
-        )
-        .route("/api/ai/chat", post(crate::ai::chat))
-        .route(
-            "/api/resources/:resource_id/files",
-            get(crate::files::list_files).delete(crate::files::delete_file),
-        )
-        .route(
-            "/api/resources/:resource_id/files/mkdir",
-            post(crate::files::mkdir),
-        )
-        .route(
-            "/api/resources/:resource_id/files/touch",
-            post(crate::files::touch),
-        )
-        .route(
-            "/api/resources/:resource_id/files/rename",
-            put(crate::files::rename_file),
-        )
-        .route(
-            "/api/resources/:resource_id/files/download",
-            get(crate::files::download_file),
-        )
-        .route(
-            "/api/resources/:resource_id/files/upload",
-            post(crate::files::upload_file),
-        )
-        .route(
-            "/api/resources/:resource_id/sql/info",
-            get(crate::sql::get_resource_info),
-        )
-        .route(
-            "/api/resources/:resource_id/sql/execute",
-            post(crate::sql::execute_sql),
-        )
-        .route("/api/sql/global-query", post(crate::sql::global_query))
-        .route(
-            "/api/resources/:resource_id/sql/peers",
-            get(crate::sql::list_peer_sql_resources),
-        )
-        .route(
-            "/api/resources/:resource_id/sql/databases",
-            get(crate::sql::list_databases),
-        )
-        .route(
-            "/api/resources/:resource_id/sql/tables",
-            get(crate::sql::list_tables),
-        )
-        .route(
-            "/api/resources/:resource_id/sql/columns",
-            get(crate::sql::list_columns),
-        )
-        .route(
-            "/api/resources/:resource_id/sql/history",
-            get(crate::history::list_history)
-                .post(crate::history::record_history)
-                .delete(crate::history::clear_history),
-        )
-        .route(
-            "/api/resources/:resource_id/queries",
-            get(crate::queries::list_queries).post(crate::queries::save_query),
-        )
-        .route(
-            "/api/resources/:resource_id/queries/:id",
-            get(crate::queries::get_query)
-                .put(crate::queries::update_query)
-                .delete(crate::queries::delete_query),
-        )
-        .route(
-            "/api/resources/:resource_id/queries/:id/rename",
-            put(crate::queries::rename_query),
-        )
-        .route("/api/backup/export", post(backup::export_handler))
-        .route("/api/backup/preview", post(backup::preview_handler))
-        .route("/api/backup/import", post(backup::import_handler))
-        .route("/api/update/status", get(crate::update::get_update_status))
-        .route("/api/update/check", get(crate::update::check_update))
-        .route(
-            "/api/update/agents",
-            get(crate::update::list_agent_versions),
-        )
-        .route("/api/update/download", post(crate::update::download_update))
-        .route("/api/update/apply", post(crate::update::apply_update))
-        .route(
-            "/api/agent/download",
-            get(crate::agent_download::download_agent),
-        )
-        .route(
-            "/api/health",
-            get(|State(state): State<Arc<AppState>>| async move {
-                match state.metrics.get_health().await {
-                    Ok(health) => (StatusCode::OK, Json(health)).into_response(),
-                    Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse {
-                        error: ErrorBody {
-                            code: "INTERNAL_ERROR".to_string(),
-                            message: e.to_string(),
-                        },
-                    })).into_response(),
-                }
-            }),
-        )
-        .route(
-            "/api/metrics/summary",
-            get(|State(state): State<Arc<AppState>>, Query(params): Query<MetricsSummaryParams>| async move {
-                match state.metrics.get_metrics_summary(params.resource_id, params.hours.unwrap_or(24)).await {
-                    Ok(summary) => (StatusCode::OK, Json(summary)).into_response(),
-                    Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse {
-                        error: ErrorBody {
-                            code: "INTERNAL_ERROR".to_string(),
-                            message: e.to_string(),
-                        },
-                    })).into_response(),
-                }
-            }),
-        )
-        .route(
-            "/api/metrics/timeline",
-            get(|State(state): State<Arc<AppState>>, Query(params): Query<MetricsTimelineParams>| async move {
-                match state.metrics.get_metrics_timeline(params.resource_id, params.metric_type.as_str().into(), params.hours.unwrap_or(24), params.granularity).await {
-                    Ok(timeline) => (StatusCode::OK, Json(timeline)).into_response(),
-                    Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse {
-                        error: ErrorBody {
-                            code: "INTERNAL_ERROR".to_string(),
-                            message: e.to_string(),
-                        },
-                    })).into_response(),
-                }
-            }),
-        )
-        .route(
-            "/api/user/profile",
-            get(crate::user::get_profile).put(crate::user::update_profile),
-        )
-        .route("/api/user/password", put(crate::user::change_password))
-        .route("/api/settings/tls", get(crate::settings::get_tls_status))
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
-            auth_middleware,
-        ));
+    let protected_routes =
+        Router::new()
+            .route(
+                "/api/environments",
+                get(env::list_envs).post(env::create_env),
+            )
+            .route(
+                "/api/environments/:id",
+                get(env::get_env)
+                    .put(env::update_env)
+                    .delete(env::delete_env),
+            )
+            .route(
+                "/api/environments/:env_id/resources",
+                get(resource::list_resources).post(resource::create_resource),
+            )
+            .route(
+                "/api/environments/:env_id/resources/:id",
+                get(resource::get_resource)
+                    .put(resource::update_resource)
+                    .delete(resource::delete_resource),
+            )
+            .route(
+                "/api/resources/test-connection",
+                post(resource::test_connection),
+            )
+            .route("/api/environments/:env_id/agents", get(agent::list_agents))
+            .route(
+                "/api/agents/:agent_id/reset-token",
+                post(agent::reset_token),
+            )
+            .route("/api/audit-log", get(audit::list_audit_log))
+            .route("/api/audit/stats", get(audit::get_stats))
+            .route(
+                "/api/ssh/sessions",
+                post(crate::ws_terminal::create_session_handler),
+            )
+            .route(
+                "/api/ssh/sessions/:session_id",
+                delete(crate::ws_terminal::delete_session_handler),
+            )
+            .route(
+                "/api/transfers",
+                get(crate::transfer::list_transfers).post(crate::transfer::create_transfer),
+            )
+            .route(
+                "/api/transfers/:id",
+                get(crate::transfer::get_transfer).delete(crate::transfer::cancel_transfer),
+            )
+            .route(
+                "/api/transfers/:id/remove",
+                delete(crate::transfer::remove_transfer),
+            )
+            .route(
+                "/api/ai/config",
+                get(crate::ai::get_config).put(crate::ai::update_config),
+            )
+            .route("/api/ai/chat", post(crate::ai::chat))
+            .route(
+                "/api/resources/:resource_id/files",
+                get(crate::files::list_files).delete(crate::files::delete_file),
+            )
+            .route(
+                "/api/resources/:resource_id/files/mkdir",
+                post(crate::files::mkdir),
+            )
+            .route(
+                "/api/resources/:resource_id/files/touch",
+                post(crate::files::touch),
+            )
+            .route(
+                "/api/resources/:resource_id/files/rename",
+                put(crate::files::rename_file),
+            )
+            .route(
+                "/api/resources/:resource_id/files/download",
+                get(crate::files::download_file),
+            )
+            .route(
+                "/api/resources/:resource_id/files/upload",
+                post(crate::files::upload_file),
+            )
+            .route(
+                "/api/resources/:resource_id/sql/info",
+                get(crate::sql::get_resource_info),
+            )
+            .route(
+                "/api/resources/:resource_id/sql/execute",
+                post(crate::sql::execute_sql),
+            )
+            .route("/api/sql/global-query", post(crate::sql::global_query))
+            .route(
+                "/api/resources/:resource_id/sql/peers",
+                get(crate::sql::list_peer_sql_resources),
+            )
+            .route(
+                "/api/resources/:resource_id/sql/databases",
+                get(crate::sql::list_databases),
+            )
+            .route(
+                "/api/resources/:resource_id/sql/tables",
+                get(crate::sql::list_tables),
+            )
+            .route(
+                "/api/resources/:resource_id/sql/columns",
+                get(crate::sql::list_columns),
+            )
+            .route(
+                "/api/resources/:resource_id/sql/history",
+                get(crate::history::list_history)
+                    .post(crate::history::record_history)
+                    .delete(crate::history::clear_history),
+            )
+            .route(
+                "/api/resources/:resource_id/queries",
+                get(crate::queries::list_queries).post(crate::queries::save_query),
+            )
+            .route(
+                "/api/resources/:resource_id/queries/:id",
+                get(crate::queries::get_query)
+                    .put(crate::queries::update_query)
+                    .delete(crate::queries::delete_query),
+            )
+            .route(
+                "/api/resources/:resource_id/queries/:id/rename",
+                put(crate::queries::rename_query),
+            )
+            .route("/api/backup/export", post(backup::export_handler))
+            .route("/api/backup/preview", post(backup::preview_handler))
+            .route("/api/backup/import", post(backup::import_handler))
+            .route("/api/update/status", get(crate::update::get_update_status))
+            .route("/api/update/check", get(crate::update::check_update))
+            .route(
+                "/api/update/agents",
+                get(crate::update::list_agent_versions),
+            )
+            .route("/api/update/download", post(crate::update::download_update))
+            .route("/api/update/apply", post(crate::update::apply_update))
+            .route(
+                "/api/agent/download",
+                get(crate::agent_download::download_agent),
+            )
+            .route(
+                "/api/health",
+                get(|State(state): State<Arc<AppState>>| async move {
+                    match state.metrics.get_health().await {
+                        Ok(health) => (StatusCode::OK, Json(health)).into_response(),
+                        Err(e) => (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(ErrorResponse {
+                                error: ErrorBody {
+                                    code: "INTERNAL_ERROR".to_string(),
+                                    message: e.to_string(),
+                                },
+                            }),
+                        )
+                            .into_response(),
+                    }
+                }),
+            )
+            .route(
+                "/api/metrics/summary",
+                get(
+                    |State(state): State<Arc<AppState>>,
+                     Query(params): Query<MetricsSummaryParams>| async move {
+                        match state
+                            .metrics
+                            .get_metrics_summary(params.resource_id, params.hours.unwrap_or(24))
+                            .await
+                        {
+                            Ok(summary) => (StatusCode::OK, Json(summary)).into_response(),
+                            Err(e) => (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(ErrorResponse {
+                                    error: ErrorBody {
+                                        code: "INTERNAL_ERROR".to_string(),
+                                        message: e.to_string(),
+                                    },
+                                }),
+                            )
+                                .into_response(),
+                        }
+                    },
+                ),
+            )
+            .route(
+                "/api/metrics/timeline",
+                get(
+                    |State(state): State<Arc<AppState>>,
+                     Query(params): Query<MetricsTimelineParams>| async move {
+                        match state
+                            .metrics
+                            .get_metrics_timeline(
+                                params.resource_id,
+                                params.metric_type.as_str().into(),
+                                params.hours.unwrap_or(24),
+                                params.granularity,
+                            )
+                            .await
+                        {
+                            Ok(timeline) => (StatusCode::OK, Json(timeline)).into_response(),
+                            Err(e) => (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(ErrorResponse {
+                                    error: ErrorBody {
+                                        code: "INTERNAL_ERROR".to_string(),
+                                        message: e.to_string(),
+                                    },
+                                }),
+                            )
+                                .into_response(),
+                        }
+                    },
+                ),
+            )
+            .route(
+                "/api/user/profile",
+                get(crate::user::get_profile).put(crate::user::update_profile),
+            )
+            .route("/api/user/password", put(crate::user::change_password))
+            .route("/api/settings/tls", get(crate::settings::get_tls_status))
+            .layer(middleware::from_fn_with_state(
+                state.clone(),
+                auth_middleware,
+            ));
 
     let mut router = public_routes
         .merge(protected_routes)

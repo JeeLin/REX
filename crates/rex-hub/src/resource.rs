@@ -472,7 +472,6 @@ mod handler_tests {
         })
     }
 
-    
     fn auth_header() -> axum::http::header::HeaderValue {
         use jsonwebtoken::{encode, EncodingKey, Header};
         let exp = std::time::SystemTime::now()
