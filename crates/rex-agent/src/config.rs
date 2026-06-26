@@ -40,6 +40,14 @@ impl Default for UpdateConfig {
 
 impl AgentConfig {
     pub fn load(config_path: Option<&str>) -> Result<Self> {
+        Self::load_with_env(config_path, |key| std::env::var(key))
+    }
+
+    /// 从指定的环境变量读取器加载配置（测试友好，避免并行污染）
+    pub fn load_with_env(
+        config_path: Option<&str>,
+        env_fn: impl Fn(&str) -> std::result::Result<String, std::env::VarError>,
+    ) -> Result<Self> {
         let mut config = match config_path {
             Some(path) => {
                 let p = Path::new(path);
@@ -66,19 +74,19 @@ impl AgentConfig {
         };
 
         // 环境变量覆盖
-        if let Ok(val) = std::env::var("REX_SERVER") {
+        if let Ok(val) = env_fn("REX_SERVER") {
             config.server = val;
         }
-        if let Ok(val) = std::env::var("REX_TOKEN") {
+        if let Ok(val) = env_fn("REX_TOKEN") {
             config.token = val;
         }
-        if let Ok(val) = std::env::var("REX_NAME") {
+        if let Ok(val) = env_fn("REX_NAME") {
             config.name = val;
         }
-        if let Ok(val) = std::env::var("REX_DATA_DIR") {
+        if let Ok(val) = env_fn("REX_DATA_DIR") {
             config.data_dir = PathBuf::from(val);
         }
-        if let Ok(val) = std::env::var("REX_UPDATE_SOURCE") {
+        if let Ok(val) = env_fn("REX_UPDATE_SOURCE") {
             config.update.source = match val.to_lowercase().as_str() {
                 "hub" => rex_common::updater::UpdateSource::Hub,
                 _ => rex_common::updater::UpdateSource::GitHub,
@@ -92,7 +100,20 @@ impl AgentConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
+    use std::collections::HashMap;
+
+    /// 创建一个基于 HashMap 的环境变量读取器（线程安全，无进程级副作用）
+    fn fake_env(vars: &[(&str, &str)]) -> impl Fn(&str) -> std::result::Result<String, std::env::VarError> {
+        let map: HashMap<String, String> = vars
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        move |key: &str| -> std::result::Result<String, std::env::VarError> {
+            map.get(key)
+                .cloned()
+                .ok_or(std::env::VarError::NotPresent)
+        }
+    }
 
     #[test]
     fn default_config() {
@@ -105,33 +126,26 @@ mod tests {
 
     #[test]
     fn load_missing_file_uses_default() {
-        // 清理可能被其他并行测试污染的环境变量
-        env::remove_var("REX_SERVER");
-        env::remove_var("REX_TOKEN");
-        env::remove_var("REX_NAME");
-        env::remove_var("REX_DATA_DIR");
-        let config = AgentConfig::load(Some("/nonexistent/path/agent.yaml")).unwrap();
+        let empty = fake_env(&[]);
+        let config = AgentConfig::load_with_env(Some("/nonexistent/path/agent.yaml"), empty).unwrap();
         assert_eq!(config.server, "http://localhost:3000");
         assert_eq!(config.token, "");
     }
 
     #[test]
     fn load_with_env_override() {
-        env::set_var("REX_SERVER", "http://hub.example.com");
-        env::set_var("REX_TOKEN", "test-token-123");
-        env::set_var("REX_NAME", "test-agent");
-        env::set_var("REX_DATA_DIR", "/tmp/agent-data");
+        let env = fake_env(&[
+            ("REX_SERVER", "http://hub.example.com"),
+            ("REX_TOKEN", "test-token-123"),
+            ("REX_NAME", "test-agent"),
+            ("REX_DATA_DIR", "/tmp/agent-data"),
+        ]);
 
-        let config = AgentConfig::load(Some("/nonexistent")).unwrap();
+        let config = AgentConfig::load_with_env(Some("/nonexistent"), env).unwrap();
         assert_eq!(config.server, "http://hub.example.com");
         assert_eq!(config.token, "test-token-123");
         assert_eq!(config.name, "test-agent");
         assert_eq!(config.data_dir, PathBuf::from("/tmp/agent-data"));
-
-        env::remove_var("REX_SERVER");
-        env::remove_var("REX_TOKEN");
-        env::remove_var("REX_NAME");
-        env::remove_var("REX_DATA_DIR");
     }
 
     #[test]
@@ -144,7 +158,8 @@ mod tests {
         )
         .unwrap();
 
-        let config = AgentConfig::load(Some(config_path.to_str().unwrap())).unwrap();
+        let empty = fake_env(&[]);
+        let config = AgentConfig::load_with_env(Some(config_path.to_str().unwrap()), empty).unwrap();
         assert_eq!(config.server, "http://custom:8080");
         assert_eq!(config.token, "my-token");
         assert_eq!(config.name, "my-agent");
@@ -170,15 +185,15 @@ mod tests {
         )
         .unwrap();
 
-        let config = AgentConfig::load(Some(config_path.to_str().unwrap())).unwrap();
+        let empty = fake_env(&[]);
+        let config = AgentConfig::load_with_env(Some(config_path.to_str().unwrap()), empty).unwrap();
         assert_eq!(config.update.source, rex_common::updater::UpdateSource::Hub);
     }
 
     #[test]
     fn load_update_source_from_env() {
-        env::set_var("REX_UPDATE_SOURCE", "hub");
-        let config = AgentConfig::load(Some("/nonexistent")).unwrap();
+        let env = fake_env(&[("REX_UPDATE_SOURCE", "hub")]);
+        let config = AgentConfig::load_with_env(Some("/nonexistent"), env).unwrap();
         assert_eq!(config.update.source, rex_common::updater::UpdateSource::Hub);
-        env::remove_var("REX_UPDATE_SOURCE");
     }
 }

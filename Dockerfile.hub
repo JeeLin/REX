@@ -20,6 +20,9 @@ RUN chmod +x /app/rex-hub
 # 前端静态资源
 COPY dist/static/ /app/static/
 
+# Agent 二进制（供 /api/agent/download 使用）
+COPY dist/agents/ /app/data/agent-binaries/
+
 RUN mkdir -p /app/data /app/data/certs /app/data/acme /app/data/self-signed
 
 ENV DATA_DIR=/app/data
