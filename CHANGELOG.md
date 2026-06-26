@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-06-26
+
+### Added
+- Agent 自动更新流程：Agent 收到 `needs_update` 后自动从 Hub 下载新版二进制、SHA256 校验、备份、写入 update-state.json、退出由 supervisor 替换
+- Agent `auto_update` 配置项：支持 YAML 配置文件和环境变量 `REX_AUTO_UPDATE` 控制是否自动更新
+- Hub Agent 配置 API：GET/PATCH `/api/agents/:agent_id/config`，支持查看和修改 Agent 的 auto_update 设置
+- Hub agents 表 `config_json` 列：存储 Agent 可配置项
+- 前端 Agent 配置弹窗自动更新开关：对接 PATCH API，乐观 UI 更新 + 错误回滚
+- 前端设置页 Agent 版本总览：显示各 Agent 版本号和更新状态
+
+### Changed
+- Agent WebSocket 心跳 payload 新增 `auto_update` 字段
+- Agent 入口使用 `run_update_supervisor` 替代简单 supervisor 循环
+
 ## [0.20.0] - 2026-06-26
 
 ### Added
