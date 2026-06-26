@@ -209,17 +209,15 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ── Docker: Agent 镜像（linux/amd64 + linux/arm64） ───
+  # 使用 build-agent 预构建的二进制，不再从源码编译
   docker-agent:
-    needs: [check-rust, check-web]
+    needs: [build-agent]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v7
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -230,6 +228,18 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download agent binary (linux-amd64)
+        uses: actions/download-artifact@v8
+        with:
+          name: agent-linux-amd64
+          path: dist/
+
+      - name: Download agent binary (linux-arm64)
+        uses: actions/download-artifact@v8
+        with:
+          name: agent-linux-arm64
+          path: dist/arm64/
 
       - name: Prepare agent README for Docker Hub
         run: cp docs/agent-readme.md README.md
