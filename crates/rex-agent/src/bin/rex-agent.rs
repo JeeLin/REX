@@ -2,7 +2,7 @@ use rex_agent::{client, config::AgentConfig, identity::AgentIdentity, ws::AgentW
 use rex_common::app;
 use rex_common::Parser;
 
-const AGENT_VERSION: &str = "0.1.0";
+const AGENT_VERSION: &str = "0.21.0";
 
 fn main() -> anyhow::Result<()> {
     app::init_tracing();
@@ -24,10 +24,49 @@ fn main() -> anyhow::Result<()> {
         let identity = AgentIdentity::load_or_create(&config.data_dir)?;
         tracing::info!(agent_id = %identity.id, "agent identity loaded");
 
+        // Check if this is an update-pending startup
+        if std::env::var("REX_UPDATE_PENDING").is_ok() {
+            tracing::info!("update pending mode, performing health check");
+            // Simple health check: try to connect to hub
+            let rt = tokio::runtime::Runtime::new()?;
+            let result = rt.block_on(async {
+                let hub_client = client::HubClient::new(&config.server);
+                let (os, arch, hostname, os_version) = client::platform_info();
+                let req = client::RegisterRequest {
+                    id: identity.id.clone(),
+                    token: config.token.clone(),
+                    name: config.name.clone(),
+                    version: AGENT_VERSION.to_string(),
+                    sha256: String::new(),
+                    os,
+                    arch,
+                    hostname,
+                    os_version,
+                };
+                hub_client.register(&req).await
+            });
+            match result {
+                Ok(_) => {
+                    tracing::info!("health check passed, update committed");
+                    std::process::exit(0);
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "health check failed");
+                    std::process::exit(11);
+                }
+            }
+        }
+
         let rt = tokio::runtime::Runtime::new()?;
         rt.block_on(run_agent(config, identity))?;
     } else {
-        app::run_from(args)?;
+        // Supervisor mode: use update supervisor with data_dir
+        let config_path = cli.config.clone();
+        let data_dir = AgentConfig::load(config_path.as_deref())
+            .map(|c| c.data_dir)
+            .unwrap_or_else(|_| std::path::PathBuf::from("./data"));
+
+        app::run_update_supervisor_from_args(args, data_dir)?;
     }
 
     Ok(())
@@ -72,6 +111,8 @@ async fn run_agent(config: AgentConfig, identity: AgentIdentity) -> anyhow::Resu
         identity.id,
         config.token,
         AGENT_VERSION.to_string(),
+        config.update.auto_update,
+        config.data_dir,
     );
     ws.run().await
 }

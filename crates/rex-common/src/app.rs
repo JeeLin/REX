@@ -1,6 +1,9 @@
 use crate::cli::Cli;
-use crate::supervisor::{run_supervisor_with, SupervisorConfig};
+use crate::supervisor::{
+    run_supervisor_with, run_update_supervisor, SupervisorConfig, UpdateSupervisorConfig,
+};
 use clap::Parser;
+use std::path::PathBuf;
 use std::time::Duration;
 
 /// 初始化 tracing 日志
@@ -50,6 +53,28 @@ fn default_supervisor() -> anyhow::Result<()> {
         },
         SupervisorConfig {
             restart_delay: Duration::from_secs(1),
+        },
+    )
+}
+
+/// 使用 update supervisor 启动，支持自动更新和回滚
+pub fn run_update_supervisor_from_args(
+    args: impl IntoIterator<Item = String>,
+    data_dir: PathBuf,
+) -> anyhow::Result<()> {
+    let _cli = Cli::parse_from(args);
+    run_update_supervisor(
+        || {
+            let mut cmd = std::process::Command::new(
+                std::env::current_exe().expect("failed to get current exe"),
+            );
+            cmd.arg("--worker");
+            cmd
+        },
+        UpdateSupervisorConfig {
+            restart_delay: Duration::from_secs(1),
+            data_dir,
+            health_check_timeout: Duration::from_secs(30),
         },
     )
 }

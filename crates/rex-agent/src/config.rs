@@ -6,6 +6,12 @@ use std::path::{Path, PathBuf};
 pub struct UpdateConfig {
     #[serde(default)]
     pub source: rex_common::updater::UpdateSource,
+    #[serde(default = "default_auto_update")]
+    pub auto_update: bool,
+}
+
+fn default_auto_update() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -34,6 +40,7 @@ impl Default for UpdateConfig {
     fn default() -> Self {
         Self {
             source: rex_common::updater::UpdateSource::GitHub,
+            auto_update: true,
         }
     }
 }
@@ -91,6 +98,9 @@ impl AgentConfig {
                 "hub" => rex_common::updater::UpdateSource::Hub,
                 _ => rex_common::updater::UpdateSource::GitHub,
             };
+        }
+        if let Ok(val) = env_fn("REX_AUTO_UPDATE") {
+            config.update.auto_update = matches!(val.to_lowercase().as_str(), "true" | "1" | "yes");
         }
 
         Ok(config)
@@ -198,5 +208,43 @@ mod tests {
         let env = fake_env(&[("REX_UPDATE_SOURCE", "hub")]);
         let config = AgentConfig::load_with_env(Some("/nonexistent"), env).unwrap();
         assert_eq!(config.update.source, rex_common::updater::UpdateSource::Hub);
+    }
+
+    #[test]
+    fn default_auto_update_is_true() {
+        let config = AgentConfig::default();
+        assert!(config.update.auto_update);
+    }
+
+    #[test]
+    fn load_auto_update_from_yaml() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("agent.yaml");
+        std::fs::write(
+            &config_path,
+            "server: http://localhost:3000\ntoken: t\nname: a\ndata_dir: /tmp/d\nupdate:\n  source: hub\n  auto_update: false\n",
+        )
+        .unwrap();
+
+        let empty = fake_env(&[]);
+        let config =
+            AgentConfig::load_with_env(Some(config_path.to_str().unwrap()), empty).unwrap();
+        assert!(!config.update.auto_update);
+    }
+
+    #[test]
+    fn load_auto_update_from_env() {
+        let env = fake_env(&[("REX_AUTO_UPDATE", "false")]);
+        let config = AgentConfig::load_with_env(Some("/nonexistent"), env).unwrap();
+        assert!(!config.update.auto_update);
+    }
+
+    #[test]
+    fn load_auto_update_from_env_true_variants() {
+        for val in &["true", "1", "yes", "True", "YES"] {
+            let env = fake_env(&[("REX_AUTO_UPDATE", val)]);
+            let config = AgentConfig::load_with_env(Some("/nonexistent"), env).unwrap();
+            assert!(config.update.auto_update, "expected true for value: {val}");
+        }
     }
 }
