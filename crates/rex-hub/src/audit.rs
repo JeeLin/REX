@@ -164,18 +164,10 @@ pub async fn get_stats(
         let conn = db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
 
         let (total, success, failed) = if period == "today" {
-            let today_prefix = {
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs();
-                let days = (now / 86400) as i64;
-                let (year, month, day) = days_to_ymd(days + 719468);
-                format!("{:04}{:02}{:02}", year, month, day)
-            };
+            let today_start = chrono::Utc::now().format("%Y-%m-%d").to_string();
             conn.query_row(
                 "SELECT COUNT(*), SUM(CASE WHEN result='success' THEN 1 ELSE 0 END), SUM(CASE WHEN result='failure' THEN 1 ELSE 0 END) FROM audit_log WHERE time >= ?1",
-                rusqlite::params![today_prefix],
+                rusqlite::params![today_start],
                 |row| Ok((row.get(0).unwrap_or(0), row.get(1).unwrap_or(0), row.get(2).unwrap_or(0))),
             ).unwrap_or((0, 0, 0))
         } else {

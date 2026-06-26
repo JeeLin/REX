@@ -24,12 +24,7 @@ pub struct ErrorBody {
 // ── 工具函数 ──────────────────────────────────────────────
 
 pub fn now_iso() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    format!("{secs:010}")
+    chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
 }
 
 pub fn gen_id(prefix: &str) -> String {
@@ -108,10 +103,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn now_iso_returns_timestamp_string() {
+    fn now_iso_returns_iso8601_string() {
         let ts = now_iso();
         assert!(!ts.is_empty());
-        assert!(ts.len() >= 10);
+        assert!(ts.ends_with('Z'));
+        assert!(ts.contains('T'));
+        assert!(ts.len() >= 20);
     }
 
     #[test]
