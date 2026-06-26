@@ -21,6 +21,7 @@
           @open-config="openConfig(agent)"
           @open-log="openLog(agent)"
           @reset-token="openResetToken(agent)"
+          @restart="restartConfirm(agent)"
         />
       </div>
     </template>
@@ -35,6 +36,7 @@
     />
     <AgentLogModal
       :visible="showLogModal"
+      :agent-id="logAgentId"
       @close="showLogModal = false"
     />
     <AgentResetTokenModal
@@ -51,7 +53,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import client from '@/api/client'
 import { getUpdateStatus } from '@/api/update'
-import type { Agent } from '@/api/agent'
+import { restartAgent, type Agent } from '@/api/agent'
 import AgentCard from '@/features/agents/AgentCard.vue'
 import DeployGuide from '@/features/agents/DeployGuide.vue'
 import AgentConfigModal from '@/features/agents/AgentConfigModal.vue'
@@ -68,6 +70,7 @@ const loading = ref(true)
 const showConfigModal = ref(false)
 const configAgent = ref<Agent | null>(null)
 const showLogModal = ref(false)
+const logAgentId = ref('')
 const showResetModal = ref(false)
 const resetAgent = ref<Agent | null>(null)
 
@@ -76,13 +79,23 @@ function openConfig(agent: Agent) {
   showConfigModal.value = true
 }
 
-function openLog(_agent: Agent) {
+function openLog(agent: Agent) {
+  logAgentId.value = agent.id
   showLogModal.value = true
 }
 
 function openResetToken(agent: Agent) {
   resetAgent.value = agent
   showResetModal.value = true
+}
+
+async function restartConfirm(agent: Agent) {
+  if (!confirm(t('agent.restartConfirm', { name: agent.name }))) return
+  try {
+    await restartAgent(agent.id)
+  } catch {
+    // 静默处理
+  }
 }
 
 onMounted(async () => {

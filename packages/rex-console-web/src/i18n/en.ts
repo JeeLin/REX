@@ -73,6 +73,7 @@ export default {
     resetTokenDesc2: "'s registration token?",
     resetTokenWarning: 'After resetting, the Agent will be immediately disconnected and unable to reconnect. Please restart the Agent on its machine with the new token.',
     resetTokenConfirm: 'Reset token and close all connections in this environment',
+    restartConfirm: 'Are you sure you want to restart {name}? The restart will briefly interrupt all connections proxied by this Agent.',
     confirmReset: 'Confirm Reset',
     viewDetail: 'View detail',
     copySummary: 'Copy summary',
@@ -184,7 +185,7 @@ export default {
     loginBtn: 'Login',
     loginFailed: 'Login failed',
     loginSuccess: 'Login successful',
-    version: 'REX Hub v0.1 · Self-hosted',
+    version: `REX Hub v${__APP_VERSION__} · Self-hosted`,
     subtitle: 'Manage your remote infrastructure',
   },
   status: {

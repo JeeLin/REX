@@ -73,6 +73,7 @@ export default {
     resetTokenDesc2: '的注册令牌吗？',
     resetTokenWarning: '重置后该 Agent 将立即断开连接且无法重新连接。请在 Agent 所在机器上使用新令牌重新启动。',
     resetTokenConfirm: '重置令牌并关闭所有该环境的连接',
+    restartConfirm: '确定要重启 {name} 吗？重启将短暂中断该 Agent 代理的所有连接。',
     confirmReset: '确认重置',
     viewDetail: '查看详情',
     copySummary: '复制摘要',
@@ -184,7 +185,7 @@ export default {
     loginBtn: '登录',
     loginFailed: '登录失败',
     loginSuccess: '登录成功',
-    version: 'REX Hub v0.1 · 自托管',
+    version: `REX Hub v${__APP_VERSION__} · 自托管`,
     subtitle: '管理你的远程基础设施',
   },
   status: {

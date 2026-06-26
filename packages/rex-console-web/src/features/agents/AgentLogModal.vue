@@ -26,13 +26,15 @@
           </label>
         </div>
         <div ref="logBodyRef" class="log-body">
+          <div v-if="loading" class="log-empty">{{ t('common.loading') }}</div>
+          <div v-else-if="filteredLogs.length === 0" class="log-empty">暂无日志</div>
           <div
             v-for="(log, idx) in filteredLogs"
             :key="idx"
             class="log-line"
             :class="log.level"
           >
-            <span class="log-time">{{ log.time }}</span>
+            <span class="log-time">{{ formatTime(log.timestamp) }}</span>
             <span class="log-level-tag">[{{ log.level.toUpperCase() }}]</span>
             <span class="log-message">{{ log.message }}</span>
           </div>
@@ -47,10 +49,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { getAgentLogs, type AgentLogEntry } from '@/api/agent'
 
-defineProps<{ visible: boolean }>()
+const props = defineProps<{ visible: boolean; agentId?: string }>()
 defineEmits<{ close: [] }>()
 
 const { t } = useI18n()
@@ -58,6 +61,11 @@ const { t } = useI18n()
 const activeLevel = ref('all')
 const autoScroll = ref(true)
 const logBodyRef = ref<HTMLElement | null>(null)
+const loading = ref(false)
+const logs = ref<AgentLogEntry[]>([])
+const lastTimestamp = ref('')
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const logLevels = [
   { value: 'all', label: '全部' },
@@ -67,24 +75,71 @@ const logLevels = [
   { value: 'debug', label: 'DEBUG' },
 ]
 
-const mockLogs = [
-  { time: '16:51:30', level: 'info', message: 'TLS 握手完成' },
-  { time: '16:51:28', level: 'info', message: 'Token 验证成功' },
-  { time: '16:50:15', level: 'info', message: 'SSH 会话建立 · root@192.168.1.100' },
-  { time: '16:49:01', level: 'info', message: 'MySQL 代理隧道建立 · db.internal:3306' },
-  { time: '16:48:22', level: 'warn', message: '延迟告警: 125ms (阈值 100ms)' },
-  { time: '16:47:50', level: 'debug', message: '心跳发送 · latency=12ms' },
-  { time: '16:47:00', level: 'info', message: '资源扫描完成 · 发现 4 个资源' },
-  { time: '16:45:13', level: 'error', message: 'SSH 连接失败: Connection refused (port 22)' },
-  { time: '16:44:00', level: 'debug', message: '心跳发送 · latency=8ms' },
-  { time: '16:43:22', level: 'info', message: 'SFTP 会话建立 · /opt/rex/' },
-  { time: '16:42:10', level: 'warn', message: '磁盘空间告警: /data 剩余 12%' },
-  { time: '16:41:00', level: 'debug', message: '心跳发送 · latency=10ms' },
-]
-
 const filteredLogs = computed(() => {
-  if (activeLevel.value === 'all') return mockLogs
-  return mockLogs.filter(l => l.level === activeLevel.value)
+  if (activeLevel.value === 'all') return logs.value
+  return logs.value.filter(l => l.level === activeLevel.value)
+})
+
+function formatTime(timestamp: string): string {
+  try {
+    const d = new Date(timestamp)
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
+  } catch {
+    return timestamp
+  }
+}
+
+async function fetchLogs() {
+  if (!props.agentId) return
+  try {
+    const since = lastTimestamp.value || undefined
+    const resp = await getAgentLogs(props.agentId, since)
+    if (resp.logs.length > 0) {
+      logs.value.push(...resp.logs)
+      lastTimestamp.value = resp.logs[resp.logs.length - 1].timestamp
+      // 保持最多 1000 条
+      if (logs.value.length > 1000) {
+        logs.value = logs.value.slice(logs.value.length - 1000)
+      }
+    }
+  } catch {
+    // 静默处理
+  }
+}
+
+async function startPolling() {
+  stopPolling()
+  logs.value = []
+  lastTimestamp.value = ''
+  loading.value = true
+  await fetchLogs()
+  loading.value = false
+  pollTimer = setInterval(fetchLogs, 5000)
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+watch(() => props.visible, (v) => {
+  if (v && props.agentId) {
+    startPolling()
+  } else {
+    stopPolling()
+  }
+})
+
+watch(() => props.agentId, (id) => {
+  if (id && props.visible) {
+    startPolling()
+  }
+})
+
+onUnmounted(() => {
+  stopPolling()
 })
 
 watch(filteredLogs, async () => {
@@ -220,6 +275,12 @@ watch(filteredLogs, async () => {
   font-size: var(--fs-xs);
   line-height: 1.8;
   min-height: 300px;
+}
+
+.log-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: var(--sp-xl);
 }
 
 .log-line {

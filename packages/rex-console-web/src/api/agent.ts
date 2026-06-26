@@ -54,3 +54,35 @@ export async function updateAgentConfig(
   )
   return data.data
 }
+
+// ── 日志 API ─────────────────────────────────────────
+
+export interface AgentLogEntry {
+  timestamp: string
+  level: string
+  message: string
+}
+
+export interface AgentLogResponse {
+  logs: AgentLogEntry[]
+  total: number
+}
+
+/** 获取 Agent 日志（支持 since 增量查询） */
+export async function getAgentLogs(
+  agentId: string,
+  since?: string,
+): Promise<AgentLogResponse> {
+  const params = since ? `?since=${encodeURIComponent(since)}` : ''
+  const { data } = await client.get<{ data: AgentLogResponse }>(
+    `/agents/${agentId}/logs${params}`,
+  )
+  return data.data
+}
+
+// ── 重启 API ─────────────────────────────────────────
+
+/** 发送 Agent 重启指令 */
+export async function restartAgent(agentId: string): Promise<void> {
+  await client.post(`/agents/${agentId}/restart`)
+}

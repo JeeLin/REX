@@ -36,6 +36,13 @@
     <div class="card-actions">
       <button class="btn btn-ghost btn-sm" @click.stop="$emit('openConfig')">{{ t('ctx.config') }}</button>
       <button class="btn btn-ghost btn-sm" @click.stop="$emit('openLog')">{{ t('ctx.viewLog') }}</button>
+      <button
+        v-if="agent.status === 'online'"
+        class="btn btn-ghost btn-sm"
+        @click.stop="$emit('restart')"
+      >
+        {{ t('ctx.restartAgent') }}
+      </button>
       <button class="btn btn-danger btn-sm" @click.stop="$emit('resetToken')">{{ t('ctx.resetToken') }}</button>
     </div>
   </div>
@@ -48,7 +55,7 @@ import type { Agent } from '@/api/agent'
 import AgentVersionBadge from './AgentVersionBadge.vue'
 
 const props = defineProps<{ agent: Agent; hubVersion?: string }>()
-const emit = defineEmits<{ openConfig: []; openLog: []; resetToken: [] }>()
+const emit = defineEmits<{ openConfig: []; openLog: []; resetToken: []; restart: [] }>()
 const { show: showMenu } = useContextMenu()
 
 function onCtx(e: MouseEvent) {
@@ -59,7 +66,7 @@ function onCtx(e: MouseEvent) {
     { label: t('ctx.copyAgentId'), action: () => navigator.clipboard?.writeText(props.agent.id) },
     { label: t('ctx.copyToken') },
     { separator: true },
-    { label: t('ctx.restartAgent'), danger: true },
+    { label: t('ctx.restartAgent'), danger: true, action: () => emit('restart') },
     { label: t('ctx.resetToken'), danger: true, action: () => emit('resetToken') },
   ])
 }
