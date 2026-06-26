@@ -195,7 +195,6 @@ impl AgentWs {
             .map(|s| s.to_string());
 
         let total = resp.content_length().unwrap_or(0);
-        let mut downloaded: u64 = 0;
         let mut bytes = Vec::with_capacity(total as usize);
 
         let mut stream = resp.bytes_stream();
@@ -203,7 +202,6 @@ impl AgentWs {
         while let Some(chunk) = stream.next().await {
             match chunk {
                 Ok(c) => {
-                    downloaded += c.len() as u64;
                     bytes.extend_from_slice(&c);
                 }
                 Err(e) => {
