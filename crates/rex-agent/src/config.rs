@@ -103,15 +103,15 @@ mod tests {
     use std::collections::HashMap;
 
     /// 创建一个基于 HashMap 的环境变量读取器（线程安全，无进程级副作用）
-    fn fake_env(vars: &[(&str, &str)]) -> impl Fn(&str) -> std::result::Result<String, std::env::VarError> {
+    fn fake_env(
+        vars: &[(&str, &str)],
+    ) -> impl Fn(&str) -> std::result::Result<String, std::env::VarError> {
         let map: HashMap<String, String> = vars
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
         move |key: &str| -> std::result::Result<String, std::env::VarError> {
-            map.get(key)
-                .cloned()
-                .ok_or(std::env::VarError::NotPresent)
+            map.get(key).cloned().ok_or(std::env::VarError::NotPresent)
         }
     }
 
@@ -127,7 +127,8 @@ mod tests {
     #[test]
     fn load_missing_file_uses_default() {
         let empty = fake_env(&[]);
-        let config = AgentConfig::load_with_env(Some("/nonexistent/path/agent.yaml"), empty).unwrap();
+        let config =
+            AgentConfig::load_with_env(Some("/nonexistent/path/agent.yaml"), empty).unwrap();
         assert_eq!(config.server, "http://localhost:3000");
         assert_eq!(config.token, "");
     }
@@ -159,7 +160,8 @@ mod tests {
         .unwrap();
 
         let empty = fake_env(&[]);
-        let config = AgentConfig::load_with_env(Some(config_path.to_str().unwrap()), empty).unwrap();
+        let config =
+            AgentConfig::load_with_env(Some(config_path.to_str().unwrap()), empty).unwrap();
         assert_eq!(config.server, "http://custom:8080");
         assert_eq!(config.token, "my-token");
         assert_eq!(config.name, "my-agent");
@@ -186,7 +188,8 @@ mod tests {
         .unwrap();
 
         let empty = fake_env(&[]);
-        let config = AgentConfig::load_with_env(Some(config_path.to_str().unwrap()), empty).unwrap();
+        let config =
+            AgentConfig::load_with_env(Some(config_path.to_str().unwrap()), empty).unwrap();
         assert_eq!(config.update.source, rex_common::updater::UpdateSource::Hub);
     }
 
