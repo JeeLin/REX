@@ -2,6 +2,7 @@ use crate::db::Database;
 use chrono::{DateTime, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use sysinfo::System;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
 
@@ -91,11 +92,10 @@ impl MetricsCollector {
         // 查询各表的行数
         let tables = vec!["environments", "resources", "audit_log", "metrics"];
         for table in tables {
-            let count: i64 = conn.query_row(
-                &format!("SELECT COUNT(*) FROM {}", table),
-                [],
-                |row| row.get(0),
-            )?;
+            let count: i64 =
+                conn.query_row(&format!("SELECT COUNT(*) FROM {}", table), [], |row| {
+                    row.get(0)
+                })?;
             db_stats.insert(table.to_string(), serde_json::Value::Number(count.into()));
         }
 
@@ -106,13 +106,63 @@ impl MetricsCollector {
             |row| row.get(0),
         )?;
 
-        db_stats.insert("size_bytes".to_string(), serde_json::Value::Number(db_size.into()));
+        db_stats.insert(
+            "size_bytes".to_string(),
+            serde_json::Value::Number(db_size.into()),
+        );
 
-        // TODO: 实际项目中应该添加系统指标（CPU、内存、磁盘等）
-        // 这里先返回模拟数据
+        // 获取系统指标（CPU、内存、运行时间）
+        // 注意：sysinfo 0.30 中 disk 访问需要通过 Disks::new_with_refresh_list
+        let sys_info = tokio::task::spawn_blocking(|| {
+            let mut sys = System::new_all();
+            sys.refresh_all();
+            sys
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("system info task failed: {e}"))?;
+
+        // CPU 使用率 (百分比) - sysinfo 0.30 使用 cgroup CPU 除以 CPU 核心数
+        let cpu_usage = {
+            let cpus = sys_info.cpus();
+            if cpus.is_empty() {
+                0.0
+            } else {
+                let total: f32 = cpus.iter().map(|c| c.cpu_usage()).sum();
+                total / cpus.len() as f32
+            }
+        };
+
+        // 内存使用率 (百分比)
+        let total_mem = sys_info.total_memory();
+        let used_mem = sys_info.used_memory();
+        let memory_usage = if total_mem > 0 {
+            (used_mem as f64 / total_mem as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        // 磁盘使用率 - sysinfo 0.30 中 Disks 是独立类型
+        let disk_usage = {
+            let disks = sysinfo::Disks::new_with_refreshed_list();
+            let mut total_disk_space: u64 = 0;
+            let mut used_disk_space: u64 = 0;
+            for disk in disks.iter() {
+                total_disk_space += disk.total_space();
+                used_disk_space += disk.total_space() - disk.available_space();
+            }
+            if total_disk_space > 0 {
+                (used_disk_space as f64 / total_disk_space as f64) * 100.0
+            } else {
+                0.0
+            }
+        };
+
+        // 系统运行时间 (秒)
+        let uptime_seconds = System::uptime();
+
         let health_status = HealthStatus {
             status: "healthy".to_string(),
-            uptime_seconds: 0, // TODO: 实际运行时间
+            uptime_seconds,
             version: env!("CARGO_PKG_VERSION").to_string(),
             database: DbStats {
                 size_bytes: db_size as u64,
@@ -121,31 +171,21 @@ impl MetricsCollector {
                     resources: db_stats.get("resources").unwrap().as_u64().unwrap(),
                     audit_log: db_stats.get("audit_log").unwrap().as_u64().unwrap(),
                     metrics: db_stats.get("metrics").unwrap().as_u64().unwrap(),
-                }
+                },
             },
             system: SystemStats {
-                cpu_usage_percent: 0.0, // TODO: 实际CPU使用率
-                memory_usage_percent: 0.0, // TODO: 实际内存使用率
-                disk_usage_percent: 0.0, // TODO: 实际磁盘使用率
+                cpu_usage_percent: cpu_usage as f64,
+                memory_usage_percent: memory_usage,
+                disk_usage_percent: disk_usage,
             },
             connections: ConnectionStatsInfo {
-                agents_online: 0, // TODO: 实际在线Agent数
-                agents_total: 0, // TODO: 总Agent数
-                active_sessions: 0, // TODO: 实际活跃会话数
-            }
+                agents_online: 0,
+                agents_total: 0,
+                active_sessions: 0,
+            },
         };
 
         Ok(health_status)
-    }
-
-    /// 获取指标摘要
-    pub async fn get_metrics_summary(&self, resource_id: Option<String>, hours: u32) -> Result<MetricsSummary, anyhow::Error> {
-        self.get_summary(resource_id, hours).await
-    }
-
-    /// 获取时间序列数据
-    pub async fn get_metrics_timeline(&self, resource_id: Option<String>, metric_type: MetricType, hours: u32, granularity: Option<String>) -> Result<Vec<TimePoint>, anyhow::Error> {
-        self.get_timeline(resource_id, metric_type, hours, granularity).await
     }
 
     /// 记录一个指标
@@ -185,7 +225,8 @@ impl MetricsCollector {
             MetricType::Latency,
             latency_ms,
             tags,
-        )).await
+        ))
+        .await
     }
 
     /// 记录吞吐量指标 (字节/秒)
@@ -200,7 +241,8 @@ impl MetricsCollector {
             MetricType::Throughput,
             bytes_per_sec,
             tags,
-        )).await
+        ))
+        .await
     }
 
     /// 记录错误计数
@@ -210,12 +252,8 @@ impl MetricsCollector {
         count: f64,
         tags: Option<String>,
     ) -> Result<(), anyhow::Error> {
-        self.record_metric(Metric::new(
-            resource_id,
-            MetricType::Error,
-            count,
-            tags,
-        )).await
+        self.record_metric(Metric::new(resource_id, MetricType::Error, count, tags))
+            .await
     }
 
     /// 记录连接事件
@@ -230,11 +268,12 @@ impl MetricsCollector {
             MetricType::Connection,
             if connected { 1.0 } else { 0.0 },
             tags,
-        )).await
+        ))
+        .await
     }
 
     /// 获取指标摘要 (最近 N 小时)
-    pub async fn get_summary(
+    pub async fn get_metrics_summary(
         &self,
         resource_id: Option<String>,
         hours: u32,
@@ -243,9 +282,8 @@ impl MetricsCollector {
         let since = Utc::now() - chrono::Duration::hours(hours as i64);
         let since_str = since.to_rfc3339();
 
-        let mut query = String::from(
-            "SELECT metric_type, value FROM metrics WHERE recorded_at >= ?1",
-        );
+        let mut query =
+            String::from("SELECT metric_type, value FROM metrics WHERE recorded_at >= ?1");
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(since_str)];
 
         if let Some(ref rid) = resource_id {
@@ -254,7 +292,8 @@ impl MetricsCollector {
         }
 
         let mut stmt = conn.prepare(&query)?;
-        let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|boxed| boxed.as_ref()).collect();
+        let param_refs: Vec<&dyn rusqlite::ToSql> =
+            params.iter().map(|boxed| boxed.as_ref()).collect();
         let mut rows = stmt.query(param_refs.as_slice())?;
 
         let mut latency_values = Vec::new();
@@ -342,7 +381,7 @@ impl MetricsCollector {
     }
 
     /// 获取时间序列数据 (按时间窗口分桶)
-    pub async fn get_timeline(
+    pub async fn get_metrics_timeline(
         &self,
         resource_id: Option<String>,
         metric_type: MetricType,
@@ -371,11 +410,13 @@ impl MetricsCollector {
         query.push_str(" ORDER BY recorded_at");
 
         let mut stmt = conn.prepare(&query)?;
-        let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|boxed| boxed.as_ref()).collect();
+        let param_refs: Vec<&dyn rusqlite::ToSql> =
+            params.iter().map(|boxed| boxed.as_ref()).collect();
         let mut rows = stmt.query(param_refs.as_slice())?;
 
         // 根据粒度分组
-        let mut buckets: std::collections::HashMap<String, Vec<f64>> = std::collections::HashMap::new();
+        let mut buckets: std::collections::HashMap<String, Vec<f64>> =
+            std::collections::HashMap::new();
 
         while let Some(row) = rows.next()? {
             let _metric_type: String = row.get(0)?;
@@ -387,45 +428,55 @@ impl MetricsCollector {
                 match gran.as_str() {
                     "1h" => {
                         // 按小时分组
-                        let dt = DateTime::parse_from_rfc3339(&timestamp).unwrap();
+                        let dt = DateTime::parse_from_rfc3339(&timestamp)
+                            .map_err(|e| anyhow::anyhow!("invalid timestamp: {e}"))?;
                         dt.format("%Y-%m-%d %H:00:00").to_string()
                     }
                     "6h" => {
                         // 按6小时分组
-                        let dt = DateTime::parse_from_rfc3339(&timestamp).unwrap();
+                        let dt = DateTime::parse_from_rfc3339(&timestamp)
+                            .map_err(|e| anyhow::anyhow!("invalid timestamp: {e}"))?;
                         let hour = dt.hour();
                         let bucket = (hour / 6) * 6;
-                        dt.format(&format!("{}-{:02}:00:00", dt.format("%Y-%m-%d"), bucket)).to_string()
+                        format!("{}-{:02}:00:00", dt.format("%Y-%m-%d"), bucket)
                     }
                     "24h" => {
                         // 按天分组
-                        let dt = DateTime::parse_from_rfc3339(&timestamp).unwrap();
+                        let dt = DateTime::parse_from_rfc3339(&timestamp)
+                            .map_err(|e| anyhow::anyhow!("invalid timestamp: {e}"))?;
                         dt.format("%Y-%m-%d 00:00:00").to_string()
                     }
                     "7d" => {
                         // 按周分组
-                        let dt = DateTime::parse_from_rfc3339(&timestamp).unwrap();
+                        let dt = DateTime::parse_from_rfc3339(&timestamp)
+                            .map_err(|e| anyhow::anyhow!("invalid timestamp: {e}"))?;
                         dt.format("%Y-%W-1 00:00:00").to_string()
                     }
                     _ => {
                         // 默认按小时分组
-                        let dt = DateTime::parse_from_rfc3339(&timestamp).unwrap();
+                        let dt = DateTime::parse_from_rfc3339(&timestamp)
+                            .map_err(|e| anyhow::anyhow!("invalid timestamp: {e}"))?;
                         dt.format("%Y-%m-%d %H:00:00").to_string()
                     }
                 }
             } else {
                 // 自动根据时间范围选择粒度
-                let dt = DateTime::parse_from_rfc3339(&timestamp).unwrap();
+                let dt = DateTime::parse_from_rfc3339(&timestamp)
+                    .map_err(|e| anyhow::anyhow!("invalid timestamp: {e}"))?;
                 if hours <= 24 {
                     dt.format("%Y-%m-%d %H:00:00").to_string()
-                } else if hours <= 168 { // 一周
+                } else if hours <= 168 {
+                    // 一周
                     dt.format("%Y-%m-%d 00:00:00").to_string()
                 } else {
                     dt.format("%Y-%W-1 00:00:00").to_string()
                 }
             };
 
-            buckets.entry(bucket_key).or_insert_with(Vec::new).push(value);
+            buckets
+                .entry(bucket_key)
+                .or_insert_with(Vec::new)
+                .push(value);
         }
 
         // 计算每个桶的平均值和数量
@@ -460,7 +511,10 @@ impl MetricsCollector {
             rusqlite::params![cutoff_str],
         )?;
 
-        info!("Cleaned up {} old metric records (older than {} days)", deleted, retention_days);
+        info!(
+            "Cleaned up {} old metric records (older than {} days)",
+            deleted, retention_days
+        );
         Ok(deleted as usize)
     }
 
@@ -471,7 +525,8 @@ impl MetricsCollector {
         let interval_secs = self.cleanup_interval_secs;
 
         self.cleanup_task = Some(tokio::spawn(async move {
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(interval_secs));
+            let mut interval =
+                tokio::time::interval(tokio::time::Duration::from_secs(interval_secs));
             loop {
                 interval.tick().await;
 
@@ -497,13 +552,9 @@ impl MetricsCollector {
     /// 停止后台清理任务
     pub async fn stop_cleanup_task(&self) {
         *self.shutdown_signal.write().await = true;
-        if let Some(task) = &self.cleanup_task {
-            let _ = task;
-        }
+        // cleanup_task 会在下次循环检查 shutdown_signal 时自行退出
     }
 }
-
-
 
 /// 计算百分位数的辅助函数
 fn percentile_f64(sorted: &[f64], percentile: f64) -> f64 {
@@ -522,7 +573,6 @@ fn percentile_f64(sorted: &[f64], percentile: f64) -> f64 {
     let high = sorted[index + 1];
     low + (high - low) * fraction
 }
-
 
 /// 指标摘要
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -617,7 +667,7 @@ pub struct ConnectionStatsInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_record_and_get_metrics() {
         let db = Arc::new(Database::new_in_memory().unwrap());
@@ -657,12 +707,17 @@ mod tests {
         let _ = collector.record_latency("resource_1", 10.0, None).await;
         let _ = collector.record_latency("resource_1", 20.0, None).await;
         let _ = collector.record_latency("resource_1", 30.0, None).await;
-        let _ = collector.record_throughput("resource_1", 1000.0, None).await;
+        let _ = collector
+            .record_throughput("resource_1", 1000.0, None)
+            .await;
         let _ = collector.record_error("resource_1", 1.0, None).await;
         let _ = collector.record_connection("resource_1", true, None).await;
 
         // 获取摘要
-        let summary = collector.get_summary(Some("resource_1".to_string()), 24).await.unwrap();
+        let summary = collector
+            .get_metrics_summary(Some("resource_1".to_string()), 24)
+            .await
+            .unwrap();
 
         assert_eq!(summary.latency.avg_ms, 20.0);
         assert_eq!(summary.latency.min_ms, 10.0);
@@ -781,11 +836,14 @@ mod tests {
         assert_eq!(deleted, 1); // 应该只删除了1条旧数据
 
         // 验证新数据仍然存在
-        let count = db.pool.get().unwrap().query_row(
-            "SELECT COUNT(*) FROM metrics",
-            [],
-            |row| row.get::<_, i64>(0),
-        ).unwrap();
+        let count = db
+            .pool
+            .get()
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM metrics", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .unwrap();
         assert_eq!(count, 1);
     }
 }
