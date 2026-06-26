@@ -627,6 +627,9 @@ export default {
       applyNow: '立即更新',
       updating: '更新中，请稍候...',
       downloadFailed: '下载失败',
+      agentVersions: 'Agent 版本',
+      hasNewVersion: '有新版本',
+      offline: '离线',
     },
   },
   docker: {

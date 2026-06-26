@@ -33,14 +33,26 @@
     <div v-else-if="checked && !checking && !status?.update_available" class="up-to-date">
       ✓ {{ t('settings.update.upToDate') }}
     </div>
+
+    <!-- Agent 版本总览 -->
+    <div v-if="agentVersions.length" class="agent-versions">
+      <h4>{{ t('settings.update.agentVersions') }}</h4>
+      <div v-for="av in agentVersions" :key="av.agent_id" class="agent-version-row">
+        <span class="agent-name">{{ av.name }}</span>
+        <span class="agent-ver">{{ av.version }}</span>
+        <span class="agent-status" :class="agentStatusClass(av)">
+          {{ agentStatusLabel(av) }}
+        </span>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getUpdateStatus, checkUpdate, downloadUpdate, applyUpdate } from '@/api/update'
-import type { UpdateStatusResponse } from '@/api/update'
+import { getUpdateStatus, checkUpdate, downloadUpdate, applyUpdate, listAgentVersions } from '@/api/update'
+import type { UpdateStatusResponse, AgentVersionInfo } from '@/api/update'
 
 const { t } = useI18n()
 const status = ref<UpdateStatusResponse | null>(null)
@@ -51,6 +63,7 @@ const downloadPercent = ref(0)
 const downloadReady = ref(false)
 const downloadError = ref('')
 const applying = ref(false)
+const agentVersions = ref<AgentVersionInfo[]>([])
 
 function formatTime(iso: string): string {
   try {
@@ -109,7 +122,24 @@ onMounted(async () => {
   } catch {
     // ignore
   }
+  try {
+    agentVersions.value = await listAgentVersions()
+  } catch {
+    // ignore
+  }
 })
+
+function agentStatusClass(av: AgentVersionInfo): string {
+  if (av.status !== 'online') return 'offline'
+  if (av.needs_update) return 'outdated'
+  return 'current'
+}
+
+function agentStatusLabel(av: AgentVersionInfo): string {
+  if (av.status !== 'online') return t('settings.update.offline')
+  if (av.needs_update) return t('settings.update.hasNewVersion')
+  return t('settings.update.upToDate')
+}
 </script>
 
 <style scoped>
@@ -215,5 +245,53 @@ onMounted(async () => {
 
 .btn-apply:hover {
   opacity: 0.9;
+}
+
+/* Agent 版本总览 */
+.agent-versions {
+  margin-top: var(--sp-lg);
+  padding-top: var(--sp-md);
+  border-top: 1px solid var(--border);
+}
+
+.agent-versions h4 {
+  margin: 0 0 var(--sp-sm);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.agent-version-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-md);
+  padding: var(--sp-sm) 0;
+  font-size: var(--fs-sm);
+}
+
+.agent-name {
+  color: var(--text-primary);
+  min-width: 120px;
+}
+
+.agent-ver {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.agent-status {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+}
+
+.agent-status.current {
+  color: var(--success, #28a745);
+}
+
+.agent-status.outdated {
+  color: var(--warning, #ffc107);
+}
+
+.agent-status.offline {
+  color: var(--text-muted);
 }
 </style>

@@ -36,7 +36,11 @@
           <div class="config-section">{{ t('ctx.update') }}</div>
           <div class="config-row">
             <span class="config-label">{{ t('ctx.autoUpdate') }}</span>
-            <div class="settings-toggle active"></div>
+            <div
+              class="settings-toggle"
+              :class="{ active: autoUpdate }"
+              @click="toggleAutoUpdate"
+            ></div>
           </div>
           <div class="config-row">
             <span class="config-label">{{ t('ctx.currentVersion') }}</span>
@@ -49,15 +53,39 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { getAgentConfig, updateAgentConfig } from '@/api/agent'
 import type { Agent } from '@/api/agent'
 
-defineProps<{ agent: Agent | null; visible: boolean }>()
+const props = defineProps<{ agent: Agent | null; visible: boolean }>()
 defineEmits<{ close: [] }>()
 
 const { t } = useI18n()
 const tokenCopied = ref(false)
+const autoUpdate = ref(true)
+
+// Load config when modal opens
+watch(() => props.visible, async (v) => {
+  if (v && props.agent) {
+    try {
+      const cfg = await getAgentConfig(props.agent.id)
+      autoUpdate.value = cfg.auto_update
+    } catch {
+      // keep default
+    }
+  }
+})
+
+async function toggleAutoUpdate() {
+  if (!props.agent) return
+  autoUpdate.value = !autoUpdate.value
+  try {
+    await updateAgentConfig(props.agent.id, { auto_update: autoUpdate.value })
+  } catch {
+    autoUpdate.value = !autoUpdate.value // revert on error
+  }
+}
 
 function copyToken() {
   navigator.clipboard?.writeText('mock-token-' + Date.now())

@@ -624,6 +624,9 @@ export default {
       applyNow: 'Apply Now',
       updating: 'Updating, please wait...',
       downloadFailed: 'Download failed',
+      agentVersions: 'Agent Versions',
+      hasNewVersion: 'Update available',
+      offline: 'Offline',
     },
   },
   docker: {

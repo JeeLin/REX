@@ -30,3 +30,27 @@ export async function resetAgentToken(agentId: string): Promise<string> {
   )
   return data.data.token
 }
+
+export interface AgentConfig {
+  auto_update: boolean
+}
+
+/** 获取 Agent 配置 */
+export async function getAgentConfig(agentId: string): Promise<AgentConfig> {
+  const { data } = await client.get<{ data: AgentConfig }>(
+    `/agents/${agentId}/config`,
+  )
+  return data.data
+}
+
+/** 更新 Agent 配置（部分更新） */
+export async function updateAgentConfig(
+  agentId: string,
+  config: Partial<AgentConfig>,
+): Promise<AgentConfig> {
+  const { data } = await client.patch<{ data: AgentConfig }>(
+    `/agents/${agentId}/config`,
+    config,
+  )
+  return data.data
+}
