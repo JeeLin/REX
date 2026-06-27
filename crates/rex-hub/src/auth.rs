@@ -197,12 +197,7 @@ mod tests {
             sub: "admin".to_string(),
             exp: 9999999999,
         };
-        let token = encode(
-            &Header::default(),
-            &claims,
-            &EncodingKey::from_secret(b""),
-        )
-        .unwrap();
+        let token = encode(&Header::default(), &claims, &EncodingKey::from_secret(b"")).unwrap();
         // 使用不同 secret 验证，应失败
         assert!(!verify_token("not-empty", &token));
     }

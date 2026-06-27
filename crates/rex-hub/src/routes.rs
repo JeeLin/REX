@@ -678,7 +678,9 @@ mod tests {
                     .uri("/api/environments")
                     .header("authorization", format!("Bearer {}", token))
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"name":"test-env","description":"test","connection_mode":"direct"}"#))
+                    .body(Body::from(
+                        r#"{"name":"test-env","description":"test","connection_mode":"direct"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -764,7 +766,9 @@ mod tests {
             .unwrap();
         // resource creation may return 201 or 400 depending on validation
         assert!(
-            res_resp.status() == StatusCode::CREATED || res_resp.status() == StatusCode::OK || res_resp.status() == StatusCode::BAD_REQUEST,
+            res_resp.status() == StatusCode::CREATED
+                || res_resp.status() == StatusCode::OK
+                || res_resp.status() == StatusCode::BAD_REQUEST,
             "unexpected status: {}",
             res_resp.status()
         );
@@ -842,7 +846,8 @@ mod tests {
         // settings/tls requires Extension<HubConfig> which test app() doesn't set
         // so it returns 500 Internal Server Error — that's expected behavior
         assert!(
-            response.status() == StatusCode::OK || response.status() == StatusCode::INTERNAL_SERVER_ERROR,
+            response.status() == StatusCode::OK
+                || response.status() == StatusCode::INTERNAL_SERVER_ERROR,
             "expected 200 or 500, got {}",
             response.status()
         );

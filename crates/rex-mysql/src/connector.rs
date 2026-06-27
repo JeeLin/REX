@@ -286,11 +286,8 @@ mod tests {
         let json =
             r#"{"host":"192.0.2.1","port":3306,"user":"root","password":"","database":null}"#;
         let mut connector = MySqlConnector::from_json(json).unwrap();
-        let result = tokio::time::timeout(
-            std::time::Duration::from_secs(3),
-            connector.connect(),
-        )
-        .await;
+        let result =
+            tokio::time::timeout(std::time::Duration::from_secs(3), connector.connect()).await;
         assert!(result.is_err() || result.unwrap().is_err());
     }
 
