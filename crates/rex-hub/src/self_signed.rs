@@ -111,7 +111,8 @@ fn parse_key_pem(pem: &str) -> Result<PrivateKeyDer<'static>> {
 /// 根据 Hub 监听地址推断 SAN 列表
 ///
 /// 从 bind address（如 "0.0.0.0:3000" 或 "192.168.1.100:3000"）推断应包含的 SAN。
-/// 如果 bind 到 0.0.0.0，使用 localhost；否则使用具体 IP。
+/// - 如果 bind 到具体 IP，使用该 IP + localhost
+/// - 如果 bind 到 0.0.0.0 或 ::，使用 localhost + 自动探测的本机 IP
 pub fn infer_self_signed_sans(listen: &str) -> Vec<String> {
     let host = listen.split(':').next().unwrap_or("0.0.0.0");
     let mut sans = vec!["localhost".to_string()];
@@ -120,9 +121,25 @@ pub fn infer_self_signed_sans(listen: &str) -> Vec<String> {
         if host.parse::<IpAddr>().is_ok() {
             sans.push(host.to_string());
         }
+    } else {
+        // 绑定到通配地址时，自动探测本机 IP 加入 SAN
+        if let Some(local_ip) = detect_local_ip() {
+            let ip_str = local_ip.to_string();
+            if !sans.contains(&ip_str) {
+                sans.push(ip_str);
+            }
+        }
     }
 
     sans
+}
+
+/// 通过 UDP socket 探测本机 IP 地址（不发送任何数据）
+fn detect_local_ip() -> Option<IpAddr> {
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    let addr = socket.local_addr().ok()?;
+    Some(addr.ip())
 }
 
 #[cfg(test)]
@@ -173,7 +190,8 @@ mod tests {
     #[test]
     fn infer_sans_from_localhost() {
         let sans = infer_self_signed_sans("0.0.0.0:3000");
-        assert_eq!(sans, vec!["localhost".to_string()]);
+        // 应包含 localhost，且如果探测到本机 IP 则也会包含
+        assert!(sans.contains(&"localhost".to_string()));
     }
 
     #[test]
