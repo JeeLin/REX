@@ -20,7 +20,7 @@
         <div class="ws-empty-text">{{ t('ws.empty.noSessions') }}</div>
         <div class="ws-empty-hint">
           从侧边栏选择资源开始连接<br />
-          按 <kbd>Ctrl</kbd>+<kbd>N</kbd> 新建连接 · <kbd>Alt</kbd>+<kbd>1~5</kbd> 切换布局 · <kbd>F1</kbd> 快捷键
+          按 <kbd>Ctrl</kbd>+<kbd>K</kbd> 全局搜索 · <kbd>Ctrl</kbd>+<kbd>N</kbd> 新建连接 · <kbd>Alt</kbd>+<kbd>1~5</kbd> 切换布局 · <kbd>F1</kbd> 快捷键
         </div>
       </div>
 
@@ -226,6 +226,14 @@
       </div>
     </div>
 
+    <!-- 全局搜索命令面板 (Ctrl+K) -->
+    <CommandPalette
+      ref="cmdRef"
+      :visible="showCommandPalette"
+      @close="showCommandPalette = false"
+      @select="handleCommandSelect"
+    />
+
     <!-- 快捷键面板 -->
     <div v-if="showShortcutsPanel" class="shortcuts-overlay" @click="showShortcutsPanel = false">
       <div class="shortcuts-card" @click.stop>
@@ -248,6 +256,7 @@
         </div>
         <div class="shortcut-group">
           <div class="shortcut-group-title">其他</div>
+          <div class="shortcut-row"><span class="desc">全局搜索</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>K</kbd></span></div>
           <div class="shortcut-row"><span class="desc">全屏</span><span class="keys"><kbd>F11</kbd></span></div>
           <div class="shortcut-row"><span class="desc">快捷键帮助</span><span class="keys"><kbd>F1</kbd></span></div>
         </div>
@@ -264,6 +273,8 @@ import { getProtocolIcon } from '@/composables/useProtocol'
 import type { Protocol } from '@/composables/useProtocol'
 import { listEnvsWithResources } from '@/api/env'
 import type { EnvWithResources } from '@/api/env'
+import CommandPalette from '@/components/CommandPalette.vue'
+import type { CommandItem } from '@/components/CommandPalette.vue'
 import TabBar from '@/features/workspace/TabBar.vue'
 import { useTabs } from '@/features/workspace/useTabs'
 import WorkspaceTerminal from '@/features/workspace/panels/WorkspaceTerminal.vue'
@@ -479,6 +490,81 @@ onUnmounted(() => {
 // ── Shortcuts Panel ──
 const showShortcutsPanel = ref(false)
 
+// ── Command Palette (Ctrl+K) ──
+const showCommandPalette = ref(false)
+const cmdRef = ref<InstanceType<typeof CommandPalette> | null>(null)
+
+const NAV_ITEMS: CommandItem[] = [
+  { id: 'nav:workspace', label: '工作区', category: 'navigation', icon: '⊞' },
+  { id: 'nav:dashboard', label: '仪表盘', category: 'navigation', icon: '◉' },
+  { id: 'nav:environments', label: '环境管理', category: 'navigation', icon: '◈' },
+  { id: 'nav:agents', label: 'Agent 管理', category: 'navigation', icon: '⬡' },
+  { id: 'nav:settings', label: '设置', category: 'navigation', icon: '⚙' },
+]
+
+const ACTION_ITEMS: CommandItem[] = [
+  { id: 'action:new-connection', label: '新建连接', category: 'action', icon: '+', shortcut: 'Ctrl+N' },
+  { id: 'action:layout-single', label: '切换单面板布局', category: 'action', icon: '⬜', shortcut: 'Alt+1' },
+  { id: 'action:layout-left-right', label: '切换左右分屏', category: 'action', icon: '🔲', shortcut: 'Alt+2' },
+  { id: 'action:layout-top-bottom', label: '切换上下分屏', category: 'action', icon: '🔳', shortcut: 'Alt+3' },
+  { id: 'action:layout-quad', label: '切换四宫格', category: 'action', icon: '🔲', shortcut: 'Alt+4' },
+  { id: 'action:layout-sidebar-main', label: '切换主+侧边', category: 'action', icon: '📐', shortcut: 'Alt+5' },
+  { id: 'action:fullscreen', label: '全屏切换', category: 'action', icon: '⛶', shortcut: 'F11' },
+]
+
+function buildCommandPaletteItems(): CommandItem[] {
+  const items: CommandItem[] = []
+  // Resources
+  for (const env of envsWithRes.value) {
+    for (const r of env.resources) {
+      const proto = getProtocolIcon(r.protocol)
+      items.push({
+        id: `res:${r.id}`,
+        label: r.name,
+        category: 'resource',
+        icon: proto.icon,
+        hint: env.name,
+        color: proto.color,
+      })
+    }
+  }
+  items.push(...NAV_ITEMS)
+  items.push(...ACTION_ITEMS)
+  return items
+}
+
+function handleCommandSelect(item: CommandItem) {
+  showCommandPalette.value = false
+  if (item.id.startsWith('res:')) {
+    const resourceId = item.id.slice(4)
+    const resource = envsWithRes.value.flatMap(e => e.resources).find(r => r.id === resourceId)
+    if (resource) addTab(resource.name, resource.protocol as Protocol, resource.id)
+  } else if (item.id.startsWith('nav:')) {
+    const routeMap: Record<string, string> = {
+      'nav:dashboard': 'dashboard',
+      'nav:environments': 'environments',
+      'nav:agents': 'agents',
+      'nav:settings': 'settings',
+      'nav:workspace': 'workspace',
+    }
+    const name = routeMap[item.id]
+    if (name && name !== 'workspace') router.push({ name })
+  } else if (item.id === 'action:new-connection') {
+    showConnMenu.value = true
+  } else if (item.id.startsWith('action:layout-')) {
+    const layout = item.id.replace('action:layout-', '') as Layout
+    setLayout(layout)
+  } else if (item.id === 'action:fullscreen') {
+    toggleFullscreen()
+  }
+}
+
+watch(showCommandPalette, (val) => {
+  if (val) {
+    nextTick(() => cmdRef.value?.setCommands(buildCommandPaletteItems()))
+  }
+})
+
 // ── Fullscreen ──
 function toggleFullscreen() {
   if (document.fullscreenElement) {
@@ -537,8 +623,12 @@ function onKeyDown(e: KeyboardEvent) {
   } else if (e.key === 'F1') {
     e.preventDefault()
     showShortcutsPanel.value = !showShortcutsPanel.value
+  } else if (ctrl && e.key === 'k') {
+    e.preventDefault()
+    showCommandPalette.value = !showCommandPalette.value
   } else if (e.key === 'Escape') {
-    if (showConnMenu.value) showConnMenu.value = false
+    if (showCommandPalette.value) showCommandPalette.value = false
+    else if (showConnMenu.value) showConnMenu.value = false
     else if (showShortcutsPanel.value) showShortcutsPanel.value = false
   }
 }
