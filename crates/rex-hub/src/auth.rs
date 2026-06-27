@@ -164,4 +164,46 @@ mod tests {
         .unwrap();
         assert!(!verify_token("wrong-secret", &token));
     }
+
+    #[test]
+    fn verify_expired_token() {
+        let secret = "test-secret";
+        let exp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as usize
+            - 3600; // 已过期 1 小时
+        let claims = Claims {
+            sub: "admin".to_string(),
+            exp,
+        };
+        let token = encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(secret.as_bytes()),
+        )
+        .unwrap();
+        assert!(!verify_token(secret, &token));
+    }
+
+    #[test]
+    fn verify_empty_token() {
+        assert!(!verify_token("secret", ""));
+    }
+
+    #[test]
+    fn verify_token_with_empty_secret() {
+        let claims = Claims {
+            sub: "admin".to_string(),
+            exp: 9999999999,
+        };
+        let token = encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(b""),
+        )
+        .unwrap();
+        // 使用不同 secret 验证，应失败
+        assert!(!verify_token("not-empty", &token));
+    }
 }

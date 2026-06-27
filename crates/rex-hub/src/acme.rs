@@ -188,4 +188,76 @@ mod tests {
         let state = build_acme_state(&cfg, dir.path()).unwrap();
         drop(state);
     }
+
+    #[test]
+    fn determine_tls_mode_self_signed_when_no_config() {
+        let config = crate::config::HubConfig::default();
+        assert_eq!(determine_tls_mode(&config), TlsMode::SelfSigned);
+    }
+
+    #[test]
+    fn determine_tls_mode_manual_takes_priority() {
+        let dir = tempfile::tempdir().unwrap();
+        let cert = dir.path().join("cert.pem");
+        let key = dir.path().join("key.pem");
+        std::fs::write(&cert, "cert").unwrap();
+        std::fs::write(&key, "key").unwrap();
+        let config = crate::config::HubConfig {
+            tls: Some(crate::config::TlsConfig { cert, key }),
+            acme: Some(HubAcmeConfig {
+                domain: "hub.example.com".to_string(),
+                email: "admin@example.com".to_string(),
+                staging: false,
+            }),
+            ..Default::default()
+        };
+        assert_eq!(determine_tls_mode(&config), TlsMode::Manual);
+    }
+
+    #[test]
+    fn determine_tls_mode_manual_missing_files_falls_back() {
+        let config = crate::config::HubConfig {
+            tls: Some(crate::config::TlsConfig {
+                cert: std::path::PathBuf::from("/nonexistent/cert.pem"),
+                key: std::path::PathBuf::from("/nonexistent/key.pem"),
+            }),
+            ..Default::default()
+        };
+        assert_eq!(determine_tls_mode(&config), TlsMode::SelfSigned);
+    }
+
+    #[test]
+    fn determine_tls_mode_acme_domain() {
+        let config = crate::config::HubConfig {
+            acme: Some(HubAcmeConfig {
+                domain: "hub.example.com".to_string(),
+                email: "admin@example.com".to_string(),
+                staging: false,
+            }),
+            ..Default::default()
+        };
+        assert_eq!(determine_tls_mode(&config), TlsMode::AcmeDomain);
+    }
+
+    #[test]
+    fn determine_tls_mode_acme_ip() {
+        let config = crate::config::HubConfig {
+            acme: Some(HubAcmeConfig {
+                domain: "203.0.113.1".to_string(),
+                email: "admin@example.com".to_string(),
+                staging: false,
+            }),
+            ..Default::default()
+        };
+        assert_eq!(determine_tls_mode(&config), TlsMode::AcmeIp);
+    }
+
+    #[test]
+    fn tls_mode_display() {
+        assert_eq!(TlsMode::Manual.to_string(), "manual");
+        assert_eq!(TlsMode::AcmeDomain.to_string(), "acme-domain");
+        assert_eq!(TlsMode::AcmeIp.to_string(), "acme-ip");
+        assert_eq!(TlsMode::SelfSigned.to_string(), "self-signed");
+        assert_eq!(TlsMode::None.to_string(), "none");
+    }
 }
