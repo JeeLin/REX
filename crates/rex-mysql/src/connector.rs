@@ -262,4 +262,49 @@ mod tests {
         let result = connector.list_databases().await;
         assert!(result.is_err());
     }
+
+    #[tokio::test]
+    async fn mysql_list_tables_fails_when_not_connected() {
+        let json =
+            r#"{"host":"localhost","port":3306,"user":"root","password":"","database":null}"#;
+        let connector = MySqlConnector::from_json(json).unwrap();
+        let result = connector.list_tables("test").await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn mysql_list_columns_fails_when_not_connected() {
+        let json =
+            r#"{"host":"localhost","port":3306,"user":"root","password":"","database":null}"#;
+        let connector = MySqlConnector::from_json(json).unwrap();
+        let result = connector.list_columns("test", "users").await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn mysql_connect_fails_on_bad_host() {
+        let json =
+            r#"{"host":"192.0.2.1","port":3306,"user":"root","password":"","database":null}"#;
+        let mut connector = MySqlConnector::from_json(json).unwrap();
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            connector.connect(),
+        )
+        .await;
+        assert!(result.is_err() || result.unwrap().is_err());
+    }
+
+    #[test]
+    fn mysql_config_serializes() {
+        let config = MySqlConfig {
+            host: "localhost".to_string(),
+            port: 3306,
+            user: "root".to_string(),
+            password: "pass".to_string(),
+            database: Some("test".to_string()),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(json.contains("localhost"));
+        assert!(json.contains("3306"));
+    }
 }

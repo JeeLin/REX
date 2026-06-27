@@ -271,4 +271,49 @@ mod tests {
         let result = connector.list_databases().await;
         assert!(result.is_err());
     }
+
+    #[tokio::test]
+    async fn postgres_list_tables_fails_when_not_connected() {
+        let json =
+            r#"{"host":"localhost","port":5432,"user":"postgres","password":"","database":null}"#;
+        let connector = PostgresConnector::from_json(json).unwrap();
+        let result = connector.list_tables("public").await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn postgres_list_columns_fails_when_not_connected() {
+        let json =
+            r#"{"host":"localhost","port":5432,"user":"postgres","password":"","database":null}"#;
+        let connector = PostgresConnector::from_json(json).unwrap();
+        let result = connector.list_columns("public", "users").await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn postgres_connect_fails_on_bad_host() {
+        let json =
+            r#"{"host":"192.0.2.1","port":5432,"user":"postgres","password":"","database":null}"#;
+        let mut connector = PostgresConnector::from_json(json).unwrap();
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            connector.connect(),
+        )
+        .await;
+        assert!(result.is_err() || result.unwrap().is_err());
+    }
+
+    #[test]
+    fn postgres_config_serializes() {
+        let config = PostgresConfig {
+            host: "localhost".to_string(),
+            port: 5432,
+            user: "postgres".to_string(),
+            password: "pass".to_string(),
+            database: Some("test".to_string()),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(json.contains("localhost"));
+        assert!(json.contains("5432"));
+    }
 }
