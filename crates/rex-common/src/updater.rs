@@ -50,7 +50,6 @@ pub enum UpdateSource {
     Hub,
 }
 
-
 /// 更新检查器
 pub struct UpdateChecker {
     repo: String,
