@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-06-27
+
+### Added
+- 补充 rex-hub 模块单元测试（auth、acme、helpers），新增 16 个测试用例
+- 补充 rex-mysql / rex-postgresql 协议 crate 单元测试，新增 8 个测试用例
+- 补充前端 vitest 测试基础设施（vitest.config.ts、vitest.setup.ts）
+- 补充前端 composables 和 API 模块单元测试，新增 7 个测试用例
+- 补充 API 集成测试（路由认证、CRUD、审计日志），新增 7 个测试用例
+
+### Changed
+- Rust 测试总数从 463 增至 494（+31）
+- 前端测试从 0 增至 7
+
 ## [0.24.0] - 2026-06-27
 
 ### Fixed
