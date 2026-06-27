@@ -7,14 +7,16 @@
       </router-link>
     </div>
 
-    <div v-if="loading" class="loading-text">{{ t('common.loading') }}</div>
+    <LoadingSpinner v-if="loading" :text="t('common.loading')" />
 
-    <div v-else-if="environments.length === 0" class="empty-state">
-      <p>{{ t('common.noData') }}</p>
-      <router-link to="/environments/new" class="btn btn-primary">
-        {{ t('env.create') }}
-      </router-link>
-    </div>
+    <ErrorState v-else-if="loadError" :message="loadError" :retry="loadEnvs" />
+
+    <EmptyState
+      v-else-if="environments.length === 0"
+      icon="📋"
+      :title="t('common.noData')"
+      :action="{ label: t('env.create'), handler: () => router.push('/environments/new') }"
+    />
 
     <div v-else class="env-grid">
       <router-link
@@ -49,6 +51,9 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import ErrorState from '@/components/ErrorState.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import client from '@/api/client'
 
 const router = useRouter()
@@ -66,6 +71,7 @@ interface Environment {
 
 const environments = ref<Environment[]>([])
 const loading = ref(true)
+const loadError = ref('')
 
 function onEnvCardCtx(e: MouseEvent, env: Environment) {
   showMenu(e, [
@@ -78,16 +84,20 @@ function onEnvCardCtx(e: MouseEvent, env: Environment) {
   ])
 }
 
-onMounted(async () => {
+onMounted(() => loadEnvs())
+
+async function loadEnvs() {
+  loading.value = true
+  loadError.value = ''
   try {
     const { data } = await client.get<{ data: Environment[] }>('/environments')
     environments.value = data.data
   } catch {
-    // 静默处理
+    loadError.value = '加载环境失败'
   } finally {
     loading.value = false
   }
-})
+}
 </script>
 
 <style scoped>

@@ -4,13 +4,17 @@
       <h2 class="section-title">{{ t('agent.title') }}</h2>
     </div>
 
-    <div v-if="loading" class="loading-text">{{ t('common.loading') }}</div>
+    <LoadingSpinner v-if="loading" :text="t('common.loading')" />
+
+    <ErrorState v-else-if="loadError" :message="loadError" :retry="loadAgents" />
 
     <template v-else>
-      <div v-if="agents.length === 0" class="empty-state">
-        <p>{{ t('agent.noAgents') }}</p>
-        <p class="empty-hint">{{ t('agent.noAgentsHint') }}</p>
-      </div>
+      <EmptyState
+        v-if="agents.length === 0"
+        icon="🤖"
+        :title="t('agent.noAgents')"
+        :hint="t('agent.noAgentsHint')"
+      />
 
       <div v-else class="agent-grid">
         <AgentCard
@@ -54,6 +58,9 @@ import { useI18n } from 'vue-i18n'
 import client from '@/api/client'
 import { getUpdateStatus } from '@/api/update'
 import { restartAgent, type Agent } from '@/api/agent'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import ErrorState from '@/components/ErrorState.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import AgentCard from '@/features/agents/AgentCard.vue'
 import DeployGuide from '@/features/agents/DeployGuide.vue'
 import AgentConfigModal from '@/features/agents/AgentConfigModal.vue'
@@ -65,6 +72,7 @@ const { t } = useI18n()
 const agents = ref<Agent[]>([])
 const hubVersion = ref('')
 const loading = ref(true)
+const loadError = ref('')
 
 // Modal state
 const showConfigModal = ref(false)
@@ -110,6 +118,8 @@ onMounted(async () => {
 })
 
 async function loadAgents() {
+  loading.value = true
+  loadError.value = ''
   try {
     const envResp = await client.get<{ data: Array<{ id: string }> }>('/environments')
     const envs = envResp.data.data
@@ -125,7 +135,7 @@ async function loadAgents() {
     }
     agents.value = allAgents
   } catch {
-    // 静默处理
+    loadError.value = '加载 Agent 列表失败'
   } finally {
     loading.value = false
   }
@@ -133,27 +143,6 @@ async function loadAgents() {
 </script>
 
 <style scoped>
-.loading-text {
-  text-align: center;
-  padding: var(--sp-3xl);
-  color: var(--text-secondary);
-}
-
-.empty-state {
-  text-align: center;
-  padding: var(--sp-3xl);
-  color: var(--text-secondary);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-sm);
-}
-
-.empty-hint {
-  font-size: var(--fs-sm);
-  color: var(--text-muted);
-}
-
 .agent-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));

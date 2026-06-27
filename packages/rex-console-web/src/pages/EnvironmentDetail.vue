@@ -12,43 +12,51 @@
 
     <div v-if="env?.description" class="env-desc">{{ env.description }}</div>
 
-    <!-- Resources -->
-    <div class="section-header">
-      <h3 class="section-title">{{ t('env.resources') }}</h3>
-      <router-link
-        v-if="env"
-        :to="`/environments/${env.id}/resources/new`"
-        class="btn btn-primary btn-sm"
-      >
-        {{ t('env.addResource') }}
-      </router-link>
-    </div>
+    <LoadingSpinner v-if="loading" :text="t('common.loading')" />
 
-    <div v-if="resources.length === 0" class="empty-state">
-      <p>{{ t('env.noResources') }}</p>
-    </div>
+    <ErrorState v-else-if="loadError" :message="loadError" :retry="loadEnv" />
 
-    <div v-else class="resource-list">
-      <button
-        v-for="res in resources"
-        :key="res.id"
-        class="resource-item resource-clickable"
-        @click="connectToResource(res)"
-        @contextmenu.prevent="onResourceCtx($event, res)"
-      >
-        <div class="resource-icon" :style="{ background: getProtocolIcon(res.protocol).color + '15', color: getProtocolIcon(res.protocol).color }">
-          {{ getProtocolIcon(res.protocol).icon }}
-        </div>
-        <div class="resource-info">
-          <div class="resource-name">{{ res.name }}</div>
-          <div class="resource-proto">{{ res.protocol.toUpperCase() }}</div>
-        </div>
-        <span class="resource-status badge badge-success">{{ t('status.online') }}</span>
-      </button>
-    </div>
+    <template v-else>
+      <!-- Resources -->
+      <div class="section-header">
+        <h3 class="section-title">{{ t('env.resources') }}</h3>
+        <router-link
+          v-if="env"
+          :to="`/environments/${env.id}/resources/new`"
+          class="btn btn-primary btn-sm"
+        >
+          {{ t('env.addResource') }}
+        </router-link>
+      </div>
 
-    <!-- Agent Status -->
-    <AgentStatusPanel v-if="env" :env-id="env.id" />
+      <EmptyState
+        v-if="resources.length === 0"
+        icon="📦"
+        :title="t('env.noResources')"
+      />
+
+      <div v-else class="resource-list">
+        <button
+          v-for="res in resources"
+          :key="res.id"
+          class="resource-item resource-clickable"
+          @click="connectToResource(res)"
+          @contextmenu.prevent="onResourceCtx($event, res)"
+        >
+          <div class="resource-icon" :style="{ background: getProtocolIcon(res.protocol).color + '15', color: getProtocolIcon(res.protocol).color }">
+            {{ getProtocolIcon(res.protocol).icon }}
+          </div>
+          <div class="resource-info">
+            <div class="resource-name">{{ res.name }}</div>
+            <div class="resource-proto">{{ res.protocol.toUpperCase() }}</div>
+          </div>
+          <span class="resource-status badge badge-success">{{ t('status.online') }}</span>
+        </button>
+      </div>
+
+      <!-- Agent Status -->
+      <AgentStatusPanel v-if="env" :env-id="env.id" />
+    </template>
   </div>
 </template>
 
@@ -57,6 +65,9 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import ErrorState from '@/components/ErrorState.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import client from '@/api/client'
 import type { Environment, Resource } from '@/api/env'
 import { getProtocolIcon } from '@/composables/useProtocol'
@@ -70,6 +81,8 @@ const { show: showMenu } = useContextMenu()
 
 const env = ref<Environment | null>(null)
 const resources = ref<Resource[]>([])
+const loading = ref(true)
+const loadError = ref('')
 
 function connectToResource(res: Resource) {
   connect(res, env.value?.name || '')
@@ -87,7 +100,11 @@ function onResourceCtx(e: MouseEvent, res: Resource) {
   ])
 }
 
-onMounted(async () => {
+onMounted(() => loadEnv())
+
+async function loadEnv() {
+  loading.value = true
+  loadError.value = ''
   const id = route.params.id as string
   try {
     const { data } = await client.get<{ data: Environment }>(`/environments/${id}`)
@@ -95,9 +112,11 @@ onMounted(async () => {
     const resResp = await client.get<{ data: Resource[] }>(`/environments/${id}/resources`)
     resources.value = resResp.data.data
   } catch {
-    // 静默处理
+    loadError.value = '加载环境详情失败'
+  } finally {
+    loading.value = false
   }
-})
+}
 </script>
 
 <style scoped>

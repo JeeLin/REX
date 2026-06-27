@@ -1,105 +1,122 @@
 <template>
   <div>
-    <!-- Stats -->
-    <div class="stats-row">
-      <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
-        <div class="stat-label">{{ t('dashboard.envCount') }}</div>
-        <div class="stat-value" style="color: var(--accent)">{{ envCount }}</div>
-      </div>
-      <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
-        <div class="stat-label">{{ t('dashboard.resCount') }}</div>
-        <div class="stat-value" style="color: var(--info)">{{ resourceCount }}</div>
-      </div>
-      <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
-        <div class="stat-label">{{ t('dashboard.agentOnline') }}</div>
-        <div class="stat-value" style="color: var(--success)">{{ agentOnlineCount }}</div>
-      </div>
-      <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
-        <div class="stat-label">{{ t('dashboard.todayOps') }}</div>
-        <div class="stat-value">{{ todayOps }}</div>
-      </div>
-    </div>
+    <!-- Loading -->
+    <LoadingSpinner v-if="loading" :text="t('common.loading')" />
 
-    <!-- Environments -->
-    <div class="section-header">
-      <h2 class="section-title">{{ t('dashboard.environments') }}</h2>
-      <span class="text-sm text-secondary">{{ envCount }} {{ t('dashboard.envCountLabel') }}</span>
-    </div>
-    <div class="env-grid">
-      <router-link
-        v-for="env in environments"
-        :key="env.id"
-        :to="`/environments/${env.id}`"
-        class="env-card"
-        @contextmenu.prevent="onEnvCardCtx($event, env)"
-      >
-        <div class="env-card-header">
-          <span class="env-card-name">{{ env.name }}</span>
-          <span class="badge" :class="env.connection_mode === 'direct' ? 'badge-info' : 'badge-success'">
-            {{ env.connection_mode === 'direct' ? t('env.connectionModeLabel') : t('env.agentOnline') }}
-          </span>
-        </div>
-        <div class="env-card-desc">{{ env.description || '—' }}</div>
-        <div v-if="env.resources.length > 0" class="env-card-badges">
-          <span
-            v-for="(count, proto) in getResourceStats(env)"
-            :key="proto"
-            class="res-badge"
-            :style="{ background: getProtocolIcon(proto as string).color + '18', color: getProtocolIcon(proto as string).color }"
-          >
-            {{ getProtocolIcon(proto as string).icon }} {{ proto.toUpperCase() }} ×{{ count }}
-          </span>
-        </div>
-        <div class="env-card-footer">
-          <span>{{ env.connection_mode === 'direct' ? t('env.direct') : t('env.agentProxy') }}</span>
-        </div>
-      </router-link>
+    <!-- Error -->
+    <ErrorState v-else-if="loadError" :message="loadError" :retry="loadData" />
 
-      <router-link to="/environments/new" class="add-env-card">
-        <div class="add-icon">+</div>
-        <div>{{ t('dashboard.createEnv') }}</div>
-      </router-link>
-    </div>
-
-    <!-- Quick Connect -->
-    <div v-if="allResources.length > 0" class="section-header" style="margin-top: var(--sp-xl)">
-      <h2 class="section-title">{{ t('dashboard.quickConnect') }}</h2>
-    </div>
-    <div v-if="allResources.length > 0" class="quick-connect-grid">
-      <button
-        v-for="item in allResources.slice(0, 8)"
-        :key="item.resource.id"
-        class="quick-card"
-        @click="connectToResource(item.resource, item.envName)"
-        @contextmenu.prevent="onQuickConnectCtx($event, item)"
-      >
-        <div class="quick-icon" :style="{ background: getProtocolIcon(item.resource.protocol).color + '20', color: getProtocolIcon(item.resource.protocol).color }">
-          {{ getProtocolIcon(item.resource.protocol).icon }}
+    <!-- Content -->
+    <template v-else>
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
+          <div class="stat-label">{{ t('dashboard.envCount') }}</div>
+          <div class="stat-value" style="color: var(--accent)">{{ envCount }}</div>
         </div>
-        <div class="quick-info">
-          <div class="quick-name">{{ item.resource.name }}</div>
-          <div class="quick-proto">{{ item.resource.protocol }}</div>
+        <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
+          <div class="stat-label">{{ t('dashboard.resCount') }}</div>
+          <div class="stat-value" style="color: var(--info)">{{ resourceCount }}</div>
         </div>
-      </button>
-    </div>
+        <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
+          <div class="stat-label">{{ t('dashboard.agentOnline') }}</div>
+          <div class="stat-value" style="color: var(--success)">{{ agentOnlineCount }}</div>
+        </div>
+        <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
+          <div class="stat-label">{{ t('dashboard.todayOps') }}</div>
+          <div class="stat-value">{{ todayOps }}</div>
+        </div>
+      </div>
 
-    <!-- Recent Used -->
-    <div v-if="recent.length > 0" class="section-header" style="margin-top: var(--sp-xl)">
-      <h2 class="section-title">{{ t('dashboard.recentUsed') }}</h2>
-    </div>
-    <div v-if="recent.length > 0" class="recent-list">
-      <button
-        v-for="item in recent"
-        :key="item.resourceId"
-        class="recent-item"
-        @click="connectToResource({ id: item.resourceId, protocol: item.protocol, name: item.name }, item.envName)"
-      >
-        <span class="recent-dot" :style="{ background: getProtocolIcon(item.protocol).color }"></span>
-        <span class="recent-name">{{ item.name }}</span>
-        <span class="recent-proto">{{ item.protocol }}</span>
-        <span class="recent-time">{{ formatTime(item.usedAt) }}</span>
-      </button>
-    </div>
+      <!-- Environments -->
+      <div class="section-header">
+        <h2 class="section-title">{{ t('dashboard.environments') }}</h2>
+        <span class="text-sm text-secondary">{{ envCount }} {{ t('dashboard.envCountLabel') }}</span>
+      </div>
+      <div class="env-grid">
+        <router-link
+          v-for="env in environments"
+          :key="env.id"
+          :to="`/environments/${env.id}`"
+          class="env-card"
+          @contextmenu.prevent="onEnvCardCtx($event, env)"
+        >
+          <div class="env-card-header">
+            <span class="env-card-name">{{ env.name }}</span>
+            <span class="badge" :class="env.connection_mode === 'direct' ? 'badge-info' : 'badge-success'">
+              {{ env.connection_mode === 'direct' ? t('env.connectionModeLabel') : t('env.agentOnline') }}
+            </span>
+          </div>
+          <div class="env-card-desc">{{ env.description || '—' }}</div>
+          <div v-if="env.resources.length > 0" class="env-card-badges">
+            <span
+              v-for="(count, proto) in getResourceStats(env)"
+              :key="proto"
+              class="res-badge"
+              :style="{ background: getProtocolIcon(proto as string).color + '18', color: getProtocolIcon(proto as string).color }"
+            >
+              {{ getProtocolIcon(proto as string).icon }} {{ proto.toUpperCase() }} ×{{ count }}
+            </span>
+          </div>
+          <div class="env-card-footer">
+            <span>{{ env.connection_mode === 'direct' ? t('env.direct') : t('env.agentProxy') }}</span>
+          </div>
+        </router-link>
+
+        <router-link to="/environments/new" class="add-env-card">
+          <div class="add-icon">+</div>
+          <div>{{ t('dashboard.createEnv') }}</div>
+        </router-link>
+      </div>
+
+      <!-- Quick Connect -->
+      <div v-if="allResources.length > 0" class="section-header" style="margin-top: var(--sp-xl)">
+        <h2 class="section-title">{{ t('dashboard.quickConnect') }}</h2>
+      </div>
+      <div v-if="allResources.length > 0" class="quick-connect-grid">
+        <button
+          v-for="item in allResources.slice(0, 8)"
+          :key="item.resource.id"
+          class="quick-card"
+          @click="connectToResource(item.resource, item.envName)"
+          @contextmenu.prevent="onQuickConnectCtx($event, item)"
+        >
+          <div class="quick-icon" :style="{ background: getProtocolIcon(item.resource.protocol).color + '20', color: getProtocolIcon(item.resource.protocol).color }">
+            {{ getProtocolIcon(item.resource.protocol).icon }}
+          </div>
+          <div class="quick-info">
+            <div class="quick-name">{{ item.resource.name }}</div>
+            <div class="quick-proto">{{ item.resource.protocol }}</div>
+          </div>
+        </button>
+      </div>
+
+      <!-- Recent Used -->
+      <div v-if="recent.length > 0" class="section-header" style="margin-top: var(--sp-xl)">
+        <h2 class="section-title">{{ t('dashboard.recentUsed') }}</h2>
+      </div>
+      <div v-if="recent.length > 0" class="recent-list">
+        <button
+          v-for="item in recent"
+          :key="item.resourceId"
+          class="recent-item"
+          @click="connectToResource({ id: item.resourceId, protocol: item.protocol, name: item.name }, item.envName)"
+        >
+          <span class="recent-dot" :style="{ background: getProtocolIcon(item.protocol).color }"></span>
+          <span class="recent-name">{{ item.name }}</span>
+          <span class="recent-proto">{{ item.protocol }}</span>
+          <span class="recent-time">{{ formatTime(item.usedAt) }}</span>
+        </button>
+      </div>
+
+      <!-- Empty -->
+      <EmptyState
+        v-if="environments.length === 0"
+        icon="🏠"
+        :title="t('common.noData')"
+        :action="{ label: t('dashboard.createEnv'), handler: () => router.push('/environments/new') }"
+      />
+    </template>
   </div>
 </template>
 
@@ -110,6 +127,9 @@ import { useI18n } from 'vue-i18n'
 import { useRecent } from '@/composables/useRecent'
 import { getProtocolIcon, useProtocol } from '@/composables/useProtocol'
 import { useContextMenu } from '@/composables/useContextMenu'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import ErrorState from '@/components/ErrorState.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import type { EnvWithResources } from '@/api/env'
 import { listEnvsWithResources } from '@/api/env'
 import { getAuditStats } from '@/api/audit'
@@ -127,6 +147,8 @@ const resourceCount = ref(0)
 const agentOnlineCount = ref(0)
 const todayOps = ref(0)
 const allResources = ref<{ resource: { id: string; name: string; protocol: string }; envName: string }[]>([])
+const loading = ref(true)
+const loadError = ref('')
 
 function getResourceStats(env: EnvWithResources): Record<string, number> {
   const stats: Record<string, number> = {}
@@ -175,7 +197,11 @@ function onStatCardCtx(e: MouseEvent) {
   ])
 }
 
-onMounted(async () => {
+onMounted(() => loadData())
+
+async function loadData() {
+  loading.value = true
+  loadError.value = ''
   try {
     const envsWithRes = await listEnvsWithResources()
     environments.value = envsWithRes
@@ -188,24 +214,18 @@ onMounted(async () => {
     }
     allResources.value = allRes
     resourceCount.value = allRes.length
-  } catch {
-    // 静默处理
-  }
 
-  try {
     const stats = await getAuditStats('today')
     todayOps.value = stats.total
-  } catch {
-    // 静默处理
-  }
 
-  try {
     const health = await fetchHealth()
     agentOnlineCount.value = health.connections.agents_online
   } catch {
-    // 静默处理
+    loadError.value = '加载仪表盘数据失败'
+  } finally {
+    loading.value = false
   }
-})
+}
 </script>
 
 <style scoped>

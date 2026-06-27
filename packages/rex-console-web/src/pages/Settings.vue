@@ -8,20 +8,21 @@
       <TlsSection />
       <BackupSection />
       <UpdateSection />
-      <div v-if="health" class="version-info">
-        <div class="ver">REX Hub {{ health.version }}</div>
-        <div class="version-sub">自托管 · 开源</div>
-      </div>
-      <div v-else class="version-info">
-        <div class="ver">加载中...</div>
-        <div class="version-sub">自托管 · 开源</div>
-      </div>
+      <LoadingSpinner v-if="loading" :text="t('common.loading')" />
+      <template v-else>
+        <div class="version-info">
+          <div class="ver">REX Hub {{ health?.version }}</div>
+          <div class="version-sub">自托管 · 开源</div>
+        </div>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import ProfileSection from '@/features/settings/ProfileSection.vue'
 import AppearanceSection from '@/features/settings/AppearanceSection.vue'
 import TerminalSection from '@/features/settings/TerminalSection.vue'
@@ -30,6 +31,8 @@ import TlsSection from '@/features/settings/TlsSection.vue'
 import BackupSection from '@/features/settings/BackupSection.vue'
 import UpdateSection from '@/features/settings/UpdateSection.vue'
 import { fetchHealth, HealthStatus } from '@/api/health'
+
+const { t } = useI18n()
 
 const health = ref<HealthStatus | null>(null)
 const loading = ref(true)

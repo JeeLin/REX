@@ -46,104 +46,110 @@
       <button class="btn btn-ghost btn-sm" @click="resetFilters">{{ t('audit.filters.reset') }}</button>
     </div>
 
-    <!-- Stats -->
-    <div class="audit-stats">
-      <div class="audit-stat">
-        <span class="stat-label">{{ t('audit.stats.total') }}</span>
-        <span class="stat-num text-accent">{{ stats.total }}</span>
-      </div>
-      <div class="audit-stat">
-        <span class="stat-label">{{ t('audit.stats.success') }}</span>
-        <span class="stat-num text-success">{{ stats.success }}</span>
-      </div>
-      <div class="audit-stat">
-        <span class="stat-label">{{ t('audit.stats.failed') }}</span>
-        <span class="stat-num text-danger">{{ stats.failed }}</span>
-      </div>
-      <div class="audit-stat">
-        <span class="stat-label">{{ t('audit.stats.activeUsers') }}</span>
-        <span class="stat-num" style="color: var(--info)">{{ stats.activeUsers }}</span>
-      </div>
-    </div>
+    <LoadingSpinner v-if="loading" :text="t('common.loading')" />
 
-    <!-- Log Table -->
-    <div class="audit-table-wrap">
-      <table class="audit-table">
-        <thead>
-          <tr>
-            <th>{{ t('audit.table.time') }}</th>
-            <th>{{ t('audit.table.user') }}</th>
-            <th>{{ t('audit.table.environment') }}</th>
-            <th>{{ t('audit.table.operation') }}</th>
-            <th>{{ t('audit.table.summary') }}</th>
-            <th>{{ t('audit.table.result') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <template v-for="record in filteredRecords" :key="record.id">
-            <tr
-              class="log-row"
-              :class="{ expanded: expandedId === record.id }"
-              @click="toggleDetail(record.id)"
-              @contextmenu.prevent="onLogRowCtx($event, record)"
-            >
-              <td class="audit-time">{{ record.time }}</td>
-              <td class="audit-user">{{ record.user }}</td>
-              <td>
-                <span class="audit-env" @contextmenu.stop="onEnvNameCtx($event, record)">
-                  <span class="env-dot"></span>
-                  {{ record.envName }}
-                </span>
-              </td>
-              <td>
-                <span class="audit-op" :class="record.operation" @contextmenu.stop="onOpTagCtx($event, record)">
-                  {{ t(`audit.ops.${record.operation}`) }}
-                </span>
-              </td>
-              <td class="audit-summary">{{ record.summary }}</td>
-              <td>
-                <span class="audit-result" :class="record.result">
-                  {{ record.result === 'ok' ? t('audit.table.success') : t('audit.table.failed') }}
-                </span>
-              </td>
+    <ErrorState v-else-if="loadError" :message="loadError" :retry="fetchLogs" />
+
+    <template v-else>
+      <!-- Stats -->
+      <div class="audit-stats">
+        <div class="audit-stat">
+          <span class="stat-label">{{ t('audit.stats.total') }}</span>
+          <span class="stat-num text-accent">{{ stats.total }}</span>
+        </div>
+        <div class="audit-stat">
+          <span class="stat-label">{{ t('audit.stats.success') }}</span>
+          <span class="stat-num text-success">{{ stats.success }}</span>
+        </div>
+        <div class="audit-stat">
+          <span class="stat-label">{{ t('audit.stats.failed') }}</span>
+          <span class="stat-num text-danger">{{ stats.failed }}</span>
+        </div>
+        <div class="audit-stat">
+          <span class="stat-label">{{ t('audit.stats.activeUsers') }}</span>
+          <span class="stat-num" style="color: var(--info)">{{ stats.activeUsers }}</span>
+        </div>
+      </div>
+
+      <!-- Log Table -->
+      <div class="audit-table-wrap">
+        <table class="audit-table">
+          <thead>
+            <tr>
+              <th>{{ t('audit.table.time') }}</th>
+              <th>{{ t('audit.table.user') }}</th>
+              <th>{{ t('audit.table.environment') }}</th>
+              <th>{{ t('audit.table.operation') }}</th>
+              <th>{{ t('audit.table.summary') }}</th>
+              <th>{{ t('audit.table.result') }}</th>
             </tr>
-            <tr v-if="expandedId === record.id" class="audit-detail">
-              <td colspan="6">
-                <div class="audit-detail-inner">
-                  <div class="detail-title">{{ t(`audit.ops.${record.operation}`) }}</div>
-                  <div class="detail-grid">
-                    <template v-if="record.detail">
-                      <template v-for="(value, key) in record.detail" :key="String(key)">
-                        <span class="detail-label">{{ String(key) }}</span>
-                        <span class="detail-value">{{ String(value) }}</span>
+          </thead>
+          <tbody>
+            <template v-for="record in filteredRecords" :key="record.id">
+              <tr
+                class="log-row"
+                :class="{ expanded: expandedId === record.id }"
+                @click="toggleDetail(record.id)"
+                @contextmenu.prevent="onLogRowCtx($event, record)"
+              >
+                <td class="audit-time">{{ record.time }}</td>
+                <td class="audit-user">{{ record.user }}</td>
+                <td>
+                  <span class="audit-env" @contextmenu.stop="onEnvNameCtx($event, record)">
+                    <span class="env-dot"></span>
+                    {{ record.envName }}
+                  </span>
+                </td>
+                <td>
+                  <span class="audit-op" :class="record.operation" @contextmenu.stop="onOpTagCtx($event, record)">
+                    {{ t(`audit.ops.${record.operation}`) }}
+                  </span>
+                </td>
+                <td class="audit-summary">{{ record.summary }}</td>
+                <td>
+                  <span class="audit-result" :class="record.result">
+                    {{ record.result === 'ok' ? t('audit.table.success') : t('audit.table.failed') }}
+                  </span>
+                </td>
+              </tr>
+              <tr v-if="expandedId === record.id" class="audit-detail">
+                <td colspan="6">
+                  <div class="audit-detail-inner">
+                    <div class="detail-title">{{ t(`audit.ops.${record.operation}`) }}</div>
+                    <div class="detail-grid">
+                      <template v-if="record.detail">
+                        <template v-for="(value, key) in record.detail" :key="String(key)">
+                          <span class="detail-label">{{ String(key) }}</span>
+                          <span class="detail-value">{{ String(value) }}</span>
+                        </template>
                       </template>
-                    </template>
+                    </div>
                   </div>
-                </div>
-              </td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Pagination -->
-    <div class="audit-pagination">
-      <span>{{ paginationText }}</span>
-      <div class="page-btns">
-        <button class="page-btn" :disabled="currentPage === 1" @click="currentPage--">&lsaquo;</button>
-        <button
-          v-for="page in totalPages"
-          :key="page"
-          class="page-btn"
-          :class="{ active: page === currentPage }"
-          @click="currentPage = page"
-        >
-          {{ page }}
-        </button>
-        <button class="page-btn" :disabled="currentPage === totalPages" @click="currentPage++">&rsaquo;</button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
       </div>
-    </div>
+
+      <!-- Pagination -->
+      <div class="audit-pagination">
+        <span>{{ paginationText }}</span>
+        <div class="page-btns">
+          <button class="page-btn" :disabled="currentPage === 1" @click="currentPage--">&lsaquo;</button>
+          <button
+            v-for="page in totalPages"
+            :key="page"
+            class="page-btn"
+            :class="{ active: page === currentPage }"
+            @click="currentPage = page"
+          >
+            {{ page }}
+          </button>
+          <button class="page-btn" :disabled="currentPage === totalPages" @click="currentPage++">&rsaquo;</button>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -151,6 +157,8 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import ErrorState from '@/components/ErrorState.vue'
 import { listAuditLog } from '@/api/audit'
 import { listEnvironments } from '@/api/env'
 import type { Environment } from '@/api/env'
@@ -201,6 +209,7 @@ interface AuditRecord {
 // ── Data state ──
 const records = ref<AuditRecord[]>([])
 const loading = ref(false)
+const loadError = ref('')
 const currentPage = ref(1)
 const pageSize = 20
 const apiTotal = ref(0)
