@@ -15,7 +15,7 @@ describe('API client', () => {
 
   it('has request and response interceptors', async () => {
     const { default: client } = await import('../client')
-    expect(client.interceptors.request.handlers.length).toBeGreaterThan(0)
-    expect(client.interceptors.response.handlers.length).toBeGreaterThan(0)
+    expect(client.interceptors.request.handlers?.length).toBeGreaterThan(0)
+    expect(client.interceptors.response.handlers?.length).toBeGreaterThan(0)
   })
 })
