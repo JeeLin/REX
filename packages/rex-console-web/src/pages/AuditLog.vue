@@ -76,16 +76,16 @@
         <table class="audit-table">
           <thead>
             <tr>
-              <th>{{ t('audit.table.time') }}</th>
-              <th>{{ t('audit.table.user') }}</th>
-              <th>{{ t('audit.table.environment') }}</th>
-              <th>{{ t('audit.table.operation') }}</th>
+              <th @click="toggleSort('time')">{{ t('audit.table.time') }} {{ sortIndicator('time') }}</th>
+              <th @click="toggleSort('user')">{{ t('audit.table.user') }} {{ sortIndicator('user') }}</th>
+              <th @click="toggleSort('envName')">{{ t('audit.table.environment') }} {{ sortIndicator('envName') }}</th>
+              <th @click="toggleSort('operation')">{{ t('audit.table.operation') }} {{ sortIndicator('operation') }}</th>
               <th>{{ t('audit.table.summary') }}</th>
-              <th>{{ t('audit.table.result') }}</th>
+              <th @click="toggleSort('result')">{{ t('audit.table.result') }} {{ sortIndicator('result') }}</th>
             </tr>
           </thead>
           <tbody>
-            <template v-for="record in filteredRecords" :key="record.id">
+            <template v-for="record in sortedFilteredRecords" :key="record.id">
               <tr
                 class="log-row"
                 :class="{ expanded: expandedId === record.id }"
@@ -157,6 +157,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
+import { useSort } from '@/composables/useSort'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import ErrorState from '@/components/ErrorState.vue'
 import { listAuditLog } from '@/api/audit'
@@ -312,6 +313,18 @@ const filteredRecords = computed(() => {
     return true
   })
 })
+
+// ── Sorting ──
+const { sortKey, sortDir, toggleSort, sorted: sortedFilteredRecords } = useSort(
+  () => filteredRecords.value,
+  'time',
+  'desc',
+)
+
+function sortIndicator(key: string) {
+  if (sortKey.value !== key) return ''
+  return sortDir.value === 'asc' ? '▲' : '▼'
+}
 
 // ── Watch filters and page changes ──
 watch(filters, () => {

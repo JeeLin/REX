@@ -101,22 +101,6 @@ async function loadEnvs() {
 </script>
 
 <style scoped>
-.loading-text {
-  text-align: center;
-  padding: var(--sp-3xl);
-  color: var(--text-secondary);
-}
-
-.empty-state {
-  text-align: center;
-  padding: var(--sp-3xl);
-  color: var(--text-secondary);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-lg);
-}
-
 .env-card {
   background: var(--bg-surface);
   border: 1px solid var(--border);
