@@ -68,6 +68,16 @@
       style="display: none"
       @change="handleFileUpload"
     />
+    <ConfirmDialog
+      :visible="showDeleteConfirm"
+      :title="t('confirm.deleteTitle')"
+      :message="deleteConfirmMsg"
+      :confirm-label="t('common.delete')"
+      :cancel-label="t('common.cancel')"
+      danger
+      @confirm="doDeleteFile"
+      @cancel="showDeleteConfirm = false"
+    />
   </div>
 </template>
 
@@ -75,6 +85,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useS3Session, type S3BucketInfo, type S3ObjectInfo } from './useS3Session'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import BucketList from './BucketList.vue'
 import ObjectBrowser from './ObjectBrowser.vue'
 
@@ -95,6 +106,9 @@ const currentBucket = ref('')
 const currentPrefix = ref('')
 const objects = ref<S3ObjectInfo[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
+const showDeleteConfirm = ref(false)
+const deleteConfirmMsg = ref('')
+let pendingDeleteKey = ''
 
 const endpoint = ref('')
 
@@ -202,11 +216,17 @@ async function downloadFile(item: S3ObjectInfo) {
 }
 
 // ── 删除 ────────────────────────────────────────────────
-async function deleteFile(item: S3ObjectInfo) {
+function deleteFile(item: S3ObjectInfo) {
   const name = item.key.split('/').filter(Boolean).pop()
-  if (!confirm(t('s3.confirmDelete', { name }))) return
+  pendingDeleteKey = item.key
+  deleteConfirmMsg.value = t('s3.confirmDelete', { name })
+  showDeleteConfirm.value = true
+}
+
+async function doDeleteFile() {
+  showDeleteConfirm.value = false
   try {
-    await session.deleteObject(currentBucket.value, item.key)
+    await session.deleteObject(currentBucket.value, pendingDeleteKey)
     await refreshObjects()
   } catch (err) {
     session.error.value = err instanceof Error ? err.message : String(err)

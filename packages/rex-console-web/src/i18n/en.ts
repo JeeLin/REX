@@ -19,6 +19,16 @@ export default {
     prev: 'Previous',
     create: 'Create',
     submit: 'Submit',
+    retry: 'Retry',
+  },
+  toast: {
+    operationSuccess: 'Operation successful',
+    operationFailed: 'Operation failed',
+  },
+  confirm: {
+    title: 'Confirm Action',
+    deleteTitle: 'Confirm Delete',
+    confirmDelete: 'This action cannot be undone. Continue?',
   },
   sidebar: {
     searchPlaceholder: 'Search resources...',

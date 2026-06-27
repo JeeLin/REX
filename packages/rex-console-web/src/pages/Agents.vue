@@ -49,6 +49,15 @@
       @close="showResetModal = false"
       @success="loadAgents"
     />
+    <ConfirmDialog
+      :visible="showRestartConfirm"
+      :title="t('confirm.title')"
+      :message="t('agent.restartConfirm', { name: restartAgentName })"
+      :confirm-label="t('common.confirm')"
+      :cancel-label="t('common.cancel')"
+      @confirm="doRestart"
+      @cancel="showRestartConfirm = false"
+    />
   </div>
 </template>
 
@@ -61,6 +70,7 @@ import { restartAgent, type Agent } from '@/api/agent'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import ErrorState from '@/components/ErrorState.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import AgentCard from '@/features/agents/AgentCard.vue'
 import DeployGuide from '@/features/agents/DeployGuide.vue'
 import AgentConfigModal from '@/features/agents/AgentConfigModal.vue'
@@ -81,6 +91,9 @@ const showLogModal = ref(false)
 const logAgentId = ref('')
 const showResetModal = ref(false)
 const resetAgent = ref<Agent | null>(null)
+const showRestartConfirm = ref(false)
+const restartAgentName = ref('')
+let pendingRestartId = ''
 
 function openConfig(agent: Agent) {
   configAgent.value = agent
@@ -97,10 +110,16 @@ function openResetToken(agent: Agent) {
   showResetModal.value = true
 }
 
-async function restartConfirm(agent: Agent) {
-  if (!confirm(t('agent.restartConfirm', { name: agent.name }))) return
+function restartConfirm(agent: Agent) {
+  restartAgentName.value = agent.name
+  pendingRestartId = agent.id
+  showRestartConfirm.value = true
+}
+
+async function doRestart() {
+  showRestartConfirm.value = false
   try {
-    await restartAgent(agent.id)
+    await restartAgent(pendingRestartId)
   } catch {
     // 静默处理
   }

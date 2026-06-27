@@ -19,6 +19,16 @@ export default {
     prev: '上一步',
     create: '创建',
     submit: '提交',
+    retry: '重试',
+  },
+  toast: {
+    operationSuccess: '操作成功',
+    operationFailed: '操作失败',
+  },
+  confirm: {
+    title: '确认操作',
+    deleteTitle: '确认删除',
+    confirmDelete: '确认删除后无法恢复，是否继续？',
   },
   sidebar: {
     searchPlaceholder: '搜索资源...',

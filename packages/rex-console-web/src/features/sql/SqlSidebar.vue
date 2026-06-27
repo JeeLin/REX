@@ -75,6 +75,16 @@
         </div>
       </div>
     </template>
+    <ConfirmDialog
+      :visible="showDeleteConfirm"
+      :title="t('confirm.deleteTitle')"
+      :message="deleteConfirmMsg"
+      :confirm-label="t('common.delete')"
+      :cancel-label="t('common.cancel')"
+      danger
+      @confirm="doDeleteQuery"
+      @cancel="showDeleteConfirm = false"
+    />
   </div>
 </template>
 
@@ -82,6 +92,7 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { listTables, listColumns, listQueries, deleteQuery, renameQuery } from '@/api/sql'
 import type { TableInfo, ColumnInfo, QueryFileMeta } from '@/api/sql'
 
@@ -108,6 +119,10 @@ const tables = ref<TableInfo[]>([])
 const columns = ref<Map<string, ColumnInfo[]>>(new Map())
 const expanded = ref<Set<string>>(new Set())
 const queries = ref<QueryFileMeta[]>([])
+const showDeleteConfirm = ref(false)
+const deleteConfirmMsg = ref('')
+let pendingDeleteResourceId = ''
+let pendingDeleteQueryId = ''
 
 const filteredTables = computed(() => {
   if (!search.value) return tables.value
@@ -182,9 +197,16 @@ async function handleRenameQuery(query: QueryFileMeta) {
   }
 }
 
-async function handleDeleteQuery(query: QueryFileMeta) {
-  if (!confirm(t('sql.sidebar.deleteConfirm', { name: query.name }))) return
-  await deleteQuery(props.resourceId, query.id)
+function handleDeleteQuery(query: QueryFileMeta) {
+  pendingDeleteResourceId = props.resourceId
+  pendingDeleteQueryId = query.id
+  deleteConfirmMsg.value = t('sql.sidebar.deleteConfirm', { name: query.name })
+  showDeleteConfirm.value = true
+}
+
+async function doDeleteQuery() {
+  showDeleteConfirm.value = false
+  await deleteQuery(pendingDeleteResourceId, pendingDeleteQueryId)
   emit('query-deleted')
   await loadQueries()
 }
