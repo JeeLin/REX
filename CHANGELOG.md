@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-06-27
+
+### Added
+- 全局搜索命令面板（Ctrl+K）：模糊搜索资源、页面导航、快捷操作
+- 键盘导航支持（↑↓ 选择、Enter 执行、Esc 关闭）
+- 资源按环境分组展示，显示协议图标和颜色
+- 内置导航命令（仪表盘、环境、Agent、设置）
+- 内置操作命令（新建连接、布局切换、全屏）
+- 快捷键帮助面板新增 Ctrl+K 说明
+
 ## [0.25.0] - 2026-06-27
 
 ### Added
