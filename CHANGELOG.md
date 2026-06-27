@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-06-27
+
+### Added
+- 统一三态组件：LoadingSpinner、ErrorState、EmptyState，所有页面统一加载/错误/空状态视觉
+- Toast 反馈：useToast composable，success/error/warning/info，3-5秒自动消失
+- 确认弹窗：ConfirmDialog 组件，删除等危险操作二次确认
+- 审计日志表格排序：列头点击切换升序/降序
+- 移动端响应式适配：所有页面支持 <768px 布局，卡片式网格、触控优化
+
+### Fixed
+- 自签名证书 SANs 自动探测本机 IP（绑定 0.0.0.0 时使用 UDP socket 探测）
+- TLS 默认模式改为 HTTP（需显式启用 enable_self_signed 才开启自签名 HTTPS）
+- 新增 REX_ENABLE_SELF_SIGNED 环境变量支持
+
 ## [0.26.0] - 2026-06-27
 
 ### Added
