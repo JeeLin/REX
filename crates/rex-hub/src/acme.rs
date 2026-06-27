@@ -65,8 +65,13 @@ pub fn determine_tls_mode(config: &HubConfig) -> TlsMode {
         }
     }
 
-    // 3. 无 TLS 配置 → 自签名证书（始终 HTTPS）
-    TlsMode::SelfSigned
+    // 3. 自签名证书（需显式启用）
+    if config.enable_self_signed {
+        return TlsMode::SelfSigned;
+    }
+
+    // 4. 默认：无 TLS（HTTP only）
+    TlsMode::None
 }
 
 /// TLS 模式
@@ -190,8 +195,17 @@ mod tests {
     }
 
     #[test]
-    fn determine_tls_mode_self_signed_when_no_config() {
+    fn determine_tls_mode_none_when_no_config() {
         let config = crate::config::HubConfig::default();
+        assert_eq!(determine_tls_mode(&config), TlsMode::None);
+    }
+
+    #[test]
+    fn determine_tls_mode_self_signed_when_enabled() {
+        let config = crate::config::HubConfig {
+            enable_self_signed: true,
+            ..Default::default()
+        };
         assert_eq!(determine_tls_mode(&config), TlsMode::SelfSigned);
     }
 
@@ -221,6 +235,19 @@ mod tests {
                 cert: std::path::PathBuf::from("/nonexistent/cert.pem"),
                 key: std::path::PathBuf::from("/nonexistent/key.pem"),
             }),
+            ..Default::default()
+        };
+        assert_eq!(determine_tls_mode(&config), TlsMode::None);
+    }
+
+    #[test]
+    fn determine_tls_mode_manual_missing_files_self_signed_enabled() {
+        let config = crate::config::HubConfig {
+            tls: Some(crate::config::TlsConfig {
+                cert: std::path::PathBuf::from("/nonexistent/cert.pem"),
+                key: std::path::PathBuf::from("/nonexistent/key.pem"),
+            }),
+            enable_self_signed: true,
             ..Default::default()
         };
         assert_eq!(determine_tls_mode(&config), TlsMode::SelfSigned);

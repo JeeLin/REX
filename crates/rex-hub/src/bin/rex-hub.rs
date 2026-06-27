@@ -255,9 +255,9 @@ mod tests {
     }
 
     #[test]
-    fn determine_tls_mode_none_falls_back_to_self_signed() {
+    fn determine_tls_mode_none_when_no_config() {
         let config = HubConfig::default();
-        assert_eq!(acme::determine_tls_mode(&config), TlsMode::SelfSigned);
+        assert_eq!(acme::determine_tls_mode(&config), TlsMode::None);
     }
 
     #[test]
@@ -288,7 +288,7 @@ mod tests {
             }),
             ..Default::default()
         };
-        assert_eq!(acme::determine_tls_mode(&config), TlsMode::SelfSigned);
+        assert_eq!(acme::determine_tls_mode(&config), TlsMode::None);
     }
 
     #[test]

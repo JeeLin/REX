@@ -211,7 +211,7 @@ mod tests {
     #[test]
     fn tls_status_none_mode() {
         let config = HubConfig::default();
-        assert_eq!(acme::determine_tls_mode(&config), TlsMode::SelfSigned);
+        assert_eq!(acme::determine_tls_mode(&config), TlsMode::None);
     }
 
     #[test]
