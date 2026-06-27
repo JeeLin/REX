@@ -8,11 +8,11 @@
       <TlsSection />
       <BackupSection />
       <UpdateSection />
-      <div class="version-info" v-if="health">
+      <div v-if="health" class="version-info">
         <div class="ver">REX Hub {{ health.version }}</div>
         <div class="version-sub">自托管 · 开源</div>
       </div>
-      <div class="version-info" v-else>
+      <div v-else class="version-info">
         <div class="ver">加载中...</div>
         <div class="version-sub">自托管 · 开源</div>
       </div>

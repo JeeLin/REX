@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-overlay" @click.self="close" v-show="visible">
+  <div v-show="visible" class="modal-overlay" @click.self="close">
     <div class="modal-content">
       <div class="modal-header">
         <span>⊞ 全局查询</span>
@@ -17,9 +17,9 @@
               :class="{ disabled: !checkCompatibility(res.protocol) }"
             >
               <input
+                v-model="selectedResources"
                 type="checkbox"
                 :value="res.id"
-                v-model="selectedResources"
                 :disabled="!checkCompatibility(res.protocol)"
                 @change="onResourceSelectionChange"
               />
@@ -28,9 +28,9 @@
           </div>
           <div class="db-select-actions">
             <button
-              @click="selectAllCompatible"
               :disabled="!selectedResources.length"
               class="btn btn-ghost btn-sm"
+              @click="selectAllCompatible"
             >
               全选兼容
             </button>
@@ -47,14 +47,14 @@
           />
           <div class="editor-toolbar">
             <button
-              @click="executeGlobalQuery"
               :disabled="!selectedResources.length || !sqlQuery.trim() || isExecuting"
+              @click="executeGlobalQuery"
             >
               执行 (Ctrl+Enter)
             </button>
             <button
-              @click="cancelQuery"
               :disabled="!isExecuting"
+              @click="cancelQuery"
             >
               取消
             </button>

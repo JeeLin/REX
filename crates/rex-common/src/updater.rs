@@ -43,16 +43,13 @@ pub type ProgressCallback = Box<dyn Fn(u32) + Send + Sync>;
 /// 更新下载源
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum UpdateSource {
+    #[default]
     GitHub,
     Hub,
 }
 
-impl Default for UpdateSource {
-    fn default() -> Self {
-        Self::GitHub
-    }
-}
 
 /// 更新检查器
 pub struct UpdateChecker {

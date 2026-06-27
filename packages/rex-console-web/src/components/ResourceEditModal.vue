@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-overlay" v-if="visible" @click.self="close">
+  <div v-if="visible" class="modal-overlay" @click.self="close">
     <div class="modal-content">
       <div class="modal-header">
         <span>{{ t('resource.edit') }}</span>

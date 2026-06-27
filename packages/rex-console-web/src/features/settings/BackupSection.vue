@@ -16,17 +16,17 @@
         <label class="backup-option-label">{{ t('settings.backup.exportScope') }}：</label>
         <div class="backup-radio-group">
           <label class="radio-label">
-            <input type="radio" v-model="exportScope" value="all" />
+            <input v-model="exportScope" type="radio" value="all" />
             {{ t('settings.backup.allEnvs') }}
           </label>
           <label class="radio-label">
-            <input type="radio" v-model="exportScope" value="selected" />
+            <input v-model="exportScope" type="radio" value="selected" />
             {{ t('settings.backup.selectEnvs') }}
           </label>
         </div>
         <div v-if="exportScope === 'selected'" class="env-checkboxes">
           <label v-for="env in environments" :key="env.id" class="checkbox-label">
-            <input type="checkbox" :value="env.id" v-model="selectedEnvIds" />
+            <input v-model="selectedEnvIds" type="checkbox" :value="env.id" />
             {{ env.name }}
           </label>
         </div>
@@ -35,19 +35,19 @@
       <!-- 加密选项 -->
       <div class="backup-option">
         <label class="checkbox-label">
-          <input type="checkbox" v-model="encryptBackup" />
+          <input v-model="encryptBackup" type="checkbox" />
           {{ t('settings.backup.encryptBackup') }}
         </label>
         <div v-if="encryptBackup" class="password-inputs">
           <input
-            type="password"
             v-model="backupPassword"
+            type="password"
             :placeholder="t('settings.backup.setPassword')"
             class="form-input"
           />
           <input
-            type="password"
             v-model="backupPasswordConfirm"
+            type="password"
             :placeholder="t('settings.backup.confirmPassword')"
             class="form-input"
           />
@@ -88,11 +88,11 @@
         @click="triggerUpload"
       >
         <input
-          type="file"
           ref="fileInput"
+          type="file"
           accept=".json"
-          @change="handleFileSelect"
           hidden
+          @change="handleFileSelect"
         />
         <div v-if="!importFile" class="upload-placeholder">
           📁 {{ t('settings.backup.dropFile') }}
@@ -107,8 +107,8 @@
       <div v-if="importFileEncrypted" class="backup-option">
         <label class="backup-option-label">{{ t('settings.backup.importPassword') }}：</label>
         <input
-          type="password"
           v-model="importPassword"
+          type="password"
           :placeholder="t('settings.backup.enterPassword')"
           class="form-input"
         />
@@ -117,7 +117,7 @@
       <!-- 合并策略 -->
       <div class="backup-option">
         <label class="backup-option-label">{{ t('settings.backup.conflictStrategy') }}：</label>
-        <select class="form-select" v-model="importStrategy">
+        <select v-model="importStrategy" class="form-select">
           <option value="skip_existing">{{ t('settings.backup.skipExisting') }}</option>
           <option value="overwrite">{{ t('settings.backup.overwrite') }}</option>
         </select>

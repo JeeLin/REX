@@ -11,7 +11,7 @@
     </div>
 
     <!-- 上下文栏 -->
-    <div class="ai-context-bar" v-if="context">
+    <div v-if="context" class="ai-context-bar">
       <span
         v-for="(item, index) in contextItems"
         :key="index"
@@ -22,7 +22,7 @@
     </div>
 
     <!-- 消息列表 -->
-    <div class="ai-messages" ref="messagesContainer">
+    <div ref="messagesContainer" class="ai-messages">
       <ai-message
         v-for="message in messages"
         :key="message.id"
@@ -35,22 +35,22 @@
     <div class="ai-quick-actions">
       <button
         class="ai-quick-btn"
-        @click="handleQuickAction('generate')"
         :disabled="isStreaming"
+        @click="handleQuickAction('generate')"
       >
         生成 SQL
       </button>
       <button
         class="ai-quick-btn"
-        @click="handleQuickAction('analyze')"
         :disabled="isStreaming"
+        @click="handleQuickAction('analyze')"
       >
         分析慢查询
       </button>
       <button
         class="ai-quick-btn"
-        @click="handleQuickAction('relations')"
         :disabled="isStreaming"
+        @click="handleQuickAction('relations')"
       >
         表关系
       </button>
@@ -59,17 +59,17 @@
     <!-- 输入区域 -->
     <div class="ai-input-area">
       <textarea
-        class="ai-input"
         v-model="inputValue"
-        @keydown.enter.exact="handleSendMessage"
+        class="ai-input"
         placeholder="向 AI 提问..."
         :disabled="isStreaming"
+        @keydown.enter.exact="handleSendMessage"
       ></textarea>
       <div class="ai-input-actions">
         <button
           class="ai-send-btn"
-          @click="handleSendMessage"
           :disabled="!inputValue.trim() || isStreaming"
+          @click="handleSendMessage"
         >
           {{ isStreaming ? "停止" : "发送" }}
         </button>

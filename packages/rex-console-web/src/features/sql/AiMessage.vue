@@ -15,8 +15,8 @@
       </div>
 
       <div
-        v-html="renderContent(message.content)"
         class="ai-message-body"
+        v-html="renderContent(message.content)"
       ></div>
 
       <!-- Copy button for code blocks -->
@@ -26,8 +26,8 @@
             v-for="(block, index) in extractCodeBlocks(message.content)"
             :key="index"
             class="ai-copy-btn"
-            @click="copySqlToEditor(block)"
             title="复制 SQL 到编辑器"
+            @click="copySqlToEditor(block)"
           >
             📋 复制
           </button>

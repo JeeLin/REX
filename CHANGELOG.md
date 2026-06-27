@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-06-27
+
+### Fixed
+- 修复审计日志 API 在带 `from/to` 时间范围时返回空的问题（ISO 8601 格式统一）
+- 修复 SSH 终端复制/粘贴/Tab 补全（Ctrl+Shift+C/V、右键菜单）
+- 改进 Redis 命令回显与交互体验
+- 修复 HTTPS 证书功能异常（证书文件不存在时优雅降级、默认启用自签名证书）
+- 修复资源编辑跳空页（改为弹出对话框编辑，不再跳转页面）
+- 修复新增资源后侧边栏不自动刷新（composable 模块级共享状态）
+- 修复最近访问与收藏记录不持久化（connectToResource 调用 addToRecent）
+- 修复移动端 SSH 历史弹窗（独立历史弹窗 + 命令输入追踪）
+- 修复移动端 SFTP 目录进入（触屏设备单击进入目录）
+- 修复 Agent 下载需认证问题（移至公开路由）
+- 修复布局切换后拖拽面板（已实现的标签拖拽到分屏面板功能确认）
+- 清理编译/类型警告（ESLint warnings 43→11，cargo clippy clean）
+
+### Added
+- 侧边栏拖拽调整宽度（180px-400px，localStorage 持久化）
+- 资源编辑对话框（ResourceEditModal，支持所有协议）
+- TLS/ACME 环境变量文档化（.env.example 补充 REX_TLS_* 和 REX_ACME_* 变量）
+- 移动端 SSH 命令历史面板（最近 50 条命令，点击回放）
+
 ## [0.22.0] - 2026-06-26
 
 ### Added

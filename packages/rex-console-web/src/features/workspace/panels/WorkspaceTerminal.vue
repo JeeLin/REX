@@ -127,7 +127,9 @@
             :key="idx"
             class="mobile-history-item"
             @click="sendKey(cmd + '\r'); showMobileHistory = false"
-          >{{ cmd }}</button>
+          >
+            {{ cmd }}
+          </button>
         </div>
         <div class="ws-term-modal-actions" style="margin-top: var(--sp-md)">
           <button class="btn" @click="showMobileHistory = false">{{ t('common.cancel') }}</button>
