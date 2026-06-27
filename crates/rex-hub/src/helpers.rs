@@ -164,4 +164,60 @@ mod tests {
         let json = serde_json::to_string(&err).unwrap();
         assert!(json.contains("TEST"));
     }
+
+    #[test]
+    fn api_response_serializes() {
+        let resp = ApiResponse {
+            data: "hello".to_string(),
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("hello"));
+    }
+
+    #[test]
+    fn gen_id_various_prefixes() {
+        let id1 = gen_id("env");
+        assert!(id1.starts_with("env_"));
+        let id2 = gen_id("");
+        assert!(id2.starts_with('_'));
+        let id3 = gen_id("a");
+        assert!(id3.starts_with("a_"));
+        assert_eq!(id3.len(), 10); // "a_" + 8 hex
+    }
+
+    #[test]
+    fn err_resp_body_contains_code_and_message() {
+        let (_, json) = err_resp("ERR_CODE", "error message");
+        assert_eq!(json.error.code, "ERR_CODE");
+        assert_eq!(json.error.message, "error message");
+    }
+
+    #[test]
+    fn not_found_body() {
+        let (_, json) = not_found("NF", "not found msg");
+        assert_eq!(json.error.code, "NF");
+        assert_eq!(json.error.message, "not found msg");
+    }
+
+    #[test]
+    fn conflict_body() {
+        let (_, json) = conflict("CF", "conflict msg");
+        assert_eq!(json.error.code, "CF");
+        assert_eq!(json.error.message, "conflict msg");
+    }
+
+    #[test]
+    fn get_or_create_password_hash_returns_hash() {
+        let db = crate::db::Database::new_in_memory().unwrap();
+        let hash = get_or_create_password_hash(&db);
+        assert!(hash.starts_with("$argon2"));
+    }
+
+    #[test]
+    fn get_or_create_password_hash_is_persistent() {
+        let db = crate::db::Database::new_in_memory().unwrap();
+        let hash1 = get_or_create_password_hash(&db);
+        let hash2 = get_or_create_password_hash(&db);
+        assert_eq!(hash1, hash2);
+    }
 }
