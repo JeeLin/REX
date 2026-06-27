@@ -67,7 +67,7 @@
           class="sfile-row"
           :class="{ selected: selectedEntry?.path === entry.path }"
           draggable="true"
-          @click="selectedEntry = entry"
+          @click="onEntryClick(entry)"
           @dblclick="handleDblClick(entry)"
           @contextmenu.prevent.stop="showEntryCtxMenu($event, entry)"
           @dragstart="onDragStart($event, entry)"
@@ -139,6 +139,9 @@ const ctxMenu = ref<{ visible: boolean; x: number; y: number; entry: FileEntry |
   visible: false, x: 0, y: 0, entry: null,
 })
 
+// 移动端检测
+const isTouchDevice: boolean = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
+
 const sortedEntries = computed(() => {
   return [...entries.value].sort((a, b) => {
     if (a.file_type !== b.file_type) return a.file_type === 'directory' ? -1 : 1
@@ -179,6 +182,14 @@ function goUp() {
   if (currentPath.value === '/') return
   const parent = currentPath.value.replace(/\/[^/]+\/?$/, '') || '/'
   loadDir(parent)
+}
+
+function onEntryClick(entry: FileEntry) {
+  selectedEntry.value = entry
+  // 移动端单击进入目录
+  if (isTouchDevice && entry.file_type === 'directory') {
+    loadDir(entry.path)
+  }
 }
 
 function handleDblClick(entry: FileEntry) {
