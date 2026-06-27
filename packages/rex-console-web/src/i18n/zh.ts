@@ -152,6 +152,7 @@ export default {
         pasteTitle: '粘贴文本',
         pastePlaceholder: '在此输入要粘贴的文本...',
         clear: '清屏',
+        noHistory: '暂无命令历史',
         reconnect: '重连',
         disconnect: '断开连接',
       },

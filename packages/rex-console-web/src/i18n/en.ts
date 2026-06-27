@@ -152,6 +152,7 @@ export default {
         pasteTitle: 'Paste Text',
         pastePlaceholder: 'Type or paste text here...',
         clear: 'Clear',
+        noHistory: 'No command history',
         reconnect: 'Reconnect',
         disconnect: 'Disconnect',
       },

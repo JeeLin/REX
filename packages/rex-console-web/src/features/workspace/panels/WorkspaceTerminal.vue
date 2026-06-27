@@ -82,7 +82,7 @@
         <button class="mobile-btn" @click="sendKey('\x0c')">^L</button>
       </div>
       <div class="mobile-row">
-        <button class="mobile-btn mobile-btn-fn" @click="showMobileMore = true">📜 {{ t('ws.terminal.mobile.history') }}</button>
+        <button class="mobile-btn mobile-btn-fn" @click="showMobileHistory = true">📜 {{ t('ws.terminal.mobile.history') }}</button>
         <button class="mobile-btn mobile-btn-fn" @click="showPasteDialog = true">📋 {{ t('ws.terminal.mobile.paste') }}</button>
         <button class="mobile-btn" @click="adjustFontSize(-1)">A-</button>
         <button class="mobile-btn" @click="adjustFontSize(1)">A+</button>
@@ -112,6 +112,25 @@
         </div>
         <div class="ws-term-modal-actions" style="margin-top: var(--sp-md)">
           <button class="btn" @click="showMobileMore = false">{{ t('common.cancel') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 移动端历史弹窗 -->
+    <div v-if="showMobileHistory" class="ws-term-modal-overlay" @click.self="showMobileHistory = false">
+      <div class="ws-term-modal">
+        <div class="ws-term-modal-title">{{ t('ws.terminal.mobile.history') }}</div>
+        <div class="mobile-history-list">
+          <div v-if="commandHistory.length === 0" class="mobile-more-item" style="opacity:0.5">{{ t('ws.terminal.mobile.noHistory') }}</div>
+          <button
+            v-for="(cmd, idx) in commandHistory.slice().reverse()"
+            :key="idx"
+            class="mobile-history-item"
+            @click="sendKey(cmd + '\r'); showMobileHistory = false"
+          >{{ cmd }}</button>
+        </div>
+        <div class="ws-term-modal-actions" style="margin-top: var(--sp-md)">
+          <button class="btn" @click="showMobileHistory = false">{{ t('common.cancel') }}</button>
         </div>
       </div>
     </div>
@@ -173,6 +192,8 @@ const isMobile = ref(false)
 const showPasteDialog = ref(false)
 const pasteText = ref('')
 const showMobileMore = ref(false)
+const showMobileHistory = ref(false)
+const commandHistory = ref<string[]>([])
 const terminalFontSize = ref(13)
 
 // SFTP panel state
@@ -190,6 +211,7 @@ let fitAddon: FitAddon | null = null
 let ws: WebSocket | null = null
 let sessionId: string | null = null
 let resizeObserver: ResizeObserver | null = null
+let inputBuffer = ''
 
 function initTerminal() {
   if (!terminalContainer.value) return
@@ -241,6 +263,20 @@ function initTerminal() {
   fitAddon.fit()
 
   terminal.onData((data: string) => {
+    // 追踪命令历史（回车时记录）
+    if (data === '\r') {
+      const cmd = inputBuffer.trim()
+      if (cmd) {
+        commandHistory.value = [...commandHistory.value.slice(-49), cmd]
+      }
+      inputBuffer = ''
+    } else if (data >= ' ' || data === '\x7f') {
+      if (data === '\x7f') {
+        inputBuffer = inputBuffer.slice(0, -1)
+      } else {
+        inputBuffer += data
+      }
+    }
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
         type: 'terminal.input',
@@ -561,6 +597,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  inputBuffer = ''
   ws?.close()
   if (sessionId) {
     deleteSession(sessionId).catch(() => {})
@@ -872,6 +909,36 @@ onBeforeUnmount(() => {
 }
 
 .mobile-more-item:active {
+  background: var(--accent-muted);
+}
+
+/* ── 移动端历史弹窗 ── */
+.mobile-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-xs);
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.mobile-history-item {
+  display: block;
+  width: 100%;
+  padding: var(--sp-sm) var(--sp-md);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-history-item:active {
   background: var(--accent-muted);
 }
 </style>
