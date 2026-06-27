@@ -366,6 +366,8 @@ export default {
     step1ConfigFileDesc: '创建 agent.yaml 配置文件',
     step2StartBinary: '启动 Agent',
     step2StartBinaryDesc: '使用配置文件启动',
+    restarted: 'Agent 已重启',
+    restartFailed: 'Agent 重启失败',
   },
   files: {
     title: '文件管理',
@@ -393,6 +395,10 @@ export default {
     error: '加载失败',
     paste: '粘贴',
     selectAll: '全选',
+    folderCreated: '文件夹已创建',
+    fileCreated: '文件已创建',
+    deleted: '已删除',
+    renamed: '已重命名',
     sftp: {
       title: 'SFTP',
       toggle: '切换 SFTP 面板',

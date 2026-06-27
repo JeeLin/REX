@@ -82,16 +82,15 @@
     </div>
 
     <!-- Delete Confirm Dialog -->
-    <div v-if="showDeleteDialog" class="ws-files-modal-overlay" @click.self="showDeleteDialog = false">
-      <div class="ws-files-modal">
-        <div class="ws-files-modal-title">确认删除？</div>
-        <p class="ws-files-modal-desc">将删除 {{ selectedPaths.length }} 个项目，此操作不可撤销。</p>
-        <div class="ws-files-modal-actions">
-          <button class="btn" @click="showDeleteDialog = false">取消</button>
-          <button class="btn btn-danger" @click="confirmDelete">删除</button>
-        </div>
-      </div>
-    </div>
+    <ConfirmDialog
+      :visible="showDeleteDialog"
+      :title="t('files.deleteConfirm')"
+      :message="t('files.deleteDesc', { count: selectedPaths.length })"
+      :confirm-label="t('files.deleteBtn')"
+      :danger="true"
+      @confirm="confirmDelete"
+      @cancel="showDeleteDialog = false"
+    />
 
     <!-- Context Menu -->
     <div
@@ -138,10 +137,16 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useFileManager } from '@/features/files/useFileManager'
+import { useToast } from '@/composables/useToast'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import FileBreadcrumb from '@/features/files/FileBreadcrumb.vue'
 import FileList from '@/features/files/FileList.vue'
 import type { FileEntry } from '@/api/files'
+
+const { t } = useI18n()
+const { success } = useToast()
 
 const props = defineProps<{
   resourceId: string
@@ -212,12 +217,14 @@ async function confirmMkdir() {
   if (!newDirName.value.trim()) return
   await createDir(newDirName.value.trim())
   showMkdirDialog.value = false
+  success(t('files.folderCreated'))
 }
 
 async function confirmTouch() {
   if (!newFileName.value.trim()) return
   await createFile(newFileName.value.trim())
   showTouchDialog.value = false
+  success(t('files.fileCreated'))
 }
 
 async function confirmDelete() {
@@ -225,6 +232,7 @@ async function confirmDelete() {
   selectedPaths.value = []
   showDeleteDialog.value = false
   await deleteEntries(paths)
+  success(t('files.deleted'))
 }
 
 function closeContextMenu() {

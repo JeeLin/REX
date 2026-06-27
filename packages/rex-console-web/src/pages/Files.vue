@@ -119,16 +119,15 @@
     </div>
 
     <!-- Delete Confirm Dialog -->
-    <div v-if="showDeleteDialog" class="modal-overlay" @click.self="showDeleteDialog = false">
-      <div class="modal">
-        <div class="modal-title">确认删除？</div>
-        <p class="modal-desc">将删除 {{ selectedPaths.length }} 个项目，此操作不可撤销。</p>
-        <div class="modal-actions">
-          <button class="btn" @click="showDeleteDialog = false">取消</button>
-          <button class="btn btn-danger" @click="confirmDelete">删除</button>
-        </div>
-      </div>
-    </div>
+    <ConfirmDialog
+      :visible="showDeleteDialog"
+      title="确认删除？"
+      :message="`将删除 ${selectedPaths.length} 个项目，此操作不可撤销。`"
+      confirm-label="删除"
+      :danger="true"
+      @confirm="confirmDelete"
+      @cancel="showDeleteDialog = false"
+    />
 
     <!-- Send To Dialog -->
     <div v-if="showSendToDialog" class="modal-overlay" @click.self="showSendToDialog = false">
@@ -222,11 +221,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useFileManager } from '@/features/files/useFileManager'
 import { useTransferQueue } from '@/features/files/useTransferQueue'
 import { downloadFile, uploadFile } from '@/api/files'
 import { createTransfer } from '@/api/transfer'
 import { useTabs } from '@/features/workspace/useTabs'
+import { useToast } from '@/composables/useToast'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import FileBreadcrumb from '@/features/files/FileBreadcrumb.vue'
 import FileList from '@/features/files/FileList.vue'
 import TransferQueuePanel from '@/features/files/TransferQueuePanel.vue'
@@ -235,6 +237,8 @@ import type { TransferEndpoint } from '@/api/transfer'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
+const { success, error: toastError } = useToast()
 const resourceId = route.params.resourceId as string
 const resourceName = ref(resourceId)
 
@@ -451,12 +455,14 @@ async function confirmMkdir() {
   if (!newDirName.value.trim()) return
   await createDir(newDirName.value.trim())
   showMkdirDialog.value = false
+  success(t('files.folderCreated'))
 }
 
 async function confirmTouch() {
   if (!newFileName.value.trim()) return
   await createFile(newFileName.value.trim())
   showTouchDialog.value = false
+  success(t('files.fileCreated'))
 }
 
 async function confirmDelete() {
@@ -464,12 +470,14 @@ async function confirmDelete() {
   selectedPaths.value = []
   showDeleteDialog.value = false
   await deleteEntries(paths)
+  success(t('files.deleted'))
 }
 
 async function confirmRename() {
   if (!renameNewName.value.trim() || !renameTarget.value) return
   await renameEntry(renameTarget.value.path, renameNewName.value.trim())
   showRenameDialog.value = false
+  success(t('files.renamed'))
 }
 
 // Close context menu on click outside

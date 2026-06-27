@@ -138,16 +138,15 @@
     </div>
 
     <!-- 断开确认弹窗 -->
-    <div v-if="showDisconnectDialog" class="ws-term-modal-overlay" @click.self="showDisconnectDialog = false">
-      <div class="ws-term-modal">
-        <div class="ws-term-modal-title">{{ t('ws.terminal.disconnect.title') }}</div>
-        <p class="ws-term-modal-desc">{{ t('ws.terminal.disconnect.desc') }}</p>
-        <div class="ws-term-modal-actions">
-          <button class="btn" @click="showDisconnectDialog = false">{{ t('common.cancel') }}</button>
-          <button class="btn btn-danger" @click="doDisconnect">{{ t('common.confirm') }}</button>
-        </div>
-      </div>
-    </div>
+    <ConfirmDialog
+      :visible="showDisconnectDialog"
+      :title="t('ws.terminal.disconnect.title')"
+      :message="t('ws.terminal.disconnect.desc')"
+      :confirm-label="t('common.confirm')"
+      :danger="true"
+      @confirm="doDisconnect"
+      @cancel="showDisconnectDialog = false"
+    />
   </div>
 </template>
 
@@ -162,6 +161,7 @@ import { createSession, deleteSession } from '@/api/terminal'
 import { terminalSettings } from '@/stores/settings'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { getErrorMessage } from '@/utils/error'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { listFiles } from '@/api/files'
 import type { FileEntry } from '@/api/files'
 import FileList from '@/features/files/FileList.vue'

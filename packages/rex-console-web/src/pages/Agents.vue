@@ -67,6 +67,7 @@ import { useI18n } from 'vue-i18n'
 import client from '@/api/client'
 import { getUpdateStatus } from '@/api/update'
 import { restartAgent, type Agent } from '@/api/agent'
+import { useToast } from '@/composables/useToast'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import ErrorState from '@/components/ErrorState.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -78,6 +79,7 @@ import AgentLogModal from '@/features/agents/AgentLogModal.vue'
 import AgentResetTokenModal from '@/features/agents/AgentResetTokenModal.vue'
 
 const { t } = useI18n()
+const { success, error: toastError } = useToast()
 
 const agents = ref<Agent[]>([])
 const hubVersion = ref('')
@@ -120,8 +122,9 @@ async function doRestart() {
   showRestartConfirm.value = false
   try {
     await restartAgent(pendingRestartId)
+    success(t('agent.restarted'))
   } catch {
-    // 静默处理
+    toastError(t('agent.restartFailed'))
   }
 }
 

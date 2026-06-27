@@ -84,8 +84,10 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getUserProfile, updateUserProfile, changePassword } from '@/api/settings'
 import { getErrorMessage } from '@/utils/error'
+import { useToast } from '@/composables/useToast'
 
 const { t } = useI18n()
+const { success, error: toastError } = useToast()
 
 const username = ref('admin')
 const showEditUsername = ref(false)
@@ -109,8 +111,9 @@ async function saveUsername() {
     const profile = await updateUserProfile(newUsername.value.trim())
     username.value = profile.username
     showEditUsername.value = false
+    success(t('toast.operationSuccess'))
   } catch (err: unknown) {
-    alert(getErrorMessage(err, t('settings.profile.saveFailed')))
+    toastError(getErrorMessage(err, t('settings.profile.saveFailed')))
   }
 }
 
@@ -124,9 +127,9 @@ async function savePassword() {
     showChangePassword.value = false
     currentPassword.value = ''
     newPassword.value = ''
-    alert(t('settings.profile.saveSuccess'))
+    success(t('settings.profile.saveSuccess'))
   } catch (err: unknown) {
-    alert(getErrorMessage(err, t('settings.profile.passwordFailed')))
+    toastError(getErrorMessage(err, t('settings.profile.passwordFailed')))
   }
 }
 

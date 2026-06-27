@@ -63,16 +63,15 @@
     </div>
 
     <!-- 断开确认弹窗 -->
-    <div v-if="showDisconnectDialog" class="modal-overlay" @click.self="showDisconnectDialog = false">
-      <div class="modal">
-        <div class="modal-title">断开连接？</div>
-        <p class="modal-desc">断开后当前会话将终止，未保存的工作可能会丢失。</p>
-        <div class="modal-actions">
-          <button class="btn" @click="showDisconnectDialog = false">取消</button>
-          <button class="btn btn-danger" @click="doDisconnect">断开</button>
-        </div>
-      </div>
-    </div>
+    <ConfirmDialog
+      :visible="showDisconnectDialog"
+      title="断开连接？"
+      message="断开后当前会话将终止，未保存的工作可能会丢失。"
+      confirm-label="断开"
+      :danger="true"
+      @confirm="doDisconnect"
+      @cancel="showDisconnectDialog = false"
+    />
   </div>
 </template>
 
@@ -84,6 +83,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { createSession, deleteSession } from '@/api/terminal'
 import { terminalSettings } from '@/stores/settings'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import TerminalSftp from '@/features/terminal/TerminalSftp.vue'
 
 const route = useRoute()

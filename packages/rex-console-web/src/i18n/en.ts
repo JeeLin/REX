@@ -364,6 +364,8 @@ export default {
     step1ConfigFileDesc: 'Create an agent.yaml config file',
     step2StartBinary: 'Start Agent',
     step2StartBinaryDesc: 'Start with the config file',
+    restarted: 'Agent restarted',
+    restartFailed: 'Failed to restart Agent',
   },
   files: {
     title: 'File Manager',
@@ -391,6 +393,10 @@ export default {
     error: 'Failed to load',
     paste: 'Paste',
     selectAll: 'Select All',
+    folderCreated: 'Folder created',
+    fileCreated: 'File created',
+    deleted: 'Deleted',
+    renamed: 'Renamed',
     sftp: {
       title: 'SFTP',
       toggle: 'Toggle SFTP Panel',
