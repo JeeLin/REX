@@ -9,18 +9,18 @@
 
     <!-- Toolbar -->
     <div class="ws-files-toolbar">
-      <button class="btn btn-ghost btn-xs" @click="showMkdirDialog = true">📁 新建</button>
-      <button class="btn btn-ghost btn-xs" @click="showTouchDialog = true">📄 新建文件</button>
+      <button class="btn btn-ghost btn-xs" @click="showMkdirDialog = true">📁 {{ t('files.newFolder') }}</button>
+      <button class="btn btn-ghost btn-xs" @click="showTouchDialog = true">📄 {{ t('files.newFile') }}</button>
       <div class="ws-files-sep"></div>
       <button
         class="btn btn-ghost btn-xs"
         :disabled="selectedPaths.length === 0"
         @click="handleDelete"
       >
-        🗑 删除{{ selectedPaths.length > 0 ? ` (${selectedPaths.length})` : '' }}
+        🗑 {{ t('files.delete') }}{{ selectedPaths.length > 0 ? ` (${selectedPaths.length})` : '' }}
       </button>
       <div class="ws-files-spacer"></div>
-      <span class="ws-files-info">{{ entries.length }} 项</span>
+      <span class="ws-files-info">{{ t('files.items', { count: entries.length }) }}</span>
     </div>
 
     <!-- Main Content -->
@@ -41,24 +41,24 @@
     <div class="ws-files-statusbar">
       <span>{{ resourceName }}</span>
       <span class="spacer"></span>
-      <span v-if="loading">加载中...</span>
+      <span v-if="loading">{{ t('files.loading') }}</span>
       <span v-else-if="error" style="color: #000">{{ error }}</span>
     </div>
 
     <!-- Mkdir Dialog -->
     <div v-if="showMkdirDialog" class="ws-files-modal-overlay" @click.self="showMkdirDialog = false">
       <div class="ws-files-modal">
-        <div class="ws-files-modal-title">新建文件夹</div>
+        <div class="ws-files-modal-title">{{ t('files.newFolder') }}</div>
         <input
           ref="mkdirInput"
           v-model="newDirName"
           class="ws-files-modal-input"
-          placeholder="文件夹名称"
+          :placeholder="t('files.folderName')"
           @keydown.enter="confirmMkdir"
         />
         <div class="ws-files-modal-actions">
-          <button class="btn" @click="showMkdirDialog = false">取消</button>
-          <button class="btn btn-primary" @click="confirmMkdir">创建</button>
+          <button class="btn" @click="showMkdirDialog = false">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" @click="confirmMkdir">{{ t('files.createBtn') }}</button>
         </div>
       </div>
     </div>
@@ -66,17 +66,17 @@
     <!-- Touch Dialog -->
     <div v-if="showTouchDialog" class="ws-files-modal-overlay" @click.self="showTouchDialog = false">
       <div class="ws-files-modal">
-        <div class="ws-files-modal-title">新建文件</div>
+        <div class="ws-files-modal-title">{{ t('files.newFile') }}</div>
         <input
           ref="touchInput"
           v-model="newFileName"
           class="ws-files-modal-input"
-          placeholder="文件名称"
+          :placeholder="t('files.fileName')"
           @keydown.enter="confirmTouch"
         />
         <div class="ws-files-modal-actions">
-          <button class="btn" @click="showTouchDialog = false">取消</button>
-          <button class="btn btn-primary" @click="confirmTouch">创建</button>
+          <button class="btn" @click="showTouchDialog = false">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" @click="confirmTouch">{{ t('files.createBtn') }}</button>
         </div>
       </div>
     </div>
@@ -103,32 +103,32 @@
           v-if="contextMenuEntry.file_type === 'directory'" class="ws-files-context-item"
           @click="enterDirectory(contextMenuEntry.name); showContextMenu = false"
         >
-          打开
+          {{ t('files.open') }}
         </div>
         <div
           class="ws-files-context-item"
           @click="handleCopyPath(contextMenuEntry.path); showContextMenu = false"
         >
-          复制路径
+          {{ t('files.copyPath') }}
         </div>
         <div class="ws-files-context-divider"></div>
         <div
           class="ws-files-context-item danger"
           @click="selectedPaths = [contextMenuEntry.path]; showDeleteDialog = true; showContextMenu = false"
         >
-          删除
+          {{ t('files.delete') }}
         </div>
       </div>
       <div v-else class="ws-files-context-items">
         <div class="ws-files-context-item" @click="showMkdirDialog = true; showContextMenu = false">
-          新建文件夹
+          {{ t('files.newFolder') }}
         </div>
         <div class="ws-files-context-item" @click="showTouchDialog = true; showContextMenu = false">
-          新建文件
+          {{ t('files.newFile') }}
         </div>
         <div class="ws-files-context-divider"></div>
         <div class="ws-files-context-item" @click="loadFiles(); showContextMenu = false">
-          刷新
+          {{ t('files.refresh') }}
         </div>
       </div>
     </div>
