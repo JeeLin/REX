@@ -277,12 +277,12 @@ onUnmounted(() => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #f85149;
+  background: var(--danger);
 }
 
-.s3-status-dot.connected { background: #3fb950; }
+.s3-status-dot.connected { background: var(--success); }
 
-.s3-topbar-label { font-weight: 600; color: #e8912d; }
+.s3-topbar-label { font-weight: 600; color: var(--accent); }
 .s3-topbar-name { color: var(--text-secondary); }
 .s3-topbar-state { color: var(--text-secondary); font-size: 12px; }
 .s3-topbar-spacer { flex: 1; }
@@ -301,12 +301,12 @@ onUnmounted(() => {
 
 .s3-btn:hover:not(:disabled) { background: var(--bg-hover); }
 .s3-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.s3-btn-connect { border-color: #3fb950; color: #3fb950; }
-.s3-btn-disconnect { border-color: #f85149; color: #f85149; }
+.s3-btn-connect { border-color: var(--success); color: var(--success); }
+.s3-btn-disconnect { border-color: var(--danger); color: var(--danger); }
 
 /* 错误 */
 .s3-error-banner {
-  color: #f85149;
+  color: var(--danger);
   padding: 8px 12px;
   border-bottom: 1px solid #f8514933;
   background: #f8514911;

@@ -308,10 +308,10 @@ onUnmounted(() => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #f85149;
+  background: var(--danger);
 }
 
-.docker-status-dot.connected { background: #3fb950; }
+.docker-status-dot.connected { background: var(--success); }
 
 .docker-topbar-label { font-weight: 600; color: #2496ed; }
 .docker-topbar-name { color: var(--text-secondary); }
@@ -332,13 +332,13 @@ onUnmounted(() => {
 
 .docker-btn:hover:not(:disabled) { background: var(--bg-hover); }
 .docker-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.docker-btn-connect { border-color: #3fb950; color: #3fb950; }
-.docker-btn-disconnect { border-color: #f85149; color: #f85149; }
+.docker-btn-connect { border-color: var(--success); color: var(--success); }
+.docker-btn-disconnect { border-color: var(--danger); color: var(--danger); }
 .docker-btn-sm { padding: 2px 8px; }
 
 /* 错误 */
 .docker-error-banner {
-  color: #f85149;
+  color: var(--danger);
   padding: 8px 12px;
   border-bottom: 1px solid #f8514933;
   background: #f8514911;
@@ -384,7 +384,7 @@ onUnmounted(() => {
 
 .docker-ctx-item:hover { background: var(--bg-hover); }
 
-.docker-ctx-danger { color: #f85149; }
+.docker-ctx-danger { color: var(--danger); }
 .docker-ctx-danger:hover { background: #f8514922; }
 
 .docker-ctx-divider {

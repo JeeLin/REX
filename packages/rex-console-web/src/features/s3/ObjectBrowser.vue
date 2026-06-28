@@ -335,13 +335,13 @@ function formatDate(dateStr: string | null): string {
 }
 
 .s3-action-btn:hover { opacity: 1; }
-.s3-action-danger:hover { color: #f85149; }
+.s3-action-danger:hover { color: var(--danger); }
 
 /* 右键菜单 */
 .s3-ctx-menu {
   position: fixed;
   z-index: 9999;
-  background: var(--bg-surface, #1c2128);
+  background: var(--bg-surface);
   border: 1px solid var(--border-primary);
   border-radius: 6px;
   padding: 4px 0;
@@ -363,7 +363,7 @@ function formatDate(dateStr: string | null): string {
 }
 
 .s3-ctx-item:hover { background: var(--bg-hover); }
-.s3-ctx-danger { color: #f85149; }
+.s3-ctx-danger { color: var(--danger); }
 .s3-ctx-danger:hover { background: #f8514922; }
 .s3-ctx-divider { height: 1px; background: var(--border-primary); margin: 4px 0; }
 
@@ -379,7 +379,7 @@ function formatDate(dateStr: string | null): string {
 }
 
 .s3-modal {
-  background: var(--bg-surface, #1c2128);
+  background: var(--bg-surface);
   border: 1px solid var(--border-primary);
   border-radius: 8px;
   width: 480px;

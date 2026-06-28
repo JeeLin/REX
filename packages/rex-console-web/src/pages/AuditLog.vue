@@ -583,7 +583,7 @@ function exportCsv() {
 .audit-op.connect { background: rgba(63,185,80,0.12); color: var(--success); }
 .audit-op.disconnect { background: rgba(139,148,158,0.15); color: var(--text-muted); }
 .audit-op.query { background: rgba(88,166,255,0.12); color: var(--info); }
-.audit-op.upload { background: rgba(139,92,246,0.12); color: #8B5CF6; }
+.audit-op.upload { background: rgba(139,92,246,0.12); color: #8B5CF6; } /* unique purple, no CSS var */
 .audit-op.download { background: rgba(63,185,80,0.12); color: var(--success); }
 .audit-op.delete { background: rgba(248,81,73,0.12); color: var(--danger); }
 .audit-op.login { background: rgba(232,145,45,0.12); color: var(--accent); }
@@ -684,7 +684,7 @@ function exportCsv() {
 
 .page-btn.active {
   background: var(--accent);
-  color: #000;
+  color: #000; /* intentional: black text on accent button for contrast */
   border-color: var(--accent);
   font-weight: 600;
   box-shadow: 0 0 8px var(--accent-glow);

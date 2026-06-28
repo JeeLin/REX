@@ -129,22 +129,22 @@ onMounted(async () => {
 
 .badge-green {
   background: rgba(46, 160, 67, 0.15);
-  color: #3fb950;
+  color: var(--success);
 }
 
 .badge-blue {
   background: rgba(56, 132, 244, 0.15);
-  color: #58a6ff;
+  color: var(--info);
 }
 
 .badge-yellow {
   background: rgba(210, 153, 34, 0.15);
-  color: #d29922;
+  color: var(--warning);
 }
 
 .badge-gray {
   background: rgba(139, 148, 158, 0.15);
-  color: #8b949e;
+  color: var(--text-muted);
 }
 
 .tls-status-dot {
@@ -156,6 +156,6 @@ onMounted(async () => {
 }
 
 .tls-status-dot.ready {
-  background: #3fb950;
+  background: var(--success);
 }
 </style>

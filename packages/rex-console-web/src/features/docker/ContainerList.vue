@@ -225,11 +225,11 @@ function stateClass(state: DockerContainerState): string {
   border-radius: 50%;
 }
 
-.state-running { background: #3fb950; }
-.state-paused { background: #d29922; }
-.state-stopped { background: #6e7681; }
-.state-created { background: #8b949e; }
-.state-dead { background: #f85149; }
+.state-running { background: var(--success); }
+.state-paused { background: var(--warning); }
+.state-stopped { background: var(--text-muted); }
+.state-created { background: var(--text-muted); }
+.state-dead { background: var(--danger); }
 
 /* State badge */
 .docker-state-badge {
@@ -240,11 +240,11 @@ function stateClass(state: DockerContainerState): string {
   font-weight: 500;
 }
 
-.docker-state-badge.state-running { background: #3fb95022; color: #3fb950; }
-.docker-state-badge.state-paused { background: #d2992222; color: #d29922; }
-.docker-state-badge.state-stopped { background: #6e768122; color: #8b949e; }
-.docker-state-badge.state-created { background: #8b949e22; color: #8b949e; }
-.docker-state-badge.state-dead { background: #f8514922; color: #f85149; }
+.docker-state-badge.state-running { background: #3fb95022; color: var(--success); }
+.docker-state-badge.state-paused { background: #d2992222; color: var(--warning); }
+.docker-state-badge.state-stopped { background: #6e768122; color: var(--text-muted); }
+.docker-state-badge.state-created { background: #8b949e22; color: var(--text-muted); }
+.docker-state-badge.state-dead { background: #f8514922; color: var(--danger); }
 
 /* Cells */
 .docker-cell-name {

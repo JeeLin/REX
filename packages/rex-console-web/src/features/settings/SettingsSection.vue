@@ -89,7 +89,7 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--bg-surface);
   transition: transform var(--transition-fast);
 }
 
