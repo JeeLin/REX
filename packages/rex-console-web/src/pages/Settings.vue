@@ -12,7 +12,7 @@
       <template v-else>
         <div class="version-info">
           <div class="ver">REX Hub {{ health?.version }}</div>
-          <div class="version-sub">自托管 · 开源</div>
+          <div class="version-sub">{{ t('settings.versionSubtitle') }}</div>
         </div>
       </template>
     </div>

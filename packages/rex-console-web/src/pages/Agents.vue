@@ -157,7 +157,7 @@ async function loadAgents() {
     }
     agents.value = allAgents
   } catch {
-    loadError.value = '加载 Agent 列表失败'
+    loadError.value = t('agent.loadFailed')
   } finally {
     loading.value = false
   }

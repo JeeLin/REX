@@ -1,9 +1,11 @@
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { listFiles, mkdirFile, touchFile, deleteFile as apiDeleteFile, renameFile } from '@/api/files'
 import type { FileEntry } from '@/api/files'
 import { getErrorMessage } from '@/utils/error'
 
 export function useFileManager(resourceId: string) {
+  const { t } = useI18n()
   const currentPath = ref('/')
   const entries = ref<FileEntry[]>([])
   const loading = ref(false)
@@ -25,7 +27,7 @@ export function useFileManager(resourceId: string) {
         return a.name.localeCompare(b.name)
       })
     } catch (e: unknown) {
-      error.value = getErrorMessage(e, '加载失败')
+      error.value = getErrorMessage(e, t('files.loadError'))
     } finally {
       loading.value = false
     }

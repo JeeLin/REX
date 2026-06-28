@@ -2,7 +2,7 @@
   <div class="files-layout">
     <!-- Top Bar -->
     <div class="files-topbar">
-      <button class="btn btn-ghost btn-sm" @click="handleBack">← 返回</button>
+      <button class="btn btn-ghost btn-sm" @click="handleBack">← {{ t('common.back') }}</button>
       <div class="topbar-spacer"></div>
       <FileBreadcrumb :path="currentPath" @navigate="navigateTo" />
       <div class="topbar-spacer"></div>
@@ -11,16 +11,16 @@
 
     <!-- Toolbar -->
     <div class="files-toolbar">
-      <button class="btn btn-ghost btn-sm" @click="showMkdirDialog = true">📁 新建</button>
-      <button class="btn btn-ghost btn-sm" @click="showTouchDialog = true">📄 新建文件</button>
+      <button class="btn btn-ghost btn-sm" @click="showMkdirDialog = true">📁 {{ t('files.newFolder') }}</button>
+      <button class="btn btn-ghost btn-sm" @click="showTouchDialog = true">📄 {{ t('files.newFile') }}</button>
       <div class="toolbar-sep"></div>
-      <button class="btn btn-ghost btn-sm" @click="triggerUpload">⬆ 上传</button>
+      <button class="btn btn-ghost btn-sm" @click="triggerUpload">⬆ {{ t('files.upload') }}</button>
       <button
         class="btn btn-ghost btn-sm"
         :disabled="selectedPaths.length !== 1 || isDirectorySelected"
         @click="handleDownload"
       >
-        ⬇ 下载
+        ⬇ {{ t('files.download') }}
       </button>
       <div class="toolbar-sep"></div>
       <button
@@ -28,10 +28,10 @@
         :disabled="selectedPaths.length === 0"
         @click="handleDelete"
       >
-        🗑 删除{{ selectedPaths.length > 0 ? ` (${selectedPaths.length})` : '' }}
+        🗑 {{ t('files.delete') }}{{ selectedPaths.length > 0 ? ` (${selectedPaths.length})` : '' }}
       </button>
       <div class="toolbar-spacer"></div>
-      <span class="toolbar-info">{{ entries.length }} 项</span>
+      <span class="toolbar-info">{{ t('files.items', { count: entries.length }) }}</span>
     </div>
 
     <!-- Main Content -->
@@ -60,7 +60,7 @@
       <div v-if="isDragging" class="drop-overlay">
         <div class="drop-overlay-content">
           <span class="drop-icon">⬆</span>
-          <span>拖放文件到此处上传</span>
+          <span>{{ t('files.dropUpload') }}</span>
         </div>
       </div>
     </div>
@@ -78,24 +78,24 @@
     <div class="files-statusbar">
       <span>{{ resourceName }}</span>
       <span class="spacer"></span>
-      <span v-if="loading">加载中...</span>
+      <span v-if="loading">{{ t('files.loading') }}</span>
       <span v-else-if="error" style="color: var(--danger)">{{ error }}</span>
     </div>
 
     <!-- Mkdir Dialog -->
     <div v-if="showMkdirDialog" class="modal-overlay" @click.self="showMkdirDialog = false">
       <div class="modal">
-        <div class="modal-title">新建文件夹</div>
+        <div class="modal-title">{{ t('files.newFolder') }}</div>
         <input
           ref="mkdirInput"
           v-model="newDirName"
           class="modal-input"
-          placeholder="文件夹名称"
+          :placeholder="t('files.folderName')"
           @keydown.enter="confirmMkdir"
         />
         <div class="modal-actions">
-          <button class="btn" @click="showMkdirDialog = false">取消</button>
-          <button class="btn btn-primary" @click="confirmMkdir">创建</button>
+          <button class="btn" @click="showMkdirDialog = false">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" @click="confirmMkdir">{{ t('common.create') }}</button>
         </div>
       </div>
     </div>
@@ -103,17 +103,17 @@
     <!-- Touch Dialog -->
     <div v-if="showTouchDialog" class="modal-overlay" @click.self="showTouchDialog = false">
       <div class="modal">
-        <div class="modal-title">新建文件</div>
+        <div class="modal-title">{{ t('files.newFile') }}</div>
         <input
           ref="touchInput"
           v-model="newFileName"
           class="modal-input"
-          placeholder="文件名称"
+          :placeholder="t('files.fileName')"
           @keydown.enter="confirmTouch"
         />
         <div class="modal-actions">
-          <button class="btn" @click="showTouchDialog = false">取消</button>
-          <button class="btn btn-primary" @click="confirmTouch">创建</button>
+          <button class="btn" @click="showTouchDialog = false">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" @click="confirmTouch">{{ t('common.create') }}</button>
         </div>
       </div>
     </div>
@@ -121,9 +121,9 @@
     <!-- Delete Confirm Dialog -->
     <ConfirmDialog
       :visible="showDeleteDialog"
-      title="确认删除？"
-      :message="`将删除 ${selectedPaths.length} 个项目，此操作不可撤销。`"
-      confirm-label="删除"
+      :title="t('files.deleteConfirm')"
+      :message="t('files.deleteDesc', { count: selectedPaths.length })"
+      :confirm-label="t('files.deleteBtn')"
       :danger="true"
       @confirm="confirmDelete"
       @cancel="showDeleteDialog = false"
@@ -132,8 +132,8 @@
     <!-- Send To Dialog -->
     <div v-if="showSendToDialog" class="modal-overlay" @click.self="showSendToDialog = false">
       <div class="modal">
-        <div class="modal-title">选择目标</div>
-        <p class="modal-desc">选择要发送文件到哪个连接</p>
+        <div class="modal-title">{{ t('files.sendToTitle') }}</div>
+        <p class="modal-desc">{{ t('files.sendToDesc') }}</p>
         <div class="send-to-list">
           <div
             v-for="target in sendToTargets"
@@ -147,8 +147,8 @@
           </div>
         </div>
         <div class="modal-actions">
-          <button class="btn" @click="showSendToDialog = false">取消</button>
-          <button class="btn btn-primary" :disabled="!sendToTargetId" @click="confirmSendTo">发送</button>
+          <button class="btn" @click="showSendToDialog = false">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="!sendToTargetId" @click="confirmSendTo">{{ t('files.send') }}</button>
         </div>
       </div>
     </div>
@@ -162,38 +162,38 @@
     >
       <div v-if="contextMenuEntry" class="context-menu-items">
         <div v-if="contextMenuEntry.file_type === 'directory'" class="context-menu-item" @click="enterDirectory(contextMenuEntry.name); showContextMenu = false">
-          打开
+          {{ t('files.open') }}
         </div>
         <div v-if="contextMenuEntry.file_type !== 'directory'" class="context-menu-item" @click="downloadFile(resourceId, contextMenuEntry.path); showContextMenu = false">
-          ⬇ 下载
+          ⬇ {{ t('files.download') }}
         </div>
         <div class="context-menu-item" @click="handleCopyPath(contextMenuEntry.path); showContextMenu = false">
-          复制路径
+          {{ t('files.copyPath') }}
         </div>
         <div class="context-menu-item" @click="handleRename(contextMenuEntry); showContextMenu = false">
-          重命名
+          {{ t('files.rename') }}
         </div>
         <div v-if="sendToTargets.length > 0" class="context-menu-item" @click="handleSendTo(contextMenuEntry); showContextMenu = false">
-          发送到…
+          {{ t('files.sendTo') }}
         </div>
         <div class="context-menu-divider"></div>
         <div class="context-menu-item danger" @click="selectedPaths = [contextMenuEntry.path]; showDeleteDialog = true; showContextMenu = false">
-          删除
+          {{ t('files.delete') }}
         </div>
       </div>
       <div v-else class="context-menu-items">
         <div class="context-menu-item" @click="showMkdirDialog = true; showContextMenu = false">
-          新建文件夹
+          {{ t('files.newFolder') }}
         </div>
         <div class="context-menu-item" @click="showTouchDialog = true; showContextMenu = false">
-          新建文件
+          {{ t('files.newFile') }}
         </div>
         <div class="context-menu-item" @click="triggerUpload(); showContextMenu = false">
-          ⬆ 上传文件
+          ⬆ {{ t('files.uploadFile') }}
         </div>
         <div class="context-menu-divider"></div>
         <div class="context-menu-item" @click="loadFiles(); showContextMenu = false">
-          刷新
+          {{ t('files.refresh') }}
         </div>
       </div>
     </div>
@@ -201,17 +201,17 @@
     <!-- Rename Dialog -->
     <div v-if="showRenameDialog" class="modal-overlay" @click.self="showRenameDialog = false">
       <div class="modal">
-        <div class="modal-title">重命名</div>
+        <div class="modal-title">{{ t('files.rename') }}</div>
         <input
           ref="renameInput"
           v-model="renameNewName"
           class="modal-input"
-          placeholder="新名称"
+          :placeholder="t('files.newName')"
           @keydown.enter="confirmRename"
         />
         <div class="modal-actions">
-          <button class="btn" @click="showRenameDialog = false">取消</button>
-          <button class="btn btn-primary" @click="confirmRename">确认</button>
+          <button class="btn" @click="showRenameDialog = false">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" @click="confirmRename">{{ t('common.confirm') }}</button>
         </div>
       </div>
     </div>

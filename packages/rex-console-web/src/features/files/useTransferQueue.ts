@@ -1,4 +1,5 @@
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { listTransfers, cancelTransfer, removeTransfer } from '@/api/transfer'
 import type { TransferTask } from '@/api/transfer'
 import { getErrorMessage } from '@/utils/error'
@@ -6,6 +7,7 @@ import { getErrorMessage } from '@/utils/error'
 const POLL_INTERVAL = 3000
 
 export function useTransferQueue() {
+  const { t } = useI18n()
   const tasks = ref<TransferTask[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -17,7 +19,7 @@ export function useTransferQueue() {
     try {
       tasks.value = await listTransfers()
     } catch (e: unknown) {
-      error.value = getErrorMessage(e, '加载失败')
+      error.value = getErrorMessage(e, t('files.loadError'))
     } finally {
       loading.value = false
     }

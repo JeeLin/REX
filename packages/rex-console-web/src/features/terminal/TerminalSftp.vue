@@ -4,7 +4,7 @@
     <div class="sftp-inline-header">
       <span class="sftp-icon">📁</span>
       <span class="panel-title">SFTP</span>
-      <button class="btn btn-ghost btn-sm btn-icon" title="关闭 SFTP" @click="$emit('close')">✕</button>
+      <button class="btn btn-ghost btn-sm btn-icon" :title="t('files.sftp.close')" @click="$emit('close')">✕</button>
     </div>
 
     <!-- Breadcrumb -->
@@ -21,15 +21,15 @@
 
     <!-- Toolbar -->
     <div class="sftp-inline-toolbar">
-      <button class="btn btn-ghost btn-sm" @click="triggerUpload">⬆ 上传</button>
+      <button class="btn btn-ghost btn-sm" @click="triggerUpload">⬆ {{ t('files.upload') }}</button>
       <button
         class="btn btn-ghost btn-sm"
         :disabled="!selectedEntry || selectedEntry.file_type === 'directory'"
         @click="handleDownload"
       >
-        ⬇ 下载
+        ⬇ {{ t('files.download') }}
       </button>
-      <button class="btn btn-ghost btn-sm" @click="showMkdirInput = true">📁 新建</button>
+      <button class="btn btn-ghost btn-sm" @click="showMkdirInput = true">📁 {{ t('files.newFolder') }}</button>
       <button class="btn btn-ghost btn-sm" @click="() => loadDir()">↻</button>
     </div>
 
@@ -39,7 +39,7 @@
         ref="mkdirInputRef"
         v-model="newDirName"
         class="sftp-mkdir-input"
-        placeholder="文件夹名称"
+        :placeholder="t('files.folderName')"
         @keydown.enter="confirmMkdir"
         @keydown.esc="showMkdirInput = false"
       />
@@ -49,7 +49,7 @@
 
     <!-- File list -->
     <div class="sftp-inline-files" @contextmenu.prevent="showBgCtxMenu">
-      <div v-if="loading" class="sftp-loading">加载中...</div>
+      <div v-if="loading" class="sftp-loading">{{ t('files.loading') }}</div>
       <template v-else>
         <div
           v-if="currentPath !== '/'"
@@ -76,13 +76,13 @@
           <span class="sfile-name" :class="{ parent: false }">{{ entry.name }}</span>
           <span class="sfile-size">{{ entry.file_type === 'directory' ? '' : formatSize(entry.size) }}</span>
         </div>
-        <div v-if="entries.length === 0 && !loading" class="sftp-empty">此目录为空</div>
+        <div v-if="entries.length === 0 && !loading" class="sftp-empty">{{ t('files.emptyDir') }}</div>
       </template>
     </div>
 
     <!-- Status -->
     <div class="sftp-inline-status">
-      {{ currentPath }} · {{ entries.length }} 项
+      {{ currentPath }} · {{ t('files.items', { count: entries.length }) }}
     </div>
 
     <!-- Context Menu -->
@@ -92,18 +92,18 @@
       :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
     >
       <template v-if="ctxMenu.entry">
-        <button v-if="ctxMenu.entry.file_type === 'directory'" class="ctx-menu-item" @click="handleDblClick(ctxMenu.entry); closeCtxMenu()">📂 打开</button>
-        <button v-else class="ctx-menu-item" @click="downloadEntry(ctxMenu.entry); closeCtxMenu()">⬇ 下载</button>
-        <button class="ctx-menu-item" @click="copyPath(ctxMenu.entry.path); closeCtxMenu()">📋 复制路径</button>
-        <button class="ctx-menu-item" @click="copyFileName(ctxMenu.entry.name); closeCtxMenu()">📎 复制文件名</button>
+        <button v-if="ctxMenu.entry.file_type === 'directory'" class="ctx-menu-item" @click="handleDblClick(ctxMenu.entry); closeCtxMenu()">{{ t('files.open') }}</button>
+        <button v-else class="ctx-menu-item" @click="downloadEntry(ctxMenu.entry); closeCtxMenu()">{{ t('files.download') }}</button>
+        <button class="ctx-menu-item" @click="copyPath(ctxMenu.entry.path); closeCtxMenu()">{{ t('files.copyPath') }}</button>
+        <button class="ctx-menu-item" @click="copyFileName(ctxMenu.entry.name); closeCtxMenu()">{{ t('files.copyFileName') }}</button>
         <div class="ctx-menu-divider"></div>
-        <button class="ctx-menu-item danger" @click="deleteEntry(ctxMenu.entry); closeCtxMenu()">🗑 删除</button>
+        <button class="ctx-menu-item danger" @click="deleteEntry(ctxMenu.entry); closeCtxMenu()">{{ t('files.delete') }}</button>
       </template>
       <template v-else>
-        <button class="ctx-menu-item" @click="showMkdirInput = true; closeCtxMenu()">📁 新建文件夹</button>
-        <button class="ctx-menu-item" @click="triggerUpload(); closeCtxMenu()">⬆ 上传</button>
+        <button class="ctx-menu-item" @click="showMkdirInput = true; closeCtxMenu()">{{ t('files.newFolder') }}</button>
+        <button class="ctx-menu-item" @click="triggerUpload(); closeCtxMenu()">{{ t('files.upload') }}</button>
         <div class="ctx-menu-divider"></div>
-        <button class="ctx-menu-item" @click="loadDir(); closeCtxMenu()">↻ 刷新</button>
+        <button class="ctx-menu-item" @click="loadDir(); closeCtxMenu()">{{ t('files.refresh') }}</button>
       </template>
     </div>
 
@@ -114,6 +114,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { listFiles, uploadFile, deleteFile as apiDeleteFile, mkdirFile, downloadFile } from '@/api/files'
 import type { FileEntry } from '@/api/files'
 
@@ -125,6 +126,8 @@ defineEmits<{
   close: []
   dragPath: [path: string]
 }>()
+
+const { t } = useI18n()
 
 const currentPath = ref('/')
 const entries = ref<FileEntry[]>([])

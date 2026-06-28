@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { executeSql } from '@/api/sql'
 import type { SqlResult } from '@/api/sql'
 import { getErrorMessage } from '@/utils/error'
+import { useI18n } from 'vue-i18n'
 
 export interface QueryTab {
   id: string
@@ -19,6 +20,7 @@ export function useSqlTabActions(
   onError?: (msg: string) => void,
   onExecuted?: (sql: string, result: SqlResult) => void,
 ) {
+  const { t } = useI18n()
   const tabs = ref<QueryTab[]>([])
   const activeTabId = ref('')
   const executing = ref(false)
@@ -36,7 +38,7 @@ export function useSqlTabActions(
   function addTab() {
     tabCounter++
     const id = `sql-tab-${Date.now()}-${tabCounter}`
-    tabs.value.push({ id, title: `查询 ${tabCounter}`, sql: '', result: null, message: '', isError: false, queryId: null })
+    tabs.value.push({ id, title: t('sql.tabTitle', { n: tabCounter }), sql: '', result: null, message: '', isError: false, queryId: null })
     activeTabId.value = id
   }
 
@@ -121,7 +123,7 @@ export function useSqlTabActions(
       onExecuted?.(sql, result)
     } catch (e: unknown) {
       activeTab.value.result = { columns: [], rows: [], affected_rows: 0, elapsed_ms: 0 }
-      const msg = getErrorMessage(e, '执行失败')
+      const msg = getErrorMessage(e, t('sql.executeFailed'))
       activeTab.value.message = `ERROR: ${msg}`
       activeTab.value.isError = true
       onError?.(msg)

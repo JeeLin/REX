@@ -27,7 +27,7 @@
         </div>
         <div ref="logBodyRef" class="log-body">
           <div v-if="loading" class="log-empty">{{ t('common.loading') }}</div>
-          <div v-else-if="filteredLogs.length === 0" class="log-empty">暂无日志</div>
+          <div v-else-if="filteredLogs.length === 0" class="log-empty">{{ t('agent.logEmpty') }}</div>
           <div
             v-for="(log, idx) in filteredLogs"
             :key="idx"
@@ -40,7 +40,7 @@
           </div>
         </div>
         <div class="log-footer">
-          <span>{{ filteredLogs.length }} 行</span>
+          <span>{{ t('agent.logLines', { count: filteredLogs.length }) }}</span>
           <span>{{ t('ctx.realTime') }}</span>
         </div>
       </div>
@@ -67,13 +67,13 @@ const lastTimestamp = ref('')
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
-const logLevels = [
-  { value: 'all', label: '全部' },
+const logLevels = computed(() => [
+  { value: 'all', label: t('agent.logAll') },
   { value: 'info', label: 'INFO' },
   { value: 'warn', label: 'WARN' },
   { value: 'error', label: 'ERROR' },
   { value: 'debug', label: 'DEBUG' },
-]
+])
 
 const filteredLogs = computed(() => {
   if (activeLevel.value === 'all') return logs.value

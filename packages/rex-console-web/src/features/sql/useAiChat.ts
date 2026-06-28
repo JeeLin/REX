@@ -6,6 +6,7 @@ import {
   type AiContext,
   type AiConfigResponse,
 } from "@/api/ai";
+import { useI18n } from "vue-i18n";
 
 export interface AiConversationMessage {
   id: string;
@@ -15,6 +16,7 @@ export interface AiConversationMessage {
 }
 
 export function useAiChat(context: AiContext) {
+  const { t } = useI18n();
   const messages = ref<AiConversationMessage[]>([]);
   const input = ref("");
   const isStreaming = ref(false);
@@ -91,7 +93,7 @@ export function useAiChat(context: AiContext) {
                 } else if (event.type === "error") {
                   console.error("AI error:", event.content);
                   assistantMsg.streaming = false;
-                  assistantMsg.content = "AI 请求失败：" + event.content;
+                  assistantMsg.content = t('sql.ai.requestFailed') + event.content;
                 }
               } catch {
                 // Plain text token (OpenAI format)
@@ -104,7 +106,7 @@ export function useAiChat(context: AiContext) {
     } catch (error) {
       console.error("AI chat failed:", error);
       assistantMsg.streaming = false;
-      assistantMsg.content = "AI 请求失败，请检查配置或重试";
+      assistantMsg.content = t('sql.ai.requestError');
     } finally {
       isStreaming.value = false;
       abortController.value = null;
@@ -113,9 +115,9 @@ export function useAiChat(context: AiContext) {
 
   function quickAction(action: "generate" | "analyze" | "relations") {
     const prompts = {
-      generate: "根据当前数据库的表结构，生成一个常用查询示例",
-      analyze: "分析当前查询的性能瓶颈，并提供优化建议",
-      relations: "分析当前数据库的表关系（外键、关联），生成 ER 图描述",
+      generate: t('sql.ai.presetGenerate'),
+      analyze: t('sql.ai.presetAnalyze'),
+      relations: t('sql.ai.presetRelations'),
     };
     void sendMessage(prompts[action]);
   }

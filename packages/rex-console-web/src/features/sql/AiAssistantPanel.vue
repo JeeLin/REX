@@ -1,13 +1,13 @@
 <template>
   <div class="ai-panel" :class="{ 'ai-panel-open': isOpen }">
     <div class="ai-panel-header">
-      <div class="ai-panel-title">✦ AI 助手</div>
+      <div class="ai-panel-title">✦ {{ t('sql.ai.title') }}</div>
       <button class="ai-panel-close" @click="closePanel">×</button>
     </div>
 
     <!-- 风险提示 -->
     <div class="ai-warning">
-      ⚠ AI 生成的 SQL 可能存在逻辑错误或性能问题。请务必先在测试环境验证。
+      {{ t('sql.ai.disclaimer') }}
     </div>
 
     <!-- 上下文栏 -->
@@ -38,21 +38,21 @@
         :disabled="isStreaming"
         @click="handleQuickAction('generate')"
       >
-        生成 SQL
+        {{ t('sql.ai.generate') }}
       </button>
       <button
         class="ai-quick-btn"
         :disabled="isStreaming"
         @click="handleQuickAction('analyze')"
       >
-        分析慢查询
+        {{ t('sql.ai.analyze') }}
       </button>
       <button
         class="ai-quick-btn"
         :disabled="isStreaming"
         @click="handleQuickAction('relations')"
       >
-        表关系
+        {{ t('sql.ai.relations') }}
       </button>
     </div>
 
@@ -61,7 +61,7 @@
       <textarea
         v-model="inputValue"
         class="ai-input"
-        placeholder="向 AI 提问..."
+        :placeholder="t('sql.ai.placeholder')"
         :disabled="isStreaming"
         @keydown.enter.exact="handleSendMessage"
       ></textarea>
@@ -71,7 +71,7 @@
           :disabled="!inputValue.trim() || isStreaming"
           @click="handleSendMessage"
         >
-          {{ isStreaming ? "停止" : "发送" }}
+          {{ isStreaming ? t('sql.ai.stop') : t('sql.ai.send') }}
         </button>
       </div>
     </div>

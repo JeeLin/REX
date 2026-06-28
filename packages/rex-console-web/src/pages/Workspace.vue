@@ -7,8 +7,8 @@
           <span>{{ layoutIcon }}</span>
           <span class="layout-label">{{ layoutLabel }}</span>
         </div>
-        <button class="ws-tab-add" title="全屏 (F11)" style="font-size: 13px" @click="toggleFullscreen">⛶</button>
-        <button class="ws-tab-add" title="快捷键 (F1)" style="font-size: 12px" @click="showShortcutsPanel = true">⌨</button>
+        <button class="ws-tab-add" :title="t('ws.workspace.fullscreen')" style="font-size: 13px" @click="toggleFullscreen">⛶</button>
+        <button class="ws-tab-add" :title="t('ws.workspace.shortcutsTitle')" style="font-size: 12px" @click="showShortcutsPanel = true">⌨</button>
       </template>
     </TabBar>
 
@@ -19,8 +19,8 @@
         <div class="ws-empty-icon">💻</div>
         <div class="ws-empty-text">{{ t('ws.empty.noSessions') }}</div>
         <div class="ws-empty-hint">
-          从侧边栏选择资源开始连接<br />
-          按 <kbd>Ctrl</kbd>+<kbd>K</kbd> 全局搜索 · <kbd>Ctrl</kbd>+<kbd>N</kbd> 新建连接 · <kbd>Alt</kbd>+<kbd>1~5</kbd> 切换布局 · <kbd>F1</kbd> 快捷键
+          {{ t('ws.workspace.empty.hint') }}<br />
+          {{ t('ws.workspace.empty.shortcutsHint') }}
         </div>
       </div>
 
@@ -87,7 +87,7 @@
               <div v-else class="panel-unsupported">
                 <span :style="{ color: getProtocolIcon(tab.proto).color }">{{ getProtocolIcon(tab.proto).icon }}</span>
                 <div class="panel-unsupported-text">{{ tab.name }}</div>
-                <div class="panel-unsupported-hint">暂不支持 {{ tab.proto.toUpperCase() }} 协议</div>
+                <div class="panel-unsupported-hint">{{ t('ws.workspace.empty.unsupported', { proto: tab.proto.toUpperCase() }) }}</div>
               </div>
             </div>
           </template>
@@ -169,11 +169,11 @@
             <div v-else class="panel-unsupported">
               <span :style="{ color: getProtocolIcon(getPanelTab(i - 1)!.proto).color }">{{ getProtocolIcon(getPanelTab(i - 1)!.proto).icon }}</span>
               <div class="panel-unsupported-text">{{ getPanelTab(i - 1)!.name }}</div>
-              <div class="panel-unsupported-hint">暂不支持 {{ getPanelTab(i - 1)!.proto.toUpperCase() }} 协议</div>
+              <div class="panel-unsupported-hint">{{ t('ws.workspace.empty.unsupported', { proto: getPanelTab(i - 1)!.proto.toUpperCase() }) }}</div>
             </div>
           </template>
           <div v-else class="panel-empty">
-            <span class="panel-empty-text">面板 {{ i }}</span>
+            <span class="panel-empty-text">{{ t('ws.workspace.empty.panelEmpty', { n: i }) }}</span>
           </div>
         </div>
       </template>
@@ -217,11 +217,11 @@
               <span class="cmi-proto">{{ res.protocol.toUpperCase() }}</span>
             </div>
           </template>
-          <div v-if="flatFilteredResources.length === 0" class="conn-menu-empty">没有匹配的资源</div>
+          <div v-if="flatFilteredResources.length === 0" class="conn-menu-empty">{{ t('ws.workspace.empty.connEmpty') }}</div>
         </div>
         <div class="conn-menu-footer">
-          <span><kbd>↑↓</kbd> 选择 · <kbd>↵</kbd> 连接</span>
-          <span><kbd>Esc</kbd> 关闭</span>
+          <span>{{ t('ws.workspace.empty.connHint') }}</span>
+          <span>{{ t('ws.workspace.empty.connClose') }}</span>
         </div>
       </div>
     </div>
@@ -237,28 +237,28 @@
     <!-- 快捷键面板 -->
     <div v-if="showShortcutsPanel" class="shortcuts-overlay" @click="showShortcutsPanel = false">
       <div class="shortcuts-card" @click.stop>
-        <h2>⌨ 快捷键</h2>
+        <h2>⌨ {{ t('ws.workspace.shortcutsTitle') }}</h2>
         <div class="shortcut-group">
-          <div class="shortcut-group-title">标签页</div>
-          <div class="shortcut-row"><span class="desc">新建连接</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>N</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">关闭当前标签</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>W</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">切换下一个标签</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>Tab</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">切换上一个标签</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>Shift</kbd><span class="key-plus">+</span><kbd>Tab</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">切换到标签 1-9</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>1~9</kbd></span></div>
+          <div class="shortcut-group-title">{{ t('ws.workspace.shortcutsTab') }}</div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.newTab') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>N</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.closeTab') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>W</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.nextTab') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>Tab</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.prevTab') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>Shift</kbd><span class="key-plus">+</span><kbd>Tab</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.tabN') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>1~9</kbd></span></div>
         </div>
         <div class="shortcut-group">
-          <div class="shortcut-group-title">布局</div>
-          <div class="shortcut-row"><span class="desc">单面板</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>1</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">左右分屏</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>2</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">上下分屏</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>3</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">四宫格</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>4</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">主+侧边</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>5</kbd></span></div>
+          <div class="shortcut-group-title">{{ t('ws.workspace.shortcutsLayout') }}</div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.layoutSingle') }}</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>1</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.layoutLeftRight') }}</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>2</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.layoutTopBottom') }}</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>3</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.layoutQuad') }}</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>4</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.layoutSidebarMain') }}</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>5</kbd></span></div>
         </div>
         <div class="shortcut-group">
-          <div class="shortcut-group-title">其他</div>
-          <div class="shortcut-row"><span class="desc">全局搜索</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>K</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">全屏</span><span class="keys"><kbd>F11</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">快捷键帮助</span><span class="keys"><kbd>F1</kbd></span></div>
+          <div class="shortcut-group-title">{{ t('ws.workspace.shortcutsOther') }}</div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.globalSearch') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>K</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.toggleFullscreen') }}</span><span class="keys"><kbd>F11</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.help') }}</span><span class="keys"><kbd>F1</kbd></span></div>
         </div>
       </div>
     </div>
@@ -302,7 +302,7 @@ const LAYOUT_ICONS: Record<Layout, string> = {
   single: '⬜', 'left-right': '🔲', 'top-bottom': '🔳', quad: '🔲🔲', 'sidebar-main': '📐',
 }
 const LAYOUT_LABELS: Record<Layout, string> = {
-  single: '单面板', 'left-right': '左右分屏', 'top-bottom': '上下分屏', quad: '四宫格', 'sidebar-main': '主+侧边',
+  single: t('ws.layout.single'), 'left-right': t('ws.layout.leftRight'), 'top-bottom': t('ws.layout.topBottom'), quad: t('ws.layout.quad'), 'sidebar-main': t('ws.layout.sidebarMain'),
 }
 
 const currentLayout = ref<Layout>('single')
@@ -495,21 +495,21 @@ const showCommandPalette = ref(false)
 const cmdRef = ref<InstanceType<typeof CommandPalette> | null>(null)
 
 const NAV_ITEMS: CommandItem[] = [
-  { id: 'nav:workspace', label: '工作区', category: 'navigation', icon: '⊞' },
-  { id: 'nav:dashboard', label: '仪表盘', category: 'navigation', icon: '◉' },
-  { id: 'nav:environments', label: '环境管理', category: 'navigation', icon: '◈' },
-  { id: 'nav:agents', label: 'Agent 管理', category: 'navigation', icon: '⬡' },
-  { id: 'nav:settings', label: '设置', category: 'navigation', icon: '⚙' },
+  { id: 'nav:workspace', label: t('ws.nav.workspace'), category: 'navigation', icon: '⊞' },
+  { id: 'nav:dashboard', label: t('ws.nav.dashboard'), category: 'navigation', icon: '◉' },
+  { id: 'nav:environments', label: t('ws.nav.environments'), category: 'navigation', icon: '◈' },
+  { id: 'nav:agents', label: t('ws.nav.agents'), category: 'navigation', icon: '⬡' },
+  { id: 'nav:settings', label: t('ws.nav.settings'), category: 'navigation', icon: '⚙' },
 ]
 
 const ACTION_ITEMS: CommandItem[] = [
-  { id: 'action:new-connection', label: '新建连接', category: 'action', icon: '+', shortcut: 'Ctrl+N' },
-  { id: 'action:layout-single', label: '切换单面板布局', category: 'action', icon: '⬜', shortcut: 'Alt+1' },
-  { id: 'action:layout-left-right', label: '切换左右分屏', category: 'action', icon: '🔲', shortcut: 'Alt+2' },
-  { id: 'action:layout-top-bottom', label: '切换上下分屏', category: 'action', icon: '🔳', shortcut: 'Alt+3' },
-  { id: 'action:layout-quad', label: '切换四宫格', category: 'action', icon: '🔲', shortcut: 'Alt+4' },
-  { id: 'action:layout-sidebar-main', label: '切换主+侧边', category: 'action', icon: '📐', shortcut: 'Alt+5' },
-  { id: 'action:fullscreen', label: '全屏切换', category: 'action', icon: '⛶', shortcut: 'F11' },
+  { id: 'action:new-connection', label: t('ws.actions.newTab'), category: 'action', icon: '+', shortcut: 'Ctrl+N' },
+  { id: 'action:layout-single', label: t('ws.actions.layoutSingle'), category: 'action', icon: '⬜', shortcut: 'Alt+1' },
+  { id: 'action:layout-left-right', label: t('ws.actions.layoutLeftRight'), category: 'action', icon: '🔲', shortcut: 'Alt+2' },
+  { id: 'action:layout-top-bottom', label: t('ws.actions.layoutTopBottom'), category: 'action', icon: '🔳', shortcut: 'Alt+3' },
+  { id: 'action:layout-quad', label: t('ws.actions.layoutQuad'), category: 'action', icon: '🔲', shortcut: 'Alt+4' },
+  { id: 'action:layout-sidebar-main', label: t('ws.actions.layoutSidebarMain'), category: 'action', icon: '📐', shortcut: 'Alt+5' },
+  { id: 'action:fullscreen', label: t('ws.actions.toggleFullscreen'), category: 'action', icon: '⛶', shortcut: 'F11' },
 ]
 
 function buildCommandPaletteItems(): CommandItem[] {

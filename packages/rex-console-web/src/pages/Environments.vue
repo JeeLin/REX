@@ -93,7 +93,7 @@ async function loadEnvs() {
     const { data } = await client.get<{ data: Environment[] }>('/environments')
     environments.value = data.data
   } catch {
-    loadError.value = '加载环境失败'
+    loadError.value = t('env.loadFailed')
   } finally {
     loading.value = false
   }

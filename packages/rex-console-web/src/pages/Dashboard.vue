@@ -221,7 +221,7 @@ async function loadData() {
     const health = await fetchHealth()
     agentOnlineCount.value = health.connections.agents_online
   } catch {
-    loadError.value = '加载仪表盘数据失败'
+    loadError.value = t('dashboard.loadFailed')
   } finally {
     loading.value = false
   }
