@@ -27,6 +27,7 @@ fn main() -> anyhow::Result<()> {
             cli.acme_domain.as_deref(),
             cli.acme_email.as_deref(),
             cli.acme_staging,
+            cli.acme_http_port,
         )?;
 
         let db_path = config.data_dir.join("hub.db");
@@ -80,6 +81,7 @@ fn main() -> anyhow::Result<()> {
                 );
 
                 let listen = config.listen.clone();
+                let http_port = acme_cfg.http_port;
 
                 rt.block_on(async move {
                     let (default_config, challenge_config, http01_service) =
@@ -91,14 +93,15 @@ fn main() -> anyhow::Result<()> {
                     let tls_acceptor =
                         rex_hub::tls::create_tls_acceptor_from_config((*server_config).clone());
 
-                    // HTTP-01 需要单独的 80 端口 listener
+                    // HTTP-01 需要单独端口的 listener
                     if let Some(http01_service) = http01_service {
                         tokio::spawn(async move {
+                            let bind_addr = format!("0.0.0.0:{}", http_port);
                             let listener =
-                                tokio::net::TcpListener::bind("0.0.0.0:80").await;
+                                tokio::net::TcpListener::bind(&bind_addr).await;
                             match listener {
                                 Ok(listener) => {
-                                    tracing::info!("HTTP-01 challenge server listening on port 80");
+                                    tracing::info!(port = http_port, "HTTP-01 challenge server listening");
                                     loop {
                                         let (mut stream, _) = match listener.accept().await {
                                             Ok(s) => s,
@@ -138,7 +141,7 @@ fn main() -> anyhow::Result<()> {
                                     }
                                 }
                                 Err(e) => {
-                                    tracing::error!(error = %e, "failed to bind HTTP-01 challenge server on port 80");
+                                    tracing::error!(error = %e, port = http_port, "failed to bind HTTP-01 challenge server");
                                 }
                             }
                         });
@@ -235,6 +238,7 @@ mod tests {
                 domain: "hub.example.com".to_string(),
                 email: "admin@example.com".to_string(),
                 staging: false,
+                http_port: 80,
             }),
             ..Default::default()
         };
@@ -248,6 +252,7 @@ mod tests {
                 domain: "203.0.113.1".to_string(),
                 email: "admin@example.com".to_string(),
                 staging: false,
+                http_port: 80,
             }),
             ..Default::default()
         };
@@ -273,6 +278,7 @@ mod tests {
                 domain: "hub.example.com".to_string(),
                 email: "admin@example.com".to_string(),
                 staging: false,
+                http_port: 80,
             }),
             ..Default::default()
         };

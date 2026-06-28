@@ -177,6 +177,7 @@ mod tests {
             domain: "example.com".to_string(),
             email: "admin@example.com".to_string(),
             staging: true,
+            http_port: 80,
         };
         let state = build_acme_state(&cfg, dir.path()).unwrap();
         drop(state);
@@ -189,6 +190,7 @@ mod tests {
             domain: "192.168.1.100".to_string(),
             email: "admin@example.com".to_string(),
             staging: true,
+            http_port: 80,
         };
         let state = build_acme_state(&cfg, dir.path()).unwrap();
         drop(state);
@@ -222,6 +224,7 @@ mod tests {
                 domain: "hub.example.com".to_string(),
                 email: "admin@example.com".to_string(),
                 staging: false,
+                http_port: 80,
             }),
             ..Default::default()
         };
@@ -260,6 +263,7 @@ mod tests {
                 domain: "hub.example.com".to_string(),
                 email: "admin@example.com".to_string(),
                 staging: false,
+                http_port: 80,
             }),
             ..Default::default()
         };
@@ -273,6 +277,7 @@ mod tests {
                 domain: "203.0.113.1".to_string(),
                 email: "admin@example.com".to_string(),
                 staging: false,
+                http_port: 80,
             }),
             ..Default::default()
         };

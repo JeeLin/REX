@@ -14,7 +14,7 @@ pub struct TlsConfig {
     pub key: PathBuf,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct AcmeConfig {
     /// 域名或公网 IP（如 hub.example.com 或 203.0.113.1）
     pub domain: String,
@@ -23,6 +23,24 @@ pub struct AcmeConfig {
     /// 是否使用 staging 环境（测试时设为 true，避免触发 rate limit）
     #[serde(default)]
     pub staging: bool,
+    /// HTTP-01 challenge 服务器端口（默认 80）
+    #[serde(default = "default_http_port")]
+    pub http_port: u16,
+}
+
+impl Default for AcmeConfig {
+    fn default() -> Self {
+        Self {
+            domain: String::new(),
+            email: String::new(),
+            staging: false,
+            http_port: 80,
+        }
+    }
+}
+
+fn default_http_port() -> u16 {
+    80
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -63,6 +81,7 @@ impl HubConfig {
         cli_acme_domain: Option<&str>,
         cli_acme_email: Option<&str>,
         cli_acme_staging: bool,
+        cli_acme_http_port: Option<u16>,
     ) -> Result<Self> {
         let path = config_path.unwrap_or("hub.yaml");
         let mut config = if Path::new(path).exists() {
@@ -122,6 +141,14 @@ impl HubConfig {
                 acme.staging = val == "true" || val == "1";
             }
         }
+        if let Ok(val) = std::env::var("REX_ACME_HTTP_PORT") {
+            if let Ok(port) = val.parse::<u16>() {
+                config
+                    .acme
+                    .get_or_insert_with(AcmeConfig::default)
+                    .http_port = port;
+            }
+        }
 
         // CLI 参数覆盖（ACME）
         if let Some(domain) = cli_acme_domain {
@@ -134,6 +161,12 @@ impl HubConfig {
             if let Some(acme) = &mut config.acme {
                 acme.staging = true;
             }
+        }
+        if let Some(port) = cli_acme_http_port {
+            config
+                .acme
+                .get_or_insert_with(AcmeConfig::default)
+                .http_port = port;
         }
 
         // ACME 配置不完整时清除（domain 和 email 必须同时存在）
@@ -171,7 +204,7 @@ mod tests {
     use super::*;
 
     fn load_default(path: Option<&str>) -> Result<HubConfig> {
-        HubConfig::load(path, None, None, None, None, false)
+        HubConfig::load(path, None, None, None, None, false, None)
     }
 
     #[test]
@@ -256,6 +289,7 @@ mod tests {
             None,
             None,
             false,
+            None,
         )
         .unwrap();
         let tls = config.tls.unwrap();
@@ -335,12 +369,14 @@ mod tests {
             Some("cli.example.com"),
             Some("cli@example.com"),
             true,
+            Some(8080),
         )
         .unwrap();
         let acme = config.acme.unwrap();
         assert_eq!(acme.domain, "cli.example.com");
         assert_eq!(acme.email, "cli@example.com");
         assert!(acme.staging);
+        assert_eq!(acme.http_port, 8080);
     }
 
     #[test]
@@ -350,6 +386,83 @@ mod tests {
         let config = load_default(Some("nonexistent.yaml")).unwrap();
         assert!(config.acme.is_none());
         std::env::remove_var("REX_ACME_DOMAIN");
+    }
+
+    #[test]
+    fn acme_config_default_http_port() {
+        let cfg = AcmeConfig::default();
+        assert_eq!(cfg.http_port, 80);
+    }
+
+    #[test]
+    fn load_acme_http_port_from_config_file() {
+        let dir = std::env::temp_dir().join("rex_test_acme_http_port");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("hub.yaml");
+        std::fs::write(
+            &path,
+            "listen: \":3000\"\ndata_dir: \"/tmp/rex\"\nsecret_key: \"test\"\nacme:\n  domain: hub.example.com\n  email: admin@example.com\n  http_port: 8080\n",
+        )
+        .unwrap();
+
+        let config = load_default(Some(path.to_str().unwrap())).unwrap();
+        let acme = config.acme.unwrap();
+        assert_eq!(acme.http_port, 8080);
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn load_acme_http_port_env_override() {
+        std::env::set_var("REX_ACME_DOMAIN", "example.com");
+        std::env::set_var("REX_ACME_EMAIL", "test@local.dev");
+        std::env::set_var("REX_ACME_HTTP_PORT", "9090");
+        let config = load_default(Some("nonexistent.yaml")).unwrap();
+        let acme = config.acme.unwrap();
+        assert_eq!(acme.http_port, 9090);
+        std::env::remove_var("REX_ACME_DOMAIN");
+        std::env::remove_var("REX_ACME_EMAIL");
+        std::env::remove_var("REX_ACME_HTTP_PORT");
+    }
+
+    #[test]
+    fn load_acme_http_port_cli_override() {
+        let dir = std::env::temp_dir().join("rex_test_acme_http_port_cli");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("hub.yaml");
+        std::fs::write(
+            &path,
+            "listen: \":3000\"\ndata_dir: \"/tmp/rex\"\nsecret_key: \"test\"\nacme:\n  domain: hub.example.com\n  email: admin@example.com\n  http_port: 80\n",
+        )
+        .unwrap();
+
+        let config = HubConfig::load(
+            Some(path.to_str().unwrap()),
+            None,
+            None,
+            None,
+            None,
+            false,
+            Some(8888),
+        )
+        .unwrap();
+        let acme = config.acme.unwrap();
+        assert_eq!(acme.http_port, 8888);
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn load_acme_http_port_invalid_env_ignored() {
+        std::env::set_var("REX_ACME_DOMAIN", "example.com");
+        std::env::set_var("REX_ACME_EMAIL", "test@local.dev");
+        std::env::set_var("REX_ACME_HTTP_PORT", "not_a_number");
+        let config = load_default(Some("nonexistent.yaml")).unwrap();
+        let acme = config.acme.unwrap();
+        assert_eq!(acme.http_port, 80); // default, since parse failed
+        std::env::remove_var("REX_ACME_DOMAIN");
+        std::env::remove_var("REX_ACME_EMAIL");
+        std::env::remove_var("REX_ACME_HTTP_PORT");
     }
 
     #[test]
