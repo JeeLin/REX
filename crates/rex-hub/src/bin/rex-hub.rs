@@ -156,20 +156,13 @@ fn main() -> anyhow::Result<()> {
                 tracing::info!(
                     listen = %config.listen,
                     sans = ?sans,
-                    "TLS mode: self-signed — generating certificate"
+                    "TLS mode: self-signed — checking certificate"
                 );
 
-                let cert = if let Some(existing) =
-                    rex_hub::self_signed::load_self_signed(&config.data_dir)
-                {
-                    tracing::info!("loaded existing self-signed certificate");
-                    existing
-                } else {
-                    let cert = rex_hub::self_signed::generate_self_signed(&sans)?;
-                    rex_hub::self_signed::save_self_signed(&config.data_dir, &cert)?;
-                    tracing::info!("generated and saved new self-signed certificate");
-                    cert
-                };
+                let cert = rex_hub::self_signed::load_or_generate_self_signed(
+                    &config.data_dir,
+                    &sans,
+                )?;
 
                 let tls_acceptor = rex_hub::tls::create_tls_acceptor_from_config(
                     rustls::ServerConfig::builder_with_provider(

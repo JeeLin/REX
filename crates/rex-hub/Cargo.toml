@@ -52,4 +52,5 @@ hmac = { workspace = true }
 rcgen = { workspace = true }
 rustls-acme = { workspace = true }
 time = { workspace = true }
+x509-parser = { workspace = true }
 sysinfo = { workspace = true }

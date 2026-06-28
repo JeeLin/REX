@@ -3,6 +3,7 @@ use rcgen::{CertificateParams, KeyPair};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use std::net::IpAddr;
 use std::path::Path;
+use x509_parser::prelude::FromDer;
 
 /// 自签名证书数据（证书 + 私钥的 DER 格式）
 pub struct SelfSignedCert {
@@ -10,6 +11,49 @@ pub struct SelfSignedCert {
     pub key_der: PrivateKeyDer<'static>,
     pub cert_pem: String,
     pub key_pem: String,
+}
+
+/// 证书过期检测阈值（7 天内过期视为"即将过期"）
+const EXPIRY_WARNING_DAYS: i64 = 7;
+
+/// 解析证书的 notAfter 时间（UTC 毫秒时间戳）
+fn parse_cert_not_after(cert_der: &[u8]) -> Result<i64> {
+    let (_, cert) = x509_parser::certificate::X509Certificate::from_der(cert_der)
+        .context("failed to parse X.509 certificate DER")?;
+    let not_after_dt = cert
+        .tbs_certificate
+        .validity
+        .not_after
+        .to_datetime();
+    // x509-parser 的 to_datetime() 返回 time::OffsetDateTime
+    // 使用 unix_timestamp 获取秒级时间戳，再转毫秒
+    let ts_secs = not_after_dt.unix_timestamp();
+    Ok(ts_secs * 1000)
+}
+
+/// 获取当前 UTC 毫秒时间戳
+fn now_millis() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64
+}
+
+/// 检查证书是否有效（未过期且距过期 > 7 天）
+///
+/// 返回 `Ok(days_remaining)` 如果有效，`Err(reason)` 如果需要重新生成。
+fn check_cert_validity(cert_der: &[u8]) -> Result<i64> {
+    let not_after_ms = parse_cert_not_after(cert_der)?;
+    let now_ms = now_millis();
+    let days_remaining = (not_after_ms - now_ms) / (1000 * 60 * 60 * 24);
+
+    if days_remaining <= 0 {
+        anyhow::bail!("certificate expired");
+    }
+    if days_remaining <= EXPIRY_WARNING_DAYS {
+        anyhow::bail!("certificate expiring soon ({days_remaining} days)");
+    }
+    Ok(days_remaining)
 }
 
 /// 生成自签名证书
@@ -69,6 +113,40 @@ pub fn load_self_signed(data_dir: &Path) -> Option<SelfSignedCert> {
         cert_pem,
         key_pem,
     })
+}
+
+/// 加载或生成自签名证书，过期时自动重新生成
+///
+/// 优先级：
+/// 1. 加载磁盘上的已有证书 → 验证有效期 → 有效则返回
+/// 2. 已有证书过期/即将过期/损坏 → 重新生成并覆盖
+/// 3. 无证书文件 → 生成新证书并保存
+pub fn load_or_generate_self_signed(
+    data_dir: &Path,
+    sans: &[String],
+) -> Result<SelfSignedCert> {
+    if let Some(existing) = load_self_signed(data_dir) {
+        match check_cert_validity(existing.cert_der.as_ref()) {
+            Ok(days) => {
+                tracing::info!(
+                    days_remaining = days,
+                    "loaded existing self-signed certificate"
+                );
+                return Ok(existing);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    reason = %e,
+                    "self-signed certificate invalid, regenerating"
+                );
+            }
+        }
+    }
+
+    let cert = generate_self_signed(sans)?;
+    save_self_signed(data_dir, &cert)?;
+    tracing::info!("generated and saved new self-signed certificate");
+    Ok(cert)
 }
 
 /// 保存自签名证书到磁盘
@@ -201,5 +279,63 @@ mod tests {
             sans,
             vec!["localhost".to_string(), "192.168.1.100".to_string()]
         );
+    }
+
+    #[test]
+    fn parse_cert_not_after_returns_valid_timestamp() {
+        let cert = generate_self_signed(&["localhost".to_string()]).unwrap();
+        let not_after = parse_cert_not_after(cert.cert_der.as_ref()).unwrap();
+        let now = now_millis();
+        // notAfter should be ~365 days in the future (within 1 day tolerance)
+        let days_diff = (not_after - now) / (1000 * 60 * 60 * 24);
+        assert!(days_diff >= 364 && days_diff <= 366, "expected ~365 days, got {days_diff}");
+    }
+
+    #[test]
+    fn check_cert_validity_valid_cert() {
+        let cert = generate_self_signed(&["localhost".to_string()]).unwrap();
+        let days = check_cert_validity(cert.cert_der.as_ref()).unwrap();
+        assert!(days > 350, "expected >350 days remaining, got {days}");
+    }
+
+    #[test]
+    fn load_or_generate_creates_new_when_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let sans = vec!["localhost".to_string()];
+        let result = load_or_generate_self_signed(dir.path(), &sans).unwrap();
+        assert!(!result.cert_pem.is_empty());
+        // Verify file was saved
+        assert!(dir.path().join("self-signed/cert.pem").exists());
+        assert!(dir.path().join("self-signed/cert_key.pem").exists());
+    }
+
+    #[test]
+    fn load_or_generate_loads_existing_valid_cert() {
+        let dir = tempfile::tempdir().unwrap();
+        let sans = vec!["localhost".to_string()];
+
+        // First call: generate and save
+        let cert1 = load_or_generate_self_signed(dir.path(), &sans).unwrap();
+        // Second call: should load existing (same cert)
+        let cert2 = load_or_generate_self_signed(dir.path(), &sans).unwrap();
+        assert_eq!(cert1.cert_pem, cert2.cert_pem);
+        assert_eq!(cert1.key_pem, cert2.key_pem);
+    }
+
+    #[test]
+    fn load_or_generate_regenerates_corrupted_cert() {
+        let dir = tempfile::tempdir().unwrap();
+        let sans = vec!["localhost".to_string()];
+
+        // Generate and save a valid cert
+        let cert1 = load_or_generate_self_signed(dir.path(), &sans).unwrap();
+
+        // Corrupt the cert file
+        let cert_path = dir.path().join("self-signed/cert.pem");
+        std::fs::write(&cert_path, "not a valid cert").unwrap();
+
+        // Should regenerate (different cert PEM)
+        let cert2 = load_or_generate_self_signed(dir.path(), &sans).unwrap();
+        assert_ne!(cert1.cert_pem, cert2.cert_pem);
     }
 }
