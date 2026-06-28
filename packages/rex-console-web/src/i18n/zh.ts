@@ -20,6 +20,7 @@ export default {
     create: '创建',
     submit: '提交',
     retry: '重试',
+    close: '关闭',
   },
   toast: {
     operationSuccess: '操作成功',
@@ -29,6 +30,12 @@ export default {
     title: '确认操作',
     deleteTitle: '确认删除',
     confirmDelete: '确认删除后无法恢复，是否继续？',
+  },
+  layout: {
+    skipToContent: '跳转到主要内容',
+    openMenu: '打开菜单',
+    sidebar: '侧边栏导航',
+    main: '主内容区域',
   },
   sidebar: {
     searchPlaceholder: '搜索资源...',

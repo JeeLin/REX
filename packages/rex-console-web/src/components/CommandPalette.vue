@@ -1,45 +1,60 @@
 <template>
   <Teleport to="body">
     <div v-if="visible" class="cmd-overlay" @click="$emit('close')"></div>
-    <div v-if="visible" class="cmd-palette" @click.stop>
+    <div
+      v-if="visible"
+      class="cmd-palette"
+      role="combobox"
+      :aria-expanded="true"
+      aria-haspopup="listbox"
+      :aria-owns="listboxId"
+      @click.stop
+    >
       <div class="cmd-search">
-        <span class="cmd-search-icon">⌕</span>
+        <span class="cmd-search-icon" aria-hidden="true">⌕</span>
         <input
           ref="searchInput"
           v-model="query"
           type="text"
-          placeholder="搜索资源、页面、操作..."
+          role="searchbox"
+          :aria-label="t('commandPalette.placeholder')"
+          :placeholder="t('commandPalette.placeholder')"
+          :aria-controls="listboxId"
+          :aria-activedescendant="activeDescendantId"
           @keydown.esc="$emit('close')"
           @keydown.up.prevent="selectPrev"
           @keydown.down.prevent="selectNext"
           @keydown.enter="executeSelected"
         />
       </div>
-      <div class="cmd-list">
+      <div :id="listboxId" class="cmd-list" role="listbox">
         <template v-for="group in filteredGroups" :key="group.label">
-          <div class="cmd-group-label">{{ group.label }}</div>
+          <div class="cmd-group-label" role="presentation">{{ group.label }}</div>
           <div
             v-for="(item, ii) in group.items"
             :key="item.id"
+            :id="'cmd-option-' + item.id"
             class="cmd-item"
+            role="option"
+            :aria-selected="isSelected(group, ii)"
             :class="{ selected: isSelected(group, ii) }"
             @click="$emit('select', item)"
             @mouseenter="setHover(group, ii)"
           >
-            <span class="cmd-item-icon" :style="item.color ? { color: item.color } : {}">{{ item.icon }}</span>
+            <span class="cmd-item-icon" :style="item.color ? { color: item.color } : {}" aria-hidden="true">{{ item.icon }}</span>
             <span class="cmd-item-label">{{ item.label }}</span>
             <span v-if="item.hint" class="cmd-item-hint">{{ item.hint }}</span>
-            <span v-if="item.shortcut" class="cmd-item-shortcut">
+            <span v-if="item.shortcut" class="cmd-item-shortcut" aria-hidden="true">
               <kbd v-for="(k, ki) in item.shortcut.split('+')" :key="ki">{{ k }}</kbd>
             </span>
           </div>
         </template>
-        <div v-if="flatItems.length === 0" class="cmd-empty">没有匹配的结果</div>
+        <div v-if="flatItems.length === 0" class="cmd-empty" role="option">{{ t('commandPalette.noResults') }}</div>
       </div>
       <div class="cmd-footer">
-        <span><kbd>↑↓</kbd> 导航</span>
-        <span><kbd>↵</kbd> 选择</span>
-        <span><kbd>Esc</kbd> 关闭</span>
+        <span><kbd aria-hidden="true">↑↓</kbd> {{ t('commandPalette.hintNavigation') }}</span>
+        <span><kbd aria-hidden="true">↵</kbd> {{ t('commandPalette.hintSelect') }}</span>
+        <span><kbd aria-hidden="true">Esc</kbd> {{ t('commandPalette.hintClose') }}</span>
       </div>
     </div>
   </Teleport>
@@ -47,6 +62,8 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useId } from '@/composables/useId'
 
 export interface CommandItem {
   id: string
@@ -64,6 +81,10 @@ interface CommandGroup {
 }
 
 const props = defineProps<{ visible: boolean }>()
+
+const { t } = useI18n()
+const listboxId = useId('cmd-listbox')
+
 const emit = defineEmits<{
   close: []
   select: [item: CommandItem]
@@ -98,6 +119,11 @@ const filteredGroups = computed<CommandGroup[]>(() => {
 })
 
 const flatItems = computed(() => filteredGroups.value.flatMap(g => g.items))
+
+const activeDescendantId = computed(() => {
+  const item = flatItems.value[hoverIdx.value]
+  return item ? `cmd-option-${item.id}` : undefined
+})
 
 // Compute flat index for a (group, localIndex) pair
 function flatIndex(group: CommandGroup, localIndex: number): number {
@@ -146,9 +172,9 @@ watch(() => props.visible, (val) => {
 watch(query, () => { hoverIdx.value = 0 })
 
 const CATEGORY_LABELS: Record<string, string> = {
-  resource: '资源',
-  navigation: '页面导航',
-  action: '操作',
+  resource: t('commandPalette.categoryResource'),
+  navigation: t('commandPalette.categoryNavigation'),
+  action: t('commandPalette.categoryAction'),
 }
 </script>
 

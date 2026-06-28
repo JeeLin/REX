@@ -20,6 +20,7 @@ export default {
     create: 'Create',
     submit: 'Submit',
     retry: 'Retry',
+    close: 'Close',
   },
   toast: {
     operationSuccess: 'Operation successful',
@@ -29,6 +30,12 @@ export default {
     title: 'Confirm Action',
     deleteTitle: 'Confirm Delete',
     confirmDelete: 'This action cannot be undone. Continue?',
+  },
+  layout: {
+    skipToContent: 'Skip to main content',
+    openMenu: 'Open menu',
+    sidebar: 'Sidebar navigation',
+    main: 'Main content area',
   },
   sidebar: {
     searchPlaceholder: 'Search resources...',

@@ -8,21 +8,29 @@
     ></div>
     <div
       v-if="menuVisible"
+      ref="menuEl"
       class="ctx-menu"
+      role="menu"
+      :aria-activedescendant="activeItemId"
       :style="{ left: menuX + 'px', top: menuY + 'px' }"
+      @keydown="onMenuKeydown"
     >
       <template v-for="(item, idx) in menuItems" :key="idx">
-        <div v-if="item.separator" class="ctx-separator"></div>
+        <div v-if="item.separator" class="ctx-separator" role="separator"></div>
         <div
           v-else
+          :id="getItemId(idx)"
           class="ctx-item"
+          role="menuitem"
+          :aria-disabled="item.disabled"
+          :aria-haspopup="!!item.children"
           :class="{
             'ctx-danger': item.danger,
             'ctx-disabled': item.disabled,
             'ctx-active': openSubIdx === idx,
           }"
           @click="handleClick(item)"
-          @mouseenter="item.children ? (openSubIdx = idx) : undefined"
+          @mouseenter="onItemEnter(idx)"
           @mouseleave="onItemLeave"
         >
           <span v-if="item.icon" class="ctx-icon">{{ item.icon }}</span>
@@ -34,15 +42,18 @@
     <div
       v-if="menuVisible && openSubItem"
       class="ctx-menu ctx-submenu"
+      role="menu"
       :style="submenuStyle"
       @mouseenter="keepSub = true"
       @mouseleave="openSubIdx = null; keepSub = false"
     >
       <template v-for="(child, ci) in openSubItem.children!" :key="ci">
-        <div v-if="child.separator" class="ctx-separator"></div>
+        <div v-if="child.separator" class="ctx-separator" role="separator"></div>
         <div
           v-else
           class="ctx-item"
+          role="menuitem"
+          :aria-disabled="child.disabled"
           :class="{
             'ctx-danger': child.danger,
             'ctx-disabled': child.disabled,
@@ -58,18 +69,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useContextMenu, type MenuItem } from '@/composables/useContextMenu'
 
 const { visible: menuVisible, x: menuX, y: menuY, items: menuItems, hide: menuHide } = useContextMenu()
 
 const openSubIdx = ref<number | null>(null)
 const keepSub = ref(false)
+const keyboardIdx = ref(-1)
+const menuEl = ref<HTMLElement>()
 
 const openSubItem = computed(() => {
   if (openSubIdx.value === null) return null
   return menuItems.value[openSubIdx.value] ?? null
 })
+
+// Non-separator items for keyboard navigation
+const actionableItems = computed(() =>
+  menuItems.value.map((item, idx) => ({ item, idx })).filter(x => !x.item.separator && !x.item.disabled)
+)
+
+const activeItemId = computed(() => {
+  if (keyboardIdx.value < 0) return undefined
+  return getItemId(keyboardIdx.value)
+})
+
+function getItemId(idx: number) {
+  return `ctx-item-${idx}`
+}
 
 const submenuStyle = computed(() => {
   if (openSubIdx.value === null) return { display: 'none' }
@@ -80,9 +107,38 @@ const submenuStyle = computed(() => {
   }
 })
 
+function onItemEnter(idx: number) {
+  openSubIdx.value = menuItems.value[idx]?.children ? idx : null
+  keyboardIdx.value = idx
+}
+
 function onItemLeave() {
   if (!keepSub.value) {
     openSubIdx.value = null
+  }
+}
+
+function onMenuKeydown(e: KeyboardEvent) {
+  const items = actionableItems.value
+  if (items.length === 0) return
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    const curIdx = items.findIndex(x => x.idx === keyboardIdx.value)
+    const next = items[(curIdx + 1) % items.length]
+    keyboardIdx.value = next.idx
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    const curIdx = items.findIndex(x => x.idx === keyboardIdx.value)
+    const prev = items[(curIdx - 1 + items.length) % items.length]
+    keyboardIdx.value = prev.idx
+  } else if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault()
+    if (keyboardIdx.value >= 0) {
+      handleClick(menuItems.value[keyboardIdx.value])
+    }
+  } else if (e.key === 'Escape') {
+    menuHide()
   }
 }
 

@@ -2,19 +2,28 @@
   <Teleport to="body">
     <Transition name="modal">
       <div v-if="visible" class="confirm-overlay" @click.self="$emit('cancel')">
-        <div class="confirm-dialog" role="alertdialog" aria-modal="true">
-          <h3 class="confirm-title">{{ title }}</h3>
-          <p class="confirm-message">{{ message }}</p>
+        <div
+          ref="dialogEl"
+          class="confirm-dialog"
+          role="alertdialog"
+          aria-modal="true"
+          :aria-labelledby="titleId"
+          :aria-describedby="descId"
+          @keydown.tab="trapFocus"
+        >
+          <h3 :id="titleId" class="confirm-title">{{ title }}</h3>
+          <p :id="descId" class="confirm-message">{{ message }}</p>
           <div class="confirm-actions">
-            <button class="btn btn-ghost btn-sm" @click="$emit('cancel')">
-              {{ cancelLabel }}
+            <button ref="cancelBtnEl" class="btn btn-ghost btn-sm" @click="$emit('cancel')">
+              {{ actualCancelLabel }}
             </button>
             <button
+              ref="confirmBtnEl"
               class="btn btn-sm"
               :class="danger ? 'btn-danger' : 'btn-primary'"
               @click="$emit('confirm')"
             >
-              {{ confirmLabel }}
+              {{ actualConfirmLabel }}
             </button>
           </div>
         </div>
@@ -24,7 +33,15 @@
 </template>
 
 <script setup lang="ts">
-withDefaults(defineProps<{
+import { computed, ref, watch, nextTick } from 'vue'
+import { useId } from '@/composables/useId'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+const titleId = useId('confirm-title')
+const descId = useId('confirm-desc')
+
+const props = withDefaults(defineProps<{
   visible: boolean
   title: string
   message: string
@@ -32,8 +49,8 @@ withDefaults(defineProps<{
   cancelLabel?: string
   danger?: boolean
 }>(), {
-  confirmLabel: '确认',
-  cancelLabel: '取消',
+  confirmLabel: undefined,
+  cancelLabel: undefined,
   danger: false,
 })
 
@@ -41,6 +58,39 @@ defineEmits<{
   confirm: []
   cancel: []
 }>()
+
+const dialogEl = ref<HTMLElement>()
+const cancelBtnEl = ref<HTMLElement>()
+const confirmBtnEl = ref<HTMLElement>()
+let previousActive: HTMLElement | null = null
+
+const actualConfirmLabel = computed(() => props.confirmLabel || t('common.confirm'))
+const actualCancelLabel = computed(() => props.cancelLabel || t('common.cancel'))
+
+// Focus management: save trigger element, focus confirm button on open, restore on close
+watch(() => props.visible, (val) => {
+  if (val) {
+    previousActive = document.activeElement as HTMLElement
+    nextTick(() => confirmBtnEl.value?.focus())
+  } else if (previousActive) {
+    previousActive.focus()
+    previousActive = null
+  }
+})
+
+function trapFocus(e: KeyboardEvent) {
+  const focusable = [cancelBtnEl.value, confirmBtnEl.value].filter(Boolean) as HTMLElement[]
+  if (focusable.length === 0) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault()
+    first.focus()
+  }
+}
 </script>
 
 <style scoped>

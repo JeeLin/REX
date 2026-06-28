@@ -8,7 +8,7 @@
       </div>
 
       <div class="login-card">
-        <form class="login-form" @submit.prevent="handleLogin">
+        <form class="login-form" @submit.prevent="handleLogin" :aria-label="t('auth.login')">
           <div class="form-group">
             <label class="form-label" for="password">{{ t('auth.password') }}</label>
             <input

@@ -1,7 +1,10 @@
 <template>
   <div class="app-layout" :class="{ 'sidebar-collapsed': collapsed }">
+    <!-- Skip to content link (accessibility) -->
+    <a href="#main-content" class="skip-link">{{ t('layout.skipToContent') }}</a>
+
     <!-- 移动端汉堡按钮 -->
-    <button v-if="!mobileOpen" class="hamburger" @click="mobileOpen = !mobileOpen">
+    <button v-if="!mobileOpen" class="hamburger" :aria-label="t('layout.openMenu')" @click="mobileOpen = !mobileOpen">
       <span></span>
       <span></span>
       <span></span>
@@ -10,7 +13,7 @@
     <!-- 移动端遮罩 -->
     <div v-if="mobileOpen" class="mobile-overlay" @click="closeMobile"></div>
 
-    <aside class="sidebar" :class="{ open: mobileOpen }" :style="{ width: collapsed ? '60px' : sidebarWidth + 'px' }">
+    <aside class="sidebar" role="complementary" :aria-label="t('layout.sidebar')" :class="{ open: mobileOpen }" :style="{ width: collapsed ? '60px' : sidebarWidth + 'px' }">
       <!-- Header -->
       <div class="sidebar-header">
         <div class="sidebar-logo">R</div>
@@ -36,7 +39,7 @@
       </div>
 
       <!-- 导航 -->
-      <nav class="sidebar-nav">
+      <nav class="sidebar-nav" :aria-label="t('layout.sidebar')">
         <router-link to="/" class="nav-item" :class="{ active: route.name === 'dashboard' }" @click="closeMobile">
           <span class="nav-icon">🏠</span>
           <span v-show="!collapsed">{{ t('nav.dashboard') }}</span>
@@ -172,7 +175,7 @@
       @mousedown="startResize"
     ></div>
 
-    <main class="main-content" :class="{ 'no-header': route.meta.noHeader }" :style="{ marginLeft: collapsed ? '60px' : sidebarWidth + 'px' }">
+    <main id="main-content" class="main-content" :class="{ 'no-header': route.meta.noHeader }" :style="{ marginLeft: collapsed ? '60px' : sidebarWidth + 'px' }">
       <header v-if="!route.meta.noHeader" class="page-header">
         <h1 class="page-title">{{ pageTitle }}</h1>
         <div class="header-actions">
@@ -387,6 +390,26 @@ onUnmounted(() => {
   display: flex;
   min-height: 100vh;
   background: var(--bg-deep);
+}
+
+/* ── Skip to content (accessibility) ── */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: var(--sp-md);
+  background: var(--accent);
+  color: #000;
+  padding: var(--sp-sm) var(--sp-md);
+  border-radius: var(--radius-md);
+  z-index: 9999;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-decoration: none;
+  transition: top 0.2s;
+}
+
+.skip-link:focus {
+  top: var(--sp-md);
 }
 
 /* ── 侧边栏 ─────────────────────────────── */

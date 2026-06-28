@@ -1,24 +1,31 @@
 <template>
-  <div class="toast-container">
+  <div class="toast-container" role="status" aria-live="polite">
     <TransitionGroup name="toast">
       <div
         v-for="toast in toasts"
         :key="toast.id"
         class="toast-item"
         :class="toast.type"
+        role="alert"
         @click="remove(toast.id)"
       >
         <span class="toast-icon">{{ iconFor(toast.type) }}</span>
         <span class="toast-msg">{{ toast.message }}</span>
-        <button class="toast-close" @click.stop="remove(toast.id)">×</button>
+        <button
+          class="toast-close"
+          :aria-label="t('common.close')"
+          @click.stop="remove(toast.id)"
+        >×</button>
       </div>
     </TransitionGroup>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 
+const { t } = useI18n()
 const { toasts, remove } = useToast()
 
 function iconFor(type: string) {
