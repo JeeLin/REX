@@ -65,3 +65,4 @@ getrandom = "0.2"
 aws-sdk-s3 = { version = "1.137.0", features = ["rt-tokio"] }
 aws-config = { version = "1.6.3", features = ["behavior-version-latest"] }
 sysinfo = "0.30"
+webpki-roots = "0.26"

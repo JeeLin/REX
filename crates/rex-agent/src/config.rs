@@ -15,6 +15,25 @@ fn default_auto_update() -> bool {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct AgentTlsConfig {
+    /// CA 证书文件路径（PEM 格式）
+    #[serde(default)]
+    pub ca_cert: Option<PathBuf>,
+    /// 跳过 TLS 证书验证
+    #[serde(default)]
+    pub insecure: bool,
+}
+
+impl Default for AgentTlsConfig {
+    fn default() -> Self {
+        Self {
+            ca_cert: None,
+            insecure: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct AgentConfig {
     pub server: String,
     pub token: String,
@@ -22,6 +41,8 @@ pub struct AgentConfig {
     pub data_dir: PathBuf,
     #[serde(default)]
     pub update: UpdateConfig,
+    #[serde(default)]
+    pub tls: AgentTlsConfig,
 }
 
 impl Default for AgentConfig {
@@ -32,6 +53,7 @@ impl Default for AgentConfig {
             name: "unnamed-agent".to_string(),
             data_dir: PathBuf::from("./data"),
             update: UpdateConfig::default(),
+            tls: AgentTlsConfig::default(),
         }
     }
 }
@@ -101,6 +123,14 @@ impl AgentConfig {
         }
         if let Ok(val) = env_fn("REX_AUTO_UPDATE") {
             config.update.auto_update = matches!(val.to_lowercase().as_str(), "true" | "1" | "yes");
+        }
+
+        // TLS 环境变量覆盖
+        if let Ok(val) = env_fn("REX_CA_CERT") {
+            config.tls.ca_cert = Some(PathBuf::from(val));
+        }
+        if let Ok(val) = env_fn("REX_INSECURE") {
+            config.tls.insecure = matches!(val.to_lowercase().as_str(), "true" | "1" | "yes");
         }
 
         Ok(config)

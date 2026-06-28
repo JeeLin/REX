@@ -31,6 +31,18 @@ pub struct Cli {
     /// ACME 使用 staging 环境（仅 Hub）
     #[arg(long = "acme-staging")]
     pub acme_staging: bool,
+
+    /// CA 证书文件路径（PEM 格式，仅 Agent）
+    #[arg(long = "ca-cert")]
+    pub ca_cert: Option<String>,
+
+    /// 跳过 TLS 证书验证（仅开发/测试环境，仅 Agent）
+    #[arg(long = "insecure")]
+    pub insecure: bool,
+
+    /// HTTP-01 challenge 服务器端口（仅 Hub）
+    #[arg(long = "acme-http-port")]
+    pub acme_http_port: Option<u16>,
 }
 
 #[cfg(test)]
