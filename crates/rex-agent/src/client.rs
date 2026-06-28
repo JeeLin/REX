@@ -50,6 +50,14 @@ impl HubClient {
         }
     }
 
+    /// 使用自定义 reqwest::Client 创建 HubClient（支持自定义 TLS 信任配置）
+    pub fn with_client(server: &str, http: reqwest::Client) -> Self {
+        Self {
+            http,
+            server: server.trim_end_matches('/').to_string(),
+        }
+    }
+
     pub async fn register(&self, req: &RegisterRequest) -> Result<RegisterResponse> {
         let url = format!("{}/api/agents/register", self.server);
         let resp = self

@@ -206,8 +206,9 @@ mod tests {
         let cert_pem = cert.pem();
 
         let client = build_reqwest_client(None, false).unwrap();
-        // Client was built successfully
+        // Client was built successfully (cert_pem available for further testing if needed)
         drop(client);
+        drop(cert_pem);
     }
 
     #[test]

@@ -3,7 +3,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tokio::time::{interval, Duration};
-use tokio_tungstenite::{connect_async, tungstenite::Message};
+use tokio_tungstenite::{connect_async, connect_async_tls_with_config, tungstenite::Message};
 
 use crate::log_collector::LogCollector;
 
@@ -21,6 +21,8 @@ pub struct AgentWs {
     auto_update: bool,
     data_dir: PathBuf,
     log_collector: LogCollector,
+    ws_connector: Option<tokio_tungstenite::Connector>,
+    http_client: reqwest::Client,
 }
 
 impl AgentWs {
@@ -41,6 +43,33 @@ impl AgentWs {
             auto_update,
             data_dir,
             log_collector,
+            ws_connector: None,
+            http_client: reqwest::Client::new(),
+        }
+    }
+
+    /// 使用自定义 TLS 配置创建 AgentWs
+    pub fn with_tls(
+        server_ws_url: String,
+        agent_id: String,
+        token: String,
+        version: String,
+        auto_update: bool,
+        data_dir: PathBuf,
+        log_collector: LogCollector,
+        ws_connector: tokio_tungstenite::Connector,
+        http_client: reqwest::Client,
+    ) -> Self {
+        Self {
+            server_ws_url,
+            agent_id,
+            token,
+            version,
+            auto_update,
+            data_dir,
+            log_collector,
+            ws_connector: Some(ws_connector),
+            http_client,
         }
     }
 
@@ -63,9 +92,21 @@ impl AgentWs {
     }
 
     async fn connect_and_run(&self) -> Result<()> {
-        let (ws_stream, _) = connect_async(&self.server_ws_url)
+        let (ws_stream, _) = if let Some(ref connector) = self.ws_connector {
+            tracing::info!("TLS: connecting to hub with custom TLS configuration");
+            connect_async_tls_with_config(
+                &self.server_ws_url,
+                None,
+                true,
+                Some(connector.clone()),
+            )
             .await
-            .context("failed to connect websocket")?;
+            .context("failed to connect websocket")?
+        } else {
+            connect_async(&self.server_ws_url)
+                .await
+                .context("failed to connect websocket")?
+        };
 
         let (mut write, mut read) = ws_stream.split();
 
@@ -186,8 +227,7 @@ impl AgentWs {
             rex_common::updater::UpdateChecker::current_arch(),
         );
 
-        let client = reqwest::Client::new();
-        let resp = match client.get(&url).bearer_auth(&self.token).send().await {
+        let resp = match self.http_client.get(&url).bearer_auth(&self.token).send().await {
             Ok(r) => r,
             Err(e) => {
                 tracing::error!(error = %e, "failed to download update from hub");
