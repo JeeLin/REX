@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.27.1] - 2026-06-28
+
+### Added
+- Toast 反馈激活：所有 CRUD 操作成功/失败时显示 Toast 提示
+- ConfirmDialog 统一：所有删除/断开连接操作使用标准确认弹窗，替代手写 modal
+- 无障碍增强：ConfirmDialog 焦点陷阱和焦点恢复，ToastProvider ARIA live region，ContextMenu 键盘导航（↑↓/Enter/Esc），CommandPalette ARIA combobox role，AppLayout skip-to-content link 和 landmark
+
+### Changed
+- i18n 补全：所有用户可见硬编码中文替换为 i18n key，支持中/英文切换
+- 主题一致性：组件内硬编码颜色（#3FB950、#F85149 等）替换为 CSS 变量（--success、--danger 等）
+- 操作逻辑规范化：所有 catch 块确保有用户可见反馈机制
+
+### Fixed
+- 终端错误消息国际化（WebSocket 断连、会话创建失败等）
+- 文件传输面板空状态文本国际化
+- AI 助手角色显示和复制按钮国际化
+- 侧边栏时间显示国际化
+
+## [0.27.0] - 2026-06-27
+
 ## [0.27.0] - 2026-06-27
 
 ### Added
