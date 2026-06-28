@@ -19,8 +19,8 @@
           <button class="sidebar-icon-btn" :title="themeLabel" @click="toggleTheme">
             {{ themeIcon }}
           </button>
-          <button class="sidebar-icon-btn" :title="lang === 'zh' ? '中文' : 'English'" @click="toggleLang">
-            {{ lang === 'zh' ? '中' : 'EN' }}
+          <button class="sidebar-icon-btn" :title="langDisplay" @click="toggleLang">
+            {{ langDisplay }}
           </button>
         </div>
       </div>
@@ -223,6 +223,7 @@ const editModalEnvId = ref('')
 const editModalResourceId = ref('')
 
 const lang = computed(() => userStore.lang)
+const langDisplay = computed(() => lang.value === 'zh' ? t('settings.appearance.languageZh') : t('settings.appearance.languageEn'))
 const auditEnabled = computed(() => securitySettings.auditEnabled)
 
 const {
@@ -314,12 +315,12 @@ function formatTimeAgo(timestamp: number): string {
   const now = Date.now()
   const diff = now - timestamp
   const minutes = Math.floor(diff / 60000)
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes}分钟前`
+  if (minutes < 1) return t('sidebar.timeJustNow')
+  if (minutes < 60) return t('sidebar.timeMinutesAgo', { n: minutes })
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}小时前`
+  if (hours < 24) return t('sidebar.timeHoursAgo', { n: hours })
   const days = Math.floor(hours / 24)
-  if (days < 30) return `${days}天前`
+  if (days < 30) return t('sidebar.timeDaysAgo', { n: days })
   return new Date(timestamp).toLocaleDateString()
 }
 

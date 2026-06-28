@@ -1,12 +1,12 @@
 <template>
   <div class="transfer-panel">
     <div class="transfer-panel-header" @click="expanded = !expanded">
-      <span class="panel-title">传输队列</span>
+      <span class="panel-title">{{ t('files.transferQueue') }}</span>
       <span v-if="activeCount > 0" class="panel-badge">{{ activeCount }}</span>
-      <span class="panel-toggle">{{ expanded ? '▾' : '▸' }}</span>
+      <span class="panel-toggle">{{ expanded ? '▾' : '▴' }}</span>
     </div>
     <div v-if="expanded" class="transfer-panel-body">
-      <div v-if="tasks.length === 0" class="transfer-empty">暂无传输任务</div>
+      <div v-if="tasks.length === 0" class="transfer-empty">{{ t('files.noTransfers') }}</div>
       <div v-else class="transfer-list">
         <TransferItem
           v-for="task in tasks"
@@ -22,9 +22,11 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import TransferItem from './TransferItem.vue'
 import type { TransferTask } from '@/api/transfer'
 
+const { t } = useI18n()
 const props = defineProps<{ tasks: TransferTask[] }>()
 defineEmits<{ cancel: [id: string]; remove: [id: string] }>()
 

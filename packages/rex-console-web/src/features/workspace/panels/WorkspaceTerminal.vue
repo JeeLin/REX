@@ -23,7 +23,7 @@
 
         <!-- 拖拽高亮 -->
         <div v-if="dragOver" class="ws-term-dropzone">
-          <span>释放以粘贴路径到终端</span>
+          <span>{{ t('ws.terminal.sftp.dropHint') }}</span>
         </div>
 
         <!-- 未连接时显示重连提示 -->
@@ -324,12 +324,12 @@ async function connectSession() {
             terminal?.write(atob(msg.payload.data))
             break
           case 'terminal.error':
-            terminal?.write(`\r\n\x1b[31m错误: ${msg.payload.message}\x1b[0m\r\n`)
+            terminal?.write(`\r\n\x1b[31m${t('ws.terminal.termError', { message: msg.payload.message })}\x1b[0m\r\n`)
             connectionStatus.value = 'disconnected'
             emit('error', msg.payload.message)
             break
           case 'terminal.closed':
-            terminal?.write('\r\n\x1b[33m连接已关闭\x1b[0m\r\n')
+            terminal?.write(`\r\n\x1b[33m${t('ws.terminal.termClosed')}\x1b[0m\r\n`)
             connectionStatus.value = 'disconnected'
             emit('disconnect')
             break
@@ -345,12 +345,12 @@ async function connectSession() {
 
     ws.onerror = () => {
       connectionStatus.value = 'disconnected'
-      emit('error', 'WebSocket 连接失败')
+      emit('error', t('ws.terminal.wsFailed'))
     }
   } catch (err: unknown) {
     connectionStatus.value = 'disconnected'
-    const msg = getErrorMessage(err, '未知错误')
-    terminal?.write(`\r\n\x1b[31m会话创建失败: ${msg}\x1b[0m\r\n`)
+    const msg = getErrorMessage(err, t('common.error'))
+    terminal?.write(`\r\n\x1b[31m${t('ws.terminal.sessionFailed', { message: msg })}\x1b[0m\r\n`)
     emit('error', msg)
   }
 }

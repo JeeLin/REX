@@ -8,20 +8,20 @@
       </div>
       <div class="toolbar-spacer"></div>
       <div class="toolbar-actions">
-        <button class="btn btn-ghost btn-sm" @click="clearTerminal">清屏</button>
-        <button class="btn btn-ghost btn-sm" @click="handleCopy">复制</button>
-        <button class="btn btn-ghost btn-sm" @click="handlePaste">粘贴</button>
+        <button class="btn btn-ghost btn-sm" @click="clearTerminal">{{ t('ws.terminal.toolbar.clear') }}</button>
+        <button class="btn btn-ghost btn-sm" @click="handleCopy">{{ t('common.copy') }}</button>
+        <button class="btn btn-ghost btn-sm" @click="handlePaste">{{ t('ws.terminal.toolbar.paste') }}</button>
         <div class="toolbar-sep"></div>
         <button
           class="toolbar-btn-sftp"
           :class="{ active: sftpVisible }"
-          title="SFTP 面板 (Ctrl+Shift+F)"
+          :title="t('ws.terminal.toolbar.sftp') + ' (Ctrl+Shift+F)'"
           @click="toggleSftp"
         >
           📁 SFTP
         </button>
-        <button class="btn btn-sm btn-ghost" :title="isFullscreen ? '退出全屏 (F11)' : '全屏 (F11)'" @click="toggleFullscreen">⛶</button>
-        <button class="btn btn-sm btn-danger" @click="confirmDisconnect">断开</button>
+        <button class="btn btn-sm btn-ghost" :title="(isFullscreen ? t('ws.terminal.statusbar.exitFullscreen') : t('ws.terminal.statusbar.fullscreen')) + ' (F11)'" @click="toggleFullscreen">⛶</button>
+        <button class="btn btn-sm btn-danger" @click="confirmDisconnect">{{ t('ws.terminal.toolbar.disconnect') }}</button>
       </div>
     </div>
 
@@ -45,11 +45,11 @@
       <span>·</span>
       <span>UTF-8</span>
       <span class="spacer"></span>
-      <span style="font-size: 11px; opacity: 0.7">Ctrl+Shift+C 复制 · Ctrl+Shift+V 粘贴</span>
+      <span style="font-size: 11px; opacity: 0.7">{{ t('ws.terminal.statusbar.hint') }}</span>
       <span class="spacer"></span>
-      <span v-if="connectionStatus === 'connected'" style="color: var(--success)">已连接</span>
-      <span v-else-if="connectionStatus === 'connecting'" style="color: var(--warning)">连接中...</span>
-      <span v-else style="color: var(--danger)">未连接</span>
+      <span v-if="connectionStatus === 'connected'" style="color: var(--success)">{{ t('ws.terminal.statusbar.connected') }}</span>
+      <span v-else-if="connectionStatus === 'connecting'" style="color: var(--warning)">{{ t('ws.terminal.statusbar.connecting') }}</span>
+      <span v-else style="color: var(--danger)">{{ t('ws.terminal.statusbar.disconnected') }}</span>
     </div>
 
     <!-- 右键菜单 -->
@@ -58,16 +58,16 @@
       class="ctx-menu"
       :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
     >
-      <button class="ctx-menu-item" @click="handleCopy">复制</button>
-      <button class="ctx-menu-item" @click="handlePaste">粘贴</button>
+      <button class="ctx-menu-item" @click="handleCopy">{{ t('common.copy') }}</button>
+      <button class="ctx-menu-item" @click="handlePaste">{{ t('ws.terminal.toolbar.paste') }}</button>
     </div>
 
     <!-- 断开确认弹窗 -->
     <ConfirmDialog
       :visible="showDisconnectDialog"
-      title="断开连接？"
-      message="断开后当前会话将终止，未保存的工作可能会丢失。"
-      confirm-label="断开"
+      :title="t('ws.terminal.disconnect.title')"
+      :message="t('ws.terminal.disconnect.desc')"
+      :confirm-label="t('ws.terminal.toolbar.disconnect')"
       :danger="true"
       @confirm="doDisconnect"
       @cancel="showDisconnectDialog = false"
@@ -78,6 +78,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -88,6 +89,7 @@ import TerminalSftp from '@/features/terminal/TerminalSftp.vue'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const resourceId = route.params.resourceId as string
 
 const terminalContainer = ref<HTMLElement>()

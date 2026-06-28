@@ -9,7 +9,7 @@
     <div class="ai-message-content">
       <div class="ai-message-header">
         <span class="ai-message-role">
-          {{ message.role === "user" ? "您" : "AI 助手" }}
+          {{ message.role === "user" ? t('sql.ai.roleUser') : t('sql.ai.roleAssistant') }}
         </span>
         <span v-if="message.streaming" class="ai-message-streaming">●</span>
       </div>
@@ -26,10 +26,10 @@
             v-for="(block, index) in extractCodeBlocks(message.content)"
             :key="index"
             class="ai-copy-btn"
-            title="复制 SQL 到编辑器"
+            :title="t('sql.ai.tooltip.copySql')"
             @click="copySqlToEditor(block)"
           >
-            📋 复制
+            📋 {{ t('common.copy') }}
           </button>
         </div>
       </template>
@@ -39,7 +39,9 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 
+const { t } = useI18n();
 const props = defineProps<{
   message: {
     id: string;

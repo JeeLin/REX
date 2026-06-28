@@ -1,8 +1,8 @@
 <template>
   <div class="file-list" @contextmenu.prevent="$emit('contextMenu', $event, null)">
     <div class="file-list-header">
-      <div class="col col-name">名称</div>
-      <div class="col col-size">大小</div>
+      <div class="col col-name">{{ t('files.name') }}</div>
+      <div class="col col-size">{{ t('files.size') }}</div>
       <div class="col col-actions"></div>
     </div>
     <div ref="listBody" class="file-list-body">
@@ -39,14 +39,17 @@
         </div>
       </div>
       <div v-if="entries.length === 0 && !loading" class="file-list-empty">
-        此目录为空
+        {{ t('files.emptyDir') }}
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import type { FileEntry } from '@/api/files'
+
+const { t } = useI18n()
 
 defineProps<{
   entries: FileEntry[]
