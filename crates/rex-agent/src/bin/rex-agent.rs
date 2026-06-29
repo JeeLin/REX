@@ -80,7 +80,13 @@ fn main() -> anyhow::Result<()> {
         let ws_connector = tls_client::build_ws_connector(ca_cert_path, insecure)?;
 
         let rt = tokio::runtime::Runtime::new()?;
-        rt.block_on(run_agent(config, identity, log_collector, http_client, ws_connector))?;
+        rt.block_on(run_agent(
+            config,
+            identity,
+            log_collector,
+            http_client,
+            ws_connector,
+        ))?;
     } else {
         // Supervisor mode: use update supervisor with data_dir
         let config_path = cli.config.clone();

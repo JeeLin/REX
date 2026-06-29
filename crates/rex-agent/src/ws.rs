@@ -94,14 +94,9 @@ impl AgentWs {
     async fn connect_and_run(&self) -> Result<()> {
         let (ws_stream, _) = if let Some(ref connector) = self.ws_connector {
             tracing::info!("TLS: connecting to hub with custom TLS configuration");
-            connect_async_tls_with_config(
-                &self.server_ws_url,
-                None,
-                true,
-                Some(connector.clone()),
-            )
-            .await
-            .context("failed to connect websocket")?
+            connect_async_tls_with_config(&self.server_ws_url, None, true, Some(connector.clone()))
+                .await
+                .context("failed to connect websocket")?
         } else {
             connect_async(&self.server_ws_url)
                 .await
@@ -227,7 +222,13 @@ impl AgentWs {
             rex_common::updater::UpdateChecker::current_arch(),
         );
 
-        let resp = match self.http_client.get(&url).bearer_auth(&self.token).send().await {
+        let resp = match self
+            .http_client
+            .get(&url)
+            .bearer_auth(&self.token)
+            .send()
+            .await
+        {
             Ok(r) => r,
             Err(e) => {
                 tracing::error!(error = %e, "failed to download update from hub");

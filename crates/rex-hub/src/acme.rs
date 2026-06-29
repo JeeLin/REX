@@ -180,7 +180,11 @@ pub async fn start_acme_driver(
                     Some(Ok(event)) => {
                         tracing::info!(?event, "ACME event");
                         // 证书就绪时更新状态
-                        if matches!(event, rustls_acme::EventOk::DeployedCachedCert | rustls_acme::EventOk::DeployedNewCert) {
+                        if matches!(
+                            event,
+                            rustls_acme::EventOk::DeployedCachedCert
+                                | rustls_acme::EventOk::DeployedNewCert
+                        ) {
                             let mut status = shared_status.write().await;
                             status.status = "ready".to_string();
                             status.error = None;
@@ -193,10 +197,7 @@ pub async fn start_acme_driver(
                         status.error = Some(e.to_string());
                     }
                     None => {
-                        tracing::warn!(
-                            attempt = attempt + 1,
-                            "ACME stream ended"
-                        );
+                        tracing::warn!(attempt = attempt + 1, "ACME stream ended");
                         break;
                     }
                 }
@@ -210,9 +211,7 @@ pub async fn start_acme_driver(
                 );
                 let mut status = shared_status.write().await;
                 status.status = "error".to_string();
-                status.error = Some(format!(
-                    "ACME stream ended after {max_retries} attempts"
-                ));
+                status.error = Some(format!("ACME stream ended after {max_retries} attempts"));
                 break;
             }
 
