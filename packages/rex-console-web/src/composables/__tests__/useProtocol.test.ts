@@ -8,7 +8,6 @@ describe('getProtocolIcon', () => {
     expect(getProtocolIcon('mysql')).toEqual({ icon: 'dB', color: '#f59e0b' })
     expect(getProtocolIcon('postgresql')).toEqual({ icon: 'pg', color: '#60a5fa' })
     expect(getProtocolIcon('redis')).toEqual({ icon: 'r', color: '#ef4444' })
-    expect(getProtocolIcon('docker')).toEqual({ icon: '🐳', color: '#3b82f6' })
     expect(getProtocolIcon('sqlite')).toEqual({ icon: 'db', color: '#10b981' })
     expect(getProtocolIcon('s3')).toEqual({ icon: '☁', color: '#f97316' })
   })

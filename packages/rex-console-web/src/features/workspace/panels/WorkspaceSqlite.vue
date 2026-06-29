@@ -12,14 +12,14 @@
         :disabled="connecting"
         @click="handleConnect"
       >
-        {{ connecting ? t('docker.connecting') : t('docker.connect') }}
+        {{ connecting ? t('sqlite.connecting') : t('sqlite.connect') }}
       </button>
       <button
         v-else
         class="btn btn-ghost btn-sm btn-danger"
         @click="handleDisconnect"
       >
-        {{ t('docker.disconnect') }}
+        {{ t('sqlite.disconnect') }}
       </button>
     </div>
 

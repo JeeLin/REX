@@ -2,7 +2,7 @@ import { useRouter } from 'vue-router'
 import { useRecent } from './useRecent'
 import { useTabs } from '@/features/workspace/useTabs'
 
-export type Protocol = 'ssh' | 'sftp' | 'mysql' | 'postgresql' | 'redis' | 'docker' | 'sqlite' | 's3'
+export type Protocol = 'ssh' | 'sftp' | 'mysql' | 'postgresql' | 'redis' | 'sqlite' | 's3'
 
 /** Protocol → icon/label mapping */
 const PROTOCOL_ICONS: Record<string, { icon: string; color: string }> = {
@@ -11,7 +11,6 @@ const PROTOCOL_ICONS: Record<string, { icon: string; color: string }> = {
   mysql: { icon: 'dB', color: '#f59e0b' },
   postgresql: { icon: 'pg', color: '#60a5fa' },
   redis: { icon: 'r', color: '#ef4444' },
-  docker: { icon: '🐳', color: '#3b82f6' },
   sqlite: { icon: 'db', color: '#10b981' },
   s3: { icon: '☁', color: '#f97316' },
 }

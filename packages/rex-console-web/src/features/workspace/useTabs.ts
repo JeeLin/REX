@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import type { Protocol } from '@/composables/useProtocol'
 
-export type PanelComponent = 'terminal' | 'sql' | 'files' | 'redis' | 'docker' | 'sqlite' | 's3' | 'unsupported'
+export type PanelComponent = 'terminal' | 'sql' | 'files' | 'redis' | 'sqlite' | 's3' | 'unsupported'
 
 const PROTOCOL_COMPONENT: Record<string, PanelComponent> = {
   ssh: 'terminal',
@@ -10,7 +10,6 @@ const PROTOCOL_COMPONENT: Record<string, PanelComponent> = {
   sqlite: 'sqlite',
   sftp: 'files',
   redis: 'redis',
-  docker: 'docker',
   s3: 's3',
 }
 

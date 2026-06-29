@@ -46,39 +46,6 @@
             </div>
           </template>
 
-          <!-- Docker -->
-          <template v-else-if="form.protocol === 'docker'">
-            <div class="form-group">
-              <label class="form-label">{{ t('resource.docker.mode') }}</label>
-              <div class="auth-toggle">
-                <button type="button" class="auth-btn" :class="{ active: dockerConfig.mode === 'unix' }" @click="dockerConfig.mode = 'unix'">Unix Socket</button>
-                <button type="button" class="auth-btn" :class="{ active: dockerConfig.mode === 'tcp' }" @click="dockerConfig.mode = 'tcp'">TCP</button>
-              </div>
-            </div>
-            <template v-if="dockerConfig.mode === 'unix'">
-              <div class="form-group">
-                <label class="form-label">{{ t('resource.docker.socketPath') }}</label>
-                <input v-model="dockerConfig.socketPath" class="form-input" placeholder="/var/run/docker.sock" />
-              </div>
-            </template>
-            <template v-else>
-              <div class="form-row">
-                <div class="form-group flex-2">
-                  <label class="form-label">{{ t('resource.docker.host') }}</label>
-                  <input v-model="dockerConfig.host" class="form-input" placeholder="127.0.0.1" required />
-                </div>
-                <div class="form-group flex-1">
-                  <label class="form-label">{{ t('resource.docker.port') }}</label>
-                  <input v-model="dockerConfig.port" class="form-input" placeholder="2375" />
-                </div>
-              </div>
-            </template>
-            <div class="form-group">
-              <label class="form-label">{{ t('resource.docker.name') }}</label>
-              <input v-model="dockerConfig.name" class="form-input" :placeholder="t('resource.docker.namePlaceholder')" />
-            </div>
-          </template>
-
           <!-- SQLite -->
           <template v-else-if="form.protocol === 'sqlite'">
             <div class="form-group">
@@ -227,14 +194,6 @@ const redisConfig = reactive({
   name: '',
 })
 
-const dockerConfig = reactive({
-  mode: 'unix' as 'unix' | 'tcp',
-  host: '127.0.0.1',
-  port: '2375',
-  socketPath: '/var/run/docker.sock',
-  name: '',
-})
-
 const sqliteConfig = reactive({
   dbPath: '',
   name: '',
@@ -261,18 +220,6 @@ function loadResource(cfg: Record<string, any>, protocol: string) {
     redisConfig.password = cfg.password || ''
     redisConfig.db = String(cfg.db ?? 0)
     redisConfig.name = cfg.name || ''
-  } else if (protocol === 'docker') {
-    const host = cfg.host || ''
-    if (host.startsWith('unix://')) {
-      dockerConfig.mode = 'unix'
-      dockerConfig.socketPath = host.slice(7)
-    } else {
-      dockerConfig.mode = 'tcp'
-      const match = host.match(/^tcp:\/\/([^:]+):(\d+)$/)
-      dockerConfig.host = match?.[1] || '127.0.0.1'
-      dockerConfig.port = match?.[2] || '2375'
-    }
-    dockerConfig.name = cfg.name || ''
   } else if (protocol === 'sqlite') {
     sqliteConfig.dbPath = cfg.db_path || ''
     sqliteConfig.name = cfg.name || ''
@@ -317,10 +264,6 @@ function buildConfigJson() {
     const db = Number(redisConfig.db)
     return JSON.stringify({ host: redisConfig.host, port: Number(redisConfig.port) || 6379, password: redisConfig.password || null, db: db >= 0 && db <= 15 ? db : 0, name: redisConfig.name || null })
   }
-  if (form.protocol === 'docker') {
-    const host = dockerConfig.mode === 'unix' ? `unix://${dockerConfig.socketPath}` : `tcp://${dockerConfig.host}:${dockerConfig.port || '2375'}`
-    return JSON.stringify({ host, name: dockerConfig.name || null })
-  }
   if (form.protocol === 'sqlite') return JSON.stringify({ db_path: sqliteConfig.dbPath, name: sqliteConfig.name || null })
   if (form.protocol === 's3') {
     return JSON.stringify({ endpoint: s3Config.endpoint, access_key: s3Config.accessKey, secret_key: s3Config.secretKey, region: s3Config.region || null, bucket: s3Config.bucket || null, force_path_style: s3Config.forcePathStyle, name: s3Config.name || null })
@@ -337,7 +280,6 @@ function buildConfigJson() {
 const canSubmit = computed(() => {
   if (!form.name.trim()) return false
   if (form.protocol === 'redis') return !!redisConfig.host.trim()
-  if (form.protocol === 'docker') return dockerConfig.mode === 'unix' ? !!dockerConfig.socketPath.trim() : !!dockerConfig.host.trim()
   if (form.protocol === 'sqlite') return !!sqliteConfig.dbPath.trim()
   if (form.protocol === 's3') return !!s3Config.endpoint.trim() && !!s3Config.accessKey.trim() && !!s3Config.secretKey.trim()
   return !!sshConfig.host.trim() && !!sshConfig.user.trim()
