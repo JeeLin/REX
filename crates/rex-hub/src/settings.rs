@@ -1,7 +1,7 @@
 use axum::Json;
 use serde::Serialize;
 
-use crate::acme::{self, TlsMode};
+use crate::acme::{self, SharedAcmeStatus, TlsMode};
 use crate::config::HubConfig;
 use crate::helpers::ErrorResponse;
 
@@ -23,11 +23,18 @@ pub struct TlsStatus {
     pub cert_issuer: Option<String>,
     /// 是否需要 80 端口（HTTP-01）
     pub port_80_required: bool,
+    /// ACME 状态（requesting / ready / error），仅 ACME 模式返回
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acme_status: Option<String>,
+    /// ACME 错误信息，仅 ACME 模式且出错时返回
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acme_error: Option<String>,
 }
 
 /// GET /api/settings/tls
 pub async fn get_tls_status(
     axum::extract::Extension(config): axum::extract::Extension<HubConfig>,
+    axum::extract::Extension(shared_acme_status): axum::extract::Extension<SharedAcmeStatus>,
 ) -> Result<Json<TlsStatus>, (axum::http::StatusCode, Json<ErrorResponse>)> {
     let mode = acme::determine_tls_mode(&config);
 
@@ -103,6 +110,15 @@ pub async fn get_tls_status(
         TlsMode::None => None,
     };
 
+    // ACME 状态（仅 ACME 模式返回）
+    let (acme_status, acme_error) = match &mode {
+        TlsMode::AcmeDomain | TlsMode::AcmeIp => {
+            let status = shared_acme_status.read().await;
+            (Some(status.status.clone()), status.error.clone())
+        }
+        _ => (None, None),
+    };
+
     Ok(Json(TlsStatus {
         mode: mode.to_string(),
         domain,
@@ -110,6 +126,8 @@ pub async fn get_tls_status(
         cert_expires_at,
         cert_issuer,
         port_80_required,
+        acme_status,
+        acme_error,
     }))
 }
 
@@ -192,8 +210,6 @@ fn parse_cert_not_after(der: &[u8]) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-
     #[test]
     fn tls_status_manual_mode() {
         let dir = tempfile::tempdir().unwrap();
@@ -223,6 +239,8 @@ mod tests {
             cert_expires_at: None,
             cert_issuer: None,
             port_80_required: false,
+            acme_status: None,
+            acme_error: None,
         };
         let json = serde_json::to_string(&status).unwrap();
         assert!(json.contains("none"));
@@ -266,9 +284,79 @@ mod tests {
             cert_expires_at: Some("2025-12-31".to_string()),
             cert_issuer: Some("Let's Encrypt".to_string()),
             port_80_required: true,
+            acme_status: Some("ready".to_string()),
+            acme_error: None,
         };
         let json = serde_json::to_string(&status).unwrap();
         assert!(json.contains("hub.example.com"));
         assert!(json.contains("Let's Encrypt"));
+    }
+
+    #[test]
+    fn tls_status_acme_error_serializes() {
+        let status = TlsStatus {
+            mode: "acme_domain".to_string(),
+            domain: Some("hub.example.com".to_string()),
+            cert_ready: false,
+            cert_expires_at: None,
+            cert_issuer: Some("Let's Encrypt".to_string()),
+            port_80_required: true,
+            acme_status: Some("error".to_string()),
+            acme_error: Some("rate limit exceeded".to_string()),
+        };
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("error"));
+        assert!(json.contains("rate limit exceeded"));
+    }
+
+    #[test]
+    fn tls_status_acme_fields_skipped_when_none() {
+        let status = TlsStatus {
+            mode: "none".to_string(),
+            domain: None,
+            cert_ready: false,
+            cert_expires_at: None,
+            cert_issuer: None,
+            port_80_required: false,
+            acme_status: None,
+            acme_error: None,
+        };
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(!json.contains("acme_status"));
+        assert!(!json.contains("acme_error"));
+    }
+
+    #[tokio::test]
+    async fn shared_acme_status_default_state() {
+        let shared = acme::new_shared_acme_status();
+        let status = shared.read().await;
+        assert_eq!(status.status, "requesting");
+        assert!(status.error.is_none());
+    }
+
+    #[tokio::test]
+    async fn shared_acme_status_update() {
+        let shared = acme::new_shared_acme_status();
+        {
+            let mut status = shared.write().await;
+            status.status = "ready".to_string();
+            status.error = None;
+        }
+        let status = shared.read().await;
+        assert_eq!(status.status, "ready");
+        assert!(status.error.is_none());
+    }
+
+    #[tokio::test]
+    async fn shared_acme_status_error() {
+        let shared = acme::new_shared_acme_status();
+        {
+            let mut status = shared.write().await;
+            status.status = "error".to_string();
+            status.error = Some("timeout".to_string());
+        }
+        let status = shared.read().await;
+        assert_eq!(status.status, "error");
+        assert_eq!(status.error.as_deref(), Some("timeout"));
     }
 }

@@ -3,8 +3,36 @@ use rustls::ServerConfig;
 use rustls_acme::caches::DirCache;
 use rustls_acme::{AcmeConfig, AcmeState, UseChallenge};
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use crate::config::{is_ip_address, AcmeConfig as HubAcmeConfig, HubConfig};
+
+/// ACME 驱动状态（共享给 TLS 状态 API）
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AcmeStatus {
+    /// 当前状态：requesting / ready / error
+    pub status: String,
+    /// 最后一次错误信息（如有）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl Default for AcmeStatus {
+    fn default() -> Self {
+        Self {
+            status: "requesting".to_string(),
+            error: None,
+        }
+    }
+}
+
+/// ACME 状态共享类型
+pub type SharedAcmeStatus = Arc<RwLock<AcmeStatus>>;
+
+/// 创建共享 ACME 状态
+pub fn new_shared_acme_status() -> SharedAcmeStatus {
+    Arc::new(RwLock::new(AcmeStatus::default()))
+}
 
 /// 构建 ACME AcmeState（用于 tokio::spawn 驱动证书申请）
 pub fn build_acme_state(
@@ -105,9 +133,13 @@ impl std::fmt::Display for TlsMode {
 ///
 /// 驱动 AcmeState stream，处理证书申请和续期。
 /// 返回 `(default_config, challenge_config)` 用于构建 TLS 服务器。
+///
+/// `shared_status` 用于向 TLS 状态 API 报告 ACME 当前状态。
+/// ACME stream 结束后最多重试 3 次。
 pub async fn start_acme_driver(
     acme_cfg: HubAcmeConfig,
     data_dir: std::path::PathBuf,
+    shared_status: SharedAcmeStatus,
 ) -> Result<(
     Arc<ServerConfig>,
     Option<Arc<ServerConfig>>,
@@ -130,23 +162,80 @@ pub async fn start_acme_driver(
         None
     };
 
-    // 后台驱动 AcmeState stream（处理证书申请和续期）
+    // 后台驱动 AcmeState stream（处理证书申请和续期，最多重试 3 次）
     tokio::spawn(async move {
         use futures_util::StreamExt;
-        let mut state = state;
+
+        let max_retries = 3;
+        let mut attempt = 0u32;
+
         loop {
-            match state.next().await {
-                Some(Ok(event)) => {
-                    tracing::info!(?event, "ACME event");
-                }
-                Some(Err(e)) => {
-                    tracing::error!(error = %e, "ACME error");
-                }
-                None => {
-                    tracing::warn!("ACME stream ended unexpectedly");
+            let mut state = match build_acme_state(&acme_cfg, &data_dir) {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::error!(error = %e, "ACME: failed to build state");
+                    let mut status = shared_status.write().await;
+                    status.status = "error".to_string();
+                    status.error = Some(format!("failed to build ACME state: {e}"));
                     break;
                 }
+            };
+
+            tracing::info!(attempt = attempt + 1, "ACME driver started");
+
+            loop {
+                match state.next().await {
+                    Some(Ok(event)) => {
+                        tracing::info!(?event, "ACME event");
+                        // 证书就绪（GotCertificate）时更新状态
+                        let event_str = format!("{event:?}");
+                        if event_str.contains("GotCertificate") {
+                            let mut status = shared_status.write().await;
+                            status.status = "ready".to_string();
+                            status.error = None;
+                        }
+                    }
+                    Some(Err(e)) => {
+                        tracing::error!(error = %e, "ACME error");
+                        let mut status = shared_status.write().await;
+                        status.status = "error".to_string();
+                        status.error = Some(e.to_string());
+                    }
+                    None => {
+                        tracing::warn!(
+                            attempt = attempt + 1,
+                            "ACME stream ended"
+                        );
+                        break;
+                    }
+                }
             }
+
+            attempt += 1;
+            if attempt >= max_retries {
+                tracing::error!(
+                    attempts = max_retries,
+                    "ACME: max retries reached, giving up"
+                );
+                let mut status = shared_status.write().await;
+                status.status = "error".to_string();
+                status.error = Some(format!(
+                    "ACME stream ended after {max_retries} attempts"
+                ));
+                break;
+            }
+
+            tracing::info!(
+                attempt = attempt + 1,
+                max_retries,
+                "ACME: retrying in 5 seconds"
+            );
+            let mut status = shared_status.write().await;
+            status.status = "requesting".to_string();
+            status.error = None;
+            drop(status);
+
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         }
     });
 
@@ -282,6 +371,35 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(determine_tls_mode(&config), TlsMode::AcmeIp);
+    }
+
+    #[test]
+    fn acme_status_default() {
+        let status = AcmeStatus::default();
+        assert_eq!(status.status, "requesting");
+        assert!(status.error.is_none());
+    }
+
+    #[test]
+    fn acme_status_serializes() {
+        let status = AcmeStatus {
+            status: "ready".to_string(),
+            error: None,
+        };
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("ready"));
+        assert!(!json.contains("error"));
+    }
+
+    #[test]
+    fn acme_status_with_error_serializes() {
+        let status = AcmeStatus {
+            status: "error".to_string(),
+            error: Some("rate limit".to_string()),
+        };
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("error"));
+        assert!(json.contains("rate limit"));
     }
 
     #[test]

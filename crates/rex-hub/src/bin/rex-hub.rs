@@ -45,12 +45,14 @@ fn main() -> anyhow::Result<()> {
         let rt = tokio::runtime::Runtime::new()?;
         let static_dir = config.static_dir.clone();
         let data_dir = config.data_dir.clone();
+        let shared_acme_status = acme::new_shared_acme_status();
         let app = routes::app_with_static(
             Arc::new(db),
             secret_key,
             static_dir,
             data_dir,
             config.clone(),
+            shared_acme_status.clone(),
         );
 
         match tls_mode {
@@ -85,7 +87,12 @@ fn main() -> anyhow::Result<()> {
 
                 rt.block_on(async move {
                     let (default_config, challenge_config, http01_service) =
-                        acme::start_acme_driver(acme_cfg, config.data_dir.clone()).await?;
+                        acme::start_acme_driver(
+                            acme_cfg,
+                            config.data_dir.clone(),
+                            shared_acme_status.clone(),
+                        )
+                        .await?;
 
                     // TLS-ALPN-01：使用 challenge config 接受连接（支持 ALPN 协商）
                     // HTTP-01：使用 default config（普通 TLS 连接）

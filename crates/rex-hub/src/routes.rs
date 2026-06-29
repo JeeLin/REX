@@ -73,6 +73,7 @@ pub fn app(db: Arc<Database>, secret_key: String) -> axum::Router {
         None,
         std::path::PathBuf::from("./data"),
         crate::config::HubConfig::default(),
+        crate::acme::new_shared_acme_status(),
     )
 }
 
@@ -82,6 +83,7 @@ pub fn app_with_static(
     static_dir: Option<std::path::PathBuf>,
     data_dir: PathBuf,
     hub_config: crate::config::HubConfig,
+    shared_acme_status: crate::acme::SharedAcmeStatus,
 ) -> axum::Router {
     let connections = Arc::new(crate::ws::new_connections());
     let sessions = Arc::new(SessionManager::new(900));
@@ -375,7 +377,8 @@ pub fn app_with_static(
     let mut router = public_routes
         .merge(protected_routes)
         .with_state(state)
-        .layer(axum::extract::Extension(hub_config));
+        .layer(axum::extract::Extension(hub_config))
+        .layer(axum::extract::Extension(shared_acme_status));
 
     // 前端静态文件服务：不经过鉴权
     if let Some(dir) = static_dir {
