@@ -75,13 +75,13 @@ REX Hub 是一款面向个人开发者和运维工程师的自托管远程资源
 - **终端提示**：SSH 连接时状态栏显示 `Linux · Ubuntu 22.04 · arm64`，帮助用户判断可用命令
 - **平台差异提醒**：Windows 设备自动提示「Windows 环境，终端使用 PowerShell / cmd」
 - **二进制下载**：部署指南根据 Agent 上报的 OS/架构自动推荐对应的下载命令
-- **资源扫描**：Agent 根据 OS 类型自动发现可用服务（如 Linux 的 systemd 服务、Docker 容器）
+- **资源扫描**：Agent 根据 OS 类型自动发现可用服务（如 Linux 的 systemd 服务）
 
 ### 2.3 资源 (Resource)
 
 可连接的远程实体。每个资源属于一个环境，通过指定协议连接。
 
-支持 8 种协议：
+支持 7 种协议：
 
 | 协议 | 图标 | 用途 | 色值 |
 |------|------|------|------|
@@ -90,7 +90,6 @@ REX Hub 是一款面向个人开发者和运维工程师的自托管远程资源
 | MySQL | `dB` | 数据库查询 | `#58A6FF` 蓝色 |
 | PostgreSQL | `pg` | 数据库查询 | `#8B5CF6` 紫色 |
 | Redis | `R` | 缓存管理 | `#F85149` 红色 |
-| Docker | 🐳 | 容器管理 | `#58A6FF` 蓝色 |
 | SQLite | `S` | 本地数据库 | `#D29922` 橙色 |
 | S3 / MinIO | ☁ | 对象存储 | `#E8912D` 主色 |
 
@@ -226,9 +225,9 @@ REX Hub 是一款面向个人开发者和运维工程师的自托管远程资源
 
 **第 1 步：选择协议**
 
-协议网格，8 个选项卡片并排：
+协议网格，7 个选项卡片并排：
 - 每个卡片：彩色图标 + 协议名 + 说明
-- SSH（远程终端）、SFTP（文件传输）、MySQL（SQL 控制台）、PostgreSQL（SQL 控制台）、Redis（命令控制台）、Docker（容器管理）、SQLite（本地数据库）、S3 / MinIO（对象存储）
+- SSH（远程终端）、SFTP（文件传输）、MySQL（SQL 控制台）、PostgreSQL（SQL 控制台）、Redis（命令控制台）、SQLite（本地数据库）、S3 / MinIO（对象存储）
 - 选中后高亮边框，底部「下一步」按钮激活
 
 **第 2 步：基本信息 + 连接方式**
@@ -573,7 +572,6 @@ SSH 终端内置 SFTP 文件管理能力，无需单独创建 SFTP 资源：
 | SFTP（独立） | 上传/下载/跨连接传输 | 完整文件管理 |
 | SSH 内置 SFTP | 上传/下载/跨连接传输 | 通过 SSH 通道，共享连接 |
 | S3 / MinIO | 跨连接传输 | 对象存储文件互传 |
-| Docker | 跨连接传输 | 容器内文件与宿主机/远程传输 |
 
 **传输方式：**
 
@@ -1015,7 +1013,7 @@ Agent 管理页面底部的内嵌部署教程，4 种部署方式通过标签页
 | 主色 | `#E8912D` | 按钮、选中态、Agent 代理标签、状态栏背景 |
 | 成功 | `#3FB950` | 在线状态、成功提示、SSH 协议、文件下载 |
 | 危险 | `#F85149` | 错误、离线状态、Redis 协议、文件删除 |
-| 信息 | `#58A6FF` | MySQL 协议、Docker 协议、信息提示、直连标签 |
+| 信息 | `#58A6FF` | MySQL 协议、信息提示、直连标签 |
 | 紫色 | `#8B5CF6` | PostgreSQL、SFTP 协议、文件上传 |
 | 警告 | `#D29922` | 警告提示、SQLite 协议、SSH 命令 |
 | 深色背景 | `#0D1117` | 终端背景、编辑器背景 |
@@ -1250,7 +1248,6 @@ rex-ssh          SSH/SFTP 协议实现
 rex-mysql        MySQL 协议实现
 rex-postgresql   PostgreSQL 协议实现
 rex-redis        Redis 协议实现
-rex-docker       Docker 协议实现
 rex-sqlite       SQLite 协议实现
 rex-s3           S3/MinIO 协议实现
 rex-transfer     文件传输引擎
@@ -1273,7 +1270,7 @@ rex-agent = 协议 crate + 文件传输 + WebSocket 隧道 + supervisor
 
 **后端：** `rex-transfer` crate
 - 负责任务调度、进度、取消、重试和校验
-- 通过统一文件接口对接 SSH/SFTP、S3/MinIO、Docker、本地文件等连接器
+- 通过统一文件接口对接 SSH/SFTP、S3/MinIO、本地文件等连接器
 - 数据在 Hub / Agent / 远端资源之间传输，不经过浏览器中转
 
 **冲突处理：**

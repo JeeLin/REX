@@ -66,7 +66,6 @@ rex-hub/
 │   ├── rex-mysql/         MySQL 协议实现
 │   ├── rex-postgresql/    PostgreSQL 协议实现
 │   ├── rex-redis/         Redis 协议实现
-│   ├── rex-docker/        Docker 协议实现
 │   ├── rex-sqlite/        SQLite 协议实现
 │   ├── rex-s3/            S3/MinIO 协议实现
 │   ├── rex-transfer/      文件传输引擎
@@ -91,7 +90,6 @@ members = [
   "crates/rex-mysql",
   "crates/rex-postgresql",
   "crates/rex-redis",
-  "crates/rex-docker",
   "crates/rex-sqlite",
   "crates/rex-s3",
   "crates/rex-transfer",
