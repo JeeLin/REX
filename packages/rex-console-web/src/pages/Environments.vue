@@ -43,6 +43,22 @@
         <div>{{ t('dashboard.createEnv') }}</div>
       </router-link>
     </div>
+
+    <!-- Edit Modal -->
+    <EnvironmentEditModal
+      v-model:visible="editModalVisible"
+      :env-id="editingEnvId"
+    />
+
+    <!-- Delete Confirm -->
+    <ConfirmDialog
+      :visible="showDeleteConfirm"
+      :title="t('env.deleteTitle')"
+      :message="t('env.deleteConfirm')"
+      :danger="true"
+      @confirm="confirmDeleteEnv"
+      @cancel="showDeleteConfirm = false"
+    />
   </div>
 </template>
 
@@ -54,7 +70,10 @@ import { useContextMenu } from '@/composables/useContextMenu'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import ErrorState from '@/components/ErrorState.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import EnvironmentEditModal from '@/components/EnvironmentEditModal.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import client from '@/api/client'
+import { deleteEnvironment } from '@/api/env'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -72,6 +91,10 @@ interface Environment {
 const environments = ref<Environment[]>([])
 const loading = ref(true)
 const loadError = ref('')
+const editModalVisible = ref(false)
+const editingEnvId = ref('')
+const showDeleteConfirm = ref(false)
+const deletingEnvId = ref('')
 
 function onEnvCardCtx(e: MouseEvent, env: Environment) {
   showMenu(e, [
@@ -79,9 +102,31 @@ function onEnvCardCtx(e: MouseEvent, env: Environment) {
     { label: t('ctx.newResource'), action: () => router.push(`/environments/${env.id}/resources/new`) },
     { label: t('ctx.addAgent'), action: () => router.push('/agents') },
     { separator: true },
-    { label: t('ctx.editEnv') },
-    { label: t('ctx.deleteEnv'), danger: true },
+    { label: t('ctx.editEnv'), action: () => openEditModal(env) },
+    { label: t('ctx.deleteEnv'), danger: true, action: () => requestDeleteEnv(env) },
   ])
+}
+
+function openEditModal(env: Environment) {
+  editingEnvId.value = env.id
+  editModalVisible.value = true
+}
+
+function requestDeleteEnv(env: Environment) {
+  deletingEnvId.value = env.id
+  showDeleteConfirm.value = true
+}
+
+async function confirmDeleteEnv() {
+  try {
+    await deleteEnvironment(deletingEnvId.value)
+    environments.value = environments.value.filter(e => e.id !== deletingEnvId.value)
+  } catch {
+    // silent
+  } finally {
+    showDeleteConfirm.value = false
+    deletingEnvId.value = ''
+  }
 }
 
 onMounted(() => loadEnvs())

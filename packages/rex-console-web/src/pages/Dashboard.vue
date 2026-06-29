@@ -117,6 +117,22 @@
         :action="{ label: t('dashboard.createEnv'), handler: () => router.push('/environments/new') }"
       />
     </template>
+
+    <!-- Edit Modal -->
+    <EnvironmentEditModal
+      v-model:visible="editModalVisible"
+      :env-id="editingEnvId"
+    />
+
+    <!-- Delete Confirm -->
+    <ConfirmDialog
+      :visible="showDeleteConfirm"
+      :title="t('env.deleteTitle')"
+      :message="t('env.deleteConfirm')"
+      :danger="true"
+      @confirm="confirmDeleteEnv"
+      @cancel="showDeleteConfirm = false"
+    />
   </div>
 </template>
 
@@ -130,8 +146,10 @@ import { useContextMenu } from '@/composables/useContextMenu'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import ErrorState from '@/components/ErrorState.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import EnvironmentEditModal from '@/components/EnvironmentEditModal.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import type { EnvWithResources } from '@/api/env'
-import { listEnvsWithResources } from '@/api/env'
+import { listEnvsWithResources, deleteEnvironment } from '@/api/env'
 import { getAuditStats } from '@/api/audit'
 import { fetchHealth } from '@/api/health'
 
@@ -149,6 +167,10 @@ const todayOps = ref(0)
 const allResources = ref<{ resource: { id: string; name: string; protocol: string }; envName: string }[]>([])
 const loading = ref(true)
 const loadError = ref('')
+const editModalVisible = ref(false)
+const editingEnvId = ref('')
+const showDeleteConfirm = ref(false)
+const deletingEnvId = ref('')
 
 function getResourceStats(env: EnvWithResources): Record<string, number> {
   const stats: Record<string, number> = {}
@@ -186,9 +208,32 @@ function onEnvCardCtx(e: MouseEvent, env: EnvWithResources) {
     { label: t('ctx.newResource'), action: () => router.push(`/environments/${env.id}/resources/new`) },
     { label: t('ctx.addAgent'), action: () => router.push('/agents') },
     { separator: true },
-    { label: t('ctx.editEnv') },
-    { label: t('ctx.deleteEnv'), danger: true },
+    { label: t('ctx.editEnv'), action: () => openEditModal(env) },
+    { label: t('ctx.deleteEnv'), danger: true, action: () => requestDeleteEnv(env) },
   ])
+}
+
+function openEditModal(env: EnvWithResources) {
+  editingEnvId.value = env.id
+  editModalVisible.value = true
+}
+
+function requestDeleteEnv(env: EnvWithResources) {
+  deletingEnvId.value = env.id
+  showDeleteConfirm.value = true
+}
+
+async function confirmDeleteEnv() {
+  try {
+    await deleteEnvironment(deletingEnvId.value)
+    environments.value = environments.value.filter(e => e.id !== deletingEnvId.value)
+    envCount.value = environments.value.length
+  } catch {
+    // silent
+  } finally {
+    showDeleteConfirm.value = false
+    deletingEnvId.value = ''
+  }
 }
 
 function onStatCardCtx(e: MouseEvent) {

@@ -49,6 +49,20 @@ export async function updateResource(envId: string, id: string, data: { name: st
   return res.data.data
 }
 
+/** Update environment name / description */
+export async function updateEnvironment(
+  id: string,
+  data: { name: string; description: string | null },
+): Promise<Environment> {
+  const res = await client.put(`/environments/${id}`, data)
+  return res.data.data
+}
+
+/** Delete environment (cascades to its resources) */
+export async function deleteEnvironment(id: string): Promise<void> {
+  await client.delete(`/environments/${id}`)
+}
+
 /** Fetch all environments with their resources for sidebar tree */
 export async function listEnvsWithResources(): Promise<EnvWithResources[]> {
   const envs = await listEnvironments()

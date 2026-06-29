@@ -57,6 +57,22 @@
       <!-- Agent Status -->
       <AgentStatusPanel v-if="env" :env-id="env.id" />
     </template>
+
+    <!-- Edit Modal -->
+    <EnvironmentEditModal
+      v-model:visible="editModalVisible"
+      :env-id="editingEnvId"
+    />
+
+    <!-- Delete Confirm -->
+    <ConfirmDialog
+      :visible="showDeleteConfirm"
+      :title="t('env.deleteTitle')"
+      :message="t('env.deleteConfirm')"
+      :danger="true"
+      @confirm="confirmDeleteEnv"
+      @cancel="showDeleteConfirm = false"
+    />
   </div>
 </template>
 
@@ -68,8 +84,11 @@ import { useContextMenu } from '@/composables/useContextMenu'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import ErrorState from '@/components/ErrorState.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import EnvironmentEditModal from '@/components/EnvironmentEditModal.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import client from '@/api/client'
 import type { Environment, Resource } from '@/api/env'
+import { deleteEnvironment } from '@/api/env'
 import { getProtocolIcon } from '@/composables/useProtocol'
 import { useProtocol } from '@/composables/useProtocol'
 import AgentStatusPanel from '@/features/agents/AgentStatusPanel.vue'
@@ -83,6 +102,9 @@ const env = ref<Environment | null>(null)
 const resources = ref<Resource[]>([])
 const loading = ref(true)
 const loadError = ref('')
+const editModalVisible = ref(false)
+const editingEnvId = ref('')
+const showDeleteConfirm = ref(false)
 
 function connectToResource(res: Resource) {
   connect(res, env.value?.name || '')
@@ -98,6 +120,25 @@ function onResourceCtx(e: MouseEvent, res: Resource) {
     { separator: true },
     { label: t('ctx.copyAddress'), action: () => navigator.clipboard?.writeText(res.name) },
   ])
+}
+
+function openEditEnvModal() {
+  if (env.value) {
+    editingEnvId.value = env.value.id
+    editModalVisible.value = true
+  }
+}
+
+async function confirmDeleteEnv() {
+  if (!env.value) return
+  try {
+    await deleteEnvironment(env.value.id)
+    window.history.back()
+  } catch {
+    // silent
+  } finally {
+    showDeleteConfirm.value = false
+  }
 }
 
 onMounted(() => loadEnv())
