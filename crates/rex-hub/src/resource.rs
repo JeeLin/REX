@@ -44,7 +44,6 @@ const VALID_PROTOCOLS: &[&str] = &[
     "mysql",
     "postgresql",
     "redis",
-    "docker",
     "sqlite",
     "s3",
 ];
@@ -375,10 +374,10 @@ mod tests {
         assert!(VALID_PROTOCOLS.contains(&"mysql"));
         assert!(VALID_PROTOCOLS.contains(&"postgresql"));
         assert!(VALID_PROTOCOLS.contains(&"redis"));
-        assert!(VALID_PROTOCOLS.contains(&"docker"));
         assert!(VALID_PROTOCOLS.contains(&"sqlite"));
         assert!(VALID_PROTOCOLS.contains(&"s3"));
         assert!(!VALID_PROTOCOLS.contains(&"invalid_protocol"));
+        assert!(!VALID_PROTOCOLS.contains(&"docker"));
     }
 
     #[test]
@@ -593,7 +592,7 @@ mod handler_tests {
                     .header("authorization", auth_header())
                     .header("content-type", "application/json")
                     .body(Body::from(
-                        r#"{"name":"test","protocol":"docker","config_json":"{}"}"#,
+                        r#"{"name":"test","protocol":"ssh","config_json":"{}"}"#,
                     ))
                     .unwrap(),
             )

@@ -122,10 +122,6 @@ pub fn app_with_static(
             get(crate::ws_redis::redis_ws_handler),
         )
         .route(
-            "/ws/docker/:resource_id",
-            get(crate::ws_docker::docker_ws_handler),
-        )
-        .route(
             "/ws/sqlite/:resource_id",
             get(crate::ws_sqlite::sqlite_ws_handler),
         )

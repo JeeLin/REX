@@ -3321,7 +3321,7 @@ dependencies = [
 
 [[package]]
 name = "rex-agent"
-version = "0.27.1"
+version = "0.27.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3343,7 +3343,7 @@ dependencies = [
 
 [[package]]
 name = "rex-common"
-version = "0.27.1"
+version = "0.27.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3365,21 +3365,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "rex-docker"
-version = "0.27.1"
-dependencies = [
- "anyhow",
- "async-trait",
- "rex-common",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "rex-hub"
-version = "0.27.1"
+version = "0.27.2"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -3400,7 +3387,6 @@ dependencies = [
  "rcgen",
  "reqwest",
  "rex-common",
- "rex-docker",
  "rex-mysql",
  "rex-postgresql",
  "rex-redis",
@@ -3429,7 +3415,7 @@ dependencies = [
 
 [[package]]
 name = "rex-mysql"
-version = "0.27.1"
+version = "0.27.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3443,7 +3429,7 @@ dependencies = [
 
 [[package]]
 name = "rex-postgresql"
-version = "0.27.1"
+version = "0.27.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3457,7 +3443,7 @@ dependencies = [
 
 [[package]]
 name = "rex-redis"
-version = "0.27.1"
+version = "0.27.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3472,7 +3458,7 @@ dependencies = [
 
 [[package]]
 name = "rex-s3"
-version = "0.27.1"
+version = "0.27.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3486,7 +3472,7 @@ dependencies = [
 
 [[package]]
 name = "rex-sqlite"
-version = "0.27.1"
+version = "0.27.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3501,7 +3487,7 @@ dependencies = [
 
 [[package]]
 name = "rex-ssh"
-version = "0.27.1"
+version = "0.27.2"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -3516,7 +3502,7 @@ dependencies = [
 
 [[package]]
 name = "rex-transfer"
-version = "0.27.1"
+version = "0.27.2"
 dependencies = [
  "anyhow",
  "async-trait",

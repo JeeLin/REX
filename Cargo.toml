@@ -13,7 +13,6 @@ rex-transfer = { path = "crates/rex-transfer" }
 rex-mysql = { path = "crates/rex-mysql" }
 rex-postgresql = { path = "crates/rex-postgresql" }
 rex-redis = { path = "crates/rex-redis" }
-rex-docker = { path = "crates/rex-docker" }
 rex-sqlite = { path = "crates/rex-sqlite" }
 rex-s3 = { path = "crates/rex-s3" }
 hmac = "0.12"
