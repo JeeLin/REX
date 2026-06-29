@@ -3418,7 +3418,6 @@ dependencies = [
  "sha2 0.10.9",
  "sysinfo",
  "tempfile",
- "time",
  "tokio",
  "tokio-rustls 0.26.4",
  "tokio-tungstenite",

@@ -69,7 +69,7 @@ pub fn challenge_description(domain: &str) -> &'static str {
     }
 }
 
-/// 确定 TLS 模式（优先级：manual > acme > self-signed > none）
+/// 确定 TLS 模式（优先级：manual > acme > none）
 pub fn determine_tls_mode(config: &HubConfig) -> TlsMode {
     // 1. 手动证书（最高优先级）— 需验证文件存在
     if let Some(ref tls) = config.tls {
@@ -93,12 +93,7 @@ pub fn determine_tls_mode(config: &HubConfig) -> TlsMode {
         }
     }
 
-    // 3. 自签名证书（需显式启用）
-    if config.enable_self_signed {
-        return TlsMode::SelfSigned;
-    }
-
-    // 4. 默认：无 TLS（HTTP only）
+    // 3. 默认：无 TLS（HTTP only）
     TlsMode::None
 }
 
@@ -111,8 +106,6 @@ pub enum TlsMode {
     AcmeDomain,
     /// ACME IP 证书（TLS-ALPN-01）
     AcmeIp,
-    /// 自签名证书
-    SelfSigned,
     /// 无 TLS（HTTP only）
     None,
 }
@@ -123,7 +116,6 @@ impl std::fmt::Display for TlsMode {
             TlsMode::Manual => write!(f, "manual"),
             TlsMode::AcmeDomain => write!(f, "acme-domain"),
             TlsMode::AcmeIp => write!(f, "acme-ip"),
-            TlsMode::SelfSigned => write!(f, "self-signed"),
             TlsMode::None => write!(f, "none"),
         }
     }
@@ -187,9 +179,8 @@ pub async fn start_acme_driver(
                 match state.next().await {
                     Some(Ok(event)) => {
                         tracing::info!(?event, "ACME event");
-                        // 证书就绪（GotCertificate）时更新状态
-                        let event_str = format!("{event:?}");
-                        if event_str.contains("GotCertificate") {
+                        // 证书就绪时更新状态
+                        if matches!(event, rustls_acme::EventOk::DeployedCachedCert | rustls_acme::EventOk::DeployedNewCert) {
                             let mut status = shared_status.write().await;
                             status.status = "ready".to_string();
                             status.error = None;
@@ -292,15 +283,6 @@ mod tests {
     }
 
     #[test]
-    fn determine_tls_mode_self_signed_when_enabled() {
-        let config = crate::config::HubConfig {
-            enable_self_signed: true,
-            ..Default::default()
-        };
-        assert_eq!(determine_tls_mode(&config), TlsMode::SelfSigned);
-    }
-
-    #[test]
     fn determine_tls_mode_manual_takes_priority() {
         let dir = tempfile::tempdir().unwrap();
         let cert = dir.path().join("cert.pem");
@@ -330,19 +312,6 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(determine_tls_mode(&config), TlsMode::None);
-    }
-
-    #[test]
-    fn determine_tls_mode_manual_missing_files_self_signed_enabled() {
-        let config = crate::config::HubConfig {
-            tls: Some(crate::config::TlsConfig {
-                cert: std::path::PathBuf::from("/nonexistent/cert.pem"),
-                key: std::path::PathBuf::from("/nonexistent/key.pem"),
-            }),
-            enable_self_signed: true,
-            ..Default::default()
-        };
-        assert_eq!(determine_tls_mode(&config), TlsMode::SelfSigned);
     }
 
     #[test]
@@ -407,7 +376,6 @@ mod tests {
         assert_eq!(TlsMode::Manual.to_string(), "manual");
         assert_eq!(TlsMode::AcmeDomain.to_string(), "acme-domain");
         assert_eq!(TlsMode::AcmeIp.to_string(), "acme-ip");
-        assert_eq!(TlsMode::SelfSigned.to_string(), "self-signed");
         assert_eq!(TlsMode::None.to_string(), "none");
     }
 }

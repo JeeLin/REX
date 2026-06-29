@@ -39,7 +39,7 @@ fn main() -> anyhow::Result<()> {
             tracing::warn!("secret_key is empty, using default - this is insecure in production");
         }
 
-        // 确定 TLS 模式（优先级：manual > acme > self-signed > none）
+        // 确定 TLS 模式（优先级：manual > acme > none）
         let tls_mode = acme::determine_tls_mode(&config);
 
         let rt = tokio::runtime::Runtime::new()?;
@@ -157,37 +157,6 @@ fn main() -> anyhow::Result<()> {
                     // 启动主 TLS 服务器
                     rex_hub::tls::run_tls_server(&listen, tls_acceptor, app).await
                 })?;
-            }
-            TlsMode::SelfSigned => {
-                let sans = rex_hub::self_signed::infer_self_signed_sans(&config.listen);
-                tracing::info!(
-                    listen = %config.listen,
-                    sans = ?sans,
-                    "TLS mode: self-signed — checking certificate"
-                );
-
-                let cert = rex_hub::self_signed::load_or_generate_self_signed(
-                    &config.data_dir,
-                    &sans,
-                )?;
-
-                let tls_acceptor = rex_hub::tls::create_tls_acceptor_from_config(
-                    rustls::ServerConfig::builder_with_provider(
-                        rustls::crypto::ring::default_provider().into(),
-                    )
-                    .with_safe_default_protocol_versions()
-                    .map_err(|e| anyhow::anyhow!("failed to build TLS config: {e}"))?
-                    .with_no_client_auth()
-                    .with_single_cert(vec![cert.cert_der], cert.key_der)
-                    .map_err(|e| anyhow::anyhow!("failed to build TLS config: {e}"))?,
-                );
-
-                tracing::info!(listen = %config.listen, "TLS mode: self-signed — serving HTTPS");
-                rt.block_on(rex_hub::tls::run_tls_server(
-                    &config.listen,
-                    tls_acceptor,
-                    app,
-                ))?;
             }
             TlsMode::None => {
                 tracing::info!(listen = %config.listen, "TLS mode: none — HTTP only");

@@ -53,8 +53,6 @@ rustls-pemfile = "2"
 hyper-util = { version = "0.1", features = ["tokio", "server-auto", "http1"] }
 rustls-acme = { version = "0.15", features = ["ring", "tokio", "tower"] }
 rcgen = { version = "0.13", features = ["pem"] }
-time = "0.3"
-x509-parser = "0.16"
 tokio-util = { version = "0.7", features = ["codec"] }
 bytes = "1"
 dotenvy = "0.15"

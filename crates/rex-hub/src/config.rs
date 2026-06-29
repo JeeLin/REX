@@ -54,9 +54,6 @@ pub struct HubConfig {
     pub tls: Option<TlsConfig>,
     #[serde(default)]
     pub acme: Option<AcmeConfig>,
-    /// 是否启用自签名证书（默认关闭，需显式开启）
-    #[serde(default)]
-    pub enable_self_signed: bool,
 }
 
 impl Default for HubConfig {
@@ -68,7 +65,6 @@ impl Default for HubConfig {
             static_dir: None,
             tls: None,
             acme: None,
-            enable_self_signed: false,
         }
     }
 }
@@ -174,11 +170,6 @@ impl HubConfig {
             if acme.domain.is_empty() || acme.email.is_empty() {
                 config.acme = None;
             }
-        }
-
-        // 自签名证书开关（默认关闭，需显式开启）
-        if let Ok(val) = std::env::var("REX_ENABLE_SELF_SIGNED") {
-            config.enable_self_signed = val == "true" || val == "1";
         }
 
         // 兼容：如果 static_dir 未设置，尝试常见的默认路径

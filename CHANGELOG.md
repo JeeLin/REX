@@ -26,8 +26,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [0.27.0] - 2026-06-27
 
-## [0.27.0] - 2026-06-27
-
 ### Added
 - 统一三态组件：LoadingSpinner、ErrorState、EmptyState，所有页面统一加载/错误/空状态视觉
 - Toast 反馈：useToast composable，success/error/warning/info，3-5秒自动消失

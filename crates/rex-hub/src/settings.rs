@@ -61,10 +61,6 @@ pub async fn get_tls_status(
             config.data_dir.join("acme").join("cached_cert_0").exists()
                 || config.data_dir.join("acme").join("cached_cert_1").exists()
         }
-        TlsMode::SelfSigned => {
-            let dir = config.data_dir.join("self-signed");
-            dir.join("cert.pem").exists() && dir.join("cert_key.pem").exists()
-        }
         TlsMode::None => false,
     };
 
@@ -79,14 +75,6 @@ pub async fn get_tls_status(
                 Some(p0)
             } else if p1.exists() {
                 Some(p1)
-            } else {
-                None
-            }
-        }
-        TlsMode::SelfSigned => {
-            let cert_pem = config.data_dir.join("self-signed").join("cert.pem");
-            if cert_pem.exists() {
-                Some(cert_pem)
             } else {
                 None
             }
@@ -106,7 +94,6 @@ pub async fn get_tls_status(
     let cert_issuer = match &mode {
         TlsMode::Manual => Some("Manual".to_string()),
         TlsMode::AcmeDomain | TlsMode::AcmeIp => Some("Let's Encrypt".to_string()),
-        TlsMode::SelfSigned => Some("Self-Signed".to_string()),
         TlsMode::None => None,
     };
 
