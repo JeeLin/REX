@@ -441,6 +441,8 @@ export default {
     testConnection: '测试连接',
     testing: '测试中...',
     testSuccess: '连接成功',
+    deleteTitle: '删除资源？',
+    deleteConfirm: '删除资源后，相关的查询文件和历史记录将保留，但连接将断开。',
   },
   agent: {
     loadFailed: '加载 Agent 列表失败',

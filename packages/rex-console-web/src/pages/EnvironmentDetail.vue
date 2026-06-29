@@ -64,6 +64,13 @@
       :env-id="editingEnvId"
     />
 
+    <!-- Resource Edit Modal -->
+    <ResourceEditModal
+      v-model:visible="resEditModalVisible"
+      :env-id="resEditEnvId"
+      :resource-id="resEditResId"
+    />
+
     <!-- Delete Confirm -->
     <ConfirmDialog
       :visible="showDeleteConfirm"
@@ -72,6 +79,16 @@
       :danger="true"
       @confirm="confirmDeleteEnv"
       @cancel="showDeleteConfirm = false"
+    />
+
+    <!-- Resource Delete Confirm -->
+    <ConfirmDialog
+      :visible="showResDeleteConfirm"
+      :title="t('resource.deleteTitle')"
+      :message="t('resource.deleteConfirm')"
+      :danger="true"
+      @confirm="confirmDeleteRes"
+      @cancel="showResDeleteConfirm = false"
     />
   </div>
 </template>
@@ -85,10 +102,11 @@ import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import ErrorState from '@/components/ErrorState.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import EnvironmentEditModal from '@/components/EnvironmentEditModal.vue'
+import ResourceEditModal from '@/components/ResourceEditModal.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import client from '@/api/client'
 import type { Environment, Resource } from '@/api/env'
-import { deleteEnvironment } from '@/api/env'
+import { deleteEnvironment, deleteResource } from '@/api/env'
 import { getProtocolIcon } from '@/composables/useProtocol'
 import { useProtocol } from '@/composables/useProtocol'
 import AgentStatusPanel from '@/features/agents/AgentStatusPanel.vue'
@@ -105,6 +123,11 @@ const loadError = ref('')
 const editModalVisible = ref(false)
 const editingEnvId = ref('')
 const showDeleteConfirm = ref(false)
+const showResDeleteConfirm = ref(false)
+const deletingResId = ref('')
+const resEditModalVisible = ref(false)
+const resEditEnvId = ref('')
+const resEditResId = ref('')
 
 function connectToResource(res: Resource) {
   connect(res, env.value?.name || '')
@@ -115,11 +138,35 @@ function onResourceCtx(e: MouseEvent, res: Resource) {
     { label: t('ctx.connect'), action: () => connectToResource(res) },
     { label: t('ctx.connectNewTab'), action: () => connectToResource(res) },
     { separator: true },
-    { label: t('ctx.editResource') },
-    { label: t('ctx.deleteResource'), danger: true },
+    { label: t('ctx.editResource'), action: () => openResEditModal(res) },
+    { label: t('ctx.deleteResource'), danger: true, action: () => requestDeleteRes(res) },
     { separator: true },
     { label: t('ctx.copyAddress'), action: () => navigator.clipboard?.writeText(res.name) },
   ])
+}
+
+function openResEditModal(res: Resource) {
+  resEditEnvId.value = env.value?.id || ''
+  resEditResId.value = res.id
+  resEditModalVisible.value = true
+}
+
+function requestDeleteRes(res: Resource) {
+  deletingResId.value = res.id
+  showResDeleteConfirm.value = true
+}
+
+async function confirmDeleteRes() {
+  if (!env.value || !deletingResId.value) return
+  try {
+    await deleteResource(env.value.id, deletingResId.value)
+    resources.value = resources.value.filter(r => r.id !== deletingResId.value)
+  } catch {
+    // silent
+  } finally {
+    showResDeleteConfirm.value = false
+    deletingResId.value = ''
+  }
 }
 
 function openEditEnvModal() {

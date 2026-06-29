@@ -49,6 +49,11 @@ export async function updateResource(envId: string, id: string, data: { name: st
   return res.data.data
 }
 
+/** Delete a resource from an environment */
+export async function deleteResource(envId: string, id: string): Promise<void> {
+  await client.delete(`/environments/${envId}/resources/${id}`)
+}
+
 /** Update environment name / description */
 export async function updateEnvironment(
   id: string,

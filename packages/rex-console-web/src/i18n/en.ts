@@ -439,6 +439,8 @@ export default {
     testConnection: 'Test Connection',
     testing: 'Testing...',
     testSuccess: 'Connected',
+    deleteTitle: 'Delete Resource?',
+    deleteConfirm: 'Deleting this resource will preserve query files and history, but the connection will be terminated.',
   },
   agent: {
     loadFailed: 'Failed to load agent list',
