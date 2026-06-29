@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.27.2] - 2026-06-29
+
+### Added
+- Agent TLS 证书信任配置（--ca-cert / --insecure）— 支持自定义 CA 证书和跳过验证
+- Agent 自定义 TLS 配置集成到 WebSocket 连接和 HTTP 下载
+- Hub HTTP-01 challenge 端口可配置（默认 80）
+- ACME 错误处理增强 + TLS 状态 API 改进（acme_status/acme_error 字段）
+
+### Changed
+- Agent TLS 配置优先级：CLI > 环境变量 > 配置文件
+- ACME 驱动失败时提供状态反馈（最多 3 次重试）
+
+### Fixed
+- Agent 无法连接使用自定义 CA 证书的 Hub（WebSocket 和 HTTP 客户端）
+- HTTP-01 challenge 端口硬编码为 80（Docker 环境易冲突）
+- ACME 驱动失败时静默吞错（无用户可见反馈）
+
+### Removed
+- 自签名证书模块（self_signed.rs）及相关依赖（x509-parser、time）
+- TlsMode::SelfSigned 枚举变体
+- enable_self_signed 配置选项
+
 ## [0.27.1] - 2026-06-28
 
 ### Added
