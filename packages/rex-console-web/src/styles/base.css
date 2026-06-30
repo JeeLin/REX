@@ -366,3 +366,13 @@ textarea.form-input {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Mobile Performance ── */
+@media (max-width: 767px) {
+  /* Lazy render off-screen content */
+  .sql-tree,
+  .sidebar-tree {
+    content-visibility: auto;
+    contain-intrinsic-size: 0 500px;
+  }
+}
