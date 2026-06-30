@@ -77,6 +77,8 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
+import { useProtocol } from '@/composables/useProtocol'
+import { listResources } from '@/api/env'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import ErrorState from '@/components/ErrorState.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -89,6 +91,7 @@ import type { Environment } from '@/api/env'
 const router = useRouter()
 const { t } = useI18n()
 const { show: showMenu } = useContextMenu()
+const { connectToResource } = useProtocol()
 
 const environments = ref<Environment[]>([])
 const loading = ref(true)
@@ -104,9 +107,22 @@ function onEnvCardCtx(e: MouseEvent, env: Environment) {
     { label: t('ctx.newResource'), action: () => router.push(`/environments/${env.id}/resources/new`) },
     { label: t('ctx.addAgent'), action: () => router.push('/agents') },
     { separator: true },
+    { label: t('ctx.openAllWorkspace'), action: () => openAllInWorkspace(env) },
+    { separator: true },
     { label: t('ctx.editEnv'), action: () => openEditModal(env) },
     { label: t('ctx.deleteEnv'), danger: true, action: () => requestDeleteEnv(env) },
   ])
+}
+
+async function openAllInWorkspace(env: Environment) {
+  try {
+    const resources = await listResources(env.id)
+    for (const res of resources) {
+      connectToResource(res, env.name)
+    }
+  } catch {
+    // silent
+  }
 }
 
 function openEditModal(env: Environment) {

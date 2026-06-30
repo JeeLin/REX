@@ -141,6 +141,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useRecent } from '@/composables/useRecent'
+import { useSidebar } from '@/composables/useSidebar'
 import { getProtocolIcon, useProtocol } from '@/composables/useProtocol'
 import { useContextMenu } from '@/composables/useContextMenu'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
@@ -155,8 +156,9 @@ import { fetchHealth } from '@/api/health'
 
 const router = useRouter()
 const { t } = useI18n()
-const { recent } = useRecent()
+const { recent, removeRecent } = useRecent()
 const { connectToResource } = useProtocol()
+const { addFavorite } = useSidebar()
 const { show: showMenu } = useContextMenu()
 
 const environments = ref<EnvWithResources[]>([])
@@ -196,9 +198,9 @@ function onQuickConnectCtx(e: MouseEvent, item: { resource: { id: string; name: 
     { label: t('ctx.connectNewTab'), action: () => connectToResource(item.resource, item.envName) },
     { separator: true },
     { label: t('ctx.copyAddress'), action: () => navigator.clipboard?.writeText(`${item.resource.name} (${item.envName})`) },
-    { label: t('ctx.addFavorite') },
+    { label: t('ctx.addFavorite'), action: () => addFavorite(item.resource.id) },
     { separator: true },
-    { label: t('ctx.removeRecent'), danger: true },
+    { label: t('ctx.removeRecent'), danger: true, action: () => removeRecent(item.resource.id) },
   ])
 }
 

@@ -42,5 +42,10 @@ export function useRecent() {
     saveToStorage()
   }
 
-  return { recent, addToRecent, clearRecent }
+  function removeRecent(resourceId: string) {
+    recent.value = recent.value.filter(r => r.resourceId !== resourceId)
+    saveToStorage()
+  }
+
+  return { recent, addToRecent, clearRecent, removeRecent }
 }
