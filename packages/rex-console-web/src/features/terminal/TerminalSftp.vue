@@ -194,9 +194,9 @@ const sendToFile = ref<FileEntry | null>(null)
 
 const sendToTargets = computed(() => {
   return tabs.value
-    .filter(t => t.id !== /* current */ undefined && (t.component === 'files' || t.component === 'terminal' || t.component === 's3'))
-    .filter(t => t.resourceId !== props.resourceId)
-    .map(t => ({ resourceId: t.resourceId, name: t.name, proto: t.proto }))
+    .filter(tab => (tab.component === 'files' || tab.component === 'terminal' || tab.component === 's3'))
+    .filter(tab => tab.resourceId !== props.resourceId)
+    .map(tab => ({ resourceId: tab.resourceId, name: tab.name, proto: tab.proto }))
 })
 
 const ctxMenu = ref<{ visible: boolean; x: number; y: number; entry: FileEntry | null }>({
