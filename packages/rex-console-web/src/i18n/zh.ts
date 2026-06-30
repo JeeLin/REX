@@ -865,6 +865,7 @@ export default {
     connected: '已连接',
     disconnected: '未连接',
     connect: '连接',
+    connecting: '连接中...',
     disconnect: '断开',
     history: '历史记录',
     placeholder: '输入 Redis 命令...',

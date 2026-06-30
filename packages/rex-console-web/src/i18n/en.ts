@@ -380,6 +380,8 @@ export default {
     protocolPlaceholder: 'Select resource protocol',
     name: 'Resource Name',
     namePlaceholder: 'Enter resource name',
+    env: 'Environment',
+    envPlaceholder: 'Select environment',
     connectionMode: 'Connection Mode',
     selectProtocol: 'Select resource type to create',
     protocols: {
@@ -612,6 +614,7 @@ export default {
       history: 'History',
     },
     result: {
+      copy: 'Copy',
       copySuccess: 'Copied to clipboard',
       ctx: {
         copyRow: 'Copy Row',
@@ -828,6 +831,11 @@ export default {
   },
   sqlite: {
     title: 'SQLite Database',
+    connected: 'Connected',
+    disconnected: 'Disconnected',
+    connect: 'Connect',
+    connecting: 'Connecting...',
+    disconnect: 'Disconnect',
     welcome: 'Connect to a SQLite database',
     tables: 'Tables',
     noTables: 'No tables',
@@ -857,11 +865,19 @@ export default {
     connected: 'Connected',
     disconnected: 'Disconnected',
     connect: 'Connect',
+    connecting: 'Connecting...',
     disconnect: 'Disconnect',
     history: 'History',
     placeholder: 'Enter Redis command...',
     welcome: 'Connect to a Redis server to start',
     clear: 'Clear',
+    host: 'Host',
+    port: 'Port',
+    password: 'Password',
+    passwordPlaceholder: 'Leave empty for anonymous connection',
+    db: 'Database',
+    name: 'Instance Name',
+    namePlaceholder: 'e.g. cache, session store',
   },
   audit: {
     title: 'Audit Log',

@@ -16,12 +16,12 @@
       <div class="step-line" :class="{ active: step > 1 }"></div>
       <div class="step" :class="{ active: step === 2, done: step > 2 }">
         <span class="step-num">{{ step > 2 ? '✓' : '2' }}</span>
-        <span class="step-label">{{ t('resource.step2') }}</span>
+        <span class="step-label">{{ t('resource.step3') }}</span>
       </div>
       <div class="step-line" :class="{ active: step > 2 }"></div>
       <div class="step" :class="{ active: step === 3 }">
         <span class="step-num">3</span>
-        <span class="step-label">{{ t('resource.step4') }}</span>
+        <span class="step-label">{{ t('resource.step3') }}</span>
       </div>
     </div>
 
@@ -403,7 +403,7 @@ async function testConnection() {
     }
   } catch {
     testState.value = 'fail'
-    testMessage.value = '请求失败'
+    testMessage.value = t('common.requestFailed')
   }
 }
 
