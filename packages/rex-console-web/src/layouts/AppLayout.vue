@@ -195,6 +195,30 @@
       :env-id="editModalEnvId"
       :resource-id="editModalResourceId"
     />
+
+    <!-- 移动端底部导航栏 -->
+    <nav v-if="isMobile" class="bottom-nav">
+      <router-link to="/" class="bottom-nav-item" :class="{ active: route.name === 'dashboard' }" @click="closeMobile">
+        <span class="bottom-nav-icon">🏠</span>
+        <span class="bottom-nav-label">{{ t('nav.dashboard') }}</span>
+      </router-link>
+      <router-link to="/workspace" class="bottom-nav-item" :class="{ active: route.name === 'workspace' }" @click="closeMobile">
+        <span class="bottom-nav-icon">💻</span>
+        <span class="bottom-nav-label">{{ t('nav.workspace') }}</span>
+      </router-link>
+      <router-link to="/environments" class="bottom-nav-item" :class="{ active: isEnvPage }" @click="closeMobile">
+        <span class="bottom-nav-icon">🖥</span>
+        <span class="bottom-nav-label">{{ t('nav.environments') }}</span>
+      </router-link>
+      <router-link to="/agents" class="bottom-nav-item" :class="{ active: route.name === 'agents' }" @click="closeMobile">
+        <span class="bottom-nav-icon">🔌</span>
+        <span class="bottom-nav-label">{{ t('nav.agents') }}</span>
+      </router-link>
+      <router-link to="/settings" class="bottom-nav-item" :class="{ active: route.name === 'settings' }" @click="closeMobile">
+        <span class="bottom-nav-icon">⚙</span>
+        <span class="bottom-nav-label">{{ t('nav.settings') }}</span>
+      </router-link>
+    </nav>
   </div>
 </template>
 
@@ -346,8 +370,16 @@ function openAllInWorkspace(env: { id: string; name: string }) {
   }
 }
 
+const isMobile = ref(false)
+let mobileMqHandler: ((e: MediaQueryListEvent) => void) | null = null
+
 onMounted(() => {
   fetchEnvs()
+  // Mobile detection
+  const mq = window.matchMedia('(max-width: 767px)')
+  isMobile.value = mq.matches
+  mobileMqHandler = (e: MediaQueryListEvent) => { isMobile.value = e.matches }
+  mq.addEventListener('change', mobileMqHandler)
 })
 
 // ── 侧边栏拖拽调整宽度 ──────────────────────────────────
@@ -382,6 +414,9 @@ function stopResize() {
 onUnmounted(() => {
   document.removeEventListener('mousemove', onResize)
   document.removeEventListener('mouseup', stopResize)
+  if (mobileMqHandler) {
+    window.matchMedia('(max-width: 767px)').removeEventListener('change', mobileMqHandler)
+  }
 })
 </script>
 
@@ -899,6 +934,7 @@ onUnmounted(() => {
 
   .main-content {
     margin-left: 0 !important;
+    padding-bottom: 56px; /* space for bottom nav */
   }
 
   .hamburger {
@@ -915,6 +951,63 @@ onUnmounted(() => {
 
   .page-header {
     padding-left: 60px;
+  }
+}
+
+/* ── 底部导航栏 ── */
+.bottom-nav {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border);
+    z-index: var(--z-sticky);
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 var(--sp-sm);
+  }
+
+  .bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: var(--sp-xs) var(--sp-sm);
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 10px;
+    transition: color var(--transition-fast);
+    min-width: 48px;
+    min-height: 48px;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .bottom-nav-item.active {
+    color: var(--accent);
+  }
+
+  .bottom-nav-item:hover {
+    color: var(--text-primary);
+    text-decoration: none;
+  }
+
+  .bottom-nav-icon {
+    font-size: 18px;
+  }
+
+  .bottom-nav-label {
+    font-size: 10px;
+    line-height: 1;
   }
 }
 </style>

@@ -106,4 +106,18 @@ function iconFor(type: string) {
 .toast-enter-from { opacity: 0; transform: translateX(100%); }
 .toast-leave-to { opacity: 0; transform: translateX(100%); }
 .toast-move { transition: transform 0.2s ease; }
+
+@media (max-width: 767px) {
+  .toast-container {
+    top: auto;
+    bottom: 60px; /* above bottom nav bar */
+    right: var(--sp-md);
+    left: var(--sp-md);
+  }
+  .toast-item {
+    min-width: auto;
+    max-width: none;
+    width: 100%;
+  }
+}
 </style>
