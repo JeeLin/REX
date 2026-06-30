@@ -48,6 +48,12 @@ function handleKeydown(e: KeyboardEvent) {
     emit('save')
     return
   }
+  // Ctrl+Shift+F / Cmd+Shift+F → 格式化
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'F') {
+    e.preventDefault()
+    formatSql()
+    return
+  }
   // Tab → 插入两个空格
   if (e.key === 'Tab') {
     e.preventDefault()
