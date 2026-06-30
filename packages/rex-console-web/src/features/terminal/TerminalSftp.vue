@@ -65,7 +65,7 @@
           v-for="entry in sortedEntries"
           :key="entry.path"
           class="sfile-row"
-          :class="{ selected: selectedEntry?.path === entry.path }"
+          :class="{ selected: selectedEntry?.path === entry.path, renaming: renamingEntry?.path === entry.path }"
           draggable="true"
           @click="onEntryClick(entry)"
           @dblclick="handleDblClick(entry)"
@@ -73,7 +73,19 @@
           @dragstart="onDragStart($event, entry)"
         >
           <span class="sfile-icon" :class="getIconClass(entry)">{{ getIcon(entry) }}</span>
-          <span class="sfile-name" :class="{ parent: false }">{{ entry.name }}</span>
+          <template v-if="renamingEntry?.path === entry.path">
+            <input
+              ref="renameInputRef"
+              v-model="renameValue"
+              class="sftp-rename-input"
+              @keydown.enter="confirmRename"
+              @keydown.esc="cancelRename"
+              @blur="confirmRename"
+            />
+          </template>
+          <template v-else>
+            <span class="sfile-name" :class="{ parent: false }">{{ entry.name }}</span>
+          </template>
           <span class="sfile-size">{{ entry.file_type === 'directory' ? '' : formatSize(entry.size) }}</span>
         </div>
         <div v-if="entries.length === 0 && !loading" class="sftp-empty">{{ t('files.emptyDir') }}</div>
@@ -96,6 +108,7 @@
         <button v-else class="ctx-menu-item" @click="downloadEntry(ctxMenu.entry); closeCtxMenu()">{{ t('files.download') }}</button>
         <button class="ctx-menu-item" @click="copyPath(ctxMenu.entry.path); closeCtxMenu()">{{ t('files.copyPath') }}</button>
         <button class="ctx-menu-item" @click="copyFileName(ctxMenu.entry.name); closeCtxMenu()">{{ t('files.copyFileName') }}</button>
+        <button class="ctx-menu-item" @click="startRename(ctxMenu.entry); closeCtxMenu()">{{ t('files.rename') }}</button>
         <div class="ctx-menu-divider"></div>
         <button class="ctx-menu-item danger" @click="deleteEntry(ctxMenu.entry); closeCtxMenu()">{{ t('files.delete') }}</button>
       </template>
@@ -115,7 +128,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { listFiles, uploadFile, deleteFile as apiDeleteFile, mkdirFile, downloadFile } from '@/api/files'
+import { listFiles, uploadFile, deleteFile as apiDeleteFile, mkdirFile, downloadFile, renameFile } from '@/api/files'
 import type { FileEntry } from '@/api/files'
 
 const props = defineProps<{
@@ -137,6 +150,11 @@ const showMkdirInput = ref(false)
 const newDirName = ref('')
 const mkdirInputRef = ref<HTMLInputElement>()
 const fileInputRef = ref<HTMLInputElement>()
+
+// Rename state
+const renamingEntry = ref<FileEntry | null>(null)
+const renameValue = ref('')
+const renameInputRef = ref<HTMLInputElement>()
 
 const ctxMenu = ref<{ visible: boolean; x: number; y: number; entry: FileEntry | null }>({
   visible: false, x: 0, y: 0, entry: null,
@@ -237,6 +255,45 @@ async function confirmMkdir() {
   newDirName.value = ''
   showMkdirInput.value = false
   await loadDir()
+}
+
+function startRename(entry: FileEntry) {
+  renamingEntry.value = entry
+  renameValue.value = entry.name
+  nextTick(() => {
+    const input = renameInputRef.value
+    if (input) {
+      input.focus()
+      // Select name without extension for files
+      if (entry.file_type !== 'directory') {
+        const dotIdx = entry.name.lastIndexOf('.')
+        input.setSelectionRange(0, dotIdx > 0 ? dotIdx : entry.name.length)
+      } else {
+        input.select()
+      }
+    }
+  })
+}
+
+async function confirmRename() {
+  const entry = renamingEntry.value
+  if (!entry) return
+  const newName = renameValue.value.trim()
+  if (!newName || newName === entry.name) {
+    renamingEntry.value = null
+    return
+  }
+  const basePath = currentPath.value === '/' ? '/' : currentPath.value + '/'
+  try {
+    await renameFile(props.resourceId, entry.path, basePath + newName)
+    await loadDir()
+  } finally {
+    renamingEntry.value = null
+  }
+}
+
+function cancelRename() {
+  renamingEntry.value = null
 }
 
 function formatSize(bytes: number | null): string {
@@ -383,6 +440,18 @@ onBeforeUnmount(() => {
 }
 
 .sftp-mkdir-input:focus { border-color: var(--accent); }
+
+.sftp-rename-input {
+  flex: 1;
+  padding: 2px var(--sp-sm);
+  background: var(--bg-deep);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  outline: none;
+}
 
 .sftp-inline-files {
   flex: 1;
