@@ -38,21 +38,12 @@
       <div v-if="showSftp" class="ws-term-divider" @mousedown="startResize"></div>
 
       <!-- SFTP 面板 -->
-      <div v-if="showSftp" class="ws-term-sftp" :style="{ width: sftpWidth + 'px' }">
-        <div class="sftp-header">
-          <span class="sftp-path">{{ sftpPath }}</span>
-          <button class="btn btn-ghost btn-xs" @click="showSftp = false">✕</button>
-        </div>
-        <FileList
-          :entries="sftpEntries"
-          :current-path="sftpPath"
-          :selected-paths="[]"
-          :loading="sftpLoading"
-          @go-up="sftpGoUp"
-          @open="sftpOpenDir"
-          @context-menu="() => {}"
-        />
-      </div>
+      <TerminalSftp
+        v-if="showSftp"
+        :resource-id="props.resourceId"
+        :style="{ width: sftpWidth + 'px' }"
+        @close="showSftp = false"
+      />
     </div>
 
     <!-- 状态栏 -->
@@ -162,9 +153,7 @@ import { terminalSettings } from '@/stores/settings'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { getErrorMessage } from '@/utils/error'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
-import { listFiles } from '@/api/files'
-import type { FileEntry } from '@/api/files'
-import FileList from '@/features/files/FileList.vue'
+import TerminalSftp from '@/features/terminal/TerminalSftp.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -201,9 +190,6 @@ const terminalFontSize = ref(13)
 // SFTP panel state
 const showSftp = ref(false)
 const sftpWidth = ref(280)
-const sftpPath = ref('/')
-const sftpEntries = ref<FileEntry[]>([])
-const sftpLoading = ref(false)
 
 // Drag to terminal
 const dragOver = ref(false)
@@ -420,35 +406,8 @@ function isMobileDevice() {
 
 function toggleSftp() {
   showSftp.value = !showSftp.value
-  if (showSftp.value && sftpEntries.value.length === 0) {
-    loadSftpFiles('/')
-  }
   // Wait for layout to settle, then refit terminal
   nextTick(() => { fitAddon?.fit() })
-}
-
-async function loadSftpFiles(path: string) {
-  sftpLoading.value = true
-  try {
-    const result = await listFiles(props.resourceId, path)
-    sftpPath.value = result.path
-    sftpEntries.value = result.entries
-  } catch {
-    sftpEntries.value = []
-  } finally {
-    sftpLoading.value = false
-  }
-}
-
-function sftpGoUp() {
-  const parts = sftpPath.value.split('/').filter(Boolean)
-  parts.pop()
-  loadSftpFiles('/' + parts.join('/') || '/')
-}
-
-function sftpOpenDir(name: string) {
-  const base = sftpPath.value.endsWith('/') ? sftpPath.value : sftpPath.value + '/'
-  loadSftpFiles(base + name)
 }
 
 // ── 拖拽分隔条 ──────────────────────────────────────
@@ -720,27 +679,6 @@ onBeforeUnmount(() => {
   background: var(--bg-surface);
   overflow: hidden;
   flex-shrink: 0;
-}
-
-.sftp-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 var(--sp-sm);
-  height: 28px;
-  background: var(--bg-elevated);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.sftp-path {
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-  color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
 }
 
 /* ── 重连提示 ── */
