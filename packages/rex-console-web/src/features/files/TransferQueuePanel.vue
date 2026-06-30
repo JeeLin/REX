@@ -12,6 +12,8 @@
           v-for="task in tasks"
           :key="task.id"
           :task="task"
+          :speed="speeds?.get(task.id)"
+          :eta="etas?.get(task.id)"
           @cancel="$emit('cancel', $event)"
           @remove="$emit('remove', $event)"
         />

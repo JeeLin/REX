@@ -8,7 +8,7 @@
         <button
           v-if="task.status === 'pending' || task.status === 'running'"
           class="btn-icon"
-          title="取消"
+          :title="t('common.close')"
           @click.stop="$emit('cancel', task.id)"
         >
           ✕
@@ -16,7 +16,7 @@
         <button
           v-if="task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled'"
           class="btn-icon"
-          title="移除"
+          :title="t('files.delete')"
           @click.stop="$emit('remove', task.id)"
         >
           🗑
@@ -28,18 +28,20 @@
         <div class="progress-fill" :style="{ width: percent + '%' }"></div>
       </div>
       <span class="progress-text">{{ percent }}%</span>
+      <span v-if="speed > 0" class="transfer-speed">{{ formatSpeed(speed) }}</span>
+      <span v-if="eta > 0" class="transfer-eta">{{ formatEta(eta) }}</span>
     </div>
     <div v-if="expanded" class="transfer-details">
       <div class="detail-row">
-        <span class="detail-label">源：</span>
+        <span class="detail-label">{{ t('files.transfer.source') }}</span>
         <span class="detail-value">{{ task.source.path }}</span>
       </div>
       <div class="detail-row">
-        <span class="detail-label">目标：</span>
+        <span class="detail-label">{{ t('files.transfer.target') }}</span>
         <span class="detail-value">{{ task.target.path }}</span>
       </div>
       <div v-if="task.status_detail" class="detail-row">
-        <span class="detail-label">错误：</span>
+        <span class="detail-label">{{ t('files.transfer.error') }}</span>
         <span class="detail-value" style="color: var(--danger)">{{ task.status_detail }}</span>
       </div>
     </div>
@@ -48,9 +50,15 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { TransferTask } from '@/api/transfer'
 
-const props = defineProps<{ task: TransferTask }>()
+const { t } = useI18n()
+const props = defineProps<{
+  task: TransferTask
+  speed?: number
+  eta?: number
+}>()
 defineEmits<{ cancel: [id: string]; remove: [id: string] }>()
 
 const expanded = ref(false)
@@ -79,14 +87,30 @@ const statusIcon = computed(() => {
 
 const statusText = computed(() => {
   switch (props.task.status) {
-    case 'completed': return '完成'
+    case 'completed': return t('files.transfer.completed')
     case 'running': return `${percent.value}%`
-    case 'pending': return '等待中'
-    case 'failed': return '失败'
-    case 'cancelled': return '已取消'
+    case 'pending': return t('files.transfer.pending')
+    case 'failed': return t('files.transfer.failed')
+    case 'cancelled': return t('files.transfer.cancelled')
     default: return props.task.status
   }
 })
+
+const speed = computed(() => props.speed ?? 0)
+const eta = computed(() => props.eta ?? 0)
+
+function formatSpeed(bytesPerSec: number): string {
+  if (bytesPerSec < 1024) return `${Math.round(bytesPerSec)} B/s`
+  if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)} KB/s`
+  return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`
+}
+
+function formatEta(seconds: number): string {
+  if (seconds < 60) return t('files.transfer.etaLessThanMinute')
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return t('files.transfer.eta', { time: `${m}:${String(s).padStart(2, '0')}` })
+}
 </script>
 
 <style scoped>
@@ -179,6 +203,18 @@ const statusText = computed(() => {
   font-family: var(--font-mono);
   min-width: 32px;
   text-align: right;
+}
+
+.transfer-speed {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.transfer-eta {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
 }
 
 .transfer-details {
