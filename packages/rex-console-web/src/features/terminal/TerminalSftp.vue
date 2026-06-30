@@ -109,6 +109,7 @@
         <button class="ctx-menu-item" @click="copyPath(ctxMenu.entry.path); closeCtxMenu()">{{ t('files.copyPath') }}</button>
         <button class="ctx-menu-item" @click="copyFileName(ctxMenu.entry.name); closeCtxMenu()">{{ t('files.copyFileName') }}</button>
         <button class="ctx-menu-item" @click="startRename(ctxMenu.entry); closeCtxMenu()">{{ t('files.rename') }}</button>
+        <button v-if="ctxMenu.entry.file_type !== 'directory' && sendToTargets.length > 0" class="ctx-menu-item" @click="openSendTo(ctxMenu.entry); closeCtxMenu()">{{ t('files.sendTo') }}</button>
         <div class="ctx-menu-divider"></div>
         <button class="ctx-menu-item danger" @click="deleteEntry(ctxMenu.entry); closeCtxMenu()">{{ t('files.delete') }}</button>
       </template>
@@ -118,6 +119,30 @@
         <div class="ctx-menu-divider"></div>
         <button class="ctx-menu-item" @click="loadDir(); closeCtxMenu()">{{ t('files.refresh') }}</button>
       </template>
+    </div>
+
+    <!-- SendTo modal -->
+    <div v-if="showSendTo" class="sftp-sendto-overlay" @click.self="showSendTo = false">
+      <div class="sftp-sendto-modal">
+        <div class="sftp-sendto-title">{{ t('files.sendToTitle') }}</div>
+        <p class="sftp-sendto-desc">{{ t('files.sendToDesc') }}</p>
+        <div class="sftp-sendto-list">
+          <div
+            v-for="target in sendToTargets"
+            :key="target.resourceId"
+            class="sftp-sendto-item"
+            :class="{ active: sendToTargetId === target.resourceId }"
+            @click="sendToTargetId = target.resourceId"
+          >
+            <span class="sftp-sendto-name">{{ target.name }}</span>
+            <span class="sftp-sendto-proto">{{ target.proto }}</span>
+          </div>
+        </div>
+        <div class="sftp-sendto-actions">
+          <button class="btn btn-ghost btn-sm" @click="showSendTo = false">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary btn-sm" :disabled="!sendToTargetId" @click="confirmSendTo">{{ t('files.send') }}</button>
+        </div>
+      </div>
     </div>
 
     <!-- Hidden upload input -->
@@ -130,6 +155,10 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { listFiles, uploadFile, deleteFile as apiDeleteFile, mkdirFile, downloadFile, renameFile } from '@/api/files'
 import type { FileEntry } from '@/api/files'
+import { createTransfer } from '@/api/transfer'
+import type { TransferEndpoint } from '@/api/transfer'
+import { useTabs } from '@/features/workspace/useTabs'
+import { useToast } from '@/composables/useToast'
 
 const props = defineProps<{
   resourceId: string
@@ -141,6 +170,8 @@ defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { tabs } = useTabs()
+const { success: toastSuccess, error: toastError } = useToast()
 
 const currentPath = ref('/')
 const entries = ref<FileEntry[]>([])
@@ -155,6 +186,18 @@ const fileInputRef = ref<HTMLInputElement>()
 const renamingEntry = ref<FileEntry | null>(null)
 const renameValue = ref('')
 const renameInputRef = ref<HTMLInputElement>()
+
+// SendTo state
+const showSendTo = ref(false)
+const sendToTargetId = ref<string>('')
+const sendToFile = ref<FileEntry | null>(null)
+
+const sendToTargets = computed(() => {
+  return tabs.value
+    .filter(t => t.id !== /* current */ undefined && (t.component === 'files' || t.component === 'terminal' || t.component === 's3'))
+    .filter(t => t.resourceId !== props.resourceId)
+    .map(t => ({ resourceId: t.resourceId, name: t.name, proto: t.proto }))
+})
 
 const ctxMenu = ref<{ visible: boolean; x: number; y: number; entry: FileEntry | null }>({
   visible: false, x: 0, y: 0, entry: null,
@@ -294,6 +337,31 @@ async function confirmRename() {
 
 function cancelRename() {
   renamingEntry.value = null
+}
+
+function openSendTo(entry: FileEntry) {
+  sendToFile.value = entry
+  sendToTargetId.value = ''
+  showSendTo.value = true
+}
+
+async function confirmSendTo() {
+  const entry = sendToFile.value
+  const targetId = sendToTargetId.value
+  if (!entry || !targetId) return
+
+  const source: TransferEndpoint = { connector_type: 'sftp', resource_id: props.resourceId, path: entry.path }
+  const target: TransferEndpoint = { connector_type: 'sftp', resource_id: targetId, path: '/' + entry.name }
+
+  try {
+    await createTransfer(source, target)
+    toastSuccess(t('files.transferStarted'))
+  } catch {
+    toastError(t('files.transferFailed'))
+  } finally {
+    showSendTo.value = false
+    sendToFile.value = null
+  }
 }
 
 function formatSize(bytes: number | null): string {
@@ -529,5 +597,95 @@ onBeforeUnmount(() => {
   height: 1px;
   background: var(--border);
   margin: 4px 0;
+}
+
+.sftp-sendto-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.sftp-sendto-modal {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-xl);
+  min-width: 320px;
+  max-width: 400px;
+  width: 90%;
+}
+
+.sftp-sendto-title {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  margin-bottom: var(--sp-xs);
+}
+
+.sftp-sendto-desc {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-md);
+}
+
+.sftp-sendto-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-xs);
+  margin-bottom: var(--sp-lg);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.sftp-sendto-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-sm) var(--sp-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.sftp-sendto-item:hover {
+  border-color: var(--accent);
+}
+
+.sftp-sendto-item.active {
+  background: var(--accent-muted);
+  border-color: var(--accent);
+}
+
+.sftp-sendto-name {
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+}
+
+.sftp-sendto-proto {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.sftp-sendto-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-sm);
+}
+
+.sftp-rename-input {
+  flex: 1;
+  padding: 2px var(--sp-sm);
+  background: var(--bg-deep);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  outline: none;
 }
 </style>

@@ -536,6 +536,8 @@ export default {
     sendToDesc: 'Choose which connection to send the file to',
     send: 'Send',
     sendTo: 'Send to…',
+    transferStarted: 'Transfer task created',
+    transferFailed: 'Failed to create transfer task',
     uploadFile: 'Upload file',
     sftp: {
       title: 'SFTP',
