@@ -152,6 +152,7 @@ import { createSession, deleteSession } from '@/api/terminal'
 import { terminalSettings } from '@/stores/settings'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { getErrorMessage } from '@/utils/error'
+import { copyWithFallback } from '@/utils/clipboard'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import TerminalSftp from '@/features/terminal/TerminalSftp.vue'
 
@@ -230,15 +231,7 @@ function initTerminal() {
       if (event.type === 'keydown') {
         const selection = terminal?.getSelection()
         if (selection) {
-          navigator.clipboard?.writeText(selection).catch(() => {
-            // Fallback: use execCommand
-            const ta = document.createElement('textarea')
-            ta.value = selection
-            document.body.appendChild(ta)
-            ta.select()
-            document.execCommand('copy')
-            document.body.removeChild(ta)
-          })
+          copyWithFallback(selection)
         }
       }
       return false
@@ -504,14 +497,7 @@ function handleContextMenu(event: MouseEvent) {
       label: t('ws.terminal.ctx.copy'),
       action: () => {
         if (selection) {
-          navigator.clipboard?.writeText(selection).catch(() => {
-            const ta = document.createElement('textarea')
-            ta.value = selection
-            document.body.appendChild(ta)
-            ta.select()
-            document.execCommand('copy')
-            document.body.removeChild(ta)
-          })
+          copyWithFallback(selection)
         }
       },
       disabled: !selection,
