@@ -696,6 +696,7 @@ export default {
         closeAll: 'Close All',
         closeSaved: 'Close Saved',
         save: 'Save',
+        saveAs: 'Save As...',
         rename: 'Rename',
         copySql: 'Copy SQL',
         executeSql: 'Execute SQL',
@@ -972,6 +973,10 @@ export default {
     },
     pagination: {
       showing: 'Showing {from}-{to} / {total} total',
+      pageSize: 'Rows per page',
+      page: 'Page {current} of {total}',
+      prev: 'Previous',
+      next: 'Next',
     },
   },
 }

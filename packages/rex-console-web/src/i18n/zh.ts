@@ -696,6 +696,7 @@ export default {
         closeAll: '关闭全部',
         closeSaved: '关闭已保存的',
         save: '保存',
+        saveAs: '另存为...',
         rename: '重命名',
         copySql: '复制 SQL',
         executeSql: '执行 SQL',
@@ -972,6 +973,10 @@ export default {
     },
     pagination: {
       showing: '显示 {from}-{to} / 共 {total} 条',
+      pageSize: '每页行数',
+      page: '第 {current} 页，共 {total} 页',
+      prev: '上一页',
+      next: '下一页',
     },
   },
 }

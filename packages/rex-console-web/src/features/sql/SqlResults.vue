@@ -27,12 +27,20 @@
         <thead>
           <tr>
             <th>#</th>
-            <th v-for="col in result.columns" :key="col.name">{{ col.name }}</th>
+            <th
+              v-for="(col, colIdx) in result.columns"
+              :key="col.name"
+              class="sortable-th"
+              @click="handleHeaderSort(colIdx)"
+            >
+              {{ col.name }}
+              <span v-if="sortColumn === colIdx" class="sort-indicator">{{ sortDirection === 'asc' ? ' ↑' : ' ↓' }}</span>
+            </th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(row, i) in result.rows" :key="i" @contextmenu.prevent="handleRowContextMenu($event, i)">
-            <td class="text-muted">{{ i + 1 }}</td>
+          <tr v-for="(row, i) in paginatedRows" :key="i" @contextmenu.prevent="handleRowContextMenu($event, i)">
+            <td class="text-muted">{{ i + 1 + (currentPage - 1) * pageSize }}</td>
             <td
               v-for="(cell, j) in row" :key="j"
               :class="cellClass(cell)"
@@ -81,11 +89,42 @@
         </button>
       </div>
     </div>
+
+    <!-- Pagination Controls -->
+    <div v-if="result && result.rows.length > pageSize" class="pagination-controls">
+      <div class="page-size-selector">
+        <label>{{ t('sql.pagination.pageSize') }}:</label>
+        <select v-model="pageSize" class="page-size-select">
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="500">500</option>
+        </select>
+      </div>
+      <div class="page-navigation">
+        <button
+          class="btn btn-ghost btn-xs"
+          :disabled="currentPage === 1"
+          @click="currentPage = Math.max(1, currentPage - 1)"
+        >
+          {{ t('sql.pagination.prev') }}
+        </button>
+        <span class="page-info">
+          {{ t('sql.pagination.page', { current: currentPage, total: totalPages }) }}
+        </span>
+        <button
+          class="btn btn-ghost btn-xs"
+          :disabled="currentPage === totalPages"
+          @click="currentPage = Math.min(totalPages, currentPage + 1)"
+        >
+          {{ t('sql.pagination.next') }}
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
 import type { SqlResult } from '@/api/sql'
@@ -107,9 +146,59 @@ const emit = defineEmits<{
 }>()
 
 const activeTab = ref<'results' | 'message'>('results')
+const currentPage = ref(1)
+const pageSize = ref(50)
+const sortColumn = ref<number | null>(null)
+const sortDirection = ref<'asc' | 'desc'>('asc')
 
-// 执行完成后自动切换到消息标签（有错误时）
+// 排序逻辑
+function handleHeaderSort(colIdx: number) {
+  if (sortColumn.value === colIdx) {
+    if (sortDirection.value === 'asc') {
+      sortDirection.value = 'desc'
+    } else {
+      // 第三次点击取消排序
+      sortColumn.value = null
+      sortDirection.value = 'asc'
+    }
+  } else {
+    sortColumn.value = colIdx
+    sortDirection.value = 'asc'
+  }
+  currentPage.value = 1
+}
+
+const sortedRows = computed(() => {
+  if (!props.result) return []
+  if (sortColumn.value === null) return props.result.rows
+  const colIdx = sortColumn.value
+  const dir = sortDirection.value === 'asc' ? 1 : -1
+  return [...props.result.rows].sort((a, b) => {
+    const va = a[colIdx]
+    const vb = b[colIdx]
+    if (va === null && vb === null) return 0
+    if (va === null) return 1
+    if (vb === null) return -1
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir
+    return String(va).localeCompare(String(vb)) * dir
+  })
+})
+
+// 分页逻辑
+const totalPages = computed(() => {
+  if (!props.result) return 1
+  return Math.ceil(sortedRows.value.length / pageSize.value)
+})
+
+const paginatedRows = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return sortedRows.value.slice(start, end)
+})
+
+// 当结果变化时重置分页
 watch(() => props.result, () => {
+  currentPage.value = 1
   if (props.isError) {
     activeTab.value = 'message'
   }
@@ -179,9 +268,10 @@ async function handleCopyAll() {
   }
 }
 
-function handleCellContextMenu(event: MouseEvent, rowIdx: number, colIdx: number) {
+function handleCellContextMenu(event: MouseEvent, paginatedIdx: number, colIdx: number) {
   if (!props.result) return
   const { columns, rows } = props.result
+  const rowIdx = (currentPage.value - 1) * pageSize.value + paginatedIdx
   const row = rows[rowIdx]
   const cell = row[colIdx]
   const colName = columns[colIdx]?.name ?? `col${colIdx}`
@@ -201,9 +291,10 @@ function handleCellContextMenu(event: MouseEvent, rowIdx: number, colIdx: number
   ])
 }
 
-function handleRowContextMenu(event: MouseEvent, rowIdx: number) {
+function handleRowContextMenu(event: MouseEvent, paginatedIdx: number) {
   if (!props.result) return
   const { columns, rows } = props.result
+  const rowIdx = (currentPage.value - 1) * pageSize.value + paginatedIdx
   const row = rows[rowIdx]
 
   showMenu(event, [
@@ -273,6 +364,20 @@ function handleRowContextMenu(event: MouseEvent, rowIdx: number) {
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
+}
+
+.results-table th.sortable-th {
+  cursor: pointer;
+  user-select: none;
+}
+
+.results-table th.sortable-th:hover {
+  color: var(--text-primary);
+}
+
+.sort-indicator {
+  color: var(--accent);
+  font-size: 10px;
 }
 
 .results-table td {
@@ -365,5 +470,50 @@ function handleRowContextMenu(event: MouseEvent, rowIdx: number) {
 
 .results-message.is-error {
   color: var(--danger);
+}
+
+/* Pagination Controls */
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-xs) var(--sp-md);
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.page-size-selector {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-xs);
+}
+
+.page-size-selector label {
+  color: var(--text-muted);
+}
+
+.page-size-select {
+  padding: 2px var(--sp-xs);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-size: var(--fs-xs);
+  outline: none;
+  cursor: pointer;
+}
+
+.page-navigation {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+}
+
+.page-info {
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
 }
 </style>
