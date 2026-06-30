@@ -7,6 +7,9 @@ export interface Environment {
   connection_mode: string
   created_at: string
   updated_at: string
+  resource_count?: number
+  agent_count?: number
+  resource_types?: Record<string, number>
 }
 
 export interface Resource {

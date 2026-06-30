@@ -33,8 +33,18 @@
           </span>
         </div>
         <div class="env-card-desc">{{ env.description || '—' }}</div>
+        <div v-if="env.resource_types && Object.keys(env.resource_types).length > 0" class="env-card-badges">
+          <span
+            v-for="(count, proto) in env.resource_types"
+            :key="proto"
+            class="res-badge"
+          >
+            {{ String(proto).toUpperCase() }} ×{{ count }}
+          </span>
+        </div>
         <div class="env-card-footer">
           <span>{{ env.connection_mode === 'direct' ? t('env.direct') : t('env.agentProxy') }}</span>
+          <span v-if="env.resource_count !== undefined">{{ env.resource_count }} {{ t('env.resources') }}</span>
         </div>
       </router-link>
 
@@ -74,19 +84,11 @@ import EnvironmentEditModal from '@/components/EnvironmentEditModal.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import client from '@/api/client'
 import { deleteEnvironment } from '@/api/env'
+import type { Environment } from '@/api/env'
 
 const router = useRouter()
 const { t } = useI18n()
 const { show: showMenu } = useContextMenu()
-
-interface Environment {
-  id: string
-  name: string
-  description: string | null
-  connection_mode: string
-  created_at: string
-  updated_at: string
-}
 
 const environments = ref<Environment[]>([])
 const loading = ref(true)
@@ -217,6 +219,27 @@ async function loadEnvs() {
   background: rgba(232, 145, 45, 0.03);
   text-decoration: none;
   box-shadow: 0 0 20px rgba(232, 145, 45, 0.06);
+}
+
+.env-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-xs);
+  margin-bottom: var(--sp-md);
+}
+
+.res-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  white-space: nowrap;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
 }
 
 .add-icon {

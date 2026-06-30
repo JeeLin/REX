@@ -19,6 +19,12 @@ pub struct Environment {
     pub agent_token_hash: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_count: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_count: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_types: Option<std::collections::HashMap<String, i64>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -40,7 +46,7 @@ pub async fn list_envs(
     let db = state.db.clone();
     let envs = tokio::task::spawn_blocking(move || {
         let conn = db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
-        let envs = conn
+        let mut envs: Vec<Environment> = conn
             .prepare(
                 "SELECT id, name, description, connection_mode, agent_token_hash, created_at, updated_at FROM environments ORDER BY created_at DESC",
             )
@@ -54,11 +60,47 @@ pub async fn list_envs(
                     agent_token_hash: row.get(4)?,
                     created_at: row.get(5)?,
                     updated_at: row.get(6)?,
+                    resource_count: None,
+                    agent_count: None,
+                    resource_types: None,
                 })
             })
             .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?
             .filter_map(|r| r.ok())
             .collect();
+
+        // Populate resource stats for each environment
+        for env in &mut envs {
+            let resource_count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM resources WHERE environment_id = ?1",
+                rusqlite::params![env.id],
+                |row| row.get(0),
+            ).unwrap_or(0);
+
+            let agent_count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM agents WHERE environment_id = ?1",
+                rusqlite::params![env.id],
+                |row| row.get(0),
+            ).unwrap_or(0);
+
+            let mut resource_types = std::collections::HashMap::new();
+            if let Ok(mut stmt) = conn.prepare(
+                "SELECT protocol, COUNT(*) as cnt FROM resources WHERE environment_id = ?1 GROUP BY protocol",
+            ) {
+                if let Ok(rows) = stmt.query_map(rusqlite::params![env.id], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+                }) {
+                    for row in rows.flatten() {
+                        resource_types.insert(row.0, row.1);
+                    }
+                }
+            }
+
+            env.resource_count = Some(resource_count);
+            env.agent_count = Some(agent_count);
+            env.resource_types = Some(resource_types);
+        }
+
         Ok::<_, (StatusCode, Json<ErrorResponse>)>(envs)
     })
     .await
@@ -97,6 +139,7 @@ pub async fn create_env(
         Ok::<_, (StatusCode, Json<ErrorResponse>)>(Environment {
             id: id_clone, name, description: desc, connection_mode: conn_mode,
             agent_token_hash: None, created_at: now.clone(), updated_at: now,
+            resource_count: Some(0), agent_count: Some(0), resource_types: Some(std::collections::HashMap::new()),
         })
     })
     .await
@@ -124,16 +167,35 @@ pub async fn get_env(
     let db = state.db.clone();
     let env = tokio::task::spawn_blocking(move || {
         let conn = db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
-        conn.query_row(
+        let mut env = conn.query_row(
             "SELECT id, name, description, connection_mode, agent_token_hash, created_at, updated_at FROM environments WHERE id = ?1",
             rusqlite::params![id],
             |row| Ok(Environment {
                 id: row.get(0)?, name: row.get(1)?, description: row.get(2)?,
                 connection_mode: row.get(3)?, agent_token_hash: row.get(4)?,
                 created_at: row.get(5)?, updated_at: row.get(6)?,
+                resource_count: None, agent_count: None, resource_types: None,
             }),
         )
-        .map_err(|_| not_found("ENVIRONMENT_NOT_FOUND", "环境不存在"))
+        .map_err(|_| not_found("ENVIRONMENT_NOT_FOUND", "环境不存在"))?;
+
+        let resource_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM resources WHERE environment_id = ?1", rusqlite::params![id], |row| row.get(0),
+        ).unwrap_or(0);
+        let agent_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM agents WHERE environment_id = ?1", rusqlite::params![id], |row| row.get(0),
+        ).unwrap_or(0);
+        let mut resource_types = std::collections::HashMap::new();
+        if let Ok(mut stmt) = conn.prepare("SELECT protocol, COUNT(*) FROM resources WHERE environment_id = ?1 GROUP BY protocol") {
+            if let Ok(rows) = stmt.query_map(rusqlite::params![id], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))) {
+                for row in rows.flatten() { resource_types.insert(row.0, row.1); }
+            }
+        }
+
+        env.resource_count = Some(resource_count);
+        env.agent_count = Some(agent_count);
+        env.resource_types = Some(resource_types);
+        Ok::<_, (StatusCode, Json<ErrorResponse>)>(env)
     })
     .await
     .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
@@ -159,6 +221,7 @@ pub async fn update_env(
                 id: row.get(0)?, name: row.get(1)?, description: row.get(2)?,
                 connection_mode: row.get(3)?, agent_token_hash: row.get(4)?,
                 created_at: row.get(5)?, updated_at: row.get(6)?,
+                resource_count: None, agent_count: None, resource_types: None,
             }),
         )
         .map_err(|_| not_found("ENVIRONMENT_NOT_FOUND", "环境不存在"))?;
@@ -174,6 +237,7 @@ pub async fn update_env(
         Ok::<_, (StatusCode, Json<ErrorResponse>)>(Environment {
             id: existing.id, name, description, connection_mode: existing.connection_mode,
             agent_token_hash: existing.agent_token_hash, created_at: existing.created_at, updated_at: now,
+            resource_count: existing.resource_count, agent_count: existing.agent_count, resource_types: existing.resource_types,
         })
     })
     .await
