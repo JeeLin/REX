@@ -158,6 +158,10 @@ pub fn app_with_static(
                     .delete(resource::delete_resource),
             )
             .route(
+                "/api/environments/:env_id/resources/:id/ping",
+                post(resource::ping_resource),
+            )
+            .route(
                 "/api/resources/test-connection",
                 post(resource::test_connection),
             )

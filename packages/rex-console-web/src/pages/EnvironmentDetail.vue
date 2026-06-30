@@ -50,7 +50,9 @@
             <div class="resource-name">{{ res.name }}</div>
             <div class="resource-proto">{{ res.protocol.toUpperCase() }}</div>
           </div>
-          <span class="resource-status badge badge-success">{{ t('status.online') }}</span>
+          <span class="resource-status badge" :class="getStatusClass(res.id)">
+            {{ getStatusLabel(res.id) }}
+          </span>
         </button>
       </div>
 
@@ -106,7 +108,7 @@ import ResourceEditModal from '@/components/ResourceEditModal.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import client from '@/api/client'
 import type { Environment, Resource } from '@/api/env'
-import { deleteEnvironment, deleteResource } from '@/api/env'
+import { deleteEnvironment, deleteResource, pingResource } from '@/api/env'
 import { getProtocolIcon } from '@/composables/useProtocol'
 import { useProtocol } from '@/composables/useProtocol'
 import AgentStatusPanel from '@/features/agents/AgentStatusPanel.vue'
@@ -128,6 +130,41 @@ const deletingResId = ref('')
 const resEditModalVisible = ref(false)
 const resEditEnvId = ref('')
 const resEditResId = ref('')
+const resourceStatuses = ref<Record<string, string>>({})
+const resourceLatencies = ref<Record<string, number>>({})
+
+function getStatusClass(resId: string): string {
+  const status = resourceStatuses.value[resId]
+  if (status === 'online') return 'badge-success'
+  if (status === 'offline') return 'badge-error'
+  return 'badge-pending'
+}
+
+function getStatusLabel(resId: string): string {
+  const status = resourceStatuses.value[resId]
+  const latency = resourceLatencies.value[resId]
+  if (status === 'online' && latency !== undefined) {
+    return `${t('status.online')} ${latency}ms`
+  }
+  if (status === 'online') return t('status.online')
+  if (status === 'offline') return t('status.offline')
+  return '...'
+}
+
+async function pingAllResources() {
+  if (!env.value || resources.value.length === 0) return
+  for (const res of resources.value) {
+    resourceStatuses.value[res.id] = 'checking'
+    pingResource(env.value.id, res.id)
+      .then((result) => {
+        resourceStatuses.value[res.id] = result.status
+        resourceLatencies.value[res.id] = result.latency_ms
+      })
+      .catch(() => {
+        resourceStatuses.value[res.id] = 'offline'
+      })
+  }
+}
 
 function connectToResource(res: Resource) {
   connect(res, env.value?.name || '')
@@ -199,6 +236,7 @@ async function loadEnv() {
     env.value = data.data
     const resResp = await client.get<{ data: Resource[] }>(`/environments/${id}/resources`)
     resources.value = resResp.data.data
+    pingAllResources()
   } catch {
     loadError.value = t('env.detailLoadFailed')
   } finally {
@@ -288,5 +326,14 @@ async function loadEnv() {
 
 .badge-info {
   color: var(--info);
+}
+
+.badge-error {
+  color: var(--error);
+}
+
+.badge-pending {
+  color: var(--text-muted);
+  opacity: 0.6;
 }
 </style>

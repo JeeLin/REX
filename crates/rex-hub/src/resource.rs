@@ -360,6 +360,103 @@ async fn test_sql_connector(mut connector: Box<dyn SqlConnector>) -> Result<(), 
     Ok(())
 }
 
+// ── Ping (lightweight status check) ────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct PingResponse {
+    pub status: String,
+    pub latency_ms: u64,
+}
+
+/// Extract host and port from resource config_json based on protocol.
+fn extract_host_port(protocol: &str, config_json: &str) -> Result<(String, u16), String> {
+    let v: serde_json::Value =
+        serde_json::from_str(config_json).map_err(|e| format!("配置解析失败: {e}"))?;
+    match protocol {
+        "ssh" | "sftp" => {
+            let host = v["host"].as_str().ok_or("缺少 host")?;
+            let port = v["port"].as_u64().unwrap_or(22) as u16;
+            Ok((host.to_string(), port))
+        }
+        "mysql" => {
+            let host = v["host"].as_str().ok_or("缺少 host")?;
+            let port = v["port"].as_u64().unwrap_or(3306) as u16;
+            Ok((host.to_string(), port))
+        }
+        "postgresql" => {
+            let host = v["host"].as_str().ok_or("缺少 host")?;
+            let port = v["port"].as_u64().unwrap_or(5432) as u16;
+            Ok((host.to_string(), port))
+        }
+        "redis" => {
+            let host = v["host"].as_str().ok_or("缺少 host")?;
+            let port = v["port"].as_u64().unwrap_or(6379) as u16;
+            Ok((host.to_string(), port))
+        }
+        "s3" => {
+            let endpoint = v["endpoint"].as_str().ok_or("缺少 endpoint")?;
+            let url = endpoint
+                .replace("https://", "")
+                .replace("http://", "");
+            let host_port = url.trim_end_matches('/');
+            let (host, port) = if let Some(colon_pos) = host_port.rfind(':') {
+                let host = &host_port[..colon_pos];
+                let port: u16 = host_port[colon_pos + 1..]
+                    .parse()
+                    .map_err(|_| "端口格式错误")?;
+                (host.to_string(), port)
+            } else {
+                (host_port.to_string(), 443)
+            };
+            Ok((host, port))
+        }
+        _ => Err(format!("{protocol} 协议不支持 ping 检查")),
+    }
+}
+
+pub async fn ping_resource(
+    State(state): State<Arc<AppState>>,
+    Path((env_id, id)): Path<(String, String)>,
+) -> Result<Json<ApiResponse<PingResponse>>, (StatusCode, Json<ErrorResponse>)> {
+    let db = state.db.clone();
+    let resource = tokio::task::spawn_blocking(move || {
+        let conn = db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+        conn.query_row(
+            "SELECT protocol, config_json FROM resources WHERE id = ?1 AND environment_id = ?2",
+            rusqlite::params![id, env_id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        )
+        .map_err(|_| not_found("RESOURCE_NOT_FOUND", "资源不存在"))
+    })
+    .await
+    .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
+
+    let (protocol, config_json) = resource;
+
+    let (host, port) = extract_host_port(&protocol, &config_json)
+        .map_err(|e| bad_request(&e))?;
+
+    let addr = format!("{host}:{port}");
+    let start = std::time::Instant::now();
+    let result = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        tokio::net::TcpStream::connect(&addr).await
+    })
+    .await;
+    let latency = start.elapsed().as_millis() as u64;
+
+    let status = match result {
+        Ok(Ok(_)) => "online",
+        _ => "offline",
+    };
+
+    Ok(Json(ApiResponse {
+        data: PingResponse {
+            status: status.to_string(),
+            latency_ms: latency,
+        },
+    }))
+}
+
 // ── Tests ──────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -592,7 +689,7 @@ mod handler_tests {
                     .header("authorization", auth_header())
                     .header("content-type", "application/json")
                     .body(Body::from(
-                        r#"{"name":"test","protocol":"ssh","config_json":"{}"}"#,
+                        r#"{"name":"test","protocol":"redis","config_json":"{\"host\":\"127.0.0.1\",\"port\":6379}"}"#,
                     ))
                     .unwrap(),
             )

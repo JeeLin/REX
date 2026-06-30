@@ -68,6 +68,15 @@ export async function deleteEnvironment(id: string): Promise<void> {
   await client.delete(`/environments/${id}`)
 }
 
+/** Ping a resource to check its connection status */
+export async function pingResource(
+  envId: string,
+  resourceId: string,
+): Promise<{ status: string; latency_ms: number }> {
+  const res = await client.post(`/environments/${envId}/resources/${resourceId}/ping`)
+  return res.data.data
+}
+
 /** Fetch all environments with their resources for sidebar tree */
 export async function listEnvsWithResources(): Promise<EnvWithResources[]> {
   const envs = await listEnvironments()
