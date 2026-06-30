@@ -551,6 +551,9 @@ export default {
       speed: '{speed}',
       eta: '{time} remaining',
       etaLessThanMinute: 'Less than 1 min remaining',
+      completedToast: '{file} transfer completed',
+      failedToast: '{file} transfer failed: {error}',
+      transferFailed: 'Transfer failed',
     },
     uploadFile: 'Upload file',
     sftp: {

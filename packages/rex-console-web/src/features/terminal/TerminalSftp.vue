@@ -147,6 +147,15 @@
 
     <!-- Hidden upload input -->
     <input ref="fileInputRef" type="file" multiple style="display: none" @change="onFileSelect" />
+
+    <!-- Transfer Queue -->
+    <TransferQueuePanel
+      :tasks="transferTasks"
+      :speeds="speeds"
+      :etas="etas"
+      @cancel="cancelTransferTask"
+      @remove="removeTransferTask"
+    />
   </div>
 </template>
 
@@ -159,6 +168,8 @@ import { createTransfer } from '@/api/transfer'
 import type { TransferEndpoint } from '@/api/transfer'
 import { useTabs } from '@/features/workspace/useTabs'
 import { useToast } from '@/composables/useToast'
+import { useTransferQueue } from '@/features/files/useTransferQueue'
+import TransferQueuePanel from '@/features/files/TransferQueuePanel.vue'
 
 const props = defineProps<{
   resourceId: string
@@ -172,6 +183,23 @@ defineEmits<{
 const { t } = useI18n()
 const { tabs } = useTabs()
 const { success: toastSuccess, error: toastError } = useToast()
+const { tasks: transferTasks, cancel: cancelTransferTask, remove: removeTransferTask, speeds, etas, prevTasks } = useTransferQueue()
+
+// Toast notifications for transfer completion/failure
+watch(transferTasks, (newTasks) => {
+  for (const task of newTasks) {
+    const prev = prevTasks.value.find(t => t.id === task.id)
+    if (!prev) continue
+
+    if (prev.status !== 'completed' && task.status === 'completed') {
+      const filename = task.target.path.split('/').pop() || task.target.path
+      toastSuccess(t('files.transfer.completedToast', { file: filename }))
+    } else if (prev.status !== 'failed' && task.status === 'failed') {
+      const filename = task.target.path.split('/').pop() || task.target.path
+      toastError(t('files.transfer.failedToast', { file: filename, error: task.status_detail || '' }))
+    }
+  }
+})
 
 const currentPath = ref('/')
 const entries = ref<FileEntry[]>([])

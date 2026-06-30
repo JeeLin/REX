@@ -264,7 +264,24 @@ const isDirectorySelected = computed(() => {
   return entry?.file_type === 'directory'
 })
 
-const { tasks: transferTasks, cancel: cancelTransfer, remove: removeTransfer } = useTransferQueue()
+const { tasks: transferTasks, cancel: cancelTransfer, remove: removeTransfer, prevTasks } = useTransferQueue()
+
+// Toast notifications for transfer completion/failure
+watch(transferTasks, (newTasks) => {
+  for (const task of newTasks) {
+    const prev = prevTasks.value.find(t => t.id === task.id)
+    if (!prev) continue
+
+    // Detect status transitions
+    if (prev.status !== 'completed' && task.status === 'completed') {
+      const filename = task.target.path.split('/').pop() || task.target.path
+      success(t('files.transfer.completedToast', { file: filename }))
+    } else if (prev.status !== 'failed' && task.status === 'failed') {
+      const filename = task.target.path.split('/').pop() || task.target.path
+      toastError(t('files.transfer.failedToast', { file: filename, error: task.status_detail || '' }))
+    }
+  }
+})
 
 // Download
 async function handleDownload() {
