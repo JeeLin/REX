@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-06-30
+
+### Added
+- TerminalSftp 右键菜单「重命名」功能（Enter 确认、Esc 取消、选中文件名不含扩展名）
+- TerminalSftp 右键菜单「发送到…」跨连接文件传输（弹窗选择目标，复用 createTransfer API）
+- i18n 新增 files.rename、files.renameFailed、files.sendTo、files.sendToTitle、files.sendToDesc、files.send、files.transferStarted、files.transferFailed
+
+### Refactored
+- WorkspaceTerminal 内嵌 SFTP 改为复用 TerminalSftp 组件，消除重复实现
+- 移除 WorkspaceTerminal 中独立的简化版 SFTP 代码（状态变量、loadSftpFiles、sftpGoUp、sftpOpenDir、相关 CSS）
+
 ## [0.30.0] - 2026-06-30
 
 ### Added
