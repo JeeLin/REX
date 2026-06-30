@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-06-30
+
+### Added
+- SQL result pagination: client-side pagination with 50/100/500 rows per page
+- SQL results column header click-to-sort (ascending/descending/none)
+- Ctrl+Shift+F keyboard shortcut for SQL formatting
+- SQL query tab "Save As..." context menu item
+
 ## [0.32.1] - 2026-06-30
 
 ### Fixed
