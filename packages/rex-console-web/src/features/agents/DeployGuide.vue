@@ -407,7 +407,7 @@ function copyCmd(key: string) {
   display: flex;
   align-items: center;
   gap: var(--sp-sm);
-  background: var(--bg-base);
+  background: var(--bg-deep);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: var(--sp-sm) var(--sp-md);
@@ -430,7 +430,7 @@ function copyCmd(key: string) {
 
 .code-block {
   position: relative;
-  background: var(--bg-base);
+  background: var(--bg-deep);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: var(--sp-md);
