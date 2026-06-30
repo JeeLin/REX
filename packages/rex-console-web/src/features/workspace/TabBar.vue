@@ -58,6 +58,8 @@ function onDragStart(e: DragEvent, id: string) {
   localDragId.value = id
   emit('update:dragId', id)
   e.dataTransfer!.effectAllowed = 'move'
+  // Set drag data for cross-panel drop
+  e.dataTransfer!.setData('text/plain', id)
 }
 
 function onDragEnd() {

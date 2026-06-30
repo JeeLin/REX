@@ -325,6 +325,7 @@ const dragOverPanel = ref<number | null>(null)
 function onPanelDragOver(e: DragEvent, panelIndex: number) {
   if (currentLayout.value === 'single' || !dragId.value) return
   e.preventDefault()
+  e.dataTransfer!.dropEffect = 'move'
   dragOverPanel.value = panelIndex
 }
 
@@ -660,15 +661,11 @@ function onKeyDown(e: KeyboardEvent) {
 
 .ws-content.layout-split .ws-panel {
   position: relative;
-  display: none;
+  display: flex;
   flex-direction: column;
   overflow: hidden;
   background: var(--bg-deep);
   min-height: 0;
-}
-
-.ws-content.layout-split .ws-panel.active {
-  display: flex;
 }
 
 .ws-content.layout-split .ws-panel.layout-drop-zone {
