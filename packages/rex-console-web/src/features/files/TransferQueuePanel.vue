@@ -29,7 +29,11 @@ import TransferItem from './TransferItem.vue'
 import type { TransferTask } from '@/api/transfer'
 
 const { t } = useI18n()
-const props = defineProps<{ tasks: TransferTask[] }>()
+const props = defineProps<{
+  tasks: TransferTask[]
+  speeds?: Map<string, number>
+  etas?: Map<string, number>
+}>()
 defineEmits<{ cancel: [id: string]; remove: [id: string] }>()
 
 const expanded = ref(true)
