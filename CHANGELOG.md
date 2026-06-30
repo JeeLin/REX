@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.32.1] - 2026-06-30
+
+### Fixed
+- Workspace split screen panels: CSS `display: none` → `display: flex` so empty panels receive drop events
+- TabBar drag-and-drop: `setData('text/plain', id)` for cross-panel drag data
+- Workspace panel drag-over: `dropEffect = 'move'` for proper cursor feedback
+- Terminal copy/paste: Ctrl+Shift+C copies selection with `execCommand` fallback for restricted contexts
+- Terminal right-click copy: `copyWithFallback()` utility for clipboard access in HTTP environments
+- SQLite connection error display: `error.value = msg.message` to surface connection failures
+- Dashboard API path: `/api/health` → `/health` (client baseURL already includes `/api`)
+- Audit log i18n: Added `environment_create/update/delete`, `resource_create/update/delete/key_upload` keys
+- Audit log filter: Added environment/resource management operation types to filter dropdown
+- Agent deploy guide: CSS variables `--bg-base` → `--bg-deep` for correct styling
+- Workspace empty state: `<kbd>` tags rendered correctly via `v-html`
+
+### Refactored
+- Extracted clipboard fallback logic to `src/utils/clipboard.ts` (`copyWithFallback`)
+
 ## [0.32.0] - 2026-06-30
 
 ### Added
