@@ -676,16 +676,4 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
   gap: var(--sp-sm);
 }
-
-.sftp-rename-input {
-  flex: 1;
-  padding: 2px var(--sp-sm);
-  background: var(--bg-deep);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-  outline: none;
-}
 </style>

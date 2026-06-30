@@ -671,16 +671,6 @@ onBeforeUnmount(() => {
   background: var(--accent);
 }
 
-/* ── SFTP 面板 ── */
-.ws-term-sftp {
-  display: flex;
-  flex-direction: column;
-  border-left: 1px solid var(--border);
-  background: var(--bg-surface);
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
 /* ── 重连提示 ── */
 .ws-term-reconnect {
   position: absolute;
