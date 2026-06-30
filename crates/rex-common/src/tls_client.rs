@@ -176,13 +176,14 @@ mod tests {
     fn build_default_reqwest_client() {
         let client = build_reqwest_client(None, false).unwrap();
         // Client was built successfully (has default webpki roots)
-        assert!(client.get("https://localhost").build().is_ok() || true);
+        // build() validates request structure; actual TLS connects are not attempted
+        assert!(client.get("https://localhost").build().is_ok());
     }
 
     #[test]
     fn build_insecure_reqwest_client() {
         let client = build_reqwest_client(None, true).unwrap();
-        assert!(client.get("https://localhost").build().is_ok() || true);
+        assert!(client.get("https://localhost").build().is_ok());
     }
 
     #[test]

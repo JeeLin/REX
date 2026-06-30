@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-06-30
+
+### Added
+- 环境编辑与删除：EnvironmentEditModal 组件，支持编辑名称/描述，删除时级联删除关联资源
+- 资源编辑与删除：ResourceEditModal 协议特定字段预填，删除确认弹窗
+- 资源轻量探活：POST ping 端点，TCP 连接测试（3s 超时），返回 online/offline + latency_ms
+- 环境卡片信息补全：后端聚合 resource_count/agent_count/resource_types，前端显示资源类型分布 badges
+- 右键菜单 action 补全：Dashboard 收藏/最近使用、Environments 编辑/删除/工作区打开、EnvironmentDetail 资源编辑/删除、AuditLog 刷新/导出 CSV/清除筛选
+- i18n 补全：en.ts 和 zh.ts 完全同步（780 keys），移除 ResourceNew.vue 硬编码字符串
+
+### Fixed
+- tls_client.rs 中 assert!(expr || true) 逻辑错误
+- resource.rs rustfmt 格式化修复
+
 ## [0.27.2] - 2026-06-29
 
 ### Added

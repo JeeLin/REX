@@ -395,9 +395,7 @@ fn extract_host_port(protocol: &str, config_json: &str) -> Result<(String, u16),
         }
         "s3" => {
             let endpoint = v["endpoint"].as_str().ok_or("缺少 endpoint")?;
-            let url = endpoint
-                .replace("https://", "")
-                .replace("http://", "");
+            let url = endpoint.replace("https://", "").replace("http://", "");
             let host_port = url.trim_end_matches('/');
             let (host, port) = if let Some(colon_pos) = host_port.rfind(':') {
                 let host = &host_port[..colon_pos];
@@ -420,7 +418,10 @@ pub async fn ping_resource(
 ) -> Result<Json<ApiResponse<PingResponse>>, (StatusCode, Json<ErrorResponse>)> {
     let db = state.db.clone();
     let resource = tokio::task::spawn_blocking(move || {
-        let conn = db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+        let conn = db
+            .pool
+            .get()
+            .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
         conn.query_row(
             "SELECT protocol, config_json FROM resources WHERE id = ?1 AND environment_id = ?2",
             rusqlite::params![id, env_id],
@@ -433,8 +434,7 @@ pub async fn ping_resource(
 
     let (protocol, config_json) = resource;
 
-    let (host, port) = extract_host_port(&protocol, &config_json)
-        .map_err(|e| bad_request(&e))?;
+    let (host, port) = extract_host_port(&protocol, &config_json).map_err(|e| bad_request(&e))?;
 
     let addr = format!("{host}:{port}");
     let start = std::time::Instant::now();
