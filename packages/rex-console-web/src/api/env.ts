@@ -10,6 +10,7 @@ export interface Environment {
   resource_count?: number
   agent_count?: number
   resource_types?: Record<string, number>
+  agent_online?: boolean
 }
 
 export interface Resource {

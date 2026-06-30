@@ -43,8 +43,8 @@
         >
           <div class="env-card-header">
             <span class="env-card-name">{{ env.name }}</span>
-            <span class="badge" :class="env.connection_mode === 'direct' ? 'badge-info' : 'badge-success'">
-              {{ env.connection_mode === 'direct' ? t('env.connectionModeLabel') : t('env.agentOnline') }}
+            <span class="badge" :class="env.connection_mode === 'direct' ? 'badge-info' : (env.agent_online ? 'badge-success' : 'badge-offline')">
+              {{ env.connection_mode === 'direct' ? t('env.connectionModeLabel') : (env.agent_online ? t('status.online') : t('status.offline')) }}
             </span>
           </div>
           <div class="env-card-desc">{{ env.description || '—' }}</div>
