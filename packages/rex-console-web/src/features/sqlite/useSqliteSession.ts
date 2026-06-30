@@ -99,6 +99,7 @@ export function useSqliteSession(resourceId: () => string) {
         break
       }
       case 'error': {
+        error.value = msg.message
         const pending = pendingCommands.get(msg.id)
         if (pending) {
           pending.resolve(msg)
