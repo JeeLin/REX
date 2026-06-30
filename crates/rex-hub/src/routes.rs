@@ -162,6 +162,10 @@ pub fn app_with_static(
                 post(resource::ping_resource),
             )
             .route(
+                "/api/environments/:env_id/resources/:id/ssh-key",
+                post(resource::upload_ssh_key),
+            )
+            .route(
                 "/api/resources/test-connection",
                 post(resource::test_connection),
             )

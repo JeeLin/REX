@@ -1,4 +1,4 @@
-use axum::extract::{Path, State};
+use axum::extract::{Multipart, Path, State};
 use axum::http::{header::HeaderMap, StatusCode};
 use axum::Json;
 use rex_common::sql::SqlConnector;
@@ -455,6 +455,147 @@ pub async fn ping_resource(
             latency_ms: latency,
         },
     }))
+}
+
+// ── SSH Key Upload ─────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct UploadKeyResponse {
+    pub key_id: String,
+    pub filename: String,
+    pub size: usize,
+}
+
+/// Valid SSH key magic bytes for format detection.
+fn detect_key_format(data: &[u8]) -> Option<&'static str> {
+    let text = String::from_utf8_lossy(data);
+    if text.contains("-----BEGIN") {
+        return Some("PEM");
+    }
+    if text.starts_with("PuTTY-User-Key-File") {
+        return Some("PPK");
+    }
+    if let Some(first_line) = text.lines().next() {
+        if first_line.starts_with("ssh-") || first_line.starts_with("ecdsa-") {
+            return Some("OpenSSH");
+        }
+    }
+    None
+}
+
+const MAX_KEY_SIZE: usize = 64 * 1024; // 64KB
+
+pub async fn upload_ssh_key(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path((env_id, id)): Path<(String, String)>,
+    mut multipart: Multipart,
+) -> Result<(StatusCode, Json<ApiResponse<UploadKeyResponse>>), (StatusCode, Json<ErrorResponse>)> {
+    let ip = extract_client_ip(&headers);
+
+    // Verify resource exists and is SSH/SFTP
+    let db = state.db.clone();
+    let resource_info = {
+        let id = id.clone();
+        let env_id = env_id.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+            conn.query_row(
+                "SELECT id, protocol FROM resources WHERE id = ?1 AND environment_id = ?2",
+                rusqlite::params![id, env_id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
+            .map_err(|_| not_found("RESOURCE_NOT_FOUND", "资源不存在"))
+        })
+        .await
+        .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??
+    };
+
+    let (_res_id, protocol) = resource_info;
+    if protocol != "ssh" && protocol != "sftp" {
+        return Err(bad_request("只有 SSH/SFTP 资源支持密钥上传"));
+    }
+
+    // Extract file from multipart
+    let mut file_data: Option<Vec<u8>> = None;
+    let mut filename = String::new();
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| bad_request(&format!("读取上传数据失败: {e}")))?
+    {
+        if let Some(name) = field.name() {
+            if name == "file" {
+                filename = field
+                    .file_name()
+                    .unwrap_or("id_rsa")
+                    .to_string();
+                let data = field
+                    .bytes()
+                    .await
+                    .map_err(|e| bad_request(&format!("读取文件内容失败: {e}")))?;
+                file_data = Some(data.to_vec());
+                break;
+            }
+        }
+    }
+
+    let data = file_data.ok_or_else(|| bad_request("缺少 file 字段"))?;
+
+    // Validate size
+    if data.len() > MAX_KEY_SIZE {
+        return Err(bad_request("密钥文件不能超过 64KB"));
+    }
+
+    // Validate format
+    let format = detect_key_format(&data)
+        .ok_or_else(|| bad_request("不支持的密钥格式。支持 PEM、PPK、OpenSSH 格式"))?;
+
+    // Save to data_dir/keys/{resource_id}
+    let keys_dir = state.data_dir.join("keys");
+    tokio::fs::create_dir_all(&keys_dir)
+        .await
+        .map_err(|_| err_resp("INTERNAL_ERROR", "创建密钥目录失败"))?;
+
+    let key_path = keys_dir.join(format!("{id}.key"));
+    tokio::fs::write(&key_path, &data)
+        .await
+        .map_err(|_| err_resp("INTERNAL_ERROR", "保存密钥文件失败"))?;
+
+    // Set permissions to 0600 on Unix
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o600);
+        let _ = std::fs::set_permissions(&key_path, perms);
+    }
+
+    let key_id = format!("key_{}", id);
+    let size = data.len();
+
+    write_audit_log(
+        &state.db,
+        "resource_key_upload",
+        "success",
+        &format!("上传 SSH 密钥到资源（格式: {}）", format),
+        Some(&env_id),
+        Some(&id),
+        None,
+        None,
+        Some(&ip),
+    );
+
+    Ok((
+        StatusCode::CREATED,
+        Json(ApiResponse {
+            data: UploadKeyResponse {
+                key_id,
+                filename,
+                size,
+            },
+        }),
+    ))
 }
 
 // ── Tests ──────────────────────────────────────────────────
