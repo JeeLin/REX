@@ -775,5 +775,17 @@ async function submitResource() {
 @media (max-width: 767px) {
   .protocol-grid { grid-template-columns: repeat(2, 1fr); }
   .form-row { flex-direction: column; }
+  .steps { gap: 4px; }
+  .step-label { font-size: 10px; }
+  .wizard-nav { padding: 0 var(--sp-md); }
+  .form-input { font-size: 16px; min-height: 44px; }
+  .auth-toggle { flex-direction: column; }
+  .auth-btn { padding: 10px 12px; min-height: 44px; }
+}
+
+@media (max-width: 479px) {
+  .protocol-grid { grid-template-columns: 1fr; }
+  .step-label { display: none; }
+  .step-line { width: 16px; }
 }
 </style>

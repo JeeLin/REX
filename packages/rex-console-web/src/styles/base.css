@@ -340,4 +340,29 @@ textarea.form-input {
   .audit-filters {
     padding: var(--sp-md);
   }
+  /* Form inputs touch-friendly on mobile */
+  .form-input,
+  .form-select {
+    min-height: 44px;
+    font-size: 16px; /* prevent iOS zoom */
+    padding: var(--sp-sm) var(--sp-md);
+  }
+}
+
+/* ── Small Mobile (< 480px) ── */
+@media (max-width: 479px) {
+  .page-body {
+    padding: var(--sp-sm);
+  }
+  .page-header {
+    padding: var(--sp-sm) var(--sp-md);
+    padding-left: 52px;
+    min-height: 44px;
+  }
+  .page-title {
+    font-size: var(--fs-sm);
+  }
+  .stats-row {
+    grid-template-columns: 1fr;
+  }
 }

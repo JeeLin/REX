@@ -182,5 +182,7 @@ async function submitUpdate() {
 @media (max-width: 767px) {
   .modal-content { width: 95%; max-height: 85vh; }
   .form-row { flex-direction: column; }
+  .modal-body input,
+  .modal-body textarea { font-size: 16px; min-height: 44px; }
 }
 </style>
