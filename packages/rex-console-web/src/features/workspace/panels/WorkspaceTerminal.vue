@@ -151,6 +151,7 @@ import '@xterm/xterm/css/xterm.css'
 import { createSession, deleteSession } from '@/api/terminal'
 import { terminalSettings } from '@/stores/settings'
 import { useContextMenu } from '@/composables/useContextMenu'
+import { useTouchGestures } from '@/composables/useTouchGestures'
 import { getErrorMessage } from '@/utils/error'
 import { copyWithFallback } from '@/utils/clipboard'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -200,6 +201,7 @@ let fitAddon: FitAddon | null = null
 let ws: WebSocket | null = null
 let sessionId: string | null = null
 let resizeObserver: ResizeObserver | null = null
+let cleanupTouch: (() => void) | null = null
 let inputBuffer = ''
 
 function initTerminal() {
@@ -565,11 +567,43 @@ onMounted(async () => {
   const mq = window.matchMedia('(max-width: 768px)')
   const mqHandler = (e: MediaQueryListEvent) => { isMobile.value = e.matches }
   mq.addEventListener('change', mqHandler)
+
+  // Touch gestures for mobile terminal
+  if (terminalContainer.value) {
+    cleanupTouch = useTouchGestures(terminalContainer.value, {
+      onSwipeUp: () => {
+        sendKey('\x1b[A') // history up
+      },
+      onSwipeDown: () => {
+        sendKey('\x1b[B') // history down
+      },
+      onSwipeLeft: () => {
+        sendKey('\x1b[D') // cursor left
+      },
+      onSwipeRight: () => {
+        sendKey('\x1b[C') // cursor right
+      },
+      onDoubleTap: () => {
+        adjustFontSize(2)
+      },
+      onLongPress: () => {
+        if (terminalContainer.value) {
+          const rect = terminalContainer.value.getBoundingClientRect()
+          handleContextMenu(new MouseEvent('contextmenu', {
+            clientX: rect.left + rect.width / 2,
+            clientY: rect.top + rect.height / 2,
+          }))
+        }
+      },
+    })
+  }
+
   // Store cleanup
   onBeforeUnmount(() => mq.removeEventListener('change', mqHandler))
 })
 
 onBeforeUnmount(() => {
+  cleanupTouch?.()
   inputBuffer = ''
   ws?.close()
   if (sessionId) {
