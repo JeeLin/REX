@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-06-30
+
+### Added
+- TransferItem 状态文本全面 i18n 化（pending/running/completed/failed/cancelled，源/目标/错误标签）
+- TransferItem 传输速度和预计剩余时间显示（格式化为 KB/s/MB/s 和 m:ss/< 1 分钟）
+- useTransferQueue 新增速度/ETA 计算（基于 3 秒轮询 delta 计算 bytes/s）
+- 传输完成/失败 Toast 通知（useTransferToast composable，Files.vue 和 TerminalSftp.vue 统一调用）
+- TerminalSftp 面板底部传输队列（TransferQueuePanel 折叠式，与 Files.vue 一致）
+
+### Refactored
+- 提取重复的 transferTasks watch 逻辑为 useTransferToast composable
+- TransferQueuePanel 补全 speeds/etas props 声明
+
 ## [0.31.0] - 2026-06-30
 
 ### Added
