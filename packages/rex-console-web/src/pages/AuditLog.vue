@@ -193,6 +193,13 @@ const operationTypes = computed(() => [
   { value: 'delete', label: t('audit.ops.delete') },
   { value: 'ssh_command', label: t('audit.ops.command') },
   { value: 'login', label: t('audit.ops.login') },
+  { value: 'environment_create', label: t('audit.ops.environment_create') },
+  { value: 'environment_update', label: t('audit.ops.environment_update') },
+  { value: 'environment_delete', label: t('audit.ops.environment_delete') },
+  { value: 'resource_create', label: t('audit.ops.resource_create') },
+  { value: 'resource_update', label: t('audit.ops.resource_update') },
+  { value: 'resource_delete', label: t('audit.ops.resource_delete') },
+  { value: 'resource_key_upload', label: t('audit.ops.resource_key_upload') },
 ])
 
 // ── Audit record type ──

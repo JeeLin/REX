@@ -26,5 +26,5 @@ export interface HealthStatus {
 }
 
 export function fetchHealth(): Promise<HealthStatus> {
-  return client.get('/api/health').then((res: { data: HealthStatus }) => res.data)
+  return client.get('/health').then((res: { data: HealthStatus }) => res.data)
 }
