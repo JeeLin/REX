@@ -20,7 +20,7 @@
         <div class="ws-empty-text">{{ t('ws.empty.noSessions') }}</div>
         <div class="ws-empty-hint">
           {{ t('ws.workspace.empty.hint') }}<br />
-          {{ t('ws.workspace.empty.shortcutsHint') }}
+          <span v-html="t('ws.workspace.empty.shortcutsHint')"></span>
         </div>
       </div>
 
