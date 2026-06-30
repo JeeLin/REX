@@ -226,6 +226,21 @@ function initTerminal() {
       return false
     }
     if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === 'C' || event.key === 'c') && event.type === 'keydown') {
+      // Ctrl+Shift+C → 复制选中内容
+      if (event.type === 'keydown') {
+        const selection = terminal?.getSelection()
+        if (selection) {
+          navigator.clipboard?.writeText(selection).catch(() => {
+            // Fallback: use execCommand
+            const ta = document.createElement('textarea')
+            ta.value = selection
+            document.body.appendChild(ta)
+            ta.select()
+            document.execCommand('copy')
+            document.body.removeChild(ta)
+          })
+        }
+      }
       return false
     }
     return true
@@ -487,7 +502,18 @@ function handleContextMenu(event: MouseEvent) {
   showMenu(event, [
     {
       label: t('ws.terminal.ctx.copy'),
-      action: () => { navigator.clipboard.writeText(selection) },
+      action: () => {
+        if (selection) {
+          navigator.clipboard?.writeText(selection).catch(() => {
+            const ta = document.createElement('textarea')
+            ta.value = selection
+            document.body.appendChild(ta)
+            ta.select()
+            document.execCommand('copy')
+            document.body.removeChild(ta)
+          })
+        }
+      },
       disabled: !selection,
     },
     {
