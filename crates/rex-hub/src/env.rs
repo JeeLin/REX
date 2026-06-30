@@ -25,6 +25,8 @@ pub struct Environment {
     pub agent_count: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resource_types: Option<std::collections::HashMap<String, i64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_online: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -63,6 +65,7 @@ pub async fn list_envs(
                     resource_count: None,
                     agent_count: None,
                     resource_types: None,
+                    agent_online: None,
                 })
             })
             .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?
@@ -99,6 +102,14 @@ pub async fn list_envs(
             env.resource_count = Some(resource_count);
             env.agent_count = Some(agent_count);
             env.resource_types = Some(resource_types);
+
+            // Check if any agent in this environment is online
+            let agent_online: bool = conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM agents WHERE environment_id = ?1 AND status = 'online' LIMIT 1)",
+                rusqlite::params![env.id],
+                |row| row.get(0),
+            ).unwrap_or(false);
+            env.agent_online = Some(agent_online);
         }
 
         Ok::<_, (StatusCode, Json<ErrorResponse>)>(envs)
@@ -140,6 +151,7 @@ pub async fn create_env(
             id: id_clone, name, description: desc, connection_mode: conn_mode,
             agent_token_hash: None, created_at: now.clone(), updated_at: now,
             resource_count: Some(0), agent_count: Some(0), resource_types: Some(std::collections::HashMap::new()),
+            agent_online: Some(false),
         })
     })
     .await
@@ -175,6 +187,7 @@ pub async fn get_env(
                 connection_mode: row.get(3)?, agent_token_hash: row.get(4)?,
                 created_at: row.get(5)?, updated_at: row.get(6)?,
                 resource_count: None, agent_count: None, resource_types: None,
+                agent_online: None,
             }),
         )
         .map_err(|_| not_found("ENVIRONMENT_NOT_FOUND", "环境不存在"))?;
@@ -195,6 +208,15 @@ pub async fn get_env(
         env.resource_count = Some(resource_count);
         env.agent_count = Some(agent_count);
         env.resource_types = Some(resource_types);
+
+        // Check if any agent in this environment is online
+        let agent_online: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM agents WHERE environment_id = ?1 AND status = 'online' LIMIT 1)",
+            rusqlite::params![id],
+            |row| row.get(0),
+        ).unwrap_or(false);
+        env.agent_online = Some(agent_online);
+
         Ok::<_, (StatusCode, Json<ErrorResponse>)>(env)
     })
     .await
@@ -222,6 +244,7 @@ pub async fn update_env(
                 connection_mode: row.get(3)?, agent_token_hash: row.get(4)?,
                 created_at: row.get(5)?, updated_at: row.get(6)?,
                 resource_count: None, agent_count: None, resource_types: None,
+                agent_online: None,
             }),
         )
         .map_err(|_| not_found("ENVIRONMENT_NOT_FOUND", "环境不存在"))?;
@@ -238,6 +261,7 @@ pub async fn update_env(
             id: existing.id, name, description, connection_mode: existing.connection_mode,
             agent_token_hash: existing.agent_token_hash, created_at: existing.created_at, updated_at: now,
             resource_count: existing.resource_count, agent_count: existing.agent_count, resource_types: existing.resource_types,
+            agent_online: existing.agent_online,
         })
     })
     .await
