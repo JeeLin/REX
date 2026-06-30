@@ -405,6 +405,7 @@ export default {
       keyFile: '密钥文件',
       encoding: '字符编码',
       keepalive: '保活间隔（秒）',
+      dropKey: '点击或拖拽上传密钥文件',
     },
     redis: {
       host: '主机地址',

@@ -405,6 +405,7 @@ export default {
       keyFile: 'Key File',
       encoding: 'Encoding',
       keepalive: 'Keepalive (seconds)',
+      dropKey: 'Click or drag to upload key file',
     },
     redis: {
       host: 'Host',

@@ -188,12 +188,38 @@
               type="password"
               placeholder="••••••••"
             />
-            <input
-              v-else
-              v-model="sshConfig.keyFile"
-              class="form-input"
-              placeholder="~/.ssh/id_rsa"
-            />
+            <div v-else class="ssh-key-upload" @click="triggerKeyUpload" @dragover.prevent @drop.prevent="onKeyDrop">
+              <input ref="keyFileInput" type="file" accept=".pem,.ppk,.pub,.key,.openssh" class="hidden-file" @change="onKeyFileSelect" />
+              <div v-if="!sshConfig.keyFileName" class="upload-placeholder">
+                <span class="upload-icon">📎</span>
+                <span>{{ t('resource.ssh.dropKey') }}</span>
+                <span class="upload-hint">PEM / PPK / OpenSSH</span>
+              </div>
+              <div v-else class="upload-selected">
+                <span class="upload-icon">🔑</span>
+                <span class="upload-filename">{{ sshConfig.keyFileName }}</span>
+                <span class="upload-size">{{ formatSize(sshConfig.keySize) }}</span>
+                <button type="button" class="upload-remove" @click.stop="removeKeyFile">✕</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="form-label">{{ t('resource.ssh.encoding') }}</label>
+              <select v-model="sshConfig.encoding" class="form-input">
+                <option value="utf-8">UTF-8</option>
+                <option value="gbk">GBK</option>
+                <option value="iso-8859-1">ISO-8859-1</option>
+              </select>
+            </div>
+            <div class="form-group flex-1">
+              <label class="form-label">{{ t('resource.ssh.keepalive') }}</label>
+              <select v-model="sshConfig.keepalive" class="form-input">
+                <option value="30">30s</option>
+                <option value="60">60s</option>
+                <option value="120">120s</option>
+              </select>
+            </div>
           </div>
           <div class="test-connection-row">
             <button type="button" class="btn btn-ghost btn-sm" :disabled="testState === 'testing'" @click="testConnection">
@@ -274,6 +300,11 @@ const sshConfig = reactive({
   auth: 'password' as 'password' | 'key',
   password: '',
   keyFile: '',
+  keyFileName: '',
+  keySize: 0,
+  keyData: null as File | null,
+  encoding: 'utf-8',
+  keepalive: '60',
 })
 
 const redisConfig = reactive({
@@ -334,6 +365,51 @@ function prevStep() {
   if (step.value > 1) step.value--
 }
 
+// ── SSH Key Upload ────────────────────────────────────────
+
+const keyFileInput = ref<HTMLInputElement | null>(null)
+
+function triggerKeyUpload() {
+  keyFileInput.value?.click()
+}
+
+function onKeyFileSelect(e: Event) {
+  const input = e.target as HTMLInputElement
+  if (input.files?.length) {
+    handleKeyFile(input.files[0])
+  }
+}
+
+function onKeyDrop(e: DragEvent) {
+  const file = e.dataTransfer?.files[0]
+  if (file) handleKeyFile(file)
+}
+
+function handleKeyFile(file: File) {
+  sshConfig.keyData = file
+  sshConfig.keyFileName = file.name
+  sshConfig.keySize = file.size
+  // Read file content for config_json
+  const reader = new FileReader()
+  reader.onload = () => {
+    sshConfig.keyFile = reader.result as string
+  }
+  reader.readAsText(file)
+}
+
+function removeKeyFile() {
+  sshConfig.keyData = null
+  sshConfig.keyFileName = ''
+  sshConfig.keySize = 0
+  sshConfig.keyFile = ''
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
 const testState = ref<'idle' | 'testing' | 'success' | 'fail'>('idle')
 const testMessage = ref('')
 
@@ -384,6 +460,8 @@ function buildConfigJson() {
         ? { password: sshConfig.password }
         : { private_key_path: sshConfig.keyFile }),
     },
+    encoding: sshConfig.encoding,
+    keepalive_interval: Number(sshConfig.keepalive) || 60,
   })
 }
 
@@ -572,6 +650,63 @@ async function submitResource() {
   background: var(--accent);
   color: #000;
   font-weight: 600;
+}
+
+.hidden-file {
+  display: none;
+}
+
+.ssh-key-upload {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--sp-lg);
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.ssh-key-upload:hover {
+  border-color: var(--accent);
+  background: rgba(232, 145, 45, 0.03);
+}
+
+.upload-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-xs);
+  color: var(--text-secondary);
+}
+
+.upload-icon { font-size: 20px; }
+.upload-hint { font-size: var(--fs-xs); color: var(--text-muted); }
+
+.upload-selected {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  color: var(--text-primary);
+}
+
+.upload-filename {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  flex: 1;
+  text-align: left;
+}
+
+.upload-size {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.upload-remove {
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  padding: 2px 6px;
 }
 
 .complete-card {
