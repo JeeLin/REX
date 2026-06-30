@@ -499,7 +499,10 @@ pub async fn upload_ssh_key(
         let id = id.clone();
         let env_id = env_id.clone();
         tokio::task::spawn_blocking(move || {
-            let conn = db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+            let conn = db
+                .pool
+                .get()
+                .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
             conn.query_row(
                 "SELECT id, protocol FROM resources WHERE id = ?1 AND environment_id = ?2",
                 rusqlite::params![id, env_id],
@@ -527,10 +530,7 @@ pub async fn upload_ssh_key(
     {
         if let Some(name) = field.name() {
             if name == "file" {
-                filename = field
-                    .file_name()
-                    .unwrap_or("id_rsa")
-                    .to_string();
+                filename = field.file_name().unwrap_or("id_rsa").to_string();
                 let data = field
                     .bytes()
                     .await

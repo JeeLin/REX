@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-06-30
+
+### Added
+- SSH 密钥文件拖拽/点击上传端点（POST /api/environments/:env_id/resources/:id/ssh-key）
+- SSH 密钥上传前端 UI（拖拽区域 + 文件名/大小显示 + 移除）
+- SSH 终端编码选择（UTF-8 / GBK / ISO-8859-1）
+- SSH 保活间隔选择（30s / 60s / 120s）
+- i18n 新增 resource.ssh.dropKey key
+
 ## [0.29.0] - 2026-06-30
 
 ### Added
