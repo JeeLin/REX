@@ -330,6 +330,8 @@ async function confirmRename() {
   try {
     await renameFile(props.resourceId, entry.path, basePath + newName)
     await loadDir()
+  } catch {
+    toastError(t('files.renameFailed'))
   } finally {
     renamingEntry.value = null
   }

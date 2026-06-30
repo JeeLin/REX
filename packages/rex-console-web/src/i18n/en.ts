@@ -531,6 +531,7 @@ export default {
     fileCreated: 'File created',
     deleted: 'Deleted',
     renamed: 'Renamed',
+    renameFailed: 'Rename failed',
     dropUpload: 'Drop files here to upload',
     sendToTitle: 'Select Target',
     sendToDesc: 'Choose which connection to send the file to',

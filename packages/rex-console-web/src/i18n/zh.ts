@@ -529,6 +529,7 @@ export default {
     fileCreated: '文件已创建',
     deleted: '已删除',
     renamed: '已重命名',
+    renameFailed: '重命名失败',
     upload: '上传',
     download: '下载',
     dropUpload: '拖放文件到此处上传',
