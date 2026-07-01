@@ -206,7 +206,7 @@
         <span class="bottom-nav-icon">◈</span>
         <span class="bottom-nav-label">{{ t('nav.environments') }}</span>
       </router-link>
-      <button class="bottom-nav-item bottom-nav-action" @click="openNewConnection">
+      <button class="bottom-nav-item bottom-nav-action" @click="openNewConnection(); closeMobile()">
         <span class="bottom-nav-icon bottom-nav-icon-action">+</span>
       </button>
       <router-link to="/agents" class="bottom-nav-item" :class="{ active: route.name === 'agents' }" @click="closeMobile">
