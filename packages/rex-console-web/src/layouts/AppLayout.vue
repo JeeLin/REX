@@ -199,19 +199,18 @@
     <!-- 移动端底部导航栏 -->
     <nav v-if="isMobile" class="bottom-nav">
       <router-link to="/" class="bottom-nav-item" :class="{ active: route.name === 'dashboard' }" @click="closeMobile">
-        <span class="bottom-nav-icon">🏠</span>
+        <span class="bottom-nav-icon">◉</span>
         <span class="bottom-nav-label">{{ t('nav.dashboard') }}</span>
       </router-link>
-      <router-link to="/workspace" class="bottom-nav-item" :class="{ active: route.name === 'workspace' }" @click="closeMobile">
-        <span class="bottom-nav-icon">💻</span>
-        <span class="bottom-nav-label">{{ t('nav.workspace') }}</span>
-      </router-link>
       <router-link to="/environments" class="bottom-nav-item" :class="{ active: isEnvPage }" @click="closeMobile">
-        <span class="bottom-nav-icon">🖥</span>
+        <span class="bottom-nav-icon">◈</span>
         <span class="bottom-nav-label">{{ t('nav.environments') }}</span>
       </router-link>
+      <button class="bottom-nav-item bottom-nav-action" @click="openNewConnection">
+        <span class="bottom-nav-icon bottom-nav-icon-action">+</span>
+      </button>
       <router-link to="/agents" class="bottom-nav-item" :class="{ active: route.name === 'agents' }" @click="closeMobile">
-        <span class="bottom-nav-icon">🔌</span>
+        <span class="bottom-nav-icon">⬡</span>
         <span class="bottom-nav-label">{{ t('nav.agents') }}</span>
       </router-link>
       <router-link to="/settings" class="bottom-nav-item" :class="{ active: route.name === 'settings' }" @click="closeMobile">
@@ -368,6 +367,10 @@ function openAllInWorkspace(env: { id: string; name: string }) {
   for (const res of envData.resources) {
     connectToResource(res, env.name)
   }
+}
+
+function openNewConnection() {
+  router.push('/workspace')
 }
 
 const isMobile = ref(false)
@@ -1008,6 +1011,25 @@ onUnmounted(() => {
   .bottom-nav-label {
     font-size: 10px;
     line-height: 1;
+  }
+
+  .bottom-nav-action {
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+
+  .bottom-nav-icon-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--accent, #3b82f6);
+    color: white;
+    font-size: 20px;
+    font-weight: bold;
   }
 }
 </style>
