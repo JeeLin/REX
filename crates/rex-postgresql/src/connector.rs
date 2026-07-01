@@ -424,21 +424,6 @@ mod tests {
             "Plan Rows": 100,
             "Plan Width": 36
         });
-        let columns = vec![
-            "Node Type".to_string(),
-            "Relation Name".to_string(),
-            "Alias".to_string(),
-            "Startup Cost".to_string(),
-            "Total Cost".to_string(),
-            "Plan Rows".to_string(),
-            "Plan Width".to_string(),
-            "Shared Hit Blocks".to_string(),
-            "Shared Read Blocks".to_string(),
-            "Actual Rows".to_string(),
-            "Actual Loops".to_string(),
-            "Filter".to_string(),
-            "Rows Removed by Filter".to_string(),
-        ];
         let mut rows = Vec::new();
         extract_pg_plan_node(&node, &mut rows);
         assert_eq!(rows.len(), 1);
@@ -466,21 +451,6 @@ mod tests {
                 }
             ]
         });
-        let columns = vec![
-            "Node Type".to_string(),
-            "Relation Name".to_string(),
-            "Alias".to_string(),
-            "Startup Cost".to_string(),
-            "Total Cost".to_string(),
-            "Plan Rows".to_string(),
-            "Plan Width".to_string(),
-            "Shared Hit Blocks".to_string(),
-            "Shared Read Blocks".to_string(),
-            "Actual Rows".to_string(),
-            "Actual Loops".to_string(),
-            "Filter".to_string(),
-            "Rows Removed by Filter".to_string(),
-        ];
         let mut rows = Vec::new();
         extract_pg_plan_node(&node, &mut rows);
         assert_eq!(rows.len(), 2);

@@ -167,8 +167,7 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
-import { explainSql, type ExplainResult } from '@/api/sql'
-import type { SqlResult } from '@/api/sql'
+import { explainSql, type ExplainResult, type SqlResult } from '@/api/sql'
 import { exportCsv, exportJson, copyTsv } from './result-export'
 
 const { t } = useI18n()
