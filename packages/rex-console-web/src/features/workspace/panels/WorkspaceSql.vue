@@ -62,6 +62,8 @@
         <SqlResults
           :result="activeTab.result"
           :loading="executing"
+          :resource-id="resourceId"
+          :current-sql="activeTab.sql"
           @sort="handleSort"
           @generate-sql="handleGenerateSql"
         />

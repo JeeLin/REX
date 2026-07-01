@@ -12,6 +12,12 @@
           :class="{ active: activeTab === 'message' }"
           @click="activeTab = 'message'"
         >{{ t('sql.messageTab') }}</span>
+        <span
+          v-if="showExplainTab"
+          class="results-tab"
+          :class="{ active: activeTab === 'explain' }"
+          @click="handleExplainTab"
+        >{{ t('sql.explainTab') }}</span>
       </div>
     </div>
 
@@ -60,6 +66,40 @@
       </div>
       <div v-else class="results-empty">
         {{ t('sql.noResult') }}
+      </div>
+    </div>
+
+    <!-- Explain Tab -->
+    <div v-if="activeTab === 'explain'" class="results-table-wrap">
+      <div v-if="explainLoading" class="results-empty">
+        <span class="spinner"></span>
+        {{ t('sql.executing') }}
+      </div>
+      <div v-else-if="explainError" class="results-empty" style="color: var(--danger)">
+        {{ explainError }}
+      </div>
+      <div v-else-if="explainResult && explainResult.rows.length > 0" class="results-table-wrap">
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th v-for="col in explainResult.columns" :key="col">{{ col }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(row, i) in explainResult.rows" :key="i">
+              <td v-for="(cell, j) in row" :key="j" :class="cellClass(cell)">
+                {{ formatCell(cell) }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else class="results-empty">
+        {{ t('sql.noResult') }}
+      </div>
+      <!-- Raw output fallback -->
+      <div v-if="explainResult && explainResult.raw_output && explainResult.rows.length === 0" class="results-message-wrap">
+        <div class="results-message">{{ explainResult.raw_output }}</div>
       </div>
     </div>
 
@@ -127,6 +167,7 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
+import { explainSql, type ExplainResult } from '@/api/sql'
 import type { SqlResult } from '@/api/sql'
 import { exportCsv, exportJson, copyTsv } from './result-export'
 
@@ -138,6 +179,8 @@ const props = defineProps<{
   loading: boolean
   message?: string
   isError?: boolean
+  resourceId?: string
+  currentSql?: string
 }>()
 
 const emit = defineEmits<{
@@ -145,11 +188,45 @@ const emit = defineEmits<{
   (e: 'generateSql', sql: string): void
 }>()
 
-const activeTab = ref<'results' | 'message'>('results')
+const activeTab = ref<'results' | 'message' | 'explain'>('results')
 const currentPage = ref(1)
 const pageSize = ref(50)
 const sortColumn = ref<number | null>(null)
 const sortDirection = ref<'asc' | 'desc'>('asc')
+
+// Explain tab state
+const showExplainTab = ref(false)
+const explainResult = ref<ExplainResult | null>(null)
+const explainLoading = ref(false)
+const explainError = ref('')
+
+async function handleExplainTab() {
+  activeTab.value = 'explain'
+  if (explainResult.value || explainLoading.value) return
+  if (!props.resourceId || !props.currentSql) {
+    explainError.value = t('sql.explainError')
+    return
+  }
+  explainLoading.value = true
+  explainError.value = ''
+  try {
+    explainResult.value = await explainSql(props.resourceId, props.currentSql)
+  } catch (e: unknown) {
+    explainError.value = (e instanceof Error ? e.message : String(e)) || t('sql.explainError')
+  } finally {
+    explainLoading.value = false
+  }
+}
+
+// Reset explain when result changes
+watch(() => props.result, () => {
+  showExplainTab.value = true
+  explainResult.value = null
+  explainError.value = ''
+  if (activeTab.value === 'explain') {
+    activeTab.value = 'results'
+  }
+})
 
 // 排序逻辑
 function handleHeaderSort(colIdx: number) {

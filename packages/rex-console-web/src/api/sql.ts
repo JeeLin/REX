@@ -36,6 +36,12 @@ export interface SqlResourceInfo {
   protocol: string
 }
 
+export interface ExplainResult {
+  columns: string[]
+  rows: unknown[][]
+  raw_output: string
+}
+
 // ── API 函数 ──────────────────────────────────────────────
 
 /** 获取资源基本信息 */
@@ -58,6 +64,13 @@ export function listPeerSqlResources(resourceId: string): Promise<SqlResourceInf
 export function executeSql(resourceId: string, sql: string): Promise<SqlResult> {
   return client
     .post(`/resources/${resourceId}/sql/execute`, { sql })
+    .then((r) => r.data.data)
+}
+
+/** 获取 SQL 执行计划 */
+export function explainSql(resourceId: string, sql: string): Promise<ExplainResult> {
+  return client
+    .post(`/resources/${resourceId}/sql/explain`, { sql })
     .then((r) => r.data.data)
 }
 
