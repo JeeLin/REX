@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-07-01
+
+### Added
+- 设置页版本总览可折叠区块（默认折叠，localStorage 持久化展开状态）
+- Hub 行显示 ⊞ 图标和「✓ 最新」标记
+- Agent 行显示 ⬡ 图标、平台标签（如 `linux · arm64`）和更新状态
+- 后端 `AgentVersionInfo` API 新增 `platform` 字段（从 agents 表的 os/arch 列拼接）
+- i18n 新增 `settings.update.versionOverview`、`hubLabel`、`hubUpToDate` 键（中/英文）
+
+### Removed
+- 移除未使用的 `agentStatusClass` 函数
+
 ## [0.35.0] - 2026-07-01
 
 ### Added
