@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-07-02
+
+### Added
+- 密码修改功能：设置页个人信息区新增修改密码弹窗，支持当前密码验证 + 新密码确认
+- 侧边栏固定/可折叠设置：外观设置区新增侧边栏模式切换（固定 / 可折叠）
+- 配置加密开关激活：安全设置区配置加密 toggle 从禁用状态改为可用
+
 ## [0.36.2] - 2026-07-01
 
 ### Fixed
