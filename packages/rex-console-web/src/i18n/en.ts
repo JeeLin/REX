@@ -585,6 +585,8 @@ export default {
     placeholder: 'Enter SQL query...',
     resultTab: 'Result',
     messageTab: 'Message',
+    explainTab: 'Execution Plan',
+    explainError: 'Failed to get execution plan',
     rows: '{count} rows',
     elapsed: 'Elapsed: {time}s',
     noResult: 'Execute a query to see results',

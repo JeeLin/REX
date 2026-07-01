@@ -585,6 +585,8 @@ export default {
     placeholder: '输入 SQL 查询...',
     resultTab: '结果',
     messageTab: '消息',
+    explainTab: '执行计划',
+    explainError: '获取执行计划失败',
     rows: '{count} 行',
     elapsed: '执行时间: {time}s',
     noResult: '执行查询以查看结果',
