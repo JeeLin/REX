@@ -23,6 +23,7 @@ export function updateTerminalSetting<K extends keyof typeof terminalSettings>(
 export const securitySettings = reactive({
   sessionTimeout: Number(localStorage.getItem('rex-session-timeout')) || 30,
   auditEnabled: localStorage.getItem('rex-audit-enabled') !== 'false',
+  configEncryption: localStorage.getItem('rex-config-encryption') !== 'false',
 })
 
 export function updateSecuritySetting<K extends keyof typeof securitySettings>(
@@ -32,6 +33,20 @@ export function updateSecuritySetting<K extends keyof typeof securitySettings>(
   ;(securitySettings[key] as unknown) = value
   const storageKey = key === 'auditEnabled' ? 'rex-audit-enabled' : `rex-${key}`
   localStorage.setItem(storageKey, String(value))
+  syncToBackend()
+}
+
+// ── Appearance settings ──
+export const appearanceSettings = reactive({
+  sidebarCollapsible: localStorage.getItem('rex-sidebar-collapsible') === 'true',
+})
+
+export function updateAppearanceSetting<K extends keyof typeof appearanceSettings>(
+  key: K,
+  value: (typeof appearanceSettings)[K],
+) {
+  ;(appearanceSettings[key] as unknown) = value
+  localStorage.setItem(`rex-${key}`, String(value))
   syncToBackend()
 }
 
@@ -47,6 +62,8 @@ function syncToBackend() {
       await updateUserSettings({
         session_timeout: securitySettings.sessionTimeout,
         audit_enabled: securitySettings.auditEnabled,
+        config_encryption: securitySettings.configEncryption,
+        sidebar_collapsible: appearanceSettings.sidebarCollapsible,
         terminal_font_size: terminalSettings.fontSize,
         terminal_font_family: terminalSettings.fontFamily,
         terminal_cursor_blink: terminalSettings.cursorBlink,
@@ -89,6 +106,16 @@ export async function loadSettingsFromBackend() {
     if (remote.audit_enabled !== undefined) {
       securitySettings.auditEnabled = remote.audit_enabled
       localStorage.setItem('rex-audit-enabled', String(remote.audit_enabled))
+    }
+    if (remote.config_encryption !== undefined) {
+      securitySettings.configEncryption = remote.config_encryption
+      localStorage.setItem('rex-config-encryption', String(remote.config_encryption))
+    }
+
+    // Appearance settings
+    if (remote.sidebar_collapsible !== undefined) {
+      appearanceSettings.sidebarCollapsible = remote.sidebar_collapsible
+      localStorage.setItem('rex-sidebar-collapsible', String(remote.sidebar_collapsible))
     }
   } catch {
     // ignore — use localStorage values as-is

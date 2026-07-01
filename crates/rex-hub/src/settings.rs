@@ -128,6 +128,8 @@ pub struct UserSettings {
     // Security
     pub session_timeout: Option<u32>,
     pub audit_enabled: Option<bool>,
+    pub sidebar_collapsible: Option<bool>,
+    pub config_encryption: Option<bool>,
     // Terminal
     pub terminal_font_size: Option<u32>,
     pub terminal_font_family: Option<String>,
@@ -143,6 +145,8 @@ fn default_user_settings() -> UserSettings {
     UserSettings {
         session_timeout: Some(30),
         audit_enabled: Some(true),
+        sidebar_collapsible: Some(false),
+        config_encryption: Some(true),
         terminal_font_size: Some(13),
         terminal_font_family: Some("JetBrains Mono".to_string()),
         terminal_cursor_blink: Some(true),
@@ -173,6 +177,8 @@ fn load_user_settings(db: &crate::db::Database) -> UserSettings {
     UserSettings {
         session_timeout: stored.session_timeout.or(defaults.session_timeout),
         audit_enabled: stored.audit_enabled.or(defaults.audit_enabled),
+        sidebar_collapsible: stored.sidebar_collapsible.or(defaults.sidebar_collapsible),
+        config_encryption: stored.config_encryption.or(defaults.config_encryption),
         terminal_font_size: stored.terminal_font_size.or(defaults.terminal_font_size),
         terminal_font_family: stored
             .terminal_font_family
@@ -225,6 +231,12 @@ pub async fn update_user_settings(
     }
     if input.lang.is_some() {
         current.lang = input.lang;
+    }
+    if input.sidebar_collapsible.is_some() {
+        current.sidebar_collapsible = input.sidebar_collapsible;
+    }
+    if input.config_encryption.is_some() {
+        current.config_encryption = input.config_encryption;
     }
 
     let json = serde_json::to_string(&current)

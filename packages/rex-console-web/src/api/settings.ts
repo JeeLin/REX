@@ -29,6 +29,8 @@ export interface UserSettings {
   // Security
   session_timeout?: number
   audit_enabled?: boolean
+  config_encryption?: boolean
+  sidebar_collapsible?: boolean
   // Terminal
   terminal_font_size?: number
   terminal_font_family?: string
