@@ -21,7 +21,7 @@
         <div class="settings-row-label">{{ t('settings.security.configEncryption') }}</div>
         <div class="settings-row-desc">{{ t('settings.security.configEncryptionDesc') }}</div>
       </div>
-      <div class="settings-toggle active" style="opacity: 0.5; pointer-events: none"></div>
+      <div class="settings-toggle" :class="{ active: securitySettings.configEncryption }" @click="toggleConfigEncryption"></div>
     </div>
     <!-- Audit Log Toggle -->
     <div class="settings-row">
@@ -58,6 +58,10 @@ function setSessionTimeout(e: Event) {
 function toggleAudit() {
   updateSecuritySetting('auditEnabled', !securitySettings.auditEnabled)
   window.dispatchEvent(new CustomEvent('audit-toggle', { detail: { enabled: securitySettings.auditEnabled } }))
+}
+
+function toggleConfigEncryption() {
+  updateSecuritySetting('configEncryption', !securitySettings.configEncryption)
 }
 </script>
 
