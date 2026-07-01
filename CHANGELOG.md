@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-06-30
+
+### Added
+- Touch gesture composable (`useTouchGestures.ts`): swipe, double-tap zoom, long-press context menu
+- Workspace terminal mobile touch gestures: swipe up/down for history, swipe left/right for cursor, double-tap to enlarge font, long-press for context menu
+- Mobile bottom navigation bar in AppLayout (Dashboard, Workspace, Environments, Agents, Settings)
+- Responsive layout breakpoints: 480px (small mobile single column) and 768px (tablet two-column)
+- Mobile-friendly form inputs: minimum 44px touch targets, 16px font to prevent iOS zoom
+- Toast notifications repositioned to bottom on mobile
+- CSS `content-visibility: auto` for off-screen lazy rendering on mobile
+- Environment edit modal and resource creation wizard mobile adaptations
+
 ## [0.33.0] - 2026-06-30
 
 ### Added
