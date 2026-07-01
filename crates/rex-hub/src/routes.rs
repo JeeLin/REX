@@ -378,8 +378,7 @@ pub fn app_with_static(
             .route("/api/user/password", put(crate::user::change_password))
             .route(
                 "/api/user/settings",
-                get(crate::settings::get_user_settings)
-                    .put(crate::settings::update_user_settings),
+                get(crate::settings::get_user_settings).put(crate::settings::update_user_settings),
             )
             .route("/api/settings/tls", get(crate::settings::get_tls_status))
             .layer(middleware::from_fn_with_state(
