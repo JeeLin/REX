@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.36.2] - 2026-07-01
+
+### Fixed
+- 环境详情页无 Agent 时显示「参考下方部署指南」但无实际部署指南组件
+
+### Added
+- 新增后端 `/api/user/settings` API（GET/PUT），将用户设置持久化到 SQLite
+- 前端 settings store 改为从后端加载 + 回写 localStorage 作为 fallback
+- 前端 user store 主题/语言切换后同步到后端
+- App.vue 启动时从后端加载设置
+
 ## [0.36.1] - 2026-07-01
 
 ### Fixed
