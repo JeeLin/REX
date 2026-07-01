@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.36.1] - 2026-07-01
+
+### Fixed
+- 移动端底部导航图标从 emoji 改为 PRODUCT.md 定义符号（◉ ◈ + ⬡ ⚙）
+- 底部导航中间项从「工作空间」改为「+ 新建」操作按钮
+- 点击「+ 新建」按钮后自动关闭移动端导航栏
+
 ## [0.36.0] - 2026-07-01
 
 ### Added
