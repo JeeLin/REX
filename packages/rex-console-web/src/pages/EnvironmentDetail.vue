@@ -58,6 +58,9 @@
 
       <!-- Agent Status -->
       <AgentStatusPanel v-if="env" :env-id="env.id" />
+
+      <!-- Deploy Guide (shown when no agents) -->
+      <DeployGuide v-if="agents.length === 0 && env" />
     </template>
 
     <!-- Edit Modal -->
@@ -96,7 +99,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
@@ -112,14 +115,18 @@ import { deleteEnvironment, deleteResource, pingResource } from '@/api/env'
 import { getProtocolIcon } from '@/composables/useProtocol'
 import { useProtocol } from '@/composables/useProtocol'
 import AgentStatusPanel from '@/features/agents/AgentStatusPanel.vue'
+import DeployGuide from '@/features/agents/DeployGuide.vue'
+import { useAgentStore } from '@/stores/agent'
 
 const { t } = useI18n()
 const route = useRoute()
 const { connectToResource: connect } = useProtocol()
 const { show: showMenu } = useContextMenu()
+const agentStore = useAgentStore()
 
 const env = ref<Environment | null>(null)
 const resources = ref<Resource[]>([])
+const agents = computed(() => env.value ? agentStore.getAgents(env.value.id) : [])
 const loading = ref(true)
 const loadError = ref('')
 const editModalVisible = ref(false)
@@ -236,6 +243,7 @@ async function loadEnv() {
     env.value = data.data
     const resResp = await client.get<{ data: Resource[] }>(`/environments/${id}/resources`)
     resources.value = resResp.data.data
+    agentStore.fetchAgents(id)
     pingAllResources()
   } catch {
     loadError.value = t('env.detailLoadFailed')
