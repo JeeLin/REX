@@ -1,4 +1,5 @@
 import { reactive } from 'vue'
+import { getUserSettings, updateUserSettings } from '@/api/settings'
 
 // ── Terminal settings ──
 export const terminalSettings = reactive({
@@ -13,7 +14,9 @@ export function updateTerminalSetting<K extends keyof typeof terminalSettings>(
   value: (typeof terminalSettings)[K],
 ) {
   ;(terminalSettings[key] as unknown) = value
-  localStorage.setItem(`rex-term-${key === 'cursorBlink' ? 'cursor-blink' : key}`, String(value))
+  const storageKey = `rex-term-${key === 'cursorBlink' ? 'cursor-blink' : key}`
+  localStorage.setItem(storageKey, String(value))
+  syncToBackend()
 }
 
 // ── Security settings ──
@@ -29,4 +32,65 @@ export function updateSecuritySetting<K extends keyof typeof securitySettings>(
   ;(securitySettings[key] as unknown) = value
   const storageKey = key === 'auditEnabled' ? 'rex-audit-enabled' : `rex-${key}`
   localStorage.setItem(storageKey, String(value))
+  syncToBackend()
+}
+
+// ── Backend sync ──
+
+let syncTimer: ReturnType<typeof setTimeout> | null = null
+
+/** Debounced sync to backend (300ms) */
+function syncToBackend() {
+  if (syncTimer) clearTimeout(syncTimer)
+  syncTimer = setTimeout(async () => {
+    try {
+      await updateUserSettings({
+        session_timeout: securitySettings.sessionTimeout,
+        audit_enabled: securitySettings.auditEnabled,
+        terminal_font_size: terminalSettings.fontSize,
+        terminal_font_family: terminalSettings.fontFamily,
+        terminal_cursor_blink: terminalSettings.cursorBlink,
+        terminal_keepalive: terminalSettings.keepalive,
+      })
+    } catch {
+      // ignore — localStorage is already saved as fallback
+    }
+  }, 300)
+}
+
+/** Load settings from backend, falling back to localStorage */
+export async function loadSettingsFromBackend() {
+  try {
+    const remote = await getUserSettings()
+
+    // Terminal settings
+    if (remote.terminal_font_size !== undefined) {
+      terminalSettings.fontSize = remote.terminal_font_size
+      localStorage.setItem('rex-term-font-size', String(remote.terminal_font_size))
+    }
+    if (remote.terminal_font_family !== undefined) {
+      terminalSettings.fontFamily = remote.terminal_font_family
+      localStorage.setItem('rex-term-font-family', remote.terminal_font_family)
+    }
+    if (remote.terminal_cursor_blink !== undefined) {
+      terminalSettings.cursorBlink = remote.terminal_cursor_blink
+      localStorage.setItem('rex-term-cursor-blink', String(remote.terminal_cursor_blink))
+    }
+    if (remote.terminal_keepalive !== undefined) {
+      terminalSettings.keepalive = remote.terminal_keepalive
+      localStorage.setItem('rex-term-keepalive', String(remote.terminal_keepalive))
+    }
+
+    // Security settings
+    if (remote.session_timeout !== undefined) {
+      securitySettings.sessionTimeout = remote.session_timeout
+      localStorage.setItem('rex-session-timeout', String(remote.session_timeout))
+    }
+    if (remote.audit_enabled !== undefined) {
+      securitySettings.auditEnabled = remote.audit_enabled
+      localStorage.setItem('rex-audit-enabled', String(remote.audit_enabled))
+    }
+  } catch {
+    // ignore — use localStorage values as-is
+  }
 }

@@ -1,9 +1,9 @@
 use axum::Json;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::acme::{self, SharedAcmeStatus, TlsMode};
 use crate::config::HubConfig;
-use crate::helpers::ErrorResponse;
+use crate::helpers::{err_resp, ApiResponse, ErrorResponse};
 
 /// TLS 状态响应
 #[derive(Serialize)]
@@ -116,6 +116,132 @@ pub async fn get_tls_status(
         acme_status,
         acme_error,
     }))
+}
+
+// ── User Settings ────────────────────────────────────────────
+
+const USER_SETTINGS_KEY: &str = "user_settings";
+
+/// 后端用户设置结构体，所有字段可选（PATCH 语义）
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct UserSettings {
+    // Security
+    pub session_timeout: Option<u32>,
+    pub audit_enabled: Option<bool>,
+    // Terminal
+    pub terminal_font_size: Option<u32>,
+    pub terminal_font_family: Option<String>,
+    pub terminal_cursor_blink: Option<bool>,
+    pub terminal_keepalive: Option<u32>,
+    // Appearance
+    pub theme: Option<String>,
+    pub lang: Option<String>,
+}
+
+/// 服务端默认值
+fn default_user_settings() -> UserSettings {
+    UserSettings {
+        session_timeout: Some(30),
+        audit_enabled: Some(true),
+        terminal_font_size: Some(13),
+        terminal_font_family: Some("JetBrains Mono".to_string()),
+        terminal_cursor_blink: Some(true),
+        terminal_keepalive: Some(60),
+        theme: Some("dark".to_string()),
+        lang: Some("zh".to_string()),
+    }
+}
+
+/// 从 SQLite 读取 user_settings JSON，反序列化后合并默认值
+fn load_user_settings(db: &crate::db::Database) -> UserSettings {
+    let defaults = default_user_settings();
+    let json_str: Option<String> = db
+        .pool
+        .get()
+        .unwrap()
+        .query_row(
+            "SELECT value FROM settings WHERE key = ?1",
+            rusqlite::params![USER_SETTINGS_KEY],
+            |row| row.get(0),
+        )
+        .ok();
+
+    let stored: UserSettings = json_str
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+
+    UserSettings {
+        session_timeout: stored.session_timeout.or(defaults.session_timeout),
+        audit_enabled: stored.audit_enabled.or(defaults.audit_enabled),
+        terminal_font_size: stored.terminal_font_size.or(defaults.terminal_font_size),
+        terminal_font_family: stored
+            .terminal_font_family
+            .or(defaults.terminal_font_family),
+        terminal_cursor_blink: stored
+            .terminal_cursor_blink
+            .or(defaults.terminal_cursor_blink),
+        terminal_keepalive: stored.terminal_keepalive.or(defaults.terminal_keepalive),
+        theme: stored.theme.or(defaults.theme),
+        lang: stored.lang.or(defaults.lang),
+    }
+}
+
+/// GET /api/user/settings
+pub async fn get_user_settings(
+    axum::extract::State(state): axum::extract::State<std::sync::Arc<crate::routes::AppState>>,
+) -> Result<Json<ApiResponse<UserSettings>>, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    let settings = load_user_settings(&state.db);
+    Ok(Json(ApiResponse { data: settings }))
+}
+
+/// PUT /api/user/settings — 合并更新（只覆盖请求中提供的字段）
+pub async fn update_user_settings(
+    axum::extract::State(state): axum::extract::State<std::sync::Arc<crate::routes::AppState>>,
+    Json(input): Json<UserSettings>,
+) -> Result<Json<ApiResponse<UserSettings>>, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    let mut current = load_user_settings(&state.db);
+
+    // 只覆盖非 None 字段
+    if input.session_timeout.is_some() {
+        current.session_timeout = input.session_timeout;
+    }
+    if input.audit_enabled.is_some() {
+        current.audit_enabled = input.audit_enabled;
+    }
+    if input.terminal_font_size.is_some() {
+        current.terminal_font_size = input.terminal_font_size;
+    }
+    if input.terminal_font_family.is_some() {
+        current.terminal_font_family = input.terminal_font_family;
+    }
+    if input.terminal_cursor_blink.is_some() {
+        current.terminal_cursor_blink = input.terminal_cursor_blink;
+    }
+    if input.terminal_keepalive.is_some() {
+        current.terminal_keepalive = input.terminal_keepalive;
+    }
+    if input.theme.is_some() {
+        current.theme = input.theme;
+    }
+    if input.lang.is_some() {
+        current.lang = input.lang;
+    }
+
+    let json = serde_json::to_string(&current)
+        .map_err(|_| err_resp("INTERNAL_ERROR", "序列化设置失败"))?;
+
+    state
+        .db
+        .pool
+        .get()
+        .unwrap()
+        .execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+            rusqlite::params![USER_SETTINGS_KEY, json],
+        )
+        .map_err(|_| err_resp("INTERNAL_ERROR", "保存设置失败"))?;
+
+    Ok(Json(ApiResponse { data: current }))
 }
 
 /// 从 DER 编码的 X.509 证书中提取 notAfter 时间。

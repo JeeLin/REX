@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { updateUserSettings } from '@/api/settings'
 
 export type Theme = 'dark' | 'light' | 'system'
 export type Lang = 'zh' | 'en'
@@ -12,11 +13,15 @@ export const useUserStore = defineStore('user', () => {
     theme.value = newTheme
     localStorage.setItem('rex-theme', newTheme)
     applyTheme(newTheme)
+    // Sync to backend (fire and forget)
+    updateUserSettings({ theme: newTheme }).catch(() => {})
   }
 
   function setLang(newLang: Lang) {
     lang.value = newLang
     localStorage.setItem('rex-lang', newLang)
+    // Sync to backend (fire and forget)
+    updateUserSettings({ lang: newLang }).catch(() => {})
   }
 
   function applyTheme(t: Theme) {
@@ -28,8 +33,27 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
+  /** Load theme/lang from backend and apply */
+  async function loadFromBackend() {
+    try {
+      const { getUserSettings } = await import('@/api/settings')
+      const remote = await getUserSettings()
+      if (remote.theme && remote.theme !== theme.value) {
+        theme.value = remote.theme as Theme
+        localStorage.setItem('rex-theme', remote.theme)
+        applyTheme(remote.theme as Theme)
+      }
+      if (remote.lang && remote.lang !== lang.value) {
+        lang.value = remote.lang as Lang
+        localStorage.setItem('rex-lang', remote.lang)
+      }
+    } catch {
+      // ignore — use localStorage values
+    }
+  }
+
   // 初始化时应用主题
   applyTheme(theme.value)
 
-  return { theme, lang, setTheme, setLang }
+  return { theme, lang, setTheme, setLang, loadFromBackend }
 })
