@@ -44,7 +44,7 @@
     <!-- 修改密码弹窗 -->
     <div v-if="showChangePassword" class="modal-overlay" @click.self="showChangePassword = false">
       <div class="modal">
-        <div class="modal-title">{{ t('settings.profile.changeTitle') }}</div>
+        <div class="modal-title">{{ t('settings.profile.passwordTitle') }}</div>
         <div class="form-group">
           <label class="form-label">{{ t('settings.profile.currentPassword') }}</label>
           <input
@@ -61,14 +61,24 @@
             type="password"
             class="form-input"
             :placeholder="t('settings.profile.newPasswordPlaceholder')"
+          />
+        </div>
+        <div class="form-group" style="margin-top: var(--sp-md)">
+          <label class="form-label">{{ t('settings.profile.newPassword') }}（确认）</label>
+          <input
+            v-model="confirmPassword"
+            type="password"
+            class="form-input"
+            :placeholder="t('settings.profile.newPasswordPlaceholder')"
             @keydown.enter="savePassword"
           />
         </div>
+        <div v-if="passwordError" class="form-error">{{ passwordError }}</div>
         <div class="modal-actions">
           <button class="btn" @click="showChangePassword = false">{{ t('settings.profile.cancel') }}</button>
           <button
             class="btn btn-primary"
-            :disabled="!currentPassword || newPassword.length < 6"
+            :disabled="!currentPassword || newPassword.length < 8 || newPassword !== confirmPassword"
             @click="savePassword"
           >
             {{ t('settings.profile.save') }}
@@ -80,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getUserProfile, updateUserProfile, changePassword } from '@/api/settings'
 import { getErrorMessage } from '@/utils/error'
@@ -95,6 +105,16 @@ const newUsername = ref('')
 const showChangePassword = ref(false)
 const currentPassword = ref('')
 const newPassword = ref('')
+const confirmPassword = ref('')
+const passwordError = computed(() => {
+  if (newPassword.value && newPassword.value.length < 8) {
+    return t('settings.profile.passwordMinLength')
+  }
+  if (confirmPassword.value && newPassword.value !== confirmPassword.value) {
+    return t('settings.profile.passwordMismatch')
+  }
+  return ''
+})
 
 async function loadProfile() {
   try {
