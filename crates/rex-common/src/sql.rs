@@ -64,8 +64,24 @@ pub trait SqlConnector: Send + Sync {
     /// 列出指定表的列信息
     async fn list_columns(&self, database: &str, table: &str) -> Result<Vec<ColumnInfo>>;
 
+    /// 获取 SQL 执行计划（EXPLAIN）
+    async fn explain(&self, sql: &str) -> Result<ExplainResult>;
+
     /// 关闭连接
     async fn close(&self) -> Result<()>;
+}
+
+// ── 执行计划结果 ────────────────────────────────────────
+
+/// 通用的 SQL 执行计划结果，使用列式结构适配不同方言
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExplainResult {
+    /// 列名（如 id, select_type, table, type, key, rows, extra 等）
+    pub columns: Vec<String>,
+    /// 行数据（每行为 Vec<serde_json::Value>）
+    pub rows: Vec<Vec<serde_json::Value>>,
+    /// 原始文本输出（作为 fallback 展示）
+    pub raw_output: String,
 }
 
 // ── Tests ───────────────────────────────────────────────
@@ -142,5 +158,21 @@ mod tests {
     #[test]
     fn sql_connector_trait_is_object_safe() {
         fn _assert_object_safe(_: &dyn SqlConnector) {}
+    }
+
+    #[test]
+    fn explain_result_roundtrips() {
+        let result = ExplainResult {
+            columns: vec!["id".into(), "select_type".into(), "table".into(), "rows".into()],
+            rows: vec![
+                vec![serde_json::json!(1), serde_json::json!("SIMPLE"), serde_json::json!("users"), serde_json::json!(100)],
+            ],
+            raw_output: "id\tselect_type\ttable\trows\n1\tSIMPLE\tusers\t100".into(),
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let parsed: ExplainResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.columns.len(), 4);
+        assert_eq!(parsed.rows.len(), 1);
+        assert!(parsed.raw_output.contains("SIMPLE"));
     }
 }
