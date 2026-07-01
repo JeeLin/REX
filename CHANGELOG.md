@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-07-01
+
+### Added
+- SQL 执行计划：`SqlConnector` trait 新增 `explain` 方法，返回通用 `ExplainResult`（列式结构）
+- MySQL EXPLAIN 支持：执行 `EXPLAIN {sql}`，解析标准输出为结构化数据
+- PostgreSQL EXPLAIN 支持：执行 `EXPLAIN (FORMAT JSON) {sql}`，解析 JSON 执行计划为扁平行，递归处理子节点
+- POST `/api/resources/:resource_id/sql/explain` API 端点
+- 前端执行计划标签页：SqlResults.vue 新增「执行计划」标签，懒加载 EXPLAIN 结果
+- i18n 新增 `sql.explainTab`（执行计划/Execution Plan）和 `sql.explainError` 键
+
 ## [0.34.0] - 2026-06-30
 
 ### Added
