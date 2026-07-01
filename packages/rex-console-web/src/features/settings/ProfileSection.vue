@@ -138,7 +138,7 @@ async function saveUsername() {
 }
 
 async function savePassword() {
-  if (!currentPassword.value || newPassword.value.length < 6) return
+  if (!currentPassword.value || newPassword.value.length < 8) return
   try {
     await changePassword({
       current_password: currentPassword.value,
