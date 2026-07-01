@@ -58,12 +58,36 @@
         </div>
       </div>
     </div>
+    <!-- Sidebar -->
+    <div class="settings-row">
+      <div class="settings-row-info">
+        <div class="settings-row-label">{{ t('settings.appearance.sidebar') }}</div>
+        <div class="settings-row-desc">{{ t('settings.appearance.sidebarDesc') }}</div>
+      </div>
+      <div class="sidebar-options">
+        <div
+          class="sidebar-option"
+          :class="{ active: !appearanceSettings.sidebarCollapsible }"
+          @click="updateAppearanceSetting('sidebarCollapsible', false)"
+        >
+          {{ t('settings.appearance.sidebarFixed') }}
+        </div>
+        <div
+          class="sidebar-option"
+          :class="{ active: appearanceSettings.sidebarCollapsible }"
+          @click="updateAppearanceSetting('sidebarCollapsible', true)"
+        >
+          {{ t('settings.appearance.sidebarCollapsible') }}
+        </div>
+      </div>
+    </div>
   </SettingsSection>
 </template>
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useUserStore, type Lang } from '@/stores/user'
+import { appearanceSettings, updateAppearanceSetting } from '@/stores/settings'
 import SettingsSection from './SettingsSection.vue'
 
 const { t } = useI18n()
@@ -141,6 +165,33 @@ function switchLang(lang: Lang) {
 }
 
 .lang-option:hover:not(.active) {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.sidebar-options {
+  display: flex;
+  gap: var(--sp-sm);
+}
+
+.sidebar-option {
+  padding: var(--sp-sm) var(--sp-lg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  background: var(--bg-deep);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.sidebar-option.active {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  background: rgba(232,145,45,0.08);
+}
+
+.sidebar-option:hover:not(.active) {
   border-color: var(--text-muted);
   color: var(--text-primary);
 }
