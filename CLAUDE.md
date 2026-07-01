@@ -60,7 +60,7 @@ REX Hub 是个人自托管远程资源统一管理平台，单用户、自托管
 - 功能目标
 - 文件结构（创建/修改哪些文件）
 - 接口设计（API 端点 / 组件 props / 数据模型）
-- 前端交互（参考 prototype 原型）
+- 前端交互设计
 - 后端流程
 - 测试标准
 - 提交信息（commit message）
@@ -100,7 +100,6 @@ REX Hub 是个人自托管远程资源统一管理平台，单用户、自托管
 - 是否有过度设计
 - 是否提前实现了下一阶段能力
 - 是否符合 Rust workspace / Vue 功能域结构
-- 是否把原型交互照搬成最终代码
 - 是否可以把大文件拆小
 - 是否符合 `workspace = true` 依赖规则
 
@@ -177,10 +176,6 @@ docs/
   milestones/
     M{N}-{name}.md        里程碑开发文档（完成后保留）
     M{N}-reports/         里程碑报告（步骤 2/4/5/6/7）
-prototype/
-  *.html                  产品交互原型
-  css/                    原型样式
-  shared.js               原型共享逻辑
 README.md                 产品简介
 CLAUDE.md                 本文件
 .mise.toml                本地工具版本
@@ -240,26 +235,6 @@ packages/rex-console-web/src/
 ├── styles/         主题和全局样式
 └── i18n/           国际化
 ```
-
----
-
-## 原型使用规则
-
-`prototype/` 只作为前端开发参考，不是最终代码。
-
-参考时直接看：
-```text
-prototype/*.html
-prototype/shared.js
-prototype/css/*.css
-```
-
-保留原型中的关键交互：
-- 标签右键菜单、全局连接菜单、多标签分屏
-- SSH 终端内置 SFTP、移动端方向键和历史选择
-- SQL 右键菜单、文件右键"发送到…"
-- Agent 页面二进制下载按钮、设置页版本总览
-- 深色/浅色/跟随系统主题、中文/英文 i18n
 
 ---
 
