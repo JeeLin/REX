@@ -1,6 +1,8 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use rex_common::sql::{ColumnInfo, DatabaseInfo, ExplainResult, SqlColumn, SqlConnector, SqlResult, TableInfo};
+use rex_common::sql::{
+    ColumnInfo, DatabaseInfo, ExplainResult, SqlColumn, SqlConnector, SqlResult, TableInfo,
+};
 use serde::{Deserialize, Serialize};
 use sqlx::mysql::{MySqlPool, MySqlPoolOptions};
 use sqlx::Column;

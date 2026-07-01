@@ -1,6 +1,8 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use rex_common::sql::{ColumnInfo, DatabaseInfo, ExplainResult, SqlColumn, SqlConnector, SqlResult, TableInfo};
+use rex_common::sql::{
+    ColumnInfo, DatabaseInfo, ExplainResult, SqlColumn, SqlConnector, SqlResult, TableInfo,
+};
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::{Column, Row};
@@ -204,9 +206,7 @@ impl SqlConnector for PostgresConnector {
             .ok_or_else(|| anyhow::anyhow!("not connected"))?;
 
         let explain_sql = format!("EXPLAIN (FORMAT JSON) {sql}");
-        let rows = sqlx::query(&explain_sql)
-            .fetch_all(pool)
-            .await?;
+        let rows = sqlx::query(&explain_sql).fetch_all(pool).await?;
 
         // PostgreSQL EXPLAIN returns a single row with a single JSON column
         let mut raw_output = String::new();
@@ -266,14 +266,9 @@ impl SqlConnector for PostgresConnector {
 }
 
 /// 递归提取 PostgreSQL 计划节点到扁平行
-fn extract_pg_plan_node(
-    node: &serde_json::Value,
-    result_rows: &mut Vec<Vec<serde_json::Value>>,
-) {
+fn extract_pg_plan_node(node: &serde_json::Value, result_rows: &mut Vec<Vec<serde_json::Value>>) {
     let get_str = |key: &str| -> serde_json::Value {
-        node.get(key)
-            .cloned()
-            .unwrap_or(serde_json::Value::Null)
+        node.get(key).cloned().unwrap_or(serde_json::Value::Null)
     };
 
     let row = vec![

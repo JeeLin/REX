@@ -611,10 +611,7 @@ mod tests {
         let state = test_state();
         Router::new()
             .route("/api/resources/:resource_id/sql/execute", post(execute_sql))
-            .route(
-                "/api/resources/:resource_id/sql/explain",
-                post(explain_sql),
-            )
+            .route("/api/resources/:resource_id/sql/explain", post(explain_sql))
             .route(
                 "/api/resources/:resource_id/sql/databases",
                 get(list_databases),

@@ -163,10 +163,18 @@ mod tests {
     #[test]
     fn explain_result_roundtrips() {
         let result = ExplainResult {
-            columns: vec!["id".into(), "select_type".into(), "table".into(), "rows".into()],
-            rows: vec![
-                vec![serde_json::json!(1), serde_json::json!("SIMPLE"), serde_json::json!("users"), serde_json::json!(100)],
+            columns: vec![
+                "id".into(),
+                "select_type".into(),
+                "table".into(),
+                "rows".into(),
             ],
+            rows: vec![vec![
+                serde_json::json!(1),
+                serde_json::json!("SIMPLE"),
+                serde_json::json!("users"),
+                serde_json::json!(100),
+            ]],
             raw_output: "id\tselect_type\ttable\trows\n1\tSIMPLE\tusers\t100".into(),
         };
         let json = serde_json::to_string(&result).unwrap();
