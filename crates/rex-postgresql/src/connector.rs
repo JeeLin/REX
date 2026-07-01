@@ -1,6 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use rex_common::sql::{ColumnInfo, DatabaseInfo, SqlColumn, SqlConnector, SqlResult, TableInfo};
+use rex_common::sql::{ColumnInfo, DatabaseInfo, ExplainResult, SqlColumn, SqlConnector, SqlResult, TableInfo};
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::{Column, Row};
@@ -196,6 +196,111 @@ impl SqlConnector for PostgresConnector {
         }
         Ok(())
     }
+
+    async fn explain(&self, sql: &str) -> Result<ExplainResult> {
+        let pool = self
+            .pool
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("not connected"))?;
+
+        let explain_sql = format!("EXPLAIN (FORMAT JSON) {sql}");
+        let rows = sqlx::query(&explain_sql)
+            .fetch_all(pool)
+            .await?;
+
+        // PostgreSQL EXPLAIN returns a single row with a single JSON column
+        let mut raw_output = String::new();
+        if let Some(first_row) = rows.first() {
+            if let Ok(json_val) = first_row.try_get::<serde_json::Value, _>(0) {
+                raw_output = serde_json::to_string_pretty(&json_val).unwrap_or_default();
+            } else if let Ok(text) = first_row.try_get::<String, _>(0) {
+                raw_output = text;
+            }
+        }
+
+        // Parse the JSON into a flat table representation
+        // PostgreSQL EXPLAIN JSON is an array of plan nodes
+        let mut columns = vec![
+            "Node Type".to_string(),
+            "Relation Name".to_string(),
+            "Alias".to_string(),
+            "Startup Cost".to_string(),
+            "Total Cost".to_string(),
+            "Plan Rows".to_string(),
+            "Plan Width".to_string(),
+            "Shared Hit Blocks".to_string(),
+            "Shared Read Blocks".to_string(),
+            "Actual Rows".to_string(),
+            "Actual Loops".to_string(),
+            "Filter".to_string(),
+            "Rows Removed by Filter".to_string(),
+        ];
+
+        let mut result_rows = Vec::new();
+
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&raw_output) {
+            // Handle both array format [{...}] and object format [{Plan: {...}}]
+            let plan_nodes = if let Some(arr) = parsed.as_array() {
+                arr.clone()
+            } else {
+                vec![parsed]
+            };
+
+            for node in &plan_nodes {
+                // Extract the Plan object from PostgreSQL JSON format
+                let plan = if let Some(plan_obj) = node.get("Plan") {
+                    plan_obj
+                } else {
+                    node
+                };
+                extract_pg_plan_node(plan, &columns, &mut result_rows);
+            }
+        }
+
+        Ok(ExplainResult {
+            columns,
+            rows: result_rows,
+            raw_output,
+        })
+    }
+}
+
+/// 递归提取 PostgreSQL 计划节点到扁平行
+fn extract_pg_plan_node(
+    node: &serde_json::Value,
+    columns: &[String],
+    result_rows: &mut Vec<Vec<serde_json::Value>>,
+) {
+    let get_str = |key: &str| -> serde_json::Value {
+        node.get(key)
+            .cloned()
+            .unwrap_or(serde_json::Value::Null)
+    };
+
+    let row = vec![
+        get_str("Node Type"),
+        get_str("Relation Name"),
+        get_str("Alias"),
+        get_str("Startup Cost"),
+        get_str("Total Cost"),
+        get_str("Plan Rows"),
+        get_str("Plan Width"),
+        get_str("Shared Hit Blocks"),
+        get_str("Shared Read Blocks"),
+        get_str("Actual Rows"),
+        get_str("Actual Loops"),
+        get_str("Filter"),
+        get_str("Rows Removed by Filter"),
+    ];
+
+    result_rows.push(row);
+
+    // Recurse into child Plans
+    if let Some(children) = node.get("Plans").and_then(|p| p.as_array()) {
+        for child in children {
+            extract_pg_plan_node(child, columns, result_rows);
+        }
+    }
 }
 
 /// 尝试从行中获取 JSON 值
@@ -298,6 +403,91 @@ mod tests {
         let result =
             tokio::time::timeout(std::time::Duration::from_secs(3), connector.connect()).await;
         assert!(result.is_err() || result.unwrap().is_err());
+    }
+
+    #[tokio::test]
+    async fn postgres_explain_fails_when_not_connected() {
+        let json =
+            r#"{"host":"localhost","port":5432,"user":"postgres","password":"","database":null}"#;
+        let connector = PostgresConnector::from_json(json).unwrap();
+        let result = connector.explain("SELECT 1").await;
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn extract_pg_plan_node_single() {
+        let node = serde_json::json!({
+            "Node Type": "Seq Scan",
+            "Relation Name": "users",
+            "Alias": "users",
+            "Startup Cost": 0.00,
+            "Total Cost": 12.00,
+            "Plan Rows": 100,
+            "Plan Width": 36
+        });
+        let columns = vec![
+            "Node Type".to_string(),
+            "Relation Name".to_string(),
+            "Alias".to_string(),
+            "Startup Cost".to_string(),
+            "Total Cost".to_string(),
+            "Plan Rows".to_string(),
+            "Plan Width".to_string(),
+            "Shared Hit Blocks".to_string(),
+            "Shared Read Blocks".to_string(),
+            "Actual Rows".to_string(),
+            "Actual Loops".to_string(),
+            "Filter".to_string(),
+            "Rows Removed by Filter".to_string(),
+        ];
+        let mut rows = Vec::new();
+        extract_pg_plan_node(&node, &columns, &mut rows);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0][0], serde_json::json!("Seq Scan"));
+        assert_eq!(rows[0][1], serde_json::json!("users"));
+    }
+
+    #[test]
+    fn extract_pg_plan_node_with_children() {
+        let node = serde_json::json!({
+            "Node Type": "Nested Loop",
+            "Startup Cost": 0.00,
+            "Total Cost": 24.00,
+            "Plan Rows": 10,
+            "Plan Width": 36,
+            "Plans": [
+                {
+                    "Node Type": "Seq Scan",
+                    "Relation Name": "users",
+                    "Alias": "users",
+                    "Startup Cost": 0.00,
+                    "Total Cost": 12.00,
+                    "Plan Rows": 100,
+                    "Plan Width": 36
+                }
+            ]
+        });
+        let columns = vec![
+            "Node Type".to_string(),
+            "Relation Name".to_string(),
+            "Alias".to_string(),
+            "Startup Cost".to_string(),
+            "Total Cost".to_string(),
+            "Plan Rows".to_string(),
+            "Plan Width".to_string(),
+            "Shared Hit Blocks".to_string(),
+            "Shared Read Blocks".to_string(),
+            "Actual Rows".to_string(),
+            "Actual Loops".to_string(),
+            "Filter".to_string(),
+            "Rows Removed by Filter".to_string(),
+        ];
+        let mut rows = Vec::new();
+        extract_pg_plan_node(&node, &columns, &mut rows);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0][0], serde_json::json!("Nested Loop"));
+        assert_eq!(rows[1][0], serde_json::json!("Seq Scan"));
+        assert_eq!(rows[1][1], serde_json::json!("users"));
     }
 
     #[test]

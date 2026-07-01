@@ -1,6 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use rex_common::sql::{ColumnInfo, DatabaseInfo, SqlColumn, SqlConnector, SqlResult, TableInfo};
+use rex_common::sql::{ColumnInfo, DatabaseInfo, ExplainResult, SqlColumn, SqlConnector, SqlResult, TableInfo};
 use serde::{Deserialize, Serialize};
 use sqlx::mysql::{MySqlPool, MySqlPoolOptions};
 use sqlx::Column;
@@ -181,6 +181,57 @@ impl SqlConnector for MySqlConnector {
         Ok(columns)
     }
 
+    async fn explain(&self, sql: &str) -> Result<ExplainResult> {
+        let pool = self
+            .pool
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("not connected"))?;
+
+        let explain_sql = format!("EXPLAIN {sql}");
+        let rows = sqlx::query(&explain_sql).fetch_all(pool).await?;
+
+        let mut columns = Vec::new();
+        let mut result_rows = Vec::new();
+
+        if let Some(first_row) = rows.first() {
+            columns = first_row
+                .columns()
+                .iter()
+                .map(|col| col.name().to_string())
+                .collect();
+        }
+
+        for row in &rows {
+            let mut result_row = Vec::new();
+            for (i, _) in columns.iter().enumerate() {
+                let value = try_get_json_value(row, i);
+                result_row.push(value);
+            }
+            result_rows.push(result_row);
+        }
+
+        // Build raw text output
+        let mut raw_lines = Vec::new();
+        raw_lines.push(columns.join("\t"));
+        for row in &result_rows {
+            let line: Vec<String> = row
+                .iter()
+                .map(|v| match v {
+                    serde_json::Value::Null => "NULL".to_string(),
+                    serde_json::Value::String(s) => s.clone(),
+                    other => other.to_string(),
+                })
+                .collect();
+            raw_lines.push(line.join("\t"));
+        }
+
+        Ok(ExplainResult {
+            columns,
+            rows: result_rows,
+            raw_output: raw_lines.join("\n"),
+        })
+    }
+
     async fn close(&self) -> Result<()> {
         if let Some(pool) = self.pool.as_ref() {
             info!("closing MySQL connection pool");
@@ -289,6 +340,15 @@ mod tests {
         let result =
             tokio::time::timeout(std::time::Duration::from_secs(3), connector.connect()).await;
         assert!(result.is_err() || result.unwrap().is_err());
+    }
+
+    #[tokio::test]
+    async fn mysql_explain_fails_when_not_connected() {
+        let json =
+            r#"{"host":"localhost","port":3306,"user":"root","password":"","database":null}"#;
+        let connector = MySqlConnector::from_json(json).unwrap();
+        let result = connector.explain("SELECT 1").await;
+        assert!(result.is_err());
     }
 
     #[test]
