@@ -1,5 +1,5 @@
 <template>
-  <div class="app-layout" :class="{ 'sidebar-collapsed': collapsed }">
+  <div class="app-layout" :class="{ 'sidebar-collapsed': effectiveCollapsed }">
     <!-- Skip to content link (accessibility) -->
     <a href="#main-content" class="skip-link">{{ t('layout.skipToContent') }}</a>
 
@@ -13,12 +13,12 @@
     <!-- 移动端遮罩 -->
     <div v-if="mobileOpen" class="mobile-overlay" @click="closeMobile"></div>
 
-    <aside class="sidebar" role="complementary" :aria-label="t('layout.sidebar')" :class="{ open: mobileOpen }" :style="{ width: collapsed ? '60px' : sidebarWidth + 'px' }">
+    <aside class="sidebar" role="complementary" :aria-label="t('layout.sidebar')" :class="{ open: mobileOpen }" :style="{ width: effectiveCollapsed ? '60px' : sidebarWidth + 'px' }">
       <!-- Header -->
       <div class="sidebar-header">
         <div class="sidebar-logo">R</div>
-        <span v-show="!collapsed" class="sidebar-brand">REX Hub</span>
-        <div v-show="!collapsed" class="sidebar-header-actions">
+        <span v-show="!effectiveCollapsed" class="sidebar-brand">REX Hub</span>
+        <div v-show="!effectiveCollapsed" class="sidebar-header-actions">
           <button class="sidebar-icon-btn" :title="themeLabel" @click="toggleTheme">
             {{ themeIcon }}
           </button>
@@ -29,7 +29,7 @@
       </div>
 
       <!-- 搜索框 -->
-      <div v-show="!collapsed" class="sidebar-search">
+      <div v-show="!effectiveCollapsed" class="sidebar-search">
         <input
           v-model="searchQuery"
           type="text"
@@ -42,24 +42,24 @@
       <nav class="sidebar-nav" :aria-label="t('layout.sidebar')">
         <router-link to="/" class="nav-item" :class="{ active: route.name === 'dashboard' }" @click="closeMobile">
           <span class="nav-icon">🏠</span>
-          <span v-show="!collapsed">{{ t('nav.dashboard') }}</span>
+          <span v-show="!effectiveCollapsed">{{ t('nav.dashboard') }}</span>
         </router-link>
         <router-link to="/workspace" class="nav-item" :class="{ active: route.name === 'workspace' }" @click="closeMobile">
           <span class="nav-icon">💻</span>
-          <span v-show="!collapsed">{{ t('nav.workspace') }}</span>
+          <span v-show="!effectiveCollapsed">{{ t('nav.workspace') }}</span>
         </router-link>
         <router-link to="/environments" class="nav-item" :class="{ active: isEnvPage }" @click="closeMobile">
           <span class="nav-icon">🖥</span>
-          <span v-show="!collapsed">{{ t('nav.environments') }}</span>
+          <span v-show="!effectiveCollapsed">{{ t('nav.environments') }}</span>
         </router-link>
         <router-link to="/agents" class="nav-item" :class="{ active: route.name === 'agents' }" @click="closeMobile">
           <span class="nav-icon">🔌</span>
-          <span v-show="!collapsed">{{ t('nav.agents') }}</span>
+          <span v-show="!effectiveCollapsed">{{ t('nav.agents') }}</span>
         </router-link>
       </nav>
 
       <!-- 环境资源树 -->
-      <div v-show="!collapsed" class="sidebar-tree">
+      <div v-show="!effectiveCollapsed" class="sidebar-tree">
         <div class="tree-label">{{ t('nav.environments') }}</div>
         <div v-if="loading" class="tree-loading">{{ t('common.loading') }}...</div>
         <div v-else-if="filteredEnvs.length === 0" class="tree-empty">{{ t('common.noData') }}</div>
@@ -97,7 +97,7 @@
       </div>
 
       <!-- 收藏 -->
-      <div v-show="!collapsed" class="sidebar-section">
+      <div v-show="!effectiveCollapsed" class="sidebar-section">
         <div class="section-header">
           <span class="section-label">⭐ {{ t('sidebar.favorites') }}</span>
           <span v-if="favoriteResources.length" class="section-count">({{ favoriteResources.length }})</span>
@@ -120,7 +120,7 @@
       </div>
 
       <!-- 最近使用 -->
-      <div v-show="!collapsed" class="sidebar-section">
+      <div v-show="!effectiveCollapsed" class="sidebar-section">
         <div class="section-header">
           <span class="section-label">🕐 {{ t('sidebar.recent') }}</span>
           <button v-if="recent.length > 0" class="section-action" :title="t('sidebar.clearRecent')" @click="clearRecent">🗑</button>
@@ -142,7 +142,7 @@
 
       <!-- Footer -->
       <div class="sidebar-footer">
-        <router-link v-show="!collapsed" to="/environments/new" class="nav-item" @click="closeMobile">
+        <router-link v-show="!effectiveCollapsed" to="/environments/new" class="nav-item" @click="closeMobile">
           <span class="nav-icon">+</span>
           <span>{{ t('sidebar.newEnv') }}</span>
         </router-link>
@@ -154,28 +154,28 @@
           @click="closeMobile"
         >
           <span class="nav-icon">📋</span>
-          <span v-show="!collapsed">{{ t('nav.auditLog') }}</span>
+          <span v-show="!effectiveCollapsed">{{ t('nav.auditLog') }}</span>
         </router-link>
         <router-link to="/settings" class="nav-item" :class="{ active: route.name === 'settings' }" @click="closeMobile">
           <span class="nav-icon">⚙</span>
-          <span v-show="!collapsed">{{ t('nav.settings') }}</span>
+          <span v-show="!effectiveCollapsed">{{ t('nav.settings') }}</span>
         </router-link>
-        <button class="nav-item collapse-btn" @click="toggleCollapse">
-          <span class="nav-icon">{{ collapsed ? '»' : '«' }}</span>
-          <span v-show="!collapsed">{{ collapsed ? t('sidebar.expand') : t('sidebar.collapse') }}</span>
+        <button v-if="appearanceSettings.sidebarCollapsible" class="nav-item collapse-btn" @click="toggleCollapse">
+          <span class="nav-icon">{{ effectiveCollapsed ? '»' : '«' }}</span>
+          <span v-show="!effectiveCollapsed">{{ effectiveCollapsed ? t('sidebar.expand') : t('sidebar.collapse') }}</span>
         </button>
       </div>
     </aside>
 
     <!-- 侧边栏拖拽调整宽度 -->
     <div
-      v-show="!collapsed"
+      v-show="!effectiveCollapsed"
       class="sidebar-resize-handle"
       :style="{ left: sidebarWidth + 'px' }"
       @mousedown="startResize"
     ></div>
 
-    <main id="main-content" class="main-content" :class="{ 'no-header': route.meta.noHeader }" :style="{ marginLeft: collapsed ? '60px' : sidebarWidth + 'px' }">
+    <main id="main-content" class="main-content" :class="{ 'no-header': route.meta.noHeader }" :style="{ marginLeft: effectiveCollapsed ? '60px' : sidebarWidth + 'px' }">
       <header v-if="!route.meta.noHeader" class="page-header">
         <h1 class="page-title">{{ pageTitle }}</h1>
         <div class="header-actions">
@@ -232,7 +232,7 @@ import ResourceEditModal from '@/components/ResourceEditModal.vue'
 import { getProtocolIcon } from '@/composables/useProtocol'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useRecent } from '@/composables/useRecent'
-import { securitySettings } from '@/stores/settings'
+import { securitySettings, appearanceSettings } from '@/stores/settings'
 
 const { recent, clearRecent } = useRecent()
 
@@ -269,6 +269,10 @@ const {
   isFavorite,
   closeMobile,
 } = useSidebar()
+
+// 侧边栏可折叠设置：固定模式下强制展开
+const sidebarFixed = computed(() => !appearanceSettings.sidebarCollapsible)
+const effectiveCollapsed = computed(() => sidebarFixed.value ? false : collapsed.value)
 
 const isEnvPage = computed(() => {
   const name = route.name as string
