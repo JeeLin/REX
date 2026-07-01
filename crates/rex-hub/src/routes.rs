@@ -233,6 +233,10 @@ pub fn app_with_static(
                 "/api/resources/:resource_id/sql/execute",
                 post(crate::sql::execute_sql),
             )
+            .route(
+                "/api/resources/:resource_id/sql/explain",
+                post(crate::sql::explain_sql),
+            )
             .route("/api/sql/global-query", post(crate::sql::global_query))
             .route(
                 "/api/resources/:resource_id/sql/peers",

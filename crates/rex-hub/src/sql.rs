@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tokio::time::{timeout, Duration};
 
-use rex_common::sql::{SqlConnector, SqlResult};
+use rex_common::sql::{ExplainResult, SqlConnector, SqlResult};
 
 use crate::helpers::{bad_request, err_resp, not_found, ApiResponse, ErrorResponse};
 use crate::routes::AppState;
@@ -89,6 +89,32 @@ pub async fn execute_sql(
         .execute(&input.sql)
         .await
         .map_err(|e| err_resp("SQL_EXECUTE_FAILED", &format!("执行失败: {e}")))?;
+
+    let _ = connector.close().await;
+
+    Ok(Json(ApiResponse { data: result }))
+}
+
+/// POST /api/resources/:resource_id/sql/explain — 获取 SQL 执行计划
+pub async fn explain_sql(
+    State(state): State<Arc<AppState>>,
+    Path(resource_id): Path<String>,
+    Json(input): Json<ExecuteRequest>,
+) -> Result<Json<ApiResponse<ExplainResult>>, (StatusCode, Json<ErrorResponse>)> {
+    if input.sql.trim().is_empty() {
+        return Err(bad_request("SQL 不能为空"));
+    }
+    let mut connector = get_sql_connector(&state, &resource_id).await?;
+
+    connector
+        .connect()
+        .await
+        .map_err(|e| err_resp("SQL_CONNECT_FAILED", &format!("连接失败: {e}")))?;
+
+    let result = connector
+        .explain(&input.sql)
+        .await
+        .map_err(|e| err_resp("SQL_EXPLAIN_FAILED", &format!("获取执行计划失败: {e}")))?;
 
     let _ = connector.close().await;
 
@@ -586,6 +612,10 @@ mod tests {
         Router::new()
             .route("/api/resources/:resource_id/sql/execute", post(execute_sql))
             .route(
+                "/api/resources/:resource_id/sql/explain",
+                post(explain_sql),
+            )
+            .route(
                 "/api/resources/:resource_id/sql/databases",
                 get(list_databases),
             )
@@ -706,5 +736,51 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn explain_sql_returns_404_for_unknown_resource() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/resources/nonexistent/sql/explain")
+                    .header("authorization", auth_header())
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"sql":"SELECT 1"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["error"]["code"], "RESOURCE_NOT_FOUND");
+    }
+
+    #[tokio::test]
+    async fn explain_sql_rejects_empty_sql() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/resources/nonexistent/sql/explain")
+                    .header("authorization", auth_header())
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"sql":"  "}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["error"]["message"], "SQL 不能为空");
     }
 }
