@@ -34,15 +34,34 @@
       ✓ {{ t('settings.update.upToDate') }}
     </div>
 
-    <!-- Agent 版本总览 -->
+    <!-- 版本总览（可折叠） -->
     <div v-if="agentVersions.length" class="agent-versions">
-      <h4>{{ t('settings.update.agentVersions') }}</h4>
-      <div v-for="av in agentVersions" :key="av.agent_id" class="agent-version-row">
-        <span class="agent-name">{{ av.name }}</span>
-        <span class="agent-ver">{{ av.version }}</span>
-        <span class="agent-status" :class="agentStatusClass(av)">
-          {{ agentStatusLabel(av) }}
-        </span>
+      <button class="version-overview-toggle" @click="toggleVersionOverview">
+        <span class="toggle-icon">{{ versionOverviewExpanded ? '▾' : '▸' }}</span>
+        {{ t('settings.update.versionOverview') }}
+      </button>
+      <div v-if="versionOverviewExpanded" class="version-overview-content">
+        <!-- Hub 行 -->
+        <div class="version-row hub-row">
+          <span class="version-icon">⊞</span>
+          <span class="version-name">{{ t('settings.update.hubLabel') }}</span>
+          <span class="version-platform" />
+          <span class="version-ver">{{ status?.current_version || '...' }}</span>
+          <span class="version-tag latest">{{ t('settings.update.hubUpToDate') }}</span>
+        </div>
+        <!-- Agent 行 -->
+        <div v-for="av in agentVersions" :key="av.agent_id" class="version-row agent-row">
+          <span class="version-icon">⬡</span>
+          <span class="version-name">{{ av.name }}</span>
+          <span class="version-platform">{{ av.platform }}</span>
+          <template v-if="av.status === 'online'">
+            <span class="version-ver">{{ av.version }}</span>
+            <span class="version-tag" :class="av.needs_update ? 'outdated' : 'latest'">
+              {{ agentStatusLabel(av) }}
+            </span>
+          </template>
+          <span v-else class="version-offline">{{ t('settings.update.offline') }}</span>
+        </div>
       </div>
     </div>
   </div>
@@ -55,6 +74,9 @@ import { getUpdateStatus, checkUpdate, downloadUpdate, applyUpdate, listAgentVer
 import type { UpdateStatusResponse, AgentVersionInfo } from '@/api/update'
 
 const { t } = useI18n()
+const versionOverviewExpanded = ref(
+  localStorage.getItem('rex-version-overview-expanded') === 'true'
+)
 const status = ref<UpdateStatusResponse | null>(null)
 const checking = ref(false)
 const checked = ref(false)
@@ -129,10 +151,9 @@ onMounted(async () => {
   }
 })
 
-function agentStatusClass(av: AgentVersionInfo): string {
-  if (av.status !== 'online') return 'offline'
-  if (av.needs_update) return 'outdated'
-  return 'current'
+function toggleVersionOverview() {
+  versionOverviewExpanded.value = !versionOverviewExpanded.value
+  localStorage.setItem('rex-version-overview-expanded', String(versionOverviewExpanded.value))
 }
 
 function agentStatusLabel(av: AgentVersionInfo): string {
@@ -254,44 +275,80 @@ function agentStatusLabel(av: AgentVersionInfo): string {
   border-top: 1px solid var(--border);
 }
 
-.agent-versions h4 {
-  margin: 0 0 var(--sp-sm);
-  font-size: var(--fs-sm);
-  color: var(--text-secondary);
-}
-
-.agent-version-row {
+.version-overview-toggle {
   display: flex;
   align-items: center;
-  gap: var(--sp-md);
+  gap: var(--sp-xs);
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  padding: var(--sp-xs) 0;
+}
+
+.version-overview-toggle:hover {
+  color: var(--text-primary);
+}
+
+.toggle-icon {
+  font-size: var(--fs-xs);
+  width: 1em;
+}
+
+.version-overview-content {
+  margin-top: var(--sp-sm);
+}
+
+.version-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
   padding: var(--sp-sm) 0;
   font-size: var(--fs-sm);
 }
 
-.agent-name {
+.version-icon {
+  color: var(--text-muted);
+  width: 1.2em;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.version-name {
   color: var(--text-primary);
+  min-width: 100px;
+}
+
+.version-platform {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
   min-width: 120px;
 }
 
-.agent-ver {
+.version-ver {
   font-family: var(--font-mono);
   color: var(--text-muted);
 }
 
-.agent-status {
+.version-tag {
   margin-left: auto;
   font-size: var(--fs-xs);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
 }
 
-.agent-status.current {
+.version-tag.latest {
   color: var(--success, #28a745);
 }
 
-.agent-status.outdated {
+.version-tag.outdated {
   color: var(--warning, #ffc107);
 }
 
-.agent-status.offline {
+.version-offline {
   color: var(--text-muted);
+  font-size: var(--fs-xs);
+  margin-left: auto;
 }
 </style>

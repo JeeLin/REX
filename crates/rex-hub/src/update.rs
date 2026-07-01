@@ -31,6 +31,7 @@ pub struct AgentVersionInfo {
     pub needs_update: bool,
     pub status: String,
     pub last_seen_at: Option<String>,
+    pub platform: String,
 }
 
 /// 下载进度
@@ -217,7 +218,7 @@ pub async fn list_agent_versions(
 
         let mut stmt = conn
             .prepare(
-                "SELECT id, name, environment_id, version, sha256, status, last_seen_at
+                "SELECT id, name, environment_id, version, sha256, status, last_seen_at, os, arch
                  FROM agents ORDER BY environment_id, name",
             )
             .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
@@ -225,6 +226,8 @@ pub async fn list_agent_versions(
         let agents = stmt
             .query_map([], |row| {
                 let version: String = row.get(3)?;
+                let os: String = row.get(7)?;
+                let arch: String = row.get(8)?;
                 Ok(AgentVersionInfo {
                     agent_id: row.get(0)?,
                     name: row.get(1)?,
@@ -234,6 +237,7 @@ pub async fn list_agent_versions(
                     needs_update: version != hub_version,
                     status: row.get(5)?,
                     last_seen_at: row.get(6)?,
+                    platform: format!("{} · {}", os, arch),
                 })
             })
             .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?

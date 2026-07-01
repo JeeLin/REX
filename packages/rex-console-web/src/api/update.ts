@@ -20,6 +20,7 @@ export interface AgentVersionInfo {
   needs_update: boolean
   status: string
   last_seen_at: string | null
+  platform: string
 }
 
 export interface DownloadProgress {
