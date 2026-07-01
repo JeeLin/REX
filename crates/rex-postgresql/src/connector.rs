@@ -253,7 +253,7 @@ impl SqlConnector for PostgresConnector {
                 } else {
                     node
                 };
-                extract_pg_plan_node(plan, &columns, &mut result_rows);
+                extract_pg_plan_node(plan, &mut result_rows);
             }
         }
 
@@ -268,7 +268,6 @@ impl SqlConnector for PostgresConnector {
 /// 递归提取 PostgreSQL 计划节点到扁平行
 fn extract_pg_plan_node(
     node: &serde_json::Value,
-    columns: &[String],
     result_rows: &mut Vec<Vec<serde_json::Value>>,
 ) {
     let get_str = |key: &str| -> serde_json::Value {
@@ -298,7 +297,7 @@ fn extract_pg_plan_node(
     // Recurse into child Plans
     if let Some(children) = node.get("Plans").and_then(|p| p.as_array()) {
         for child in children {
-            extract_pg_plan_node(child, columns, result_rows);
+            extract_pg_plan_node(child, result_rows);
         }
     }
 }
@@ -441,7 +440,7 @@ mod tests {
             "Rows Removed by Filter".to_string(),
         ];
         let mut rows = Vec::new();
-        extract_pg_plan_node(&node, &columns, &mut rows);
+        extract_pg_plan_node(&node, &mut rows);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0][0], serde_json::json!("Seq Scan"));
         assert_eq!(rows[0][1], serde_json::json!("users"));
@@ -483,7 +482,7 @@ mod tests {
             "Rows Removed by Filter".to_string(),
         ];
         let mut rows = Vec::new();
-        extract_pg_plan_node(&node, &columns, &mut rows);
+        extract_pg_plan_node(&node, &mut rows);
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0][0], serde_json::json!("Nested Loop"));
         assert_eq!(rows[1][0], serde_json::json!("Seq Scan"));
