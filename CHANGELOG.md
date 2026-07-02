@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-07-03
+
+### Added
+- 查询标签右键菜单：关闭其他、关闭已保存、另存为、重命名、复制 SQL、执行 SQL
+- 查看视图/表定义（DDL）— 后端 `POST /sql/ddl` API 支持 MySQL 和 PostgreSQL
+- 数据文件导出下载 — CSV/JSON 结果区导出按钮改为真实文件下载
+- 新建表菜单项 — 数据库节点右键菜单，弹出 DDL 编辑器执行 CREATE TABLE
+- i18n 补全：sql.tab.ctx.closeOthers/closeSaved/saveAs/rename/copySql/executeSql、sql.tree.ctx.viewDefinition/createNewTable
+
+### Fixed
+- 修复 `serde_json::Map` 格式化导致的编译错误（`format!("{map}")` → `format!("{map:?}")`）
+
+## [0.39.0] - 2026-07-02
+
+### Added
+- 集成 CodeMirror 6 替代 textarea，支持 SQL 语法高亮、行号、自动补全、搜索替换、括号匹配、代码折叠
+- SQL 编辑器右键菜单：格式化、大小写转换、注释切换、插入模板、历史记录
+- 侧边栏可拖拽调整宽度（200-400px），localStorage 持久化
+- 数据库选择器移入侧边栏顶部，库表结构树始终可见
+- 查询文件列表移至侧边栏底部，可折叠区域
+- 编辑器/结果区可拖拽分割线，高度比例 localStorage 持久化
+- SQL 方言自动检测（MySQL/PostgreSQL/SQLite）
+- 库表结构树右键菜单：查看行数统计、查看列约束、导出表数据、刷新
+- i18n 新增 exportData、viewConstraints 键（中英文）
+
+### Changed
+- SQL 侧边栏从双模式 Tab 切换重构为 Navicat 风格持久布局（上部库表树 + 下部查询文件）
+
 ## [0.38.0] - 2026-07-02
 
 ### Fixed
