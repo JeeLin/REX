@@ -66,11 +66,13 @@
       <div class="sql-right">
         <SqlEditor
           v-model="activeTab.sql"
+          :dialect="editorDialect"
           @execute="execute(activeTab.sql)"
           @execute-selection="execute"
           @save="handleToolbarSave"
           @show-history="showHistoryPanel = true"
         />
+        <div class="sql-resize-handle" @mousedown.prevent="startEditorResize" />
         <SqlResults
           :result="activeTab.result"
           :loading="executing"
@@ -97,7 +99,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import SqlTopbar from '@/features/sql/SqlTopbar.vue'
@@ -138,6 +140,56 @@ const sidebarRef = ref<InstanceType<typeof SqlSidebar>>()
 const showHistoryPanel = ref(false)
 const globalQueryVisible = ref(false)
 const peerResources = ref<SqlResourceInfo[]>([])
+
+// Editor/Results split resize
+const EDITOR_SPLIT_KEY = 'rex-sql-editor-split'
+const splitRatio = ref(parseFloat(localStorage.getItem(EDITOR_SPLIT_KEY) || '0.4'))
+let resizingEditor = false
+let resizeStartY = 0
+let resizeStartRatio = 0
+
+function startEditorResize(e: MouseEvent) {
+  resizingEditor = true
+  resizeStartY = e.clientY
+  resizeStartRatio = splitRatio.value
+  document.addEventListener('mousemove', onEditorResize)
+  document.addEventListener('mouseup', stopEditorResize)
+  document.body.style.cursor = 'row-resize'
+  document.body.style.userSelect = 'none'
+}
+
+function onEditorResize(e: MouseEvent) {
+  if (!resizingEditor) return
+  const sqlRight = document.querySelector('.sql-right') as HTMLElement
+  if (!sqlRight) return
+  const rect = sqlRight.getBoundingClientRect()
+  const delta = e.clientY - resizeStartY
+  const newRatio = resizeStartRatio + delta / rect.height
+  splitRatio.value = Math.min(0.8, Math.max(0.15, newRatio))
+}
+
+function stopEditorResize() {
+  resizingEditor = false
+  document.removeEventListener('mousemove', onEditorResize)
+  document.removeEventListener('mouseup', stopEditorResize)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  localStorage.setItem(EDITOR_SPLIT_KEY, String(splitRatio.value))
+}
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousemove', onEditorResize)
+  document.removeEventListener('mouseup', stopEditorResize)
+})
+
+// SQL dialect from protocol
+const editorDialect = computed(() => {
+  const protocol = resource.value?.protocol?.toLowerCase() ?? ''
+  if (protocol.includes('mysql')) return 'mysql' as const
+  if (protocol.includes('postgres')) return 'postgresql' as const
+  if (protocol.includes('sqlite')) return 'sqlite' as const
+  return 'sql' as const
+})
 
 function insertTableSql(tableName: string) {
   const tab = tabs.value.find((t) => t.id === activeTabId.value)
@@ -326,5 +378,26 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.sql-resize-handle {
+  height: 4px;
+  cursor: row-resize;
+  background: var(--border);
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.sql-resize-handle:hover {
+  background: var(--accent);
+}
+
+.sql-right > .sql-editor-wrap {
+  flex: none;
+}
+
+.sql-right > .sql-results {
+  flex: 1;
+  min-height: 100px;
 }
 </style>
