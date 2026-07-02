@@ -238,10 +238,13 @@ async function doDeleteQuery() {
 async function handleTableContextMenu(event: MouseEvent, table: TableInfo) {
   ctxMenu.show(event, [
     { label: t('sql.tree.ctx.viewStructure'), action: () => toggleTable(table.name) },
-    { label: t('sql.tree.ctx.viewRowCount'), disabled: table.row_count == null },
+    { label: t('sql.tree.ctx.viewRowCount'), action: () => alert(`${table.name}: ${table.row_count?.toLocaleString() ?? 'N/A'}`), disabled: table.row_count == null },
     { separator: true },
     { label: t('sql.tree.ctx.copyTableName'), action: () => navigator.clipboard.writeText(table.name) },
     { label: t('sql.tree.ctx.selectStar'), action: () => emit('select-table', table.name) },
+    { label: t('sql.tree.ctx.exportData'), action: () => emit('select-table', table.name) },
+    { separator: true },
+    { label: t('sql.tree.ctx.refresh'), action: () => loadTables() },
   ])
 }
 
@@ -249,6 +252,7 @@ function handleColumnContextMenu(event: MouseEvent, col: ColumnInfo) {
   ctxMenu.show(event, [
     { label: t('sql.tree.ctx.copyColumnName'), action: () => navigator.clipboard.writeText(col.name) },
     { label: t('sql.tree.ctx.copyColumnType'), action: () => navigator.clipboard.writeText(col.data_type) },
+    { label: t('sql.tree.ctx.viewConstraints'), action: () => alert(`${col.name}: ${col.is_primary_key ? 'PK' : ''}${col.is_nullable === false ? ' NOT NULL' : ''}`) },
   ])
 }
 
