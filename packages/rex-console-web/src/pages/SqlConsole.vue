@@ -64,14 +64,16 @@
 
       <!-- Right: Editor + Results -->
       <div class="sql-right">
-        <SqlEditor
-          v-model="activeTab.sql"
-          :dialect="editorDialect"
-          @execute="execute(activeTab.sql)"
-          @execute-selection="execute"
-          @save="handleToolbarSave"
-          @show-history="showHistoryPanel = true"
-        />
+        <div class="sql-editor-section" :style="{ height: (splitRatio * 100) + '%' }">
+          <SqlEditor
+            v-model="activeTab.sql"
+            :dialect="editorDialect"
+            @execute="execute(activeTab.sql)"
+            @execute-selection="execute"
+            @save="handleToolbarSave"
+            @show-history="showHistoryPanel = true"
+          />
+        </div>
         <div class="sql-resize-handle" @mousedown.prevent="startEditorResize" />
         <SqlResults
           :result="activeTab.result"
@@ -392,8 +394,9 @@ onMounted(async () => {
   background: var(--accent);
 }
 
-.sql-right > .sql-editor-wrap {
+.sql-right > .sql-editor-section {
   flex: none;
+  overflow: hidden;
 }
 
 .sql-right > .sql-results {

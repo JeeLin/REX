@@ -256,13 +256,6 @@ function handleColumnContextMenu(event: MouseEvent, col: ColumnInfo) {
   ])
 }
 
-function handleHeaderContextMenu(event: MouseEvent) {
-  ctxMenu.show(event, [
-    { label: t('sql.tree.ctx.refresh'), action: () => emit('refresh') },
-    { label: t('sql.tree.ctx.copyDbName'), action: () => navigator.clipboard.writeText(props.database) },
-  ])
-}
-
 function handleTreeContextMenu(event: MouseEvent) {
   ctxMenu.show(event, [
     { label: t('sql.tree.ctx.expandAll'), action: expandAll },

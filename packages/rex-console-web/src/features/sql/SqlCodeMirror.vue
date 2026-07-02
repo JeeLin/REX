@@ -209,7 +209,6 @@ function convertCase(mode: 'upper' | 'lower' | 'title') {
 function toggleComment() {
   if (!view) return
   const { from } = view.state.selection.main
-  const doc = view.state.doc.toString()
   const line = view.state.doc.lineAt(from)
   const lineText = line.text
   const commented = lineText.trimStart().startsWith('-- ')
