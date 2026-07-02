@@ -24,6 +24,7 @@
       @close-all="closeAll"
       @close-saved="closeSaved"
       @save="handleTabSave"
+      @save-as="handleTabSaveAs"
       @rename="handleTabRename"
       @copy-sql="handleTabCopySql"
       @execute-sql="handleTabExecuteSql"
@@ -238,6 +239,17 @@ function handleToolbarSave() {
 function handleTabRename(id: string) {
   const newTitle = prompt(t('sql.sidebar.renamePrompt'))
   if (newTitle) renameTab(id, newTitle)
+}
+
+async function handleTabSaveAs(id: string) {
+  const tab = tabs.value.find((t) => t.id === id)
+  if (!tab) return
+  const name = prompt(t('sql.savePrompt'))
+  if (!name || !name.trim()) return
+  const saved = await saveQuery(resourceId, name.trim(), tab.sql, selectedDb.value)
+  markSaved(id, saved.id)
+  tab.title = saved.name
+  sidebarRef.value?.loadQueries()
 }
 
 function handleTabCopySql(id: string) {
