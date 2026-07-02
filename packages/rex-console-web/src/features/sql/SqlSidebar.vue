@@ -1,29 +1,15 @@
 <template>
-  <div class="sql-sidebar">
-    <!-- 模式切换标签 -->
-    <div class="sql-sidebar-tabs">
-      <button
-        class="sidebar-tab"
-        :class="{ active: mode === 'schema' }"
-        @click="mode = 'schema'"
-      >
-        {{ t('sql.sidebar.schema') }}
-      </button>
-      <button
-        class="sidebar-tab"
-        :class="{ active: mode === 'queries' }"
-        @click="mode = 'queries'"
-      >
-        {{ t('sql.sidebar.queries') }}
-      </button>
+  <div class="sql-sidebar" :style="{ width: sidebarWidth + 'px' }">
+    <!-- 数据库选择器 -->
+    <div class="sql-sidebar-db">
+      <select class="db-select" :value="database" @change="$emit('update:database', ($event.target as HTMLSelectElement).value)">
+        <option v-for="db in databases" :key="db.name" :value="db.name">{{ db.name }}</option>
+      </select>
+      <button class="btn btn-ghost btn-xs" @click="$emit('refresh')">↻</button>
     </div>
 
-    <!-- 库表结构模式 -->
-    <template v-if="mode === 'schema'">
-      <div class="sql-sidebar-header" @contextmenu.prevent="handleHeaderContextMenu">
-        <span>{{ database }}</span>
-        <button class="btn btn-ghost btn-sm" @click="$emit('refresh')">↻</button>
-      </div>
+    <!-- 库表结构树 -->
+    <div class="sql-sidebar-schema">
       <div class="sql-sidebar-search">
         <input v-model="search" type="text" :placeholder="t('sql.searchPlaceholder')" />
       </div>
@@ -45,36 +31,43 @@
           </div>
         </div>
       </div>
-    </template>
+    </div>
 
-    <!-- 查询文件模式 -->
-    <template v-if="mode === 'queries'">
-      <div class="sql-sidebar-header">
+    <!-- 查询文件（底部可折叠区域） -->
+    <div class="sql-sidebar-queries">
+      <div class="queries-header" @click="queriesExpanded = !queriesExpanded">
+        <span class="tree-icon">{{ queriesExpanded ? '▾' : '▸' }}</span>
         <span>{{ t('sql.sidebar.savedQueries') }}</span>
-        <button class="btn btn-ghost btn-sm" @click="loadQueries">↻</button>
+        <span class="queries-count">{{ queries.length }}</span>
       </div>
-      <div class="sql-sidebar-search">
-        <input v-model="querySearch" type="text" :placeholder="t('sql.sidebar.searchQueries')" />
-      </div>
-      <div class="sql-tree">
-        <div
-          v-for="q in filteredQueries"
-          :key="q.id"
-          class="tree-query-item"
-          @click="$emit('open-query', q)"
-          @contextmenu.prevent="handleQueryContextMenu($event, q)"
-        >
-          <span class="query-icon">📄</span>
-          <div class="query-info">
-            <span class="query-name">{{ q.name }}</span>
-            <span class="query-meta">{{ q.database }} · {{ formatDate(q.updated_at) }}</span>
+      <template v-if="queriesExpanded">
+        <div class="sql-sidebar-search">
+          <input v-model="querySearch" type="text" :placeholder="t('sql.sidebar.searchQueries')" />
+        </div>
+        <div class="sql-tree queries-list">
+          <div
+            v-for="q in filteredQueries"
+            :key="q.id"
+            class="tree-query-item"
+            @click="$emit('open-query', q)"
+            @contextmenu.prevent="handleQueryContextMenu($event, q)"
+          >
+            <span class="query-icon">📄</span>
+            <div class="query-info">
+              <span class="query-name">{{ q.name }}</span>
+              <span class="query-meta">{{ q.database }} · {{ formatDate(q.updated_at) }}</span>
+            </div>
+          </div>
+          <div v-if="filteredQueries.length === 0" class="tree-empty">
+            {{ t('sql.sidebar.noQueries') }}
           </div>
         </div>
-        <div v-if="filteredQueries.length === 0" class="tree-empty">
-          {{ t('sql.sidebar.noQueries') }}
-        </div>
-      </div>
-    </template>
+      </template>
+    </div>
+
+    <!-- 拖拽调整宽度 -->
+    <div class="sidebar-resize" @mousedown.prevent="startResize" />
+
     <ConfirmDialog
       :visible="showDeleteConfirm"
       :title="t('confirm.deleteTitle')"
@@ -94,7 +87,7 @@ import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { listTables, listColumns, listQueries, deleteQuery, renameQuery } from '@/api/sql'
-import type { TableInfo, ColumnInfo, QueryFileMeta } from '@/api/sql'
+import type { TableInfo, ColumnInfo, QueryFileMeta, DatabaseInfo } from '@/api/sql'
 
 const { t } = useI18n()
 const ctxMenu = useContextMenu()
@@ -102,9 +95,11 @@ const ctxMenu = useContextMenu()
 const props = defineProps<{
   resourceId: string
   database: string
+  databases: DatabaseInfo[]
 }>()
 
 const emit = defineEmits<{
+  'update:database': [db: string]
   'select-table': [table: string]
   'open-query': [query: QueryFileMeta]
   'refresh': []
@@ -112,17 +107,49 @@ const emit = defineEmits<{
   'query-renamed': []
 }>()
 
-const mode = ref<'schema' | 'queries'>('schema')
 const search = ref('')
 const querySearch = ref('')
 const tables = ref<TableInfo[]>([])
 const columns = ref<Map<string, ColumnInfo[]>>(new Map())
 const expanded = ref<Set<string>>(new Set())
 const queries = ref<QueryFileMeta[]>([])
+const queriesExpanded = ref(true)
 const showDeleteConfirm = ref(false)
 const deleteConfirmMsg = ref('')
 let pendingDeleteResourceId = ''
 let pendingDeleteQueryId = ''
+
+// 侧边栏宽度拖拽
+const SIDEBAR_WIDTH_KEY = 'rex-sql-sidebar-width'
+const sidebarWidth = ref(parseInt(localStorage.getItem(SIDEBAR_WIDTH_KEY) || '260'))
+let resizing = false
+let startX = 0
+let startWidth = 0
+
+function startResize(e: MouseEvent) {
+  resizing = true
+  startX = e.clientX
+  startWidth = sidebarWidth.value
+  document.addEventListener('mousemove', onResize)
+  document.addEventListener('mouseup', stopResize)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+}
+
+function onResize(e: MouseEvent) {
+  if (!resizing) return
+  const delta = e.clientX - startX
+  sidebarWidth.value = Math.min(400, Math.max(200, startWidth + delta))
+}
+
+function stopResize() {
+  resizing = false
+  document.removeEventListener('mousemove', onResize)
+  document.removeEventListener('mouseup', stopResize)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth.value))
+}
 
 const filteredTables = computed(() => {
   if (!search.value) return tables.value
@@ -138,10 +165,7 @@ const filteredQueries = computed(() => {
   )
 })
 
-watch(() => props.database, loadTables, { immediate: true })
-watch(mode, (m) => {
-  if (m === 'queries') loadQueries()
-})
+watch(() => props.database, () => { loadTables(); loadQueries() }, { immediate: true })
 
 async function loadTables() {
   if (!props.database) return
@@ -264,56 +288,46 @@ defineExpose({ loadQueries })
 
 <style scoped>
 .sql-sidebar {
-  width: 260px;
   border-right: 1px solid var(--border);
   background: var(--bg-surface);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
   overflow: hidden;
+  position: relative;
 }
 
-.sql-sidebar-tabs {
+.sql-sidebar-db {
   display: flex;
+  align-items: center;
+  gap: var(--sp-xs);
+  padding: var(--sp-xs) var(--sp-sm);
   border-bottom: 1px solid var(--border);
   background: var(--bg-deep);
 }
 
-.sidebar-tab {
+.db-select {
   flex: 1;
   padding: var(--sp-xs) var(--sp-sm);
-  font-size: var(--fs-xs);
-  font-weight: 500;
-  color: var(--text-muted);
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.sidebar-tab:hover {
-  color: var(--text-secondary);
-}
-
-.sidebar-tab.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-}
-
-.sql-sidebar-header {
-  padding: var(--sp-sm) var(--sp-md);
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
   font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--text-secondary);
+  outline: none;
+  min-width: 0;
+}
+
+.sql-sidebar-schema {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 120px;
 }
 
 .sql-sidebar-search {
-  padding: var(--sp-sm) var(--sp-md);
+  padding: var(--sp-xs) var(--sp-sm);
   border-bottom: 1px solid var(--border);
 }
 
@@ -365,7 +379,40 @@ defineExpose({ loadQueries })
 .tree-col-item .col-type { color: var(--accent); }
 .tree-col-item .col-key { color: var(--info); font-size: 9px; }
 
-/* 查询文件列表 */
+/* 查询文件区域 */
+.sql-sidebar-queries {
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  max-height: 50%;
+  display: flex;
+  flex-direction: column;
+}
+
+.queries-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  padding: var(--sp-xs) var(--sp-sm);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-deep);
+}
+
+.queries-header:hover { background: var(--bg-hover); }
+
+.queries-count {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.queries-list {
+  max-height: 200px;
+}
+
 .tree-query-item {
   display: flex;
   align-items: flex-start;
@@ -404,5 +451,21 @@ defineExpose({ loadQueries })
   text-align: center;
   color: var(--text-muted);
   font-size: var(--fs-sm);
+}
+
+/* 拖拽调整宽度 */
+.sidebar-resize {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.sidebar-resize:hover {
+  background: var(--accent);
+  opacity: 0.3;
 }
 </style>

@@ -53,6 +53,8 @@
         ref="sidebarRef"
         :resource-id="resourceId"
         :database="selectedDb"
+        :databases="databases"
+        @update:database="onDbChange"
         @select-table="insertTableSql"
         @open-query="handleOpenQuery"
         @refresh="loadDatabases"
