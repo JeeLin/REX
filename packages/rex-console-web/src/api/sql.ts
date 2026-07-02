@@ -74,6 +74,22 @@ export function explainSql(resourceId: string, sql: string): Promise<ExplainResu
     .then((r) => r.data.data)
 }
 
+/** 获取表/视图 DDL 定义 */
+export function getDdl(
+  resourceId: string,
+  database: string,
+  objectName: string,
+  objectType: 'table' | 'view' = 'table',
+): Promise<{ ddl: string }> {
+  return client
+    .post(`/resources/${resourceId}/sql/ddl`, {
+      database,
+      object_name: objectName,
+      object_type: objectType,
+    })
+    .then((r) => r.data.data)
+}
+
 /** 列出数据库 */
 export function listDatabases(resourceId: string): Promise<DatabaseInfo[]> {
   return client

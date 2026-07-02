@@ -67,7 +67,118 @@ pub enum GlobalQueryEvent {
     },
 }
 
+// ── DDL 请求类型 ─────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct DdlRequest {
+    pub database: String,
+    pub object_name: String,
+    #[serde(default = "default_object_type")]
+    pub object_type: String,
+}
+
+fn default_object_type() -> String {
+    "table".to_string()
+}
+
+#[derive(Debug, Serialize)]
+pub struct DdlResult {
+    pub ddl: String,
+}
+
 // ── 路由处理函数 ──────────────────────────────────────────
+
+/// POST /api/resources/:resource_id/sql/ddl — 获取表/视图定义
+pub async fn get_ddl(
+    State(state): State<Arc<AppState>>,
+    Path(resource_id): Path<String>,
+    Json(input): Json<DdlRequest>,
+) -> Result<Json<ApiResponse<DdlResult>>, (StatusCode, Json<ErrorResponse>)> {
+    let mut connector = get_sql_connector(&state, &resource_id).await?;
+
+    connector
+        .connect()
+        .await
+        .map_err(|e| err_resp("SQL_CONNECT_FAILED", &format!("连接失败: {e}")))?;
+
+    let protocol = resource_protocol(&state, &resource_id).await?;
+
+    let sql = match input.object_type.as_str() {
+        "view" => match protocol.as_str() {
+            "mysql" => format!(
+                "SHOW CREATE VIEW `{}`",
+                input.object_name.replace('`', "``")
+            ),
+            "postgresql" => format!(
+                "SELECT pg_get_viewdef('{}', true)",
+                input.object_name.replace('\'', "''")
+            ),
+            _ => return Err(bad_request("不支持的协议获取视图定义")),
+        },
+        _ => match protocol.as_str() {
+            "mysql" => format!(
+                "SHOW CREATE TABLE `{}`",
+                input.object_name.replace('`', "``")
+            ),
+            "postgresql" => {
+                // pg_get_tabledef 在大多数 PostgreSQL 版本不可用，使用替代方案
+                format!(
+                    "-- {} 表结构信息 (请通过 \\d {} 查看)\nSELECT column_name, data_type, is_nullable, column_default\nFROM information_schema.columns\nWHERE table_schema = 'public' AND table_name = '{}'\nORDER BY ordinal_position;",
+                    input.object_name,
+                    input.object_name,
+                    input.object_name.replace('\'', "''")
+                )
+            }
+            _ => return Err(bad_request("不支持的协议获取表定义")),
+        },
+    };
+
+    let result = connector
+        .execute(&sql)
+        .await
+        .map_err(|e| err_resp("SQL_DDL_FAILED", &format!("获取定义失败: {e}")))?;
+
+    let _ = connector.close().await;
+
+    // 从结果中提取 DDL 文本
+    let ddl = if let Some(first_row) = result.rows.first() {
+        if let Some(first_col) = first_row.first() {
+            match first_col {
+                serde_json::Value::String(s) => s.clone(),
+                serde_json::Value::Object(map) => {
+                    // PostgreSQL SHOW CREATE TABLE 返回对象
+                    map.get("CREATE TABLE")
+                        .or_else(|| map.values().next())
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(&format!("{map:?}"))
+                        .to_string()
+                }
+                _ => format!("{first_col}"),
+            }
+        } else {
+            "-- 无法获取定义".to_string()
+        }
+    } else {
+        "-- 无法获取定义".to_string()
+    };
+
+    Ok(Json(ApiResponse {
+        data: DdlResult { ddl },
+    }))
+}
+
+/// 获取资源协议类型
+async fn resource_protocol(
+    state: &Arc<AppState>,
+    resource_id: &str,
+) -> Result<String, (StatusCode, Json<ErrorResponse>)> {
+    let resource = state
+        .db
+        .get_resource_by_id(resource_id)
+        .map_err(|e| err_resp("DB_ERROR", &format!("查询资源失败: {e}")))?
+        .ok_or_else(|| not_found("RESOURCE_NOT_FOUND", "资源不存在"))?;
+    Ok(resource.protocol)
+}
 
 /// POST /api/resources/:resource_id/sql/execute — 执行 SQL
 pub async fn execute_sql(

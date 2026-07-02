@@ -68,6 +68,51 @@
     <!-- 拖拽调整宽度 -->
     <div class="sidebar-resize" @mousedown.prevent="startResize" />
 
+    <!-- 创建表弹窗 -->
+    <div v-if="showCreateTableModal" class="modal-overlay" @click.self="showCreateTableModal = false">
+      <div class="modal-content">
+        <div class="modal-header">
+          <span>{{ t('sql.tree.ctx.createNewTable') }}</span>
+          <button @click="showCreateTableModal = false">×</button>
+        </div>
+
+        <div class="modal-body">
+          <textarea
+            ref="ddlTextarea"
+            v-model="createTableDdl"
+            placeholder="输入 CREATE TABLE 语句..."
+            @keydown.ctrl.enter="executeCreateTable"
+          />
+          <div class="editor-toolbar">
+            <button
+              :disabled="!createTableDdl.trim() || isExecuting"
+              @click="executeCreateTable"
+            >
+              {{ t('common.execute') }} (Ctrl+Enter)
+            </button>
+            <button
+              :disabled="!isExecuting"
+              @click="showCreateTableModal = false"
+            >
+              {{ t('common.cancel') }}
+            </button>
+            <progress
+              v-if="isExecuting"
+              :value="progress"
+              max="100"
+            ></progress>
+          </div>
+
+          <div v-if="createTableError" class="error-message">
+            ❌ {{ createTableError }}
+          </div>
+          <div v-if="createTableSuccess" class="success-message">
+            ✅ {{ t('toast.operationSuccess') }}
+          </div>
+        </div>
+      </div>
+    </div>
+
     <ConfirmDialog
       :visible="showDeleteConfirm"
       :title="t('confirm.deleteTitle')"
@@ -82,11 +127,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
-import { listTables, listColumns, listQueries, deleteQuery, renameQuery } from '@/api/sql'
+import { listTables, listColumns, listQueries, deleteQuery, renameQuery, getDdl, executeSql } from '@/api/sql'
 import type { TableInfo, ColumnInfo, QueryFileMeta, DatabaseInfo } from '@/api/sql'
 
 const { t } = useI18n()
@@ -118,6 +163,15 @@ const showDeleteConfirm = ref(false)
 const deleteConfirmMsg = ref('')
 let pendingDeleteResourceId = ''
 let pendingDeleteQueryId = ''
+
+// 创建表弹窗
+const showCreateTableModal = ref(false)
+const createTableDdl = ref('')
+const ddlTextareaRef = ref<HTMLTextAreaElement>()
+const isExecuting = ref(false)
+const progress = ref(0)
+const createTableError = ref('')
+const createTableSuccess = ref(false)
 
 // 侧边栏宽度拖拽
 const SIDEBAR_WIDTH_KEY = 'rex-sql-sidebar-width'
@@ -178,15 +232,19 @@ async function loadQueries() {
   queries.value = await listQueries(props.resourceId)
 }
 
+async function loadColumnsForTable(tableName: string) {
+  if (!columns.value.has(tableName)) {
+    const cols = await listColumns(props.resourceId, props.database, tableName)
+    columns.value.set(tableName, cols)
+  }
+}
+
 async function toggleTable(name: string) {
   if (expanded.value.has(name)) {
     expanded.value.delete(name)
   } else {
     expanded.value.add(name)
-    if (!columns.value.has(name)) {
-      const cols = await listColumns(props.resourceId, props.database, name)
-      columns.value.set(name, cols)
-    }
+    await loadColumnsForTable(name)
     emit('select-table', name)
   }
 }
@@ -239,6 +297,7 @@ async function handleTableContextMenu(event: MouseEvent, table: TableInfo) {
   ctxMenu.show(event, [
     { label: t('sql.tree.ctx.viewStructure'), action: () => toggleTable(table.name) },
     { label: t('sql.tree.ctx.viewRowCount'), action: () => alert(`${table.name}: ${table.row_count?.toLocaleString() ?? 'N/A'}`), disabled: table.row_count == null },
+    { label: t('sql.tree.ctx.viewDefinition'), action: () => handleViewDefinition(table.name, 'table') },
     { separator: true },
     { label: t('sql.tree.ctx.copyTableName'), action: () => navigator.clipboard.writeText(table.name) },
     { label: t('sql.tree.ctx.selectStar'), action: () => emit('select-table', table.name) },
@@ -262,16 +321,60 @@ function handleTreeContextMenu(event: MouseEvent) {
     { label: t('sql.tree.ctx.collapseAll'), action: collapseAll },
     { separator: true },
     { label: t('sql.tree.ctx.refreshStructure'), action: () => emit('refresh') },
+    { separator: true },
+    { label: t('sql.tree.ctx.createNewTable'), action: handleCreateNewTable },
   ])
+}
+
+async function handleViewDefinition(name: string, type: 'table' | 'view' = 'view') {
+  if (!props.database) return
+  try {
+    const { ddl } = await getDdl(props.resourceId, props.database, name, type)
+    alert(`${type.toUpperCase()} ${name}:\n\n${ddl}`)
+  } catch (e) {
+    alert(`获取定义失败: ${e instanceof Error ? e.message : String(e)}`)
+  }
+}
+
+function handleCreateNewTable() {
+  if (!props.database) return
+
+  createTableDdl.value = `CREATE TABLE ${props.database}.new_table (\n  id INT PRIMARY KEY AUTO_INCREMENT,\n  name VARCHAR(255) NOT NULL,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);`
+  createTableError.value = ''
+  createTableSuccess.value = false
+  isExecuting.value = false
+  progress.value = 0
+  showCreateTableModal.value = true
+
+  nextTick(() => ddlTextareaRef.value?.focus())
+}
+
+async function executeCreateTable() {
+  if (!createTableDdl.value.trim() || isExecuting.value) return
+
+  isExecuting.value = true
+  createTableError.value = ''
+  createTableSuccess.value = false
+  progress.value = 30
+
+  try {
+    await executeSql(props.resourceId, createTableDdl.value.trim())
+    progress.value = 80
+    await loadTables()
+    progress.value = 100
+    createTableSuccess.value = true
+    setTimeout(() => { showCreateTableModal.value = false }, 1000)
+  } catch (e) {
+    createTableError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    isExecuting.value = false
+  }
 }
 
 async function expandAll() {
   for (const table of filteredTables.value) {
     expanded.value.add(table.name)
-    if (!columns.value.has(table.name)) {
-      const cols = await listColumns(props.resourceId, props.database, table.name)
-      columns.value.set(table.name, cols)
-    }
+    await loadColumnsForTable(table.name)
   }
 }
 
