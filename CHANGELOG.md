@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-07-02
+
+### Fixed
+- 删除引用已删除函数的孤立测试（audit.rs `days_to_ymd`、bin/rex-hub.rs `extract_port`）
+- 修复 connector.rs unused mut warning
+
 ## [0.37.0] - 2026-07-02
 
 ### Added
