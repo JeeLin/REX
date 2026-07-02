@@ -650,6 +650,19 @@ export default {
         generateDelete: '在编辑器中生成 DELETE',
       },
     },
+    tab: {
+      ctx: {
+        close: '关闭',
+        closeOthers: '关闭其他',
+        closeAll: '关闭全部',
+        closeSaved: '关闭已保存的',
+        save: '保存',
+        saveAs: '另存为…',
+        rename: '重命名',
+        copySql: '复制 SQL',
+        executeSql: '执行 SQL',
+      },
+    },
     tree: {
       ctx: {
         viewStructure: '查看表结构',
@@ -660,6 +673,8 @@ export default {
         copyColumnName: '复制列名',
         copyColumnType: '复制列类型',
         viewConstraints: '查看列约束',
+        viewDefinition: '查看定义',
+        createNewTable: '新建表',
         copyDbName: '复制数据库名',
         refresh: '刷新',
         expandAll: '全部展开',
@@ -692,19 +707,6 @@ export default {
       empty: '暂无执行历史',
       copy: '📋 复制',
       copySuccess: '已复制到剪贴板',
-    },
-    tab: {
-      ctx: {
-        close: '关闭',
-        closeOthers: '关闭其他',
-        closeAll: '关闭全部',
-        closeSaved: '关闭已保存的',
-        save: '保存',
-        saveAs: '另存为...',
-        rename: '重命名',
-        copySql: '复制 SQL',
-        executeSql: '执行 SQL',
-      },
     },
     noMessage: '暂无消息',
   },

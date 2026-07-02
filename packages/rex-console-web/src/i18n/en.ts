@@ -650,6 +650,19 @@ export default {
         generateDelete: 'Generate DELETE',
       },
     },
+    tab: {
+      ctx: {
+        close: 'Close',
+        closeOthers: 'Close Others',
+        closeAll: 'Close All',
+        closeSaved: 'Close Saved',
+        save: 'Save',
+        saveAs: 'Save As…',
+        rename: 'Rename',
+        copySql: 'Copy SQL',
+        executeSql: 'Execute SQL',
+      },
+    },
     tree: {
       ctx: {
         viewStructure: 'View Structure',
@@ -660,6 +673,8 @@ export default {
         copyColumnName: 'Copy Column Name',
         copyColumnType: 'Copy Column Type',
         viewConstraints: 'View Constraints',
+        viewDefinition: 'View Definition',
+        createNewTable: 'Create New Table',
         copyDbName: 'Copy Database Name',
         refresh: 'Refresh',
         expandAll: 'Expand All',
@@ -692,19 +707,6 @@ export default {
       empty: 'No execution history',
       copy: '📋 Copy',
       copySuccess: 'Copied to clipboard',
-    },
-    tab: {
-      ctx: {
-        close: 'Close',
-        closeOthers: 'Close Others',
-        closeAll: 'Close All',
-        closeSaved: 'Close Saved',
-        save: 'Save',
-        saveAs: 'Save As...',
-        rename: 'Rename',
-        copySql: 'Copy SQL',
-        executeSql: 'Execute SQL',
-      },
     },
     noMessage: 'No messages',
   },
