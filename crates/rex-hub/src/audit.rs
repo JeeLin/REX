@@ -186,55 +186,10 @@ pub async fn get_stats(
     Ok(Json(ApiResponse { data: result }))
 }
 
-/// 简单的 Unix 日历日转年月日
-fn days_to_ymd(g: i64) -> (i64, i64, i64) {
-    let y = (10000 * g + 14780) / 3652425;
-    let mut doy = g - (365 * y + y / 4 - y / 100 + y / 400);
-    if doy < 0 {
-        let y2 = y - 1;
-        doy = g - (365 * y2 + y2 / 4 - y2 / 100 + y2 / 400);
-    }
-    let mi = (100 * doy + 52) / 3060;
-    let month = (mi + 2) % 12 + 1;
-    let year = y + (mi + 2) / 12;
-    let day = doy - (mi * 306 + 5) / 10 + 1;
-    (year, month, day)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::db::Database;
-
-    #[test]
-    fn days_to_ymd_basic_date() {
-        // 测试已知日期：2024-01-01 对应 days from epoch
-        // 2024-01-01 00:00:00 UTC = 1704038400 秒
-        // days = 1704038400 / 86400 = 19723
-        let (year, month, day) = days_to_ymd(19723 + 719468);
-        assert_eq!(year, 2024);
-        assert_eq!(month, 1);
-        assert_eq!(day, 1);
-    }
-
-    #[test]
-    fn days_to_ymd_february() {
-        // 测试 2024-02-28（函数返回 28 日）
-        // days = 19781 gives us 2024-02-28
-        let (year, month, day) = days_to_ymd(19781 + 719468);
-        assert_eq!(year, 2024);
-        assert_eq!(month, 2);
-        assert_eq!(day, 28);
-    }
-
-    #[test]
-    fn days_to_ymd_year_boundary() {
-        // 测试年份边界：2023-12-31 到 2024-01-01
-        let (year, month, day) = days_to_ymd(19722 + 719468);
-        assert_eq!(year, 2023);
-        assert_eq!(month, 12);
-        assert_eq!(day, 31);
-    }
 
     #[test]
     fn write_audit_log_works() {

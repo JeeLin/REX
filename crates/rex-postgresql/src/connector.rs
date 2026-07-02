@@ -220,7 +220,7 @@ impl SqlConnector for PostgresConnector {
 
         // Parse the JSON into a flat table representation
         // PostgreSQL EXPLAIN JSON is an array of plan nodes
-        let mut columns = vec![
+        let columns = vec![
             "Node Type".to_string(),
             "Relation Name".to_string(),
             "Alias".to_string(),

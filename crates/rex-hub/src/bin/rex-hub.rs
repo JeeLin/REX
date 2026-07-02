@@ -174,12 +174,6 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// 从 "host:port" 格式提取端口号
-fn extract_port(addr: &str) -> Option<u16> {
-    addr.rsplit_once(':')
-        .and_then(|(_, port)| port.parse().ok())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -266,11 +260,4 @@ mod tests {
         assert_eq!(acme::determine_tls_mode(&config), TlsMode::None);
     }
 
-    #[test]
-    fn extract_port_from_addr() {
-        assert_eq!(extract_port("0.0.0.0:3000"), Some(3000));
-        assert_eq!(extract_port("127.0.0.1:8080"), Some(8080));
-        assert_eq!(extract_port("hub.example.com:443"), Some(443));
-        assert_eq!(extract_port("no-port"), None);
-    }
 }
