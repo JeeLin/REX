@@ -259,5 +259,4 @@ mod tests {
         };
         assert_eq!(acme::determine_tls_mode(&config), TlsMode::None);
     }
-
 }
