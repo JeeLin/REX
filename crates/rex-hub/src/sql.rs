@@ -123,6 +123,10 @@ pub async fn get_ddl(
                 "SELECT pg_get_viewdef('{}', true)",
                 input.object_name.replace('\'', "''")
             ),
+            "sqlite" => format!(
+                "SELECT sql FROM sqlite_master WHERE type='view' AND name='{}'",
+                input.object_name.replace('\'', "''")
+            ),
             _ => return Err(bad_request("不支持的协议获取视图定义")),
         },
         _ => match protocol.as_str() {
@@ -139,6 +143,10 @@ pub async fn get_ddl(
                     input.object_name.replace('\'', "''")
                 )
             }
+            "sqlite" => format!(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='{}'",
+                input.object_name.replace('\'', "''")
+            ),
             _ => return Err(bad_request("不支持的协议获取表定义")),
         },
     };
@@ -736,6 +744,11 @@ async fn get_sql_connector(
         "postgresql" => {
             let connector = rex_postgresql::PostgresConnector::from_json(&resource.config_json)
                 .map_err(|e| bad_request(&format!("PostgreSQL 配置解析错误: {e}")))?;
+            Ok(Box::new(connector))
+        }
+        "sqlite" => {
+            let connector = rex_sqlite::SqliteConnectorImpl::from_json(&resource.config_json)
+                .map_err(|e| bad_request(&format!("SQLite 配置解析错误: {e}")))?;
             Ok(Box::new(connector))
         }
         other => Err(bad_request(&format!("不支持的 SQL 协议: {other}"))),
