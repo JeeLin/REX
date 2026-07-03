@@ -98,11 +98,13 @@ const props = defineProps<{
   resourceId: string
   database: string
   databases: DatabaseInfo[]
+  protocol: string
 }>()
 
 const emit = defineEmits<{
   'update:database': [db: string]
   'select-table': [table: string]
+  'export-table': [table: string]
   'open-query': [query: QueryFileMeta]
   'refresh': []
   'query-deleted': []
@@ -250,7 +252,7 @@ async function handleTableContextMenu(event: MouseEvent, table: TableInfo) {
     { separator: true },
     { label: t('sql.tree.ctx.copyTableName'), action: () => navigator.clipboard.writeText(table.name) },
     { label: t('sql.tree.ctx.selectStar'), action: () => emit('select-table', table.name) },
-    { label: t('sql.tree.ctx.exportData'), action: () => emit('select-table', table.name) },
+    { label: t('sql.tree.ctx.exportData'), action: () => emit('export-table', table.name) },
     { separator: true },
     { label: t('sql.tree.ctx.refresh'), action: () => loadTables() },
   ])
@@ -285,9 +287,25 @@ async function handleViewDefinition(name: string, type: 'table' | 'view' = 'view
   }
 }
 
+function getDialect(): string {
+  const protocol = props.protocol?.toLowerCase() ?? ''
+  if (protocol.includes('postgres')) return 'postgresql'
+  if (protocol.includes('sqlite')) return 'sqlite'
+  return 'mysql'
+}
+
 function handleCreateNewTable() {
   if (!props.database) return
-  emit('open-sql-tab', '新建表', `CREATE TABLE ${props.database}.new_table (\n  id INT PRIMARY KEY AUTO_INCREMENT,\n  name VARCHAR(255) NOT NULL,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);`)
+  const dialect = getDialect()
+  let ddl: string
+  if (dialect === 'postgresql') {
+    ddl = `CREATE TABLE ${props.database}.new_table (\n  id SERIAL PRIMARY KEY,\n  name VARCHAR(255) NOT NULL,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);`
+  } else if (dialect === 'sqlite') {
+    ddl = `CREATE TABLE ${props.database}.new_table (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  name TEXT NOT NULL,\n  created_at DATETIME DEFAULT CURRENT_TIMESTAMP\n);`
+  } else {
+    ddl = `CREATE TABLE ${props.database}.new_table (\n  id INT PRIMARY KEY AUTO_INCREMENT,\n  name VARCHAR(255) NOT NULL,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);`
+  }
+  emit('open-sql-tab', '新建表', ddl)
 }
 
 async function expandAll() {

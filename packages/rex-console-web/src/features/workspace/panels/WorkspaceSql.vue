@@ -48,6 +48,7 @@
         @update:database="selectedDb = $event"
         @select-table="insertTableSql"
         @refresh="loadDatabases"
+        @export-table="handleExportTable"
       />
       <div
         v-if="selectedDb" class="ws-sql-resize-handle"
@@ -87,13 +88,19 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import SqlTabs from '@/features/sql/SqlTabs.vue'
 import SqlSidebar from '@/features/sql/SqlSidebar.vue'
 import SqlEditor from '@/features/sql/SqlEditor.vue'
 import SqlResults from '@/features/sql/SqlResults.vue'
-import { listDatabases } from '@/api/sql'
+import { listDatabases, executeSql } from '@/api/sql'
 import type { DatabaseInfo } from '@/api/sql'
+import { exportCsv } from '@/features/sql/result-export'
+import { useToast } from '@/composables/useToast'
 import { useSqlTabActions } from '@/features/sql/useSqlTabActions'
+
+const toast = useToast()
+const { t } = useI18n()
 
 const props = defineProps<{
   resourceId: string
@@ -119,6 +126,16 @@ const selectedDb = ref('')
 function insertTableSql(tableName: string) {
   const tab = tabs.value.find((t) => t.id === activeTabId.value)
   if (tab) tab.sql = `SELECT * FROM ${tableName} LIMIT 100;`
+}
+
+async function handleExportTable(tableName: string) {
+  try {
+    const result = await executeSql(props.resourceId, `SELECT * FROM \`${tableName}\``)
+    exportCsv(result.columns, result.rows)
+    toast.success(t('sql.toast.exportSuccess'))
+  } catch {
+    toast.error(t('sql.toast.exportFailed'))
+  }
 }
 
 function handleTabSave(_id: string) {

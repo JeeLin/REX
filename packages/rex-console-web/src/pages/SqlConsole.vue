@@ -55,6 +55,7 @@
         :resource-id="resourceId"
         :database="selectedDb"
         :databases="databases"
+        :protocol="resource?.protocol ?? ''"
         @update:database="onDbChange"
         @select-table="insertTableSql"
         @open-query="handleOpenQuery"
@@ -62,6 +63,7 @@
         @query-deleted="handleQueryDeleted"
         @query-renamed="handleQueryRenamed"
         @open-sql-tab="openSqlTab"
+        @export-table="handleExportTable"
       />
 
       <!-- Right: Editor + Results -->
@@ -114,8 +116,9 @@ import SqlEditor from '@/features/sql/SqlEditor.vue'
 import SqlResults from '@/features/sql/SqlResults.vue'
 import SqlHistoryPanel from '@/features/sql/SqlHistoryPanel.vue'
 import GlobalQueryModal from '@/components/GlobalQueryModal.vue'
-import { listDatabases, getResourceInfo, getQuery, saveQuery, updateQuery, recordHistory, listPeerSqlResources } from '@/api/sql'
+import { listDatabases, getResourceInfo, getQuery, saveQuery, updateQuery, recordHistory, listPeerSqlResources, executeSql } from '@/api/sql'
 import type { DatabaseInfo, SqlResourceInfo, QueryFileMeta, HistoryRecord, SqlResult } from '@/api/sql'
+import { exportCsv } from '@/features/sql/result-export'
 import { useSqlTabActions } from '@/features/sql/useSqlTabActions'
 
 const { t } = useI18n()
@@ -200,6 +203,16 @@ const editorDialect = computed(() => {
 function insertTableSql(tableName: string) {
   const tab = tabs.value.find((t) => t.id === activeTabId.value)
   if (tab) tab.sql = `SELECT * FROM ${tableName} LIMIT 100;`
+}
+
+async function handleExportTable(tableName: string) {
+  try {
+    const result = await executeSql(resourceId, `SELECT * FROM \`${tableName}\``)
+    exportCsv(result.columns, result.rows)
+    toast.success(t('sql.toast.exportSuccess'))
+  } catch (e) {
+    toast.error(t('sql.toast.exportFailed'))
+  }
 }
 
 function handleOpenQuery(query: QueryFileMeta) {
