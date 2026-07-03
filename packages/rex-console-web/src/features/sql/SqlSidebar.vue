@@ -48,6 +48,17 @@
             </div>
           </div>
         </template>
+        <template v-if="filteredProcedures.length > 0">
+          <div class="tree-section-label">{{ t('sql.procedureLabel') }}</div>
+          <div v-for="proc in filteredProcedures" :key="proc.name" class="tree-group">
+            <div class="tree-group-header" @contextmenu.prevent="handleProcedureContextMenu($event, proc)">
+              <span class="tree-icon" style="visibility:hidden">▸</span>
+              <span>🔧</span>
+              <span>{{ proc.name }}</span>
+              <span class="col-type" style="font-size:var(--fs-xs);margin-left:auto">{{ proc.type }}</span>
+            </div>
+          </div>
+        </template>
       </div>
     </div>
 
@@ -105,8 +116,8 @@ import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useToast } from '@/composables/useToast'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
-import { listTables, listColumns, listViews, listQueries, deleteQuery, renameQuery, getDdl } from '@/api/sql'
-import type { TableInfo, ColumnInfo, ViewInfo, QueryFileMeta, DatabaseInfo } from '@/api/sql'
+import { listTables, listColumns, listViews, listProcedures, listQueries, deleteQuery, renameQuery, getDdl } from '@/api/sql'
+import type { TableInfo, ColumnInfo, ViewInfo, ProcedureInfo, QueryFileMeta, DatabaseInfo } from '@/api/sql'
 
 const { t } = useI18n()
 const ctxMenu = useContextMenu()
@@ -136,6 +147,7 @@ const tables = ref<TableInfo[]>([])
 const views = ref<ViewInfo[]>([])
 const viewColumns = ref<Map<string, ColumnInfo[]>>(new Map())
 const viewExpanded = ref<Set<string>>(new Set())
+const procedures = ref<ProcedureInfo[]>([])
 const columns = ref<Map<string, ColumnInfo[]>>(new Map())
 const expanded = ref<Set<string>>(new Set())
 const queries = ref<QueryFileMeta[]>([])
@@ -189,6 +201,12 @@ const filteredViews = computed(() => {
   return views.value.filter(v => v.name.toLowerCase().includes(q))
 })
 
+const filteredProcedures = computed(() => {
+  if (!search.value) return procedures.value
+  const q = search.value.toLowerCase()
+  return procedures.value.filter(p => p.name.toLowerCase().includes(q))
+})
+
 const filteredQueries = computed(() => {
   if (!querySearch.value) return queries.value
   const q = querySearch.value.toLowerCase()
@@ -197,7 +215,7 @@ const filteredQueries = computed(() => {
   )
 })
 
-watch(() => props.database, () => { loadTables(); loadViews(); loadQueries() }, { immediate: true })
+watch(() => props.database, () => { loadTables(); loadViews(); loadProcedures(); loadQueries() }, { immediate: true })
 
 async function loadTables() {
   if (!props.database) return
@@ -215,6 +233,15 @@ async function loadViews() {
   }
   viewColumns.value = new Map()
   viewExpanded.value = new Set()
+}
+
+async function loadProcedures() {
+  if (!props.database) return
+  try {
+    procedures.value = await listProcedures(props.resourceId, props.database)
+  } catch {
+    toast.error(t('sql.toast.procedureListFailed'))
+  }
 }
 
 async function loadQueries() {
@@ -262,6 +289,16 @@ function handleViewContextMenu(event: MouseEvent, view: ViewInfo) {
     { label: t('sql.tree.ctx.viewName'), action: () => navigator.clipboard.writeText(view.name) },
     { separator: true },
     { label: t('sql.tree.ctx.refresh'), action: () => loadViews() },
+  ])
+}
+
+function handleProcedureContextMenu(event: MouseEvent, proc: ProcedureInfo) {
+  ctxMenu.show(event, [
+    { label: t('sql.tree.ctx.viewDefinition'), action: () => handleViewDefinition(proc.name, proc.type === 'PROCEDURE' ? 'procedure' : 'function') },
+    { separator: true },
+    { label: t('sql.tree.ctx.procedureName'), action: () => navigator.clipboard.writeText(proc.name) },
+    { separator: true },
+    { label: t('sql.tree.ctx.refresh'), action: () => loadProcedures() },
   ])
 }
 
@@ -342,7 +379,7 @@ function handleTreeContextMenu(event: MouseEvent) {
   ])
 }
 
-async function handleViewDefinition(name: string, type: 'table' | 'view' = 'view') {
+async function handleViewDefinition(name: string, type: 'table' | 'view' | 'procedure' | 'function' = 'view') {
   if (!props.database) return
   try {
     const { ddl } = await getDdl(props.resourceId, props.database, name, type)

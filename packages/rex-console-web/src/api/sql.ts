@@ -34,6 +34,11 @@ export interface ViewInfo {
   name: string
 }
 
+export interface ProcedureInfo {
+  name: string
+  type: string
+}
+
 export interface SqlResourceInfo {
   id: string
   name: string
@@ -78,12 +83,12 @@ export function explainSql(resourceId: string, sql: string): Promise<ExplainResu
     .then((r) => r.data.data)
 }
 
-/** 获取表/视图 DDL 定义 */
+/** 获取表/视图/存储过程 DDL 定义 */
 export function getDdl(
   resourceId: string,
   database: string,
   objectName: string,
-  objectType: 'table' | 'view' = 'table',
+  objectType: 'table' | 'view' | 'procedure' | 'function' = 'table',
 ): Promise<{ ddl: string }> {
   return client
     .post(`/resources/${resourceId}/sql/ddl`, {
@@ -112,6 +117,13 @@ export function listTables(resourceId: string, database: string): Promise<TableI
 export function listViews(resourceId: string, database: string): Promise<ViewInfo[]> {
   return client
     .get(`/resources/${resourceId}/sql/views`, { params: { database } })
+    .then((r) => r.data.data)
+}
+
+/** 列出存储过程/函数 */
+export function listProcedures(resourceId: string, database: string): Promise<ProcedureInfo[]> {
+  return client
+    .get(`/resources/${resourceId}/sql/procedures`, { params: { database } })
     .then((r) => r.data.data)
 }
 

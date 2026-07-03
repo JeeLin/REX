@@ -682,9 +682,11 @@ export default {
         collapseAll: '全部折叠',
         refreshStructure: '刷新结构',
         viewName: '复制视图名',
+        procedureName: '复制过程/函数名',
       },
     },
     viewLabel: '视图',
+    procedureLabel: '存储过程/函数',
     sidebar: {
       schema: '库表结构',
       queries: '查询文件',
@@ -716,6 +718,7 @@ export default {
       exportSuccess: '导出成功',
       exportFailed: '导出失败',
       viewListFailed: '获取视图列表失败',
+      procedureListFailed: '获取存储过程列表失败',
     },
   },
   settings: {

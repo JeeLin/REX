@@ -682,9 +682,11 @@ export default {
         collapseAll: 'Collapse All',
         refreshStructure: 'Refresh Structure',
         viewName: 'Copy View Name',
+        procedureName: 'Copy Procedure Name',
       },
     },
     viewLabel: 'Views',
+    procedureLabel: 'Procedures/Functions',
     sidebar: {
       schema: 'Schema',
       queries: 'Queries',
@@ -716,6 +718,7 @@ export default {
       exportSuccess: 'Export successful',
       exportFailed: 'Export failed',
       viewListFailed: 'Failed to fetch views',
+      procedureListFailed: 'Failed to fetch procedures',
     },
   },
   settings: {
