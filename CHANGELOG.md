@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-07-03
+
+### Added
+- 后端新增 listViews API（MySQL/PostgreSQL 视图列表）
+- SQL 侧边栏显示视图节点（📐 图标，与表节点并列）
+- 视图节点展开显示列信息（复用 listColumns API）
+- 视图节点右键菜单（查看定义、复制视图名、刷新）
+- 补全视图相关 i18n 键（sql.tree.ctx.viewName、sql.tree.viewLabel、sql.toast.viewListFailed）
+
 ## [0.42.0] - 2026-07-03
 
 ### Fixed
