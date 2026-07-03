@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.42.0] - 2026-07-03
+
+### Fixed
+- 导出表数据菜单项改为真实 CSV 下载（复用 executeSql API + exportCsv 工具函数）
+- 补全导出相关 i18n 键（sql.toast.exportSuccess、sql.toast.exportFailed）
+
 ## [0.41.0] - 2026-07-03
 
 ### Fixed
