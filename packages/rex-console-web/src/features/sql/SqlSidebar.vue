@@ -85,12 +85,14 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
+import { useToast } from '@/composables/useToast'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { listTables, listColumns, listQueries, deleteQuery, renameQuery, getDdl } from '@/api/sql'
 import type { TableInfo, ColumnInfo, QueryFileMeta, DatabaseInfo } from '@/api/sql'
 
 const { t } = useI18n()
 const ctxMenu = useContextMenu()
+const toast = useToast()
 
 const props = defineProps<{
   resourceId: string
@@ -243,7 +245,7 @@ async function doDeleteQuery() {
 async function handleTableContextMenu(event: MouseEvent, table: TableInfo) {
   ctxMenu.show(event, [
     { label: t('sql.tree.ctx.viewStructure'), action: () => toggleTable(table.name) },
-    { label: t('sql.tree.ctx.viewRowCount'), action: () => alert(`${table.name}: ${table.row_count?.toLocaleString() ?? 'N/A'}`), disabled: table.row_count == null },
+    { label: t('sql.tree.ctx.viewRowCount'), action: () => toast.info(`${table.name}: ${table.row_count?.toLocaleString() ?? 'N/A'}`), disabled: table.row_count == null },
     { label: t('sql.tree.ctx.viewDefinition'), action: () => handleViewDefinition(table.name, 'table') },
     { separator: true },
     { label: t('sql.tree.ctx.copyTableName'), action: () => navigator.clipboard.writeText(table.name) },
@@ -258,7 +260,7 @@ function handleColumnContextMenu(event: MouseEvent, col: ColumnInfo) {
   ctxMenu.show(event, [
     { label: t('sql.tree.ctx.copyColumnName'), action: () => navigator.clipboard.writeText(col.name) },
     { label: t('sql.tree.ctx.copyColumnType'), action: () => navigator.clipboard.writeText(col.data_type) },
-    { label: t('sql.tree.ctx.viewConstraints'), action: () => alert(`${col.name}: ${col.is_primary_key ? 'PK' : ''}${col.is_nullable === false ? ' NOT NULL' : ''}`) },
+    { label: t('sql.tree.ctx.viewConstraints'), action: () => toast.info(`${col.name}: ${col.is_primary_key ? 'PK' : ''}${col.is_nullable === false ? ' NOT NULL' : ''}`) },
   ])
 }
 
@@ -279,7 +281,7 @@ async function handleViewDefinition(name: string, type: 'table' | 'view' = 'view
     const { ddl } = await getDdl(props.resourceId, props.database, name, type)
     emit('open-sql-tab', `${type} ${name} — DDL`, ddl)
   } catch (e) {
-    alert(`获取定义失败: ${e instanceof Error ? e.message : String(e)}`)
+    toast.error(t('sql.toast.definitionFailed'))
   }
 }
 

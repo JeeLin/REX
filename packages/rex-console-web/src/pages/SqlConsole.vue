@@ -106,6 +106,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useToast } from '@/composables/useToast'
 import SqlTopbar from '@/features/sql/SqlTopbar.vue'
 import SqlTabs from '@/features/sql/SqlTabs.vue'
 import SqlSidebar from '@/features/sql/SqlSidebar.vue'
@@ -118,6 +119,7 @@ import type { DatabaseInfo, SqlResourceInfo, QueryFileMeta, HistoryRecord, SqlRe
 import { useSqlTabActions } from '@/features/sql/useSqlTabActions'
 
 const { t } = useI18n()
+const toast = useToast()
 const route = useRoute()
 const router = useRouter()
 const resourceId = route.params.resourceId as string
@@ -129,7 +131,7 @@ const {
   execute, handleSort, handleGenerateSql,
 } = useSqlTabActions(
   resourceId,
-  (msg) => alert(msg),
+  (msg) => toast.error(msg),
   (sql: string, result: SqlResult) => {
     // 自动记录执行历史
     recordHistory(resourceId, sql, selectedDb.value, result.elapsed_ms, result.rows.length)
