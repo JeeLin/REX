@@ -2,6 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use rex_common::sql::{
     ColumnInfo, DatabaseInfo, ExplainResult, SqlColumn, SqlConnector, SqlResult, TableInfo,
+    ViewInfo,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::mysql::{MySqlPool, MySqlPoolOptions};
@@ -150,6 +151,27 @@ impl SqlConnector for MySqlConnector {
         }
 
         Ok(tables)
+    }
+
+    async fn list_views(&self, database: &str) -> Result<Vec<ViewInfo>> {
+        let pool = self
+            .pool
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("not connected"))?;
+
+        let query = format!(
+            "SHOW FULL TABLES FROM `{}` WHERE Table_type = 'VIEW'",
+            database.replace('`', "``")
+        );
+        let rows = sqlx::query(&query).fetch_all(pool).await?;
+
+        let mut views = Vec::new();
+        for row in rows {
+            let name: String = row.try_get(0)?;
+            views.push(ViewInfo { name });
+        }
+
+        Ok(views)
     }
 
     async fn list_columns(&self, database: &str, table: &str) -> Result<Vec<ColumnInfo>> {

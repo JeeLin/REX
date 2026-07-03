@@ -255,6 +255,10 @@ pub fn app_with_static(
                 get(crate::sql::list_columns),
             )
             .route(
+                "/api/resources/:resource_id/sql/views",
+                get(crate::sql::list_views),
+            )
+            .route(
                 "/api/resources/:resource_id/sql/ddl",
                 post(crate::sql::get_ddl),
             )

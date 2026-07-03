@@ -2,6 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use rex_common::sql::{
     ColumnInfo, DatabaseInfo, ExplainResult, SqlColumn, SqlConnector, SqlResult, TableInfo,
+    ViewInfo,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::{PgPool, PgPoolOptions};
@@ -151,6 +152,27 @@ impl SqlConnector for PostgresConnector {
         }
 
         Ok(tables)
+    }
+
+    async fn list_views(&self, _database: &str) -> Result<Vec<ViewInfo>> {
+        let pool = self
+            .pool
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("not connected"))?;
+
+        let rows = sqlx::query(
+            "SELECT viewname FROM pg_views WHERE schemaname = 'public' ORDER BY viewname",
+        )
+        .fetch_all(pool)
+        .await?;
+
+        let mut views = Vec::new();
+        for row in rows {
+            let name: String = row.try_get(0)?;
+            views.push(ViewInfo { name });
+        }
+
+        Ok(views)
     }
 
     async fn list_columns(&self, _database: &str, table: &str) -> Result<Vec<ColumnInfo>> {

@@ -28,6 +28,11 @@ pub struct TablesQuery {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ViewsQuery {
+    pub database: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ColumnsQuery {
     pub database: String,
     pub table: String,
@@ -300,6 +305,29 @@ pub async fn list_columns(
     let _ = connector.close().await;
 
     Ok(Json(ApiResponse { data: columns }))
+}
+
+/// GET /api/resources/:resource_id/sql/views?database=x — 列出视图
+pub async fn list_views(
+    State(state): State<Arc<AppState>>,
+    Path(resource_id): Path<String>,
+    Query(query): Query<ViewsQuery>,
+) -> Result<Json<ApiResponse<Vec<rex_common::sql::ViewInfo>>>, (StatusCode, Json<ErrorResponse>)> {
+    let mut connector = get_sql_connector(&state, &resource_id).await?;
+
+    connector
+        .connect()
+        .await
+        .map_err(|e| err_resp("SQL_CONNECT_FAILED", &format!("连接失败: {e}")))?;
+
+    let views = connector
+        .list_views(&query.database)
+        .await
+        .map_err(|e| err_resp("SQL_LIST_FAILED", &format!("列出视图失败: {e}")))?;
+
+    let _ = connector.close().await;
+
+    Ok(Json(ApiResponse { data: views }))
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -729,6 +757,7 @@ mod tests {
             )
             .route("/api/resources/:resource_id/sql/tables", get(list_tables))
             .route("/api/resources/:resource_id/sql/columns", get(list_columns))
+            .route("/api/resources/:resource_id/sql/views", get(list_views))
             .with_state(state)
     }
 
@@ -890,5 +919,21 @@ mod tests {
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json["error"]["message"], "SQL 不能为空");
+    }
+
+    #[tokio::test]
+    async fn list_views_returns_404_for_unknown_resource() {
+        let app = test_app();
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/resources/nonexistent/sql/views?database=test")
+                    .header("authorization", auth_header())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 }

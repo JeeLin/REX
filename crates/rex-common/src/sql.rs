@@ -45,6 +45,13 @@ pub struct ColumnInfo {
     pub is_primary_key: bool,
 }
 
+// ── 视图信息 ──────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViewInfo {
+    pub name: String,
+}
+
 // ── SqlConnector trait ──────────────────────────────────
 
 #[async_trait]
@@ -63,6 +70,12 @@ pub trait SqlConnector: Send + Sync {
 
     /// 列出指定表的列信息
     async fn list_columns(&self, database: &str, table: &str) -> Result<Vec<ColumnInfo>>;
+
+    /// 列出指定数据库中的所有视图
+    async fn list_views(&self, database: &str) -> Result<Vec<ViewInfo>> {
+        let _ = database;
+        Ok(vec![])
+    }
 
     /// 获取 SQL 执行计划（EXPLAIN）
     async fn explain(&self, sql: &str) -> Result<ExplainResult>;
