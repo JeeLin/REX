@@ -121,6 +121,17 @@ rex-agent = 所有 crate（无前端）
 | 0.42.0 | SQL 侧边栏导出完善 | ✅ 完成 |
 | 0.43.0 | SQL 视图节点支持 | ✅ 完成 |
 | 0.44.0 | SQL 存储过程/函数节点支持 | ✅ 完成 |
+
+### 0.45.0 SQLite 连接器现代化
+- **核心功能**：将 SQLite 从独立的 SqliteConnector trait 重构为统一的 SqlConnector trait，接入 REST API 层，补齐缺失功能，前端适配新版侧边栏。
+- **子任务预估**：4 个
+  1. 后端重构：让 SqliteConnectorImpl 实现 SqlConnector trait（适配 list_tables、list_columns 等方法签名差异）
+  2. Hub API 集成：在 get_sql_connector() 中支持 SQLite，接入 DDL、explain、views 等端点
+  3. WebSocket 升级：ws_sqlite 支持 databases/views/explain 等缺失 action
+  4. 前端适配：SqlSidebar 智能过滤（SQLite 不显示存储过程/函数节点），适配新的 REST API
+- **依赖**：0.44.0 SQL 存储过程/函数节点支持
+- **版本类型**：minor
+- **版本号**：0.45.0
 ---
 
 ## 4. 架构文档
