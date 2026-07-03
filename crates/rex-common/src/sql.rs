@@ -52,6 +52,14 @@ pub struct ViewInfo {
     pub name: String,
 }
 
+// ── 存储过程/函数信息 ──────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProcedureInfo {
+    pub name: String,
+    pub r#type: String,
+}
+
 // ── SqlConnector trait ──────────────────────────────────
 
 #[async_trait]
@@ -73,6 +81,12 @@ pub trait SqlConnector: Send + Sync {
 
     /// 列出指定数据库中的所有视图
     async fn list_views(&self, database: &str) -> Result<Vec<ViewInfo>> {
+        let _ = database;
+        Ok(vec![])
+    }
+
+    /// 列出指定数据库中的所有存储过程/函数
+    async fn list_procedures(&self, database: &str) -> Result<Vec<ProcedureInfo>> {
         let _ = database;
         Ok(vec![])
     }

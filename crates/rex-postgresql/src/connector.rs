@@ -1,8 +1,8 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use rex_common::sql::{
-    ColumnInfo, DatabaseInfo, ExplainResult, SqlColumn, SqlConnector, SqlResult, TableInfo,
-    ViewInfo,
+    ColumnInfo, DatabaseInfo, ExplainResult, ProcedureInfo, SqlColumn, SqlConnector, SqlResult,
+    TableInfo, ViewInfo,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::{PgPool, PgPoolOptions};
@@ -173,6 +173,28 @@ impl SqlConnector for PostgresConnector {
         }
 
         Ok(views)
+    }
+
+    async fn list_procedures(&self, _database: &str) -> Result<Vec<ProcedureInfo>> {
+        let pool = self
+            .pool
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("not connected"))?;
+
+        let rows = sqlx::query(
+            "SELECT routine_name, routine_type FROM information_schema.routines WHERE routine_schema = 'public' ORDER BY routine_name",
+        )
+        .fetch_all(pool)
+        .await?;
+
+        let mut procedures = Vec::new();
+        for row in rows {
+            let name: String = row.try_get(0)?;
+            let r#type: String = row.try_get(1)?;
+            procedures.push(ProcedureInfo { name, r#type });
+        }
+
+        Ok(procedures)
     }
 
     async fn list_columns(&self, _database: &str, table: &str) -> Result<Vec<ColumnInfo>> {

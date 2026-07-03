@@ -33,6 +33,11 @@ pub struct ViewsQuery {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ProceduresQuery {
+    pub database: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ColumnsQuery {
     pub database: String,
     pub table: String,
@@ -328,6 +333,29 @@ pub async fn list_views(
     let _ = connector.close().await;
 
     Ok(Json(ApiResponse { data: views }))
+}
+
+/// GET /api/resources/:resource_id/sql/procedures?database=x — 列出存储过程/函数
+pub async fn list_procedures(
+    State(state): State<Arc<AppState>>,
+    Path(resource_id): Path<String>,
+    Query(query): Query<ProceduresQuery>,
+) -> Result<Json<ApiResponse<Vec<rex_common::sql::ProcedureInfo>>>, (StatusCode, Json<ErrorResponse>)> {
+    let mut connector = get_sql_connector(&state, &resource_id).await?;
+
+    connector
+        .connect()
+        .await
+        .map_err(|e| err_resp("SQL_CONNECT_FAILED", &format!("连接失败: {e}")))?;
+
+    let procedures = connector
+        .list_procedures(&query.database)
+        .await
+        .map_err(|e| err_resp("SQL_LIST_FAILED", &format!("列出存储过程失败: {e}")))?;
+
+    let _ = connector.close().await;
+
+    Ok(Json(ApiResponse { data: procedures }))
 }
 
 #[derive(Debug, serde::Serialize)]
