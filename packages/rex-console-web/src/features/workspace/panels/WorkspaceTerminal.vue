@@ -54,6 +54,7 @@
       <span>{{ t('ws.terminal.statusbar.encoding') }}</span>
       <span>·</span>
       <span>{{ termSize.cols }}×{{ termSize.rows }}</span>
+      <span v-if="latency !== null" class="ws-term-latency-status" :class="latencyClass">{{ latency }}ms</span>
       <span class="spacer"></span>
       <span v-if="props.connectionMode === 'agent'">{{ t('ws.terminal.statusbar.agent') }}</span>
       <span v-else>{{ t('ws.terminal.statusbar.direct') }}</span>
@@ -574,6 +575,10 @@ function handleContextMenu(event: MouseEvent) {
       action: () => { toggleSftp() },
     },
     {
+      label: t('ws.terminal.ctx.openSftpNewTab'),
+      action: () => { window.open(`/workspace?resource=${props.resourceId}&panel=sftp`, '_blank') },
+    },
+    {
       label: t('ws.terminal.ctx.newConnection'),
       action: () => { emit('newConnection') },
     },
@@ -814,6 +819,13 @@ onBeforeUnmount(() => {
 }
 
 .ws-term-statusbar .spacer { flex: 1; }
+
+.ws-term-latency-status {
+  font-weight: 700;
+}
+.ws-term-latency-status.low { color: #000; }
+.ws-term-latency-status.medium { color: #000; }
+.ws-term-latency-status.high { color: #fff; background: rgba(0,0,0,0.3); padding: 0 4px; border-radius: 3px; }
 
 /* ── Modal ── */
 .ws-term-modal-overlay {

@@ -244,6 +244,7 @@ export default {
         clear: 'Clear',
         reconnect: 'Reconnect',
         openSftp: 'Open SFTP Panel',
+        openSftpNewTab: 'Open SFTP in New Tab',
         newConnection: 'New SSH Connection',
         copyAddress: 'Copy Connection Address',
         disconnect: 'Disconnect',

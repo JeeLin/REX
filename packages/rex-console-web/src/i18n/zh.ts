@@ -244,6 +244,7 @@ export default {
         clear: '清屏',
         reconnect: '重连',
         openSftp: '打开 SFTP 面板',
+        openSftpNewTab: '在新标签中打开 SFTP',
         newConnection: '新建 SSH 连接',
         copyAddress: '复制连接地址',
         disconnect: '断开连接',
