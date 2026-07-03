@@ -340,7 +340,8 @@ pub async fn list_procedures(
     State(state): State<Arc<AppState>>,
     Path(resource_id): Path<String>,
     Query(query): Query<ProceduresQuery>,
-) -> Result<Json<ApiResponse<Vec<rex_common::sql::ProcedureInfo>>>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<ApiResponse<Vec<rex_common::sql::ProcedureInfo>>>, (StatusCode, Json<ErrorResponse>)>
+{
     let mut connector = get_sql_connector(&state, &resource_id).await?;
 
     connector
