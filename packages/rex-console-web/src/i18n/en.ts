@@ -28,6 +28,7 @@ export default {
   toast: {
     operationSuccess: 'Operation successful',
     operationFailed: 'Operation failed',
+    definitionFailed: 'Failed to get definition',
   },
   confirm: {
     title: 'Confirm Action',

@@ -28,6 +28,7 @@ export default {
   toast: {
     operationSuccess: '操作成功',
     operationFailed: '操作失败',
+    definitionFailed: '获取定义失败',
   },
   confirm: {
     title: '确认操作',
