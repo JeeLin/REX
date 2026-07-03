@@ -68,51 +68,6 @@
     <!-- 拖拽调整宽度 -->
     <div class="sidebar-resize" @mousedown.prevent="startResize" />
 
-    <!-- 创建表弹窗 -->
-    <div v-if="showCreateTableModal" class="modal-overlay" @click.self="showCreateTableModal = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <span>{{ t('sql.tree.ctx.createNewTable') }}</span>
-          <button @click="showCreateTableModal = false">×</button>
-        </div>
-
-        <div class="modal-body">
-          <textarea
-            ref="ddlTextarea"
-            v-model="createTableDdl"
-            placeholder="输入 CREATE TABLE 语句..."
-            @keydown.ctrl.enter="executeCreateTable"
-          />
-          <div class="editor-toolbar">
-            <button
-              :disabled="!createTableDdl.trim() || isExecuting"
-              @click="executeCreateTable"
-            >
-              {{ t('common.execute') }} (Ctrl+Enter)
-            </button>
-            <button
-              :disabled="!isExecuting"
-              @click="showCreateTableModal = false"
-            >
-              {{ t('common.cancel') }}
-            </button>
-            <progress
-              v-if="isExecuting"
-              :value="progress"
-              max="100"
-            ></progress>
-          </div>
-
-          <div v-if="createTableError" class="error-message">
-            ❌ {{ createTableError }}
-          </div>
-          <div v-if="createTableSuccess" class="success-message">
-            ✅ {{ t('toast.operationSuccess') }}
-          </div>
-        </div>
-      </div>
-    </div>
-
     <ConfirmDialog
       :visible="showDeleteConfirm"
       :title="t('confirm.deleteTitle')"
@@ -127,11 +82,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
-import { listTables, listColumns, listQueries, deleteQuery, renameQuery, getDdl, executeSql } from '@/api/sql'
+import { listTables, listColumns, listQueries, deleteQuery, renameQuery, getDdl } from '@/api/sql'
 import type { TableInfo, ColumnInfo, QueryFileMeta, DatabaseInfo } from '@/api/sql'
 
 const { t } = useI18n()
@@ -150,6 +105,7 @@ const emit = defineEmits<{
   'refresh': []
   'query-deleted': []
   'query-renamed': []
+  'open-sql-tab': [title: string, sql: string]
 }>()
 
 const search = ref('')
@@ -163,15 +119,6 @@ const showDeleteConfirm = ref(false)
 const deleteConfirmMsg = ref('')
 let pendingDeleteResourceId = ''
 let pendingDeleteQueryId = ''
-
-// 创建表弹窗
-const showCreateTableModal = ref(false)
-const createTableDdl = ref('')
-const ddlTextareaRef = ref<HTMLTextAreaElement>()
-const isExecuting = ref(false)
-const progress = ref(0)
-const createTableError = ref('')
-const createTableSuccess = ref(false)
 
 // 侧边栏宽度拖拽
 const SIDEBAR_WIDTH_KEY = 'rex-sql-sidebar-width'
@@ -330,7 +277,7 @@ async function handleViewDefinition(name: string, type: 'table' | 'view' = 'view
   if (!props.database) return
   try {
     const { ddl } = await getDdl(props.resourceId, props.database, name, type)
-    alert(`${type.toUpperCase()} ${name}:\n\n${ddl}`)
+    emit('open-sql-tab', `${type} ${name} — DDL`, ddl)
   } catch (e) {
     alert(`获取定义失败: ${e instanceof Error ? e.message : String(e)}`)
   }
@@ -338,37 +285,7 @@ async function handleViewDefinition(name: string, type: 'table' | 'view' = 'view
 
 function handleCreateNewTable() {
   if (!props.database) return
-
-  createTableDdl.value = `CREATE TABLE ${props.database}.new_table (\n  id INT PRIMARY KEY AUTO_INCREMENT,\n  name VARCHAR(255) NOT NULL,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);`
-  createTableError.value = ''
-  createTableSuccess.value = false
-  isExecuting.value = false
-  progress.value = 0
-  showCreateTableModal.value = true
-
-  nextTick(() => ddlTextareaRef.value?.focus())
-}
-
-async function executeCreateTable() {
-  if (!createTableDdl.value.trim() || isExecuting.value) return
-
-  isExecuting.value = true
-  createTableError.value = ''
-  createTableSuccess.value = false
-  progress.value = 30
-
-  try {
-    await executeSql(props.resourceId, createTableDdl.value.trim())
-    progress.value = 80
-    await loadTables()
-    progress.value = 100
-    createTableSuccess.value = true
-    setTimeout(() => { showCreateTableModal.value = false }, 1000)
-  } catch (e) {
-    createTableError.value = e instanceof Error ? e.message : String(e)
-  } finally {
-    isExecuting.value = false
-  }
+  emit('open-sql-tab', '新建表', `CREATE TABLE ${props.database}.new_table (\n  id INT PRIMARY KEY AUTO_INCREMENT,\n  name VARCHAR(255) NOT NULL,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);`)
 }
 
 async function expandAll() {

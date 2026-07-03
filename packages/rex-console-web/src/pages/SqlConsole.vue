@@ -61,6 +61,7 @@
         @refresh="loadDatabases"
         @query-deleted="handleQueryDeleted"
         @query-renamed="handleQueryRenamed"
+        @open-sql-tab="openSqlTab"
       />
 
       <!-- Right: Editor + Results -->
@@ -124,7 +125,7 @@ const resourceId = route.params.resourceId as string
 const {
   tabs, activeTabId, executing, tabList, activeTab,
   addTab, closeTab, closeOthers, closeAll, closeSaved, renameTab, getTabSql,
-  clearEditor, openQueryFile, markSaved, getQueryId,
+  clearEditor, openQueryFile, openSqlTab, markSaved, getQueryId,
   execute, handleSort, handleGenerateSql,
 } = useSqlTabActions(
   resourceId,

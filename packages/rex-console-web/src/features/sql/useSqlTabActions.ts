@@ -112,6 +112,14 @@ export function useSqlTabActions(
     return tabs.value.find((t) => t.id === id)?.queryId ?? null
   }
 
+  /** 在新标签页中打开指定 SQL 内容（只读查看或模板编辑） */
+  function openSqlTab(title: string, sql: string) {
+    tabCounter++
+    const id = `sql-tab-${Date.now()}-${tabCounter}`
+    tabs.value.push({ id, title, sql, result: null, message: '', isError: false, queryId: null })
+    activeTabId.value = id
+  }
+
   async function execute(sql: string) {
     if (!sql.trim() || executing.value) return
     executing.value = true
@@ -166,6 +174,7 @@ export function useSqlTabActions(
     getTabSql,
     clearEditor,
     openQueryFile,
+    openSqlTab,
     markSaved,
     getQueryId,
     execute,
