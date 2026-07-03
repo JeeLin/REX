@@ -1,7 +1,7 @@
 <template>
   <div class="sql-sidebar" :style="{ width: sidebarWidth + 'px' }">
-    <!-- 数据库选择器 -->
-    <div class="sql-sidebar-db">
+    <!-- 数据库选择器（SQLite 隐藏） -->
+    <div v-if="!isSqlite" class="sql-sidebar-db">
       <select class="db-select" :value="database" @change="$emit('update:database', ($event.target as HTMLSelectElement).value)">
         <option v-for="db in databases" :key="db.name" :value="db.name">{{ db.name }}</option>
       </select>
@@ -30,7 +30,7 @@
             </div>
           </div>
         </div>
-        <template v-if="filteredViews.length > 0">
+        <template v-if="!isSqlite && filteredViews.length > 0">
           <div class="tree-section-label">{{ t('sql.viewLabel') }}</div>
           <div v-for="view in filteredViews" :key="view.name" class="tree-group">
             <div class="tree-group-header" @click="toggleView(view.name)" @contextmenu.prevent="handleViewContextMenu($event, view)">
@@ -48,7 +48,7 @@
             </div>
           </div>
         </template>
-        <template v-if="filteredProcedures.length > 0">
+        <template v-if="!isSqlite && filteredProcedures.length > 0">
           <div class="tree-section-label">{{ t('sql.procedureLabel') }}</div>
           <div v-for="proc in filteredProcedures" :key="proc.name" class="tree-group">
             <div class="tree-group-header" @contextmenu.prevent="handleProcedureContextMenu($event, proc)">
@@ -140,6 +140,9 @@ const emit = defineEmits<{
   'query-renamed': []
   'open-sql-tab': [title: string, sql: string]
 }>()
+
+// SQLite 协议检测
+const isSqlite = computed(() => props.protocol.toLowerCase() === 'sqlite')
 
 const search = ref('')
 const querySearch = ref('')
