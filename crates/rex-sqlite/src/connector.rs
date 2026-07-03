@@ -239,6 +239,133 @@ impl SqliteConnector for SqliteConnectorImpl {
     }
 }
 
+// ── SqlConnector trait implementation ─────────────────────
+
+#[async_trait]
+impl rex_common::sql::SqlConnector for SqliteConnectorImpl {
+    async fn connect(&mut self) -> Result<()> {
+        SqliteConnector::connect(self).await
+    }
+
+    async fn execute(&self, sql: &str) -> Result<rex_common::sql::SqlResult> {
+        let result = SqliteConnector::execute(self, sql).await?;
+        Ok(rex_common::sql::SqlResult {
+            columns: result
+                .columns
+                .into_iter()
+                .map(|name| rex_common::sql::SqlColumn {
+                    name,
+                    data_type: String::new(),
+                })
+                .collect(),
+            rows: result.rows,
+            affected_rows: result.affected_rows,
+            elapsed_ms: result.elapsed_ms,
+        })
+    }
+
+    async fn list_databases(&self) -> Result<Vec<rex_common::sql::DatabaseInfo>> {
+        let state = self.state.lock().unwrap();
+        let _ = state
+            .connection
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("not connected"))?;
+        // SQLite 只有一个数据库文件，返回文件名作为数据库名
+        Ok(vec![rex_common::sql::DatabaseInfo {
+            name: "main".into(),
+        }])
+    }
+
+    async fn list_tables(&self, _database: &str) -> Result<Vec<rex_common::sql::TableInfo>> {
+        let tables = SqliteConnector::list_tables(self).await?;
+        Ok(tables
+            .into_iter()
+            .map(|name| rex_common::sql::TableInfo {
+                name,
+                row_count: None,
+            })
+            .collect())
+    }
+
+    async fn list_columns(
+        &self,
+        _database: &str,
+        table: &str,
+    ) -> Result<Vec<rex_common::sql::ColumnInfo>> {
+        let info = SqliteConnector::get_table_info(self, table).await?;
+        Ok(info
+            .into_iter()
+            .map(|c| rex_common::sql::ColumnInfo {
+                name: c.name,
+                data_type: c.r#type,
+                is_nullable: !c.notnull,
+                is_primary_key: c.pk,
+            })
+            .collect())
+    }
+
+    async fn list_views(&self, _database: &str) -> Result<Vec<rex_common::sql::ViewInfo>> {
+        let state = self.state.lock().unwrap();
+        let conn = state
+            .connection
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("not connected"))?;
+        let mut stmt =
+            conn.prepare("SELECT name FROM sqlite_master WHERE type='view' ORDER BY name")?;
+        let views = stmt
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<std::result::Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(|name| rex_common::sql::ViewInfo { name })
+            .collect();
+        Ok(views)
+    }
+
+    async fn explain(&self, sql: &str) -> Result<rex_common::sql::ExplainResult> {
+        let state = self.state.lock().unwrap();
+        let conn = state
+            .connection
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("not connected"))?;
+        let explain_sql = format!("EXPLAIN QUERY PLAN {sql}");
+        let mut stmt = conn.prepare(&explain_sql)?;
+        let mut rows = Vec::new();
+        let mut raw_output = String::new();
+        let query_rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, i32>(0)?,
+                row.get::<_, i32>(1)?,
+                row.get::<_, i32>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })?;
+        for row in query_rows {
+            let (id, parent, notused, detail) = row?;
+            rows.push(vec![
+                serde_json::json!(id),
+                serde_json::json!(parent),
+                serde_json::json!(notused),
+                serde_json::json!(detail),
+            ]);
+            raw_output.push_str(&format!("{id}|{parent}|{notused}|{detail}\n"));
+        }
+        Ok(rex_common::sql::ExplainResult {
+            columns: vec![
+                "id".into(),
+                "parent".into(),
+                "notused".into(),
+                "detail".into(),
+            ],
+            rows,
+            raw_output,
+        })
+    }
+
+    async fn close(&self) -> Result<()> {
+        SqliteConnector::close(self).await
+    }
+}
+
 // ── Tests ────────────────────────────────────────────────
 
 #[cfg(test)]
