@@ -710,6 +710,10 @@ export default {
       copySuccess: '已复制到剪贴板',
     },
     noMessage: '暂无消息',
+    toast: {
+      exportSuccess: '导出成功',
+      exportFailed: '导出失败',
+    },
   },
   settings: {
     versionSubtitle: '自托管 · 开源',

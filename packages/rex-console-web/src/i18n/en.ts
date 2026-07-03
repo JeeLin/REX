@@ -710,6 +710,10 @@ export default {
       copySuccess: 'Copied to clipboard',
     },
     noMessage: 'No messages',
+    toast: {
+      exportSuccess: 'Export successful',
+      exportFailed: 'Export failed',
+    },
   },
   settings: {
     versionSubtitle: 'Self-hosted · Open source',
