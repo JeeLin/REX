@@ -256,6 +256,7 @@ export default {
       termError: '错误: {message}',
       termClosed: '连接已关闭',
       sessionFailed: '会话创建失败: {message}',
+      pasteHint: '提示: 请使用 Ctrl+V 粘贴内容',
     },
     workspace: {
       empty: {

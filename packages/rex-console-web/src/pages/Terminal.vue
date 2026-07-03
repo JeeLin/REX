@@ -203,11 +203,11 @@ async function connectSession() {
             terminal?.write(atob(msg.payload.data))
             break
           case 'terminal.error':
-            terminal?.write(`\r\n\x1b[31m错误: ${msg.payload.message}\x1b[0m\r\n`)
+            terminal?.write(`\r\n\x1b[31m${t('ws.terminal.termError', { message: msg.payload.message })}\x1b[0m\r\n`)
             connectionStatus.value = 'disconnected'
             break
           case 'terminal.closed':
-            terminal?.write('\r\n\x1b[33m连接已关闭\x1b[0m\r\n')
+            terminal?.write(`\r\n\x1b[33m${t('ws.terminal.termClosed')}\x1b[0m\r\n`)
             connectionStatus.value = 'disconnected'
             break
         }
@@ -222,12 +222,12 @@ async function connectSession() {
 
     ws.onerror = () => {
       connectionStatus.value = 'disconnected'
-      terminal?.write('\r\n\x1b[31mWebSocket 连接失败\x1b[0m\r\n')
+      terminal?.write(`\r\n\x1b[31m${t('ws.terminal.wsFailed')}\x1b[0m\r\n`)
     }
   } catch (err: unknown) {
     connectionStatus.value = 'disconnected'
     const error = err as { response?: { data?: { error?: { message?: string } } }; message?: string }
-    terminal?.write(`\r\n\x1b[31m会话创建失败: ${error?.response?.data?.error?.message ?? error?.message ?? '未知错误'}\x1b[0m\r\n`)
+    terminal?.write(`\r\n\x1b[31m${t('ws.terminal.sessionFailed', { message: error?.response?.data?.error?.message ?? error?.message ?? 'Unknown error' })}\x1b[0m\r\n`)
   }
 }
 
@@ -255,7 +255,7 @@ async function handlePaste() {
     }
   } catch {
     // HTTP 环境下 Clipboard API 不可用，提示用户使用 Ctrl+V 粘贴
-    terminal?.write('\r\n\x1b[33m提示: 请使用 Ctrl+V 粘贴内容\x1b[0m')
+    terminal?.write(`\r\n\x1b[33m${t('ws.terminal.pasteHint')}\x1b[0m`)
   }
 }
 

@@ -256,6 +256,7 @@ export default {
       termError: 'Error: {message}',
       termClosed: 'Connection closed',
       sessionFailed: 'Session creation failed: {message}',
+      pasteHint: 'Hint: Use Ctrl+V to paste',
     },
     workspace: {
       empty: {
