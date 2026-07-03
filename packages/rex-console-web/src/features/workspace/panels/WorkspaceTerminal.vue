@@ -5,6 +5,7 @@
       <div class="ws-term-info">
         <span class="ws-term-status" :class="connectionStatus">●</span>
         <span class="ws-term-name">{{ resourceName }}</span>
+        <span v-if="latency !== null" class="ws-term-latency" :class="latencyClass">{{ latency }}ms</span>
       </div>
       <div class="ws-term-spacer"></div>
       <div class="ws-term-actions">
@@ -142,7 +143,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Terminal } from '@xterm/xterm'
@@ -203,6 +204,39 @@ let sessionId: string | null = null
 let resizeObserver: ResizeObserver | null = null
 let cleanupTouch: (() => void) | null = null
 let inputBuffer = ''
+
+// Latency measurement
+const latency = ref<number | null>(null)
+let pingInterval: ReturnType<typeof setInterval> | null = null
+let pingTimestamp = 0
+
+const latencyClass = computed(() => {
+  if (latency.value === null) return ''
+  if (latency.value < 100) return 'low'
+  if (latency.value < 300) return 'medium'
+  return 'high'
+})
+
+function startPing() {
+  stopPing()
+  pingInterval = setInterval(() => {
+    if (ws?.readyState === WebSocket.OPEN) {
+      pingTimestamp = Date.now()
+      ws.send(JSON.stringify({
+        type: 'ping',
+        payload: { timestamp: pingTimestamp },
+      }))
+    }
+  }, 5000)
+}
+
+function stopPing() {
+  if (pingInterval) {
+    clearInterval(pingInterval)
+    pingInterval = null
+  }
+  latency.value = null
+}
 
 function initTerminal() {
   if (!terminalContainer.value) return
@@ -310,6 +344,7 @@ async function connectSession() {
     ws.onopen = () => {
       connectionStatus.value = 'connected'
       terminal?.focus()
+      startPing()
     }
 
     ws.onmessage = (event: MessageEvent) => {
@@ -329,6 +364,9 @@ async function connectSession() {
             connectionStatus.value = 'disconnected'
             emit('disconnect')
             break
+          case 'pong':
+            latency.value = Date.now() - (msg.payload.timestamp as number)
+            break
         }
       } catch {
         // ignore parse errors
@@ -336,10 +374,12 @@ async function connectSession() {
     }
 
     ws.onclose = () => {
+      stopPing()
       connectionStatus.value = 'disconnected'
     }
 
     ws.onerror = () => {
+      stopPing()
       connectionStatus.value = 'disconnected'
       emit('error', t('ws.terminal.wsFailed'))
     }
@@ -371,6 +411,7 @@ async function handlePaste() {
 
 async function doDisconnect() {
   showDisconnectDialog.value = false
+  stopPing()
   ws?.close()
   if (sessionId) {
     try { await deleteSession(sessionId) } catch { /* ignore */ }
@@ -472,7 +513,10 @@ function handleToolbarContextMenu(event: MouseEvent) {
   showMenu(event, [
     {
       label: t('ws.terminal.toolbar.ctx.copyLatency'),
-      action: () => { navigator.clipboard.writeText(`${props.resourceName} · ${connectionStatus.value}`) },
+      action: () => {
+        const latencyStr = latency.value !== null ? `${latency.value}ms` : 'N/A'
+        navigator.clipboard.writeText(`${props.resourceName} · ${latency.value !== null ? latency.value + 'ms' : 'N/A'} · ${connectionStatus.value}`)
+      },
     },
     {
       label: t('ws.terminal.toolbar.ctx.openConnectionDetail'),
@@ -605,6 +649,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   cleanupTouch?.()
   inputBuffer = ''
+  stopPing()
   ws?.close()
   if (sessionId) {
     deleteSession(sessionId).catch(() => {})
@@ -652,6 +697,19 @@ onBeforeUnmount(() => {
   font-family: var(--font-mono);
   font-weight: 500;
 }
+
+.ws-term-latency {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.ws-term-latency.low { color: var(--success, #3fb950); }
+.ws-term-latency.medium { color: var(--warning, #d29922); }
+.ws-term-latency.high { color: var(--danger, #f85149); }
 
 .ws-term-spacer { flex: 1; }
 

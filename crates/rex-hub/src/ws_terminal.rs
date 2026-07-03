@@ -266,6 +266,16 @@ async fn handle_terminal_socket(socket: WebSocket, session_id: String, state: Ar
                                     let rows = msg.payload["rows"].as_u64().unwrap_or(24) as u32;
                                     let _ = session.resize(cols, rows).await;
                                 }
+                                "ping" => {
+                                    let ts = msg.payload["timestamp"].as_i64().unwrap_or(0);
+                                    let pong = serde_json::json!({
+                                        "type": "pong",
+                                        "payload": { "timestamp": ts }
+                                    });
+                                    if let Ok(json) = serde_json::to_string(&pong) {
+                                        let _ = ws_write.send(Message::Text(json)).await;
+                                    }
+                                }
                                 _ => {}
                             }
                         }
