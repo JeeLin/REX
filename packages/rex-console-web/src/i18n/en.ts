@@ -681,8 +681,10 @@ export default {
         expandAll: 'Expand All',
         collapseAll: 'Collapse All',
         refreshStructure: 'Refresh Structure',
+        viewName: 'Copy View Name',
       },
     },
+    viewLabel: 'Views',
     sidebar: {
       schema: 'Schema',
       queries: 'Queries',
@@ -713,6 +715,7 @@ export default {
     toast: {
       exportSuccess: 'Export successful',
       exportFailed: 'Export failed',
+      viewListFailed: 'Failed to fetch views',
     },
   },
   settings: {

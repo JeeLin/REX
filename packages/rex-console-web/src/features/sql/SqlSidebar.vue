@@ -30,6 +30,24 @@
             </div>
           </div>
         </div>
+        <template v-if="filteredViews.length > 0">
+          <div class="tree-section-label">{{ t('sql.viewLabel') }}</div>
+          <div v-for="view in filteredViews" :key="view.name" class="tree-group">
+            <div class="tree-group-header" @click="toggleView(view.name)" @contextmenu.prevent="handleViewContextMenu($event, view)">
+              <span class="tree-icon">{{ viewExpanded.has(view.name) ? '▾' : '▸' }}</span>
+              <span>📐</span>
+              <span>{{ view.name }}</span>
+            </div>
+            <div v-if="viewExpanded.has(view.name)" class="tree-children">
+              <div v-for="col in viewColumns.get(view.name)" :key="col.name" class="tree-col-item">
+                <span v-if="col.is_primary_key" class="col-key">PK</span>
+                <span v-else class="col-key" style="visibility:hidden">_</span>
+                <span class="col-name">{{ col.name }}</span>
+                <span class="col-type">{{ col.data_type }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
       </div>
     </div>
 
@@ -87,8 +105,8 @@ import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useToast } from '@/composables/useToast'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
-import { listTables, listColumns, listQueries, deleteQuery, renameQuery, getDdl } from '@/api/sql'
-import type { TableInfo, ColumnInfo, QueryFileMeta, DatabaseInfo } from '@/api/sql'
+import { listTables, listColumns, listViews, listQueries, deleteQuery, renameQuery, getDdl } from '@/api/sql'
+import type { TableInfo, ColumnInfo, ViewInfo, QueryFileMeta, DatabaseInfo } from '@/api/sql'
 
 const { t } = useI18n()
 const ctxMenu = useContextMenu()
@@ -115,6 +133,9 @@ const emit = defineEmits<{
 const search = ref('')
 const querySearch = ref('')
 const tables = ref<TableInfo[]>([])
+const views = ref<ViewInfo[]>([])
+const viewColumns = ref<Map<string, ColumnInfo[]>>(new Map())
+const viewExpanded = ref<Set<string>>(new Set())
 const columns = ref<Map<string, ColumnInfo[]>>(new Map())
 const expanded = ref<Set<string>>(new Set())
 const queries = ref<QueryFileMeta[]>([])
@@ -162,6 +183,12 @@ const filteredTables = computed(() => {
   return tables.value.filter(t => t.name.toLowerCase().includes(q))
 })
 
+const filteredViews = computed(() => {
+  if (!search.value) return views.value
+  const q = search.value.toLowerCase()
+  return views.value.filter(v => v.name.toLowerCase().includes(q))
+})
+
 const filteredQueries = computed(() => {
   if (!querySearch.value) return queries.value
   const q = querySearch.value.toLowerCase()
@@ -170,13 +197,24 @@ const filteredQueries = computed(() => {
   )
 })
 
-watch(() => props.database, () => { loadTables(); loadQueries() }, { immediate: true })
+watch(() => props.database, () => { loadTables(); loadViews(); loadQueries() }, { immediate: true })
 
 async function loadTables() {
   if (!props.database) return
   tables.value = await listTables(props.resourceId, props.database)
   columns.value = new Map()
   expanded.value = new Set()
+}
+
+async function loadViews() {
+  if (!props.database) return
+  try {
+    views.value = await listViews(props.resourceId, props.database)
+  } catch {
+    toast.error(t('sql.toast.viewListFailed'))
+  }
+  viewColumns.value = new Map()
+  viewExpanded.value = new Set()
 }
 
 async function loadQueries() {
@@ -198,6 +236,33 @@ async function toggleTable(name: string) {
     await loadColumnsForTable(name)
     emit('select-table', name)
   }
+}
+
+async function loadColumnsForView(viewName: string) {
+  if (!viewColumns.value.has(viewName)) {
+    const cols = await listColumns(props.resourceId, props.database, viewName)
+    viewColumns.value.set(viewName, cols)
+  }
+}
+
+async function toggleView(name: string) {
+  if (viewExpanded.value.has(name)) {
+    viewExpanded.value.delete(name)
+  } else {
+    viewExpanded.value.add(name)
+    await loadColumnsForView(name)
+  }
+}
+
+function handleViewContextMenu(event: MouseEvent, view: ViewInfo) {
+  ctxMenu.show(event, [
+    { label: t('sql.tree.ctx.viewStructure'), action: () => toggleView(view.name) },
+    { label: t('sql.tree.ctx.viewDefinition'), action: () => handleViewDefinition(view.name, 'view') },
+    { separator: true },
+    { label: t('sql.tree.ctx.viewName'), action: () => navigator.clipboard.writeText(view.name) },
+    { separator: true },
+    { label: t('sql.tree.ctx.refresh'), action: () => loadViews() },
+  ])
 }
 
 function formatDate(isoTs: string): string {
@@ -415,6 +480,17 @@ defineExpose({ loadQueries })
 .tree-col-item .col-name { flex: 1; color: var(--text-secondary); }
 .tree-col-item .col-type { color: var(--accent); }
 .tree-col-item .col-key { color: var(--info); font-size: 9px; }
+
+.tree-section-label {
+  padding: var(--sp-xs) var(--sp-md);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-top: 1px solid var(--border);
+  margin-top: var(--sp-xs);
+}
 
 /* 查询文件区域 */
 .sql-sidebar-queries {

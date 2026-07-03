@@ -30,6 +30,10 @@ export interface ColumnInfo {
   is_primary_key: boolean
 }
 
+export interface ViewInfo {
+  name: string
+}
+
 export interface SqlResourceInfo {
   id: string
   name: string
@@ -101,6 +105,13 @@ export function listDatabases(resourceId: string): Promise<DatabaseInfo[]> {
 export function listTables(resourceId: string, database: string): Promise<TableInfo[]> {
   return client
     .get(`/resources/${resourceId}/sql/tables`, { params: { database } })
+    .then((r) => r.data.data)
+}
+
+/** 列出视图 */
+export function listViews(resourceId: string, database: string): Promise<ViewInfo[]> {
+  return client
+    .get(`/resources/${resourceId}/sql/views`, { params: { database } })
     .then((r) => r.data.data)
 }
 
