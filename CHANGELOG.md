@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-07-03
+
+### Fixed
+- 替换 SQL 侧边栏和控制台中 4 处 `alert()` 为 Toast 通知
+- 新建表模板根据数据库方言（MySQL/PostgreSQL/SQLite）自动选择合适语法
+- 补全缺失的 i18n 键（sql.tree.ctx.copyDatabaseName、sql.toast.*）
+
+
 ## [0.40.0] - 2026-07-03
 
 ### Added

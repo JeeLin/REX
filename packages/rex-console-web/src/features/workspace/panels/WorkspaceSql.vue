@@ -44,6 +44,7 @@
         :resource-id="resourceId"
         :database="selectedDb"
         :databases="databases"
+        :protocol="protocol"
         @update:database="selectedDb = $event"
         @select-table="insertTableSql"
         @refresh="loadDatabases"
