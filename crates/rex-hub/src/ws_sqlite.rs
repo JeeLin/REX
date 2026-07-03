@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use crate::auth;
 use crate::routes::AppState;
-use rex_sqlite::SqliteConnector;
+use rex_common::sql::SqlConnector;
 
 // ── WebSocket 消息协议（客户端 → Hub）─────────────────────
 
@@ -137,7 +137,7 @@ async fn handle_sqlite_socket(socket: WebSocket, resource_id: String, state: Arc
                     Some(Ok(Message::Text(text))) => {
                         match serde_json::from_str::<SqliteClientMsg>(&text) {
                             Ok(SqliteClientMsg::Command { id, action, params }) => {
-                                let result = handle_sqlite_action(&connector as &dyn SqliteConnector, &action, &params).await;
+                                let result = handle_sqlite_action(&connector as &dyn SqlConnector, &action, &params).await;
                                 let msg = match result {
                                     Ok(data) => SqliteServerMsg::Response { id, data },
                                     Err(e) => SqliteServerMsg::Error {
@@ -177,7 +177,7 @@ async fn handle_sqlite_socket(socket: WebSocket, resource_id: String, state: Arc
 // ── SQLite 操作分发 ────────────────────────────────────────
 
 async fn handle_sqlite_action(
-    connector: &dyn SqliteConnector,
+    connector: &dyn SqlConnector,
     action: &str,
     params: &serde_json::Value,
 ) -> anyhow::Result<serde_json::Value> {
@@ -191,7 +191,7 @@ async fn handle_sqlite_action(
             Ok(serde_json::to_value(result)?)
         }
         "tables" => {
-            let tables = connector.list_tables().await?;
+            let tables = connector.list_tables("main").await?;
             Ok(serde_json::json!({ "tables": tables }))
         }
         "columns" => {
@@ -199,8 +199,24 @@ async fn handle_sqlite_action(
                 .get("table")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| anyhow::anyhow!("missing 'table' param"))?;
-            let columns = connector.get_table_info(table).await?;
+            let columns = connector.list_columns("main", table).await?;
             Ok(serde_json::to_value(columns)?)
+        }
+        "databases" => {
+            let databases = connector.list_databases().await?;
+            Ok(serde_json::to_value(databases)?)
+        }
+        "views" => {
+            let views = connector.list_views("main").await?;
+            Ok(serde_json::to_value(views)?)
+        }
+        "explain" => {
+            let sql = params
+                .get("sql")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("missing 'sql' param"))?;
+            let result = connector.explain(sql).await?;
+            Ok(serde_json::to_value(result)?)
         }
         _ => Err(anyhow::anyhow!("unknown action: {action}")),
     }
