@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-07-03
+
+### Changed
+- SQLite connector 重构：实现统一的 SqlConnector trait，替代独立的 SqliteConnector trait
+- Hub REST API 层支持 SQLite（get_sql_connector、get_ddl 端点）
+- WebSocket handler 升级：支持 databases/views/explain 等 action
+- SQL 侧边栏适配 SQLite 协议（隐藏数据库选择器、视图、存储过程区块）
+
+## [0.44.0] - 2026-07-03
+
+### Added
+- SQL 侧边栏存储过程/函数节点支持（MySQL/PostgreSQL）
+
+## [0.43.0] - 2026-07-03
+
 ## [0.43.0] - 2026-07-03
 
 ### Added
