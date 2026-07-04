@@ -29,6 +29,14 @@
     </div>
 
     <div class="redis-body">
+      <!-- 键浏览器 -->
+      <RedisKeyBrowser
+        v-if="session.connected.value && showKeyBrowser"
+        :connected="session.connected.value"
+        @selectKey="handleKeySelect"
+        @sendCommand="handleScanCommand"
+      />
+
       <!-- 历史记录面板 -->
       <RedisHistory
         v-if="showHistory"
@@ -89,6 +97,7 @@ import { useI18n } from 'vue-i18n'
 import { useRedisSession } from './useRedisSession'
 import RedisResult from './RedisResult.vue'
 import RedisHistory from './RedisHistory.vue'
+import RedisKeyBrowser from './RedisKeyBrowser.vue'
 import type { RedisValue } from '@/api/redis'
 
 const props = defineProps<{
@@ -104,6 +113,7 @@ const inputValue = ref('')
 const outputRef = ref<HTMLDivElement>()
 const inputRef = ref<HTMLInputElement>()
 const showHistory = ref(false)
+const showKeyBrowser = ref(true)
 
 interface OutputEntry {
   id: number
@@ -128,6 +138,18 @@ function handleHistorySelect(command: string) {
   inputValue.value = command
   showHistory.value = false
   inputRef.value?.focus()
+}
+
+function handleKeySelect(key: string) {
+  inputValue.value = `GET "${key}"`
+  inputRef.value?.focus()
+}
+
+function handleScanCommand(command: string) {
+  inputValue.value = command
+  // Auto-execute
+  const event = new KeyboardEvent('keydown', { key: 'Enter' })
+  inputRef.value?.dispatchEvent(event)
 }
 
 async function handleKeydown(e: KeyboardEvent) {

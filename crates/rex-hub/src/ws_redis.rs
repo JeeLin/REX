@@ -20,6 +20,9 @@ pub enum RedisClientMsg {
     /// 执行 Redis 命令
     #[serde(rename = "command")]
     Command { id: String, command: String },
+    /// SCAN 键列表（自动迭代返回所有匹配的键）
+    #[serde(rename = "scan")]
+    Scan { id: String, pattern: String, count: Option<u32> },
     /// 心跳
     #[serde(rename = "ping")]
     Ping,
@@ -159,6 +162,56 @@ async fn handle_redis_socket(socket: WebSocket, resource_id: String, state: Arc<
                                             break;
                                         }
                                     }
+                                }
+                            }
+                            Ok(RedisClientMsg::Scan { id, pattern, count }) => {
+                                let scan_count = count.unwrap_or(100);
+                                let mut all_keys = Vec::new();
+                                let mut cursor = 0u64;
+                                loop {
+                                    let cmd = format!("SCAN {cursor} MATCH {pattern} COUNT {scan_count}");
+                                    match connector.execute(&cmd).await {
+                                        Ok(response) => {
+                                            if let rex_redis::RedisValue::Array(items) = response.value {
+                                                if items.len() >= 2 {
+                                                    // items[0] = next cursor, items[1] = keys array
+                                                    if let rex_redis::RedisValue::Bulk(Some(cursor_str)) = &items[0] {
+                                                        cursor = cursor_str.parse().unwrap_or(0);
+                                                    }
+                                                    if let rex_redis::RedisValue::Array(keys) = &items[1] {
+                                                        for key in keys {
+                                                            if let rex_redis::RedisValue::Bulk(Some(name)) = key {
+                                                                all_keys.push(name.clone());
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            if cursor == 0 {
+                                                break;
+                                            }
+                                        }
+                                        Err(e) => {
+                                            let msg = RedisServerMsg::Error {
+                                                id,
+                                                message: e.to_string(),
+                                            };
+                                            let _ = send_ws_msg(&mut ws_write, &msg).await;
+                                            break;
+                                        }
+                                    }
+                                }
+                                let msg = RedisServerMsg::Response {
+                                    id,
+                                    value: rex_redis::RedisValue::Array(
+                                        all_keys.into_iter()
+                                            .map(|k| rex_redis::RedisValue::Bulk(Some(k)))
+                                            .collect()
+                                    ),
+                                    elapsed_ms: 0,
+                                };
+                                if send_ws_msg(&mut ws_write, &msg).await.is_err() {
+                                    break;
                                 }
                             }
                             Ok(RedisClientMsg::Ping) => {
