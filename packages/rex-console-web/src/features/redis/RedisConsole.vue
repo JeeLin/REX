@@ -47,6 +47,18 @@
 
       <!-- 主区域 -->
       <div class="redis-main">
+        <!-- 值查看器 -->
+        <RedisValueViewer
+          v-if="selectedKey"
+          :key-name="selectedKey"
+          :value-type="selectedKeyType"
+          :value="selectedKeyValue"
+          :ttl="selectedKeyTtl"
+          :loading="valueLoading"
+          @refresh="refreshSelectedKey"
+          @deleteKey="deleteSelectedKey"
+        />
+
         <!-- 输出区域 -->
         <div ref="outputRef" class="redis-output">
           <div v-if="!session.connected.value && !session.error.value" class="redis-welcome">
@@ -98,6 +110,7 @@ import { useRedisSession } from './useRedisSession'
 import RedisResult from './RedisResult.vue'
 import RedisHistory from './RedisHistory.vue'
 import RedisKeyBrowser from './RedisKeyBrowser.vue'
+import RedisValueViewer from './RedisValueViewer.vue'
 import type { RedisValue } from '@/api/redis'
 
 const props = defineProps<{
@@ -114,6 +127,13 @@ const outputRef = ref<HTMLDivElement>()
 const inputRef = ref<HTMLInputElement>()
 const showHistory = ref(false)
 const showKeyBrowser = ref(true)
+
+// Value viewer state
+const selectedKey = ref<string | null>(null)
+const selectedKeyType = ref('string')
+const selectedKeyValue = ref<RedisValue | null>(null)
+const selectedKeyTtl = ref<number | null>(null)
+const valueLoading = ref(false)
 
 interface OutputEntry {
   id: number
@@ -141,8 +161,8 @@ function handleHistorySelect(command: string) {
 }
 
 function handleKeySelect(key: string) {
-  inputValue.value = `GET "${key}"`
-  inputRef.value?.focus()
+  selectedKey.value = key
+  loadKeyValue(key)
 }
 
 function handleScanCommand(command: string) {
@@ -150,6 +170,65 @@ function handleScanCommand(command: string) {
   // Auto-execute
   const event = new KeyboardEvent('keydown', { key: 'Enter' })
   inputRef.value?.dispatchEvent(event)
+}
+
+async function loadKeyValue(key: string) {
+  if (!session.connected.value) return
+  valueLoading.value = true
+
+  try {
+    // Get type
+    const typeResult = await session.execute(`TYPE ${key}`)
+    if (typeResult.type === 'response' && typeResult.value.type === 'Status') {
+      selectedKeyType.value = typeResult.value.value
+    }
+
+    // Get value based on type
+    let valueResult
+    switch (selectedKeyType.value) {
+      case 'hash':
+        valueResult = await session.execute(`HGETALL ${key}`)
+        break
+      case 'list':
+        valueResult = await session.execute(`LRANGE ${key} 0 -1`)
+        break
+      case 'set':
+        valueResult = await session.execute(`SMEMBERS ${key}`)
+        break
+      case 'zset':
+        valueResult = await session.execute(`ZRANGE ${key} 0 -1 WITHSCORES`)
+        break
+      default:
+        valueResult = await session.execute(`GET ${key}`)
+    }
+
+    if (valueResult.type === 'response') {
+      selectedKeyValue.value = valueResult.value
+    }
+
+    // Get TTL
+    const ttlResult = await session.execute(`TTL ${key}`)
+    if (ttlResult.type === 'response' && ttlResult.value.type === 'Integer') {
+      selectedKeyTtl.value = ttlResult.value.value
+    }
+  } catch {
+    // ignore errors
+  } finally {
+    valueLoading.value = false
+  }
+}
+
+function refreshSelectedKey() {
+  if (selectedKey.value) {
+    loadKeyValue(selectedKey.value)
+  }
+}
+
+async function deleteSelectedKey(key: string) {
+  if (!session.connected.value) return
+  await session.execute(`DEL ${key}`)
+  selectedKey.value = null
+  selectedKeyValue.value = null
 }
 
 async function handleKeydown(e: KeyboardEvent) {
