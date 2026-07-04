@@ -8,6 +8,14 @@
       <span class="redis-topbar-state">
         {{ session.connected.value ? t('redis.connected') : t('redis.disconnected') }}
       </span>
+      <select
+        v-if="session.connected.value"
+        v-model="selectedDb"
+        class="redis-db-select"
+        @change="handleDbChange"
+      >
+        <option v-for="n in 16" :key="n - 1" :value="n - 1">DB{{ n - 1 }}</option>
+      </select>
       <div class="redis-topbar-spacer" />
       <button
         v-if="!session.connected.value"
@@ -87,16 +95,30 @@
         </div>
 
         <!-- 输入区域 -->
-        <div class="redis-input-area">
-          <span class="redis-prompt">&gt;</span>
-          <input
-            ref="inputRef"
-            v-model="inputValue"
-            class="redis-input"
-            :placeholder="t('redis.placeholder')"
-            :disabled="!session.connected.value"
-            @keydown="handleKeydown"
-          />
+        <div class="redis-input-wrapper">
+          <div v-if="showAutocomplete" class="redis-autocomplete">
+            <div
+              v-for="(cmd, index) in filteredCommands"
+              :key="cmd"
+              class="redis-autocomplete-item"
+              :class="{ active: index === autocompleteIndex }"
+              @mousedown.prevent="selectAutocomplete(cmd)"
+            >
+              {{ cmd }}
+            </div>
+          </div>
+          <div class="redis-input-area">
+            <span class="redis-prompt">&gt;</span>
+            <input
+              ref="inputRef"
+              v-model="inputValue"
+              class="redis-input"
+              :placeholder="t('redis.placeholder')"
+              :disabled="!session.connected.value"
+              @input="updateAutocomplete"
+              @keydown="handleKeydown"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -127,6 +149,12 @@ const outputRef = ref<HTMLDivElement>()
 const inputRef = ref<HTMLInputElement>()
 const showHistory = ref(false)
 const showKeyBrowser = ref(true)
+const selectedDb = ref(0)
+
+// Autocomplete state
+const showAutocomplete = ref(false)
+const filteredCommands = ref<string[]>([])
+const autocompleteIndex = ref(0)
 
 // Value viewer state
 const selectedKey = ref<string | null>(null)
@@ -157,6 +185,28 @@ async function handleConnect() {
 function handleHistorySelect(command: string) {
   inputValue.value = command
   showHistory.value = false
+  inputRef.value?.focus()
+}
+
+async function handleDbChange() {
+  if (!session.connected.value) return
+  await session.execute(`SELECT ${selectedDb.value}`)
+}
+
+function updateAutocomplete() {
+  const input = inputValue.value.trim().toUpperCase()
+  if (!input) {
+    showAutocomplete.value = false
+    return
+  }
+  filteredCommands.value = session.REDIS_COMMANDS.filter(cmd => cmd.startsWith(input)).slice(0, 10)
+  autocompleteIndex.value = 0
+  showAutocomplete.value = filteredCommands.value.length > 0 && input !== filteredCommands.value[0]
+}
+
+function selectAutocomplete(cmd: string) {
+  inputValue.value = cmd + ' '
+  showAutocomplete.value = false
   inputRef.value?.focus()
 }
 
@@ -232,9 +282,33 @@ async function deleteSelectedKey(key: string) {
 }
 
 async function handleKeydown(e: KeyboardEvent) {
+  // Autocomplete navigation
+  if (showAutocomplete.value) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      autocompleteIndex.value = (autocompleteIndex.value + 1) % filteredCommands.value.length
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      autocompleteIndex.value = (autocompleteIndex.value - 1 + filteredCommands.value.length) % filteredCommands.value.length
+      return
+    }
+    if (e.key === 'Tab') {
+      e.preventDefault()
+      selectAutocomplete(filteredCommands.value[autocompleteIndex.value])
+      return
+    }
+    if (e.key === 'Escape') {
+      showAutocomplete.value = false
+      return
+    }
+  }
+
   // Enter → 执行命令
   if (e.key === 'Enter') {
     e.preventDefault()
+    showAutocomplete.value = false
     const cmd = inputValue.value.trim()
     if (!cmd || !session.connected.value) return
 
@@ -348,6 +422,22 @@ onMounted(() => {
 .redis-btn-connect { border-color: #3fb950; color: #3fb950; }
 .redis-btn-disconnect { border-color: #f85149; color: #f85149; }
 
+/* 数据库选择器 */
+.redis-db-select {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.redis-db-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 /* 主区域 */
 .redis-body {
   display: flex;
@@ -419,4 +509,35 @@ onMounted(() => {
   font-size: 13px;
 }
 .redis-input::placeholder { color: var(--text-secondary); }
+
+/* 自动补全 */
+.redis-input-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+.redis-autocomplete {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  z-index: 10;
+}
+.redis-autocomplete-item {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.redis-autocomplete-item:hover,
+.redis-autocomplete-item.active {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
 </style>

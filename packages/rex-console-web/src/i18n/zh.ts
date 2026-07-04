@@ -929,6 +929,18 @@ export default {
     db: '数据库编号',
     name: '实例名称',
     namePlaceholder: '例如：缓存服务、会话存储',
+    keys: {
+      searchPlaceholder: '搜索模式（如 user:*）',
+      search: '搜索',
+      empty: '未找到键',
+      loading: '加载中...',
+    },
+    value: {
+      refresh: '刷新',
+      delete: '删除',
+      loading: '加载中...',
+      selectKey: '选择一个键查看',
+    },
   },
   audit: {
     title: '审计日志',

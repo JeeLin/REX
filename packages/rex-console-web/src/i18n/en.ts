@@ -929,6 +929,18 @@ export default {
     db: 'Database',
     name: 'Instance Name',
     namePlaceholder: 'e.g. cache, session store',
+    keys: {
+      searchPlaceholder: 'Search pattern (e.g. user:*)',
+      search: 'Search',
+      empty: 'No keys found',
+      loading: 'Loading...',
+    },
+    value: {
+      refresh: 'Refresh',
+      delete: 'Delete',
+      loading: 'Loading...',
+      selectKey: 'Select a key to view',
+    },
   },
   audit: {
     title: 'Audit Log',
