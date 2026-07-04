@@ -89,7 +89,10 @@ impl RedisConnectorImpl {
 
     /// 将命令编码为 RESP 格式并发送
     async fn send_raw(&mut self, command: &str) -> Result<()> {
-        let stream = self.stream.as_mut().ok_or_else(|| anyhow::anyhow!("not connected"))?;
+        let stream = self
+            .stream
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("not connected"))?;
         let parts: Vec<&str> = command.split_whitespace().collect();
         let mut buf = format!("*{}\r\n", parts.len());
         for part in &parts {
@@ -101,7 +104,10 @@ impl RedisConnectorImpl {
 
     /// 读取一个完整的 RESP 响应
     async fn read_response(&mut self) -> Result<RedisValue> {
-        let stream = self.stream.as_mut().ok_or_else(|| anyhow::anyhow!("not connected"))?;
+        let stream = self
+            .stream
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("not connected"))?;
         let mut buf = BytesMut::with_capacity(4096);
         let mut temp = [0u8; 4096];
 
@@ -145,11 +151,15 @@ fn decode_resp(buf: &mut BytesMut) -> Result<Option<RedisValue>> {
         '+' => Ok(Some(RedisValue::Status(line))),
         '-' => Ok(Some(RedisValue::Error(line))),
         ':' => {
-            let n: i64 = line.parse().map_err(|_| anyhow::anyhow!("invalid integer: {line}"))?;
+            let n: i64 = line
+                .parse()
+                .map_err(|_| anyhow::anyhow!("invalid integer: {line}"))?;
             Ok(Some(RedisValue::Integer(n)))
         }
         '$' => {
-            let len: i64 = line.parse().map_err(|_| anyhow::anyhow!("invalid bulk length: {line}"))?;
+            let len: i64 = line
+                .parse()
+                .map_err(|_| anyhow::anyhow!("invalid bulk length: {line}"))?;
             if len < 0 {
                 Ok(Some(RedisValue::Bulk(None)))
             } else {
@@ -164,7 +174,9 @@ fn decode_resp(buf: &mut BytesMut) -> Result<Option<RedisValue>> {
             }
         }
         '*' => {
-            let count: i64 = line.parse().map_err(|_| anyhow::anyhow!("invalid array count: {line}"))?;
+            let count: i64 = line
+                .parse()
+                .map_err(|_| anyhow::anyhow!("invalid array count: {line}"))?;
             if count < 0 {
                 Ok(Some(RedisValue::Null))
             } else {
@@ -228,7 +240,10 @@ impl RedisConnector for RedisConnectorImpl {
             }
         }
 
-        info!("connected to Redis {}:{}", self.config.host, self.config.port);
+        info!(
+            "connected to Redis {}:{}",
+            self.config.host, self.config.port
+        );
         Ok(())
     }
 

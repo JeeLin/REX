@@ -515,7 +515,6 @@ function handleToolbarContextMenu(event: MouseEvent) {
     {
       label: t('ws.terminal.toolbar.ctx.copyLatency'),
       action: () => {
-        const latencyStr = latency.value !== null ? `${latency.value}ms` : 'N/A'
         navigator.clipboard.writeText(`${props.resourceName} · ${latency.value !== null ? latency.value + 'ms' : 'N/A'} · ${connectionStatus.value}`)
       },
     },

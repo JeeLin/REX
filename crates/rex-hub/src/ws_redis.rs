@@ -22,7 +22,11 @@ pub enum RedisClientMsg {
     Command { id: String, command: String },
     /// SCAN 键列表（自动迭代返回所有匹配的键）
     #[serde(rename = "scan")]
-    Scan { id: String, pattern: String, count: Option<u32> },
+    Scan {
+        id: String,
+        pattern: String,
+        count: Option<u32>,
+    },
     /// 心跳
     #[serde(rename = "ping")]
     Ping,
@@ -193,7 +197,7 @@ async fn handle_redis_socket(socket: WebSocket, resource_id: String, state: Arc<
                                         }
                                         Err(e) => {
                                             let msg = RedisServerMsg::Error {
-                                                id,
+                                                id: id.clone(),
                                                 message: e.to_string(),
                                             };
                                             let _ = send_ws_msg(&mut ws_write, &msg).await;
