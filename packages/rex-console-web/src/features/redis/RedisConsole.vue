@@ -41,8 +41,9 @@
       <RedisKeyBrowser
         v-if="session.connected.value && showKeyBrowser"
         :connected="session.connected.value"
+        :keys="keyBrowserKeys"
         @selectKey="handleKeySelect"
-        @sendCommand="handleScanCommand"
+        @search="handleKeyBrowserSearch"
       />
 
       <!-- 历史记录面板 -->
@@ -151,6 +152,13 @@ const showHistory = ref(false)
 const showKeyBrowser = ref(true)
 const selectedDb = ref(0)
 
+// Key browser state
+interface KeyWithType {
+  key: string
+  type: string
+}
+const keyBrowserKeys = ref<KeyWithType[]>([])
+
 // Autocomplete state
 const showAutocomplete = ref(false)
 const filteredCommands = ref<string[]>([])
@@ -215,11 +223,32 @@ function handleKeySelect(key: string) {
   loadKeyValue(key)
 }
 
-function handleScanCommand(command: string) {
-  inputValue.value = command
-  // Auto-execute
-  const event = new KeyboardEvent('keydown', { key: 'Enter' })
-  inputRef.value?.dispatchEvent(event)
+async function handleKeyBrowserSearch(pattern: string) {
+  if (!session.connected.value) return
+  keyBrowserKeys.value = []
+  const cmd = `SCAN 0 MATCH ${pattern} COUNT 1000`
+  try {
+    const result = await session.execute(cmd)
+    if (result.type === 'response' && result.value.type === 'Array') {
+      const items = result.value.value as RedisValue[]
+      const parsed: KeyWithType[] = []
+      for (const item of items) {
+        if (item.type === 'Array' && item.value.length >= 2) {
+          const keyVal = item.value[0]
+          const typeVal = item.value[1]
+          if (keyVal.type === 'Bulk' && typeVal.type === 'Bulk') {
+            parsed.push({
+              key: keyVal.value ?? '',
+              type: typeVal.value ?? 'unknown',
+            })
+          }
+        }
+      }
+      keyBrowserKeys.value = parsed
+    }
+  } catch {
+    // ignore errors
+  }
 }
 
 async function loadKeyValue(key: string) {

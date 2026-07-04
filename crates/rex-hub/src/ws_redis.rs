@@ -178,7 +178,6 @@ async fn handle_redis_socket(socket: WebSocket, resource_id: String, state: Arc<
                                         Ok(response) => {
                                             if let rex_redis::RedisValue::Array(items) = response.value {
                                                 if items.len() >= 2 {
-                                                    // items[0] = next cursor, items[1] = keys array
                                                     if let rex_redis::RedisValue::Bulk(Some(cursor_str)) = &items[0] {
                                                         cursor = cursor_str.parse().unwrap_or(0);
                                                     }
@@ -205,11 +204,27 @@ async fn handle_redis_socket(socket: WebSocket, resource_id: String, state: Arc<
                                         }
                                     }
                                 }
+                                // Fetch TYPE for each key
+                                let mut keys_with_type = Vec::with_capacity(all_keys.len());
+                                for key in &all_keys {
+                                    let type_cmd = format!("TYPE {key}");
+                                    let key_type = match connector.execute(&type_cmd).await {
+                                        Ok(resp) => match resp.value {
+                                            rex_redis::RedisValue::Status(s) => s,
+                                            _ => "unknown".to_string(),
+                                        },
+                                        Err(_) => "unknown".to_string(),
+                                    };
+                                    keys_with_type.push((key.clone(), key_type));
+                                }
                                 let msg = RedisServerMsg::Response {
                                     id,
                                     value: rex_redis::RedisValue::Array(
-                                        all_keys.into_iter()
-                                            .map(|k| rex_redis::RedisValue::Bulk(Some(k)))
+                                        keys_with_type.into_iter()
+                                            .map(|(k, t)| rex_redis::RedisValue::Array(vec![
+                                                rex_redis::RedisValue::Bulk(Some(k)),
+                                                rex_redis::RedisValue::Bulk(Some(t)),
+                                            ]))
                                             .collect()
                                     ),
                                     elapsed_ms: 0,
