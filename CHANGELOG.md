@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.48.0] - 2026-07-05
+
+### Added
+- Redis 键浏览器：树形视图，按 `:` 分隔符分组为可折叠文件夹
+- Redis 键浏览器：类型图标（Aa/String、{}/Hash、[]/List、(~)/Set、< >/ZSet），后端 SCAN 返回 TYPE
+- Redis 键浏览器：右键菜单（复制键名、查看值、删除键、设置 TTL）
+
+### Changed
+- 提取共享类型 `KeyWithType`、`OutputEntry` 到 `redis/types.ts`
+
 ## [0.47.0] - 2026-07-04
 
 ### Added
