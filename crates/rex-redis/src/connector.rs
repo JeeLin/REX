@@ -1,7 +1,10 @@
 use anyhow::{bail, Result};
 use async_trait::async_trait;
+use bytes::{Buf, BytesMut};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 use tracing::info;
 
 use crate::resp::RedisValue;
@@ -46,31 +49,28 @@ pub trait RedisConnector: Send + Sync {
     async fn connect(&mut self) -> Result<()>;
 
     /// 执行 Redis 命令
-    async fn execute(&self, command: &str) -> Result<RedisResponse>;
+    async fn execute(&mut self, command: &str) -> Result<RedisResponse>;
 
     /// 获取服务器信息
-    async fn info(&self) -> Result<HashMap<String, String>>;
+    async fn info(&mut self) -> Result<HashMap<String, String>>;
 
     /// 关闭连接
-    async fn close(&self) -> Result<()>;
+    async fn close(&mut self) -> Result<()>;
 }
 
-// ── RedisConnector stub ──────────────────────────────────
+// ── RedisConnector TCP 实现 ────────────────────────────────
 
-/// Redis 连接器（stub 实现）
-///
-/// 实际连接通过 Agent 代理或 Hub 直连的 TCP 隧道完成。
-/// 此 stub 用于 trait 定义和配置解析。
+/// Redis 连接器（真实 TCP 实现）
 pub struct RedisConnectorImpl {
     config: RedisConfig,
-    connected: bool,
+    stream: Option<TcpStream>,
 }
 
 impl RedisConnectorImpl {
     pub fn new(config: RedisConfig) -> Self {
         Self {
             config,
-            connected: false,
+            stream: None,
         }
     }
 
@@ -86,7 +86,113 @@ impl RedisConnectorImpl {
     pub fn into_config(self) -> RedisConfig {
         self.config
     }
+
+    /// 将命令编码为 RESP 格式并发送
+    async fn send_raw(&mut self, command: &str) -> Result<()> {
+        let stream = self.stream.as_mut().ok_or_else(|| anyhow::anyhow!("not connected"))?;
+        let parts: Vec<&str> = command.split_whitespace().collect();
+        let mut buf = format!("*{}\r\n", parts.len());
+        for part in &parts {
+            buf.push_str(&format!("${}\r\n{}\r\n", part.len(), part));
+        }
+        stream.write_all(buf.as_bytes()).await?;
+        Ok(())
+    }
+
+    /// 读取一个完整的 RESP 响应
+    async fn read_response(&mut self) -> Result<RedisValue> {
+        let stream = self.stream.as_mut().ok_or_else(|| anyhow::anyhow!("not connected"))?;
+        let mut buf = BytesMut::with_capacity(4096);
+        let mut temp = [0u8; 4096];
+
+        loop {
+            if !buf.is_empty() {
+                if let Some(val) = decode_resp(&mut buf)? {
+                    return Ok(val);
+                }
+            }
+            let n = stream.read(&mut temp).await?;
+            if n == 0 {
+                bail!("connection closed by server");
+            }
+            buf.extend_from_slice(&temp[..n]);
+        }
+    }
+
+    /// 发送命令并等待响应
+    async fn send_command(&mut self, command: &str) -> Result<RedisValue> {
+        self.send_raw(command).await?;
+        self.read_response().await
+    }
 }
+
+// ── 手动 RESP 解码 ───────────────────────────────────────
+
+fn decode_resp(buf: &mut BytesMut) -> Result<Option<RedisValue>> {
+    if buf.is_empty() {
+        return Ok(None);
+    }
+    let prefix = buf[0] as char;
+
+    let line_end = match find_crlf(buf) {
+        Some(pos) => pos,
+        None => return Ok(None),
+    };
+    let line = String::from_utf8_lossy(&buf[1..line_end]).to_string();
+    buf.advance(line_end + 2);
+
+    match prefix {
+        '+' => Ok(Some(RedisValue::Status(line))),
+        '-' => Ok(Some(RedisValue::Error(line))),
+        ':' => {
+            let n: i64 = line.parse().map_err(|_| anyhow::anyhow!("invalid integer: {line}"))?;
+            Ok(Some(RedisValue::Integer(n)))
+        }
+        '$' => {
+            let len: i64 = line.parse().map_err(|_| anyhow::anyhow!("invalid bulk length: {line}"))?;
+            if len < 0 {
+                Ok(Some(RedisValue::Bulk(None)))
+            } else {
+                let len = len as usize;
+                if buf.len() < len + 2 {
+                    buf.reserve(len + 2 - buf.len());
+                    return Ok(None);
+                }
+                let data = String::from_utf8_lossy(&buf[..len]).to_string();
+                buf.advance(len + 2);
+                Ok(Some(RedisValue::Bulk(Some(data))))
+            }
+        }
+        '*' => {
+            let count: i64 = line.parse().map_err(|_| anyhow::anyhow!("invalid array count: {line}"))?;
+            if count < 0 {
+                Ok(Some(RedisValue::Null))
+            } else {
+                let count = count as usize;
+                let mut items = Vec::with_capacity(count);
+                for _ in 0..count {
+                    match decode_resp(buf)? {
+                        Some(v) => items.push(v),
+                        None => return Ok(None),
+                    }
+                }
+                Ok(Some(RedisValue::Array(items)))
+            }
+        }
+        _ => Err(anyhow::anyhow!("unknown RESP prefix: {prefix}")),
+    }
+}
+
+fn find_crlf(buf: &[u8]) -> Option<usize> {
+    for i in 0..buf.len().saturating_sub(1) {
+        if buf[i] == b'\r' && buf[i + 1] == b'\n' {
+            return Some(i);
+        }
+    }
+    None
+}
+
+// ── RedisConnector trait 实现 ─────────────────────────────
 
 #[async_trait]
 impl RedisConnector for RedisConnectorImpl {
@@ -97,37 +203,60 @@ impl RedisConnector for RedisConnectorImpl {
             db = self.config.db,
             "connecting to Redis"
         );
-        // TODO: 实际 TCP 连接 + AUTH + SELECT
-        self.connected = true;
+
+        let addr = format!("{}:{}", self.config.host, self.config.port);
+        let tcp = TcpStream::connect(&addr).await?;
+        self.stream = Some(tcp);
+
+        // AUTH if password is set
+        if let Some(ref password) = self.config.password {
+            let auth_cmd = format!("AUTH {password}");
+            match self.send_command(&auth_cmd).await? {
+                RedisValue::Status(s) if s == "OK" => {}
+                RedisValue::Error(e) => bail!("AUTH failed: {e}"),
+                other => bail!("AUTH unexpected response: {other:?}"),
+            }
+        }
+
+        // SELECT database
+        if self.config.db > 0 {
+            let select_cmd = format!("SELECT {}", self.config.db);
+            match self.send_command(&select_cmd).await? {
+                RedisValue::Status(s) if s == "OK" => {}
+                RedisValue::Error(e) => bail!("SELECT failed: {e}"),
+                other => bail!("SELECT unexpected response: {other:?}"),
+            }
+        }
+
+        info!("connected to Redis {}:{}", self.config.host, self.config.port);
         Ok(())
     }
 
-    async fn execute(&self, command: &str) -> Result<RedisResponse> {
-        if !self.connected {
-            bail!("not connected");
-        }
-        info!(command = %command, "executing Redis command");
-        // TODO: 通过 TCP 发送 RESP 命令并解析响应
-        Ok(RedisResponse {
-            value: RedisValue::Status("OK".into()),
-            elapsed_ms: 0,
-        })
+    async fn execute(&mut self, command: &str) -> Result<RedisResponse> {
+        let start = std::time::Instant::now();
+        let value = self.send_command(command).await?;
+        let elapsed_ms = start.elapsed().as_millis() as u64;
+        Ok(RedisResponse { value, elapsed_ms })
     }
 
-    async fn info(&self) -> Result<HashMap<String, String>> {
-        if !self.connected {
-            bail!("not connected");
-        }
-        // TODO: 执行 INFO server 并解析
+    async fn info(&mut self) -> Result<HashMap<String, String>> {
+        let value = self.send_command("INFO server").await?;
         let mut info = HashMap::new();
-        info.insert("redis_version".into(), "7.0.0".into());
-        info.insert("mode".into(), "standalone".into());
+        if let RedisValue::Bulk(Some(text)) = value {
+            for line in text.lines() {
+                if let Some((key, val)) = line.split_once(':') {
+                    info.insert(key.to_string(), val.to_string());
+                }
+            }
+        }
         Ok(info)
     }
 
-    async fn close(&self) -> Result<()> {
+    async fn close(&mut self) -> Result<()> {
         info!("closing Redis connection");
-        // TODO: 关闭 TCP 连接
+        if let Some(mut stream) = self.stream.take() {
+            let _ = stream.shutdown().await;
+        }
         Ok(())
     }
 }
@@ -172,47 +301,12 @@ mod tests {
         let json = r#"{"host":"localhost","port":6379,"password":null,"db":0,"name":null}"#;
         let connector = RedisConnectorImpl::from_json(json).unwrap();
         assert_eq!(connector.config().host, "localhost");
-        assert!(!connector.connected);
+        assert!(connector.stream.is_none());
     }
 
     #[test]
     fn redis_connector_is_object_safe() {
         fn _assert_object_safe(_: &dyn RedisConnector) {}
-    }
-
-    #[tokio::test]
-    async fn redis_connect_sets_connected() {
-        let json = r#"{"host":"localhost","port":6379}"#;
-        let mut connector = RedisConnectorImpl::from_json(json).unwrap();
-        assert!(!connector.connected);
-        connector.connect().await.unwrap();
-        assert!(connector.connected);
-    }
-
-    #[tokio::test]
-    async fn redis_execute_fails_when_not_connected() {
-        let json = r#"{"host":"localhost","port":6379}"#;
-        let connector = RedisConnectorImpl::from_json(json).unwrap();
-        let result = connector.execute("PING").await;
-        assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn redis_info_returns_server_info() {
-        let json = r#"{"host":"localhost","port":6379}"#;
-        let mut connector = RedisConnectorImpl::from_json(json).unwrap();
-        connector.connect().await.unwrap();
-        let info = connector.info().await.unwrap();
-        assert_eq!(info.get("redis_version").unwrap(), "7.0.0");
-        assert_eq!(info.get("mode").unwrap(), "standalone");
-    }
-
-    #[tokio::test]
-    async fn redis_close_succeeds() {
-        let json = r#"{"host":"localhost","port":6379}"#;
-        let mut connector = RedisConnectorImpl::from_json(json).unwrap();
-        connector.connect().await.unwrap();
-        connector.close().await.unwrap();
     }
 
     #[test]
@@ -225,5 +319,67 @@ mod tests {
         assert!(json.contains("Bulk"));
         assert!(json.contains("hello"));
         assert!(json.contains("elapsed_ms"));
+    }
+
+    #[test]
+    fn decode_resp_status() {
+        let mut buf = BytesMut::from(&b"+OK\r\n"[..]);
+        let val = decode_resp(&mut buf).unwrap().unwrap();
+        assert_eq!(val, RedisValue::Status("OK".into()));
+    }
+
+    #[test]
+    fn decode_resp_error() {
+        let mut buf = BytesMut::from(&b"-ERR unknown\r\n"[..]);
+        let val = decode_resp(&mut buf).unwrap().unwrap();
+        assert_eq!(val, RedisValue::Error("ERR unknown".into()));
+    }
+
+    #[test]
+    fn decode_resp_integer() {
+        let mut buf = BytesMut::from(&b":1000\r\n"[..]);
+        let val = decode_resp(&mut buf).unwrap().unwrap();
+        assert_eq!(val, RedisValue::Integer(1000));
+    }
+
+    #[test]
+    fn decode_resp_bulk() {
+        let mut buf = BytesMut::from(&b"$6\r\nfoobar\r\n"[..]);
+        let val = decode_resp(&mut buf).unwrap().unwrap();
+        assert_eq!(val, RedisValue::Bulk(Some("foobar".into())));
+    }
+
+    #[test]
+    fn decode_resp_bulk_null() {
+        let mut buf = BytesMut::from(&b"$-1\r\n"[..]);
+        let val = decode_resp(&mut buf).unwrap().unwrap();
+        assert_eq!(val, RedisValue::Bulk(None));
+    }
+
+    #[test]
+    fn decode_resp_array() {
+        let mut buf = BytesMut::from(&b"*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"[..]);
+        let val = decode_resp(&mut buf).unwrap().unwrap();
+        assert_eq!(
+            val,
+            RedisValue::Array(vec![
+                RedisValue::Bulk(Some("foo".into())),
+                RedisValue::Bulk(Some("bar".into())),
+            ])
+        );
+    }
+
+    #[test]
+    fn decode_resp_empty_array() {
+        let mut buf = BytesMut::from(&b"*0\r\n"[..]);
+        let val = decode_resp(&mut buf).unwrap().unwrap();
+        assert_eq!(val, RedisValue::Array(vec![]));
+    }
+
+    #[test]
+    fn decode_resp_incomplete() {
+        let mut buf = BytesMut::from(&b"+OK"[..]);
+        let val = decode_resp(&mut buf).unwrap();
+        assert!(val.is_none());
     }
 }
