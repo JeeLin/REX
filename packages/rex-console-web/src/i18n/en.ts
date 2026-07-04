@@ -934,6 +934,14 @@ export default {
       search: 'Search',
       empty: 'No keys found',
       loading: 'Loading...',
+      context: {
+        copyKey: 'Copy key name',
+        viewValue: 'View value',
+        deleteKey: 'Delete key',
+        setTtl: 'Set TTL...',
+        deleteConfirm: 'Delete key "{key}"?',
+        ttlPrompt: 'TTL in seconds:',
+      },
     },
     value: {
       refresh: 'Refresh',

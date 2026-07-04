@@ -44,6 +44,8 @@
         :keys="keyBrowserKeys"
         @selectKey="handleKeySelect"
         @search="handleKeyBrowserSearch"
+        @deleteKey="handleKeyBrowserDelete"
+        @setTtl="handleKeyBrowserSetTtl"
       />
 
       <!-- 历史记录面板 -->
@@ -309,6 +311,25 @@ async function deleteSelectedKey(key: string) {
   selectedKey.value = null
   selectedKeyValue.value = null
 }
+
+async function handleKeyBrowserDelete(key: string) {
+  if (!session.connected.value) return
+  await session.execute(`DEL ${key}`)
+  // Refresh key browser
+  handleKeyBrowserSearch(searchPattern.value || '*')
+  // Clear value viewer if this key was selected
+  if (selectedKey.value === key) {
+    selectedKey.value = null
+    selectedKeyValue.value = null
+  }
+}
+
+async function handleKeyBrowserSetTtl(key: string, seconds: number) {
+  if (!session.connected.value) return
+  await session.execute(`EXPIRE ${key} ${seconds}`)
+}
+
+const searchPattern = ref('*')
 
 async function handleKeydown(e: KeyboardEvent) {
   // Autocomplete navigation

@@ -36,7 +36,7 @@
             class="key-item"
             :class="{ selected: selectedKey === child.key }"
             @click.stop="$emit('selectKey', child.key)"
-            @contextmenu.prevent="handleKeyContext($event, child.key)"
+            @contextmenu.prevent="openContextMenu($event, child.key)"
           >
             <span class="key-type-icon" :class="child.keyType">{{ getTypeIcon(child.keyType) }}</span>
             <span class="key-name">{{ child.label }}</span>
@@ -48,7 +48,7 @@
           class="key-item"
           :class="{ selected: selectedKey === node.key }"
           @click="$emit('selectKey', node.key)"
-          @contextmenu.prevent="handleKeyContext($event, node.key)"
+          @contextmenu.prevent="openContextMenu($event, node.key)"
         >
           <span class="key-type-icon" :class="node.keyType">{{ getTypeIcon(node.keyType) }}</span>
           <span class="key-name">{{ node.label }}</span>
@@ -63,11 +63,39 @@
     <div v-if="loading" class="key-list-loading">
       {{ t('redis.keys.loading') }}
     </div>
+
+    <!-- Context Menu -->
+    <div
+      v-if="contextMenu.visible"
+      class="context-menu-overlay"
+      @click="closeContextMenu"
+      @contextmenu.prevent="closeContextMenu"
+    >
+      <div
+        class="context-menu"
+        :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
+        @click.stop
+      >
+        <div class="context-menu-item" @click="handleCopyKey">
+          {{ t('redis.keys.context.copyKey') }}
+        </div>
+        <div class="context-menu-item" @click="handleViewValue">
+          {{ t('redis.keys.context.viewValue') }}
+        </div>
+        <div class="context-menu-separator" />
+        <div class="context-menu-item danger" @click="handleDeleteKey">
+          {{ t('redis.keys.context.deleteKey') }}
+        </div>
+        <div class="context-menu-item" @click="handleSetTtl">
+          {{ t('redis.keys.context.setTtl') }}
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -85,12 +113,21 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'selectKey', key: string): void
   (e: 'search', pattern: string): void
+  (e: 'deleteKey', key: string): void
+  (e: 'setTtl', key: string, seconds: number): void
 }>()
 
 const searchPattern = ref('*')
 const selectedKey = ref<string | null>(null)
 const loading = ref(false)
 const collapsedFolders = ref<Set<string>>(new Set())
+
+const contextMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  key: '',
+})
 
 interface TreeNode {
   key: string
@@ -115,9 +152,8 @@ const treeNodes = computed<TreeNode[]>(() => {
     const sepIndex = kt.key.indexOf(':')
     if (sepIndex > 0) {
       const folder = kt.key.substring(0, sepIndex)
-      const rest = kt.key.substring(sepIndex + 1)
       if (!folders.has(folder)) folders.set(folder, [])
-      folders.get(folder)!.push({ key: kt.key, type: kt.type })
+      folders.get(folder)!.push(kt)
     } else {
       leaves.push(kt)
     }
@@ -174,18 +210,61 @@ function handleSearch() {
   loading.value = true
   collapsedFolders.value.clear()
   emit('search', searchPattern.value)
-  // Loading will be cleared when keys prop updates
   setTimeout(() => { loading.value = false }, 100)
 }
 
-function handleKeyContext(_event: MouseEvent, _key: string) {
-  // Will be implemented in subtask 3
+function openContextMenu(event: MouseEvent, key: string) {
+  contextMenu.x = event.clientX
+  contextMenu.y = event.clientY
+  contextMenu.key = key
+  contextMenu.visible = true
+}
+
+function closeContextMenu() {
+  contextMenu.visible = false
+}
+
+function handleCopyKey() {
+  navigator.clipboard.writeText(contextMenu.key)
+  closeContextMenu()
+}
+
+function handleViewValue() {
+  emit('selectKey', contextMenu.key)
+  closeContextMenu()
+}
+
+function handleDeleteKey() {
+  if (window.confirm(t('redis.keys.context.deleteConfirm', { key: contextMenu.key }))) {
+    emit('deleteKey', contextMenu.key)
+  }
+  closeContextMenu()
+}
+
+function handleSetTtl() {
+  const input = window.prompt(t('redis.keys.context.ttlPrompt'), '3600')
+  if (input !== null) {
+    const seconds = parseInt(input, 10)
+    if (!isNaN(seconds) && seconds > 0) {
+      emit('setTtl', contextMenu.key, seconds)
+    }
+  }
+  closeContextMenu()
+}
+
+function handleGlobalClick() {
+  closeContextMenu()
 }
 
 onMounted(() => {
   if (props.connected) {
     handleSearch()
   }
+  document.addEventListener('click', handleGlobalClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleGlobalClick)
 })
 </script>
 
@@ -196,6 +275,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   background: var(--bg-surface);
+  position: relative;
 }
 
 .key-browser-header {
@@ -328,5 +408,47 @@ onMounted(() => {
   text-align: center;
   color: var(--text-muted);
   font-size: var(--fs-xs);
+}
+
+/* Context Menu */
+.context-menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+}
+
+.context-menu {
+  position: fixed;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 0;
+  min-width: 160px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 1001;
+}
+
+.context-menu-item {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.context-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.context-menu-item.danger {
+  color: #f85149;
+}
+
+.context-menu-separator {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
 }
 </style>

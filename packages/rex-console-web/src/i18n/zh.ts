@@ -934,6 +934,14 @@ export default {
       search: '搜索',
       empty: '未找到键',
       loading: '加载中...',
+      context: {
+        copyKey: '复制键名',
+        viewValue: '查看值',
+        deleteKey: '删除键',
+        setTtl: '设置 TTL...',
+        deleteConfirm: '删除键 "{key}"？',
+        ttlPrompt: 'TTL（秒）：',
+      },
     },
     value: {
       refresh: '刷新',
