@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.47.0] - 2026-07-04
+
+### Added
+- Redis 控制台：后端真实 TCP 连接器（替代 stub），支持 AUTH/SELECT
+- Redis 控制台：键浏览器面板（SCAN 搜索 + 键列表）
+- Redis 控制台：类型感知值查看器（String/Hash/List/Set/ZSet + JSON 格式化）
+- Redis 控制台：数据库选择器（DB 0-15 切换）
+- Redis 控制台：命令自动补全（前缀匹配 + Tab 补全）
+
+## [0.46.0] - 2026-07-04
+
+### Added
+- SSH 终端：延迟测量与工具栏显示
+- SSH 终端：右键菜单补齐 + 状态栏补全
+- SSH 终端：Terminal.vue i18n 修复
+
 ## [0.45.0] - 2026-07-03
 
 ### Changed
