@@ -97,13 +97,9 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { KeyWithType } from './types'
 
 const { t } = useI18n()
-
-interface KeyWithType {
-  key: string
-  type: string
-}
 
 const props = defineProps<{
   connected: boolean

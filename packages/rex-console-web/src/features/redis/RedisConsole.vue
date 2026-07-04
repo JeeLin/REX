@@ -137,6 +137,7 @@ import RedisHistory from './RedisHistory.vue'
 import RedisKeyBrowser from './RedisKeyBrowser.vue'
 import RedisValueViewer from './RedisValueViewer.vue'
 import type { RedisValue } from '@/api/redis'
+import type { KeyWithType, OutputEntry } from './types'
 
 const props = defineProps<{
   resourceId: string
@@ -155,10 +156,6 @@ const showKeyBrowser = ref(true)
 const selectedDb = ref(0)
 
 // Key browser state
-interface KeyWithType {
-  key: string
-  type: string
-}
 const keyBrowserKeys = ref<KeyWithType[]>([])
 
 // Autocomplete state
@@ -172,14 +169,6 @@ const selectedKeyType = ref('string')
 const selectedKeyValue = ref<RedisValue | null>(null)
 const selectedKeyTtl = ref<number | null>(null)
 const valueLoading = ref(false)
-
-interface OutputEntry {
-  id: number
-  command: string
-  response?: RedisValue
-  error?: string
-  elapsed_ms?: number
-}
 
 const outputEntries = ref<OutputEntry[]>([])
 let nextEntryId = 0
