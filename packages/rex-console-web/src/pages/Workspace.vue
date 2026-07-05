@@ -251,7 +251,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { getProtocolIcon } from '@/composables/useProtocol'
@@ -262,12 +262,14 @@ import CommandPalette from '@/components/CommandPalette.vue'
 import type { CommandItem } from '@/components/CommandPalette.vue'
 import TabBar from '@/features/workspace/TabBar.vue'
 import { useTabs } from '@/features/workspace/useTabs'
-import WorkspaceTerminal from '@/features/workspace/panels/WorkspaceTerminal.vue'
-import WorkspaceSql from '@/features/workspace/panels/WorkspaceSql.vue'
-import WorkspaceFiles from '@/features/workspace/panels/WorkspaceFiles.vue'
-import WorkspaceRedis from '@/features/workspace/panels/WorkspaceRedis.vue'
-import WorkspaceSqlite from '@/features/workspace/panels/WorkspaceSqlite.vue'
-import WorkspaceS3 from '@/features/workspace/panels/WorkspaceS3.vue'
+
+// Lazy load workspace panels for better code splitting
+const WorkspaceTerminal = defineAsyncComponent(() => import('@/features/workspace/panels/WorkspaceTerminal.vue'))
+const WorkspaceSql = defineAsyncComponent(() => import('@/features/workspace/panels/WorkspaceSql.vue'))
+const WorkspaceFiles = defineAsyncComponent(() => import('@/features/workspace/panels/WorkspaceFiles.vue'))
+const WorkspaceRedis = defineAsyncComponent(() => import('@/features/workspace/panels/WorkspaceRedis.vue'))
+const WorkspaceSqlite = defineAsyncComponent(() => import('@/features/workspace/panels/WorkspaceSqlite.vue'))
+const WorkspaceS3 = defineAsyncComponent(() => import('@/features/workspace/panels/WorkspaceS3.vue'))
 
 const { t } = useI18n()
 const route = useRoute()
