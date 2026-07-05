@@ -201,23 +201,23 @@
     />
 
     <!-- 移动端底部导航栏 -->
-    <nav v-if="isMobile" class="bottom-nav">
-      <router-link to="/" class="bottom-nav-item" :class="{ active: route.name === 'dashboard' }" @click="closeMobile">
+    <nav v-if="isMobile" class="bottom-nav" aria-label="Mobile navigation">
+      <router-link to="/" class="bottom-nav-item" :class="{ active: route.name === 'dashboard' }" :aria-current="route.name === 'dashboard' ? 'page' : undefined" @click="closeMobile">
         <span class="bottom-nav-icon">◉</span>
         <span class="bottom-nav-label">{{ t('nav.dashboard') }}</span>
       </router-link>
-      <router-link to="/environments" class="bottom-nav-item" :class="{ active: isEnvPage }" @click="closeMobile">
+      <router-link to="/environments" class="bottom-nav-item" :class="{ active: isEnvPage }" :aria-current="isEnvPage ? 'page' : undefined" @click="closeMobile">
         <span class="bottom-nav-icon">◈</span>
         <span class="bottom-nav-label">{{ t('nav.environments') }}</span>
       </router-link>
-      <button class="bottom-nav-item bottom-nav-action" @click="openNewConnection(); closeMobile()">
+      <button class="bottom-nav-item bottom-nav-action" aria-label="New connection" @click="openNewConnection(); closeMobile()">
         <span class="bottom-nav-icon bottom-nav-icon-action">+</span>
       </button>
-      <router-link to="/agents" class="bottom-nav-item" :class="{ active: route.name === 'agents' }" @click="closeMobile">
+      <router-link to="/agents" class="bottom-nav-item" :class="{ active: route.name === 'agents' }" :aria-current="route.name === 'agents' ? 'page' : undefined" @click="closeMobile">
         <span class="bottom-nav-icon">⬡</span>
         <span class="bottom-nav-label">{{ t('nav.agents') }}</span>
       </router-link>
-      <router-link to="/settings" class="bottom-nav-item" :class="{ active: route.name === 'settings' }" @click="closeMobile">
+      <router-link to="/settings" class="bottom-nav-item" :class="{ active: route.name === 'settings' }" :aria-current="route.name === 'settings' ? 'page' : undefined" @click="closeMobile">
         <span class="bottom-nav-icon">⚙</span>
         <span class="bottom-nav-label">{{ t('nav.settings') }}</span>
       </router-link>

@@ -1,16 +1,22 @@
 <template>
-  <div class="ws-tabbar" @contextmenu.prevent>
-    <button class="ws-tab-add" title="新建连接 (Ctrl+N)" @click="$emit('newConnection')">+</button>
+  <div class="ws-tabbar" role="tablist" aria-label="Workspace tabs" @contextmenu.prevent>
+    <button class="ws-tab-add" title="新建连接 (Ctrl+N)" aria-label="New connection" @click="$emit('newConnection')">+</button>
     <div
       v-for="tab in tabs"
       :key="tab.id"
       class="ws-tab"
       :class="{ active: tab.id === activeTabId, dragging: localDragId === tab.id }"
       :data-tab-id="tab.id"
+      role="tab"
+      :aria-selected="tab.id === activeTabId"
+      :aria-label="`${tab.name} - ${tab.proto}`"
+      tabindex="0"
       draggable="true"
       @click="activateTab(tab.id)"
       @dblclick="onTabDblclick($event, tab)"
       @contextmenu.prevent="onTabCtx($event, tab)"
+      @keydown.enter="activateTab(tab.id)"
+      @keydown.space.prevent="activateTab(tab.id)"
       @dragstart="onDragStart($event, tab.id)"
       @dragend="onDragEnd"
       @dragover.prevent="onDragOver($event, tab.id)"
@@ -20,7 +26,7 @@
       <span class="ws-tab-dot" :class="tab.status"></span>
       <span class="ws-tab-icon" :style="{ color: getProtocolIcon(tab.proto).color }">{{ getProtocolIcon(tab.proto).icon }}</span>
       <span class="ws-tab-name">{{ tab.name }}</span>
-      <span class="ws-tab-close" @click.stop="closeTab(tab.id)">&times;</span>
+      <span class="ws-tab-close" @click.stop="closeTab(tab.id)" :aria-label="`Close ${tab.name}`">&times;</span>
     </div>
     <div class="ws-tabbar-right">
       <slot name="right" />
