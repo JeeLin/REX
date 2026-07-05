@@ -7,19 +7,41 @@
         TTL: {{ formatTtl(ttl) }}
       </span>
       <div class="value-header-spacer" />
-      <button class="redis-btn redis-btn-sm" @click="$emit('refresh')">
-        {{ t('redis.value.refresh') }}
-      </button>
-      <button class="redis-btn redis-btn-sm redis-btn-danger" @click="$emit('deleteKey', keyName)">
-        {{ t('redis.value.delete') }}
-      </button>
+      <template v-if="editing">
+        <button class="redis-btn redis-btn-sm redis-btn-save" @click="handleSave">
+          {{ t('common.save') }}
+        </button>
+        <button class="redis-btn redis-btn-sm" @click="cancelEdit">
+          {{ t('common.cancel') }}
+        </button>
+      </template>
+      <template v-else>
+        <button class="redis-btn redis-btn-sm" @click="startEdit">
+          {{ t('common.edit') }}
+        </button>
+        <button class="redis-btn redis-btn-sm" @click="$emit('refresh')">
+          {{ t('redis.value.refresh') }}
+        </button>
+        <button class="redis-btn redis-btn-sm redis-btn-danger" @click="$emit('deleteKey', keyName)">
+          {{ t('redis.value.delete') }}
+        </button>
+      </template>
     </div>
 
     <div class="value-content">
       <!-- String type -->
       <div v-if="valueType === 'string'" class="value-string">
-        <pre v-if="isJson" class="value-json">{{ formattedJson }}</pre>
-        <pre v-else class="value-text">{{ displayValue }}</pre>
+        <template v-if="editing">
+          <textarea
+            v-model="editStringValue"
+            class="value-edit-textarea"
+            rows="8"
+          />
+        </template>
+        <template v-else>
+          <pre v-if="isJson" class="value-json">{{ formattedJson }}</pre>
+          <pre v-else class="value-text">{{ displayValue }}</pre>
+        </template>
       </div>
 
       <!-- Hash type -->
@@ -29,29 +51,66 @@
             <tr>
               <th>Field</th>
               <th>Value</th>
+              <th v-if="editing" class="th-action"></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(item, index) in hashItems" :key="index">
-              <td class="hash-field">{{ item.field }}</td>
-              <td class="hash-value">{{ item.value }}</td>
+            <tr v-for="(item, index) in editing ? editHashItems : hashItems" :key="index">
+              <template v-if="editing">
+                <td><input v-model="item.field" class="value-edit-input" /></td>
+                <td><input v-model="item.value" class="value-edit-input" /></td>
+                <td class="td-action">
+                  <button class="redis-btn redis-btn-sm redis-btn-danger" @click="editHashItems.splice(index, 1)">×</button>
+                </td>
+              </template>
+              <template v-else>
+                <td class="hash-field">{{ item.field }}</td>
+                <td class="hash-value">{{ item.value }}</td>
+              </template>
             </tr>
           </tbody>
         </table>
+        <div v-if="editing" class="value-add-row">
+          <button class="redis-btn redis-btn-sm" @click="editHashItems.push({ field: '', value: '' })">
+            + {{ t('redis.keys.addField') }}
+          </button>
+        </div>
       </div>
 
       <!-- List type -->
       <div v-else-if="valueType === 'list'" class="value-list">
-        <div v-for="(item, index) in listItems" :key="index" class="list-item">
+        <div v-for="(item, index) in editing ? editListItems : listItems" :key="index" class="list-item">
           <span class="list-index">[{{ index }}]</span>
-          <span class="list-value">{{ item }}</span>
+          <template v-if="editing">
+            <input v-model="editListItems[index]" class="value-edit-input value-list-input" />
+            <button class="redis-btn redis-btn-sm redis-btn-danger" @click="editListItems.splice(index, 1)">×</button>
+          </template>
+          <template v-else>
+            <span class="list-value">{{ item }}</span>
+          </template>
+        </div>
+        <div v-if="editing" class="value-add-row">
+          <button class="redis-btn redis-btn-sm" @click="editListItems.push('')">
+            + {{ t('redis.keys.addElement') }}
+          </button>
         </div>
       </div>
 
       <!-- Set type -->
       <div v-else-if="valueType === 'set'" class="value-set">
-        <div v-for="(item, index) in setItems" :key="index" class="set-item">
-          {{ item }}
+        <div v-for="(item, index) in editing ? editSetItems : setItems" :key="index" class="set-item">
+          <template v-if="editing">
+            <input v-model="editSetItems[index]" class="value-edit-input value-list-input" />
+            <button class="redis-btn redis-btn-sm redis-btn-danger" @click="editSetItems.splice(index, 1)">×</button>
+          </template>
+          <template v-else>
+            {{ item }}
+          </template>
+        </div>
+        <div v-if="editing" class="value-add-row">
+          <button class="redis-btn redis-btn-sm" @click="editSetItems.push('')">
+            + {{ t('redis.keys.addMember') }}
+          </button>
         </div>
       </div>
 
@@ -62,15 +121,30 @@
             <tr>
               <th>Member</th>
               <th>Score</th>
+              <th v-if="editing" class="th-action"></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(item, index) in zsetItems" :key="index">
-              <td class="zset-member">{{ item.member }}</td>
-              <td class="zset-score">{{ item.score }}</td>
+            <tr v-for="(item, index) in editing ? editZsetItems : zsetItems" :key="index">
+              <template v-if="editing">
+                <td><input v-model="item.member" class="value-edit-input" /></td>
+                <td><input v-model="item.score" type="number" class="value-edit-input" /></td>
+                <td class="td-action">
+                  <button class="redis-btn redis-btn-sm redis-btn-danger" @click="editZsetItems.splice(index, 1)">×</button>
+                </td>
+              </template>
+              <template v-else>
+                <td class="zset-member">{{ item.member }}</td>
+                <td class="zset-score">{{ item.score }}</td>
+              </template>
             </tr>
           </tbody>
         </table>
+        <div v-if="editing" class="value-add-row">
+          <button class="redis-btn redis-btn-sm" @click="editZsetItems.push({ member: '', score: '0' })">
+            + {{ t('redis.keys.addMember') }}
+          </button>
+        </div>
       </div>
 
       <!-- Loading -->
@@ -87,7 +161,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { RedisValue } from '@/api/redis'
 
@@ -101,10 +175,23 @@ const props = defineProps<{
   loading: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'refresh'): void
   (e: 'deleteKey', key: string): void
+  (e: 'saveString', key: string, value: string): void
+  (e: 'saveHash', key: string, added: { field: string; value: string }[], removed: string[]): void
+  (e: 'saveList', key: string, added: string[], removedIndices: number[]): void
+  (e: 'saveSet', key: string, added: string[], removed: string[]): void
+  (e: 'saveZset', key: string, added: { member: string; score: string }[], removed: string[]): void
 }>()
+
+// Edit state
+const editing = ref(false)
+const editStringValue = ref('')
+const editHashItems = ref<{ field: string; value: string }[]>([])
+const editListItems = ref<string[]>([])
+const editSetItems = ref<string[]>([])
+const editZsetItems = ref<{ member: string; score: string }[]>([])
 
 const displayValue = computed(() => {
   if (!props.value) return ''
@@ -174,6 +261,76 @@ const zsetItems = computed(() => {
   }
   return items
 })
+
+function startEdit() {
+  editing.value = true
+  switch (props.valueType) {
+    case 'string':
+      editStringValue.value = displayValue.value
+      break
+    case 'hash':
+      editHashItems.value = hashItems.value.map(h => ({ ...h }))
+      break
+    case 'list':
+      editListItems.value = [...listItems.value]
+      break
+    case 'set':
+      editSetItems.value = [...setItems.value]
+      break
+    case 'zset':
+      editZsetItems.value = zsetItems.value.map(z => ({ member: z.member, score: String(z.score) }))
+      break
+  }
+}
+
+function cancelEdit() {
+  editing.value = false
+}
+
+function handleSave() {
+  switch (props.valueType) {
+    case 'string':
+      emit('saveString', props.keyName, editStringValue.value)
+      break
+    case 'hash': {
+      // Compare original vs edited to find added and removed
+      const origFields = new Set(hashItems.value.map(h => h.field))
+      const newFields = new Set(editHashItems.value.map(h => h.field))
+      const removed = [...origFields].filter(f => !newFields.has(f))
+      const added = editHashItems.value.filter(h => !origFields.has(h.field) || hashItems.value.find(oh => oh.field === h.field)?.value !== h.value)
+      emit('saveHash', props.keyName, added, removed)
+      break
+    }
+    case 'list': {
+      const removedIndices: number[] = []
+      const origLen = listItems.value.length
+      const newLen = editListItems.value.length
+      // Items at indices >= newLen that existed in original are removed
+      for (let i = newLen; i < origLen; i++) {
+        removedIndices.push(i)
+      }
+      const added = editListItems.value.slice(origLen)
+      emit('saveList', props.keyName, added, removedIndices)
+      break
+    }
+    case 'set': {
+      const origSet = new Set(setItems.value)
+      const newSet = new Set(editSetItems.value)
+      const added = [...newSet].filter(m => !origSet.has(m))
+      const removed = [...origSet].filter(m => !newSet.has(m))
+      emit('saveSet', props.keyName, added, removed)
+      break
+    }
+    case 'zset': {
+      const origMembers = new Map(zsetItems.value.map(z => [z.member, String(z.score)]))
+      const added = editZsetItems.value.filter(z => !origMembers.has(z.member) || origMembers.get(z.member) !== z.score)
+      const removed = [...origMembers.keys()].filter(m => !editZsetItems.value.find(z => z.member === m))
+      emit('saveZset', props.keyName, added, removed)
+      break
+    }
+  }
+  editing.value = false
+}
 
 function formatTtl(ttl: number): string {
   if (ttl === -1) return '∞'
@@ -270,7 +427,13 @@ function formatTtl(ttl: number): string {
   border-bottom: 1px solid var(--border);
 }
 
+.th-action { width: 32px; }
+.td-action { width: 32px; text-align: center; }
+
 .list-item, .set-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 4px 0;
   font-family: var(--font-mono);
   font-size: var(--fs-xs);
@@ -278,7 +441,7 @@ function formatTtl(ttl: number): string {
 
 .list-index {
   color: var(--text-muted);
-  margin-right: 8px;
+  flex-shrink: 0;
 }
 
 .value-loading, .value-empty {
@@ -288,5 +451,63 @@ function formatTtl(ttl: number): string {
   height: 100%;
   color: var(--text-muted);
   font-size: var(--fs-sm);
+}
+
+/* Edit mode */
+.value-edit-textarea {
+  width: 100%;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 8px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.value-edit-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.value-edit-input {
+  width: 100%;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 3px 6px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  box-sizing: border-box;
+}
+
+.value-edit-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.value-list-input {
+  flex: 1;
+}
+
+.value-add-row {
+  padding: 8px 0;
+}
+
+.redis-btn-save {
+  border-color: #3fb950;
+  color: #3fb950;
+}
+
+.redis-btn-danger {
+  color: #f85149;
+  border-color: #f85149;
+}
+
+.redis-btn-danger:hover {
+  background: #f8514922;
 }
 </style>
