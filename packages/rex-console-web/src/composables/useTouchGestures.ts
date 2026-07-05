@@ -19,6 +19,8 @@ export interface TouchGestureOptions {
   longPressDelay?: number
   doubleTapDelay?: number
   tapThreshold?: number
+  // Mobile-specific options
+  enableHapticFeedback?: boolean
 }
 
 interface TouchPoint {
@@ -49,6 +51,7 @@ export function useTouchGestures(element: HTMLElement, options: TouchGestureOpti
     onPinchEnd,
     onPan,
     onPanEnd,
+    enableHapticFeedback = false,
   } = options
 
   let touchStart: TouchPoint | null = null
@@ -70,6 +73,12 @@ export function useTouchGestures(element: HTMLElement, options: TouchGestureOpti
     if (longPressTimer !== null) {
       clearTimeout(longPressTimer)
       longPressTimer = null
+    }
+  }
+
+  function triggerHaptic() {
+    if (enableHapticFeedback && navigator.vibrate) {
+      navigator.vibrate(10)
     }
   }
 
@@ -98,6 +107,7 @@ export function useTouchGestures(element: HTMLElement, options: TouchGestureOpti
     if (onLongPress) {
       longPressTimer = window.setTimeout(() => {
         clearLongPress()
+        triggerHaptic()
         onLongPress(event)
       }, longPressDelay)
     }
@@ -170,6 +180,7 @@ export function useTouchGestures(element: HTMLElement, options: TouchGestureOpti
     if (onDoubleTap && deltaTime < 300 && distance < tapThreshold) {
       const now = Date.now()
       if (now - lastTapTime < doubleTapDelay) {
+        triggerHaptic()
         onDoubleTap()
         lastTapTime = 0
         touchStart = null
