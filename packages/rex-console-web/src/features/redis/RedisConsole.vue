@@ -75,6 +75,11 @@
           :loading="valueLoading"
           @refresh="refreshSelectedKey"
           @deleteKey="deleteSelectedKey"
+          @saveString="handleSaveString"
+          @saveHash="handleSaveHash"
+          @saveList="handleSaveList"
+          @saveSet="handleSaveSet"
+          @saveZset="handleSaveZset"
         />
 
         <!-- 输出区域 -->
@@ -445,6 +450,63 @@ async function handleKeyBrowserDelete(key: string) {
 async function handleKeyBrowserSetTtl(key: string, seconds: number) {
   if (!session.connected.value) return
   await session.execute(`EXPIRE ${key} ${seconds}`)
+}
+
+async function handleSaveString(key: string, value: string) {
+  if (!session.connected.value) return
+  await session.execute(`SET ${key} ${value}`)
+  refreshSelectedKey()
+}
+
+async function handleSaveHash(key: string, added: { field: string; value: string }[], removed: string[]) {
+  if (!session.connected.value) return
+  for (const field of removed) {
+    await session.execute(`HDEL ${key} ${field}`)
+  }
+  for (const entry of added) {
+    if (entry.field.trim()) {
+      await session.execute(`HSET ${key} ${entry.field} ${entry.value}`)
+    }
+  }
+  refreshSelectedKey()
+}
+
+async function handleSaveList(key: string, added: string[], removedIndices: number[]) {
+  if (!session.connected.value) return
+  // Remove from end to preserve indices
+  for (let i = removedIndices.length - 1; i >= 0; i--) {
+    const idx = removedIndices[i]
+    await session.execute(`LSET ${key} ${idx} __REX_DEL__`)
+    await session.execute(`LREM ${key} 1 __REX_DEL__`)
+  }
+  for (const val of added) {
+    if (val.trim()) await session.execute(`RPUSH ${key} ${val}`)
+  }
+  refreshSelectedKey()
+}
+
+async function handleSaveSet(key: string, added: string[], removed: string[]) {
+  if (!session.connected.value) return
+  for (const member of removed) {
+    await session.execute(`SREM ${key} ${member}`)
+  }
+  for (const member of added) {
+    if (member.trim()) await session.execute(`SADD ${key} ${member}`)
+  }
+  refreshSelectedKey()
+}
+
+async function handleSaveZset(key: string, added: { member: string; score: string }[], removed: string[]) {
+  if (!session.connected.value) return
+  for (const member of removed) {
+    await session.execute(`ZREM ${key} ${member}`)
+  }
+  for (const entry of added) {
+    if (entry.member.trim()) {
+      await session.execute(`ZADD ${key} ${entry.score} ${entry.member}`)
+    }
+  }
+  refreshSelectedKey()
 }
 
 const searchPattern = ref('*')
