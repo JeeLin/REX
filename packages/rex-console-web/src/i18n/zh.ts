@@ -721,7 +721,12 @@ export default {
       exportFailed: '导出失败',
       viewListFailed: '获取视图列表失败',
       procedureListFailed: '获取存储过程列表失败',
+      saveSuccess: '保存成功',
+      saveFailed: '保存失败',
     },
+    saveQuery: '保存查询',
+    fileName: '文件名',
+    fileNamePlaceholder: '输入查询名称',
   },
   settings: {
     versionSubtitle: '自托管 · 开源',

@@ -721,7 +721,12 @@ export default {
       exportFailed: 'Export failed',
       viewListFailed: 'Failed to fetch views',
       procedureListFailed: 'Failed to fetch procedures',
+      saveSuccess: 'Saved successfully',
+      saveFailed: 'Save failed',
     },
+    saveQuery: 'Save Query',
+    fileName: 'File name',
+    fileNamePlaceholder: 'Enter query name',
   },
   settings: {
     versionSubtitle: 'Self-hosted · Open source',

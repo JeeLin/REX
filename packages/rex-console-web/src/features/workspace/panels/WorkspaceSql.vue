@@ -31,10 +31,13 @@
     <div class="ws-sql-toolbar">
       <button class="btn btn-run btn-xs" @click="execute(activeTab.sql)">▶ 执行</button>
       <div class="ws-sql-sep"></div>
-      <button class="btn btn-ghost btn-xs" @click="clearEditor">清空</button>
+      <button class="btn btn-ghost btn-xs" @click="handleFormat">✨ 格式化</button>
       <div class="ws-sql-sep"></div>
+      <button class="btn btn-ghost btn-xs" @click="handleSave">💾 保存</button>
+      <div class="ws-sql-sep"></div>
+      <button class="btn btn-ghost btn-xs" @click="clearEditor">清空</button>
       <div class="ws-sql-spacer"></div>
-      <span class="ws-sql-hint">Ctrl+Enter 执行</span>
+      <span class="ws-sql-hint">Ctrl+S 保存 · Ctrl+Enter 执行</span>
     </div>
 
     <!-- Main Area -->
@@ -57,10 +60,11 @@
       </div>
       <div class="ws-sql-right">
         <SqlEditor
+          ref="sqlEditorRef"
           v-model="activeTab.sql"
           @execute="execute(activeTab.sql)"
           @execute-selection="execute"
-          @save="() => {}"
+          @save="handleSave"
           @show-history="() => {}"
         />
         <SqlResults
@@ -83,6 +87,29 @@
         {{ activeTab.result.rows?.length ?? 0 }} 行 · {{ activeTab.result.elapsed_ms }}ms
       </span>
     </div>
+
+    <!-- Save Modal -->
+    <div v-if="showSaveModal" class="ws-sql-modal-overlay" @click.self="showSaveModal = false">
+      <div class="ws-sql-modal">
+        <div class="ws-sql-modal-header">
+          <span>{{ t('sql.saveQuery') }}</span>
+          <button class="btn btn-ghost btn-xs" @click="showSaveModal = false">×</button>
+        </div>
+        <div class="ws-sql-modal-body">
+          <label class="ws-sql-modal-label">{{ t('sql.fileName') }}</label>
+          <input
+            v-model="saveFileName"
+            class="ws-sql-modal-input"
+            :placeholder="t('sql.fileNamePlaceholder')"
+            @keyup.enter="confirmSave"
+          />
+        </div>
+        <div class="ws-sql-modal-footer">
+          <button class="btn btn-ghost btn-xs" @click="showSaveModal = false">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary btn-xs" @click="confirmSave">{{ t('common.save') }}</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -93,7 +120,7 @@ import SqlTabs from '@/features/sql/SqlTabs.vue'
 import SqlSidebar from '@/features/sql/SqlSidebar.vue'
 import SqlEditor from '@/features/sql/SqlEditor.vue'
 import SqlResults from '@/features/sql/SqlResults.vue'
-import { listDatabases, executeSql } from '@/api/sql'
+import { listDatabases, executeSql, saveQuery } from '@/api/sql'
 import type { DatabaseInfo } from '@/api/sql'
 import { exportCsv } from '@/features/sql/result-export'
 import { useToast } from '@/composables/useToast'
@@ -116,12 +143,19 @@ const emit = defineEmits<{
 const {
   tabs, activeTabId, executing, tabList, activeTab,
   addTab, closeTab, closeOthers, renameTab, getTabSql,
-  clearEditor, execute, handleSort, handleGenerateSql,
+  clearEditor, execute, handleSort, handleGenerateSql, markSaved,
 } = useSqlTabActions(props.resourceId, (msg) => emit('error', msg))
 
 // Database
 const databases = ref<DatabaseInfo[]>([])
 const selectedDb = ref('')
+
+// Save modal
+const showSaveModal = ref(false)
+const saveFileName = ref('')
+
+// SqlEditor ref
+const sqlEditorRef = ref<InstanceType<typeof SqlEditor>>()
 
 function insertTableSql(tableName: string) {
   const tab = tabs.value.find((t) => t.id === activeTabId.value)
@@ -140,6 +174,32 @@ async function handleExportTable(tableName: string) {
 
 function handleTabSave(_id: string) {
   // TODO: implement save query file flow
+}
+
+function handleSave() {
+  saveFileName.value = activeTab.value.title || 'query'
+  showSaveModal.value = true
+}
+
+async function confirmSave() {
+  if (!saveFileName.value.trim()) return
+  try {
+    const result = await saveQuery(
+      props.resourceId,
+      saveFileName.value.trim(),
+      activeTab.value.sql,
+      selectedDb.value,
+    )
+    markSaved(activeTabId.value, result.id)
+    showSaveModal.value = false
+    toast.success(t('sql.toast.saveSuccess'))
+  } catch {
+    toast.error(t('sql.toast.saveFailed'))
+  }
+}
+
+function handleFormat() {
+  sqlEditorRef.value?.formatSql()
 }
 
 function handleTabRename(id: string) {
@@ -332,4 +392,70 @@ onBeforeUnmount(() => {
 }
 
 .ws-sql-statusbar .spacer { flex: 1; }
+
+/* Save Modal */
+.ws-sql-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.ws-sql-modal {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  width: 400px;
+  max-width: 90%;
+}
+
+.ws-sql-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-sm) var(--sp-md);
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.ws-sql-modal-body {
+  padding: var(--sp-md);
+}
+
+.ws-sql-modal-label {
+  display: block;
+  margin-bottom: var(--sp-xs);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+}
+
+.ws-sql-modal-input {
+  width: 100%;
+  padding: var(--sp-xs) var(--sp-sm);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+
+.ws-sql-modal-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.ws-sql-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-xs);
+  padding: var(--sp-sm) var(--sp-md);
+  border-top: 1px solid var(--border);
+}
 </style>

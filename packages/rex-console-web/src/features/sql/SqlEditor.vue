@@ -32,6 +32,7 @@ const emit = defineEmits<{
   'executeSelection': [sql: string]
   'save': []
   'showHistory': []
+  'format': []
 }>()
 
 const cmRef = ref<InstanceType<typeof SqlCodeMirror>>()
@@ -107,6 +108,12 @@ function handleContextMenu(event: MouseEvent) {
     },
   ])
 }
+
+function formatSql() {
+  cmRef.value?.formatSql()
+}
+
+defineExpose({ formatSql })
 </script>
 
 <style scoped>
