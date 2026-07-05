@@ -67,6 +67,7 @@ function createExtensions() {
       indentWithTab,
       { key: 'Mod-Enter', run: () => { emit('execute'); return true } },
       { key: 'Mod-s', run: () => { emit('save'); return true } },
+      { key: 'Mod-Shift-f', run: () => { formatSql(); return true } },
     ]),
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
