@@ -126,6 +126,7 @@ rex-agent = 所有 crate（无前端）
 | 0.47.0 | Redis 控制台体验升级 | ✅ 完成 |
 | 0.48.0 | Redis 键浏览器增强 | ✅ 完成 |
 | 0.49.0 | Redis 值编辑 | ✅ 完成 |
+| 0.50.0 | Docker 控制台 | 🔄 当前 |
 
 ### 0.45.0 SQLite 连接器现代化
 - **核心功能**：将 SQLite 从独立的 SqliteConnector trait 重构为统一的 SqlConnector trait，接入 REST API 层，补齐缺失功能，前端适配新版侧边栏。
@@ -168,6 +169,17 @@ rex-agent = 所有 crate（无前端）
 - **依赖**：0.48.0 Redis 键浏览器增强
 - **版本类型**：minor
 - **版本号**：0.49.0
+
+### 0.50.0 Docker 控制台
+- **核心功能**：实现 Docker 容器管理控制台，包括容器列表、状态操作、详情查看、日志实时查看
+- **子任务预估**：4 个
+  1. 后端 Docker 连接器：rex-docker crate 实现 Docker Engine REST API 通信
+  2. Hub Docker WebSocket 会话管理：Docker 操作的消息协议和路由
+  3. 前端 Docker 容器控制台：容器列表、详情面板、日志查看器、操作按钮
+  4. 资源创建向导 + 工作空间集成：Docker 连接表单 + WorkspaceDocker 面板
+- **依赖**：0.49.0 Redis 值编辑
+- **版本类型**：minor
+- **版本号**：0.50.0
 
 ### 0.46.0 终端体验补全
 - **核心功能**：补齐 SSH 终端的移动端浮动工具栏、完整右键菜单、延迟显示，以及修复硬编码中文字符串
