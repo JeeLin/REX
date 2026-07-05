@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-07-05
+
+### Added
+- Redis 控制台：新建键对话框，支持创建 String/Hash/List/Set/ZSet 类型的键
+- Redis 值查看器：内联编辑模式，支持修改 String 值、Hash 字段、List 元素、Set 成员、ZSet 成员及分数
+- Redis 值查看器：编辑模式下支持添加和删除字段/元素/成员
+
 ## [0.48.0] - 2026-07-05
 
 ### Added
