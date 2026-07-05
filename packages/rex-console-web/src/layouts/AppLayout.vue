@@ -175,7 +175,7 @@
       @mousedown="startResize"
     ></div>
 
-    <main id="main-content" class="main-content" :class="{ 'no-header': route.meta.noHeader }" :style="{ marginLeft: effectiveCollapsed ? '60px' : sidebarWidth + 'px' }">
+    <main id="main-content" class="main-content" :class="{ 'no-header': route.meta.noHeader }" :style="{ marginLeft: effectiveCollapsed ? '60px' : sidebarWidth + 'px' }" @touchstart="handleMainTouchStart" @touchend="handleMainTouchEnd">
       <header v-if="!route.meta.noHeader" class="page-header">
         <h1 class="page-title">{{ pageTitle }}</h1>
         <div class="header-actions">
@@ -185,7 +185,11 @@
         </div>
       </header>
       <div class="page-body">
-        <router-view />
+        <router-view v-slot="{ Component }">
+          <Transition :name="isMobile ? 'page-slide' : 'page-fade'" mode="out-in">
+            <component :is="Component" />
+          </Transition>
+        </router-view>
       </div>
     </main>
 
@@ -379,6 +383,26 @@ function openNewConnection() {
 
 const isMobile = ref(false)
 let mobileMqHandler: ((e: MediaQueryListEvent) => void) | null = null
+
+// Back gesture support (swipe right on main content)
+let mainTouchStartX = 0
+let mainTouchStartY = 0
+
+function handleMainTouchStart(e: TouchEvent) {
+  if (!isMobile.value || e.touches.length !== 1) return
+  mainTouchStartX = e.touches[0].clientX
+  mainTouchStartY = e.touches[0].clientY
+}
+
+function handleMainTouchEnd(e: TouchEvent) {
+  if (!isMobile.value) return
+  const deltaX = e.changedTouches[0].clientX - mainTouchStartX
+  const deltaY = Math.abs(e.changedTouches[0].clientY - mainTouchStartY)
+  // Swipe right > 80px and mostly horizontal → go back
+  if (deltaX > 80 && deltaY < 50 && mainTouchStartX < 30) {
+    router.back()
+  }
+}
 
 onMounted(() => {
   fetchEnvs()
@@ -1035,5 +1059,38 @@ onUnmounted(() => {
     font-size: 20px;
     font-weight: bold;
   }
+
+  .bottom-nav-item.active .bottom-nav-icon {
+    animation: nav-bounce 0.3s ease;
+  }
+}
+
+/* ── Page transition animations ── */
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+.page-fade-enter-from,
+.page-fade-leave-to {
+  opacity: 0;
+}
+
+.page-slide-enter-active,
+.page-slide-leave-active {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.page-slide-enter-from {
+  transform: translateX(20px);
+  opacity: 0;
+}
+.page-slide-leave-to {
+  transform: translateX(-20px);
+  opacity: 0;
+}
+
+@keyframes nav-bounce {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
 }
 </style>
