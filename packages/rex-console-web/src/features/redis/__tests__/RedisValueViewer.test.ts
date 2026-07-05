@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, config } from '@vue/test-utils'
 import RedisValueViewer from '../RedisValueViewer.vue'
 
 vi.mock('vue-i18n', () => ({
@@ -7,6 +7,10 @@ vi.mock('vue-i18n', () => ({
     t: (key: string) => key,
   }),
 }))
+
+// Workaround for Vue 3.5 + @vue/test-utils WeakMap issue
+// Disable all automatic stubbing to prevent the WeakMap registration error
+config.global.stubs = false
 
 describe('RedisValueViewer', () => {
   it('renders key name and type badge', () => {

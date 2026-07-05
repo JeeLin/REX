@@ -291,6 +291,7 @@ const selectedDb = ref(0)
 
 // Key browser state
 const keyBrowserKeys = ref<KeyWithType[]>([])
+const searchPattern = ref('*')
 
 // Autocomplete state
 const showAutocomplete = ref(false)
@@ -508,8 +509,6 @@ async function handleSaveZset(key: string, added: { member: string; score: strin
   }
   refreshSelectedKey()
 }
-
-const searchPattern = ref('*')
 
 // Create key state
 const showCreateKey = ref(false)

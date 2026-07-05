@@ -15,8 +15,8 @@ vi.mock('vue-i18n', () => ({
 describe('SqlResults', () => {
   const mockResult = {
     columns: [
-      { name: 'id', type: 'INT' },
-      { name: 'name', type: 'VARCHAR' },
+      { name: 'id', data_type: 'INT' },
+      { name: 'name', data_type: 'VARCHAR' },
     ],
     rows: [
       [1, 'Alice'],
@@ -24,6 +24,7 @@ describe('SqlResults', () => {
       [3, 'Charlie'],
     ],
     elapsed_ms: 15,
+    affected_rows: 0,
   }
 
   it('renders column headers', () => {
@@ -98,9 +99,10 @@ describe('SqlResults', () => {
 
   it('formats NULL cells', () => {
     const resultWithNull = {
-      columns: [{ name: 'val', type: 'TEXT' }],
+      columns: [{ name: 'val', data_type: 'TEXT' }],
       rows: [[null], ['hello']],
       elapsed_ms: 5,
+      affected_rows: 0,
     }
     const wrapper = mount(SqlResults, {
       props: { result: resultWithNull, loading: false },

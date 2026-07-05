@@ -112,7 +112,7 @@ describe('useTabs', () => {
     const id = addTab('S1', 'ssh', 'res-unique-dup')
     // duplicateTab calls addTab with same resourceId, which triggers dedup
     // So it should still be 1 tab (same resource)
-    duplicateTab(id)
+    if (id) duplicateTab(id)
     expect(tabs.value).toHaveLength(1)
   })
 
