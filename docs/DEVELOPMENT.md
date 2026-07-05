@@ -127,7 +127,7 @@ rex-agent = 所有 crate（无前端）
 | 0.48.0 | Redis 键浏览器增强 | ✅ 完成 |
 | 0.49.0 | Redis 值编辑 | ✅ 完成 |
 | 0.50.0 | 前端测试覆盖提升 | ✅ 完成 |
-| 0.51.0 | SQL 工作空间面板增强 | 🔄 当前 |
+| 0.51.0 | SQL 工作空间面板增强 | ✅ 完成 |
 
 ### 0.45.0 SQLite 连接器现代化
 - **核心功能**：将 SQLite 从独立的 SqliteConnector trait 重构为统一的 SqlConnector trait，接入 REST API 层，补齐缺失功能，前端适配新版侧边栏。
