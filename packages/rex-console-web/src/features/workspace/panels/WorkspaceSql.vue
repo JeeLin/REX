@@ -173,7 +173,7 @@ async function handleExportTable(tableName: string) {
 }
 
 function handleTabSave(_id: string) {
-  // TODO: implement save query file flow
+  handleSave()
 }
 
 function handleSave() {
