@@ -34,6 +34,13 @@
       <button class="redis-btn" @click="showHistory = !showHistory">
         {{ t('redis.history') }}
       </button>
+      <button
+        v-if="session.connected.value"
+        class="redis-btn redis-btn-create"
+        @click="showCreateKey = true"
+      >
+        {{ t('redis.keys.createKey') }}
+      </button>
     </div>
 
     <div class="redis-body">
@@ -125,11 +132,133 @@
         </div>
       </div>
     </div>
+
+    <!-- Create Key Modal -->
+    <div v-if="showCreateKey" class="redis-modal-overlay" @click.self="showCreateKey = false">
+      <div class="redis-modal" @click.stop>
+        <div class="redis-modal-header">
+          <span>{{ t('redis.keys.createKeyTitle') }}</span>
+          <button class="redis-modal-close" @click="showCreateKey = false">×</button>
+        </div>
+        <div class="redis-modal-body">
+          <div class="redis-form-row">
+            <label>{{ t('redis.keys.keyName') }}</label>
+            <input
+              v-model="createKeyForm.key"
+              class="redis-form-input"
+              :placeholder="t('redis.keys.keyNamePlaceholder')"
+            />
+          </div>
+          <div class="redis-form-row">
+            <label>{{ t('redis.keys.type') }}</label>
+            <div class="redis-type-selector">
+              <button
+                v-for="t in createKeyTypes"
+                :key="t"
+                class="redis-type-btn"
+                :class="{ active: createKeyForm.type === t }"
+                @click="createKeyForm.type = t"
+              >
+                {{ t }}
+              </button>
+            </div>
+          </div>
+          <div class="redis-form-row">
+            <label>{{ t('redis.keys.value') }}</label>
+            <div v-if="createKeyForm.type === 'string'" class="redis-value-input">
+              <textarea
+                v-model="createKeyForm.stringValue"
+                class="redis-form-textarea"
+                rows="3"
+                :placeholder="t('redis.keys.stringValuePlaceholder')"
+              />
+            </div>
+            <div v-else-if="createKeyForm.type === 'hash'" class="redis-value-input">
+              <div
+                v-for="(entry, idx) in createKeyForm.hashEntries"
+                :key="idx"
+                class="redis-hash-entry"
+              >
+                <input
+                  v-model="entry.field"
+                  class="redis-form-input redis-hash-field"
+                  :placeholder="t('redis.keys.field')"
+                />
+                <input
+                  v-model="entry.value"
+                  class="redis-form-input redis-hash-value"
+                  :placeholder="t('redis.keys.fieldValue')"
+                />
+                <button class="redis-btn redis-btn-sm redis-btn-danger" @click="createKeyForm.hashEntries.splice(idx, 1)">×</button>
+              </div>
+              <button class="redis-btn redis-btn-sm" @click="createKeyForm.hashEntries.push({ field: '', value: '' })">
+                + {{ t('redis.keys.addField') }}
+              </button>
+            </div>
+            <div v-else-if="createKeyForm.type === 'list'" class="redis-value-input">
+              <div v-for="(val, idx) in createKeyForm.listValues" :key="idx" class="redis-list-entry">
+                <input
+                  v-model="createKeyForm.listValues[idx]"
+                  class="redis-form-input"
+                  :placeholder="t('redis.keys.element')"
+                />
+                <button class="redis-btn redis-btn-sm redis-btn-danger" @click="createKeyForm.listValues.splice(idx, 1)">×</button>
+              </div>
+              <button class="redis-btn redis-btn-sm" @click="createKeyForm.listValues.push('')">
+                + {{ t('redis.keys.addElement') }}
+              </button>
+            </div>
+            <div v-else-if="createKeyForm.type === 'set'" class="redis-value-input">
+              <div v-for="(val, idx) in createKeyForm.setMembers" :key="idx" class="redis-list-entry">
+                <input
+                  v-model="createKeyForm.setMembers[idx]"
+                  class="redis-form-input"
+                  :placeholder="t('redis.keys.member')"
+                />
+                <button class="redis-btn redis-btn-sm redis-btn-danger" @click="createKeyForm.setMembers.splice(idx, 1)">×</button>
+              </div>
+              <button class="redis-btn redis-btn-sm" @click="createKeyForm.setMembers.push('')">
+                + {{ t('redis.keys.addMember') }}
+              </button>
+            </div>
+            <div v-else-if="createKeyForm.type === 'zset'" class="redis-value-input">
+              <div v-for="(entry, idx) in createKeyForm.zsetEntries" :key="idx" class="redis-hash-entry">
+                <input
+                  v-model="entry.member"
+                  class="redis-form-input redis-hash-field"
+                  :placeholder="t('redis.keys.member')"
+                />
+                <input
+                  v-model="entry.score"
+                  class="redis-form-input redis-hash-value"
+                  type="number"
+                  :placeholder="t('redis.keys.score')"
+                />
+                <button class="redis-btn redis-btn-sm redis-btn-danger" @click="createKeyForm.zsetEntries.splice(idx, 1)">×</button>
+              </div>
+              <button class="redis-btn redis-btn-sm" @click="createKeyForm.zsetEntries.push({ member: '', score: '0' })">
+                + {{ t('redis.keys.addMember') }}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="redis-modal-footer">
+          <button class="redis-btn" @click="showCreateKey = false">{{ t('common.cancel') }}</button>
+          <button
+            class="redis-btn redis-btn-create"
+            :disabled="!createKeyForm.key.trim()"
+            @click="handleCreateKey"
+          >
+            {{ t('redis.keys.create') }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, nextTick, onMounted, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRedisSession } from './useRedisSession'
 import RedisResult from './RedisResult.vue'
@@ -319,6 +448,68 @@ async function handleKeyBrowserSetTtl(key: string, seconds: number) {
 }
 
 const searchPattern = ref('*')
+
+// Create key state
+const showCreateKey = ref(false)
+const createKeyTypes = ['string', 'hash', 'list', 'set', 'zset']
+const createKeyForm = reactive({
+  key: '',
+  type: 'string',
+  stringValue: '',
+  hashEntries: [{ field: '', value: '' }],
+  listValues: [''],
+  setMembers: [''],
+  zsetEntries: [{ member: '', score: '0' }],
+})
+
+async function handleCreateKey() {
+  if (!session.connected.value || !createKeyForm.key.trim()) return
+  const key = createKeyForm.key.trim()
+
+  try {
+    switch (createKeyForm.type) {
+      case 'string':
+        await session.execute(`SET ${key} ${createKeyForm.stringValue}`)
+        break
+      case 'hash':
+        for (const entry of createKeyForm.hashEntries) {
+          if (entry.field.trim()) {
+            await session.execute(`HSET ${key} ${entry.field} ${entry.value}`)
+          }
+        }
+        break
+      case 'list':
+        for (const val of createKeyForm.listValues) {
+          if (val.trim()) await session.execute(`RPUSH ${key} ${val}`)
+        }
+        break
+      case 'set':
+        for (const member of createKeyForm.setMembers) {
+          if (member.trim()) await session.execute(`SADD ${key} ${member}`)
+        }
+        break
+      case 'zset':
+        for (const entry of createKeyForm.zsetEntries) {
+          if (entry.member.trim()) {
+            await session.execute(`ZADD ${key} ${entry.score} ${entry.member}`)
+          }
+        }
+        break
+    }
+    showCreateKey.value = false
+    // Reset form
+    createKeyForm.key = ''
+    createKeyForm.stringValue = ''
+    createKeyForm.hashEntries = [{ field: '', value: '' }]
+    createKeyForm.listValues = ['']
+    createKeyForm.setMembers = ['']
+    createKeyForm.zsetEntries = [{ member: '', score: '0' }]
+    // Refresh key browser
+    handleKeyBrowserSearch(searchPattern.value || '*')
+  } catch {
+    // errors are shown in console output
+  }
+}
 
 async function handleKeydown(e: KeyboardEvent) {
   // Autocomplete navigation
@@ -578,5 +769,174 @@ onMounted(() => {
 .redis-autocomplete-item.active {
   background: var(--bg-hover);
   color: var(--accent);
+}
+
+/* Create Key Modal */
+.redis-btn-create {
+  border-color: #3fb950;
+  color: #3fb950;
+}
+
+.redis-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.redis-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  width: 480px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.redis-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-primary);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.redis-modal-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.redis-modal-close:hover {
+  color: var(--text-primary);
+}
+
+.redis-modal-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.redis-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.redis-form-row {
+  margin-bottom: 12px;
+}
+
+.redis-form-row label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.redis-form-input {
+  width: 100%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.redis-form-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.redis-form-textarea {
+  width: 100%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.redis-form-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.redis-type-selector {
+  display: flex;
+  gap: 4px;
+}
+
+.redis-type-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-secondary);
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.redis-type-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.redis-value-input {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.redis-hash-entry,
+.redis-list-entry {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.redis-hash-field {
+  flex: 1;
+}
+
+.redis-hash-value {
+  flex: 1;
+}
+
+.redis-btn-danger {
+  color: #f85149;
+  border-color: #f85149;
+}
+
+.redis-btn-danger:hover {
+  background: #f8514922;
+}
+
+.redis-btn-sm {
+  padding: 3px 8px;
+  font-size: 11px;
 }
 </style>
