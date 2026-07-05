@@ -203,7 +203,7 @@ function handleFormat() {
 }
 
 function handleTabRename(id: string) {
-  const newTitle = prompt('输入新名称:')
+  const newTitle = prompt(t('sql.sidebar.renamePrompt'))
   if (newTitle) renameTab(id, newTitle)
 }
 
