@@ -1063,4 +1063,64 @@ function onKeyDown(e: KeyboardEvent) {
   from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }
 }
+
+/* ── Mobile Layout ── */
+@media (max-width: 767px) {
+  .ws-tabbar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .ws-tab-name {
+    max-width: 80px;
+    font-size: var(--fs-xs);
+  }
+
+  .ws-tab-close {
+    opacity: 1;
+  }
+
+  .layout-indicator {
+    display: none;
+  }
+
+  .ws-content.layout-split {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: 1fr !important;
+  }
+
+  .ws-content.layout-split .ws-panel:not(.active) {
+    display: none;
+  }
+
+  .conn-menu {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    border-radius: 0;
+    margin: 0;
+  }
+
+  .conn-menu-overlay {
+    padding-top: 0;
+  }
+}
+
+/* ── Small Mobile (< 480px) ── */
+@media (max-width: 479px) {
+  .ws-tabbar {
+    height: 32px;
+    padding: 0 var(--sp-xs);
+  }
+
+  .ws-tab {
+    padding: 4px var(--sp-sm);
+    font-size: var(--fs-xs);
+  }
+
+  .ws-tab-name {
+    max-width: 60px;
+  }
+}
 </style>
