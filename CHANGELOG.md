@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.65.0] - 2026-07-06
+
+### Added
+- 仪表盘：移动端统计卡片 2 列、环境卡片单列、快速连接紧凑显示
+- 环境管理：移动端卡片单列、资源表格水平滚动
+- 资源创建向导：移动端协议选择 2 列、表单全宽
+
 ## [0.64.0] - 2026-07-06
 
 ### Added
