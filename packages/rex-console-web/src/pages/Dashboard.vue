@@ -253,7 +253,7 @@ async function confirmDeleteEnv() {
 
 function onStatCardCtx(e: MouseEvent) {
   showMenu(e, [
-    { label: t('ctx.refreshStats'), action: () => location.reload() },
+    { label: t('ctx.refreshStats'), action: () => refreshStats() },
   ])
 }
 
