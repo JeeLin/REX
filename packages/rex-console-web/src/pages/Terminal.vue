@@ -337,6 +337,16 @@ function confirmDisconnect() {
   showDisconnectDialog.value = true
 }
 
+function handleToolbarAction(e: Event) {
+  const type = (e as CustomEvent).detail
+  switch (type) {
+    case 'clear': clearTerminal(); break
+    case 'sftp': toggleSftp(); break
+    case 'fullscreen': toggleFullscreen(); break
+    case 'disconnect': confirmDisconnect(); break
+  }
+}
+
 async function doDisconnect() {
   showDisconnectDialog.value = false
   ws?.close()
@@ -351,7 +361,7 @@ function handleFullscreenChange() {
 }
 
 function checkMobile() {
-  isMobile.value = window.innerWidth < 768 || 'ontouchstart' in window
+  isMobile.value = window.innerWidth < 768
 }
 
 function handleFontSizeChange(delta: number) {
@@ -391,6 +401,7 @@ onMounted(async () => {
   window.addEventListener('keydown', handleKeydown)
   window.addEventListener('resize', checkMobile)
   document.addEventListener('fullscreenchange', handleFullscreenChange)
+  window.addEventListener('toolbar-action', handleToolbarAction)
   checkMobile()
 })
 
@@ -400,8 +411,10 @@ onBeforeUnmount(() => {
     deleteSession(sessionId).catch(() => {})
   }
   window.removeEventListener('resize', handleResize)
+  window.removeEventListener('resize', checkMobile)
   window.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  window.removeEventListener('toolbar-action', handleToolbarAction)
   terminal?.dispose()
 })
 </script>

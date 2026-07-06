@@ -18,11 +18,11 @@
     <div class="toolbar-row function-keys">
       <button class="toolbar-btn func-btn" @click="$emit('openHistory')">
         <span class="btn-icon">📜</span>
-        <span class="btn-label">{{ t('terminal.mobile.history') }}</span>
+        <span class="btn-label">{{ t('ws.terminal.mobile.history') }}</span>
       </button>
       <button class="toolbar-btn func-btn" @click="$emit('openPaste')">
         <span class="btn-icon">📋</span>
-        <span class="btn-label">{{ t('terminal.mobile.paste') }}</span>
+        <span class="btn-label">{{ t('ws.terminal.mobile.paste') }}</span>
       </button>
       <div class="toolbar-sep"></div>
       <button class="toolbar-btn func-btn" @click="$emit('fontSizeChange', -1)">A-</button>
@@ -30,7 +30,7 @@
       <div class="toolbar-sep"></div>
       <button class="toolbar-btn func-btn" @click="showMoreMenu = !showMoreMenu">
         <span class="btn-icon">⚙</span>
-        <span class="btn-label">{{ t('terminal.mobile.more') }}</span>
+        <span class="btn-label">{{ t('ws.terminal.mobile.more') }}</span>
       </button>
     </div>
 
