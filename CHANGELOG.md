@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.66.0] - 2026-07-06
+
+### Added
+- S3/MinIO 控制台：移动端桶列表单列、工具栏紧凑排列、路径可水平滚动
+- SQLite 控制台：移动端工具栏换行、侧边栏全宽、结果表格水平滚动
+- 工作空间面板：通用移动端工具栏紧凑、padding 调整
+
 ## [0.65.0] - 2026-07-06
 
 ### Added
