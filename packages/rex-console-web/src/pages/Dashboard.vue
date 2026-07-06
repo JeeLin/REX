@@ -152,6 +152,7 @@ const todayOps = ref(0)
 const allResources = ref<{ resource: { id: string; name: string; protocol: string; config_json: string }; envName: string }[]>([])
 const loading = ref(true)
 const loadError = ref('')
+let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 function getResourceAddress(configJson: string, protocol: string): string {
   try {
@@ -246,7 +247,36 @@ function onStatCardCtx(e: MouseEvent) {
   ])
 }
 
-onMounted(() => loadData())
+onMounted(() => {
+  loadData()
+  refreshTimer = setInterval(refreshStats, 60000)
+})
+
+onUnmounted(() => {
+  if (refreshTimer) clearInterval(refreshTimer)
+})
+
+async function refreshStats() {
+  try {
+    const envsWithRes = await listEnvsWithResources()
+    environments.value = envsWithRes
+    envCount.value = envsWithRes.length
+    const allRes: { resource: { id: string; name: string; protocol: string; config_json: string }; envName: string }[] = []
+    for (const env of envsWithRes) {
+      for (const res of env.resources) {
+        allRes.push({ resource: res, envName: env.name })
+      }
+    }
+    allResources.value = allRes
+    resourceCount.value = allRes.length
+    const stats = await getAuditStats('today')
+    todayOps.value = stats.total
+    const health = await fetchHealth()
+    agentOnlineCount.value = health.connections.agents_online
+  } catch {
+    // silent — keep stale data
+  }
+}
 
 async function loadData() {
   loading.value = true
