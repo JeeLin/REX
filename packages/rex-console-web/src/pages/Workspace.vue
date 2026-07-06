@@ -7,8 +7,8 @@
           <span>{{ layoutIcon }}</span>
           <span class="layout-label">{{ layoutLabel }}</span>
         </div>
-        <button class="ws-tab-add" :title="t('ws.workspace.fullscreen')" style="font-size: 13px" @click="toggleFullscreen">⛶</button>
-        <button class="ws-tab-add" :title="t('ws.workspace.shortcutsTitle')" style="font-size: 12px" @click="showShortcutsPanel = true">⌨</button>
+        <button class="ws-tab-add" :title="t('ws.fullscreen')" style="font-size: 13px" @click="toggleFullscreen">⛶</button>
+        <button class="ws-tab-add" :title="t('ws.shortcuts.title')" style="font-size: 12px" @click="showShortcutsPanel = true">⌨</button>
       </template>
     </TabBar>
 
@@ -19,8 +19,8 @@
         <div class="ws-empty-icon">💻</div>
         <div class="ws-empty-text">{{ t('ws.empty.noSessions') }}</div>
         <div class="ws-empty-hint">
-          {{ t('ws.workspace.empty.hint') }}<br />
-          <span v-html="t('ws.workspace.empty.shortcutsHint')"></span>
+          {{ t('ws.empty.hint') }}<br />
+          <span v-html="t('ws.empty.shortcutsHint')"></span>
         </div>
       </div>
 
@@ -80,7 +80,7 @@
               <div v-else class="panel-unsupported">
                 <span :style="{ color: getProtocolIcon(tab.proto).color }">{{ getProtocolIcon(tab.proto).icon }}</span>
                 <div class="panel-unsupported-text">{{ tab.name }}</div>
-                <div class="panel-unsupported-hint">{{ t('ws.workspace.empty.unsupported', { proto: tab.proto.toUpperCase() }) }}</div>
+                <div class="panel-unsupported-hint">{{ t('ws.empty.unsupported', { proto: tab.proto.toUpperCase() }) }}</div>
               </div>
             </div>
           </template>
@@ -154,11 +154,11 @@
             <div v-else class="panel-unsupported">
               <span :style="{ color: getProtocolIcon(getPanelTab(i - 1)!.proto).color }">{{ getProtocolIcon(getPanelTab(i - 1)!.proto).icon }}</span>
               <div class="panel-unsupported-text">{{ getPanelTab(i - 1)!.name }}</div>
-              <div class="panel-unsupported-hint">{{ t('ws.workspace.empty.unsupported', { proto: getPanelTab(i - 1)!.proto.toUpperCase() }) }}</div>
+              <div class="panel-unsupported-hint">{{ t('ws.empty.unsupported', { proto: getPanelTab(i - 1)!.proto.toUpperCase() }) }}</div>
             </div>
           </template>
           <div v-else class="panel-empty">
-            <span class="panel-empty-text">{{ t('ws.workspace.empty.panelEmpty', { n: i }) }}</span>
+            <span class="panel-empty-text">{{ t('ws.empty.panelEmpty', { n: i }) }}</span>
           </div>
         </div>
       </template>
@@ -202,11 +202,11 @@
               <span class="cmi-proto">{{ res.protocol.toUpperCase() }}</span>
             </div>
           </template>
-          <div v-if="flatFilteredResources.length === 0" class="conn-menu-empty">{{ t('ws.workspace.empty.connEmpty') }}</div>
+          <div v-if="flatFilteredResources.length === 0" class="conn-menu-empty">{{ t('ws.empty.connEmpty') }}</div>
         </div>
         <div class="conn-menu-footer">
-          <span>{{ t('ws.workspace.empty.connHint') }}</span>
-          <span>{{ t('ws.workspace.empty.connClose') }}</span>
+          <span>{{ t('ws.empty.connHint') }}</span>
+          <span>{{ t('ws.empty.connClose') }}</span>
         </div>
       </div>
     </div>
@@ -222,28 +222,28 @@
     <!-- 快捷键面板 -->
     <div v-if="showShortcutsPanel" class="shortcuts-overlay" @click="showShortcutsPanel = false">
       <div class="shortcuts-card" @click.stop>
-        <h2>⌨ {{ t('ws.workspace.shortcutsTitle') }}</h2>
+        <h2>⌨ {{ t('ws.shortcuts.title') }}</h2>
         <div class="shortcut-group">
-          <div class="shortcut-group-title">{{ t('ws.workspace.shortcutsTab') }}</div>
-          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.newTab') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>N</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.closeTab') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>W</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.nextTab') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>Tab</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.prevTab') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>Shift</kbd><span class="key-plus">+</span><kbd>Tab</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.tabN') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>1~9</kbd></span></div>
+          <div class="shortcut-group-title">{{ t('ws.shortcuts.tab') }}</div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.shortcuts.newTab') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>N</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.shortcuts.closeTab') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>W</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.shortcuts.nextTab') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>Tab</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.shortcuts.prevTab') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>Shift</kbd><span class="key-plus">+</span><kbd>Tab</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.shortcuts.tabN') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>1~9</kbd></span></div>
         </div>
         <div class="shortcut-group">
-          <div class="shortcut-group-title">{{ t('ws.workspace.shortcutsLayout') }}</div>
-          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.layoutSingle') }}</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>1</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.layoutLeftRight') }}</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>2</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.layoutTopBottom') }}</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>3</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.layoutQuad') }}</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>4</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.layoutSidebarMain') }}</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>5</kbd></span></div>
+          <div class="shortcut-group-title">{{ t('ws.shortcuts.layout') }}</div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.shortcuts.layoutSingle') }}</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>1</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.shortcuts.layoutLeftRight') }}</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>2</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.shortcuts.layoutTopBottom') }}</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>3</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.shortcuts.layoutQuad') }}</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>4</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.shortcuts.layoutSidebarMain') }}</span><span class="keys"><kbd>Alt</kbd><span class="key-plus">+</span><kbd>5</kbd></span></div>
         </div>
         <div class="shortcut-group">
-          <div class="shortcut-group-title">{{ t('ws.workspace.shortcutsOther') }}</div>
-          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.globalSearch') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>K</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.toggleFullscreen') }}</span><span class="keys"><kbd>F11</kbd></span></div>
-          <div class="shortcut-row"><span class="desc">{{ t('ws.workspace.shortcuts.help') }}</span><span class="keys"><kbd>F1</kbd></span></div>
+          <div class="shortcut-group-title">{{ t('ws.shortcuts.other') }}</div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.shortcuts.globalSearch') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>K</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.shortcuts.toggleFullscreen') }}</span><span class="keys"><kbd>F11</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.shortcuts.help') }}</span><span class="keys"><kbd>F1</kbd></span></div>
         </div>
       </div>
     </div>
