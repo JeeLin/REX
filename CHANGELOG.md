@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.61.0] - 2026-07-06
+
+### Added
+- Agent 管理：移动端卡片单列布局和操作按钮紧凑排列
+- Agent 日志查看器：移动端全屏显示、筛选栏换行、日志行水平滚动
+- Agent 配置弹窗：移动端全屏显示、表单单列布局
+
 ## [0.60.0] - 2026-07-06
 
 ### Changed
