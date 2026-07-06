@@ -67,15 +67,15 @@
       <div class="sidebar-options">
         <div
           class="sidebar-option"
-          :class="{ active: !appearanceSettings.sidebarCollapsible }"
-          @click="updateAppearanceSetting('sidebarCollapsible', false)"
+          :class="{ active: !settingsStore.appearanceSettings.sidebarCollapsible }"
+          @click="settingsStore.updateAppearanceSetting('sidebarCollapsible', false)"
         >
           {{ t('settings.appearance.sidebarFixed') }}
         </div>
         <div
           class="sidebar-option"
-          :class="{ active: appearanceSettings.sidebarCollapsible }"
-          @click="updateAppearanceSetting('sidebarCollapsible', true)"
+          :class="{ active: settingsStore.appearanceSettings.sidebarCollapsible }"
+          @click="settingsStore.updateAppearanceSetting('sidebarCollapsible', true)"
         >
           {{ t('settings.appearance.sidebarCollapsible') }}
         </div>
@@ -87,11 +87,12 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useUserStore, type Lang } from '@/stores/user'
-import { appearanceSettings, updateAppearanceSetting } from '@/stores/settings'
+import { useSettingsStore } from '@/stores/settings'
 import SettingsSection from './SettingsSection.vue'
 
 const { t } = useI18n()
 const userStore = useUserStore()
+const settingsStore = useSettingsStore()
 
 function switchLang(lang: Lang) {
   userStore.setLang(lang)

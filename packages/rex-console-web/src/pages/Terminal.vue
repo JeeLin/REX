@@ -83,13 +83,14 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { createSession, deleteSession } from '@/api/terminal'
-import { terminalSettings } from '@/stores/settings'
+import { useSettingsStore } from '@/stores/settings'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import TerminalSftp from '@/features/terminal/TerminalSftp.vue'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const settingsStore = useSettingsStore()
 const resourceId = route.params.resourceId as string
 
 const terminalContainer = ref<HTMLElement>()
@@ -109,15 +110,15 @@ function initTerminal() {
   if (!terminalContainer.value) return
 
   terminal = new Terminal({
-    fontFamily: `'${terminalSettings.fontFamily}', 'Fira Code', monospace`,
-    fontSize: terminalSettings.fontSize,
+    fontFamily: `'${settingsStore.terminalSettings.fontFamily}', 'Fira Code', monospace`,
+    fontSize: settingsStore.terminalSettings.fontSize,
     theme: {
       background: '#0D1117',
       foreground: '#E6EDF3',
       cursor: '#E8912D',
       cursorAccent: '#0D1117',
     },
-    cursorBlink: terminalSettings.cursorBlink,
+    cursorBlink: settingsStore.terminalSettings.cursorBlink,
   })
 
   fitAddon = new FitAddon()
@@ -339,13 +340,13 @@ function handleFullscreenChange() {
 }
 
 // ── Watch terminal settings ──
-watch(() => terminalSettings.fontSize, (val) => {
+watch(() => settingsStore.terminalSettings.fontSize, (val) => {
   if (terminal) terminal.options.fontSize = val
 })
-watch(() => terminalSettings.fontFamily, (val) => {
+watch(() => settingsStore.terminalSettings.fontFamily, (val) => {
   if (terminal) terminal.options.fontFamily = `'${val}', 'Fira Code', monospace`
 })
-watch(() => terminalSettings.cursorBlink, (val) => {
+watch(() => settingsStore.terminalSettings.cursorBlink, (val) => {
   if (terminal) terminal.options.cursorBlink = val
 })
 

@@ -8,7 +8,7 @@
         <div class="settings-row-label">{{ t('settings.security.sessionTimeout') }}</div>
         <div class="settings-row-desc">{{ t('settings.security.sessionTimeoutDesc') }}</div>
       </div>
-      <select class="form-select" :value="securitySettings.sessionTimeout" @change="setSessionTimeout">
+      <select class="form-select" :value="settingsStore.securitySettings.sessionTimeout" @change="setSessionTimeout">
         <option value="15">{{ t('settings.security.timeout15') }}</option>
         <option value="30">{{ t('settings.security.timeout30') }}</option>
         <option value="60">{{ t('settings.security.timeout60') }}</option>
@@ -21,7 +21,7 @@
         <div class="settings-row-label">{{ t('settings.security.configEncryption') }}</div>
         <div class="settings-row-desc">{{ t('settings.security.configEncryptionDesc') }}</div>
       </div>
-      <div class="settings-toggle" :class="{ active: securitySettings.configEncryption }" @click="toggleConfigEncryption"></div>
+      <div class="settings-toggle" :class="{ active: settingsStore.securitySettings.configEncryption }" @click="toggleConfigEncryption"></div>
     </div>
     <!-- Audit Log Toggle -->
     <div class="settings-row">
@@ -29,10 +29,10 @@
         <div class="settings-row-label">{{ t('settings.security.auditLog') }}</div>
         <div class="settings-row-desc">{{ t('settings.security.auditLogDesc') }}</div>
       </div>
-      <div class="settings-toggle" :class="{ active: securitySettings.auditEnabled }" @click="toggleAudit"></div>
+      <div class="settings-toggle" :class="{ active: settingsStore.securitySettings.auditEnabled }" @click="toggleAudit"></div>
     </div>
     <!-- View Audit Log (only when enabled) -->
-    <div v-if="securitySettings.auditEnabled" class="settings-row">
+    <div v-if="settingsStore.securitySettings.auditEnabled" class="settings-row">
       <div class="settings-row-info">
         <div class="settings-row-label">{{ t('settings.security.viewAuditLog') }}</div>
         <div class="settings-row-desc">{{ t('settings.security.viewAuditLogDesc') }}</div>
@@ -47,21 +47,22 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import SettingsSection from './SettingsSection.vue'
-import { securitySettings, updateSecuritySetting } from '@/stores/settings'
+import { useSettingsStore } from '@/stores/settings'
 
 const { t } = useI18n()
+const settingsStore = useSettingsStore()
 
 function setSessionTimeout(e: Event) {
-  updateSecuritySetting('sessionTimeout', Number((e.target as HTMLSelectElement).value))
+  settingsStore.updateSecuritySetting('sessionTimeout', Number((e.target as HTMLSelectElement).value))
 }
 
 function toggleAudit() {
-  updateSecuritySetting('auditEnabled', !securitySettings.auditEnabled)
-  window.dispatchEvent(new CustomEvent('audit-toggle', { detail: { enabled: securitySettings.auditEnabled } }))
+  settingsStore.updateSecuritySetting('auditEnabled', !settingsStore.securitySettings.auditEnabled)
+  window.dispatchEvent(new CustomEvent('audit-toggle', { detail: { enabled: settingsStore.securitySettings.auditEnabled } }))
 }
 
 function toggleConfigEncryption() {
-  updateSecuritySetting('configEncryption', !securitySettings.configEncryption)
+  settingsStore.updateSecuritySetting('configEncryption', !settingsStore.securitySettings.configEncryption)
 }
 </script>
 

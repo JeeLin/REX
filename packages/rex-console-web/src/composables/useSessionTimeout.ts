@@ -1,6 +1,6 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { securitySettings } from '@/stores/settings'
+import { useSettingsStore } from '@/stores/settings'
 
 const lastActivity = ref(Date.now())
 let timer: ReturnType<typeof setInterval> | null = null
@@ -15,13 +15,14 @@ function handleActivity() {
 
 export function useSessionTimeout() {
   const router = useRouter()
+  const settingsStore = useSettingsStore()
 
   function startTimer() {
     stopTimer()
     timer = setInterval(() => {
-      if (securitySettings.sessionTimeout === 0) return // "never"
+      if (settingsStore.securitySettings.sessionTimeout === 0) return // "never"
       const elapsed = (Date.now() - lastActivity.value) / 1000 / 60 // minutes
-      if (elapsed >= securitySettings.sessionTimeout) {
+      if (elapsed >= settingsStore.securitySettings.sessionTimeout) {
         localStorage.removeItem('rex-token')
         localStorage.removeItem('rex-expires-at')
         router.push('/login')
@@ -50,7 +51,7 @@ export function useSessionTimeout() {
     stopTimer()
   })
 
-  watch(() => securitySettings.sessionTimeout, () => {
+  watch(() => settingsStore.securitySettings.sessionTimeout, () => {
     resetTimer()
     startTimer()
   })

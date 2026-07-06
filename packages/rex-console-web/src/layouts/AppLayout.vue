@@ -160,7 +160,7 @@
           <span class="nav-icon">⚙</span>
           <span v-show="!effectiveCollapsed">{{ t('nav.settings') }}</span>
         </router-link>
-        <button v-if="appearanceSettings.sidebarCollapsible" class="nav-item collapse-btn" @click="toggleCollapse">
+        <button v-if="settingsStore.appearanceSettings.sidebarCollapsible" class="nav-item collapse-btn" @click="toggleCollapse">
           <span class="nav-icon">{{ effectiveCollapsed ? '»' : '«' }}</span>
           <span v-show="!effectiveCollapsed">{{ effectiveCollapsed ? t('sidebar.expand') : t('sidebar.collapse') }}</span>
         </button>
@@ -236,9 +236,10 @@ import ResourceEditModal from '@/components/ResourceEditModal.vue'
 import { getProtocolIcon } from '@/composables/useProtocol'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useRecent } from '@/composables/useRecent'
-import { securitySettings, appearanceSettings } from '@/stores/settings'
+import { useSettingsStore } from '@/stores/settings'
 
 const { recent, clearRecent } = useRecent()
+const settingsStore = useSettingsStore()
 
 const route = useRoute()
 const router = useRouter()
@@ -254,7 +255,7 @@ const editModalResourceId = ref('')
 
 const lang = computed(() => userStore.lang)
 const langDisplay = computed(() => lang.value === 'zh' ? t('settings.appearance.languageZh') : t('settings.appearance.languageEn'))
-const auditEnabled = computed(() => securitySettings.auditEnabled)
+const auditEnabled = computed(() => settingsStore.securitySettings.auditEnabled)
 
 const {
   collapsed,
@@ -275,7 +276,7 @@ const {
 } = useSidebar()
 
 // 侧边栏可折叠设置：固定模式下强制展开
-const sidebarFixed = computed(() => !appearanceSettings.sidebarCollapsible)
+const sidebarFixed = computed(() => !settingsStore.appearanceSettings.sidebarCollapsible)
 const effectiveCollapsed = computed(() => sidebarFixed.value ? false : collapsed.value)
 
 const isEnvPage = computed(() => {
