@@ -136,7 +136,7 @@
     </div>
 
     <!-- Pagination Controls -->
-    <div v-if="result && result.rows.length > pageSize" class="pagination-controls">
+    <div v-if="result && result.rows.length > pageSize" class="results-footer">
       <div class="page-size-selector">
         <label>{{ t('sql.pagination.pageSize') }}:</label>
         <select v-model="pageSize" class="page-size-select">
@@ -567,18 +567,6 @@ function handleRowContextMenu(event: MouseEvent, paginatedIdx: number) {
 }
 
 /* Pagination Controls */
-.pagination-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--sp-xs) var(--sp-md);
-  background: var(--bg-surface);
-  border-top: 1px solid var(--border);
-  font-size: var(--fs-xs);
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
 .page-size-selector {
   display: flex;
   align-items: center;

@@ -28,8 +28,9 @@ export function useSqlTabActions(
 
   const tabList = computed(() =>
     tabs.value.map((t) => {
-      const subtitle = t.sql.trim()
-        ? t.sql.trim().split('\n')[0].substring(0, 30)
+      const trimmed = t.sql.trim()
+      const subtitle = trimmed
+        ? trimmed.split('\n')[0].substring(0, 30)
         : undefined
       return { id: t.id, title: t.title, queryId: t.queryId, subtitle }
     }),
