@@ -134,19 +134,3 @@ export const useSettingsStore = defineStore('settings', () => {
     loadSettingsFromBackend,
   }
 })
-
-// Re-export for backward compatibility — consumers import from this module directly
-export { useSettingsStore as settingsStore }
-
-/** Convenience accessors for components that only need to read values */
-export function getTerminalSettings() {
-  return useSettingsStore().terminalSettings
-}
-
-export function getSecuritySettings() {
-  return useSettingsStore().securitySettings
-}
-
-export function getAppearanceSettings() {
-  return useSettingsStore().appearanceSettings
-}
