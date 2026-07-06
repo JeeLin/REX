@@ -74,6 +74,19 @@
       @change="onFileSelect"
     />
 
+    <!-- 移动端浮动工具栏 -->
+    <FileMobileToolbar
+      :visible="isMobile"
+      :selected-count="selectedPaths.length"
+      @upload="triggerUpload"
+      @new-file="showTouchDialog = true"
+      @new-folder="showMkdirDialog = true"
+      @refresh="loadFiles()"
+      @download="handleDownload"
+      @delete="handleDelete"
+      @select-all="selectedPaths = entries.map(e => e.path)"
+    />
+
     <!-- Status Bar -->
     <div class="files-statusbar">
       <span>{{ resourceName }}</span>
@@ -232,6 +245,7 @@ import { useToast } from '@/composables/useToast'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import FileBreadcrumb from '@/features/files/FileBreadcrumb.vue'
 import FileList from '@/features/files/FileList.vue'
+import FileMobileToolbar from '@/features/files/FileMobileToolbar.vue'
 import TransferQueuePanel from '@/features/files/TransferQueuePanel.vue'
 import type { FileEntry } from '@/api/files'
 import type { TransferEndpoint } from '@/api/transfer'
@@ -242,6 +256,11 @@ const { t } = useI18n()
 const { success, error: toastError } = useToast()
 const resourceId = route.params.resourceId as string
 const resourceName = ref(resourceId)
+const isMobile = ref(false)
+
+function checkMobile() {
+  isMobile.value = window.innerWidth < 768
+}
 
 const {
   currentPath,
@@ -491,11 +510,14 @@ function closeContextMenu() {
 
 onMounted(async () => {
   document.addEventListener('click', closeContextMenu)
+  window.addEventListener('resize', checkMobile)
+  checkMobile()
   await loadFiles()
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', closeContextMenu)
+  window.removeEventListener('resize', checkMobile)
 })
 </script>
 
