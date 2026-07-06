@@ -318,4 +318,29 @@ watch(filteredLogs, async () => {
   color: var(--text-muted);
   flex-shrink: 0;
 }
+
+@media (max-width: 767px) {
+  .log-panel {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+
+  .log-toolbar {
+    flex-wrap: wrap;
+    padding: var(--sp-sm);
+  }
+
+  .log-body {
+    padding: var(--sp-sm);
+    min-height: 0;
+    overflow-x: auto;
+  }
+
+  .log-line {
+    min-width: max-content;
+  }
+}
 </style>
