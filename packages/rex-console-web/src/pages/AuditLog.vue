@@ -723,6 +723,23 @@ function exportCsv() {
 
   .audit-stats {
     flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-sm);
+  }
+
+  .audit-table-wrap {
+    overflow-x: auto;
+  }
+
+  .audit-table {
+    min-width: 600px;
+  }
+
+  .audit-table th,
+  .audit-table td {
+    padding: var(--sp-sm) var(--sp-md);
+    font-size: var(--fs-xs);
   }
 
   .audit-table th:nth-child(4),
