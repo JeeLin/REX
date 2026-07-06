@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.64.0] - 2026-07-06
+
+### Added
+- 工作空间：连接菜单触摸目标增大、标签栏触摸区域优化、快捷键面板移动端适配
+
 ## [0.63.0] - 2026-07-06
 
 ### Added
