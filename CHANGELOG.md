@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.60.0] - 2026-07-06
+
+### Changed
+- 提取 MobileToolbar 共享组件，消除三个移动端浮动工具栏的重复 CSS
+
+### Fixed
+- 清理前端 Lint 警告（39 → 0）
+
+### Added
+- MobileToolbar 共享组件单元测试
+
 ## [0.59.0] - 2026-07-06
 
 ### Added
