@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.63.0] - 2026-07-06
+
+### Added
+- 设置页：移动端全宽布局、设置区块减小内边距、设置行垂直排列
+
 ## [0.62.0] - 2026-07-06
 
 ### Added
