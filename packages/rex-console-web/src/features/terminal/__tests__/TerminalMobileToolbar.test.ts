@@ -14,6 +14,7 @@ describe('TerminalMobileToolbar', () => {
     textarea: {
       dispatchEvent: vi.fn(),
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any)
 
   it('renders all direction key buttons', () => {

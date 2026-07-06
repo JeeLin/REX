@@ -387,7 +387,7 @@ async function handleViewDefinition(name: string, type: 'table' | 'view' | 'proc
   try {
     const { ddl } = await getDdl(props.resourceId, props.database, name, type)
     emit('open-sql-tab', `${type} ${name} — DDL`, ddl)
-  } catch (e) {
+  } catch {
     toast.error(t('sql.toast.definitionFailed'))
   }
 }

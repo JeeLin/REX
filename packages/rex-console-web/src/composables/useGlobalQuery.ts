@@ -18,6 +18,7 @@ interface GlobalQueryEvent {
   data?: {
     connection_id?: string
     connectionId?: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     data?: any[]
     columns?: string[]
     row_count?: number
@@ -37,6 +38,7 @@ export function useGlobalQuery(resources: SqlResource[]) {
   const results = ref<Array<{
     connectionId: string
     connectionName: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     data: any[]
     columns: string[]
     rowCount: number

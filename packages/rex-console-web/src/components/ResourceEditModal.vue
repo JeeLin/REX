@@ -153,7 +153,7 @@
 <script setup lang="ts">
 import { reactive, ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getResource, updateResource, type Resource } from '@/api/env'
+import { getResource, updateResource } from '@/api/env'
 import { useSidebar } from '@/composables/useSidebar'
 
 const props = defineProps<{
@@ -213,6 +213,7 @@ function parseConfigJson(configJson: string) {
   try { return JSON.parse(configJson) } catch { return {} }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function loadResource(cfg: Record<string, any>, protocol: string) {
   if (protocol === 'redis') {
     redisConfig.host = cfg.host || '127.0.0.1'

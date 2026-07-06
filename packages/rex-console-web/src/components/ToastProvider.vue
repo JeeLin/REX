@@ -15,7 +15,9 @@
           class="toast-close"
           :aria-label="t('common.close')"
           @click.stop="remove(toast.id)"
-        >×</button>
+        >
+          ×
+        </button>
       </div>
     </TransitionGroup>
   </div>

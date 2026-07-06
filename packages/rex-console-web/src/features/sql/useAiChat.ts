@@ -1,4 +1,4 @@
-import { ref, computed } from "vue";
+import { ref } from "vue";
 import {
   getAiConfig,
   sendAiMessage,
@@ -22,8 +22,6 @@ export function useAiChat(context: AiContext) {
   const isStreaming = ref(false);
   const config = ref<AiConfigResponse | null>(null);
   const abortController = ref<AbortController | null>(null);
-
-  const isOpen = computed(() => messages.value.length > 0 || isStreaming.value);
 
   async function loadConfig() {
     try {

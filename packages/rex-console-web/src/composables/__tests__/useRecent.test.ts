@@ -13,6 +13,7 @@ describe('useRecent', () => {
     expect(stored).toBeTruthy()
     const parsed = JSON.parse(stored!)
     expect(parsed.length).toBeGreaterThanOrEqual(1)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect(parsed.some((r: any) => r.resourceId === 'r1')).toBe(true)
   })
 

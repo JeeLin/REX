@@ -231,7 +231,7 @@ async function handleExportTable(tableName: string) {
     const result = await executeSql(resourceId, `SELECT * FROM \`${tableName}\``)
     exportCsv(result.columns, result.rows)
     toast.success(t('sql.toast.exportSuccess'))
-  } catch (e) {
+  } catch {
     toast.error(t('sql.toast.exportFailed'))
   }
 }

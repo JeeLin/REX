@@ -253,7 +253,7 @@ import type { TransferEndpoint } from '@/api/transfer'
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
-const { success, error: toastError } = useToast()
+const { success } = useToast()
 const resourceId = route.params.resourceId as string
 const resourceName = ref(resourceId)
 const isMobile = ref(false)

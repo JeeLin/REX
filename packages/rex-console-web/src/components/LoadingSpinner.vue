@@ -11,6 +11,7 @@ withDefaults(defineProps<{
   text?: string
 }>(), {
   size: 'md',
+  text: '',
 })
 </script>
 

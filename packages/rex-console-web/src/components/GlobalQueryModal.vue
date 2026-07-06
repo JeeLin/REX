@@ -161,6 +161,7 @@ function close() {
   emit('update:visible', false)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatValue(value: any): string {
   if (value === null || value === undefined) {
     return '(null)'

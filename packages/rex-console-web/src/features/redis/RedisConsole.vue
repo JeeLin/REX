@@ -49,10 +49,10 @@
         v-if="session.connected.value && showKeyBrowser"
         :connected="session.connected.value"
         :keys="keyBrowserKeys"
-        @selectKey="handleKeySelect"
+        @select-key="handleKeySelect"
         @search="handleKeyBrowserSearch"
-        @deleteKey="handleKeyBrowserDelete"
-        @setTtl="handleKeyBrowserSetTtl"
+        @delete-key="handleKeyBrowserDelete"
+        @set-ttl="handleKeyBrowserSetTtl"
       />
 
       <!-- 历史记录面板 -->
@@ -74,12 +74,12 @@
           :ttl="selectedKeyTtl"
           :loading="valueLoading"
           @refresh="refreshSelectedKey"
-          @deleteKey="deleteSelectedKey"
-          @saveString="handleSaveString"
-          @saveHash="handleSaveHash"
-          @saveList="handleSaveList"
-          @saveSet="handleSaveSet"
-          @saveZset="handleSaveZset"
+          @delete-key="deleteSelectedKey"
+          @save-string="handleSaveString"
+          @save-hash="handleSaveHash"
+          @save-list="handleSaveList"
+          @save-set="handleSaveSet"
+          @save-zset="handleSaveZset"
         />
 
         <!-- 输出区域 -->
@@ -158,13 +158,13 @@
             <label>{{ t('redis.keys.type') }}</label>
             <div class="redis-type-selector">
               <button
-                v-for="t in createKeyTypes"
-                :key="t"
+                v-for="tItem in createKeyTypes"
+                :key="tItem"
                 class="redis-type-btn"
-                :class="{ active: createKeyForm.type === t }"
-                @click="createKeyForm.type = t"
+                :class="{ active: createKeyForm.type === tItem }"
+                @click="createKeyForm.type = tItem"
               >
-                {{ t }}
+                {{ tItem }}
               </button>
             </div>
           </div>

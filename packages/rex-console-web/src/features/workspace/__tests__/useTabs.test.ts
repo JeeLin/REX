@@ -12,14 +12,6 @@ describe('useTabs', () => {
     vi.useRealTimers()
   })
 
-  function addTestTabs() {
-    const s = useTabs()
-    s.addTab('S1', 'ssh', `res-${Date.now()}-1`)
-    s.addTab('S2', 'mysql', `res-${Date.now()}-2`)
-    s.addTab('S3', 'redis', `res-${Date.now()}-3`)
-    return s
-  }
-
   it('starts with no tabs', () => {
     const { tabs, activeTabId } = useTabs()
     expect(tabs.value).toHaveLength(0)

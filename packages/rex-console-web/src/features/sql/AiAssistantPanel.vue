@@ -119,7 +119,6 @@ const {
   loadConfig,
   sendMessage: aiSendMessage,
   quickAction: aiQuickAction,
-  stopStreaming: aiStopStreaming,
 } = useAiChat(
   props.context ?? {
     database: undefined,
@@ -191,15 +190,6 @@ async function handleSendMessage() {
 
 function handleQuickAction(action: "generate" | "analyze" | "relations") {
   aiQuickAction(action);
-}
-
-function handleStopStreaming() {
-  aiStopStreaming();
-}
-
-function handleCopySql(sql: string) {
-  // Emit to parent to handle copying to editor
-  emit("copy-sql", sql);
 }
 
 // Lifecycle

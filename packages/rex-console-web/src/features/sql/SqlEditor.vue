@@ -2,9 +2,9 @@
   <div class="sql-editor-wrap">
     <SqlCodeMirror
       ref="cmRef"
-      :modelValue="modelValue"
+      :model-value="modelValue"
       :dialect="dialect"
-      @update:modelValue="$emit('update:modelValue', $event)"
+      @update:model-value="$emit('update:modelValue', $event)"
       @execute="$emit('execute')"
       @save="$emit('save')"
       @contextmenu.prevent="handleContextMenu"

@@ -26,7 +26,7 @@
       <span class="ws-tab-dot" :class="tab.status"></span>
       <span class="ws-tab-icon" :style="{ color: getProtocolIcon(tab.proto).color }">{{ getProtocolIcon(tab.proto).icon }}</span>
       <span class="ws-tab-name">{{ tab.name }}</span>
-      <span class="ws-tab-close" @click.stop="closeTab(tab.id)" :aria-label="`Close ${tab.name}`">&times;</span>
+      <span class="ws-tab-close" :aria-label="`Close ${tab.name}`" @click.stop="closeTab(tab.id)">&times;</span>
     </div>
     <div class="ws-tabbar-right">
       <slot name="right" />

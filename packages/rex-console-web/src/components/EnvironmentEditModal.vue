@@ -38,7 +38,7 @@
 <script setup lang="ts">
 import { reactive, ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { updateEnvironment, getEnvironment, type Environment } from '@/api/env'
+import { updateEnvironment, getEnvironment } from '@/api/env'
 import { useSidebar } from '@/composables/useSidebar'
 
 const props = defineProps<{

@@ -12,7 +12,7 @@
       </button>
     </div>
 
-    <div class="key-list" v-if="treeNodes.length > 0">
+    <div v-if="treeNodes.length > 0" class="key-list">
       <template v-for="node in treeNodes" :key="node.key">
         <!-- Folder node -->
         <div

@@ -213,13 +213,6 @@ async function confirmDeleteRes() {
   }
 }
 
-function openEditEnvModal() {
-  if (env.value) {
-    editingEnvId.value = env.value.id
-    editModalVisible.value = true
-  }
-}
-
 async function confirmDeleteEnv() {
   if (!env.value) return
   try {

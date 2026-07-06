@@ -10,6 +10,7 @@ vi.mock('vue-i18n', () => ({
 
 // Workaround for Vue 3.5 + @vue/test-utils WeakMap issue
 // Disable all automatic stubbing to prevent the WeakMap registration error
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 config.global.stubs = false as any
 
 describe('RedisValueViewer', () => {

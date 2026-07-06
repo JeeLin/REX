@@ -32,8 +32,8 @@
           <div class="cmd-group-label" role="presentation">{{ group.label }}</div>
           <div
             v-for="(item, ii) in group.items"
-            :key="item.id"
             :id="'cmd-option-' + item.id"
+            :key="item.id"
             class="cmd-item"
             role="option"
             :aria-selected="isSelected(group, ii)"
