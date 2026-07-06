@@ -110,10 +110,9 @@ describe('useTabs', () => {
   it('duplicateTab creates a copy', () => {
     const { tabs, addTab, duplicateTab } = useTabs()
     const id = addTab('S1', 'ssh', 'res-unique-dup')
-    // duplicateTab calls addTab with same resourceId, which triggers dedup
-    // So it should still be 1 tab (same resource)
+    // duplicateTab now creates a new tab even with the same resourceId
     if (id) duplicateTab(id)
-    expect(tabs.value).toHaveLength(1)
+    expect(tabs.value).toHaveLength(2)
   })
 
   it('reorderTab changes tab order', () => {
