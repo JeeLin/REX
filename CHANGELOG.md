@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.56.0] - 2026-07-06
+
+### Added
+- SQL 标签：未保存标签显示蓝色圆点标记，已保存标签显示图标
+- SQL 标签副标题：显示 SQL 首行内容（截断到 30 字符）
+- SQL 结果表格：奇偶行斑马纹交替背景色
+- SQL 结果表格：点击行高亮选中，再次点击取消
+- SQL 历史记录面板：按时间分组（今天/昨天/更早）
+- SQL 历史记录面板：右键菜单支持复制 SQL、新标签打开、删除
+- SQL 功能单元测试：SqlTabs、useSqlTabActions、SqlResults 斑马纹测试
+
+### Fixed
+- SQL 结果表格：结果变化时重置选中行和排序状态
+
+### Changed
+- SQL 结果表格：合并重复 CSS 样式（pagination-controls → results-footer）
+- SQL 标签：优化 subtitle computed 中重复的 trim() 调用
+
 ## [0.55.0] - 2026-07-06
 
 ### Fixed
