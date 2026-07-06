@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.57.0] - 2026-07-06
+
+### Added
+- 终端移动端浮动工具栏：方向键、Tab、Enter、^C、^L 按钮
+- 终端移动端浮动工具栏：历史记录、粘贴、字体缩放（A-/A+）、更多选项菜单
+- 终端移动端浮动工具栏单元测试
+
+### Fixed
+- 终端移动端工具栏：修复 i18n 键名错误（`terminal.mobile.*` → `ws.terminal.mobile.*`）
+- 终端移动端工具栏：添加 `toolbar-action` 事件监听，修复更多菜单功能无响应问题
+
 ## [0.56.0] - 2026-07-06
 
 ### Added
