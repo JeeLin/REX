@@ -212,10 +212,20 @@ function onEnvCardCtx(e: MouseEvent, env: EnvWithResources) {
     { label: t('ctx.openDetail'), action: () => router.push(`/environments/${env.id}`) },
     { label: t('ctx.newResource'), action: () => router.push(`/environments/${env.id}/resources/new`) },
     { label: t('ctx.addAgent'), action: () => router.push('/agents') },
+    ...(env.resources.length > 0 ? [
+      { separator: true },
+      { label: t('ctx.openAllWorkspace'), action: () => openAllInWorkspace(env) },
+    ] : []),
     { separator: true },
     { label: t('ctx.editEnv'), action: () => openEditModal(env) },
     { label: t('ctx.deleteEnv'), danger: true, action: () => requestDeleteEnv(env) },
   ])
+}
+
+function openAllInWorkspace(env: EnvWithResources) {
+  for (const res of env.resources) {
+    connectToResource(res, env.name)
+  }
 }
 
 function openEditModal(env: EnvWithResources) {
