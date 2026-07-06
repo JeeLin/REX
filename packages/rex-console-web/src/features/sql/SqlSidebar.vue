@@ -410,7 +410,7 @@ function handleCreateNewTable() {
   } else {
     ddl = `CREATE TABLE ${props.database}.new_table (\n  id INT PRIMARY KEY AUTO_INCREMENT,\n  name VARCHAR(255) NOT NULL,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);`
   }
-  emit('open-sql-tab', '新建表', ddl)
+  emit('open-sql-tab', t('sql.tree.ctx.createNewTable'), ddl)
 }
 
 async function expandAll() {

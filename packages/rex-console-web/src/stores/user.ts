@@ -9,6 +9,8 @@ export const useUserStore = defineStore('user', () => {
   const theme = ref<Theme>((localStorage.getItem('rex-theme') as Theme) || 'dark')
   const lang = ref<Lang>((localStorage.getItem('rex-lang') as Lang) || 'zh')
 
+  let systemThemeCleanup: (() => void) | null = null
+
   function setTheme(newTheme: Theme) {
     theme.value = newTheme
     localStorage.setItem('rex-theme', newTheme)
@@ -25,9 +27,20 @@ export const useUserStore = defineStore('user', () => {
   }
 
   function applyTheme(t: Theme) {
+    // Clean up previous system theme listener
+    if (systemThemeCleanup) {
+      systemThemeCleanup()
+      systemThemeCleanup = null
+    }
+
     if (t === 'system') {
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light')
+      const mql = window.matchMedia('(prefers-color-scheme: dark)')
+      const update = () => {
+        document.documentElement.setAttribute('data-theme', mql.matches ? 'dark' : 'light')
+      }
+      update()
+      mql.addEventListener('change', update)
+      systemThemeCleanup = () => mql.removeEventListener('change', update)
     } else {
       document.documentElement.setAttribute('data-theme', t)
     }
