@@ -246,4 +246,25 @@ function copyToken() {
 .settings-toggle.active::after {
   transform: translateX(18px);
 }
+
+@media (max-width: 767px) {
+  .modal-panel {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+
+  .config-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-xs);
+  }
+
+  .config-value {
+    text-align: left;
+    word-break: break-all;
+  }
+}
 </style>
