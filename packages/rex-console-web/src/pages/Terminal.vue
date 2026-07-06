@@ -39,6 +39,15 @@
       />
     </div>
 
+    <!-- 移动端浮动工具栏 -->
+    <TerminalMobileToolbar
+      :terminal="terminal"
+      :visible="isMobile"
+      @open-history="handleMobileHistory"
+      @open-paste="handleMobilePaste"
+      @font-size-change="handleFontSizeChange"
+    />
+
     <!-- 状态栏 -->
     <div class="terminal-statusbar">
       <span>SSH</span>
@@ -86,6 +95,7 @@ import { createSession, deleteSession } from '@/api/terminal'
 import { useSettingsStore } from '@/stores/settings'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import TerminalSftp from '@/features/terminal/TerminalSftp.vue'
+import TerminalMobileToolbar from '@/features/terminal/TerminalMobileToolbar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -99,6 +109,7 @@ const showDisconnectDialog = ref(false)
 const resourceName = ref(resourceId)
 const sftpVisible = ref(false)
 const isFullscreen = ref(false)
+const isMobile = ref(false)
 const contextMenu = ref({ visible: false, x: 0, y: 0 })
 
 let terminal: Terminal | null = null
@@ -339,6 +350,30 @@ function handleFullscreenChange() {
   isFullscreen.value = !!document.fullscreenElement
 }
 
+function checkMobile() {
+  isMobile.value = window.innerWidth < 768 || 'ontouchstart' in window
+}
+
+function handleFontSizeChange(delta: number) {
+  const current = settingsStore.terminalSettings.fontSize
+  const newSize = Math.max(10, Math.min(24, current + delta))
+  settingsStore.terminalSettings.fontSize = newSize
+}
+
+function handleMobileHistory() {
+  // Open bash history in terminal
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'terminal.input',
+      payload: { data: btoa('\x1b[A') },
+    }))
+  }
+}
+
+async function handleMobilePaste() {
+  await handlePaste()
+}
+
 // ── Watch terminal settings ──
 watch(() => settingsStore.terminalSettings.fontSize, (val) => {
   if (terminal) terminal.options.fontSize = val
@@ -354,7 +389,9 @@ onMounted(async () => {
   initTerminal()
   await connectSession()
   window.addEventListener('keydown', handleKeydown)
+  window.addEventListener('resize', checkMobile)
   document.addEventListener('fullscreenchange', handleFullscreenChange)
+  checkMobile()
 })
 
 onBeforeUnmount(() => {
