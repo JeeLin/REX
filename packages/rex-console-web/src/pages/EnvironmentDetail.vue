@@ -337,4 +337,26 @@ async function loadEnv() {
   color: var(--text-muted);
   opacity: 0.6;
 }
+
+@media (max-width: 767px) {
+  .detail-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-sm);
+  }
+
+  .detail-header .header-actions {
+    width: 100%;
+    display: flex;
+    gap: var(--sp-sm);
+  }
+
+  .resource-table-wrap {
+    overflow-x: auto;
+  }
+
+  .resource-table {
+    min-width: 500px;
+  }
+}
 </style>

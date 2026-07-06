@@ -788,4 +788,28 @@ async function submitResource() {
   .step-label { display: none; }
   .step-line { width: 16px; }
 }
+
+@media (max-width: 767px) {
+  .protocol-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-sm);
+  }
+
+  .protocol-card {
+    padding: var(--sp-md);
+    text-align: center;
+  }
+
+  .protocol-icon {
+    font-size: 24px;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .form-actions .btn {
+    width: 100%;
+  }
+}
 </style>

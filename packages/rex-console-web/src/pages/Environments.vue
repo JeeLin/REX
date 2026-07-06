@@ -276,4 +276,14 @@ async function loadEnvs() {
 .badge-info {
   color: var(--info);
 }
+
+@media (max-width: 767px) {
+  .env-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .env-card {
+    padding: var(--sp-md);
+  }
+}
 </style>

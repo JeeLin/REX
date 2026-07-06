@@ -470,4 +470,23 @@ async function loadData() {
   font-size: 10px;
   color: var(--text-secondary);
 }
+
+@media (max-width: 767px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-sm);
+  }
+
+  .dashboard-section {
+    margin-bottom: var(--sp-md);
+  }
+
+  .env-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-list {
+    max-height: 200px;
+  }
+}
 </style>
