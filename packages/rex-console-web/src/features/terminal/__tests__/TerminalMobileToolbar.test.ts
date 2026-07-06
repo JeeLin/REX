@@ -14,7 +14,7 @@ describe('TerminalMobileToolbar', () => {
     textarea: {
       dispatchEvent: vi.fn(),
     },
-  })
+  } as any)
 
   it('renders all direction key buttons', () => {
     const terminal = createTerminalMock()
@@ -57,8 +57,8 @@ describe('TerminalMobileToolbar', () => {
     const wrapper = mount(TerminalMobileToolbar, {
       props: { terminal, visible: true },
     })
-    const historyBtn = wrapper.findAll('.function-keys .toolbar-btn').at(0)
-    await historyBtn?.trigger('click')
+    const funcButtons = wrapper.findAll('.function-keys .toolbar-btn')
+    await funcButtons[0].trigger('click')
     expect(wrapper.emitted('openHistory')).toBeTruthy()
   })
 
@@ -67,8 +67,8 @@ describe('TerminalMobileToolbar', () => {
     const wrapper = mount(TerminalMobileToolbar, {
       props: { terminal, visible: true },
     })
-    const pasteBtn = wrapper.findAll('.function-keys .toolbar-btn').at(1)
-    await pasteBtn?.trigger('click')
+    const funcButtons = wrapper.findAll('.function-keys .toolbar-btn')
+    await funcButtons[1].trigger('click')
     expect(wrapper.emitted('openPaste')).toBeTruthy()
   })
 
@@ -77,8 +77,8 @@ describe('TerminalMobileToolbar', () => {
     const wrapper = mount(TerminalMobileToolbar, {
       props: { terminal, visible: true },
     })
-    const smallerBtn = wrapper.findAll('.function-keys .toolbar-btn').at(2)
-    await smallerBtn?.trigger('click')
+    const funcButtons = wrapper.findAll('.function-keys .toolbar-btn')
+    await funcButtons[2].trigger('click')
     expect(wrapper.emitted('fontSizeChange')).toBeTruthy()
     expect(wrapper.emitted('fontSizeChange')![0]).toEqual([-1])
   })
@@ -88,8 +88,8 @@ describe('TerminalMobileToolbar', () => {
     const wrapper = mount(TerminalMobileToolbar, {
       props: { terminal, visible: true },
     })
-    const largerBtn = wrapper.findAll('.function-keys .toolbar-btn').at(3)
-    await largerBtn?.trigger('click')
+    const funcButtons = wrapper.findAll('.function-keys .toolbar-btn')
+    await funcButtons[3].trigger('click')
     expect(wrapper.emitted('fontSizeChange')).toBeTruthy()
     expect(wrapper.emitted('fontSizeChange')![0]).toEqual([1])
   })
@@ -99,8 +99,8 @@ describe('TerminalMobileToolbar', () => {
     const wrapper = mount(TerminalMobileToolbar, {
       props: { terminal, visible: true },
     })
-    const moreBtn = wrapper.findAll('.function-keys .toolbar-btn').at(4)
-    await moreBtn?.trigger('click')
+    const funcButtons = wrapper.findAll('.function-keys .toolbar-btn')
+    await funcButtons[4].trigger('click')
     expect(wrapper.find('.more-menu').exists()).toBe(true)
   })
 
@@ -109,8 +109,8 @@ describe('TerminalMobileToolbar', () => {
     const wrapper = mount(TerminalMobileToolbar, {
       props: { terminal, visible: true },
     })
-    expect(wrapper.text()).toContain('terminal.mobile.history')
-    expect(wrapper.text()).toContain('terminal.mobile.paste')
-    expect(wrapper.text()).toContain('terminal.mobile.more')
+    expect(wrapper.text()).toContain('ws.terminal.mobile.history')
+    expect(wrapper.text()).toContain('ws.terminal.mobile.paste')
+    expect(wrapper.text()).toContain('ws.terminal.mobile.more')
   })
 })
