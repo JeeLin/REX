@@ -27,7 +27,12 @@ export function useSqlTabActions(
   let tabCounter = 0
 
   const tabList = computed(() =>
-    tabs.value.map((t) => ({ id: t.id, title: t.title, queryId: t.queryId })),
+    tabs.value.map((t) => {
+      const subtitle = t.sql.trim()
+        ? t.sql.trim().split('\n')[0].substring(0, 30)
+        : undefined
+      return { id: t.id, title: t.title, queryId: t.queryId, subtitle }
+    }),
   )
 
   const activeTab = computed(() => {

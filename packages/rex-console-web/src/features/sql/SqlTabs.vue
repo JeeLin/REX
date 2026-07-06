@@ -5,11 +5,16 @@
       :key="tab.id"
       class="sql-tab"
       :class="{ active: tab.id === activeId }"
+      :title="tab.subtitle || tab.title"
       @click="$emit('select', tab.id)"
       @contextmenu.prevent="handleContextMenu($event, tab)"
     >
+      <span v-if="!tab.queryId" class="tab-unsaved">·</span>
       <span class="tab-icon">{{ tab.queryId ? '💾' : '📄' }}</span>
-      {{ tab.title }}
+      <span class="tab-label">
+        <span class="tab-title">{{ tab.title }}</span>
+        <span v-if="tab.subtitle" class="tab-subtitle">{{ tab.subtitle }}</span>
+      </span>
       <span
         v-if="tabs.length > 1"
         class="tab-close"
@@ -25,7 +30,7 @@ import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
 
 defineProps<{
-  tabs: Array<{ id: string; title: string; queryId: string | null }>
+  tabs: Array<{ id: string; title: string; queryId: string | null; subtitle?: string }>
   activeId: string
 }>()
 
@@ -111,6 +116,36 @@ function handleContextMenu(event: MouseEvent, tab: { id: string; title: string; 
 
 .tab-icon {
   font-size: 10px;
+}
+
+.tab-unsaved {
+  color: var(--accent);
+  font-size: 16px;
+  line-height: 1;
+  margin-right: -2px;
+}
+
+.tab-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.tab-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-subtitle {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+  line-height: 1.2;
 }
 
 .tab-close {
