@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.59.0] - 2026-07-06
+
+### Added
+- SQL 控制台移动端浮动工具栏：执行、格式化、清空操作按钮
+- SQL 控制台移动端浮动工具栏：保存、历史、全局查询、更多操作
+- SQL 控制台移动端浮动工具栏单元测试
+
 ## [0.58.0] - 2026-07-06
 
 ### Added
