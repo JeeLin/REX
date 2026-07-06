@@ -69,13 +69,13 @@
         </router-link>
       </div>
 
-      <!-- Quick Connect -->
-      <div v-if="allResources.length > 0" class="section-header" style="margin-top: var(--sp-xl)">
+      <!-- Quick Connect (Recent Resources) -->
+      <div v-if="recentQuickItems.length > 0" class="section-header" style="margin-top: var(--sp-xl)">
         <h2 class="section-title">{{ t('dashboard.quickConnect') }}</h2>
       </div>
-      <div v-if="allResources.length > 0" class="quick-connect-grid">
+      <div v-if="recentQuickItems.length > 0" class="quick-connect-grid">
         <button
-          v-for="item in allResources.slice(0, 8)"
+          v-for="item in recentQuickItems"
           :key="item.resource.id"
           class="quick-card"
           @click="connectToResource(item.resource, item.envName)"
@@ -86,26 +86,9 @@
           </div>
           <div class="quick-info">
             <div class="quick-name">{{ item.resource.name }}</div>
-            <div class="quick-proto">{{ item.resource.protocol }}</div>
+            <div v-if="item.address" class="quick-addr">{{ item.address }}</div>
+            <div class="quick-env">{{ item.envName }}</div>
           </div>
-        </button>
-      </div>
-
-      <!-- Recent Used -->
-      <div v-if="recent.length > 0" class="section-header" style="margin-top: var(--sp-xl)">
-        <h2 class="section-title">{{ t('dashboard.recentUsed') }}</h2>
-      </div>
-      <div v-if="recent.length > 0" class="recent-list">
-        <button
-          v-for="item in recent"
-          :key="item.resourceId"
-          class="recent-item"
-          @click="connectToResource({ id: item.resourceId, protocol: item.protocol, name: item.name }, item.envName)"
-        >
-          <span class="recent-dot" :style="{ background: getProtocolIcon(item.protocol).color }"></span>
-          <span class="recent-name">{{ item.name }}</span>
-          <span class="recent-proto">{{ item.protocol }}</span>
-          <span class="recent-time">{{ formatTime(item.usedAt) }}</span>
         </button>
       </div>
 
@@ -137,7 +120,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useRecent } from '@/composables/useRecent'
@@ -166,9 +149,38 @@ const envCount = ref(0)
 const resourceCount = ref(0)
 const agentOnlineCount = ref(0)
 const todayOps = ref(0)
-const allResources = ref<{ resource: { id: string; name: string; protocol: string }; envName: string }[]>([])
+const allResources = ref<{ resource: { id: string; name: string; protocol: string; config_json: string }; envName: string }[]>([])
 const loading = ref(true)
 const loadError = ref('')
+
+function getResourceAddress(configJson: string, protocol: string): string {
+  try {
+    const cfg = JSON.parse(configJson)
+    if (protocol === 'sqlite') return cfg.db_path || ''
+    if (protocol === 's3') return cfg.endpoint || ''
+    if (cfg.host) return cfg.port ? `${cfg.host}:${cfg.port}` : cfg.host
+    return ''
+  } catch {
+    return ''
+  }
+}
+
+const recentQuickItems = computed(() => {
+  const resMap = new Map(
+    allResources.value.map(r => [r.resource.id, r.resource]),
+  )
+  return recent.value.slice(0, 8).map(item => {
+    const full = resMap.get(item.resourceId)
+    const address = full
+      ? getResourceAddress(full.config_json, full.protocol)
+      : ''
+    return {
+      resource: { id: item.resourceId, name: item.name, protocol: item.protocol },
+      envName: item.envName,
+      address,
+    }
+  })
+})
 const editModalVisible = ref(false)
 const editingEnvId = ref('')
 const showDeleteConfirm = ref(false)
@@ -180,16 +192,6 @@ function getResourceStats(env: EnvWithResources): Record<string, number> {
     stats[r.protocol] = (stats[r.protocol] || 0) + 1
   }
   return stats
-}
-
-function formatTime(ts: number): string {
-  const diff = Date.now() - ts
-  const mins = Math.floor(diff / 60000)
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  return `${days}d ago`
 }
 
 function onQuickConnectCtx(e: MouseEvent, item: { resource: { id: string; name: string; protocol: string }; envName: string }) {
@@ -253,7 +255,7 @@ async function loadData() {
     const envsWithRes = await listEnvsWithResources()
     environments.value = envsWithRes
     envCount.value = envsWithRes.length
-    const allRes: { resource: { id: string; name: string; protocol: string }; envName: string }[] = []
+    const allRes: { resource: { id: string; name: string; protocol: string; config_json: string }; envName: string }[] = []
     for (const env of envsWithRes) {
       for (const res of env.resources) {
         allRes.push({ resource: res, envName: env.name })
@@ -436,60 +438,16 @@ async function loadData() {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.quick-proto {
+.quick-addr {
   font-size: 10px;
   color: var(--text-muted);
-  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* Recent */
-.recent-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.recent-item {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-sm);
-  padding: var(--sp-sm) var(--sp-md);
-  border: none;
-  background: none;
-  cursor: pointer;
-  border-radius: var(--radius-md);
-  transition: background var(--transition-fast);
+.quick-env {
+  font-size: 10px;
   color: var(--text-secondary);
-  font-size: var(--fs-sm);
-}
-
-.recent-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.recent-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.recent-name {
-  flex: 1;
-  text-align: left;
-  font-family: var(--font-mono);
-}
-
-.recent-proto {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-}
-
-.recent-time {
-  font-size: 11px;
-  color: var(--text-muted);
 }
 </style>
