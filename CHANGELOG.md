@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.58.0] - 2026-07-06
+
+### Added
+- SFTP 移动端浮动工具栏：上传、新建文件、新建文件夹、刷新操作按钮
+- SFTP 移动端浮动工具栏：下载、删除、全选更多操作
+- SFTP 移动端浮动工具栏单元测试
+
 ## [0.57.0] - 2026-07-06
 
 ### Added
