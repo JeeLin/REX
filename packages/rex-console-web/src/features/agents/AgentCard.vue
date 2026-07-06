@@ -210,4 +210,29 @@ function osIcon(os: string): string {
 .btn-danger:hover {
   background: rgba(248, 81, 73, 0.1);
 }
+
+@media (max-width: 767px) {
+  .agent-card {
+    padding: var(--sp-md);
+  }
+
+  .card-actions {
+    flex-wrap: wrap;
+  }
+
+  .card-actions .btn {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    padding: var(--sp-sm);
+  }
+
+  .info-label {
+    min-width: 60px;
+  }
+
+  .info-row {
+    font-size: var(--fs-xs);
+  }
+}
 </style>

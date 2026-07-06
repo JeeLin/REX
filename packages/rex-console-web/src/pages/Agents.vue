@@ -170,4 +170,10 @@ async function loadAgents() {
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: var(--sp-md);
 }
+
+@media (max-width: 767px) {
+  .agent-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
