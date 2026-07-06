@@ -2,26 +2,10 @@
   <div v-if="visible" class="mobile-toolbar">
     <!-- 方向键区 -->
     <div class="toolbar-row direction-keys">
-      <button
-        class="toolbar-btn"
-        @pointerdown="sendKey('\x1b[A')"
-        @pointerup="stopRepeat"
-      >↑</button>
-      <button
-        class="toolbar-btn"
-        @pointerdown="sendKey('\x1b[B')"
-        @pointerup="stopRepeat"
-      >↓</button>
-      <button
-        class="toolbar-btn"
-        @pointerdown="sendKey('\x1b[D')"
-        @pointerup="stopRepeat"
-      >←</button>
-      <button
-        class="toolbar-btn"
-        @pointerdown="sendKey('\x1b[C')"
-        @pointerup="stopRepeat"
-      >→</button>
+      <button class="toolbar-btn" @click="sendKey('\x1b[A')">↑</button>
+      <button class="toolbar-btn" @click="sendKey('\x1b[B')">↓</button>
+      <button class="toolbar-btn" @click="sendKey('\x1b[D')">←</button>
+      <button class="toolbar-btn" @click="sendKey('\x1b[C')">→</button>
       <div class="toolbar-sep"></div>
       <button class="toolbar-btn" @click="sendKey('\t')">Tab</button>
       <button class="toolbar-btn" @click="sendKey('\r')">⏎</button>
@@ -82,53 +66,27 @@ defineEmits<{
   openHistory: []
   openPaste: []
   fontSizeChange: [delta: number]
-  action: [type: string]
 }>()
 
 const { t } = useI18n()
 const showMoreMenu = ref(false)
-let repeatTimer: ReturnType<typeof setInterval> | null = null
 
 function sendKey(data: string) {
-  props.terminal?.focus()
-  props.terminal?.focus()
-  // xterm.js textarea focus then write
-  props.terminal?.textarea?.dispatchEvent(
-    new KeyboardEvent('keydown', { key: data, bubbles: true })
-  )
-  // Direct write approach for reliable input
   const textarea = props.terminal?.textarea
-  if (textarea) {
-    // Use native input setter to bypass xterm.js key handling
-    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-      window.HTMLTextAreaElement.prototype, 'value'
-    )?.set
-    if (nativeInputValueSetter) {
-      nativeInputValueSetter.call(textarea, data)
-      textarea.dispatchEvent(new Event('input', { bubbles: true }))
-    }
-  }
-}
-
-function startRepeat(data: string) {
-  stopRepeat()
-  repeatTimer = setInterval(() => sendKey(data), 100)
-}
-
-function stopRepeat() {
-  if (repeatTimer) {
-    clearInterval(repeatTimer)
-    repeatTimer = null
+  if (!textarea) return
+  textarea.focus()
+  const setter = Object.getOwnPropertyDescriptor(
+    window.HTMLTextAreaElement.prototype, 'value'
+  )?.set
+  if (setter) {
+    setter.call(textarea, data)
+    textarea.dispatchEvent(new Event('input', { bubbles: true }))
   }
 }
 
 function handleMoreAction(type: string) {
   showMoreMenu.value = false
-  props.terminal?.focus()
-  // Emit action to parent Terminal.vue to handle
-  // Use a custom event for actions
-  const event = new CustomEvent('toolbar-action', { detail: type })
-  window.dispatchEvent(event)
+  window.dispatchEvent(new CustomEvent('toolbar-action', { detail: type }))
 }
 </script>
 
