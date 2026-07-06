@@ -227,13 +227,20 @@ async function handleExplainTab() {
   }
 }
 
-// Reset explain when result changes
+// Reset state when result changes
 watch(() => props.result, () => {
   showExplainTab.value = true
   explainResult.value = null
   explainError.value = ''
   if (activeTab.value === 'explain') {
     activeTab.value = 'results'
+  }
+  currentPage.value = 1
+  selectedRow.value = null
+  sortColumn.value = null
+  sortDirection.value = 'asc'
+  if (props.isError) {
+    activeTab.value = 'message'
   }
 })
 
@@ -280,14 +287,6 @@ const paginatedRows = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value
   const end = start + pageSize.value
   return sortedRows.value.slice(start, end)
-})
-
-// 当结果变化时重置分页
-watch(() => props.result, () => {
-  currentPage.value = 1
-  if (props.isError) {
-    activeTab.value = 'message'
-  }
 })
 
 function cellClass(cell: unknown): string {
