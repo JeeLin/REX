@@ -10,7 +10,7 @@ vi.mock('vue-i18n', () => ({
 
 // Workaround for Vue 3.5 + @vue/test-utils WeakMap issue
 // Disable all automatic stubbing to prevent the WeakMap registration error
-config.global.stubs = false
+config.global.stubs = false as any
 
 describe('RedisValueViewer', () => {
   it('renders key name and type badge', () => {
