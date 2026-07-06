@@ -125,4 +125,14 @@ function formatDate(dateStr: string): string {
   color: var(--text-muted);
   font-size: 11px;
 }
+
+@media (max-width: 767px) {
+  .s3-bucket-list {
+    gap: var(--sp-sm);
+  }
+
+  .s3-bucket-item {
+    padding: var(--sp-sm) var(--sp-md);
+  }
+}
 </style>

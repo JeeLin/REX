@@ -413,4 +413,47 @@ function formatDate(dateStr: string | null): string {
   color: var(--text-muted);
   min-width: 80px;
 }
+
+@media (max-width: 767px) {
+  .s3-toolbar {
+    flex-wrap: wrap;
+    gap: var(--sp-xs);
+    padding: var(--sp-sm);
+  }
+
+  .s3-path {
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .s3-upload-zone {
+    padding: var(--sp-md);
+  }
+
+  .s3-obj-icon {
+    display: none;
+  }
+
+  .s3-obj-size {
+    min-width: auto;
+  }
+
+  .s3-empty-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .s3-empty-actions button {
+    width: 100%;
+  }
+
+  .s3-info-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .s3-info-label {
+    min-width: auto;
+  }
+}
 </style>

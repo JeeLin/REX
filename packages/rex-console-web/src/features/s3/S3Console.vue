@@ -324,4 +324,35 @@ onUnmounted(() => {
   font-size: 14px;
   font-family: inherit;
 }
+
+@media (max-width: 767px) {
+  .s3-toolbar {
+    flex-wrap: wrap;
+    gap: var(--sp-xs);
+    padding: var(--sp-sm);
+  }
+
+  .s3-path {
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .s3-upload-zone {
+    padding: var(--sp-md);
+  }
+
+  .s3-modal {
+    width: 95vw;
+    max-height: 90vh;
+  }
+
+  .s3-modal-actions {
+    flex-direction: column;
+    gap: var(--sp-sm);
+  }
+
+  .s3-modal-actions button {
+    width: 100%;
+  }
+}
 </style>

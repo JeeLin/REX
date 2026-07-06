@@ -413,4 +413,26 @@ onBeforeUnmount(() => {
   background: var(--border);
   margin: var(--sp-xs) 0;
 }
+
+@media (max-width: 767px) {
+  .ws-files-topbar {
+    padding: 0 var(--sp-xs);
+    gap: var(--sp-xs);
+  }
+
+  .ws-files-toolbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: var(--sp-xs) var(--sp-xs);
+    gap: var(--sp-xs);
+  }
+
+  .ws-files-modal {
+    width: 95%;
+  }
+
+  .ws-files-context-menu {
+    max-width: 200px;
+  }
+}
 </style>

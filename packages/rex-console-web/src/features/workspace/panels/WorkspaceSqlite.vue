@@ -385,4 +385,42 @@ onMounted(() => {
   color: var(--text-secondary);
   font-size: 13px;
 }
+
+@media (max-width: 767px) {
+  .sqlite-topbar {
+    padding: var(--sp-xs) var(--sp-sm);
+    flex-wrap: wrap;
+    gap: var(--sp-xs);
+  }
+
+  .sqlite-toolbar {
+    flex-wrap: wrap;
+    gap: var(--sp-xs);
+    padding: var(--sp-xs) var(--sp-sm);
+  }
+
+  .sqlite-main {
+    flex-direction: column;
+  }
+
+  .sqlite-sidebar {
+    width: 100%;
+    max-height: 120px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-primary);
+  }
+
+  .sqlite-editor {
+    min-height: 80px;
+    max-height: 30%;
+  }
+
+  .result-table-wrap {
+    overflow-x: auto;
+  }
+
+  .result-table {
+    min-width: 400px;
+  }
+}
 </style>

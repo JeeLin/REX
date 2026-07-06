@@ -458,4 +458,30 @@ onBeforeUnmount(() => {
   padding: var(--sp-sm) var(--sp-md);
   border-top: 1px solid var(--border);
 }
+
+@media (max-width: 767px) {
+  .ws-sql-topbar {
+    padding: 0 var(--sp-xs);
+    gap: var(--sp-xs);
+  }
+
+  .ws-sql-toolbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: var(--sp-xs);
+    gap: var(--sp-xs);
+  }
+
+  .ws-sql-hint {
+    display: none;
+  }
+
+  .ws-sql-main :deep(.sql-sidebar) {
+    width: 140px;
+  }
+
+  .ws-sql-modal {
+    width: 95%;
+  }
+}
 </style>
