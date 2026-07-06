@@ -92,6 +92,7 @@
           :visible="showHistoryPanel"
           @close="showHistoryPanel = false"
           @select="handleHistorySelect"
+          @open-sql-tab="openSqlTab"
         />
       </div>
     </div>

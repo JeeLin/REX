@@ -667,6 +667,16 @@ export default {
       empty: '暂无执行历史',
       copy: '📋 复制',
       copySuccess: '已复制到剪贴板',
+      group: {
+        today: '今天',
+        yesterday: '昨天',
+        earlier: '更早',
+      },
+      ctx: {
+        copySql: '📋 复制 SQL',
+        openNewTab: '在新标签中打开',
+        delete: '删除',
+      },
     },
     noMessage: '暂无消息',
     toast: {

@@ -667,6 +667,16 @@ export default {
       empty: 'No execution history',
       copy: '📋 Copy',
       copySuccess: 'Copied to clipboard',
+      group: {
+        today: 'Today',
+        yesterday: 'Yesterday',
+        earlier: 'Earlier',
+      },
+      ctx: {
+        copySql: '📋 Copy SQL',
+        openNewTab: 'Open in New Tab',
+        delete: 'Delete',
+      },
     },
     noMessage: 'No messages',
     toast: {

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useContextMenu } from '@/composables/useContextMenu'
 import { listHistory, clearHistory, type HistoryRecord } from '@/api/sql'
 
 const { t } = useI18n()
+const { show: showMenu } = useContextMenu()
 
 const props = defineProps<{
   resourceId: string
@@ -13,6 +15,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   select: [record: HistoryRecord]
+  'open-sql-tab': [title: string, sql: string]
 }>()
 
 const records = ref<HistoryRecord[]>([])
@@ -27,6 +30,41 @@ const filtered = computed(() => {
   )
 })
 
+interface TimeGroup {
+  label: string
+  items: HistoryRecord[]
+}
+
+const grouped = computed<TimeGroup[]>(() => {
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const yesterdayStart = new Date(todayStart)
+  yesterdayStart.setDate(yesterdayStart.getDate() - 1)
+
+  const groups: Record<string, HistoryRecord[]> = {
+    today: [],
+    yesterday: [],
+    earlier: [],
+  }
+
+  for (const r of filtered.value) {
+    const d = new Date(parseInt(r.executed_at, 10) * 1000)
+    if (d >= todayStart) {
+      groups.today.push(r)
+    } else if (d >= yesterdayStart) {
+      groups.yesterday.push(r)
+    } else {
+      groups.earlier.push(r)
+    }
+  }
+
+  const result: TimeGroup[] = []
+  if (groups.today.length) result.push({ label: t('sql.history.group.today'), items: groups.today })
+  if (groups.yesterday.length) result.push({ label: t('sql.history.group.yesterday'), items: groups.yesterday })
+  if (groups.earlier.length) result.push({ label: t('sql.history.group.earlier'), items: groups.earlier })
+  return result
+})
+
 function truncate(sql: string, max: number): string {
   const oneLine = sql.replace(/\s+/g, ' ').trim()
   return oneLine.length > max ? oneLine.slice(0, max) + '…' : oneLine
@@ -35,14 +73,24 @@ function truncate(sql: string, max: number): string {
 function formatTime(ts: string): string {
   const sec = parseInt(ts, 10)
   const d = new Date(sec * 1000)
-  const now = new Date()
-  const isToday =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  if (isToday) return time
-  return `${d.getMonth() + 1}/${d.getDate()} ${time}`
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function handleContextMenu(event: MouseEvent, item: HistoryRecord) {
+  showMenu(event, [
+    { label: t('sql.history.ctx.copySql'), action: () => copySql(item.sql) },
+    { label: t('sql.history.ctx.openNewTab'), action: () => emit('open-sql-tab', truncate(item.sql, 40), item.sql) },
+    { separator: true },
+    { label: t('sql.history.ctx.delete'), action: () => deleteRecord(item.id) },
+  ])
+}
+
+function copySql(sql: string) {
+  navigator.clipboard.writeText(sql)
+}
+
+function deleteRecord(id: string) {
+  records.value = records.value.filter((r) => r.id !== id)
 }
 
 async function loadHistory() {
@@ -91,21 +139,27 @@ watch(
       </div>
     </div>
     <div class="history-list">
-      <div
-        v-for="item in filtered"
-        :key="item.id"
-        class="history-item"
-        @click="emit('select', item)"
-      >
-        <code class="history-sql">{{ truncate(item.sql, 80) }}</code>
-        <div class="history-meta">
-          <span>{{ item.database }}</span>
-          <span>{{ formatTime(item.executed_at) }}</span>
-          <span>{{ item.elapsed_ms }}ms</span>
-          <span>{{ item.row_count }} rows</span>
+      <template v-if="grouped.length > 0">
+        <div v-for="group in grouped" :key="group.label" class="history-group">
+          <div class="history-group-label">{{ group.label }}</div>
+          <div
+            v-for="item in group.items"
+            :key="item.id"
+            class="history-item"
+            @click="emit('select', item)"
+            @contextmenu.prevent="handleContextMenu($event, item)"
+          >
+            <code class="history-sql">{{ truncate(item.sql, 80) }}</code>
+            <div class="history-meta">
+              <span>{{ item.database }}</span>
+              <span>{{ formatTime(item.executed_at) }}</span>
+              <span>{{ item.elapsed_ms }}ms</span>
+              <span>{{ item.row_count }} rows</span>
+            </div>
+          </div>
         </div>
-      </div>
-      <div v-if="filtered.length === 0" class="history-empty">
+      </template>
+      <div v-else class="history-empty">
         {{ t('sql.history.empty') }}
       </div>
     </div>
@@ -162,6 +216,15 @@ watch(
   flex: 1;
   overflow-y: auto;
   padding: 4px 0;
+}
+
+.history-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 6px 12px 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .history-item {
