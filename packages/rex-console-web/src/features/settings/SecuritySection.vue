@@ -80,4 +80,15 @@ function toggleConfigEncryption() {
   color: var(--text-primary);
   background: var(--bg-hover);
 }
+@media (max-width: 767px) {
+  .settings-section {
+    padding: var(--sp-md);
+  }
+
+  .settings-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-xs);
+  }
+}
 </style>

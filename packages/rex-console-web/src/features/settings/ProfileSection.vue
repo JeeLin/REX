@@ -233,4 +233,16 @@ onMounted(loadProfile)
   gap: var(--sp-sm);
   margin-top: var(--sp-lg);
 }
+
+@media (max-width: 767px) {
+  .settings-section {
+    padding: var(--sp-md);
+  }
+
+  .settings-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-xs);
+  }
+}
 </style>

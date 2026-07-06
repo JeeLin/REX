@@ -351,4 +351,15 @@ function agentStatusLabel(av: AgentVersionInfo): string {
   font-size: var(--fs-xs);
   margin-left: auto;
 }
+@media (max-width: 767px) {
+  .settings-section {
+    padding: var(--sp-md);
+  }
+
+  .settings-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-xs);
+  }
+}
 </style>

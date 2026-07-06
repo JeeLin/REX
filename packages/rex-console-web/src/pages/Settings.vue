@@ -57,6 +57,13 @@ onMounted(async () => {
   max-width: 640px;
 }
 
+@media (max-width: 767px) {
+  .settings-layout {
+    max-width: 100%;
+    padding: 0 var(--sp-sm);
+  }
+}
+
 .version-info {
   text-align: center;
   padding: var(--sp-2xl) 0;
