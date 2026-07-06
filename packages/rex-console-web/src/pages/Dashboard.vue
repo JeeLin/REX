@@ -253,13 +253,13 @@ async function confirmDeleteEnv() {
 
 function onStatCardCtx(e: MouseEvent) {
   showMenu(e, [
-    { label: t('ctx.refreshStats'), action: () => refreshStats() },
+    { label: t('ctx.refreshStats'), action: () => refreshStats().catch(() => {}) },
   ])
 }
 
 onMounted(() => {
   loadData()
-  refreshTimer = setInterval(refreshStats, 60000)
+  refreshTimer = setInterval(() => refreshStats().catch(() => {}), 60000)
 })
 
 onUnmounted(() => {
@@ -267,48 +267,28 @@ onUnmounted(() => {
 })
 
 async function refreshStats() {
-  try {
-    const envsWithRes = await listEnvsWithResources()
-    environments.value = envsWithRes
-    envCount.value = envsWithRes.length
-    const allRes: { resource: { id: string; name: string; protocol: string; config_json: string }; envName: string }[] = []
-    for (const env of envsWithRes) {
-      for (const res of env.resources) {
-        allRes.push({ resource: res, envName: env.name })
-      }
+  const envsWithRes = await listEnvsWithResources()
+  environments.value = envsWithRes
+  envCount.value = envsWithRes.length
+  const allRes: { resource: { id: string; name: string; protocol: string; config_json: string }; envName: string }[] = []
+  for (const env of envsWithRes) {
+    for (const res of env.resources) {
+      allRes.push({ resource: res, envName: env.name })
     }
-    allResources.value = allRes
-    resourceCount.value = allRes.length
-    const stats = await getAuditStats('today')
-    todayOps.value = stats.total
-    const health = await fetchHealth()
-    agentOnlineCount.value = health.connections.agents_online
-  } catch {
-    // silent — keep stale data
   }
+  allResources.value = allRes
+  resourceCount.value = allRes.length
+  const stats = await getAuditStats('today')
+  todayOps.value = stats.total
+  const health = await fetchHealth()
+  agentOnlineCount.value = health.connections.agents_online
 }
 
 async function loadData() {
   loading.value = true
   loadError.value = ''
   try {
-    const envsWithRes = await listEnvsWithResources()
-    environments.value = envsWithRes
-    envCount.value = envsWithRes.length
-    const allRes: { resource: { id: string; name: string; protocol: string; config_json: string }; envName: string }[] = []
-    for (const env of envsWithRes) {
-      for (const res of env.resources) {
-        allRes.push({ resource: res, envName: env.name })
-      }
-    }
-    allResources.value = allRes
-    resourceCount.value = allRes.length
-
-    const stats = await getAuditStats('today')
-    todayOps.value = stats.total
-
-    const health = await fetchHealth()
-    agentOnlineCount.value = health.connections.agents_online
+    await refreshStats()
   } catch {
     loadError.value = t('dashboard.loadFailed')
   } finally {
