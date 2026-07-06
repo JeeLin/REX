@@ -45,7 +45,12 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(row, i) in paginatedRows" :key="i" @contextmenu.prevent="handleRowContextMenu($event, i)">
+          <tr
+            v-for="(row, i) in paginatedRows" :key="i"
+            :class="{ 'row-selected': selectedRow === i }"
+            @click="handleRowClick(i)"
+            @contextmenu.prevent="handleRowContextMenu($event, i)"
+          >
             <td class="text-muted">{{ i + 1 + (currentPage - 1) * pageSize }}</td>
             <td
               v-for="(cell, j) in row" :key="j"
@@ -192,6 +197,11 @@ const currentPage = ref(1)
 const pageSize = ref(50)
 const sortColumn = ref<number | null>(null)
 const sortDirection = ref<'asc' | 'desc'>('asc')
+const selectedRow = ref<number | null>(null)
+
+function handleRowClick(rowIdx: number) {
+  selectedRow.value = selectedRow.value === rowIdx ? null : rowIdx
+}
 
 // Explain tab state
 const showExplainTab = ref(false)
@@ -468,6 +478,14 @@ function handleRowContextMenu(event: MouseEvent, paginatedIdx: number) {
 
 .results-table tr:hover td {
   background: var(--bg-hover);
+}
+
+.results-table tbody tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.results-table tr.row-selected td {
+  background: rgba(88, 166, 255, 0.1) !important;
 }
 
 .results-table .cell-null {
