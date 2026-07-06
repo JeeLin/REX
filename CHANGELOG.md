@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.55.0] - 2026-07-06
+
+### Fixed
+- Dashboard "在新标签中打开"现在真正创建新标签（而非复用已有标签）
+- 系统主题模式下切换 OS 偏好时自动切换深色/浅色
+- SqlSidebar 新建表标签名国际化（修复硬编码中文）
+
+### Changed
+- i18n 清理：消除 `ws.workspace.*` 与 `ws.*` 的重复 key（减少约 94 行冗余翻译）
+- settings store 重构为 Pinia `defineStore`，与其他 store 架构一致
+
 ## [0.54.0] - 2026-07-06
 
 ### Changed
