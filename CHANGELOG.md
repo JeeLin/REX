@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.62.0] - 2026-07-06
+
+### Added
+- 审计日志：移动端筛选栏垂直排列、表格水平滚动、统计卡片 2 列布局
+
 ## [0.61.0] - 2026-07-06
 
 ### Added
