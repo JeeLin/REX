@@ -31,8 +31,8 @@
       @add="addTab"
     />
 
-    <!-- Toolbar -->
-    <div class="sql-toolbar">
+    <!-- Toolbar (desktop) -->
+    <div v-if="!isMobile" class="sql-toolbar">
       <button class="btn btn-run btn-sm" @click="execute(activeTab.sql)">
         ▶ {{ t('sql.execute') }}
       </button>
@@ -70,6 +70,7 @@
       <div class="sql-right">
         <div class="sql-editor-section" :style="{ height: (splitRatio * 100) + '%' }">
           <SqlEditor
+            ref="editorRef"
             v-model="activeTab.sql"
             :dialect="editorDialect"
             @execute="execute(activeTab.sql)"
@@ -98,6 +99,17 @@
     </div>
   </div>
 
+  <!-- Mobile Toolbar -->
+  <SqlMobileToolbar
+    :visible="isMobile"
+    @execute="execute(activeTab.sql)"
+    @format="handleFormat"
+    @clear="clearEditor"
+    @save="handleToolbarSave"
+    @history="showHistoryPanel = true"
+    @global-query="openGlobalQuery"
+  />
+
   <!-- Global Query Modal -->
   <GlobalQueryModal
     v-model:visible="globalQueryVisible"
@@ -116,6 +128,7 @@ import SqlSidebar from '@/features/sql/SqlSidebar.vue'
 import SqlEditor from '@/features/sql/SqlEditor.vue'
 import SqlResults from '@/features/sql/SqlResults.vue'
 import SqlHistoryPanel from '@/features/sql/SqlHistoryPanel.vue'
+import SqlMobileToolbar from '@/features/sql/SqlMobileToolbar.vue'
 import GlobalQueryModal from '@/components/GlobalQueryModal.vue'
 import { listDatabases, getResourceInfo, getQuery, saveQuery, updateQuery, recordHistory, listPeerSqlResources, executeSql } from '@/api/sql'
 import type { DatabaseInfo, SqlResourceInfo, QueryFileMeta, HistoryRecord, SqlResult } from '@/api/sql'
@@ -147,9 +160,16 @@ const resource = ref<{ name: string; protocol: string } | null>(null)
 const databases = ref<DatabaseInfo[]>([])
 const selectedDb = ref('')
 const sidebarRef = ref<InstanceType<typeof SqlSidebar>>()
+const editorRef = ref<InstanceType<typeof SqlEditor>>()
 const showHistoryPanel = ref(false)
 const globalQueryVisible = ref(false)
 const peerResources = ref<SqlResourceInfo[]>([])
+
+// Mobile detection
+const isMobile = ref(window.innerWidth < 768)
+function checkMobile() {
+  isMobile.value = window.innerWidth < 768
+}
 
 // Editor/Results split resize
 const EDITOR_SPLIT_KEY = 'rex-sql-editor-split'
@@ -253,6 +273,17 @@ function handleToolbarSave() {
   handleTabSave(activeTabId.value)
 }
 
+function handleFormat() {
+  editorRef.value?.formatSql()
+}
+
+function handleToolbarAction(e: Event) {
+  const type = (e as CustomEvent).detail
+  switch (type) {
+    case 'openQuery': openGlobalQuery(); break
+  }
+}
+
 function handleTabRename(id: string) {
   const newTitle = prompt(t('sql.sidebar.renamePrompt'))
   if (newTitle) renameTab(id, newTitle)
@@ -337,6 +368,13 @@ onMounted(async () => {
   }
   addTab()
   await loadDatabases()
+  window.addEventListener('resize', checkMobile)
+  window.addEventListener('sql-toolbar-action', handleToolbarAction)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', checkMobile)
+  window.removeEventListener('sql-toolbar-action', handleToolbarAction)
 })
 </script>
 
