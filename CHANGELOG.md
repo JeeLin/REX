@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.54.0] - 2026-07-06
+
+### Changed
+- 快速连接改为显示最近使用的资源（而非全部），卡片补充地址和环境名
+- 仪表盘自动刷新：每 60 秒定时更新统计数据
+- 环境卡片右键菜单增加"在工作区打开所有资源"
+- 统计卡片手动刷新改为静默更新（不再整页重载）
+
 ## [0.53.0] - 2026-07-06
 
 ### Changed
