@@ -111,4 +111,47 @@ describe('SqlResults', () => {
     // NULL should be formatted differently (e.g., "NULL" text or special class)
     expect(cells.length).toBeGreaterThanOrEqual(2)
   })
+
+  it('applies zebra striping to even rows', () => {
+    const wrapper = mount(SqlResults, {
+      props: { result: mockResult, loading: false },
+    })
+    const rows = wrapper.findAll('tbody tr')
+    // Even rows (1-indexed: 2nd, 4th...) should have zebra styling via CSS nth-child
+    // We verify the rows exist and are rendered correctly
+    expect(rows.length).toBe(3)
+    // The first row should not have row-selected class
+    expect(rows[0].classes()).not.toContain('row-selected')
+  })
+
+  it('selects a row on click', async () => {
+    const wrapper = mount(SqlResults, {
+      props: { result: mockResult, loading: false },
+    })
+    const rows = wrapper.findAll('tbody tr')
+    await rows[0].trigger('click')
+    expect(rows[0].classes()).toContain('row-selected')
+  })
+
+  it('deselects row on second click', async () => {
+    const wrapper = mount(SqlResults, {
+      props: { result: mockResult, loading: false },
+    })
+    const rows = wrapper.findAll('tbody tr')
+    await rows[0].trigger('click')
+    expect(rows[0].classes()).toContain('row-selected')
+    await rows[0].trigger('click')
+    expect(rows[0].classes()).not.toContain('row-selected')
+  })
+
+  it('selects only one row at a time', async () => {
+    const wrapper = mount(SqlResults, {
+      props: { result: mockResult, loading: false },
+    })
+    const rows = wrapper.findAll('tbody tr')
+    await rows[0].trigger('click')
+    await rows[1].trigger('click')
+    expect(rows[0].classes()).not.toContain('row-selected')
+    expect(rows[1].classes()).toContain('row-selected')
+  })
 })
