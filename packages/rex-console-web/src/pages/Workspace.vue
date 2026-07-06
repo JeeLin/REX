@@ -1125,4 +1125,29 @@ function onKeyDown(e: KeyboardEvent) {
     max-width: 60px;
   }
 }
+
+/* ── Mobile Touch Optimizations ── */
+@media (max-width: 767px) {
+  /* Connection menu touch optimization */
+  .conn-menu-item {
+    min-height: 48px;
+    padding: var(--sp-sm) var(--sp-md);
+  }
+
+  /* Shortcuts panel mobile adaptation */
+  .shortcuts-panel-separator {
+    margin: var(--sp-sm) 0;
+  }
+
+  .shortcut-item {
+    padding: var(--sp-sm);
+    border-radius: var(--radius-sm);
+    background: var(--bg-elevated);
+  }
+
+  .shortcut-key {
+    min-width: 60px;
+    display: inline-block;
+  }
+}
 </style>

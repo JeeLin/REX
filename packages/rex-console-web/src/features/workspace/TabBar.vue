@@ -298,4 +298,29 @@ function onTabCtx(e: MouseEvent, tab: Tab) {
   flex-shrink: 0;
   padding-left: var(--sp-sm);
 }
+
+@media (max-width: 767px) {
+  .ws-tab {
+    min-height: 44px;
+    padding: var(--sp-sm) var(--sp-md);
+  }
+
+  .ws-tab-close {
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--fs-lg);
+  }
+
+  .ws-tab-add {
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--fs-lg);
+  }
+}
 </style>
