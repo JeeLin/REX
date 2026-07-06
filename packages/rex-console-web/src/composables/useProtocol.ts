@@ -28,8 +28,9 @@ export function useProtocol() {
   function connectToResource(
     resource: { id: string; protocol: string; name: string },
     envName: string,
+    forceNew = false,
   ) {
-    addTab(resource.name, resource.protocol as Protocol, resource.id)
+    addTab(resource.name, resource.protocol as Protocol, resource.id, !forceNew)
     router.push('/workspace')
     addToRecent({ resourceId: resource.id, name: resource.name, protocol: resource.protocol, envName })
   }

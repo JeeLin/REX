@@ -198,7 +198,7 @@ function getResourceStats(env: EnvWithResources): Record<string, number> {
 function onQuickConnectCtx(e: MouseEvent, item: { resource: { id: string; name: string; protocol: string }; envName: string }) {
   showMenu(e, [
     { label: t('ctx.connect'), action: () => connectToResource(item.resource, item.envName) },
-    { label: t('ctx.connectNewTab'), action: () => connectToResource(item.resource, item.envName) },
+    { label: t('ctx.connectNewTab'), action: () => connectToResource(item.resource, item.envName, true) },
     { separator: true },
     { label: t('ctx.copyAddress'), action: () => navigator.clipboard?.writeText(`${item.resource.name} (${item.envName})`) },
     { label: t('ctx.addFavorite'), action: () => addFavorite(item.resource.id) },

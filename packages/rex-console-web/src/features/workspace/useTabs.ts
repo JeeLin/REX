@@ -31,12 +31,14 @@ const activeTabId = ref<string | null>(null)
 export function useTabs() {
   const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.value) ?? null)
 
-  function addTab(name: string, proto: Protocol, resourceId: string): string | null {
+  function addTab(name: string, proto: Protocol, resourceId: string, dedup = true): string | null {
     // Dedup: same resourceId → activate existing
-    const existing = tabs.value.find((t) => t.resourceId === resourceId)
-    if (existing) {
-      activeTabId.value = existing.id
-      return existing.id
+    if (dedup) {
+      const existing = tabs.value.find((t) => t.resourceId === resourceId)
+      if (existing) {
+        activeTabId.value = existing.id
+        return existing.id
+      }
     }
 
     tabCounter++
@@ -116,7 +118,7 @@ export function useTabs() {
   function duplicateTab(id: string) {
     const tab = tabs.value.find((t) => t.id === id)
     if (tab) {
-      addTab(tab.name, tab.proto, tab.resourceId)
+      addTab(tab.name, tab.proto, tab.resourceId, false)
     }
   }
 
