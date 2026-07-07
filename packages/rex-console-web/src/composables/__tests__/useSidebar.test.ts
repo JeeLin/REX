@@ -65,8 +65,8 @@ describe('useSidebar', () => {
     const { searchQuery, filteredEnvs, envs } = await getSidebar()
     // Manually set envs since fetchEnvs requires API
     envs.value = [
-      { id: 'e1', name: 'Production', resources: [] } as any,
-      { id: 'e2', name: 'Staging', resources: [] } as any,
+      { id: 'e1', name: 'Production', resources: [] } as unknown as typeof envs.value[number],
+      { id: 'e2', name: 'Staging', resources: [] } as unknown as typeof envs.value[number],
     ]
     searchQuery.value = 'prod'
     expect(filteredEnvs.value).toHaveLength(1)
