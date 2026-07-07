@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- Loading -->
-    <LoadingSpinner v-if="loading" :text="t('common.loading')" />
+    <SkeletonLoader v-if="loading" variant="card" />
 
     <!-- Error -->
     <ErrorState v-else-if="loadError" :message="loadError" :retry="loadData" />
@@ -127,7 +127,7 @@ import { useRecent } from '@/composables/useRecent'
 import { useSidebar } from '@/composables/useSidebar'
 import { getProtocolIcon, useProtocol } from '@/composables/useProtocol'
 import { useContextMenu } from '@/composables/useContextMenu'
-import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import ErrorState from '@/components/ErrorState.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import EnvironmentEditModal from '@/components/EnvironmentEditModal.vue'
