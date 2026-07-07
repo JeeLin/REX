@@ -12,19 +12,19 @@
       <div class="stats-row">
         <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
           <div class="stat-label">{{ t('dashboard.envCount') }}</div>
-          <div class="stat-value" style="color: var(--accent)">{{ envCount }}</div>
+          <div class="stat-value" style="color: var(--accent)" aria-live="polite">{{ envCount }}</div>
         </div>
         <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
           <div class="stat-label">{{ t('dashboard.resCount') }}</div>
-          <div class="stat-value" style="color: var(--info)">{{ resourceCount }}</div>
+          <div class="stat-value" style="color: var(--info)" aria-live="polite">{{ resourceCount }}</div>
         </div>
         <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
           <div class="stat-label">{{ t('dashboard.agentOnline') }}</div>
-          <div class="stat-value" style="color: var(--success)">{{ agentOnlineCount }}</div>
+          <div class="stat-value" style="color: var(--success)" aria-live="polite">{{ agentOnlineCount }}</div>
         </div>
         <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
           <div class="stat-label">{{ t('dashboard.todayOps') }}</div>
-          <div class="stat-value">{{ todayOps }}</div>
+          <div class="stat-value" aria-live="polite">{{ todayOps }}</div>
         </div>
       </div>
 

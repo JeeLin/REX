@@ -6,7 +6,7 @@
         :key="toast.id"
         class="toast-item"
         :class="toast.type"
-        role="alert"
+        :role="toast.type === 'error' || toast.type === 'warning' ? 'alert' : 'status'"
         @click="remove(toast.id)"
       >
         <span class="toast-icon">{{ iconFor(toast.type) }}</span>

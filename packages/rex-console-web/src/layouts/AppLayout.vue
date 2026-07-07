@@ -4,7 +4,7 @@
     <a href="#main-content" class="skip-link">{{ t('layout.skipToContent') }}</a>
 
     <!-- 移动端汉堡按钮 -->
-    <button v-if="!mobileOpen" class="hamburger" :aria-label="t('layout.openMenu')" @click="mobileOpen = !mobileOpen">
+    <button v-if="!mobileOpen" ref="hamburgerRef" class="hamburger" :aria-label="t('layout.openMenu')" @click="mobileOpen = !mobileOpen">
       <span></span>
       <span></span>
       <span></span>
@@ -13,7 +13,7 @@
     <!-- 移动端遮罩 -->
     <div v-if="mobileOpen" class="mobile-overlay" @click="closeMobile"></div>
 
-    <aside class="sidebar" role="complementary" :aria-label="t('layout.sidebar')" :class="{ open: mobileOpen }" :style="{ width: effectiveCollapsed ? '60px' : sidebarWidth + 'px' }">
+    <aside ref="sidebarRef" class="sidebar" role="complementary" :aria-label="t('layout.sidebar')" :class="{ open: mobileOpen }" :style="{ width: effectiveCollapsed ? '60px' : sidebarWidth + 'px' }" @keydown="onSidebarKeydown">
       <!-- Header -->
       <div class="sidebar-header">
         <div class="sidebar-logo">R</div>
@@ -34,6 +34,7 @@
           v-model="searchQuery"
           type="text"
           :placeholder="t('sidebar.searchPlaceholder')"
+          :aria-label="t('sidebar.searchPlaceholder')"
           class="search-input"
         />
       </div>
@@ -65,7 +66,7 @@
         <div v-else-if="filteredEnvs.length === 0" class="tree-empty">{{ t('common.noData') }}</div>
         <template v-else>
           <div v-for="env in filteredEnvs" :key="env.id" class="env-group">
-            <button class="env-group-header" @click="toggleEnvExpand(env.id)" @contextmenu.prevent="onEnvGroupCtx($event, env)">
+            <button class="env-group-header" :aria-expanded="isEnvExpanded(env.id)" @click="toggleEnvExpand(env.id)" @contextmenu.prevent="onEnvGroupCtx($event, env)">
               <span class="env-dot" :class="env.resources.length > 0 ? 'online' : 'offline'"></span>
               <span class="env-name">{{ env.name }}</span>
               <span class="env-count">[{{ env.resources.length }}]</span>
@@ -99,7 +100,7 @@
       <!-- 收藏 -->
       <div v-show="!effectiveCollapsed" class="sidebar-section">
         <div class="section-header">
-          <span class="section-label">⭐ {{ t('sidebar.favorites') }}</span>
+          <span class="section-label"><span aria-hidden="true">⭐</span> {{ t('sidebar.favorites') }}</span>
           <span v-if="favoriteResources.length" class="section-count">({{ favoriteResources.length }})</span>
         </div>
         <div v-if="favoriteResources.length === 0" class="section-empty">
@@ -125,7 +126,7 @@
       <!-- 最近使用 -->
       <div v-show="!effectiveCollapsed" class="sidebar-section">
         <div class="section-header">
-          <span class="section-label">🕐 {{ t('sidebar.recent') }}</span>
+          <span class="section-label"><span aria-hidden="true">🕐</span> {{ t('sidebar.recent') }}</span>
           <button v-if="recent.length > 0" class="section-action" :title="t('sidebar.clearRecent')" @click="clearRecent">🗑</button>
         </div>
         <div v-if="recent.length === 0" class="section-empty">
@@ -166,7 +167,7 @@
           <span class="nav-icon">⚙</span>
           <span v-show="!effectiveCollapsed">{{ t('nav.settings') }}</span>
         </router-link>
-        <button v-if="settingsStore.appearanceSettings.sidebarCollapsible" class="nav-item collapse-btn" @click="toggleCollapse">
+        <button v-if="settingsStore.appearanceSettings.sidebarCollapsible" class="nav-item collapse-btn" :aria-expanded="!effectiveCollapsed" :aria-label="effectiveCollapsed ? t('sidebar.expand') : t('sidebar.collapse')" @click="toggleCollapse">
           <span class="nav-icon">{{ effectiveCollapsed ? '»' : '«' }}</span>
           <span v-show="!effectiveCollapsed">{{ effectiveCollapsed ? t('sidebar.expand') : t('sidebar.collapse') }}</span>
         </button>
@@ -232,7 +233,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useUserStore, type Theme } from '@/stores/user'
@@ -253,6 +254,10 @@ const { t } = useI18n()
 const userStore = useUserStore()
 const authStore = useAuthStore()
 const { show: showMenu } = useContextMenu()
+
+// Mobile sidebar focus trap
+const hamburgerRef = ref<HTMLButtonElement | null>(null)
+const sidebarRef = ref<HTMLElement | null>(null)
 
 // 资源编辑对话框状态
 const editModalVisible = ref(false)
@@ -280,6 +285,45 @@ const {
   isFavorite,
   closeMobile,
 } = useSidebar()
+
+// Mobile sidebar focus trap
+watch(mobileOpen, (open) => {
+  if (!isMobile.value) return
+  if (open) {
+    // Focus first focusable element in sidebar
+    nextTick(() => {
+      const sidebar = sidebarRef.value
+      if (!sidebar) return
+      const focusable = sidebar.querySelector<HTMLElement>(
+        'a, button, input, [tabindex]:not([tabindex="-1"])',
+      )
+      focusable?.focus()
+    })
+  } else {
+    // Restore focus to hamburger button
+    hamburgerRef.value?.focus()
+  }
+})
+
+// Trap Tab key inside mobile sidebar
+function onSidebarKeydown(e: KeyboardEvent) {
+  if (!isMobile.value || !mobileOpen.value || e.key !== 'Tab') return
+  const sidebar = sidebarRef.value
+  if (!sidebar) return
+  const focusable = sidebar.querySelectorAll<HTMLElement>(
+    'a, button, input, [tabindex]:not([tabindex="-1"])',
+  )
+  if (focusable.length === 0) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault()
+    first.focus()
+  }
+}
 
 // 侧边栏可折叠设置：固定模式下强制展开
 const sidebarFixed = computed(() => !settingsStore.appearanceSettings.sidebarCollapsible)
