@@ -454,4 +454,55 @@ mod tests {
             let _parsed: TransferEvent = serde_json::from_str(&json).unwrap();
         }
     }
+
+    // ── Edge case tests ───────────────────────────────────
+
+    #[test]
+    fn transfer_progress_percent_100() {
+        let p = TransferProgress {
+            total_bytes: 500,
+            transferred_bytes: 500,
+        };
+        assert_eq!(p.percent(), 100.0);
+    }
+
+    #[test]
+    fn transfer_progress_percent_zero_total() {
+        let p = TransferProgress {
+            total_bytes: 0,
+            transferred_bytes: 100,
+        };
+        assert_eq!(p.percent(), 0.0);
+    }
+
+    #[tokio::test]
+    async fn manager_set_status_nonexistent_fails() {
+        let mgr = TransferManager::new();
+        let result = mgr.set_status("nonexistent", TransferStatus::Running).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn manager_set_progress_nonexistent_fails() {
+        let mgr = TransferManager::new();
+        let result = mgr.set_progress("nonexistent", 100, 50).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn manager_cancel_running_task() {
+        let mgr = TransferManager::new();
+        let id = mgr
+            .create_task(make_endpoint("/a"), make_endpoint("/b"))
+            .await;
+        mgr.set_status(&id, TransferStatus::Running)
+            .await
+            .unwrap();
+
+        mgr.cancel_task(&id).await.unwrap();
+        let task = mgr.get_task(&id).await.unwrap();
+        assert_eq!(task.status, TransferStatus::Cancelled);
+    }
 }

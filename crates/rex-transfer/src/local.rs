@@ -353,4 +353,15 @@ mod tests {
         assert_eq!(entry.file_type, FileType::Directory);
         assert!(connector.metadata(Path::new("/old_dir")).await.is_err());
     }
+
+    #[test]
+    fn new_rejects_file_not_directory() {
+        let tmp = TempDir::new().unwrap();
+        let file_path = tmp.path().join("not_a_dir.txt");
+        std::fs::write(&file_path, b"data").unwrap();
+        let result = LocalConnector::new(file_path);
+        assert!(result.is_err());
+        let err_msg = result.err().unwrap().to_string();
+        assert!(err_msg.contains("not a directory"));
+    }
 }
