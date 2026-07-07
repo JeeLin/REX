@@ -1,6 +1,7 @@
 import axios from 'axios'
 import router from '@/router'
 import { useToast } from '@/composables/useToast'
+import { t } from '@/i18n'
 
 const client = axios.create({
   baseURL: '/api',
@@ -33,25 +34,25 @@ client.interceptors.response.use(
 
     // 429 限流
     if (err.response?.status === 429) {
-      toast.error(err.response?.data?.error?.message || '操作过于频繁，请稍后重试')
+      toast.error(err.response?.data?.error?.message || t('api.error.rateLimit'))
       return Promise.reject(err)
     }
 
     // 5xx 服务端错误
     if (err.response?.status >= 500) {
-      toast.error(`服务器错误（${err.response.status}），请稍后重试`)
+      toast.error(t('api.error.serverError', { status: err.response.status }))
       return Promise.reject(err)
     }
 
     // 超时
     if (err.code === 'ECONNABORTED') {
-      toast.error('请求超时，请稍后重试')
+      toast.error(t('api.error.timeout'))
       return Promise.reject(err)
     }
 
     // 网络错误（无 response）
     if (!err.response) {
-      toast.error('网络连接失败，请检查网络')
+      toast.error(t('api.error.network'))
       return Promise.reject(err)
     }
 

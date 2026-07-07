@@ -38,6 +38,14 @@ export default {
     offline: '网络已断开',
     restored: '网络已恢复',
   },
+  api: {
+    error: {
+      rateLimit: '操作过于频繁，请稍后重试',
+      serverError: '服务器错误（{status}），请稍后重试',
+      timeout: '请求超时，请稍后重试',
+      network: '网络连接失败，请检查网络',
+    },
+  },
   confirm: {
     title: '确认操作',
     deleteTitle: '确认删除',

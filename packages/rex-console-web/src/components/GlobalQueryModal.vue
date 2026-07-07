@@ -2,13 +2,13 @@
   <div v-show="visible" class="modal-overlay" @click.self="close">
     <div class="modal-content">
       <div class="modal-header">
-        <span>⊞ 全局查询</span>
+        <span>⊞ {{ t('sql.globalQuery.title') }}</span>
         <button @click="close">×</button>
       </div>
 
       <div class="modal-body">
         <div class="db-selector">
-          <label>资源：</label>
+          <label>{{ t('sql.globalQuery.resourceLabel') }}</label>
           <div class="db-checkbox-group">
             <label
               v-for="res in peerResources"
@@ -32,17 +32,17 @@
               class="btn btn-ghost btn-sm"
               @click="selectAllCompatible"
             >
-              全选兼容
+              {{ t('sql.globalQuery.selectAllCompatible') }}
             </button>
           </div>
-          <small class="hint">仅支持相同方言的数据库（MySQL 或 PostgreSQL）</small>
+          <small class="hint">{{ t('sql.globalQuery.compatibleHint') }}</small>
         </div>
 
         <div class="sql-editor">
           <textarea
             ref="textareaRef"
             v-model="sqlQuery"
-            placeholder="输入 SQL 查询语句..."
+            :placeholder="t('sql.globalQuery.placeholder')"
             @keydown.ctrl.enter="executeGlobalQuery"
           />
           <div class="editor-toolbar">
@@ -50,13 +50,13 @@
               :disabled="!selectedResources.length || !sqlQuery.trim() || isExecuting"
               @click="executeGlobalQuery"
             >
-              执行 (Ctrl+Enter)
+              {{ t('sql.globalQuery.execute') }}
             </button>
             <button
               :disabled="!isExecuting"
               @click="cancelQuery"
             >
-              取消
+              {{ t('common.cancel') }}
             </button>
             <progress
               v-if="isExecuting"
@@ -75,8 +75,8 @@
               @click="activeTab = index"
             >
               {{ result.connectionName }}
-              <span v-if="result.error !== undefined" class="error-tag">错误</span>
-              <span v-else>{{ result.rowCount }} 行</span>
+              <span v-if="result.error !== undefined" class="error-tag">{{ t('sql.globalQuery.error') }}</span>
+              <span v-else>{{ t('sql.globalQuery.rowCount', { count: result.rowCount }) }}</span>
             </button>
           </div>
           <div class="tab-content">
@@ -101,13 +101,13 @@
                     </tr>
                   </tbody>
                 </table>
-                <div v-else class="empty-result">无结果数据</div>
+                <div v-else class="empty-result">{{ t('sql.globalQuery.noData') }}</div>
               </div>
             </div>
           </div>
         </div>
 
-        <div v-else class="empty-state">暂无结果</div>
+        <div v-else class="empty-state">{{ t('sql.globalQuery.noResult') }}</div>
       </div>
     </div>
   </div>
@@ -115,7 +115,10 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useGlobalQuery, type SqlResource } from '@/composables/useGlobalQuery'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   visible: boolean

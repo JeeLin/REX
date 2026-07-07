@@ -38,6 +38,14 @@ export default {
     offline: 'Network disconnected',
     restored: 'Network restored',
   },
+  api: {
+    error: {
+      rateLimit: 'Too many requests. Please try again later.',
+      serverError: 'Server error ({status}). Please try again later.',
+      timeout: 'Request timed out. Please try again later.',
+      network: 'Network connection failed. Please check your network.',
+    },
+  },
   confirm: {
     title: 'Confirm Action',
     deleteTitle: 'Confirm Delete',

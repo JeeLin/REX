@@ -8,3 +8,12 @@ export const i18n = createI18n({
   fallbackLocale: 'en',
   messages: { zh, en },
 })
+
+/**
+ * 独立的翻译函数，可在 Vue 组件外使用（如 api/client.ts）
+ * 内部读取 i18n 实例的当前 locale
+ */
+export function t(key: string, params?: Record<string, unknown>): string {
+  const { global } = i18n
+  return global.t(key, params) as string
+}
