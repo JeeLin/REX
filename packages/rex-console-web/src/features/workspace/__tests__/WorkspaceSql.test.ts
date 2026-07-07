@@ -11,9 +11,14 @@ const i18n = createI18n({
     zh: {
       common: { cancel: '取消', save: '保存' },
       sql: {
+        database: '数据库',
         execute: '执行',
         format: '格式化',
+        clear: '清空',
         saveQuery: '保存查询',
+        shortcutHint: 'Ctrl+S 保存 · Ctrl+Enter 执行',
+        executing: '执行中...',
+        elapsed: '执行时间: {time}s',
         fileName: '文件名',
         fileNamePlaceholder: '输入查询名称',
         toast: { saveSuccess: '保存成功', saveFailed: '保存失败' },

@@ -5,6 +5,11 @@ vi.mock('@/router', () => ({
   default: { push: vi.fn() },
 }))
 
+// Mock i18n
+vi.mock('@/i18n', () => ({
+  t: vi.fn((key: string) => key),
+}))
+
 describe('API client', () => {
   it('exports an axios instance with correct config', async () => {
     const { default: client } = await import('../client')
