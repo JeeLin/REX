@@ -4,7 +4,7 @@
     <div class="ws-sql-topbar">
       <div class="ws-sql-db-select">
         <select v-model="selectedDb" class="ws-sql-db-dropdown">
-          <option value="" disabled>选择数据库</option>
+          <option value="" disabled>{{ t('sql.database') }}</option>
           <option v-for="db in databases" :key="db.name" :value="db.name">{{ db.name }}</option>
         </select>
         <button class="btn btn-ghost btn-xs" @click="loadDatabases">↻</button>
@@ -29,15 +29,15 @@
 
     <!-- Toolbar -->
     <div class="ws-sql-toolbar">
-      <button class="btn btn-run btn-xs" @click="execute(activeTab.sql)">▶ 执行</button>
+      <button class="btn btn-run btn-xs" @click="execute(activeTab.sql)">▶ {{ t('sql.execute') }}</button>
       <div class="ws-sql-sep"></div>
-      <button class="btn btn-ghost btn-xs" @click="handleFormat">✨ 格式化</button>
+      <button class="btn btn-ghost btn-xs" @click="handleFormat">✨ {{ t('sql.format') }}</button>
       <div class="ws-sql-sep"></div>
-      <button class="btn btn-ghost btn-xs" @click="handleSave">💾 保存</button>
+      <button class="btn btn-ghost btn-xs" @click="handleSave">💾 {{ t('sql.saveQuery') }}</button>
       <div class="ws-sql-sep"></div>
-      <button class="btn btn-ghost btn-xs" @click="clearEditor">清空</button>
+      <button class="btn btn-ghost btn-xs" @click="clearEditor">{{ t('sql.clear') }}</button>
       <div class="ws-sql-spacer"></div>
-      <span class="ws-sql-hint">Ctrl+S 保存 · Ctrl+Enter 执行</span>
+      <span class="ws-sql-hint">{{ t('sql.shortcutHint') }}</span>
     </div>
 
     <!-- Main Area -->
@@ -82,9 +82,9 @@
     <div class="ws-sql-statusbar">
       <span>{{ resourceName }}</span>
       <span class="spacer"></span>
-      <span v-if="executing" style="color: #000">执行中...</span>
+      <span v-if="executing" style="color: #000">{{ t('sql.executing') }}</span>
       <span v-else-if="activeTab.result" style="color: #000">
-        {{ activeTab.result.rows?.length ?? 0 }} 行 · {{ activeTab.result.elapsed_ms }}ms
+        {{ t('sql.elapsed', { time: activeTab.result.elapsed_ms }) }}
       </span>
     </div>
 

@@ -564,6 +564,7 @@ export default {
     explainError: '获取执行计划失败',
     rows: '{count} 行',
     elapsed: '执行时间: {time}s',
+    shortcutHint: 'Ctrl+S 保存 · Ctrl+Enter 执行',
     noResult: '执行查询以查看结果',
     executing: '执行中...',
     emptySql: 'SQL 不能为空',

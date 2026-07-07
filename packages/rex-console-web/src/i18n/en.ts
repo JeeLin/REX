@@ -564,6 +564,7 @@ export default {
     explainError: 'Failed to get execution plan',
     rows: '{count} rows',
     elapsed: 'Elapsed: {time}s',
+    shortcutHint: 'Ctrl+S Save · Ctrl+Enter Execute',
     noResult: 'Execute a query to see results',
     executing: 'Executing...',
     emptySql: 'SQL cannot be empty',
