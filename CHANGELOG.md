@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.67.0] - 2026-07-07
+
+### Added
+- 统一骨架屏加载状态：Dashboard、环境列表、Agent 列表使用 SkeletonLoader 组件
+- 空态引导优化：侧边栏收藏/最近使用、仪表盘快速连接显示引导文案和图标
+- Toast 通知：自动关闭动画和手动关闭按钮
+
 ## [0.66.0] - 2026-07-06
 
 ### Added
