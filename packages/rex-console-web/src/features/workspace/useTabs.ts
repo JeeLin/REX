@@ -31,7 +31,7 @@ const activeTabId = ref<string | null>(null)
 export function useTabs() {
   const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.value) ?? null)
 
-  function addTab(name: string, proto: Protocol, resourceId: string, dedup = true): string | null {
+  function addTab(name: string, proto: Protocol, resourceId: string, dedup = true, targetPanel?: number): string | null {
     // Dedup: same resourceId → activate existing
     if (dedup) {
       const existing = tabs.value.find((t) => t.resourceId === resourceId)
@@ -43,12 +43,14 @@ export function useTabs() {
 
     tabCounter++
     const id = `tab-${tabCounter}`
+    // Default to active panel if not specified
+    const panelIndex = targetPanel ?? (activeTab.value?.panelIndex ?? 0)
     const tab: Tab = {
       id,
       name,
       proto,
       resourceId,
-      panelIndex: 0,
+      panelIndex,
       status: 'connecting',
       component: PROTOCOL_COMPONENT[proto] || 'unsupported',
     }
