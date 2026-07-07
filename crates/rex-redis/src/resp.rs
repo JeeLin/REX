@@ -412,4 +412,52 @@ mod tests {
         let parsed: RedisValue = serde_json::from_str(&json).unwrap();
         assert_eq!(val, parsed);
     }
+
+    // ── Edge case tests ───────────────────────────────────
+
+    #[test]
+    fn decode_zero_length_bulk_string() {
+        // $0\r\n\r\n  — empty bulk string
+        let mut buf = BytesMut::from(&b"$0\r\n\r\n"[..]);
+        let val = RespDecoder::new().decode(&mut buf).unwrap().unwrap();
+        assert_eq!(val, RedisValue::Bulk(Some(String::new())));
+    }
+
+    #[test]
+    fn resp_error_display_io() {
+        let err = RespError::Io(std::io::Error::new(
+            std::io::ErrorKind::ConnectionRefused,
+            "connection refused",
+        ));
+        let msg = err.to_string();
+        assert!(msg.contains("IO error"));
+        assert!(msg.contains("connection refused"));
+    }
+
+    #[test]
+    fn resp_error_display_invalid() {
+        let err = RespError::Invalid("bad prefix".into());
+        assert_eq!(err.to_string(), "Invalid RESP: bad prefix");
+    }
+
+    #[test]
+    fn encode_then_decode_roundtrip() {
+        let mut buf = BytesMut::new();
+        RespEncoder::new()
+            .encode("PING".into(), &mut buf)
+            .unwrap();
+        let val = RespDecoder::new().decode(&mut buf).unwrap().unwrap();
+        // Encoded as *1\r\n$4\r\nPING\r\n, decoded as Array([Bulk("PING")])
+        assert_eq!(
+            val,
+            RedisValue::Array(vec![RedisValue::Bulk(Some("PING".into()))])
+        );
+    }
+
+    #[test]
+    fn decode_unknown_prefix_error() {
+        let mut buf = BytesMut::from(&b"!unknown\r\n"[..]);
+        let result = RespDecoder::new().decode(&mut buf);
+        assert!(result.is_err());
+    }
 }

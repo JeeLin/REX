@@ -606,4 +606,54 @@ mod tests {
         assert!(json.contains("id"));
         assert!(json.contains("INTEGER"));
     }
+
+    #[test]
+    fn sqlite_config_serialization_roundtrip() {
+        let config = SqliteConfig {
+            db_path: "/data/test.db".into(),
+            name: Some("test-db".into()),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let parsed: SqliteConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.db_path, "/data/test.db");
+        assert_eq!(parsed.name, Some("test-db".into()));
+    }
+
+    #[test]
+    fn sqlite_config_roundtrip_without_optional() {
+        let config = SqliteConfig {
+            db_path: "/data/app.db".into(),
+            name: None,
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let parsed: SqliteConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.db_path, "/data/app.db");
+        assert!(parsed.name.is_none());
+    }
+
+    #[tokio::test]
+    async fn sqlite_get_table_info_rejects_invalid_name() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let json = format!(r#"{{"db_path":"{}"}}"#, temp_file.path().to_string_lossy());
+        let mut connector = SqliteConnectorImpl::from_json(&json).unwrap();
+        connector.connect().await.unwrap();
+
+        // SQL injection attempt
+        let result = connector.get_table_info("users; DROP TABLE users").await;
+        assert!(result.is_err());
+
+        // Empty string
+        let result = connector.get_table_info("").await;
+        assert!(result.is_err());
+
+        // Special characters
+        let result = connector.get_table_info("users-table").await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("invalid table name"));
+
+        // Valid name passes validation (PRAGMA returns empty for non-existent table)
+        let result = connector.get_table_info("valid_table_123").await;
+        assert!(result.is_ok());
+    }
 }

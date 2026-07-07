@@ -410,4 +410,37 @@ mod tests {
         assert!(json.contains("localhost"));
         assert!(json.contains("3306"));
     }
+
+    #[test]
+    fn mysql_config_serialization_roundtrip() {
+        let config = MySqlConfig {
+            host: "db.example.com".into(),
+            port: 3307,
+            user: "admin".into(),
+            password: "s3cret".into(),
+            database: Some("mydb".into()),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let parsed: MySqlConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.host, "db.example.com");
+        assert_eq!(parsed.port, 3307);
+        assert_eq!(parsed.user, "admin");
+        assert_eq!(parsed.password, "s3cret");
+        assert_eq!(parsed.database, Some("mydb".into()));
+    }
+
+    #[test]
+    fn mysql_config_roundtrip_without_database() {
+        let config = MySqlConfig {
+            host: "localhost".into(),
+            port: 3306,
+            user: "root".into(),
+            password: "".into(),
+            database: None,
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let parsed: MySqlConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.host, "localhost");
+        assert!(parsed.database.is_none());
+    }
 }

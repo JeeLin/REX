@@ -511,4 +511,71 @@ mod tests {
         assert!(json.contains("localhost"));
         assert!(json.contains("5432"));
     }
+
+    #[test]
+    fn postgres_config_serialization_roundtrip() {
+        let config = PostgresConfig {
+            host: "db.example.com".into(),
+            port: 5433,
+            user: "admin".into(),
+            password: "p@ss:word".into(),
+            database: Some("mydb".into()),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let parsed: PostgresConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.host, "db.example.com");
+        assert_eq!(parsed.port, 5433);
+        assert_eq!(parsed.user, "admin");
+        assert_eq!(parsed.password, "p@ss:word");
+        assert_eq!(parsed.database, Some("mydb".into()));
+    }
+
+    #[test]
+    fn extract_pg_plan_node_deeply_nested() {
+        let node = serde_json::json!({
+            "Node Type": "Sort",
+            "Plans": [{
+                "Node Type": "Hash Join",
+                "Plans": [{
+                    "Node Type": "Seq Scan",
+                    "Relation Name": "users"
+                }, {
+                    "Node Type": "Seq Scan",
+                    "Relation Name": "orders"
+                }]
+            }]
+        });
+        let mut rows = Vec::new();
+        extract_pg_plan_node(&node, &mut rows);
+        assert_eq!(rows.len(), 4);
+        assert_eq!(rows[0][0], serde_json::json!("Sort"));
+        assert_eq!(rows[1][0], serde_json::json!("Hash Join"));
+        assert_eq!(rows[2][0], serde_json::json!("Seq Scan"));
+        assert_eq!(rows[3][0], serde_json::json!("Seq Scan"));
+    }
+
+    #[test]
+    fn extract_pg_plan_node_missing_fields() {
+        let node = serde_json::json!({
+            "Node Type": "Index Scan"
+        });
+        let mut rows = Vec::new();
+        extract_pg_plan_node(&node, &mut rows);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0][0], serde_json::json!("Index Scan"));
+        // Missing fields should be Null
+        assert_eq!(rows[0][1], serde_json::Value::Null);
+        assert_eq!(rows[0][2], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn extract_pg_plan_node_empty_plans() {
+        let node = serde_json::json!({
+            "Node Type": "Result",
+            "Plans": []
+        });
+        let mut rows = Vec::new();
+        extract_pg_plan_node(&node, &mut rows);
+        assert_eq!(rows.len(), 1);
+    }
 }
