@@ -739,6 +739,7 @@ export default {
       currentPasswordPlaceholder: 'Enter current password',
       newPassword: 'New Password',
       newPasswordPlaceholder: 'Enter new password (min 8 chars)',
+      confirmPassword: 'Confirm Password',
       saveSuccess: 'Password changed successfully',
       saveFailed: 'Save failed',
       passwordFailed: 'Password change failed',

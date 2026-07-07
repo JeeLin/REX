@@ -1,6 +1,6 @@
 <template>
   <div class="ws-tabbar" role="tablist" aria-label="Workspace tabs" @contextmenu.prevent>
-    <button class="ws-tab-add" title="新建连接 (Ctrl+N)" aria-label="New connection" @click="$emit('newConnection')">+</button>
+    <button class="ws-tab-add" :title="t('ws.tab.newConnection')" aria-label="New connection" @click="$emit('newConnection')">+</button>
     <div
       v-for="tab in tabs"
       :key="tab.id"

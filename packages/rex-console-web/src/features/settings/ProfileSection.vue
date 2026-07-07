@@ -64,7 +64,7 @@
           />
         </div>
         <div class="form-group" style="margin-top: var(--sp-md)">
-          <label class="form-label">{{ t('settings.profile.newPassword') }}（确认）</label>
+          <label class="form-label">{{ t('settings.profile.confirmPassword') }}</label>
           <input
             v-model="confirmPassword"
             type="password"

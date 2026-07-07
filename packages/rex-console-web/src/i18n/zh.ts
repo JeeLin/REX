@@ -739,6 +739,7 @@ export default {
       currentPasswordPlaceholder: '输入当前密码',
       newPassword: '新密码',
       newPasswordPlaceholder: '输入新密码（至少 8 位）',
+      confirmPassword: '确认密码',
       saveSuccess: '密码修改成功',
       saveFailed: '保存失败',
       passwordFailed: '密码修改失败',
