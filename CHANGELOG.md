@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.71.0] - 2026-07-07
+
+### Added
+- i18n 基础设施：创建可独立导入的 i18n 实例（t() 函数），供非 Vue 模块使用
+- API 错误消息国际化：client.ts 4 处硬编码中文替换为 i18n 翻译（429/5xx/超时/网络错误）
+
+### Fixed
+- GlobalQueryModal.vue：修复 12+ 处硬编码中文 UI 文本
+- WorkspaceSql.vue：修复 8 处硬编码中文 UI 文本（执行、格式化、保存、清空、快捷键提示等）
+- ProfileSection.vue：修复确认密码标签硬编码中文
+- TabBar.vue：修复新建连接 tooltip 硬编码中文
+
 ## [0.70.0] - 2026-07-07
 
 ### Added
