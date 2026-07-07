@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.72.0] - 2026-07-07
+
+### Added
+- Vite 构建优化：手动 chunk 分割（CodeMirror/xterm/vendor 独立 chunk）、构建目标升级 es2020、rollup-plugin-visualizer 产物分析
+- 可访问性补全：侧边栏 aria-expanded/aria-label、移动端焦点陷阱、prefers-reduced-motion、Toast 角色分级、Dashboard aria-live
+- TypeScript 配置加固：启用 noUncheckedIndexedAccess、forceConsistentCasingInFileNames
+
+### Fixed
+- SqlResults.test.ts：修复 vue-i18n mock 缺少 createI18n 导出导致的测试失败
+- i18n/zh.ts、i18n/en.ts：__APP_VERSION__ 添加 typeof 回退值，兼容测试环境
+
 ## [0.71.0] - 2026-07-07
 
 ### Added
