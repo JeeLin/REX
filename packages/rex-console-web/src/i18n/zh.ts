@@ -34,6 +34,10 @@ export default {
     title: '页面出错了',
     retry: '重新加载',
   },
+  network: {
+    offline: '网络已断开',
+    restored: '网络已恢复',
+  },
   confirm: {
     title: '确认操作',
     deleteTitle: '确认删除',
@@ -225,6 +229,8 @@ export default {
       reconnect: {
         title: '连接已断开',
         btn: '重新连接',
+        reconnecting: '正在重连（{attempt}/{max}）...',
+        failed: '重连失败，请手动重新连接',
       },
       disconnect: {
         title: '断开连接？',

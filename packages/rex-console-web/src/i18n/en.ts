@@ -34,6 +34,10 @@ export default {
     title: 'Something went wrong',
     retry: 'Reload page',
   },
+  network: {
+    offline: 'Network disconnected',
+    restored: 'Network restored',
+  },
   confirm: {
     title: 'Confirm Action',
     deleteTitle: 'Confirm Delete',
@@ -225,6 +229,8 @@ export default {
       reconnect: {
         title: 'Disconnected',
         btn: 'Reconnect',
+        reconnecting: 'Reconnecting ({attempt}/{max})...',
+        failed: 'Reconnect failed. Please reconnect manually.',
       },
       disconnect: {
         title: 'Disconnect?',

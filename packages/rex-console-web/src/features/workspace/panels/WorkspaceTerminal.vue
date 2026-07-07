@@ -207,6 +207,13 @@ let resizeObserver: ResizeObserver | null = null
 let cleanupTouch: (() => void) | null = null
 let inputBuffer = ''
 
+// Auto-reconnect state
+let reconnectAttempts = 0
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+const MAX_RECONNECT_ATTEMPTS = 5
+const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000] // 指数退避：1s → 16s
+let manualDisconnect = false
+
 // Latency measurement
 const latency = ref<number | null>(null)
 let pingInterval: ReturnType<typeof setInterval> | null = null
@@ -332,6 +339,7 @@ function initTerminal() {
 
 async function connectSession() {
   connectionStatus.value = 'connecting'
+  manualDisconnect = false
 
   try {
     const cols = terminal?.cols ?? 80
@@ -345,6 +353,7 @@ async function connectSession() {
 
     ws.onopen = () => {
       connectionStatus.value = 'connected'
+      reconnectAttempts = 0 // 重连成功，重置计数
       terminal?.focus()
       startPing()
     }
@@ -378,12 +387,23 @@ async function connectSession() {
     ws.onclose = () => {
       stopPing()
       connectionStatus.value = 'disconnected'
+
+      // 自动重连（非手动断开时）
+      if (!manualDisconnect && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        const delay = RECONNECT_DELAYS[Math.min(reconnectAttempts, RECONNECT_DELAYS.length - 1)]
+        reconnectAttempts++
+        terminal?.write(`\r\n\x1b[33m${t('ws.terminal.reconnect.reconnecting', { attempt: reconnectAttempts, max: MAX_RECONNECT_ATTEMPTS })}\x1b[0m\r\n`)
+        reconnectTimer = setTimeout(() => {
+          connectSession()
+        }, delay)
+      } else if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+        terminal?.write(`\r\n\x1b[31m${t('ws.terminal.reconnect.failed')}\x1b[0m\r\n`)
+      }
     }
 
     ws.onerror = () => {
       stopPing()
-      connectionStatus.value = 'disconnected'
-      emit('error', t('ws.terminal.wsFailed'))
+      // 不设置 disconnected 状态，让 onclose 处理重连
     }
   } catch (err: unknown) {
     connectionStatus.value = 'disconnected'
@@ -413,7 +433,12 @@ async function handlePaste() {
 
 async function doDisconnect() {
   showDisconnectDialog.value = false
+  manualDisconnect = true
   stopPing()
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
   ws?.close()
   if (sessionId) {
     try { await deleteSession(sessionId) } catch { /* ignore */ }
@@ -655,6 +680,10 @@ onBeforeUnmount(() => {
   cleanupTouch?.()
   inputBuffer = ''
   stopPing()
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
   ws?.close()
   if (sessionId) {
     deleteSession(sessionId).catch(() => {})
