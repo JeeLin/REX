@@ -126,4 +126,22 @@ mod tests {
         let state = UpdateState::read(&path);
         assert_eq!(state.phase, UpdatePhase::Idle);
     }
+
+    #[test]
+    fn update_phase_variants_serialization() {
+        let variants = vec![
+            UpdatePhase::Idle,
+            UpdatePhase::Requested,
+            UpdatePhase::StartingNew,
+            UpdatePhase::Committed,
+            UpdatePhase::RollingBack,
+            UpdatePhase::RolledBack,
+            UpdatePhase::Failed,
+        ];
+        for phase in variants {
+            let json = serde_json::to_string(&phase).unwrap();
+            let parsed: UpdatePhase = serde_json::from_str(&json).unwrap();
+            assert_eq!(parsed, phase);
+        }
+    }
 }

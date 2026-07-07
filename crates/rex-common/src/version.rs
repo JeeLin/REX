@@ -97,4 +97,21 @@ mod tests {
         assert_eq!(is_newer("abc", "0.1.0"), None);
         assert_eq!(is_newer("0.1", "0.1.0"), None);
     }
+
+    #[test]
+    fn is_newer_with_pre_release_suffix() {
+        // pre-release suffix causes parse failure (only numeric parts supported)
+        assert_eq!(is_newer("0.1.0-alpha", "0.1.1"), None);
+        assert_eq!(is_newer("0.1.0", "0.1.1-beta"), None);
+    }
+
+    #[test]
+    fn version_info_serializes() {
+        let info = VersionInfo::current();
+        let json = serde_json::to_string(&info).unwrap();
+        assert!(json.contains("\"version\""));
+        assert!(json.contains("\"git_commit\""));
+        assert!(json.contains("\"build_time\""));
+        assert!(json.contains("\"rust_version\""));
+    }
 }

@@ -90,4 +90,25 @@ mod tests {
         assert_eq!(cli.acme_email.as_deref(), Some("admin@example.com"));
         assert!(cli.acme_staging);
     }
+
+    #[test]
+    fn parse_tls_flags() {
+        let cli = Cli::parse_from([
+            "rex",
+            "--tls-cert",
+            "/etc/cert.pem",
+            "--tls-key",
+            "/etc/key.pem",
+            "--ca-cert",
+            "/etc/ca.pem",
+            "--insecure",
+            "--acme-http-port",
+            "8080",
+        ]);
+        assert_eq!(cli.tls_cert.as_deref(), Some("/etc/cert.pem"));
+        assert_eq!(cli.tls_key.as_deref(), Some("/etc/key.pem"));
+        assert_eq!(cli.ca_cert.as_deref(), Some("/etc/ca.pem"));
+        assert!(cli.insecure);
+        assert_eq!(cli.acme_http_port, Some(8080));
+    }
 }

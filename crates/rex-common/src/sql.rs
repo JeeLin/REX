@@ -210,4 +210,26 @@ mod tests {
         assert_eq!(parsed.rows.len(), 1);
         assert!(parsed.raw_output.contains("SIMPLE"));
     }
+
+    #[test]
+    fn view_info_roundtrips() {
+        let info = ViewInfo {
+            name: "active_users".into(),
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        let parsed: ViewInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.name, "active_users");
+    }
+
+    #[test]
+    fn procedure_info_roundtrips() {
+        let info = ProcedureInfo {
+            name: "get_user".into(),
+            r#type: "FUNCTION".into(),
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        let parsed: ProcedureInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.name, "get_user");
+        assert_eq!(parsed.r#type, "FUNCTION");
+    }
 }
