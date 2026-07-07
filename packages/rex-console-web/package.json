@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "check": "bun run type-check && bun run lint && bun run build",
+    "analyze": "vite build --mode analyze",
     "continue": "bash scripts/continue.sh"
   },
   "dependencies": {
@@ -40,6 +41,7 @@
     "typescript-eslint": "^8.61.1",
     "vite": "^6.0.0",
     "vitest": "^4.1.9",
-    "vue-tsc": "^2.1.0"
+    "vue-tsc": "^2.1.0",
+    "rollup-plugin-visualizer": "^5.14.0"
   }
 }
