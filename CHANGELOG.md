@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.69.0] - 2026-07-07
+
+### Added
+- rex-common 测试：ViewInfo/ProcedureInfo 序列化、CLI TLS flags、版本号边缘情况、UpdatePhase 序列化
+- 协议连接器测试：配置序列化往返（SQLite/MySQL/PostgreSQL/Redis）、表名验证、RESP 编解码边界
+- 传输引擎测试：TransferManager 边缘情况、LocalConnector 边界测试
+
 ## [0.68.0] - 2026-07-07
 
 ### Added
