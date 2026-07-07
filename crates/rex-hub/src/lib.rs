@@ -15,6 +15,7 @@ pub mod metrics;
 pub mod queries;
 pub mod resource;
 pub mod routes;
+pub mod security;
 pub mod settings;
 pub mod sql;
 pub mod ssh_config;

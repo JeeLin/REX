@@ -64,6 +64,7 @@ pub struct AppState {
     pub data_dir: PathBuf,
     pub metrics: Arc<MetricsCollector>,
     pub agent_log_store: Arc<AgentLogStore>,
+    pub rate_limiter: Arc<crate::security::RateLimiter>,
 }
 
 pub fn app(db: Arc<Database>, secret_key: String) -> axum::Router {
@@ -92,6 +93,10 @@ pub fn app_with_static(
     });
     let metrics = Arc::new(MetricsCollector::new(db.clone(), 3600)); // Cleanup every hour
     let agent_log_store = Arc::new(AgentLogStore::new());
+    let rate_limiter = Arc::new(crate::security::RateLimiter::new(
+        5,
+        std::time::Duration::from_secs(300),
+    ));
     let state = Arc::new(AppState {
         db,
         secret_key,
@@ -102,6 +107,7 @@ pub fn app_with_static(
         data_dir,
         metrics,
         agent_log_store,
+        rate_limiter,
     });
 
     let public_routes = Router::new()
@@ -402,7 +408,10 @@ pub fn app_with_static(
         .merge(protected_routes)
         .with_state(state)
         .layer(axum::extract::Extension(hub_config))
-        .layer(axum::extract::Extension(shared_acme_status));
+        .layer(axum::extract::Extension(shared_acme_status))
+        .layer(middleware::from_fn(
+            crate::security::security_headers_middleware,
+        ));
 
     // 前端静态文件服务：不经过鉴权
     if let Some(dir) = static_dir {

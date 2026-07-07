@@ -849,6 +849,10 @@ mod handler_tests {
                 3600,
             )),
             agent_log_store: Arc::new(crate::agent::AgentLogStore::new()),
+            rate_limiter: Arc::new(crate::security::RateLimiter::new(
+                5,
+                std::time::Duration::from_secs(300),
+            )),
         })
     }
 

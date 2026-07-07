@@ -46,6 +46,33 @@ pub async fn login(
 ) -> Result<Json<ApiResponse<LoginResponse>>, (StatusCode, Json<ErrorResponse>)> {
     let ip = extract_client_ip(&headers);
 
+    // 速率限制检查
+    let ip_addr: std::net::IpAddr = ip
+        .parse()
+        .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED));
+    if !state.rate_limiter.check(&ip_addr) {
+        write_audit_log(
+            &state.db,
+            "login",
+            "failure",
+            "登录失败：速率限制",
+            None,
+            None,
+            None,
+            None,
+            Some(&ip),
+        );
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(ErrorResponse {
+                error: crate::helpers::ErrorBody {
+                    code: "RATE_LIMITED".to_string(),
+                    message: "操作过于频繁，请稍后重试".to_string(),
+                },
+            }),
+        ));
+    }
+
     let password_hash = crate::helpers::get_or_create_password_hash(&state.db);
 
     let parsed_hash =
@@ -56,6 +83,7 @@ pub async fn login(
         .is_ok();
 
     if !password_valid {
+        state.rate_limiter.record_failure(&ip_addr);
         write_audit_log(
             &state.db,
             "login",
@@ -107,6 +135,8 @@ pub async fn login(
         None,
         Some(&ip),
     );
+
+    state.rate_limiter.clear(&ip_addr);
 
     let expires_at = format!("{exp:010}");
     Ok(Json(ApiResponse {

@@ -171,6 +171,10 @@ mod tests {
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: tmp.path().to_path_buf(),
             agent_log_store: Arc::new(crate::agent::AgentLogStore::new()),
+            rate_limiter: Arc::new(crate::security::RateLimiter::new(
+                5,
+                std::time::Duration::from_secs(300),
+            )),
             metrics: Arc::new(crate::metrics::MetricsCollector::new(
                 Arc::new(crate::db::Database::new_in_memory().unwrap()),
                 3600,
@@ -398,6 +402,10 @@ mod tests {
             update_cache: tokio::sync::RwLock::new(crate::routes::UpdateCache::new()),
             data_dir: tmp.path().to_path_buf(),
             agent_log_store: Arc::new(crate::agent::AgentLogStore::new()),
+            rate_limiter: Arc::new(crate::security::RateLimiter::new(
+                5,
+                std::time::Duration::from_secs(300),
+            )),
             metrics: Arc::new(crate::metrics::MetricsCollector::new(
                 Arc::new(crate::db::Database::new_in_memory().unwrap()),
                 3600,
