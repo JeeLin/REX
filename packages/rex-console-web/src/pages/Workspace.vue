@@ -262,6 +262,7 @@ import CommandPalette from '@/components/CommandPalette.vue'
 import type { CommandItem } from '@/components/CommandPalette.vue'
 import TabBar from '@/features/workspace/TabBar.vue'
 import { useTabs } from '@/features/workspace/useTabs'
+import { useWorkspacePersistence } from '@/composables/useWorkspacePersistence'
 
 // Lazy load workspace panels for better code splitting
 const WorkspaceTerminal = defineAsyncComponent(() => import('@/features/workspace/panels/WorkspaceTerminal.vue'))
@@ -277,6 +278,9 @@ const router = useRouter()
 
 // ── Tabs ──
 const { tabs, activeTabId, addTab, closeTab, nextTab, prevTab, switchTabByIndex, moveTabToPanel, swapPanels } = useTabs()
+
+// ── Workspace Persistence ──
+const { restore } = useWorkspacePersistence()
 
 // ── Layout ──
 type Layout = 'single' | 'left-right' | 'top-bottom' | 'quad' | 'sidebar-main'
@@ -458,6 +462,9 @@ watch(connSearchQuery, () => {
 onMounted(async () => {
   try { envsWithRes.value = await listEnvsWithResources() } catch { /* */ }
   window.addEventListener('keydown', onKeyDown)
+
+  // Restore workspace state from persistence
+  restore()
 
   // 从路由 query 读取待打开的资源
   const openId = route.query.open as string
