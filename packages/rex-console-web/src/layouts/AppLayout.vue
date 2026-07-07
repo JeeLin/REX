@@ -102,7 +102,10 @@
           <span class="section-label">⭐ {{ t('sidebar.favorites') }}</span>
           <span v-if="favoriteResources.length" class="section-count">({{ favoriteResources.length }})</span>
         </div>
-        <div v-if="favoriteResources.length === 0" class="section-empty">{{ t('sidebar.favoritesEmpty') }}</div>
+        <div v-if="favoriteResources.length === 0" class="section-empty">
+          <span class="empty-icon">⭐</span>
+          <span>{{ t('sidebar.favoritesEmpty') }}</span>
+        </div>
         <div v-else class="section-list">
           <button
             v-for="fav in favoriteResources"
@@ -125,7 +128,10 @@
           <span class="section-label">🕐 {{ t('sidebar.recent') }}</span>
           <button v-if="recent.length > 0" class="section-action" :title="t('sidebar.clearRecent')" @click="clearRecent">🗑</button>
         </div>
-        <div v-if="recent.length === 0" class="section-empty">{{ t('sidebar.recentEmpty') }}</div>
+        <div v-if="recent.length === 0" class="section-empty">
+          <span class="empty-icon">🕐</span>
+          <span>{{ t('sidebar.recentEmpty') }}</span>
+        </div>
         <div v-else class="section-list">
           <button
             v-for="item in recent"
@@ -827,6 +833,15 @@ onUnmounted(() => {
   color: var(--text-muted);
   padding: var(--sp-xs) var(--sp-sm);
   text-align: center;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-xs);
+  justify-content: center;
+}
+
+.section-empty .empty-icon {
+  font-size: 12px;
+  opacity: 0.6;
 }
 
 .section-list {

@@ -70,7 +70,7 @@
       </div>
 
       <!-- Quick Connect (Recent Resources) -->
-      <div v-if="recentQuickItems.length > 0" class="section-header" style="margin-top: var(--sp-xl)">
+      <div class="section-header" style="margin-top: var(--sp-xl)">
         <h2 class="section-title">{{ t('dashboard.quickConnect') }}</h2>
       </div>
       <div v-if="recentQuickItems.length > 0" class="quick-connect-grid">
@@ -90,6 +90,10 @@
             <div class="quick-env">{{ item.envName }}</div>
           </div>
         </button>
+      </div>
+      <div v-else class="quick-connect-empty">
+        <span class="empty-icon">🔗</span>
+        <span>{{ t('dashboard.quickConnectEmpty') }}</span>
       </div>
 
       <!-- Empty -->
@@ -415,6 +419,22 @@ async function loadData() {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: var(--sp-sm);
+}
+
+.quick-connect-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  padding: var(--sp-lg);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  text-align: center;
+  justify-content: center;
+}
+
+.quick-connect-empty .empty-icon {
+  font-size: 14px;
+  opacity: 0.6;
 }
 
 .quick-card {
