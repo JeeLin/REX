@@ -1,11 +1,14 @@
 <template>
-  <router-view />
-  <ContextMenu />
-  <ToastProvider />
+  <ErrorBoundary>
+    <router-view />
+    <ContextMenu />
+    <ToastProvider />
+  </ErrorBoundary>
 </template>
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import ErrorBoundary from '@/components/ErrorBoundary.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
 import ToastProvider from '@/components/ToastProvider.vue'
 import { useSessionTimeout } from '@/composables/useSessionTimeout'

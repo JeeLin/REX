@@ -30,6 +30,10 @@ export default {
     operationFailed: 'Operation failed',
     definitionFailed: 'Failed to get definition',
   },
+  errorBoundary: {
+    title: 'Something went wrong',
+    retry: 'Reload page',
+  },
   confirm: {
     title: 'Confirm Action',
     deleteTitle: 'Confirm Delete',

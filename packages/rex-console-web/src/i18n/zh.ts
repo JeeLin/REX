@@ -30,6 +30,10 @@ export default {
     operationFailed: '操作失败',
     definitionFailed: '获取定义失败',
   },
+  errorBoundary: {
+    title: '页面出错了',
+    retry: '重新加载',
+  },
   confirm: {
     title: '确认操作',
     deleteTitle: '确认删除',
