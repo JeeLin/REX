@@ -277,7 +277,7 @@ const route = useRoute()
 const router = useRouter()
 
 // ── Tabs ──
-const { tabs, activeTabId, addTab, closeTab, nextTab, prevTab, switchTabByIndex, moveTabToPanel, swapPanels } = useTabs()
+const { tabs, activeTabId, addTab, closeTab, duplicateTab, nextTab, prevTab, switchTabByIndex, moveTabToPanel, swapPanels } = useTabs()
 
 // ── Workspace Persistence ──
 const { restore } = useWorkspacePersistence()
@@ -598,12 +598,18 @@ function onKeyDown(e: KeyboardEvent) {
     if (activeTabId.value) {
       closeTab(activeTabId.value)
     }
-  } else if (ctrl && !e.shiftKey && e.key === 'Tab') {
+  } else if (ctrl && e.key === 'd') {
     e.preventDefault()
-    nextTab()
-  } else if (ctrl && e.shiftKey && e.key === 'Tab') {
+    if (activeTabId.value) {
+      duplicateTab(activeTabId.value)
+    }
+  } else if (ctrl && e.key === 'Tab') {
     e.preventDefault()
-    prevTab()
+    if (e.shiftKey) {
+      prevTab()
+    } else {
+      nextTab()
+    }
   } else if (ctrl && e.key >= '1' && e.key <= '9') {
     e.preventDefault()
     switchTabByIndex(parseInt(e.key) - 1)
