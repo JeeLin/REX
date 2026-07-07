@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.68.0] - 2026-07-07
+
+### Added
+- 通用组件测试：SkeletonLoader、EmptyState、ErrorState、LoadingSpinner 单元测试
+- useToast composable 单元测试
+- 页面组件测试：Dashboard、Environments、Agents 单元测试
+
 ## [0.67.0] - 2026-07-07
 
 ### Added
