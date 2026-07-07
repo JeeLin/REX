@@ -25,7 +25,7 @@ const parts = computed(() => {
 
 function navigate(index: number) {
   if (index === parts.value.length - 1) return
-  const path = parts.value[index]
+  const path = parts.value[index]!
   emit('navigate', path)
 }
 </script>

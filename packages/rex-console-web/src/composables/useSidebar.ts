@@ -117,7 +117,7 @@ export function useSidebar() {
     try {
       envs.value = await listEnvsWithResources()
       if (expandedEnvIds.value.size === 0 && envs.value.length > 0) {
-        expandedEnvIds.value = new Set([envs.value[0].id])
+        expandedEnvIds.value = new Set([envs.value[0]!.id])
         saveExpandedEnvs()
       }
     } catch {

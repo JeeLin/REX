@@ -292,7 +292,7 @@ useTransferToast(transferTasks, prevTasks)
 // Download
 async function handleDownload() {
   if (selectedPaths.value.length !== 1) return
-  await downloadFile(resourceId, selectedPaths.value[0])
+  await downloadFile(resourceId, selectedPaths.value[0]!)
 }
 
 // Upload
@@ -368,7 +368,7 @@ async function handleSendTo(entry: FileEntry) {
   if (sendToTargets.value.length === 0) return
   if (sendToTargets.value.length === 1) {
     // Only one target, send directly
-    const target = sendToTargets.value[0]
+    const target = sendToTargets.value[0]!
     const source: TransferEndpoint = {
       connector_type: 'sftp',
       resource_id: resourceId,
@@ -383,7 +383,7 @@ async function handleSendTo(entry: FileEntry) {
   } else {
     // Multiple targets, show selection dialog
     sendToFile.value = entry
-    sendToTargetId.value = sendToTargets.value[0].resourceId
+    sendToTargetId.value = sendToTargets.value[0]!.resourceId
     showSendToDialog.value = true
   }
 }

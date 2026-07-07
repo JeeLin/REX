@@ -65,7 +65,7 @@ describe('useRedisSession', () => {
 
     session.addToHistory('GET foo')
     expect(session.history.value).toHaveLength(1)
-    expect(session.history.value[0].command).toBe('GET foo')
+    expect(session.history.value[0]!.command).toBe('GET foo')
 
     // Add 250 entries
     for (let i = 0; i < 250; i++) {

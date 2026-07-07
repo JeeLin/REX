@@ -3,6 +3,9 @@ import { mount } from '@vue/test-utils'
 import SqlResults from '../SqlResults.vue'
 
 vi.mock('vue-i18n', () => ({
+  createI18n: () => ({
+    global: { t: (key: string) => key },
+  }),
   useI18n: () => ({
     t: (key: string, params?: Record<string, unknown>) => {
       if (key === 'sql.rows') return `${params?.count} rows`
@@ -34,8 +37,8 @@ describe('SqlResults', () => {
     const headers = wrapper.findAll('th')
     // First th is row number (#), then data columns
     expect(headers.length).toBeGreaterThanOrEqual(3)
-    expect(headers[1].text()).toContain('id')
-    expect(headers[2].text()).toContain('name')
+    expect(headers[1]!.text()).toContain('id')
+    expect(headers[2]!.text()).toContain('name')
   })
 
   it('renders data rows', () => {
@@ -89,7 +92,7 @@ describe('SqlResults', () => {
     const wrapper = mount(SqlResults, {
       props: { result: mockResult, loading: false },
     })
-    const nameHeader = wrapper.findAll('th')[1]
+    const nameHeader = wrapper.findAll('th')[1]!
     await nameHeader.trigger('click')
 
     // After sorting by name, rows should be in alphabetical order
@@ -121,7 +124,7 @@ describe('SqlResults', () => {
     // We verify the rows exist and are rendered correctly
     expect(rows.length).toBe(3)
     // The first row should not have row-selected class
-    expect(rows[0].classes()).not.toContain('row-selected')
+    expect(rows[0]!.classes()).not.toContain('row-selected')
   })
 
   it('selects a row on click', async () => {
@@ -129,8 +132,8 @@ describe('SqlResults', () => {
       props: { result: mockResult, loading: false },
     })
     const rows = wrapper.findAll('tbody tr')
-    await rows[0].trigger('click')
-    expect(rows[0].classes()).toContain('row-selected')
+    await rows[0]!.trigger('click')
+    expect(rows[0]!.classes()).toContain('row-selected')
   })
 
   it('deselects row on second click', async () => {
@@ -138,10 +141,10 @@ describe('SqlResults', () => {
       props: { result: mockResult, loading: false },
     })
     const rows = wrapper.findAll('tbody tr')
-    await rows[0].trigger('click')
-    expect(rows[0].classes()).toContain('row-selected')
-    await rows[0].trigger('click')
-    expect(rows[0].classes()).not.toContain('row-selected')
+    await rows[0]!.trigger('click')
+    expect(rows[0]!.classes()).toContain('row-selected')
+    await rows[0]!.trigger('click')
+    expect(rows[0]!.classes()).not.toContain('row-selected')
   })
 
   it('selects only one row at a time', async () => {
@@ -149,9 +152,9 @@ describe('SqlResults', () => {
       props: { result: mockResult, loading: false },
     })
     const rows = wrapper.findAll('tbody tr')
-    await rows[0].trigger('click')
-    await rows[1].trigger('click')
-    expect(rows[0].classes()).not.toContain('row-selected')
-    expect(rows[1].classes()).toContain('row-selected')
+    await rows[0]!.trigger('click')
+    await rows[1]!.trigger('click')
+    expect(rows[0]!.classes()).not.toContain('row-selected')
+    expect(rows[1]!.classes()).toContain('row-selected')
   })
 })

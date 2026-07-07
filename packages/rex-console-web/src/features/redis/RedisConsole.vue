@@ -360,8 +360,8 @@ async function handleKeyBrowserSearch(pattern: string) {
       const parsed: KeyWithType[] = []
       for (const item of items) {
         if (item.type === 'Array' && item.value.length >= 2) {
-          const keyVal = item.value[0]
-          const typeVal = item.value[1]
+          const keyVal = item.value[0]!
+          const typeVal = item.value[1]!
           if (keyVal.type === 'Bulk' && typeVal.type === 'Bulk') {
             parsed.push({
               key: keyVal.value ?? '',
@@ -587,7 +587,7 @@ async function handleKeydown(e: KeyboardEvent) {
     }
     if (e.key === 'Tab') {
       e.preventDefault()
-      selectAutocomplete(filteredCommands.value[autocompleteIndex.value])
+      selectAutocomplete(filteredCommands.value[autocompleteIndex.value]!)
       return
     }
     if (e.key === 'Escape') {

@@ -90,14 +90,14 @@ function extractCodeBlocks(content: string): string[] {
   const sqlRegex = /```sql([\s\S]*?)```/g;
   let match;
   while ((match = sqlRegex.exec(content)) !== null) {
-    blocks.push(match[1].trim());
+    blocks.push(match[1]!.trim());
   }
   // Also extract inline code if no blocks
   if (blocks.length === 0) {
     const inlineRegex = /`([^`]+)`/g;
     while ((match = inlineRegex.exec(content)) !== null) {
-      if (looksLikeSql(match[1])) {
-        blocks.push(match[1]);
+      if (looksLikeSql(match[1]!)) {
+        blocks.push(match[1]!);
       }
     }
   }

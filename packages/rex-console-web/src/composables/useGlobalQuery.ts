@@ -98,7 +98,7 @@ export function useGlobalQuery(resources: SqlResource[]) {
 
         const existingIndex = results.value.findIndex(r => r.connectionId === connId)
         if (existingIndex >= 0) {
-          results.value[existingIndex].error = d.message
+          results.value[existingIndex]!.error = d.message
         } else {
           results.value.push({
             connectionId: connId,

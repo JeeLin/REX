@@ -294,7 +294,7 @@ export default {
     loginBtn: '登录',
     loginFailed: '登录失败',
     loginSuccess: '登录成功',
-    version: `REX Hub v${__APP_VERSION__} · 自托管`,
+    version: `REX Hub v${typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'} · 自托管`,
     subtitle: '管理你的远程基础设施',
   },
   status: {

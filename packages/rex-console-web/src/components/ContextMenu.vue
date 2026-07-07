@@ -125,17 +125,17 @@ function onMenuKeydown(e: KeyboardEvent) {
   if (e.key === 'ArrowDown') {
     e.preventDefault()
     const curIdx = items.findIndex(x => x.idx === keyboardIdx.value)
-    const next = items[(curIdx + 1) % items.length]
+    const next = items[(curIdx + 1) % items.length]!
     keyboardIdx.value = next.idx
   } else if (e.key === 'ArrowUp') {
     e.preventDefault()
     const curIdx = items.findIndex(x => x.idx === keyboardIdx.value)
-    const prev = items[(curIdx - 1 + items.length) % items.length]
+    const prev = items[(curIdx - 1 + items.length) % items.length]!
     keyboardIdx.value = prev.idx
   } else if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault()
     if (keyboardIdx.value >= 0) {
-      handleClick(menuItems.value[keyboardIdx.value])
+      handleClick(menuItems.value[keyboardIdx.value]!)
     }
   } else if (e.key === 'Escape') {
     menuHide()

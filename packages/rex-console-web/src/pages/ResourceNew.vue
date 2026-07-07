@@ -376,7 +376,7 @@ function triggerKeyUpload() {
 function onKeyFileSelect(e: Event) {
   const input = e.target as HTMLInputElement
   if (input.files?.length) {
-    handleKeyFile(input.files[0])
+    handleKeyFile(input.files[0]!)
   }
 }
 

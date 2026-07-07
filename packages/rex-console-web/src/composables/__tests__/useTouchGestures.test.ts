@@ -240,7 +240,7 @@ describe('useTouchGestures', () => {
       ]))
 
       expect(onPinch).toHaveBeenCalled()
-      const [scale] = onPinch.mock.calls[0]
+      const [scale] = onPinch.mock.calls[0]!
       expect(scale).toBeGreaterThan(1)
     })
 

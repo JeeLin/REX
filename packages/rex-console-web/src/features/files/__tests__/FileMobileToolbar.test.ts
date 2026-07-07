@@ -36,7 +36,7 @@ describe('FileMobileToolbar', () => {
     const wrapper = mount(FileMobileToolbar, {
       props: { visible: true, selectedCount: 0 },
     })
-    await wrapper.findAll('.toolbar-btn')[0].trigger('click')
+    await wrapper.findAll('.toolbar-btn')[0]!.trigger('click')
     expect(wrapper.emitted('upload')).toBeTruthy()
   })
 
@@ -44,7 +44,7 @@ describe('FileMobileToolbar', () => {
     const wrapper = mount(FileMobileToolbar, {
       props: { visible: true, selectedCount: 0 },
     })
-    await wrapper.findAll('.toolbar-btn')[1].trigger('click')
+    await wrapper.findAll('.toolbar-btn')[1]!.trigger('click')
     expect(wrapper.emitted('newFile')).toBeTruthy()
   })
 
@@ -52,7 +52,7 @@ describe('FileMobileToolbar', () => {
     const wrapper = mount(FileMobileToolbar, {
       props: { visible: true, selectedCount: 0 },
     })
-    await wrapper.findAll('.toolbar-btn')[2].trigger('click')
+    await wrapper.findAll('.toolbar-btn')[2]!.trigger('click')
     expect(wrapper.emitted('newFolder')).toBeTruthy()
   })
 
@@ -60,7 +60,7 @@ describe('FileMobileToolbar', () => {
     const wrapper = mount(FileMobileToolbar, {
       props: { visible: true, selectedCount: 0 },
     })
-    await wrapper.findAll('.toolbar-btn')[3].trigger('click')
+    await wrapper.findAll('.toolbar-btn')[3]!.trigger('click')
     expect(wrapper.emitted('refresh')).toBeTruthy()
   })
 
@@ -70,8 +70,8 @@ describe('FileMobileToolbar', () => {
     })
     const buttons = wrapper.findAll('.toolbar-btn')
     // 下载 = index 4, 删除 = index 5
-    expect(buttons[4].attributes('disabled')).toBeDefined()
-    expect(buttons[5].attributes('disabled')).toBeDefined()
+    expect(buttons[4]!.attributes('disabled')).toBeDefined()
+    expect(buttons[5]!.attributes('disabled')).toBeDefined()
   })
 
   it('enables download and delete when items selected', () => {
@@ -79,15 +79,15 @@ describe('FileMobileToolbar', () => {
       props: { visible: true, selectedCount: 2 },
     })
     const buttons = wrapper.findAll('.toolbar-btn')
-    expect(buttons[4].attributes('disabled')).toBeUndefined()
-    expect(buttons[5].attributes('disabled')).toBeUndefined()
+    expect(buttons[4]!.attributes('disabled')).toBeUndefined()
+    expect(buttons[5]!.attributes('disabled')).toBeUndefined()
   })
 
   it('emits selectAll when select all button clicked', async () => {
     const wrapper = mount(FileMobileToolbar, {
       props: { visible: true, selectedCount: 0 },
     })
-    await wrapper.findAll('.toolbar-btn')[6].trigger('click')
+    await wrapper.findAll('.toolbar-btn')[6]!.trigger('click')
     expect(wrapper.emitted('selectAll')).toBeTruthy()
   })
 

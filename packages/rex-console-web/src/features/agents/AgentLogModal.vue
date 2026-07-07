@@ -96,7 +96,7 @@ async function fetchLogs() {
     const resp = await getAgentLogs(props.agentId, since)
     if (resp.logs.length > 0) {
       logs.value.push(...resp.logs)
-      lastTimestamp.value = resp.logs[resp.logs.length - 1].timestamp
+      lastTimestamp.value = resp.logs[resp.logs.length - 1]!.timestamp
       // 保持最多 1000 条
       if (logs.value.length > 1000) {
         logs.value = logs.value.slice(logs.value.length - 1000)

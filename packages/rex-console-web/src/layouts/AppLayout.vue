@@ -314,8 +314,8 @@ function onSidebarKeydown(e: KeyboardEvent) {
     'a, button, input, [tabindex]:not([tabindex="-1"])',
   )
   if (focusable.length === 0) return
-  const first = focusable[0]
-  const last = focusable[focusable.length - 1]
+  const first = focusable[0]!
+  const last = focusable[focusable.length - 1]!
   if (e.shiftKey && document.activeElement === first) {
     e.preventDefault()
     last.focus()
@@ -441,14 +441,14 @@ let mainTouchStartY = 0
 
 function handleMainTouchStart(e: TouchEvent) {
   if (!isMobile.value || e.touches.length !== 1) return
-  mainTouchStartX = e.touches[0].clientX
-  mainTouchStartY = e.touches[0].clientY
+  mainTouchStartX = e.touches[0]!.clientX
+  mainTouchStartY = e.touches[0]!.clientY
 }
 
 function handleMainTouchEnd(e: TouchEvent) {
   if (!isMobile.value) return
-  const deltaX = e.changedTouches[0].clientX - mainTouchStartX
-  const deltaY = Math.abs(e.changedTouches[0].clientY - mainTouchStartY)
+  const deltaX = e.changedTouches[0]!.clientX - mainTouchStartX
+  const deltaY = Math.abs(e.changedTouches[0]!.clientY - mainTouchStartY)
   // Swipe right > 80px and mostly horizontal → go back
   if (deltaX > 80 && deltaY < 50 && mainTouchStartX < 30) {
     router.back()

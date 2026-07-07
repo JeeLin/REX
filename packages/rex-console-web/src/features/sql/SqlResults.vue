@@ -267,8 +267,8 @@ const sortedRows = computed(() => {
   const colIdx = sortColumn.value
   const dir = sortDirection.value === 'asc' ? 1 : -1
   return [...props.result.rows].sort((a, b) => {
-    const va = a[colIdx]
-    const vb = b[colIdx]
+    const va = a[colIdx]!
+    const vb = b[colIdx]!
     if (va === null && vb === null) return 0
     if (va === null) return 1
     if (vb === null) return -1
@@ -313,7 +313,7 @@ function rowToTsv(row: unknown[]): string {
 
 function rowToJson(row: unknown[], columns: { name: string }[]): Record<string, unknown> {
   const obj: Record<string, unknown> = {}
-  columns.forEach((c, i) => { obj[c.name] = row[i] })
+  columns.forEach((c, i) => { obj[c.name] = row[i]! })
   return obj
 }
 
@@ -322,7 +322,7 @@ function formatValStr(val: unknown): string {
 }
 
 function generateUpdateSql(row: unknown[], columns: { name: string }[]): string {
-  const setClauses = columns.map((c, i) => `  ${c.name} = ${formatValStr(row[i])}`)
+  const setClauses = columns.map((c, i) => `  ${c.name} = ${formatValStr(row[i]!)}`)
   return `UPDATE table_name\nSET\n${setClauses.join(',\n')}\nWHERE id = ${row[0] ?? '...'};`
 }
 
@@ -357,14 +357,14 @@ function handleCellContextMenu(event: MouseEvent, paginatedIdx: number, colIdx: 
   if (!props.result) return
   const { columns, rows } = props.result
   const rowIdx = (currentPage.value - 1) * pageSize.value + paginatedIdx
-  const row = rows[rowIdx]
+  const row = rows[rowIdx]!
   const cell = row[colIdx]
   const colName = columns[colIdx]?.name ?? `col${colIdx}`
 
   showMenu(event, [
     { label: t('sql.result.ctx.copyRow'), action: () => copyToClipboard(rowToTsv(row)) },
     { label: t('sql.result.ctx.copyCell'), action: () => copyToClipboard(cell === null ? 'NULL' : String(cell)) },
-    { label: t('sql.result.ctx.copyColumn'), action: () => copyToClipboard(rows.map((r) => r[colIdx] === null ? 'NULL' : String(r[colIdx])).join('\n')) },
+    { label: t('sql.result.ctx.copyColumn'), action: () => copyToClipboard(rows.map((r) => r[colIdx]! === null ? 'NULL' : String(r[colIdx]!)).join('\n')) },
     { label: t('sql.result.ctx.copyJson'), action: () => copyToClipboard(JSON.stringify(rowToJson(row, columns), null, 2)) },
     { separator: true },
     { label: t('sql.result.ctx.sortAsc'), action: () => emit('sort', colName, 'asc') },
@@ -380,7 +380,7 @@ function handleRowContextMenu(event: MouseEvent, paginatedIdx: number) {
   if (!props.result) return
   const { columns, rows } = props.result
   const rowIdx = (currentPage.value - 1) * pageSize.value + paginatedIdx
-  const row = rows[rowIdx]
+  const row = rows[rowIdx]!
 
   showMenu(event, [
     { label: t('sql.result.ctx.copyRow'), action: () => copyToClipboard(rowToTsv(row)) },

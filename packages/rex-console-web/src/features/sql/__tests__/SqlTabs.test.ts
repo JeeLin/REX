@@ -26,8 +26,8 @@ describe('SqlTabs', () => {
     })
     const labels = wrapper.findAll('.tab-title')
     expect(labels.length).toBe(2)
-    expect(labels[0].text()).toBe('Query 1')
-    expect(labels[1].text()).toBe('Query 2')
+    expect(labels[0]!.text()).toBe('Query 1')
+    expect(labels[1]!.text()).toBe('Query 2')
   })
 
   it('shows unsaved indicator for tabs without queryId', () => {
@@ -55,8 +55,8 @@ describe('SqlTabs', () => {
     })
     const subtitles = wrapper.findAll('.tab-subtitle')
     expect(subtitles.length).toBe(2)
-    expect(subtitles[0].text()).toBe('SELECT *')
-    expect(subtitles[1].text()).toBe('INSERT INTO')
+    expect(subtitles[0]!.text()).toBe('SELECT *')
+    expect(subtitles[1]!.text()).toBe('INSERT INTO')
   })
 
   it('does not show subtitle when undefined', () => {
@@ -74,15 +74,15 @@ describe('SqlTabs', () => {
       props: { tabs: baseTabs, activeId: 'tab-2' },
     })
     const tabs = wrapper.findAll('.sql-tab')
-    expect(tabs[0].classes()).not.toContain('active')
-    expect(tabs[1].classes()).toContain('active')
+    expect(tabs[0]!.classes()).not.toContain('active')
+    expect(tabs[1]!.classes()).toContain('active')
   })
 
   it('emits select event on tab click', async () => {
     const wrapper = mount(SqlTabs, {
       props: { tabs: baseTabs, activeId: 'tab-1' },
     })
-    await wrapper.findAll('.sql-tab')[1].trigger('click')
+    await wrapper.findAll('.sql-tab')[1]!.trigger('click')
     expect(wrapper.emitted('select')).toEqual([['tab-2']])
   })
 
@@ -90,7 +90,7 @@ describe('SqlTabs', () => {
     const wrapper = mount(SqlTabs, {
       props: { tabs: baseTabs, activeId: 'tab-1' },
     })
-    await wrapper.findAll('.tab-close')[0].trigger('click')
+    await wrapper.findAll('.tab-close')[0]!.trigger('click')
     expect(wrapper.emitted('close')).toEqual([['tab-1']])
   })
 
@@ -104,7 +104,7 @@ describe('SqlTabs', () => {
 
   it('hides close button when only one tab', () => {
     const wrapper = mount(SqlTabs, {
-      props: { tabs: [baseTabs[0]], activeId: 'tab-1' },
+      props: { tabs: [baseTabs[0]!], activeId: 'tab-1' },
     })
     expect(wrapper.find('.tab-close').exists()).toBe(false)
   })
@@ -114,7 +114,7 @@ describe('SqlTabs', () => {
       props: { tabs: baseTabs, activeId: 'tab-1' },
     })
     const icons = wrapper.findAll('.tab-icon')
-    expect(icons[0].text()).toBe('📄') // unsaved
-    expect(icons[1].text()).toBe('💾') // saved
+    expect(icons[0]!.text()).toBe('📄') // unsaved
+    expect(icons[1]!.text()).toBe('💾') // saved
   })
 })

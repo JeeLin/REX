@@ -331,7 +331,7 @@ async function loadDatabases() {
   try {
     databases.value = await listDatabases(resourceId)
     if (databases.value.length > 0 && !selectedDb.value) {
-      selectedDb.value = databases.value[0].name
+      selectedDb.value = databases.value[0]!.name
     }
   } catch {
     databases.value = []

@@ -178,7 +178,7 @@ export function useS3Session(resourceId: () => string) {
     const bytes = new Uint8Array(data)
     let binary = ''
     for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i])
+      binary += String.fromCharCode(bytes[i]!)
     }
     const b64 = btoa(binary)
     const msg = await sendCommand('upload', { bucket, key, data: b64 })

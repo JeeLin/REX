@@ -36,7 +36,7 @@ describe('SqlMobileToolbar', () => {
     const wrapper = mount(SqlMobileToolbar, {
       props: { visible: true },
     })
-    await wrapper.findAll('.toolbar-btn')[0].trigger('click')
+    await wrapper.findAll('.toolbar-btn')[0]!.trigger('click')
     expect(wrapper.emitted('execute')).toBeTruthy()
   })
 
@@ -44,7 +44,7 @@ describe('SqlMobileToolbar', () => {
     const wrapper = mount(SqlMobileToolbar, {
       props: { visible: true },
     })
-    await wrapper.findAll('.toolbar-btn')[1].trigger('click')
+    await wrapper.findAll('.toolbar-btn')[1]!.trigger('click')
     expect(wrapper.emitted('format')).toBeTruthy()
   })
 
@@ -52,7 +52,7 @@ describe('SqlMobileToolbar', () => {
     const wrapper = mount(SqlMobileToolbar, {
       props: { visible: true },
     })
-    await wrapper.findAll('.toolbar-btn')[2].trigger('click')
+    await wrapper.findAll('.toolbar-btn')[2]!.trigger('click')
     expect(wrapper.emitted('clear')).toBeTruthy()
   })
 
@@ -60,7 +60,7 @@ describe('SqlMobileToolbar', () => {
     const wrapper = mount(SqlMobileToolbar, {
       props: { visible: true },
     })
-    await wrapper.findAll('.toolbar-btn')[3].trigger('click')
+    await wrapper.findAll('.toolbar-btn')[3]!.trigger('click')
     expect(wrapper.emitted('save')).toBeTruthy()
   })
 
@@ -68,7 +68,7 @@ describe('SqlMobileToolbar', () => {
     const wrapper = mount(SqlMobileToolbar, {
       props: { visible: true },
     })
-    await wrapper.findAll('.toolbar-btn')[4].trigger('click')
+    await wrapper.findAll('.toolbar-btn')[4]!.trigger('click')
     expect(wrapper.emitted('history')).toBeTruthy()
   })
 
@@ -76,7 +76,7 @@ describe('SqlMobileToolbar', () => {
     const wrapper = mount(SqlMobileToolbar, {
       props: { visible: true },
     })
-    await wrapper.findAll('.toolbar-btn')[5].trigger('click')
+    await wrapper.findAll('.toolbar-btn')[5]!.trigger('click')
     expect(wrapper.emitted('globalQuery')).toBeTruthy()
   })
 
@@ -86,7 +86,7 @@ describe('SqlMobileToolbar', () => {
       props: { visible: true },
     })
     // Click more button (index 6)
-    await wrapper.findAll('.toolbar-btn')[6].trigger('click')
+    await wrapper.findAll('.toolbar-btn')[6]!.trigger('click')
     // More menu should appear
     expect(wrapper.find('.more-menu').exists()).toBe(true)
     // Click openQuery in more menu

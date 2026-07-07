@@ -30,7 +30,7 @@ export function useSqlTabActions(
     tabs.value.map((t) => {
       const trimmed = t.sql.trim()
       const subtitle = trimmed
-        ? trimmed.split('\n')[0].substring(0, 30)
+        ? trimmed.split('\n')[0]!.substring(0, 30)
         : undefined
       return { id: t.id, title: t.title, queryId: t.queryId, subtitle }
     }),
@@ -38,7 +38,7 @@ export function useSqlTabActions(
 
   const activeTab = computed(() => {
     const tab = tabs.value.find((t) => t.id === activeTabId.value)
-    return tab ?? tabs.value[0] ?? { id: '', title: '', sql: '', result: null, queryId: null }
+    return tab ?? tabs.value[0] ?? { id: '', title: '', sql: '', result: null, message: '', isError: false, queryId: null }
   })
 
   function addTab() {
@@ -54,7 +54,7 @@ export function useSqlTabActions(
     tabs.value.splice(idx, 1)
     if (tabs.value.length === 0) addTab()
     if (activeTabId.value === id) {
-      activeTabId.value = tabs.value[Math.min(idx, tabs.value.length - 1)].id
+      activeTabId.value = tabs.value[Math.min(idx, tabs.value.length - 1)]!.id
     }
   }
 
@@ -75,7 +75,7 @@ export function useSqlTabActions(
     tabs.value = tabs.value.filter((t) => t.queryId === null)
     if (tabs.value.length === 0) addTab()
     if (!tabs.value.find((t) => t.id === activeTabId.value)) {
-      activeTabId.value = tabs.value[0].id
+      activeTabId.value = tabs.value[0]!.id
     }
   }
 

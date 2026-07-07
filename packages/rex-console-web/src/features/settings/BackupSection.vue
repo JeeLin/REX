@@ -292,7 +292,7 @@ function triggerUpload() {
 function handleFileSelect(e: Event) {
   const input = e.target as HTMLInputElement
   if (input.files?.length) {
-    setFile(input.files[0])
+    setFile(input.files[0]!)
   }
 }
 
@@ -300,7 +300,7 @@ function handleDrop(e: DragEvent) {
   dragover.value = false
   const files = e.dataTransfer?.files
   if (files?.length) {
-    setFile(files[0])
+    setFile(files[0]!)
   }
 }
 

@@ -89,13 +89,13 @@ export function useTouchGestures(element: HTMLElement, options: TouchGestureOpti
       // Pinch starts: ignore previous single-finger state
       clearLongPress()
       gestureActive = true
-      pinchStartDistance = getDistance(event.touches[0], event.touches[1])
+      pinchStartDistance = getDistance(event.touches[0]!, event.touches[1]!)
       pinchStartScale = 1
       touchStart = null
       return
     }
 
-    const touch = event.touches[0]
+    const touch = event.touches[0]!
     touchStart = {
       x: touch.clientX,
       y: touch.clientY,
@@ -117,7 +117,7 @@ export function useTouchGestures(element: HTMLElement, options: TouchGestureOpti
     // --- Pinch handling (two fingers) ---
     if (event.touches.length === 2 && pinchStartDistance !== null && onPinch) {
       clearLongPress()
-      const currentDistance = getDistance(event.touches[0], event.touches[1])
+      const currentDistance = getDistance(event.touches[0]!, event.touches[1]!)
       const scale = currentDistance / pinchStartDistance
       const deltaScale = scale - pinchStartScale
       pinchStartScale = scale
@@ -127,7 +127,7 @@ export function useTouchGestures(element: HTMLElement, options: TouchGestureOpti
 
     if (!touchStart) return
 
-    const touch = event.touches[0]
+    const touch = event.touches[0]!
     const deltaX = touch.clientX - touchStart.x
     const deltaY = touch.clientY - touchStart.y
     const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
@@ -162,7 +162,7 @@ export function useTouchGestures(element: HTMLElement, options: TouchGestureOpti
 
     if (!touchStart) return
 
-    const touch = event.changedTouches[0]
+    const touch = event.changedTouches[0]!
     const deltaX = touch.clientX - touchStart.x
     const deltaY = touch.clientY - touchStart.y
     const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)

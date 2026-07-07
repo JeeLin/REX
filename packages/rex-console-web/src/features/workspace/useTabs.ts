@@ -76,7 +76,7 @@ export function useTabs() {
         activeTabId.value = null
       } else {
         const nextIdx = Math.min(idx, tabs.value.length - 1)
-        activeTabId.value = tabs.value[nextIdx].id
+        activeTabId.value = tabs.value[nextIdx]!.id
       }
     }
   }
@@ -142,19 +142,19 @@ export function useTabs() {
     if (tabs.value.length <= 1) return
     const idx = tabs.value.findIndex((t) => t.id === activeTabId.value)
     const nextIdx = (idx + 1) % tabs.value.length
-    activeTabId.value = tabs.value[nextIdx].id
+    activeTabId.value = tabs.value[nextIdx]!.id
   }
 
   function prevTab() {
     if (tabs.value.length <= 1) return
     const idx = tabs.value.findIndex((t) => t.id === activeTabId.value)
     const prevIdx = (idx - 1 + tabs.value.length) % tabs.value.length
-    activeTabId.value = tabs.value[prevIdx].id
+    activeTabId.value = tabs.value[prevIdx]!.id
   }
 
   function switchTabByIndex(index: number) {
     if (index >= 0 && index < tabs.value.length) {
-      activeTabId.value = tabs.value[index].id
+      activeTabId.value = tabs.value[index]!.id
     }
   }
 
@@ -164,7 +164,7 @@ export function useTabs() {
     const dstIdx = allTabs.findIndex((t) => t.id === toId)
     if (srcIdx === -1 || dstIdx === -1 || srcIdx === dstIdx) return
     const [moved] = allTabs.splice(srcIdx, 1)
-    allTabs.splice(dstIdx, 0, moved)
+    allTabs.splice(dstIdx, 0, moved!)
   }
 
   function disconnectAll() {

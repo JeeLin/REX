@@ -294,7 +294,7 @@ export default {
     loginBtn: 'Login',
     loginFailed: 'Login failed',
     loginSuccess: 'Login successful',
-    version: `REX Hub v${__APP_VERSION__} · Self-hosted`,
+    version: `REX Hub v${typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'} · Self-hosted`,
     subtitle: 'Manage your remote infrastructure',
   },
   status: {

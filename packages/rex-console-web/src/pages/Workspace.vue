@@ -305,7 +305,7 @@ function setLayout(layout: Layout) {
 }
 function cycleLayout() {
   const idx = LAYOUT_ORDER.indexOf(currentLayout.value)
-  currentLayout.value = LAYOUT_ORDER[(idx + 1) % LAYOUT_ORDER.length]
+  currentLayout.value = LAYOUT_ORDER[(idx + 1) % LAYOUT_ORDER.length]!
 }
 function isPanelActive(panelIndex: number): boolean {
   if (currentLayout.value === 'single') {
@@ -359,7 +359,7 @@ function handleTabDblclick(tabId: string) {
   if (candidate) {
     moveTabToPanel(candidate.id, 1)
   } else if (tabs.value.length > 1) {
-    const fallback = tabs.value[(currentIdx + 1) % tabs.value.length]
+    const fallback = tabs.value[(currentIdx + 1) % tabs.value.length]!
     if (fallback.id !== tabId) moveTabToPanel(fallback.id, 1)
   }
 }
@@ -391,7 +391,7 @@ const groupedResources = computed(() => {
   const groups: Record<string, Resource[]> = {}
   for (const r of flatFilteredResources.value) {
     if (!groups[r.envName]) groups[r.envName] = []
-    groups[r.envName].push(r)
+    groups[r.envName]!.push(r)
   }
   return groups
 })
@@ -603,7 +603,7 @@ function onKeyDown(e: KeyboardEvent) {
   } else if (e.altKey && e.key >= '1' && e.key <= '5') {
     e.preventDefault()
     const layouts: Layout[] = ['single', 'left-right', 'top-bottom', 'quad', 'sidebar-main']
-    setLayout(layouts[parseInt(e.key) - 1])
+    setLayout(layouts[parseInt(e.key) - 1]!)
   } else if (e.key === 'F11') {
     e.preventDefault()
     toggleFullscreen()

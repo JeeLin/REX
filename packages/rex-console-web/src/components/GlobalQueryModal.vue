@@ -81,21 +81,21 @@
           </div>
           <div class="tab-content">
             <div v-if="results[activeTab]" class="result-view">
-              <div v-if="results[activeTab].error" class="error-message">
-                ❌ {{ results[activeTab].error }}
+              <div v-if="results[activeTab]!.error" class="error-message">
+                ❌ {{ results[activeTab]!.error }}
               </div>
               <div v-else class="results-table">
-                <table v-if="results[activeTab].data.length > 0">
+                <table v-if="results[activeTab]!.data.length > 0">
                   <thead>
                     <tr>
-                      <th v-for="col in results[activeTab].columns" :key="col">
+                      <th v-for="col in results[activeTab]!.columns" :key="col">
                         {{ col }}
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="(row, rowIndex) in results[activeTab].data" :key="rowIndex">
-                      <td v-for="(colName, colIndex) in results[activeTab].columns" :key="colIndex">
+                    <tr v-for="(row, rowIndex) in results[activeTab]!.data" :key="rowIndex">
+                      <td v-for="(colName, colIndex) in results[activeTab]!.columns" :key="colIndex">
                         {{ formatValue(row[colName]) }}
                       </td>
                     </tr>

@@ -50,18 +50,18 @@ const grouped = computed<TimeGroup[]>(() => {
   for (const r of filtered.value) {
     const d = new Date(parseInt(r.executed_at, 10) * 1000)
     if (d >= todayStart) {
-      groups.today.push(r)
+      groups.today!.push(r)
     } else if (d >= yesterdayStart) {
-      groups.yesterday.push(r)
+      groups.yesterday!.push(r)
     } else {
-      groups.earlier.push(r)
+      groups.earlier!.push(r)
     }
   }
 
   const result: TimeGroup[] = []
-  if (groups.today.length) result.push({ label: t('sql.history.group.today'), items: groups.today })
-  if (groups.yesterday.length) result.push({ label: t('sql.history.group.yesterday'), items: groups.yesterday })
-  if (groups.earlier.length) result.push({ label: t('sql.history.group.earlier'), items: groups.earlier })
+  if (groups.today!.length) result.push({ label: t('sql.history.group.today'), items: groups.today! })
+  if (groups.yesterday!.length) result.push({ label: t('sql.history.group.yesterday'), items: groups.yesterday! })
+  if (groups.earlier!.length) result.push({ label: t('sql.history.group.earlier'), items: groups.earlier! })
   return result
 })
 
