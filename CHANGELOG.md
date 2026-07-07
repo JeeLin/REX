@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.74.0] - 2026-07-07
+
+### Added
+- 单元测试：ConfirmDialog 组件测试（7 个用例）
+- 单元测试：useWorkspacePersistence 测试（5 个用例）
+- 单元测试：useSidebar 测试（7 个用例）
+- 单元测试：useGlobalQuery 测试（8 个用例）
+- 单元测试：useNetworkStatus 测试（4 个用例）
+- 单元测试：useSort 测试（9 个用例）
+
 ## [0.73.0] - 2026-07-07
 
 ### Added
