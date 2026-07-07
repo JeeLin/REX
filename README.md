@@ -29,6 +29,8 @@
 - **SFTP 文件管理** — 双面板布局，传输队列，拖放上传
 - **跨连接文件传输** — SSH、SFTP、S3 之间互相传送文件
 - **8 种协议** — SSH、SFTP、MySQL、PostgreSQL、Redis、Docker、SQLite、S3/MinIO
+- **布局持久化** — 分屏布局和面板尺寸自动保存，刷新页面后恢复
+- **状态恢复** — 关闭浏览器后重新打开，之前的工作标签自动恢复（24 小时有效）
 
 ### 🌐 内网穿透
 
@@ -60,6 +62,13 @@
 
 - **深色 / 浅色 / 跟随系统** — CSS 变量驱动，一键切换
 - **中文 / English** — 完整双语支持，即时切换无刷新
+
+### 🔒 安全 & 韧性
+
+- **登录限流** — 同 IP 5 分钟内最多 5 次失败尝试，超出返回 429
+- **安全响应头** — CSP、HSTS、X-Frame-Options、X-Content-Type-Options
+- **自动重连** — WebSocket 断线自动重连（指数退避），网络恢复提示
+- **离线检测** — 实时监听网络状态，离线/在线 Toast 提示
 
 ---
 
@@ -111,7 +120,9 @@
 |--------|------|
 | `Ctrl+N` | 新建连接 |
 | `Ctrl+W` | 关闭标签 |
+| `Ctrl+D` | 复制当前标签 |
 | `Ctrl+Tab` | 切换标签 |
+| `Ctrl+\` | 切换侧边栏 |
 | `Alt+1~5` | 切换布局 |
 | `F11` | 全屏 |
 | `F1` | 快捷键帮助 |
@@ -187,7 +198,7 @@ chmod +x rex-agent
 浏览器 (REX Hub 控制台)
     │ WebSocket + HTTPS
     ▼
-REX Hub 服务端
+REX Hub 服务端 (Rust)
     │ TLS 加密隧道
     ▼
 REX Agent (内网节点)
@@ -195,6 +206,12 @@ REX Agent (内网节点)
     ▼
 SSH / 数据库 / 文件系统 / Docker
 ```
+
+**技术栈：** Rust 后端（tokio async）+ Vue 3 前端（Vite + TypeScript）+ SQLite 本地存储
+
+**性能优化：** 路由懒加载、CodeMirror/xterm 独立 chunk 分割、构建产物分析
+
+**可访问性：** ARIA 标签、键盘导航、屏幕阅读器支持、prefers-reduced-motion
 
 ---
 
