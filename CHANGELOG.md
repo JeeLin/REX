@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.70.0] - 2026-07-07
+
+### Added
+- 后端安全加固：登录速率限制（同IP 5分钟内最多5次失败，超出返回429）、HTTP安全响应头（CSP、HSTS、X-Frame-Options、X-Content-Type-Options、Cache-Control）
+- 前端错误处理：Vue全局ErrorBoundary组件捕获渲染错误、API错误统一拦截器（401/429/5xx/超时/网络错误Toast提示）
+- 网络状态监听：useNetworkStatus composable（离线/在线Toast提示）、WebSocket自动重连（指数退避1s→16s，最多5次）
+
 ## [0.69.0] - 2026-07-07
 
 ### Added
