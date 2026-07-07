@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.73.0] - 2026-07-07
+
+### Added
+- 工作空间布局持久化：记住用户的分屏布局偏好，刷新页面后恢复
+- 标签操作增强：新标签在当前活动面板打开
+- 快捷键系统完善：Ctrl+D 复制当前标签
+- 工作空间状态恢复：刷新页面后恢复已打开的标签和布局（24 小时过期）
+
 ## [0.72.0] - 2026-07-07
 
 ### Added
