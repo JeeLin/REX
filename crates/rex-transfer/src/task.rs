@@ -497,9 +497,7 @@ mod tests {
         let id = mgr
             .create_task(make_endpoint("/a"), make_endpoint("/b"))
             .await;
-        mgr.set_status(&id, TransferStatus::Running)
-            .await
-            .unwrap();
+        mgr.set_status(&id, TransferStatus::Running).await.unwrap();
 
         mgr.cancel_task(&id).await.unwrap();
         let task = mgr.get_task(&id).await.unwrap();

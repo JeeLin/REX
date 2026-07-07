@@ -443,9 +443,7 @@ mod tests {
     #[test]
     fn encode_then_decode_roundtrip() {
         let mut buf = BytesMut::new();
-        RespEncoder::new()
-            .encode("PING".into(), &mut buf)
-            .unwrap();
+        RespEncoder::new().encode("PING".into(), &mut buf).unwrap();
         let val = RespDecoder::new().decode(&mut buf).unwrap().unwrap();
         // Encoded as *1\r\n$4\r\nPING\r\n, decoded as Array([Bulk("PING")])
         assert_eq!(
