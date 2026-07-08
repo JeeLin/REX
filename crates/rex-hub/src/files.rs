@@ -163,7 +163,7 @@ pub async fn download_file(
             format!("attachment; filename=\"{filename}\""),
         )
         .body(body)
-        .unwrap();
+        .expect("response builder failed");
 
     Ok(resp)
 }

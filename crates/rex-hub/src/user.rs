@@ -34,7 +34,7 @@ pub async fn get_profile(
         .db
         .pool
         .get()
-        .unwrap()
+        .map_err(|_| err_resp("INTERNAL_ERROR", "数据库连接失败"))?
         .query_row(
             "SELECT value FROM settings WHERE key = 'username'",
             [],
@@ -66,7 +66,7 @@ pub async fn update_profile(
         .db
         .pool
         .get()
-        .unwrap()
+        .map_err(|_| err_resp("INTERNAL_ERROR", "数据库连接失败"))?
         .execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES ('username', ?1)",
             rusqlite::params![input.username],
@@ -125,7 +125,7 @@ pub async fn change_password(
         .db
         .pool
         .get()
-        .unwrap()
+        .map_err(|_| err_resp("INTERNAL_ERROR", "数据库连接失败"))?
         .execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES ('password_hash', ?1)",
             rusqlite::params![new_hash],

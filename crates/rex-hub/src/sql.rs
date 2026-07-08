@@ -548,7 +548,7 @@ pub async fn global_query(
                 // 用 name 而不是 conn_id 作为结果标识
                 let mut qr = query_result;
                 qr.connection_id = name;
-                let mut results_lock = results.lock().unwrap();
+                let mut results_lock = results.lock().expect("results mutex poisoned");
                 (*results_lock)[idx] = Some(qr);
             });
 
@@ -560,7 +560,7 @@ pub async fn global_query(
         }
 
         let ordered_results: Vec<QueryResult> = {
-            let results_lock = results.lock().unwrap();
+            let results_lock = results.lock().expect("results mutex poisoned");
             results_lock.iter().filter_map(|opt| opt.clone()).collect()
         };
         for qr in &ordered_results {
@@ -678,12 +678,12 @@ async fn send_error(tx: &mpsc::Sender<Result<Event, Infallible>>, conn_id: &str,
             connection_id: conn_id.to_string(),
             message: message.to_string(),
         })
-        .unwrap();
+        .expect("failed to serialize SSE event");
     let _ = tx.send(Ok(event)).await;
 }
 
 async fn send_event(tx: &mpsc::Sender<Result<Event, Infallible>>, data: GlobalQueryEvent) {
-    let event = Event::default().json_data(data).unwrap();
+    let event = Event::default().json_data(data).expect("failed to serialize SSE event");
     let _ = tx.send(Ok(event)).await;
 }
 

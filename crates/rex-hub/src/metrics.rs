@@ -167,10 +167,10 @@ impl MetricsCollector {
             database: DbStats {
                 size_bytes: db_size as u64,
                 tables: TablesStats {
-                    environments: db_stats.get("environments").unwrap().as_u64().unwrap(),
-                    resources: db_stats.get("resources").unwrap().as_u64().unwrap(),
-                    audit_log: db_stats.get("audit_log").unwrap().as_u64().unwrap(),
-                    metrics: db_stats.get("metrics").unwrap().as_u64().unwrap(),
+                    environments: db_stats.get("environments").and_then(|v| v.as_u64()).unwrap_or(0),
+                    resources: db_stats.get("resources").and_then(|v| v.as_u64()).unwrap_or(0),
+                    audit_log: db_stats.get("audit_log").and_then(|v| v.as_u64()).unwrap_or(0),
+                    metrics: db_stats.get("metrics").and_then(|v| v.as_u64()).unwrap_or(0),
                 },
             },
             system: SystemStats {
@@ -330,9 +330,9 @@ impl MetricsCollector {
 
         if !latency_values.is_empty() {
             let mut sorted = latency_values.clone();
-            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            latency_min = *sorted.first().unwrap();
-            latency_max = *sorted.last().unwrap();
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            latency_min = sorted.first().copied().unwrap_or(0.0);
+            latency_max = sorted.last().copied().unwrap_or(0.0);
             latency_avg = latency_values.iter().sum::<f64>() / latency_values.len() as f64;
             latency_p50 = percentile_f64(&sorted, 0.5);
             latency_p95 = percentile_f64(&sorted, 0.95);
