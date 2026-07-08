@@ -8,14 +8,12 @@ use std::time::Instant;
 // ── 数据模型 ─────────────────────────────────────────────
 
 /// SQLite 连接配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SqliteConfig {
     /// SQLite 数据库文件路径
     pub db_path: String,
     pub name: Option<String>,
 }
-
 
 /// 列信息
 #[derive(Debug, Clone, Serialize, Deserialize)]

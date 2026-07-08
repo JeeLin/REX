@@ -14,8 +14,7 @@ fn default_auto_update() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct AgentTlsConfig {
     /// CA 证书文件路径（PEM 格式）
     #[serde(default)]
@@ -24,7 +23,6 @@ pub struct AgentTlsConfig {
     #[serde(default)]
     pub insecure: bool,
 }
-
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AgentConfig {

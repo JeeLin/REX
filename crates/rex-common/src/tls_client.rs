@@ -162,8 +162,7 @@ fn load_ca_certs_from_pem(pem: &str) -> Result<Vec<rustls::pki_types::Certificat
         anyhow::bail!("no certificates found in CA certificate file");
     }
 
-    Ok(certs
-        .into_iter().collect())
+    Ok(certs.into_iter().collect())
 }
 
 #[cfg(test)]
