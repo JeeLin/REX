@@ -181,6 +181,19 @@
           />
           <span class="search-shortcut">Esc</span>
         </div>
+        <div class="conn-menu-tags" v-if="allTags.length">
+          <button
+            v-for="tag in allTags"
+            :key="tag.id"
+            class="cm-tag-chip"
+            :class="{ active: selectedTagIds.includes(tag.id) }"
+            :style="{ '--tag-color': tag.color }"
+            @click="toggleTag(tag.id)"
+          >
+            <span class="cm-tag-dot" />
+            {{ tag.name }}
+          </button>
+        </div>
         <div class="conn-menu-list">
           <template v-for="(items, env) in groupedResources" :key="env">
             <div class="conn-menu-group-label">{{ env }}</div>
@@ -200,6 +213,15 @@
                 <div class="cmi-meta">{{ res.address }}</div>
               </div>
               <span class="cmi-proto">{{ res.protocol.toUpperCase() }}</span>
+              <template v-if="getResourceTags(res.id).length">
+                <span
+                  v-for="tag in getResourceTags(res.id).slice(0, 3)"
+                  :key="tag.id"
+                  class="cmi-tag"
+                  :style="{ background: tag.color + '18', color: tag.color }"
+                >{{ tag.name }}</span>
+                <span v-if="getResourceTags(res.id).length > 3" class="cmi-tag cmi-tag-more">+{{ getResourceTags(res.id).length - 3 }}</span>
+              </template>
             </div>
           </template>
           <div v-if="flatFilteredResources.length === 0" class="conn-menu-empty">{{ t('ws.empty.connEmpty') }}</div>
@@ -258,6 +280,8 @@ import { getProtocolIcon } from '@/composables/useProtocol'
 import type { Protocol } from '@/composables/useProtocol'
 import { listEnvsWithResources } from '@/api/env'
 import type { EnvWithResources } from '@/api/env'
+import { listTags, type Tag } from '@/api/tags'
+import client from '@/api/client'
 import CommandPalette from '@/components/CommandPalette.vue'
 import type { CommandItem } from '@/components/CommandPalette.vue'
 import TabBar from '@/features/workspace/TabBar.vue'
@@ -378,12 +402,22 @@ interface Resource { id: string; name: string; address: string; protocol: string
 
 const envsWithRes = ref<EnvWithResources[]>([])
 
+// ── Tag Filtering ──
+const allTags = ref<Tag[]>([])
+const resourceTagMap = ref<Record<string, string[]>>({}) // resource_id -> tag_ids
+const selectedTagIds = ref<string[]>([])
+
+interface ResourceTagInfo { resource_id: string; tags: Tag[] }
+
 const flatFilteredResources = computed<Resource[]>(() => {
   const all: Resource[] = []
+  const tagFilter = selectedTagIds.value
   for (const env of envsWithRes.value) {
     for (const r of env.resources) {
       const q = connSearchQuery.value.toLowerCase()
-      if (!q || r.name.toLowerCase().includes(q) || r.protocol.includes(q)) {
+      const matchesSearch = !q || r.name.toLowerCase().includes(q) || r.protocol.includes(q)
+      const matchesTags = tagFilter.length === 0 || tagFilter.every(tid => resourceTagMap.value[r.id]?.includes(tid))
+      if (matchesSearch && matchesTags) {
         all.push({ id: r.id, name: r.name, address: '', protocol: r.protocol, envName: env.name, connectionMode: (env.connection_mode === 'agent' ? 'agent' : 'direct') as 'direct' | 'agent' })
       }
     }
@@ -428,6 +462,36 @@ function connectToResource(res: Resource) {
   showConnMenu.value = false
   connSearchQuery.value = ''
   selectedResourceIdx.value = 0
+  selectedTagIds.value = []
+}
+
+function toggleTag(tagId: string) {
+  const idx = selectedTagIds.value.indexOf(tagId)
+  if (idx >= 0) selectedTagIds.value.splice(idx, 1)
+  else selectedTagIds.value.push(tagId)
+  selectedResourceIdx.value = 0
+}
+
+function getResourceTags(resourceId: string): Tag[] {
+  const tagIds = resourceTagMap.value[resourceId]
+  if (!tagIds?.length) return []
+  return allTags.value.filter(t => tagIds.includes(t.id))
+}
+
+async function fetchResourceTags() {
+  try {
+    const res = await client.get<{ data: ResourceTagInfo[] }>('/resource-tags')
+    const map: Record<string, string[]> = {}
+    for (const item of res.data.data) {
+      map[item.resource_id] = item.tags.map(t => t.id)
+    }
+    resourceTagMap.value = map
+  } catch { /* */ }
+}
+
+async function loadTags() {
+  try { allTags.value = await listTags() } catch { /* */ }
+  await fetchResourceTags()
 }
 
 function getConnectionMode(resourceId: string): 'direct' | 'agent' {
@@ -452,6 +516,7 @@ function onPanelError(tabId: string, _msg: string) {
 watch(showConnMenu, (val) => {
   if (val) {
     nextTick(() => connSearchInput.value?.focus())
+    loadTags()
   }
 })
 
@@ -899,6 +964,47 @@ function onKeyDown(e: KeyboardEvent) {
   font-family: var(--font-mono);
 }
 
+.conn-menu-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: var(--sp-sm) var(--sp-md);
+  border-bottom: 1px solid var(--border);
+}
+
+.cm-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--tag-color) 10%, transparent);
+  color: color-mix(in srgb, var(--tag-color) 80%, var(--text-muted));
+  border: 1px solid color-mix(in srgb, var(--tag-color) 20%, transparent);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.cm-tag-chip:hover {
+  background: color-mix(in srgb, var(--tag-color) 20%, transparent);
+}
+
+.cm-tag-chip.active {
+  background: color-mix(in srgb, var(--tag-color) 25%, transparent);
+  color: var(--tag-color);
+  border-color: color-mix(in srgb, var(--tag-color) 50%, transparent);
+}
+
+.cm-tag-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tag-color);
+  flex-shrink: 0;
+}
+
 .conn-menu-list {
   max-height: 320px;
   overflow-y: auto;
@@ -966,6 +1072,18 @@ function onKeyDown(e: KeyboardEvent) {
   font-family: var(--font-mono);
   padding: 1px 6px;
   border-radius: 3px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+}
+
+.cmi-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.cmi-tag-more {
   background: var(--bg-surface);
   color: var(--text-muted);
 }
