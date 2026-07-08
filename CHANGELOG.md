@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.75.0] - 2026-07-08
+
+### Changed
+- 代码清理：应用 clippy 建议，使用 derive(Default) 简化手写 Default 实现
+- 代码清理：移除冗余的类型转换和借用
+- 代码格式化：统一 cargo fmt 格式
+
 ## [0.74.0] - 2026-07-07
 
 ### Added
