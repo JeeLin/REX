@@ -19,6 +19,7 @@ pub mod security;
 pub mod settings;
 pub mod sql;
 pub mod ssh_config;
+pub mod tags;
 pub mod terminal;
 pub mod tls;
 pub mod transfer;

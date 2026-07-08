@@ -183,6 +183,24 @@ pub fn app_with_static(
             .route("/api/audit-log", get(audit::list_audit_log))
             .route("/api/audit/stats", get(audit::get_stats))
             .route(
+                "/api/tags",
+                get(crate::tags::list_tags).post(crate::tags::create_tag),
+            )
+            .route(
+                "/api/tags/:id",
+                get(crate::tags::get_tag)
+                    .put(crate::tags::update_tag)
+                    .delete(crate::tags::delete_tag),
+            )
+            .route(
+                "/api/resources/:resource_id/tags",
+                get(crate::tags::get_resource_tags).put(crate::tags::set_resource_tags),
+            )
+            .route(
+                "/api/resource-tags",
+                get(crate::tags::list_resources_by_tag),
+            )
+            .route(
                 "/api/ssh/sessions",
                 post(crate::ws_terminal::create_session_handler),
             )

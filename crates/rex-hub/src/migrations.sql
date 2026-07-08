@@ -80,3 +80,18 @@ CREATE TABLE IF NOT EXISTS ai_config (
     base_url TEXT NOT NULL DEFAULT 'https://api.openai.com/v1',
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS tags (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    color TEXT NOT NULL DEFAULT '#58A6FF',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS resource_tags (
+    resource_id TEXT NOT NULL,
+    tag_id TEXT NOT NULL,
+    PRIMARY KEY (resource_id, tag_id),
+    FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+);
