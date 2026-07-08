@@ -35,6 +35,8 @@ jobs:
         working-directory: packages/rex-console-web
       - run: bun run lint
         working-directory: packages/rex-console-web
+      - run: bun run test
+        working-directory: packages/rex-console-web
 
   # ── 构建 Agent 二进制（全平台矩阵） ──────────────────
   # 产物用于：Docker Hub 镜像内嵌 + Release 发布
