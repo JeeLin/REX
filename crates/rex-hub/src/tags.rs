@@ -315,6 +315,32 @@ mod tests {
         Arc::new(Database::new_in_memory().unwrap())
     }
 
+    fn insert_tag(conn: &rusqlite::Connection, id: &str, name: &str, color: &str) {
+        conn.execute(
+            "INSERT INTO tags (id, name, color, created_at) VALUES (?1, ?2, ?3, '2024-01-01T00:00:00Z')",
+            rusqlite::params![id, name, color],
+        ).unwrap();
+    }
+
+    fn insert_resource(conn: &rusqlite::Connection, id: &str, name: &str) {
+        // Ensure environment exists (FK constraint)
+        let _ = conn.execute(
+            "INSERT OR IGNORE INTO environments (id, name, connection_mode, created_at, updated_at) VALUES ('env_1', 'test-env', 'direct', '2024-01-01', '2024-01-01')",
+            [],
+        );
+        conn.execute(
+            "INSERT INTO resources (id, environment_id, name, protocol, config_json, status, created_at, updated_at) VALUES (?1, 'env_1', ?2, 'ssh', '{}', 'active', '2024-01-01', '2024-01-01')",
+            rusqlite::params![id, name],
+        ).unwrap();
+    }
+
+    fn insert_resource_tag(conn: &rusqlite::Connection, resource_id: &str, tag_id: &str) {
+        conn.execute(
+            "INSERT INTO resource_tags (resource_id, tag_id) VALUES (?1, ?2)",
+            rusqlite::params![resource_id, tag_id],
+        ).unwrap();
+    }
+
     #[test]
     fn tag_struct_serializes() {
         let tag = Tag {
@@ -329,27 +355,117 @@ mod tests {
     }
 
     #[test]
-    fn create_tag_validates_empty_name() {
-        let name = "  ";
-        assert!(name.trim().is_empty());
-    }
-
-    #[test]
     fn db_tables_created() {
         let db = test_db();
         let conn = db.pool.get().unwrap();
 
-        // tags table should exist
         let result = conn.execute("INSERT INTO tags (id, name, color, created_at) VALUES ('tag_1', 'test', '#58A6FF', '2024-01-01')", []);
         assert!(result.is_ok());
 
-        // resource_tags table should exist
+        // resource_tags requires valid FKs
+        insert_resource(&conn, "res_1", "test-resource");
         let result = conn.execute("INSERT INTO resource_tags (resource_id, tag_id) VALUES ('res_1', 'tag_1')", []);
-        // This may fail due to FK constraint, but table should exist
-        let _ = result;
+        assert!(result.is_ok());
 
-        // Cleanup
         let _ = conn.execute("DELETE FROM resource_tags", []);
+        let _ = conn.execute("DELETE FROM resources", []);
+        let _ = conn.execute("DELETE FROM tags", []);
+    }
+
+    #[test]
+    fn tag_name_uniqueness() {
+        let db = test_db();
+        let conn = db.pool.get().unwrap();
+
+        insert_tag(&conn, "tag_1", "production", "#58A6FF");
+
+        let result = conn.execute(
+            "INSERT INTO tags (id, name, color, created_at) VALUES ('tag_2', 'production', '#3FB950', '2024-01-01')",
+            [],
+        );
+        assert!(result.is_err());
+        let _ = conn.execute("DELETE FROM tags", []);
+    }
+
+    #[test]
+    fn resource_tag_cascade_on_tag_delete() {
+        let db = test_db();
+        let conn = db.pool.get().unwrap();
+
+        insert_resource(&conn, "res_1", "web-server");
+        insert_tag(&conn, "tag_1", "production", "#58A6FF");
+        insert_resource_tag(&conn, "res_1", "tag_1");
+
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM resource_tags", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 1);
+
+        conn.execute("DELETE FROM tags WHERE id = 'tag_1'", []).unwrap();
+
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM resource_tags", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 0);
+
+        let _ = conn.execute("DELETE FROM resources", []);
+    }
+
+    #[test]
+    fn resource_tag_cascade_on_resource_delete() {
+        let db = test_db();
+        let conn = db.pool.get().unwrap();
+
+        insert_resource(&conn, "res_1", "web-server");
+        insert_tag(&conn, "tag_1", "production", "#58A6FF");
+        insert_resource_tag(&conn, "res_1", "tag_1");
+
+        conn.execute("DELETE FROM resources WHERE id = 'res_1'", []).unwrap();
+
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM resource_tags", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 0);
+
+        // Tag itself should still exist
+        let exists: bool = conn.query_row("SELECT COUNT(*) FROM tags WHERE id = 'tag_1'", [], |r| r.get::<_, i64>(0)).map(|c| c > 0).unwrap();
+        assert!(exists);
+
+        let _ = conn.execute("DELETE FROM tags", []);
+    }
+
+    #[test]
+    fn resource_multiple_tags() {
+        let db = test_db();
+        let conn = db.pool.get().unwrap();
+
+        insert_resource(&conn, "res_1", "web-server");
+        insert_tag(&conn, "tag_1", "production", "#58A6FF");
+        insert_tag(&conn, "tag_2", "critical", "#F85149");
+        insert_resource_tag(&conn, "res_1", "tag_1");
+        insert_resource_tag(&conn, "res_1", "tag_2");
+
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM resource_tags WHERE resource_id = 'res_1'", [], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(count, 2);
+
+        let _ = conn.execute("DELETE FROM resource_tags", []);
+        let _ = conn.execute("DELETE FROM tags", []);
+        let _ = conn.execute("DELETE FROM resources", []);
+    }
+
+    #[test]
+    fn tag_update_name_and_color() {
+        let db = test_db();
+        let conn = db.pool.get().unwrap();
+
+        insert_tag(&conn, "tag_1", "prod", "#58A6FF");
+
+        conn.execute(
+            "UPDATE tags SET name = 'production', color = '#3FB950' WHERE id = 'tag_1'", [],
+        ).unwrap();
+
+        let (name, color): (String, String) = conn.query_row(
+            "SELECT name, color FROM tags WHERE id = 'tag_1'", [], |r| Ok((r.get(0)?, r.get(1)?)),
+        ).unwrap();
+        assert_eq!(name, "production");
+        assert_eq!(color, "#3FB950");
+
         let _ = conn.execute("DELETE FROM tags", []);
     }
 }
