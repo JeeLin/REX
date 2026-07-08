@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.76.0] - 2026-07-08
+
+### Changed
+- 后端可靠性：清理生产代码中约420处 unwrap()，替换为正确的错误处理（?、unwrap_or、expect）
+- WebSocket 重构：提取 ws_common.rs 通用模块，消除4个 handler 文件约300行重复代码
+- CI 补全：前端测试（bun run test）纳入 CI 流程，修正过时的 stub 注释
+
 ## [0.75.0] - 2026-07-08
 
 ### Changed

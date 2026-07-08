@@ -683,7 +683,9 @@ async fn send_error(tx: &mpsc::Sender<Result<Event, Infallible>>, conn_id: &str,
 }
 
 async fn send_event(tx: &mpsc::Sender<Result<Event, Infallible>>, data: GlobalQueryEvent) {
-    let event = Event::default().json_data(data).expect("failed to serialize SSE event");
+    let event = Event::default()
+        .json_data(data)
+        .expect("failed to serialize SSE event");
     let _ = tx.send(Ok(event)).await;
 }
 

@@ -167,10 +167,22 @@ impl MetricsCollector {
             database: DbStats {
                 size_bytes: db_size as u64,
                 tables: TablesStats {
-                    environments: db_stats.get("environments").and_then(|v| v.as_u64()).unwrap_or(0),
-                    resources: db_stats.get("resources").and_then(|v| v.as_u64()).unwrap_or(0),
-                    audit_log: db_stats.get("audit_log").and_then(|v| v.as_u64()).unwrap_or(0),
-                    metrics: db_stats.get("metrics").and_then(|v| v.as_u64()).unwrap_or(0),
+                    environments: db_stats
+                        .get("environments")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0),
+                    resources: db_stats
+                        .get("resources")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0),
+                    audit_log: db_stats
+                        .get("audit_log")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0),
+                    metrics: db_stats
+                        .get("metrics")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0),
                 },
             },
             system: SystemStats {
