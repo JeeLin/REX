@@ -163,9 +163,7 @@ fn load_ca_certs_from_pem(pem: &str) -> Result<Vec<rustls::pki_types::Certificat
     }
 
     Ok(certs
-        .into_iter()
-        .map(rustls::pki_types::CertificateDer::from)
-        .collect())
+        .into_iter().collect())
 }
 
 #[cfg(test)]
