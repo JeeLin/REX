@@ -419,6 +419,13 @@ export default {
     testSuccess: '连接成功',
     deleteTitle: '删除资源？',
     deleteConfirm: '删除资源后，相关的查询文件和历史记录将保留，但连接将断开。',
+    tags: '标签',
+    tagsPlaceholder: '搜索或创建标签...',
+    tagsEmpty: '暂无标签，输入名称创建',
+    tagMore: '继续添加标签...',
+    tagAdd: '创建标签',
+    tagRemove: '移除标签',
+    tagCreate: '创建新标签',
   },
   agent: {
     loadFailed: '加载 Agent 列表失败',

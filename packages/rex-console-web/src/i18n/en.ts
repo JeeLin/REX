@@ -419,6 +419,13 @@ export default {
     testSuccess: 'Connected',
     deleteTitle: 'Delete Resource?',
     deleteConfirm: 'Deleting this resource will preserve query files and history, but the connection will be terminated.',
+    tags: 'Tags',
+    tagsPlaceholder: 'Search or create tags...',
+    tagsEmpty: 'No tags yet, type to create',
+    tagMore: 'Add more tags...',
+    tagAdd: 'Create Tag',
+    tagRemove: 'Remove tag',
+    tagCreate: 'Create new tag',
   },
   agent: {
     loadFailed: 'Failed to load agent list',

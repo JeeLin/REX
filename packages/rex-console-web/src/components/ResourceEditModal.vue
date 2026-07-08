@@ -137,6 +137,12 @@
               />
             </div>
           </template>
+
+          <!-- Tags -->
+          <div class="form-group">
+            <label class="form-label">{{ t('resource.tags') }}</label>
+            <TagSelector v-model="form.tags" />
+          </div>
         </template>
       </div>
 
@@ -155,6 +161,8 @@ import { reactive, ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getResource, updateResource } from '@/api/env'
 import { useSidebar } from '@/composables/useSidebar'
+import TagSelector from '@/components/TagSelector.vue'
+import { getResourceTags, setResourceTags } from '@/api/tags'
 
 const props = defineProps<{
   visible: boolean
@@ -175,6 +183,7 @@ const saving = ref(false)
 const form = reactive({
   protocol: '',
   name: '',
+  tags: [] as string[],
 })
 
 const sshConfig = reactive({
@@ -252,6 +261,8 @@ watch(() => props.visible, async (v) => {
     form.protocol = resource.protocol
     form.name = resource.name
     loadResource(parseConfigJson(resource.config_json), resource.protocol)
+    const tags = await getResourceTags(resource.id)
+    form.tags = tags.map(t => t.id)
   } catch {
     emit('update:visible', false)
   } finally {
@@ -297,6 +308,7 @@ async function submitUpdate() {
       name: form.name,
       config_json: buildConfigJson(),
     })
+    await setResourceTags(props.resourceId, form.tags)
     fetchEnvs()
     close()
   } catch {

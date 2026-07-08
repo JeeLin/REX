@@ -229,6 +229,12 @@
             <span v-if="testState === 'fail'" class="test-fail">✕ {{ testMessage }}</span>
           </div>
         </template>
+
+        <!-- Tags -->
+        <div class="form-group">
+          <label class="form-label">{{ t('resource.tags') }}</label>
+          <TagSelector v-model="form.tags" />
+        </div>
       </form>
     </div>
 
@@ -269,6 +275,8 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import client from '@/api/client'
 import { useSidebar } from '@/composables/useSidebar'
+import TagSelector from '@/components/TagSelector.vue'
+import { setResourceTags } from '@/api/tags'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -291,6 +299,7 @@ const form = reactive({
   protocol: '',
   name: '',
   config_json: '',
+  tags: [] as string[],
 })
 
 const sshConfig = reactive({
@@ -488,9 +497,11 @@ async function testConnection() {
 async function submitResource() {
   form.config_json = buildConfigJson()
   try {
-    await client.post(`/environments/${envId}/resources`, form)
+    const res = await client.post<{ data: { id: string } }>(`/environments/${envId}/resources`, form)
+    if (form.tags.length) {
+      await setResourceTags(res.data.data.id, form.tags)
+    }
     step.value = 3
-    // 资源创建成功后刷新侧边栏环境列表
     fetchEnvs()
   } catch {
     // 静默处理
