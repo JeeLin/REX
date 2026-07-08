@@ -70,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { listTags, createTag, type Tag } from '@/api/tags'
 
@@ -157,10 +157,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside)
-})
-
-watch(() => props.modelValue, () => {
-  loadTags()
 })
 </script>
 
