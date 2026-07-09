@@ -12,6 +12,7 @@ pub mod files;
 pub mod helpers;
 pub mod history;
 pub mod metrics;
+pub mod notebook;
 pub mod queries;
 pub mod resource;
 pub mod routes;

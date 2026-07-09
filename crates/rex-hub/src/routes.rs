@@ -417,6 +417,36 @@ pub fn app_with_static(
                 get(crate::settings::get_user_settings).put(crate::settings::update_user_settings),
             )
             .route("/api/settings/tls", get(crate::settings::get_tls_status))
+            .route(
+                "/api/notebooks",
+                get(crate::notebook::list_notebooks).post(crate::notebook::create_notebook),
+            )
+            .route(
+                "/api/notebooks/:id",
+                get(crate::notebook::get_notebook)
+                    .put(crate::notebook::update_notebook)
+                    .delete(crate::notebook::delete_notebook),
+            )
+            .route(
+                "/api/notebooks/:id/blocks",
+                put(crate::notebook::update_blocks),
+            )
+            .route(
+                "/api/notebooks/export/:id",
+                get(crate::notebook::export_notebook),
+            )
+            .route(
+                "/api/notebooks/import",
+                post(crate::notebook::import_notebook),
+            )
+            .route(
+                "/api/notebooks/execute",
+                post(crate::notebook::execute_command),
+            )
+            .route(
+                "/api/notebooks/executions/:block_id",
+                get(crate::notebook::list_executions),
+            )
             .layer(middleware::from_fn_with_state(
                 state.clone(),
                 auth_middleware,

@@ -95,3 +95,36 @@ CREATE TABLE IF NOT EXISTS resource_tags (
     FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS notebooks (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT 'Untitled',
+    description TEXT,
+    tags TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS notebook_blocks (
+    id TEXT PRIMARY KEY,
+    notebook_id TEXT NOT NULL,
+    block_type TEXT NOT NULL,
+    content TEXT NOT NULL DEFAULT '',
+    resource_id TEXT,
+    protocol TEXT,
+    order_index INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (notebook_id) REFERENCES notebooks(id) ON DELETE CASCADE,
+    FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS notebook_executions (
+    id TEXT PRIMARY KEY,
+    block_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    output TEXT NOT NULL DEFAULT '',
+    duration_ms INTEGER,
+    executed_at TEXT NOT NULL,
+    FOREIGN KEY (block_id) REFERENCES notebook_blocks(id) ON DELETE CASCADE
+);
+
