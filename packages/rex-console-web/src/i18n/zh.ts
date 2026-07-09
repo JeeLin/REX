@@ -308,6 +308,9 @@ export default {
     contextRename: '重命名',
     contextDelete: '删除',
     contextExport: '导出',
+    import: '从 JSON 导入',
+    importSuccess: '笔记本导入成功',
+    importError: '导入失败',
     editor: {
       placeholder: {
         paragraph: "输入 '/' 使用命令...",
@@ -354,6 +357,9 @@ export default {
         empty: '暂无执行记录',
         refresh: '刷新',
       },
+      export: '导出为 JSON',
+      exportSuccess: '笔记本导出成功',
+      exportError: '导出失败',
     },
   },
   auth: {

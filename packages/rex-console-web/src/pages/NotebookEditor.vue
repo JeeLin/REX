@@ -4,6 +4,14 @@
       <button class="btn btn-ghost btn-sm" @click="goBack">← {{ t('common.back') }}</button>
       <h1 class="editor-title">{{ notebook?.title || '...' }}</h1>
       <span v-if="isSaving" class="save-indicator">{{ t('common.saving') }}</span>
+      <div class="editor-header-spacer" />
+      <button
+        v-if="notebook"
+        class="btn btn-ghost btn-sm"
+        @click="handleExport"
+      >
+        📤 {{ t('notebooks.editor.export') }}
+      </button>
     </div>
     <div v-if="loading" class="editor-loading">
       <LoadingSpinner />
@@ -25,6 +33,8 @@ import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { getNotebook } from '../api/notebook'
 import type { NotebookWithBlocks } from '../api/notebook'
+import { exportNotebookToFile } from '../utils/notebook-io'
+import { useToast } from '../composables/useToast'
 import NotebookEditor from '../components/notebook/NotebookEditor.vue'
 import LoadingSpinner from '../components/LoadingSpinner.vue'
 import ErrorState from '../components/ErrorState.vue'
@@ -32,6 +42,7 @@ import ErrorState from '../components/ErrorState.vue'
 const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
+const { success: toastSuccess, error: toastError } = useToast()
 
 const notebook = ref<NotebookWithBlocks | null>(null)
 const loading = ref(true)
@@ -40,6 +51,15 @@ const isSaving = ref(false)
 
 function goBack() {
   router.push('/notebooks')
+}
+async function handleExport() {
+  if (!notebook.value) return
+  try {
+    await exportNotebookToFile(notebook.value.id, notebook.value.title)
+    toastSuccess(t('notebooks.editor.exportSuccess'))
+  } catch {
+    toastError(t('notebooks.editor.exportError'))
+  }
 }
 
 async function loadNotebook() {
@@ -82,6 +102,10 @@ onMounted(loadNotebook)
 .save-indicator {
   font-size: var(--fs-xs);
   color: var(--text-muted);
+}
+
+.editor-header-spacer {
+  flex: 1;
 }
 
 .editor-loading {

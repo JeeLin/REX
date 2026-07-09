@@ -308,6 +308,9 @@ export default {
     contextRename: 'Rename',
     contextDelete: 'Delete',
     contextExport: 'Export',
+    import: 'Import from JSON',
+    importSuccess: 'Notebook imported successfully',
+    importError: 'Import failed',
     editor: {
       placeholder: {
         paragraph: "Type '/' for commands...",
@@ -354,6 +357,9 @@ export default {
         empty: 'No execution history',
         refresh: 'Refresh',
       },
+      export: 'Export as JSON',
+      exportSuccess: 'Notebook exported successfully',
+      exportError: 'Export failed',
     },
   },
   auth: {

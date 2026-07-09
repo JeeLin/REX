@@ -6,9 +6,21 @@
         <h1 class="notebooks-title">📓 {{ t('notebooks.title') }}</h1>
         <span class="notebooks-count">{{ notebooks.length }}</span>
       </div>
-      <button class="btn btn-primary btn-sm" @click="showCreateDialog = true">
-        + {{ t('notebooks.create') }}
-      </button>
+      <div class="notebooks-header-actions">
+        <button class="btn btn-ghost btn-sm" @click="fileInputRef?.click()">
+          📥 {{ t('notebooks.import') }}
+        </button>
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept=".json"
+          class="file-input-hidden"
+          @change="handleFileImport"
+        />
+        <button class="btn btn-primary btn-sm" @click="showCreateDialog = true">
+          + {{ t('notebooks.create') }}
+        </button>
+      </div>
     </div>
 
     <!-- Search -->
@@ -112,11 +124,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { listNotebooks, createNotebook, deleteNotebook } from '../api/notebook'
+import { listNotebooks, createNotebook, deleteNotebook, importNotebook } from '../api/notebook'
 import type { Notebook } from '../api/notebook'
+import { importNotebookFromFile, exportNotebookToFile } from '../utils/notebook-io'
+import { useToast } from '../composables/useToast'
 import LoadingSpinner from '../components/LoadingSpinner.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -124,6 +138,8 @@ import ContextMenu from '../components/ContextMenu.vue'
 
 const { t } = useI18n()
 const router = useRouter()
+const { success: toastSuccess, error: toastError } = useToast()
+const fileInputRef = useTemplateRef<HTMLInputElement>('fileInputRef')
 
 const notebooks = ref<Notebook[]>([])
 const loading = ref(true)
@@ -212,8 +228,33 @@ function startRename(notebook: Notebook) {
 }
 
 async function handleExport(notebook: Notebook) {
-  // TODO: implement export
   contextMenu.value = null
+  try {
+    await exportNotebookToFile(notebook.id, notebook.title)
+    toastSuccess(t('notebooks.editor.exportSuccess'))
+  } catch {
+    toastError(t('notebooks.editor.exportError'))
+  }
+}
+
+async function handleFileImport(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  input.value = ''
+  try {
+    const data = await importNotebookFromFile(file)
+    const notebook = await importNotebook({
+      title: data.title,
+      description: data.description || undefined,
+      blocks: data.blocks,
+    })
+    notebooks.value.unshift(notebook)
+    toastSuccess(t('notebooks.importSuccess'))
+    router.push(`/notebooks/${notebook.id}`)
+  } catch (err) {
+    toastError(err instanceof Error ? err.message : t('notebooks.importError'))
+  }
 }
 
 function showContextMenu(event: MouseEvent, notebook: Notebook) {
@@ -244,6 +285,15 @@ function formatDate(dateStr: string): string {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.notebooks-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-input-hidden {
+  display: none;
 }
 
 .notebooks-title {
