@@ -8,6 +8,8 @@
       :focused="focusedBlockId === block.id"
       :suppress-keyboard="slashMenuVisible"
       @update:content="(c: string) => handleContentUpdate(block.id, c)"
+      @update:resource-id="(id: string) => handleResourceUpdate(block.id, id)"
+      @update:protocol="(p: string) => handleProtocolUpdate(block.id, p)"
       @enter-pressed="handleEnter(block.id)"
       @backspace-empty="handleBackspace(block.id)"
       @adjust-level="(d: 1 | -1) => adjustHeadingLevel(block.id, d)"
@@ -48,6 +50,7 @@ const {
   addBlock,
   removeBlock,
   updateBlockContent,
+  updateBlockResource,
   setFocusedBlock,
   adjustHeadingLevel,
   focusPreviousBlock,
@@ -99,6 +102,26 @@ watch(
 function handleContentUpdate(id: string, content: string) {
   updateBlockContent(id, content)
   detectSlashInput(id, content)
+}
+// Resource/protocol updates from CommandBlock
+const pendingProtocols = new Map<string, string>()
+
+function handleResourceUpdate(id: string, resourceId: string) {
+  const block = blocks.value.find(b => b.id === id)
+  if (!block) return
+  const protocol = pendingProtocols.get(id) ?? block.protocol ?? ''
+  pendingProtocols.delete(id)
+  updateBlockResource(id, resourceId, protocol)
+}
+
+function handleProtocolUpdate(id: string, protocol: string) {
+  const block = blocks.value.find(b => b.id === id)
+  if (!block) return
+  if (block.resourceId) {
+    updateBlockResource(id, block.resourceId, protocol)
+  } else {
+    pendingProtocols.set(id, protocol)
+  }
 }
 
 // Enter — create new paragraph block after current

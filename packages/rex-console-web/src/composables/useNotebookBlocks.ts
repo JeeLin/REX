@@ -59,6 +59,7 @@ export interface NotebookBlocksState {
   addBlock: (afterId: string | null, type?: EditorBlock['type']) => EditorBlock
   removeBlock: (id: string) => void
   updateBlockContent: (id: string, content: string) => void
+  updateBlockResource: (id: string, resourceId: string, protocol: string) => void
   setFocusedBlock: (id: string | null) => void
   adjustHeadingLevel: (id: string, direction: 1 | -1) => void
   focusPreviousBlock: () => void
@@ -139,6 +140,14 @@ export function useNotebookBlocks(
     const block = blocks.value.find((b) => b.id === id)
     if (block) {
       block.content = content
+      markDirty()
+    }
+  }
+  function updateBlockResource(id: string, resourceId: string, protocol: string) {
+    const block = blocks.value.find((b) => b.id === id)
+    if (block) {
+      block.resourceId = resourceId
+      block.protocol = protocol
       markDirty()
     }
   }
@@ -228,6 +237,7 @@ export function useNotebookBlocks(
     addBlock,
     removeBlock,
     updateBlockContent,
+    updateBlockResource,
     setFocusedBlock,
     adjustHeadingLevel,
     focusPreviousBlock,

@@ -48,6 +48,9 @@
       :content="block.content"
       :resource-id="block.resourceId"
       :protocol="block.protocol"
+      @update:resource-id="(id) => $emit('update:resource-id', id)"
+      @update:protocol="(p) => $emit('update:protocol', p)"
+      @update:content="(c) => $emit('update:content', c)"
     />
   </div>
 </template>
@@ -69,6 +72,8 @@ defineProps<{
 
 defineEmits<{
   'update:content': [content: string]
+  'update:resource-id': [id: string]
+  'update:protocol': [protocol: string]
   'enter-pressed': []
   'backspace-empty': []
   'adjust-level': [direction: 1 | -1]
