@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.77.0] - 2026-07-09
+
+### Added
+- 标签系统：资源标签数据模型（tags + resource_tags 表）和 CRUD API
+- 标签管理 UI：TagSelector 组件，集成到资源创建和编辑流程
+- 连接菜单标签筛选：工作空间连接菜单支持按标签 AND 逻辑筛选资源
+- 标签颜色预设：12 种品牌色系预设颜色
+- 单元测试：标签系统后端和前端测试用例
+
 ## [0.76.0] - 2026-07-08
 
 ### Changed
