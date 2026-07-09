@@ -27,6 +27,17 @@ export interface NotebookWithBlocks extends Notebook {
   blocks: NotebookBlock[]
 }
 
+/** Editor-level block data model. */
+export interface EditorBlock {
+  id: string
+  type: 'heading' | 'paragraph' | 'code' | 'command'
+  content: string
+  level?: number
+  resourceId?: string
+  protocol?: string
+  orderIndex: number
+}
+
 export interface NotebookExecution {
   id: string
   block_id: string
@@ -38,16 +49,15 @@ export interface NotebookExecution {
 
 export interface NotebookExport {
   'rex-notebook': string
-  title: string
-  description: string | null
-  blocks: BlockExport[]
+  [key: string]: unknown
 }
 
 export interface BlockExport {
   type: string
-  content: string | null
-  protocol: string | null
-  resource_name: string | null
+  content: string
+  level?: number
+  resourceId?: string
+  protocol?: string
 }
 
 // ── API 函数 ──────────────────────────────────────────────
@@ -63,7 +73,7 @@ export async function getNotebook(id: string): Promise<NotebookWithBlocks> {
 }
 
 export async function createNotebook(data: {
-  title?: string
+  title: string
   description?: string
 }): Promise<Notebook> {
   const res = await client.post<{ data: Notebook }>('/api/notebooks', data)

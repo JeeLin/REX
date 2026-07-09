@@ -308,6 +308,30 @@ export default {
     contextRename: 'Rename',
     contextDelete: 'Delete',
     contextExport: 'Export',
+    editor: {
+      placeholder: {
+        paragraph: "Type '/' for commands...",
+        heading: 'Heading',
+        h1: 'Heading 1',
+        h2: 'Heading 2',
+        h3: 'Heading 3',
+        code: 'Code block',
+        command: 'Configure command...',
+      },
+      slashMenu: {
+        title: 'Block types',
+      },
+      blockType: {
+        paragraph: 'Paragraph',
+        paragraphDesc: 'Plain text block',
+        heading: 'Heading',
+        headingDesc: 'Section title (H1-H3)',
+        code: 'Code',
+        codeDesc: 'Read-only code block',
+        command: 'Command',
+        commandDesc: 'Executable command block',
+      },
+    },
   },
   auth: {
     login: 'Login',

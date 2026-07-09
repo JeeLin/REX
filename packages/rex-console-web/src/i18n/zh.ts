@@ -308,6 +308,30 @@ export default {
     contextRename: '重命名',
     contextDelete: '删除',
     contextExport: '导出',
+    editor: {
+      placeholder: {
+        paragraph: "输入 '/' 使用命令...",
+        heading: '标题',
+        h1: '标题 1',
+        h2: '标题 2',
+        h3: '标题 3',
+        code: '代码块',
+        command: '配置命令...',
+      },
+      slashMenu: {
+        title: '块类型',
+      },
+      blockType: {
+        paragraph: '段落',
+        paragraphDesc: '普通文本块',
+        heading: '标题',
+        headingDesc: '章节标题（H1-H3）',
+        code: '代码',
+        codeDesc: '只读代码块',
+        command: '命令',
+        commandDesc: '可执行命令块',
+      },
+    },
   },
   auth: {
     login: '登录',
