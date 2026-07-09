@@ -62,18 +62,31 @@
       </div>
     </div>
 
-    <!-- Result area -->
-    <div v-if="lastExecution" class="command-result">
-      <div class="command-result-header">
-        <span class="command-result-status" :class="lastExecution.status">
-          {{ lastExecution.status === 'success' ? '✓' : '✗' }}
-        </span>
-        <span v-if="lastExecution.duration_ms != null" class="command-result-duration">
-          {{ t('notebooks.editor.command.duration', { ms: lastExecution.duration_ms }) }}
-        </span>
-      </div>
-      <pre class="command-result-output">{{ lastExecution.output || t('notebooks.editor.command.noOutput') }}</pre>
+    <!-- Result panel -->
+    <ResultPanel
+      v-if="lastExecution"
+      :execution="lastExecution"
+      :protocol="protocol"
+    />
+
+    <!-- History toggle -->
+    <div v-if="resourceId" class="command-history-toggle">
+      <button
+        class="history-toggle-btn"
+        :class="{ active: showHistory }"
+        @click="showHistory = !showHistory"
+        type="button"
+      >
+        {{ showHistory ? '▾' : '▸' }} {{ t('notebooks.editor.history.toggle') }}
+      </button>
     </div>
+
+    <!-- Execution history -->
+    <ExecutionHistory
+      v-if="showHistory"
+      :block-id="blockId"
+      :protocol="protocol"
+    />
   </div>
 </template>
 
@@ -83,6 +96,8 @@ import { useI18n } from 'vue-i18n'
 import { executeCommand } from '@/api/notebook'
 import type { NotebookExecution } from '@/api/notebook'
 import ResourcePicker from '../ResourcePicker.vue'
+import ResultPanel from '../ResultPanel.vue'
+import ExecutionHistory from '../ExecutionHistory.vue'
 
 const props = defineProps<{
   blockId: string
@@ -106,6 +121,7 @@ const inputRef = ref<HTMLTextAreaElement>()
 const commandInput = ref(props.content || '')
 const executionState = ref<'idle' | 'executing' | 'completed' | 'failed'>('idle')
 const lastExecution = ref<NotebookExecution | null>(null)
+const showHistory = ref(false)
 
 // Protocol awareness
 const PROTOCOL_ICONS: Record<string, string> = {
@@ -418,46 +434,27 @@ defineExpose({ focus })
   cursor: not-allowed;
 }
 
-/* Result area */
-.command-result {
+/* History toggle */
+.command-history-toggle {
+  padding: var(--sp-xs) var(--sp-md);
   border-top: 1px solid var(--border);
-  background: var(--bg-surface);
 }
 
-.command-result-header {
+.history-toggle-btn {
   display: flex;
   align-items: center;
-  gap: var(--sp-sm);
-  padding: var(--sp-xs) var(--sp-md);
-  font-size: var(--fs-xs);
+  gap: var(--sp-xs);
+  padding: var(--sp-xs) var(--sp-sm);
+  border: none;
+  background: transparent;
   color: var(--text-muted);
-  border-bottom: 1px solid var(--border);
-}
-
-.command-result-status.success {
-  color: var(--success, #10b981);
-}
-
-.command-result-status.error,
-.command-result-status.failed {
-  color: var(--danger, #ef4444);
-}
-
-.command-result-duration {
-  margin-left: auto;
-  font-family: var(--font-mono);
-}
-
-.command-result-output {
-  margin: 0;
-  padding: var(--sp-sm) var(--sp-md);
-  font-family: var(--font-mono);
   font-size: var(--fs-xs);
-  line-height: var(--lh-relaxed);
-  color: var(--text-primary);
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 200px;
-  overflow-y: auto;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.history-toggle-btn:hover,
+.history-toggle-btn.active {
+  color: var(--accent);
 }
 </style>

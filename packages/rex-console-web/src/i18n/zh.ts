@@ -344,6 +344,16 @@ export default {
         command: '命令',
         commandDesc: '可执行命令块',
       },
+      result: {
+        copy: '复制结果',
+      },
+      history: {
+        toggle: '执行历史',
+        title: '执行历史',
+        loading: '加载中...',
+        empty: '暂无执行记录',
+        refresh: '刷新',
+      },
     },
   },
   auth: {

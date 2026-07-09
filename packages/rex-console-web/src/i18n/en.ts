@@ -344,6 +344,16 @@ export default {
         command: 'Command',
         commandDesc: 'Executable command block',
       },
+      result: {
+        copy: 'Copy result',
+      },
+      history: {
+        toggle: 'Execution History',
+        title: 'Execution History',
+        loading: 'Loading...',
+        empty: 'No execution history',
+        refresh: 'Refresh',
+      },
     },
   },
   auth: {
