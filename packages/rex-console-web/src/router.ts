@@ -54,6 +54,16 @@ const router = createRouter({
           component: () => import('./pages/Settings.vue'),
         },
         {
+          path: 'notebooks',
+          name: 'notebooks',
+          component: () => import('./pages/Notebooks.vue'),
+        },
+        {
+          path: 'notebooks/:id',
+          name: 'notebook-editor',
+          component: () => import('./pages/NotebookEditor.vue'),
+        },
+        {
           path: 'workspace',
           name: 'workspace',
           component: () => import('./pages/Workspace.vue'),

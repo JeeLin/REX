@@ -57,6 +57,10 @@
           <span class="nav-icon">🔌</span>
           <span v-show="!effectiveCollapsed">{{ t('nav.agents') }}</span>
         </router-link>
+        <router-link to="/notebooks" class="nav-item" :class="{ active: isNotebookPage }" @click="closeMobile">
+          <span class="nav-icon">📓</span>
+          <span v-show="!effectiveCollapsed">{{ t('nav.notebooks') }}</span>
+        </router-link>
       </nav>
 
       <!-- 环境资源树 -->
@@ -332,6 +336,10 @@ const effectiveCollapsed = computed(() => sidebarFixed.value ? false : collapsed
 const isEnvPage = computed(() => {
   const name = route.name as string
   return name?.startsWith('environment')
+})
+const isNotebookPage = computed(() => {
+  const name = route.name as string
+  return name?.startsWith('notebook')
 })
 
 const pageTitle = computed(() => {
