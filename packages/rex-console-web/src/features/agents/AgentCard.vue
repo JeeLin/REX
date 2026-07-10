@@ -3,7 +3,7 @@
     <div class="card-header">
       <div class="status-dot" :class="agent.status === 'online' ? 'online' : 'offline'" />
       <span class="agent-name">{{ agent.name }}</span>
-      <span class="badge" :class="agent.status === 'online' ? 'badge-success' : 'badge-offline'">
+      <span class="badge" :class="agent.status === 'online' ? 'badge-success' : 'badge-muted'">
         {{ agent.status === 'online' ? t('status.online') : t('status.offline') }}
       </span>
     </div>
@@ -157,59 +157,6 @@ function osIcon(os: string): string {
   font-size: var(--fs-xs);
 }
 
-.badge {
-  padding: 2px var(--sp-sm);
-  border-radius: var(--radius-sm);
-  font-size: var(--fs-xs);
-  font-weight: 500;
-}
-
-.badge-success {
-  color: var(--success);
-  background: rgba(34, 197, 94, 0.1);
-}
-
-.badge-offline {
-  color: var(--text-muted);
-  background: var(--bg-elevated);
-}
-
-.card-actions {
-  display: flex;
-  gap: var(--sp-sm);
-  margin-top: var(--sp-md);
-  padding-top: var(--sp-md);
-  border-top: 1px solid var(--border);
-}
-
-.btn {
-  padding: var(--sp-xs) var(--sp-md);
-  border-radius: var(--radius-sm);
-  font-size: var(--fs-xs);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  border: 1px solid var(--border);
-  background: none;
-  color: var(--text-secondary);
-}
-
-.btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.btn-sm {
-  padding: var(--sp-xs) var(--sp-sm);
-}
-
-.btn-danger {
-  color: var(--danger);
-  border-color: transparent;
-}
-
-.btn-danger:hover {
-  background: rgba(248, 81, 73, 0.1);
-}
 
 @media (max-width: 767px) {
   .agent-card {

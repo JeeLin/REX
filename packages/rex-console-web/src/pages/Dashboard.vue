@@ -12,15 +12,15 @@
       <div class="stats-row">
         <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
           <div class="stat-label">{{ t('dashboard.envCount') }}</div>
-          <div class="stat-value" style="color: var(--accent)" aria-live="polite">{{ envCount }}</div>
+          <div class="stat-value stat-accent" aria-live="polite">{{ envCount }}</div>
         </div>
         <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
           <div class="stat-label">{{ t('dashboard.resCount') }}</div>
-          <div class="stat-value" style="color: var(--info)" aria-live="polite">{{ resourceCount }}</div>
+          <div class="stat-value stat-info" aria-live="polite">{{ resourceCount }}</div>
         </div>
         <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
           <div class="stat-label">{{ t('dashboard.agentOnline') }}</div>
-          <div class="stat-value" style="color: var(--success)" aria-live="polite">{{ agentOnlineCount }}</div>
+          <div class="stat-value stat-success" aria-live="polite">{{ agentOnlineCount }}</div>
         </div>
         <div class="stat-card" @contextmenu.prevent="onStatCardCtx($event)">
           <div class="stat-label">{{ t('dashboard.todayOps') }}</div>
@@ -70,7 +70,7 @@
       </div>
 
       <!-- Quick Connect (Recent Resources) -->
-      <div class="section-header" style="margin-top: var(--sp-xl)">
+      <div class="section-header section-header-spaced">
         <h2 class="section-title">{{ t('dashboard.quickConnect') }}</h2>
       </div>
       <div v-if="recentQuickItems.length > 0" class="quick-connect-grid">
@@ -302,6 +302,11 @@ async function loadData() {
 </script>
 
 <style scoped>
+.stat-accent { color: var(--accent); }
+.stat-info { color: var(--info); }
+.stat-success { color: var(--success); }
+.section-header-spaced { margin-top: var(--sp-xl); }
+
 .env-card {
   background: var(--bg-surface);
   border: 1px solid var(--border);

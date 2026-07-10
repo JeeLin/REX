@@ -85,7 +85,7 @@ a:hover {
 
 .btn-danger {
   color: var(--danger);
-  border-color: var(--danger);
+  border-color: transparent;
 }
 
 .btn-danger:hover {
@@ -93,8 +93,7 @@ a:hover {
 }
 
 .btn-sm {
-  height: 30px;
-  padding: 0 var(--sp-md);
+  padding: var(--sp-xs) var(--sp-sm);
   font-size: var(--fs-xs);
 }
 
@@ -188,8 +187,7 @@ textarea.form-input {
 }
 
 .badge-success {
-  background: rgba(63, 185, 80, 0.12);
-  color: var(--success);
+  background: rgba(34, 197, 94, 0.1);
 }
 
 .badge-muted {
