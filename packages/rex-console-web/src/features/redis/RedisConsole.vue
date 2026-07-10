@@ -390,6 +390,33 @@ async function handleKeyBrowserSearch(pattern: string) {
         }
       }
       keyBrowserKeys.value = parsed
+
+      // Fetch TTL for each key in parallel (batches of 50)
+      const batchSize = 50
+      for (let i = 0; i < parsed.length; i += batchSize) {
+        const batch = parsed.slice(i, i + batchSize)
+        const ttlResults = await Promise.allSettled(
+          batch.map(k => session.execute(`TTL ${k.key}`)),
+        )
+        for (let j = 0; j < batch.length; j++) {
+          const ttlResult = ttlResults[j]
+          if (ttlResult && ttlResult.status === 'fulfilled') {
+            const value = ttlResult.value
+            if (value && value.type === 'response' && value.value.type === 'Integer') {
+              const keyIdx = keyBrowserKeys.value.findIndex(k => k.key === batch[j]?.key)
+              if (keyIdx >= 0) {
+                const existingKey = keyBrowserKeys.value[keyIdx]
+                if (existingKey) {
+                  keyBrowserKeys.value[keyIdx] = {
+                    ...existingKey,
+                    ttl: value.value.value,
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   } catch {
     // ignore errors

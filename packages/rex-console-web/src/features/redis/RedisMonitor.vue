@@ -286,7 +286,8 @@ function parseInfoResponse(raw: string): InfoData {
     const key = trimmed.slice(0, colonIdx).trim()
     const value = trimmed.slice(colonIdx + 1).trim()
     if (!sections[currentSection]) sections[currentSection] = {}
-    sections[currentSection][key] = value
+    const section = sections[currentSection]
+    if (section) section[key] = value
   }
 
   const mem = sections['memory'] || {}
