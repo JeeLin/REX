@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+
+## [0.78.0] - 2026-07-10
+
+### Added
+- Notebook 功能：交互式笔记本，支持 block-based 富文本编辑器
+- 支持 4 种块类型：段落、标题、代码块、命令块
+- 命令块支持资源绑定和执行（7 种协议：SSH、SQL、Redis、S3、MCP、FTP、Terminal）
+- 内联结果展示与执行历史
+- JSON 导入/导出功能
+- 自动保存与脏数据检测
+- 后端 Notebook CRUD API 和数据模型
+- 前端 Notebook 列表页与编辑器页面
+- 单元测试：composable 和 API 客户端测试用例
+- 代码审查修复：事务包裹、block_type 验证、级联删除、错误处理
+
 ## [0.77.0] - 2026-07-09
 
 ### Added
