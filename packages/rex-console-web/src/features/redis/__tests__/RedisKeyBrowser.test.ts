@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import RedisKeyBrowser from '../RedisKeyBrowser.vue'
+import SearchFilter from '../SearchFilter.vue'
 
 // Mock vue-i18n
 vi.mock('vue-i18n', () => ({
@@ -20,12 +21,23 @@ describe('RedisKeyBrowser', () => {
     { key: 'tags:redis', type: 'set' },
   ]
 
-  it('renders search input and search button', () => {
+  it('renders SearchFilter component', () => {
     const wrapper = mount(RedisKeyBrowser, {
       props: { connected: true, keys: [] },
     })
-    expect(wrapper.find('.key-search-input').exists()).toBe(true)
-    expect(wrapper.find('.redis-btn-sm').exists()).toBe(true)
+    expect(wrapper.findComponent(SearchFilter).exists()).toBe(true)
+  })
+
+  it('emits search event from SearchFilter', async () => {
+    const wrapper = mount(RedisKeyBrowser, {
+      props: { connected: true, keys: [] },
+    })
+    // Clear the mount-triggered search
+    await wrapper.vm.$nextTick()
+    const emittedBefore = (wrapper.emitted('search') ?? []).length
+    await wrapper.findComponent(SearchFilter).vm.$emit('search', 'test:*')
+    expect(wrapper.emitted('search')!.length).toBeGreaterThan(emittedBefore)
+    expect(wrapper.emitted('search')![wrapper.emitted('search')!.length - 1]).toEqual(['test:*'])
   })
 
   it('shows empty state when no keys', () => {
