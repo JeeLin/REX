@@ -182,7 +182,7 @@
           />
           <span class="search-shortcut">Esc</span>
         </div>
-        <div class="conn-menu-tags" v-if="allTags.length">
+        <div v-if="allTags.length" class="conn-menu-tags">
           <button
             v-for="tag in allTags"
             :key="tag.id"

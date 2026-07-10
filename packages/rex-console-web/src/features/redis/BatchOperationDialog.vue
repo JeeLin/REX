@@ -133,6 +133,7 @@ const title = computed(() => {
     case 'delete': return t('redis.keys.batch.deleteTitle')
     case 'setTtl': return t('redis.keys.batch.setTtlTitle')
     case 'export': return t('redis.keys.batch.exportTitle')
+    default: return ''
   }
 })
 
