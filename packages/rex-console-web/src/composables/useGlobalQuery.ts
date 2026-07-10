@@ -134,7 +134,10 @@ export function useGlobalQuery(resources: SqlResource[]) {
 
       const response = await fetch('/api/sql/global-query', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('rex-token') || ''}`,
+        },
         body: JSON.stringify(request),
         signal: abortController.signal,
       })

@@ -117,19 +117,20 @@ onMounted(() => {
     state,
     parent: editorContainer.value,
   })
+})
 
-  useThemeObserver(() => {
-    if (!view) return
-    const currentDoc = view.state.doc.toString()
-    view.destroy()
-    const newState = EditorState.create({
-      doc: currentDoc,
-      extensions: createExtensions(),
-    })
-    view = new EditorView({
-      state: newState,
-      parent: editorContainer.value!,
-    })
+// 主题变化时重建编辑器（在顶层调用以正确注册生命周期钩子）
+useThemeObserver(() => {
+  if (!view || !editorContainer.value) return
+  const currentDoc = view.state.doc.toString()
+  view.destroy()
+  const newState = EditorState.create({
+    doc: currentDoc,
+    extensions: createExtensions(),
+  })
+  view = new EditorView({
+    state: newState,
+    parent: editorContainer.value,
   })
 })
 

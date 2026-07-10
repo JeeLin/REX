@@ -214,6 +214,12 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 const MAX_RECONNECT_ATTEMPTS = 5
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000] // 指数退避：1s → 16s
 let manualDisconnect = false
+// 监听主题变化（顶层调用以正确注册生命周期钩子）
+useThemeObserver(() => {
+  if (terminal) {
+    terminal.options.theme = getTerminalTheme()
+  }
+})
 
 // Latency measurement
 const latency = ref<number | null>(null)
@@ -272,12 +278,6 @@ function initTerminal() {
   fitAddon = new FitAddon()
   terminal.loadAddon(fitAddon)
   terminal.open(terminalContainer.value)
-  // 监听主题变化
-  useThemeObserver(() => {
-    if (terminal) {
-      terminal.options.theme = getTerminalTheme()
-    }
-  })
 
 
   // 拦截 Ctrl+C/V：智能处理复制粘贴
