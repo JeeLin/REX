@@ -284,23 +284,38 @@ function initTerminal() {
   })
 
 
-  // 拦截 Ctrl+V / Ctrl+Shift+C：交给浏览器原生处理
+  // 拦截 Ctrl+C/V：智能处理复制粘贴
   terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
-    if ((event.ctrlKey || event.metaKey) && event.key === 'v' && event.type === 'keydown') {
+    const ctrl = event.ctrlKey || event.metaKey
+    if (event.type !== 'keydown') return true
+
+    // Ctrl+V → 浏览器原生粘贴
+    if (ctrl && event.key === 'v') {
       return false
     }
-    if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === 'C' || event.key === 'c') && event.type === 'keydown') {
-      // Ctrl+Shift+C → 复制选中内容
-      if (event.type === 'keydown') {
-        const selection = terminal?.getSelection()
-        if (selection) {
-          copyWithFallback(selection)
-        }
+
+    // Ctrl+C → 有选中文本时复制，无选中时发送 SIGINT
+    if (ctrl && !event.shiftKey && (event.key === 'c' || event.key === 'C')) {
+      const selection = terminal?.getSelection()
+      if (selection) {
+        copyWithFallback(selection)
+        return false
+      }
+      return true // 无选中文本，交给终端处理（发送 SIGINT）
+    }
+
+    // Ctrl+Shift+C → 强制复制选中内容
+    if (ctrl && event.shiftKey && (event.key === 'c' || event.key === 'C')) {
+      const selection = terminal?.getSelection()
+      if (selection) {
+        copyWithFallback(selection)
       }
       return false
     }
+
     return true
   })
+
 
   // 监听浏览器原生 paste 事件，转发到 WebSocket
   terminal.textarea?.addEventListener('paste', (e: ClipboardEvent) => {
