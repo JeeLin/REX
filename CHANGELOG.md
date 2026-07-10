@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.80.0] - 2026-07-10
+
+### Added
+- CSS 变量修复与设计 token 补齐：新增 --bg-panel, --bg-header, --bg-input, --bg-muted, --border-hover 等变量
+- Light 主题适配：CodeMirror 和 xterm.js 支持动态主题切换
+- 弹窗过渡动画：所有模态框添加 opacity + scale 过渡动画
+- useThemeObserver composable：统一主题变化监听逻辑
+- 面板拖拽调整大小：支持水平和垂直方向的面板边框拖拽
+- 全局键盘快捷键：Ctrl+K 命令面板、Ctrl+N 新建连接、F1 快捷键面板
+
+### Changed
+- 样式去重：AgentCard 移除重复 badge/btn 样式，复用全局类
+- Dashboard 内联样式提取为 scoped CSS 类
+- lightTheme 硬编码颜色值改为 CSS 变量引用
+- SQL 格式化器优化（复合关键字处理顺序）
+
+### Fixed
+- SSH 终端 Ctrl+C/V 快捷键冲突：有选中文本时复制，无选中时发送 SIGINT
+- AppLayout 布局过渡动画：修复 --transition-normal 未定义问题
+- GlobalQueryModal 未定义 CSS 变量修复
+- useThemeObserver 内存泄漏：生命周期钩子移至顶层作用域
+- GlobalQuery API 请求添加 Authorization header
+- ESLint 错误修复（BatchOperationDialog switch default case）
+
 ## [0.79.0] - 2026-07-10
 
 ### Added
