@@ -14,6 +14,20 @@ import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
 import { lintKeymap } from '@codemirror/lint'
 import { bracketMatching, indentOnInput, foldGutter, foldKeymap, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
 
+const lightTheme = EditorView.theme({
+  '&': { backgroundColor: '#FFFFFF', color: '#1F2328' },
+  '.cm-gutters': { backgroundColor: '#F6F8FA', color: '#656D76', borderRight: '1px solid #D0D7DE' },
+  '.cm-activeLineGutter': { backgroundColor: '#F0F2F5' },
+  '.cm-activeLine': { backgroundColor: '#F6F8FA' },
+  '.cm-selectionBackground': { backgroundColor: '#ADD6FF !important' },
+  '.cm-cursor': { borderLeftColor: '#BF5700' },
+  '.cm-matchingBracket': { backgroundColor: '#BBF0FF', outline: '1px solid #96D3FF' },
+})
+
+function getCurrentTheme() {
+  return document.documentElement.getAttribute('data-theme') || 'dark'
+}
+
 const props = defineProps<{
   modelValue: string
   placeholder?: string
@@ -53,8 +67,7 @@ function createExtensions() {
     closeBrackets(),
     highlightSelectionMatches(),
     autocompletion(),
-    sql({ dialect: getSqlDialect() }),
-    oneDark,
+    getCurrentTheme() === 'dark' ? oneDark : lightTheme,
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
     keymap.of([
       ...closeBracketsKeymap,
@@ -93,6 +106,8 @@ function createExtensions() {
   ]
 }
 
+let themeObserver: MutationObserver | null = null
+
 onMounted(() => {
   if (!editorContainer.value) return
   const state = EditorState.create({
@@ -103,12 +118,34 @@ onMounted(() => {
     state,
     parent: editorContainer.value,
   })
+
+  themeObserver = new MutationObserver(() => {
+    if (!view) return
+    const currentDoc = view.state.doc.toString()
+    view.destroy()
+    const newState = EditorState.create({
+      doc: currentDoc,
+      extensions: createExtensions(),
+    })
+    view = new EditorView({
+      state: newState,
+      parent: editorContainer.value!,
+    })
+  })
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  })
 })
+
 
 onBeforeUnmount(() => {
   view?.destroy()
   view = null
+  themeObserver?.disconnect()
+  themeObserver = null
 })
+
 
 watch(() => props.modelValue, (newVal) => {
   if (view && view.state.doc.toString() !== newVal) {

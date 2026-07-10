@@ -204,6 +204,7 @@ let fitAddon: FitAddon | null = null
 let ws: WebSocket | null = null
 let sessionId: string | null = null
 let resizeObserver: ResizeObserver | null = null
+let themeObserver: MutationObserver | null = null
 let cleanupTouch: (() => void) | null = null
 let inputBuffer = ''
 
@@ -247,24 +248,41 @@ function stopPing() {
   latency.value = null
 }
 
+function getTerminalTheme() {
+  const style = getComputedStyle(document.documentElement)
+  return {
+    background: style.getPropertyValue('--bg-deep').trim(),
+    foreground: style.getPropertyValue('--text-primary').trim(),
+    cursor: style.getPropertyValue('--accent').trim(),
+    cursorAccent: style.getPropertyValue('--bg-deep').trim(),
+  }
+}
+
 function initTerminal() {
   if (!terminalContainer.value) return
 
   terminal = new Terminal({
     fontFamily: `'${settingsStore.terminalSettings.fontFamily}', 'Fira Code', monospace`,
     fontSize: settingsStore.terminalSettings.fontSize,
-    theme: {
-      background: '#0D1117',
-      foreground: '#E6EDF3',
-      cursor: '#E8912D',
-      cursorAccent: '#0D1117',
-    },
+    theme: getTerminalTheme(),
     cursorBlink: settingsStore.terminalSettings.cursorBlink,
   })
+
 
   fitAddon = new FitAddon()
   terminal.loadAddon(fitAddon)
   terminal.open(terminalContainer.value)
+  // 监听主题变化
+  themeObserver = new MutationObserver(() => {
+    if (terminal) {
+      terminal.options.theme = getTerminalTheme()
+    }
+  })
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  })
+
 
   // 拦截 Ctrl+V / Ctrl+Shift+C：交给浏览器原生处理
   terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
@@ -689,6 +707,8 @@ onBeforeUnmount(() => {
     deleteSession(sessionId).catch(() => {})
   }
   resizeObserver?.disconnect()
+  themeObserver?.disconnect()
+  themeObserver = null
   terminal?.dispose()
   document.removeEventListener('mousemove', onResize)
   document.removeEventListener('mouseup', stopResize)
