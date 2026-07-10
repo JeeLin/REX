@@ -13,7 +13,7 @@
     </TabBar>
 
     <!-- 内容区 -->
-    <div class="ws-content" :class="layoutClass">
+    <div class="ws-content" :class="layoutClass" :style="layoutStyle">
       <!-- 空状态 -->
       <div v-if="tabs.length === 0" class="ws-empty">
         <div class="ws-empty-icon">💻</div>
@@ -99,6 +99,7 @@
           @dragover="onPanelDragOver($event, i - 1)"
           @dragleave="onPanelDragLeave"
           @drop="onPanelDrop($event, i - 1)"
+          @mousedown="onPanelMouseDown($event, i - 1)"
         >
           <template v-if="getPanelTab(i - 1)">
             <WorkspaceTerminal
@@ -327,6 +328,21 @@ const layoutClass = computed(() => {
   if (currentLayout.value === 'single') return 'layout-single'
   return `layout-split layout-${currentLayout.value}`
 })
+const layoutStyle = computed(() => {
+  if (currentLayout.value === 'single') return {}
+  const s = panelSizes.value
+  const hasCustom = Object.keys(s).length > 0
+  if (!hasCustom) return {}
+  if (currentLayout.value === 'left-right') {
+    return { gridTemplateColumns: `${s[0] ?? 50}fr ${s[1] ?? 50}fr` }
+  } else if (currentLayout.value === 'top-bottom') {
+    return { gridTemplateRows: `${s[0] ?? 50}fr ${s[1] ?? 50}fr` }
+  } else if (currentLayout.value === 'sidebar-main') {
+    return { gridTemplateColumns: `${s[0] ?? 67}fr ${s[1] ?? 33}fr` }
+  }
+  return {}
+})
+
 
 function setLayout(layout: Layout) {
   currentLayout.value = layout
@@ -335,6 +351,60 @@ function cycleLayout() {
   const idx = LAYOUT_ORDER.indexOf(currentLayout.value)
   currentLayout.value = LAYOUT_ORDER[(idx + 1) % LAYOUT_ORDER.length]!
 }
+// ── Panel Resize ──
+const panelSizes = ref<Record<number, number>>({})
+let resizingPanel = -1
+let resizingStart = 0
+let resizingStartSize = 0
+
+function startPanelResize(e: MouseEvent, panelIndex: number) {
+  e.preventDefault()
+  resizingPanel = panelIndex
+  resizingStart = currentLayout.value.includes('top-bottom') ? e.clientY : e.clientX
+  resizingStartSize = panelSizes.value[panelIndex] ?? 50
+  document.addEventListener('mousemove', onPanelResize)
+  document.addEventListener('mouseup', stopPanelResize)
+  document.body.style.cursor = currentLayout.value.includes('top-bottom') ? 'row-resize' : 'col-resize'
+  document.body.style.userSelect = 'none'
+}
+
+function onPanelResize(e: MouseEvent) {
+  if (resizingPanel < 0) return
+  const current = currentLayout.value.includes('top-bottom') ? e.clientY : e.clientX
+  const diff = current - resizingStart
+  const container = document.querySelector('.ws-content.layout-split') as HTMLElement
+  if (!container) return
+  const total = currentLayout.value.includes('top-bottom') ? container.clientHeight : container.clientWidth
+  const deltaPercent = (diff / total) * 100
+  const newSize = Math.max(20, Math.min(80, resizingStartSize + deltaPercent))
+  panelSizes.value[resizingPanel] = newSize
+}
+
+function stopPanelResize() {
+  resizingPanel = -1
+  document.removeEventListener('mousemove', onPanelResize)
+  document.removeEventListener('mouseup', stopPanelResize)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+}
+function onPanelMouseDown(e: MouseEvent, panelIndex: number) {
+  if (currentLayout.value === 'single') return
+  const el = e.currentTarget as HTMLElement
+  const rect = el.getBoundingClientRect()
+  const isHorizontal = !currentLayout.value.includes('top-bottom')
+  const handleSize = 6
+  let isHandle = false
+  if (isHorizontal) {
+    isHandle = e.clientX > rect.right - handleSize
+  } else {
+    isHandle = e.clientY > rect.bottom - handleSize
+  }
+  if (isHandle && panelIndex < panelCount.value - 1) {
+    startPanelResize(e, panelIndex)
+  }
+}
+
+
 function isPanelActive(panelIndex: number): boolean {
   if (currentLayout.value === 'single') {
     return tabs.value.some((t) => t.id === activeTabId.value)
@@ -752,6 +822,31 @@ function onKeyDown(e: KeyboardEvent) {
   background: var(--bg-deep);
   min-height: 0;
 }
+.ws-content.layout-split .ws-panel::after {
+  content: '';
+  position: absolute;
+  background: transparent;
+  z-index: 10;
+  transition: background 0.15s;
+}
+.ws-content.layout-split .ws-panel::after:hover {
+  background: var(--accent);
+}
+.ws-content.layout-split:not(.layout-top-bottom):not(.layout-quad) .ws-panel::after {
+  right: -3px;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+}
+.ws-content.layout-split.layout-top-bottom .ws-panel::after {
+  bottom: -3px;
+  left: 0;
+  width: 100%;
+  height: 6px;
+  cursor: row-resize;
+}
+
 
 .ws-content.layout-split .ws-panel.layout-drop-zone {
   border: 2px dashed var(--accent);
