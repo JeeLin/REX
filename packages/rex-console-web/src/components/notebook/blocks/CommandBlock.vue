@@ -98,6 +98,7 @@ import type { NotebookExecution } from '@/api/notebook'
 import ResourcePicker from '../ResourcePicker.vue'
 import ResultPanel from '../ResultPanel.vue'
 import ExecutionHistory from '../ExecutionHistory.vue'
+import { PROTOCOL_ICONS } from '@/utils/protocols'
 
 const props = defineProps<{
   blockId: string
@@ -122,17 +123,6 @@ const commandInput = ref(props.content || '')
 const executionState = ref<'idle' | 'executing' | 'completed' | 'failed'>('idle')
 const lastExecution = ref<NotebookExecution | null>(null)
 const showHistory = ref(false)
-
-// Protocol awareness
-const PROTOCOL_ICONS: Record<string, string> = {
-  ssh: '💻',
-  sql: '🗄',
-  redis: '📦',
-  s3: '📁',
-  mcp: '🔌',
-  ftp: '📂',
-  terminal: '⌨',
-}
 
 const protocolIcon = computed(() => {
   if (!props.protocol) return '⚡'
@@ -199,8 +189,6 @@ function handleKeydown(e: KeyboardEvent) {
       // Allow natural newline for multi-line commands
       return
     }
-    // For other protocols, Enter alone doesn't execute but also doesn't add newline
-    // (single-line mode)
   }
 }
 
@@ -227,7 +215,6 @@ async function execute() {
   }
 }
 
-// Focus helper
 function focus() {
   nextTick(() => {
     inputRef.value?.focus()

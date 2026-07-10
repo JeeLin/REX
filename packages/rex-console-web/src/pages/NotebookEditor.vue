@@ -3,7 +3,6 @@
     <div class="editor-header">
       <button class="btn btn-ghost btn-sm" @click="goBack">← {{ t('common.back') }}</button>
       <h1 class="editor-title">{{ notebook?.title || '...' }}</h1>
-      <span v-if="isSaving" class="save-indicator">{{ t('common.saving') }}</span>
       <div class="editor-header-spacer" />
       <button
         v-if="notebook"
@@ -22,7 +21,6 @@
     <NotebookEditor
       v-else-if="notebook"
       :notebook="notebook"
-      @saved="isSaving = false"
     />
   </div>
 </template>
@@ -47,7 +45,6 @@ const { success: toastSuccess, error: toastError } = useToast()
 const notebook = ref<NotebookWithBlocks | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
-const isSaving = ref(false)
 
 function goBack() {
   router.push('/notebooks')
@@ -97,11 +94,6 @@ onMounted(loadNotebook)
   font-size: 20px;
   font-weight: 600;
   margin: 0;
-}
-
-.save-indicator {
-  font-size: var(--fs-xs);
-  color: var(--text-muted);
 }
 
 .editor-header-spacer {

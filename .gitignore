@@ -42,3 +42,7 @@ frontend/vite.config.js
 
 # Worktrees
 .worktrees/
+
+# AI agent context
+.cursorrules
+.dev-flow

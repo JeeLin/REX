@@ -260,7 +260,10 @@ pub async fn delete_notebook(
 ) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
     let db = state.db.clone();
     tokio::task::spawn_blocking(move || {
-        let conn = db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "数据库连接失败"))?;
+        let conn = db
+            .pool
+            .get()
+            .map_err(|_| err_resp("INTERNAL_ERROR", "数据库连接失败"))?;
         let affected = conn
             .execute("DELETE FROM notebooks WHERE id = ?1", rusqlite::params![id])
             .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
@@ -473,20 +476,18 @@ pub async fn export_notebook(
     let export = tokio::task::spawn_blocking(move || {
         let conn = db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "数据库连接失败"))?;
 
-        let notebook = conn
+        let (title, description) = conn
             .query_row(
-                "SELECT id, title, description FROM notebooks WHERE id = ?1",
+                "SELECT title, description FROM notebooks WHERE id = ?1",
                 rusqlite::params![id],
                 |row| {
                     Ok((
                         row.get::<_, String>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, Option<String>>(2)?,
+                        row.get::<_, Option<String>>(1)?,
                     ))
                 },
             )
             .map_err(|_| not_found("Notebook 不存在"))?;
-
         let mut stmt = conn
             .prepare("SELECT block_type, content, protocol FROM notebook_blocks WHERE notebook_id = ?1 ORDER BY order_index ASC")
             .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
@@ -505,8 +506,8 @@ pub async fn export_notebook(
 
         Ok::<_, (StatusCode, Json<ErrorResponse>)>(NotebookExport {
             version: "1.0".to_string(),
-            title: notebook.1,
-            description: notebook.2,
+            title,
+            description,
             blocks,
         })
     })

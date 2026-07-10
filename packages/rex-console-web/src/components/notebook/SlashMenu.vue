@@ -11,7 +11,6 @@
     ref="menuEl"
     class="slash-menu"
     :style="menuStyle"
-    @keydown="onKeydown"
   >
     <div class="slash-menu-header">{{ t('notebooks.editor.slashMenu.title') }}</div>
     <button
@@ -41,7 +40,7 @@ const props = defineProps<{
   filter: string
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   select: [type: string]
   close: []
 }>()
@@ -121,13 +120,11 @@ function onKeydown(e: KeyboardEvent) {
     if (activeIndex.value >= 0 && activeIndex.value < count) {
       const item = filteredItems.value[activeIndex.value]
       if (item) {
-        const event = new CustomEvent('slash-menu-select', { detail: item.type })
-        window.dispatchEvent(event)
+        emit('select', item.type)
       }
     }
   } else if (e.key === 'Escape') {
-    const event = new CustomEvent('slash-menu-close')
-    window.dispatchEvent(event)
+    emit('close')
   }
 }
 

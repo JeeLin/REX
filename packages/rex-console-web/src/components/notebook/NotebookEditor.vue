@@ -15,7 +15,6 @@
       @adjust-level="(d: 1 | -1) => adjustHeadingLevel(block.id, d)"
       @add-after="handleAddAfter(block.id)"
       @focus="setFocusedBlock(block.id)"
-      @blur="handleBlockBlur"
     />
     <SlashMenu
       :visible="slashMenuVisible"
@@ -149,14 +148,6 @@ function handleAddAfter(id: string) {
   focusBlock(newBlock.id)
 }
 
-function handleBlockBlur() {
-  // Allow click to register before clearing focus
-  setTimeout(() => {
-    if (!slashMenuVisible.value) {
-      // Keep focusedBlockId for visual state
-    }
-  }, 100)
-}
 
 // ── Slash Menu ──────────────────────────────────────────
 

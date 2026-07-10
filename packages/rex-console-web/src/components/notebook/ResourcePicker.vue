@@ -71,6 +71,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { listEnvsWithResources } from '@/api/env'
 import type { EnvWithResources, Resource } from '@/api/env'
+import { PROTOCOL_ICONS } from '@/utils/protocols'
 
 const props = defineProps<{
   modelValue: string | null
@@ -88,7 +89,6 @@ const searchInput = ref<HTMLInputElement>()
 const isOpen = ref(false)
 const searchQuery = ref('')
 const groups = ref<EnvWithResources[]>([])
-const loading = ref(false)
 const dropdownStyle = ref<Record<string, string>>({})
 
 const selectedResource = computed(() => {
@@ -116,16 +116,6 @@ const filteredGroups = computed(() => {
     .filter(group => group.resources.length > 0)
 })
 
-const PROTOCOL_ICONS: Record<string, string> = {
-  ssh: '💻',
-  sql: '🗄',
-  redis: '📦',
-  s3: '📁',
-  mcp: '🔌',
-  ftp: '📂',
-  terminal: '⌨',
-}
-
 function getProtocolIcon(protocol: string): string {
   return PROTOCOL_ICONS[protocol.toLowerCase()] ?? '⚡'
 }
@@ -143,13 +133,10 @@ function getResourceAddress(resource: Resource): string {
 }
 
 async function fetchResources() {
-  loading.value = true
   try {
     groups.value = await listEnvsWithResources()
   } catch {
     groups.value = []
-  } finally {
-    loading.value = false
   }
 }
 
