@@ -39,7 +39,7 @@
         <LoadingSpinner />
       </div>
       <div v-else-if="filteredNotebooks.length === 0" class="notebooks-empty">
-        <EmptyState :message="t('notebooks.empty')" />
+        <EmptyState :title="t('notebooks.empty')" />
       </div>
       <div
         v-for="notebook in filteredNotebooks"
@@ -73,9 +73,10 @@
 
     <!-- Create Dialog -->
     <ConfirmDialog
-      v-if="showCreateDialog"
+      :visible="showCreateDialog"
       :title="t('notebooks.createDialog.title')"
-      :confirm-text="t('notebooks.createDialog.confirm')"
+      :message="t('notebooks.createDialog.message')"
+      :confirm-label="t('notebooks.createDialog.confirm')"
       @confirm="handleCreate"
       @cancel="showCreateDialog = false"
     >
@@ -102,15 +103,14 @@
 
     <!-- Delete Confirm -->
     <ConfirmDialog
-      v-if="notebookToDelete"
+      :visible="notebookToDelete !== null"
       :title="t('notebooks.deleteDialog.title')"
-      :confirm-text="t('notebooks.deleteDialog.confirm')"
+      :message="t('notebooks.deleteDialog.message', { title: notebookToDelete?.title ?? '' })"
+      :confirm-label="t('notebooks.deleteDialog.confirm')"
       :danger="true"
       @confirm="handleDelete"
       @cancel="notebookToDelete = null"
-    >
-      <p>{{ t('notebooks.deleteDialog.message', { title: notebookToDelete.title }) }}</p>
-    </ConfirmDialog>
+    />
 
     <!-- Context Menu -->
     <ContextMenu
