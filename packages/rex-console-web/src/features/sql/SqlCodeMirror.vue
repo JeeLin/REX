@@ -4,6 +4,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useThemeObserver } from '@/composables/useThemeObserver'
 import { EditorState } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightSpecialChars, drawSelection, rectangularSelection } from '@codemirror/view'
 import { sql, SQLite, MySQL, PostgreSQL } from '@codemirror/lang-sql'
@@ -15,13 +16,13 @@ import { lintKeymap } from '@codemirror/lint'
 import { bracketMatching, indentOnInput, foldGutter, foldKeymap, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
 
 const lightTheme = EditorView.theme({
-  '&': { backgroundColor: '#FFFFFF', color: '#1F2328' },
-  '.cm-gutters': { backgroundColor: '#F6F8FA', color: '#656D76', borderRight: '1px solid #D0D7DE' },
-  '.cm-activeLineGutter': { backgroundColor: '#F0F2F5' },
-  '.cm-activeLine': { backgroundColor: '#F6F8FA' },
-  '.cm-selectionBackground': { backgroundColor: '#ADD6FF !important' },
-  '.cm-cursor': { borderLeftColor: '#BF5700' },
-  '.cm-matchingBracket': { backgroundColor: '#BBF0FF', outline: '1px solid #96D3FF' },
+  '&': { backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' },
+  '.cm-gutters': { backgroundColor: 'var(--bg-deep)', color: 'var(--text-secondary)', borderRight: '1px solid var(--border)' },
+  '.cm-activeLineGutter': { backgroundColor: 'var(--bg-hover)' },
+  '.cm-activeLine': { backgroundColor: 'var(--bg-deep)' },
+  '.cm-selectionBackground': { backgroundColor: 'var(--accent-muted)' },
+  '.cm-cursor': { borderLeftColor: 'var(--accent)' },
+  '.cm-matchingBracket': { backgroundColor: '#BBF0FF', outline: '1px solid #96DFF' },
 })
 
 function getCurrentTheme() {
@@ -106,8 +107,6 @@ function createExtensions() {
   ]
 }
 
-let themeObserver: MutationObserver | null = null
-
 onMounted(() => {
   if (!editorContainer.value) return
   const state = EditorState.create({
@@ -119,7 +118,7 @@ onMounted(() => {
     parent: editorContainer.value,
   })
 
-  themeObserver = new MutationObserver(() => {
+  useThemeObserver(() => {
     if (!view) return
     const currentDoc = view.state.doc.toString()
     view.destroy()
@@ -132,20 +131,12 @@ onMounted(() => {
       parent: editorContainer.value!,
     })
   })
-  themeObserver.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ['data-theme'],
-  })
 })
-
 
 onBeforeUnmount(() => {
   view?.destroy()
   view = null
-  themeObserver?.disconnect()
-  themeObserver = null
 })
-
 
 watch(() => props.modelValue, (newVal) => {
   if (view && view.state.doc.toString() !== newVal) {

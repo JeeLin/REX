@@ -760,8 +760,7 @@ function onKeyDown(e: KeyboardEvent) {
     switchTabByIndex(parseInt(e.key) - 1)
   } else if (e.altKey && e.key >= '1' && e.key <= '5') {
     e.preventDefault()
-    const layouts: Layout[] = ['single', 'left-right', 'top-bottom', 'quad', 'sidebar-main']
-    setLayout(layouts[parseInt(e.key) - 1]!)
+    setLayout(LAYOUT_ORDER[parseInt(e.key) - 1]!)
   } else if (e.key === 'F11') {
     e.preventDefault()
     toggleFullscreen()

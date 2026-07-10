@@ -154,6 +154,7 @@ import { createSession, deleteSession } from '@/api/terminal'
 import { useSettingsStore } from '@/stores/settings'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useTouchGestures } from '@/composables/useTouchGestures'
+import { useThemeObserver } from '@/composables/useThemeObserver'
 import { getErrorMessage } from '@/utils/error'
 import { copyWithFallback } from '@/utils/clipboard'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -204,7 +205,6 @@ let fitAddon: FitAddon | null = null
 let ws: WebSocket | null = null
 let sessionId: string | null = null
 let resizeObserver: ResizeObserver | null = null
-let themeObserver: MutationObserver | null = null
 let cleanupTouch: (() => void) | null = null
 let inputBuffer = ''
 
@@ -273,14 +273,10 @@ function initTerminal() {
   terminal.loadAddon(fitAddon)
   terminal.open(terminalContainer.value)
   // 监听主题变化
-  themeObserver = new MutationObserver(() => {
+  useThemeObserver(() => {
     if (terminal) {
       terminal.options.theme = getTerminalTheme()
     }
-  })
-  themeObserver.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ['data-theme'],
   })
 
 
@@ -722,8 +718,6 @@ onBeforeUnmount(() => {
     deleteSession(sessionId).catch(() => {})
   }
   resizeObserver?.disconnect()
-  themeObserver?.disconnect()
-  themeObserver = null
   terminal?.dispose()
   document.removeEventListener('mousemove', onResize)
   document.removeEventListener('mouseup', stopResize)
