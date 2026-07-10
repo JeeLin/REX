@@ -69,7 +69,8 @@ export interface NotebookBlocksState {
 
 export function useNotebookBlocks(
   notebookId: string,
-  onSaved?: () => void
+  onSaved?: () => void,
+  onError?: (error: Error) => void
 ): NotebookBlocksState {
   const blocks = ref<EditorBlock[]>([])
   const focusedBlockId = ref<string | null>(null)
@@ -193,7 +194,6 @@ export function useNotebookBlocks(
 
   async function saveBlocks() {
     if (!isDirty) return
-    isDirty = false
     if (pendingSave) {
       clearTimeout(pendingSave)
       pendingSave = null
@@ -215,9 +215,13 @@ export function useNotebookBlocks(
 
     try {
       await updateBlocks(notebookId, apiBlocks)
+      isDirty = false
       onSaved?.()
     } catch (e) {
       console.error('Failed to save blocks:', e)
+      // 标记为 dirty 以便重试
+      isDirty = true
+      onError?.(e as Error)
     }
   }
 

@@ -9,6 +9,16 @@ use crate::helpers::{
 };
 use crate::routes::AppState;
 
+const VALID_BLOCK_TYPES: &[&str] = &["heading", "paragraph", "code", "command"];
+
+fn validate_block_type(bt: &str) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    if VALID_BLOCK_TYPES.contains(&bt) {
+        Ok(())
+    } else {
+        Err(bad_request(&format!("无效的 block_type: {}", bt)))
+    }
+}
+
 // ── 数据模型 ──────────────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -138,7 +148,7 @@ pub async fn get_notebook(
                     })
                 },
             )
-            .map_err(|_| not_found("Notebook 不存在"))?;
+            .map_err(|_| not_found("NOT_FOUND", "Notebook 不存在"))?;
 
         // 获取 blocks
         let mut stmt = conn
@@ -213,10 +223,10 @@ pub async fn update_notebook(
         // 检查存在
         let exists: bool = conn
             .query_row("SELECT COUNT(*) FROM notebooks WHERE id = ?1", rusqlite::params![id], |row| row.get::<_, i64>(0))
-            .map_err(|_| not_found("Notebook 不存在"))?
+            .map_err(|_| not_found("NOT_FOUND", "Notebook 不存在"))?
             > 0;
         if !exists {
-            return Err(not_found("Notebook 不存在"));
+            return Err(not_found("NOT_FOUND", "Notebook 不存在"));
         }
 
         // 更新字段
@@ -264,11 +274,16 @@ pub async fn delete_notebook(
             .pool
             .get()
             .map_err(|_| err_resp("INTERNAL_ERROR", "数据库连接失败"))?;
+        // 先删除关联数据，再删除 notebook
+        conn.execute("DELETE FROM notebook_executions WHERE block_id IN (SELECT id FROM notebook_blocks WHERE notebook_id = ?1)", rusqlite::params![id])
+            .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+        conn.execute("DELETE FROM notebook_blocks WHERE notebook_id = ?1", rusqlite::params![id])
+            .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
         let affected = conn
             .execute("DELETE FROM notebooks WHERE id = ?1", rusqlite::params![id])
             .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
         if affected == 0 {
-            return Err(not_found("Notebook 不存在"));
+            return Err(not_found("NOT_FOUND", "Notebook 不存在"));
         }
         Ok::<_, (StatusCode, Json<ErrorResponse>)>(StatusCode::NO_CONTENT)
     })
@@ -291,54 +306,73 @@ pub async fn update_blocks(
         // 检查 notebook 存在
         let exists: bool = conn
             .query_row("SELECT COUNT(*) FROM notebooks WHERE id = ?1", rusqlite::params![notebook_id], |row| row.get::<_, i64>(0))
-            .map_err(|_| not_found("Notebook 不存在"))?
+            .map_err(|_| not_found("NOT_FOUND", "Notebook 不存在"))?
             > 0;
         if !exists {
-            return Err(not_found("Notebook 不存在"));
+            return Err(not_found("NOT_FOUND", "Notebook 不存在"));
         }
 
-        // 删除旧 blocks
-        conn.execute("DELETE FROM notebook_blocks WHERE notebook_id = ?1", rusqlite::params![notebook_id])
+        // 使用事务确保原子性
+        conn.execute_batch("BEGIN IMMEDIATE")
             .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
 
-        // 插入新 blocks
-        let mut result_blocks = Vec::new();
-        for block_input in &input.blocks {
-            let id = block_input.id.clone().unwrap_or_else(|| gen_id("nbb"));
-            conn.execute(
-                "INSERT INTO notebook_blocks (id, notebook_id, block_type, content, resource_id, protocol, order_index, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-                rusqlite::params![
+        let result = (|| -> Result<Vec<NotebookBlock>, (StatusCode, Json<ErrorResponse>)> {
+            // 删除旧 blocks
+            conn.execute("DELETE FROM notebook_blocks WHERE notebook_id = ?1", rusqlite::params![notebook_id])
+                .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+
+            // 插入新 blocks
+            let mut result_blocks = Vec::new();
+            for block_input in &input.blocks {
+                let id = block_input.id.clone().unwrap_or_else(|| gen_id("nbb"));
+                validate_block_type(&block_input.block_type)?;
+                conn.execute(
+                    "INSERT INTO notebook_blocks (id, notebook_id, block_type, content, resource_id, protocol, order_index, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                    rusqlite::params![
+                        id,
+                        notebook_id,
+                        block_input.block_type,
+                        block_input.content.as_deref().unwrap_or(""),
+                        block_input.resource_id,
+                        block_input.protocol,
+                        block_input.order_index,
+                        now,
+                        now,
+                    ],
+                )
+                .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+
+                result_blocks.push(NotebookBlock {
                     id,
-                    notebook_id,
-                    block_input.block_type,
-                    block_input.content.as_deref().unwrap_or(""),
-                    block_input.resource_id,
-                    block_input.protocol,
-                    block_input.order_index,
-                    now,
-                    now,
-                ],
-            )
-            .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+                    notebook_id: notebook_id.clone(),
+                    block_type: block_input.block_type.clone(),
+                    content: block_input.content.clone().unwrap_or_default(),
+                    resource_id: block_input.resource_id.clone(),
+                    protocol: block_input.protocol.clone(),
+                    order_index: block_input.order_index,
+                    created_at: now.clone(),
+                    updated_at: now.clone(),
+                });
+            }
 
-            result_blocks.push(NotebookBlock {
-                id,
-                notebook_id: notebook_id.clone(),
-                block_type: block_input.block_type.clone(),
-                content: block_input.content.clone().unwrap_or_default(),
-                resource_id: block_input.resource_id.clone(),
-                protocol: block_input.protocol.clone(),
-                order_index: block_input.order_index,
-                created_at: now.clone(),
-                updated_at: now.clone(),
-            });
+            // 更新 notebook 的 updated_at
+            conn.execute("UPDATE notebooks SET updated_at = ?1 WHERE id = ?2", rusqlite::params![now, notebook_id])
+                .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+
+            Ok(result_blocks)
+        })();
+
+        match result {
+            Ok(blocks) => {
+                conn.execute_batch("COMMIT").map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+                Ok(blocks)
+            }
+            Err(e) => {
+                conn.execute_batch("ROLLBACK").ok();
+                Err(e)
+            }
         }
 
-        // 更新 notebook 的 updated_at
-        conn.execute("UPDATE notebooks SET updated_at = ?1 WHERE id = ?2", rusqlite::params![now, notebook_id])
-            .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
-
-        Ok::<_, (StatusCode, Json<ErrorResponse>)>(result_blocks)
     })
     .await
     .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
@@ -371,7 +405,7 @@ pub async fn execute_command(
                     ))
                 },
             )
-            .map_err(|_| not_found("命令块不存在"))?;
+            .map_err(|_| not_found("NOT_FOUND", "命令块不存在"))?;
 
         let (block_id, _notebook_id, block_type, content, resource_id, protocol) = block;
 
@@ -487,7 +521,7 @@ pub async fn export_notebook(
                     ))
                 },
             )
-            .map_err(|_| not_found("Notebook 不存在"))?;
+            .map_err(|_| not_found("NOT_FOUND", "Notebook 不存在"))?;
         let mut stmt = conn
             .prepare("SELECT block_type, content, protocol FROM notebook_blocks WHERE notebook_id = ?1 ORDER BY order_index ASC")
             .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
@@ -538,6 +572,7 @@ pub async fn import_notebook(
         if let Some(blocks) = &input.blocks {
             for (i, block) in blocks.iter().enumerate() {
                 let block_id = gen_id("nbb");
+                validate_block_type(&block.block_type)?;
                 conn.execute(
                     "INSERT INTO notebook_blocks (id, notebook_id, block_type, content, resource_id, protocol, order_index, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8)",
                     rusqlite::params![
