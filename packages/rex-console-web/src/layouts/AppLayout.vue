@@ -237,7 +237,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useUserStore, type Theme } from '@/stores/user'
@@ -470,7 +470,35 @@ onMounted(() => {
   isMobile.value = mq.matches
   mobileMqHandler = (e: MediaQueryListEvent) => { isMobile.value = e.matches }
   mq.addEventListener('change', mobileMqHandler)
+
+  // Global keyboard shortcuts
+  window.addEventListener('keydown', onGlobalKeyDown)
 })
+
+// ── Global Keyboard Shortcuts ──
+const globalShortcutsEnabled = ref(true)
+provide('globalShortcutsEnabled', globalShortcutsEnabled)
+
+function onGlobalKeyDown(e: KeyboardEvent) {
+  if (!globalShortcutsEnabled.value) return
+  const tag = (e.target as HTMLElement).tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return
+
+  const ctrl = e.ctrlKey || e.metaKey
+
+  if (ctrl && e.key === 'k') {
+    e.preventDefault()
+    // Emit event for child components to handle
+    window.dispatchEvent(new CustomEvent('rex:shortcut', { detail: 'command-palette' }))
+  } else if (ctrl && e.key === 'n') {
+    e.preventDefault()
+    window.dispatchEvent(new CustomEvent('rex:shortcut', { detail: 'new-connection' }))
+  } else if (e.key === 'F1') {
+    e.preventDefault()
+    window.dispatchEvent(new CustomEvent('rex:shortcut', { detail: 'shortcuts-panel' }))
+  }
+}
+
 
 // ── 侧边栏拖拽调整宽度 ──────────────────────────────────
 const SIDEBAR_WIDTH_KEY = 'rex-sidebar-width'
@@ -498,15 +526,13 @@ function stopResize() {
   document.removeEventListener('mouseup', stopResize)
   document.body.style.cursor = ''
   document.body.style.userSelect = ''
-  localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth.value))
-}
-
 onUnmounted(() => {
   document.removeEventListener('mousemove', onResize)
   document.removeEventListener('mouseup', stopResize)
   if (mobileMqHandler) {
     window.matchMedia('(max-width: 767px)').removeEventListener('change', mobileMqHandler)
   }
+  window.removeEventListener('keydown', onGlobalKeyDown)
 })
 </script>
 

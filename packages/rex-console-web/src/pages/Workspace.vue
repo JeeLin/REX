@@ -643,10 +643,23 @@ function onOpenInWorkspace(e: Event) {
 
 onMounted(() => {
   window.addEventListener('open-in-workspace', onOpenInWorkspace)
+  window.addEventListener('rex:shortcut', onShortcut as EventListener)
 })
 onUnmounted(() => {
   window.removeEventListener('open-in-workspace', onOpenInWorkspace)
+  window.removeEventListener('rex:shortcut', onShortcut as EventListener)
 })
+function onShortcut(e: Event) {
+  const detail = (e as CustomEvent).detail
+  if (detail === 'command-palette') {
+    showCommandPalette.value = !showCommandPalette.value
+  } else if (detail === 'new-connection') {
+    showConnMenu.value = true
+  } else if (detail === 'shortcuts-panel') {
+    showShortcutsPanel.value = !showShortcutsPanel.value
+  }
+}
+
 
 // ── Global Keyboard Shortcuts ──
 function onKeyDown(e: KeyboardEvent) {
@@ -655,10 +668,7 @@ function onKeyDown(e: KeyboardEvent) {
 
   const ctrl = e.ctrlKey || e.metaKey
 
-  if (ctrl && e.key === 'n') {
-    e.preventDefault()
-    showConnMenu.value = true
-  } else if (ctrl && e.key === 'w') {
+  if (ctrl && e.key === 'w') {
     e.preventDefault()
     if (activeTabId.value) {
       closeTab(activeTabId.value)
@@ -685,18 +695,13 @@ function onKeyDown(e: KeyboardEvent) {
   } else if (e.key === 'F11') {
     e.preventDefault()
     toggleFullscreen()
-  } else if (e.key === 'F1') {
-    e.preventDefault()
-    showShortcutsPanel.value = !showShortcutsPanel.value
-  } else if (ctrl && e.key === 'k') {
-    e.preventDefault()
-    showCommandPalette.value = !showCommandPalette.value
   } else if (e.key === 'Escape') {
     if (showCommandPalette.value) showCommandPalette.value = false
     else if (showConnMenu.value) showConnMenu.value = false
     else if (showShortcutsPanel.value) showShortcutsPanel.value = false
   }
 }
+
 </script>
 
 <style scoped>
