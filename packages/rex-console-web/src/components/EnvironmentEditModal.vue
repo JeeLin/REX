@@ -1,5 +1,6 @@
 <template>
-  <div v-if="visible" class="modal-overlay" @click.self="close">
+  <Transition name="modal" mode="out-in">
+    <div v-if="visible" class="modal-overlay" @click.self="close">
     <div class="modal-content">
       <div class="modal-header">
         <span>{{ t('env.edit') }}</span>
@@ -33,6 +34,7 @@
       </div>
     </div>
   </div>
+  </Transition>
 </template>
 
 <script setup lang="ts">

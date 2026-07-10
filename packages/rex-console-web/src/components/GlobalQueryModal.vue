@@ -1,5 +1,6 @@
 <template>
-  <div v-show="visible" class="modal-overlay" @click.self="close">
+  <Transition name="modal" mode="out-in">
+    <div v-show="visible" class="modal-overlay" @click.self="close">
     <div class="modal-content">
       <div class="modal-header">
         <span>⊞ {{ t('sql.globalQuery.title') }}</span>
@@ -111,6 +112,7 @@
       </div>
     </div>
   </div>
+  </Transition>
 </template>
 
 <script setup lang="ts">

@@ -376,6 +376,24 @@ textarea.form-input {
 }
 
 /* ── Reduced Motion ── */
+/* ── Modal Transition ── */
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 250ms ease, transform 250ms ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
+}
+
+.modal-enter-to,
+.modal-leave-from {
+  opacity: 1;
+  transform: scale(1);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
