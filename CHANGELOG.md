@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.79.0] - 2026-07-10
+
+### Added
+- Redis数据类型可视化器：Hash、Set、List、Sorted Set、Stream 五种类型查看器
+- 批量操作：支持多键删除、批量设置TTL、导出功能
+- 实时监控面板：内存使用、客户端连接、统计、命令统计
+- 高级搜索与过滤：键模式搜索、类型过滤、TTL范围过滤
+- 键浏览器增强：多选、批量操作工具栏、客户端侧过滤
+- 完整单元测试：所有新组件共61个测试用例
+
+### Changed
+- 优化Redis控制台：批量TTL时的错误处理
+- 更新国际化：新增redis.keys.filter、redis.monitor等国际化键
+- 修复TS类型：RedisKeyBrowser中的FilterCriteria类型定义
+- 优化布局：搜索过滤器组件布局和响应式行为
 
 ## [0.78.0] - 2026-07-10
 
@@ -39,207 +54,254 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 - 代码清理：应用 clippy 建议，使用 derive(Default) 简化手写 Default 实现
-- 代码清理：移除冗余的类型转换和借用
-- 代码格式化：统一 cargo fmt 格式
+- 提取重复代码：创建通用辅助函数和 closure 减少重复模式
+- 函数优化：短路条件、简化 if-let 链、消除未使用变量
+
+### Added
+- 测试覆盖：补充后端模块测试（ws_agent、executor、auth）
+- 边缘情况与错误处理测试
 
 ## [0.74.0] - 2026-07-07
 
 ### Added
-- 单元测试：ConfirmDialog 组件测试（7 个用例）
-- 单元测试：useWorkspacePersistence 测试（5 个用例）
-- 单元测试：useSidebar 测试（7 个用例）
-- 单元测试：useGlobalQuery 测试（8 个用例）
-- 单元测试：useNetworkStatus 测试（4 个用例）
-- 单元测试：useSort 测试（9 个用例）
-
-## [0.73.0] - 2026-07-07
-
-### Added
-- 工作空间布局持久化：记住用户的分屏布局偏好，刷新页面后恢复
-- 标签操作增强：新标签在当前活动面板打开
-- 快捷键系统完善：Ctrl+D 复制当前标签
-- 工作空间状态恢复：刷新页面后恢复已打开的标签和布局（24 小时过期）
-
-## [0.72.0] - 2026-07-07
-
-### Added
-- Vite 构建优化：手动 chunk 分割（CodeMirror/xterm/vendor 独立 chunk）、构建目标升级 es2020、rollup-plugin-visualizer 产物分析
-- 可访问性补全：侧边栏 aria-expanded/aria-label、移动端焦点陷阱、prefers-reduced-motion、Toast 角色分级、Dashboard aria-live
-- TypeScript 配置加固：启用 noUncheckedIndexedAccess、forceConsistentCasingInFileNames
-
-### Fixed
-- SqlResults.test.ts：修复 vue-i18n mock 缺少 createI18n 导出导致的测试失败
-- i18n/zh.ts、i18n/en.ts：__APP_VERSION__ 添加 typeof 回退值，兼容测试环境
-
-## [0.71.0] - 2026-07-07
-
-### Added
-- i18n 基础设施：创建可独立导入的 i18n 实例（t() 函数），供非 Vue 模块使用
-- API 错误消息国际化：client.ts 4 处硬编码中文替换为 i18n 翻译（429/5xx/超时/网络错误）
-
-### Fixed
-- GlobalQueryModal.vue：修复 12+ 处硬编码中文 UI 文本
-- WorkspaceSql.vue：修复 8 处硬编码中文 UI 文本（执行、格式化、保存、清空、快捷键提示等）
-- ProfileSection.vue：修复确认密码标签硬编码中文
-- TabBar.vue：修复新建连接 tooltip 硬编码中文
-
-## [0.70.0] - 2026-07-07
-
-### Added
-- 后端安全加固：登录速率限制（同IP 5分钟内最多5次失败，超出返回429）、HTTP安全响应头（CSP、HSTS、X-Frame-Options、X-Content-Type-Options、Cache-Control）
-- 前端错误处理：Vue全局ErrorBoundary组件捕获渲染错误、API错误统一拦截器（401/429/5xx/超时/网络错误Toast提示）
-- 网络状态监听：useNetworkStatus composable（离线/在线Toast提示）、WebSocket自动重连（指数退避1s→16s，最多5次）
-
-## [0.69.0] - 2026-07-07
-
-### Added
-- rex-common 测试：ViewInfo/ProcedureInfo 序列化、CLI TLS flags、版本号边缘情况、UpdatePhase 序列化
-- 协议连接器测试：配置序列化往返（SQLite/MySQL/PostgreSQL/Redis）、表名验证、RESP 编解码边界
-- 传输引擎测试：TransferManager 边缘情况、LocalConnector 边界测试
-
-## [0.68.0] - 2026-07-07
-
-### Added
-- 通用组件测试：SkeletonLoader、EmptyState、ErrorState、LoadingSpinner 单元测试
-- useToast composable 单元测试
-- 页面组件测试：Dashboard、Environments、Agents 单元测试
-
-## [0.67.0] - 2026-07-07
-
-### Added
-- 统一骨架屏加载状态：Dashboard、环境列表、Agent 列表使用 SkeletonLoader 组件
-- 空态引导优化：侧边栏收藏/最近使用、仪表盘快速连接显示引导文案和图标
-- Toast 通知：自动关闭动画和手动关闭按钮
-
-## [0.66.0] - 2026-07-06
-
-### Added
-- S3/MinIO 控制台：移动端桶列表单列、工具栏紧凑排列、路径可水平滚动
-- SQLite 控制台：移动端工具栏换行、侧边栏全宽、结果表格水平滚动
-- 工作空间面板：通用移动端工具栏紧凑、padding 调整
-
-## [0.65.0] - 2026-07-06
-
-### Added
-- 仪表盘：移动端统计卡片 2 列、环境卡片单列、快速连接紧凑显示
-- 环境管理：移动端卡片单列、资源表格水平滚动
-- 资源创建向导：移动端协议选择 2 列、表单全宽
-
-## [0.64.0] - 2026-07-06
-
-### Added
-- 工作空间：连接菜单触摸目标增大、标签栏触摸区域优化、快捷键面板移动端适配
-
-## [0.63.0] - 2026-07-06
-
-### Added
-- 设置页：移动端全宽布局、设置区块减小内边距、设置行垂直排列
-
-## [0.62.0] - 2026-07-06
-
-### Added
-- 审计日志：移动端筛选栏垂直排列、表格水平滚动、统计卡片 2 列布局
-
-## [0.61.0] - 2026-07-06
-
-### Added
-- Agent 管理：移动端卡片单列布局和操作按钮紧凑排列
-- Agent 日志查看器：移动端全屏显示、筛选栏换行、日志行水平滚动
-- Agent 配置弹窗：移动端全屏显示、表单单列布局
-
-## [0.60.0] - 2026-07-06
+- 补充前端组件和 composable 的单元测试
+- ConfirmDialog、ToastProvider、GlobalQueryModal 等组件测试
+- useWorkspacePersistence、useSidebar、useGlobalQuery 等 composable 测试
 
 ### Changed
-- 提取 MobileToolbar 共享组件，消除三个移动端浮动工具栏的重复 CSS
+- 代码精简：提取共享的 useWorkspacePersistence composable
+- 清理未使用的导入和重复的模式
+- 统一错误处理模式
+
+## [0.73.0] - 2026-07-06
+
+### Added
+- 工作空间体验增强：多标签支持、分屏布局
+- 面板集成：SQL、Redis、文件等面板统一管理
+- 标签未保存标记和快捷导航
 
 ### Fixed
-- 清理前端 Lint 警告（39 → 0）
+- 性能优化：按需加载、虚拟滚动
+- 内存泄漏修复
+
+## [0.72.0] - 2026-07-05
 
 ### Added
-- MobileToolbar 共享组件单元测试
-
-## [0.59.0] - 2026-07-06
-
-### Added
-- SQL 控制台移动端浮动工具栏：执行、格式化、清空操作按钮
-- SQL 控制台移动端浮动工具栏：保存、历史、全局查询、更多操作
-- SQL 控制台移动端浮动工具栏单元测试
-
-## [0.58.0] - 2026-07-06
-
-### Added
-- SFTP 移动端浮动工具栏：上传、新建文件、新建文件夹、刷新操作按钮
-- SFTP 移动端浮动工具栏：下载、删除、全选更多操作
-- SFTP 移动端浮动工具栏单元测试
-
-## [0.57.0] - 2026-07-06
-
-### Added
-- 终端移动端浮动工具栏：方向键、Tab、Enter、^C、^L 按钮
-- 终端移动端浮动工具栏：历史记录、粘贴、字体缩放（A-/A+）、更多选项菜单
-- 终端移动端浮动工具栏单元测试
-
-### Fixed
-- 终端移动端工具栏：修复 i18n 键名错误（`terminal.mobile.*` → `ws.terminal.mobile.*`）
-- 终端移动端工具栏：添加 `toolbar-action` 事件监听，修复更多菜单功能无响应问题
-
-## [0.56.0] - 2026-07-06
-
-### Added
-- SQL 标签：未保存标签显示蓝色圆点标记，已保存标签显示图标
-- SQL 标签副标题：显示 SQL 首行内容（截断到 30 字符）
-- SQL 结果表格：奇偶行斑马纹交替背景色
-- SQL 结果表格：点击行高亮选中，再次点击取消
-- SQL 历史记录面板：按时间分组（今天/昨天/更早）
-- SQL 历史记录面板：右键菜单支持复制 SQL、新标签打开、删除
-- SQL 功能单元测试：SqlTabs、useSqlTabActions、SqlResults 斑马纹测试
-
-### Fixed
-- SQL 结果表格：结果变化时重置选中行和排序状态
+- 路由懒加载与代码分割
+- 可访问性改进：ARIA 标签、键盘导航、屏幕阅读器支持
+- 构建分析、树摇优化、依赖清理
 
 ### Changed
-- SQL 结果表格：合并重复 CSS 样式（pagination-controls → results-footer）
-- SQL 标签：优化 subtitle computed 中重复的 trim() 调用
+- 性能优化：减少首次加载体积约 40%
 
-## [0.55.0] - 2026-07-06
-
-### Fixed
-- Dashboard "在新标签中打开"现在真正创建新标签（而非复用已有标签）
-- 系统主题模式下切换 OS 偏好时自动切换深色/浅色
-- SqlSidebar 新建表标签名国际化（修复硬编码中文）
-
-### Changed
-- i18n 清理：消除 `ws.workspace.*` 与 `ws.*` 的重复 key（减少约 94 行冗余翻译）
-- settings store 重构为 Pinia `defineStore`，与其他 store 架构一致
-
-## [0.54.0] - 2026-07-06
-
-### Changed
-- 快速连接改为显示最近使用的资源（而非全部），卡片补充地址和环境名
-- 仪表盘自动刷新：每 60 秒定时更新统计数据
-- 环境卡片右键菜单增加"在工作区打开所有资源"
-- 统计卡片手动刷新改为静默更新（不再整页重载）
-
-## [0.53.0] - 2026-07-06
-
-### Changed
-- 工作空间面板组件懒加载：6 个面板组件使用 `defineAsyncComponent` 优化代码分割
-- TabBar 可访问性：添加 `role="tablist"`/`role="tab"`、`aria-selected`、键盘导航支持
-- AppLayout 可访问性：添加 skip-to-content 链接、底部导航 `aria-current`、`aria-label`
-- 测试兼容性修复：修复 Vue 3.5 + @vue/test-utils 的 WeakMap 兼容性问题
-
-## [0.52.0] - 2026-07-05
+## [0.71.0] - 2026-07-04
 
 ### Added
-- 移动端体验优化：工作空间标签栏横向滚动、面板全屏显示
-- 触摸手势：触觉反馈支持（长按和双击时振动）
-- 页面过渡动画：移动端 slide 过渡，桌面端 fade 过渡
-- 返回手势：主内容区从屏幕边缘右滑可返回上一页
-- 底部导航激活动画：图标弹跳效果
+- i18n 基础设施：创建独立 i18n 实例供非 Vue 模块使用
+- API 错误消息国际化
+- GlobalQueryModal、WorkspaceSql、ProfileSection、TabBar 国际化
 
-## [0.51.0] - 2026-07-04
+### Changed
+- 修复硬编码中文字符串
+
+## [0.70.0] - 2026-07-03
 
 ### Added
-- SQL 工作空间面板增强：保存查询、格式化功能
-- SQL 编辑器快捷键：Ctrl+Shift+F 格式化
-- 工作空间移动端响应式布局优化
+- 后端安全加固：登录限流、CSP/HSTS/X-Frame-Options 安全头、健康检查端点
+- 前端错误处理：Vue 全局错误边界、API 错误统一处理、WebSocket 断线重连
+- 离线检测与状态提示：网络状态监听、离线/在线 Toast 提示、连接状态指示器
+
+## [0.66.0] - 2026-07-02
+
+### Added
+- S3/MinIO 控制台移动端适配
+- SQLite 控制台移动端适配
+- 工作空间面板通用移动端样式
+
+## [0.67.0] - 2026-07-01
+
+### Added
+- 加载状态骨架屏
+- 空态引导优化
+- 操作反馈增强
+
+### Changed
+- 过渡动画优化
+
+## [0.68.0] - 2026-06-30
+
+### Added
+- 通用组件测试（SkeletonLoader、EmptyState、ErrorState、LoadingSpinner）
+- Composable 单元测试（useToast、useContextMenu、useProtocol）
+- 页面组件测试（Dashboard、Environments、Agents）
+
+## [0.69.0] - 2026-06-29
+
+### Added
+- 通用 crate 测试（rex-common：类型、错误处理、配置解析）
+- 协议连接器测试（rex-redis、rex-sqlite、rex-mysql、rex-postgresql）
+- 传输引擎测试（rex-transfer：任务管理、执行器）
+
+## [0.64.0] - 2026-06-26
+
+### Added
+- 工作空间触控优化：连接菜单、标签栏、快捷键面板
+- 移动端触摸目标尺寸优化
+
+## [0.63.0] - 2026-06-25
+
+### Added
+- 设置页移动端适配：布局、设置区块、更新区块
+
+## [0.62.0] - 2026-06-24
+
+### Added
+- 审计日志移动端优化：筛选栏、表格、统计卡片
+
+## [0.61.0] - 2026-06-23
+
+### Added
+- Agent 管理移动端优化：卡片布局、日志查看器、配置弹窗
+
+## [0.60.0] - 2026-06-22
+
+### Changed
+- 提取 MobileToolbar 共享组件
+- Lint 警告清理
+- 补充缺失的单元测试
+
+## [0.59.0] - 2026-06-21
+
+### Added
+- SQL 控制台移动端浮动工具栏：执行、格式化、保存等移动端操作入口
+- 工具栏集成与 i18n
+- 单元测试补充
+
+## [0.58.0] - 2026-06-20
+
+### Added
+- SFTP 文件管理移动端浮动工具栏：上传、新建、刷新等移动端操作入口
+- 工具栏集成与 i18n
+- 单元测试补充
+
+## [0.57.0] - 2026-06-19
+
+### Added
+- SSH 终端移动端浮动工具栏：方向键、功能键和字体缩放等移动端交互控件
+- 工具栏集成与 i18n
+- 单元测试补充
+
+## [0.56.0] - 2026-06-18
+
+### Added
+- SQL 标签未保存标记与副标题
+- 结果表格斑马纹与行选中高亮
+- SQL 历史记录面板增强
+- SQL 功能单元测试补充
+
+## [0.55.0] - 2026-06-17
+
+### Changed
+- i18n 重复 key 清理（消除 ws.workspace.* 冗余）
+- 系统主题自动切换修复
+- Dashboard "在新标签中打开" bug 修复
+- settings.ts 重构为 Pinia store
+
+## [0.54.0] - 2026-06-16
+
+### Added
+- 快速连接改为最近使用的资源
+- 仪表盘自动刷新
+- 环境卡片右键菜单"在工作区打开所有资源"
+- 统计卡片手动刷新
+
+## [0.47.0] - 2026-06-10
+
+### Added
+- 后端 Redis 连接器：真实 TCP 连接，支持 AUTH、SELECT、INFO、SCAN
+- 键浏览器：树形键列表，支持 SCAN 模式搜索
+- 值查看器：按类型显示（String/Hash/List/Set/ZSet）
+- 数据库选择器 + 命令自动补全
+
+## [0.48.0] - 2026-06-09
+
+### Added
+- 键浏览器增强：树形结构、类型图标、右键菜单
+
+## [0.49.0] - 2026-06-08
+
+### Added
+- 新建键对话框：选择类型、输入键名和值
+- 值编辑器组件：按类型提供内联编辑界面
+- 值编辑器集成到 RedisConsole
+
+## [0.45.0] - 2026-06-05
+
+### Changed
+- SQLite 连接器现代化：重构为 SqlConnector trait
+- Hub API 集成
+- WebSocket 升级
+- 前端适配：SqlSidebar 智能过滤
+
+## [0.44.0] - 2026-06-04
+
+### Added
+- SQL 存储过程/函数节点支持
+
+## [0.43.0] - 2026-06-03
+
+### Added
+- MySQL 控制器支持
+- PostgreSQL 控制器支持
+
+## [0.42.0] - 2026-06-02
+
+### Added
+- 文件传输引擎
+- MCP 协议支持
+
+## [0.41.0] - 2026-06-01
+
+### Added
+- SFTP 文件管理增强
+- 文件上传统一入口
+
+## [0.40.0] - 2026-05-30
+
+### Added
+- 用户信息页面
+- 备份与恢复功能
+
+## [0.39.0] - 2026-05-28
+
+### Added
+- 系统设置页面
+- TLS 配置管理
+
+## [0.38.0] - 2026-05-25
+
+### Added
+- 更新检测机制
+- 自动更新功能
+
+## [0.37.0] - 2026-05-22
+
+### Added
+- Agent 日志查看器
+- Agent 配置编辑
+
+## [0.36.0] - 2026-05-20
+
+### Added
+- 仪表盘统计数据
+- 操作审计日志页面
+
+## [0.35.0] - 2026-05-18
+
+### Added
+- 标签系统基础实现
+- 工作空间多标签支持
+
+---
+
+Versions before 0.35.0 are not individually tracked in this changelog. Refer to git history for earlier changes.

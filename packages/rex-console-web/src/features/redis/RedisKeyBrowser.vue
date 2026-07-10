@@ -1,16 +1,10 @@
 <template>
   <div class="redis-key-browser">
-    <div class="key-browser-header">
-      <input
-        v-model="searchPattern"
-        class="key-search-input"
-        :placeholder="t('redis.keys.searchPlaceholder')"
-        @keydown.enter="handleSearch"
-      />
-      <button class="redis-btn redis-btn-sm" @click="handleSearch">
-        {{ t('redis.keys.search') }}
-      </button>
-    </div>
+    <SearchFilter
+      ref="searchFilterRef"
+      @search="handleSearch"
+      @filter="handleFilter"
+    />
 
     <!-- Batch Action Toolbar -->
     <div v-if="selectedKeys.size > 0" class="batch-toolbar">
@@ -144,6 +138,8 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { KeyWithType } from './types'
+import SearchFilter from './SearchFilter.vue'
+import type { FilterCriteria } from './SearchFilter.vue'
 
 const { t } = useI18n()
 
@@ -162,17 +158,29 @@ const emit = defineEmits<{
   (e: 'batchExport', keys: string[]): void
 }>()
 
-const searchPattern = ref('*')
+const searchFilterRef = ref<InstanceType<typeof SearchFilter> | null>(null)
 const selectedKey = ref<string | null>(null)
 const loading = ref(false)
 const collapsedFolders = ref<Set<string>>(new Set())
 const selectedKeys = ref<Set<string>>(new Set())
+const activeFilter = ref<FilterCriteria>({ type: '', ttlMin: null, ttlMax: null })
 
 const contextMenu = reactive({
   visible: false,
   x: 0,
   y: 0,
   key: '',
+})
+
+/** Keys filtered by type and TTL criteria (client-side) */
+const filteredKeys = computed<KeyWithType[]>(() => {
+  const criteria = activeFilter.value
+  return props.keys.filter((k) => {
+    if (criteria.type && k.type !== criteria.type) return false
+    if (criteria.ttlMin !== null && (k.ttl ?? -2) < criteria.ttlMin) return false
+    if (criteria.ttlMax !== null && (k.ttl ?? -2) > criteria.ttlMax) return false
+    return true
+  })
 })
 
 interface TreeNode {
@@ -184,17 +192,17 @@ interface TreeNode {
 }
 
 const treeNodes = computed<TreeNode[]>(() => {
-  if (props.keys.length === 0) return []
+  if (filteredKeys.value.length === 0) return []
 
   const typeMap = new Map<string, string>()
-  for (const kt of props.keys) {
+  for (const kt of filteredKeys.value) {
     typeMap.set(kt.key, kt.type)
   }
 
   const folders = new Map<string, KeyWithType[]>()
   const leaves: KeyWithType[] = []
 
-  for (const kt of props.keys) {
+  for (const kt of filteredKeys.value) {
     const sepIndex = kt.key.indexOf(':')
     if (sepIndex > 0) {
       const folder = kt.key.substring(0, sepIndex)
@@ -294,11 +302,15 @@ function toggleFolder(folder: string) {
   }
 }
 
-function handleSearch() {
+function handleSearch(pattern: string) {
   loading.value = true
   collapsedFolders.value.clear()
-  emit('search', searchPattern.value)
+  emit('search', pattern || '*')
   setTimeout(() => { loading.value = false }, 100)
+}
+
+function handleFilter(criteria: FilterCriteria) {
+  activeFilter.value = { ...criteria }
 }
 
 function openContextMenu(event: MouseEvent, key: string) {
@@ -346,7 +358,7 @@ function handleGlobalClick() {
 
 onMounted(() => {
   if (props.connected) {
-    handleSearch()
+    handleSearch('*')
   }
   document.addEventListener('click', handleGlobalClick)
 })
@@ -364,29 +376,6 @@ onUnmounted(() => {
   flex-direction: column;
   background: var(--bg-surface);
   position: relative;
-}
-
-.key-browser-header {
-  padding: 8px;
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--border);
-}
-
-.key-search-input {
-  flex: 1;
-  background: var(--bg-deep);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  padding: 4px 8px;
-  font-size: var(--fs-xs);
-  font-family: var(--font-mono);
-}
-
-.key-search-input:focus {
-  outline: none;
-  border-color: var(--accent);
 }
 
 /* Batch Toolbar */

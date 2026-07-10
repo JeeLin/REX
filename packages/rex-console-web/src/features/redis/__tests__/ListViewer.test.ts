@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ListViewer from '../types/ListViewer.vue'
+import type { RedisValue } from '@/api/redis'
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
@@ -9,7 +10,7 @@ vi.mock('vue-i18n', () => ({
 }))
 
 describe('ListViewer', () => {
-  const mockValue = {
+  const mockValue: RedisValue = {
     type: 'Array',
     value: [
       { type: 'Bulk', value: 'value1' },
