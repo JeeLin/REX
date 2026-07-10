@@ -53,6 +53,9 @@
         @search="handleKeyBrowserSearch"
         @delete-key="handleKeyBrowserDelete"
         @set-ttl="handleKeyBrowserSetTtl"
+        @batch-delete="openBatchDialog('delete', $event)"
+        @batch-set-ttl="openBatchDialog('setTtl', $event)"
+        @batch-export="openBatchDialog('export', $event)"
       />
 
       <!-- 历史记录面板 -->
@@ -259,6 +262,17 @@
         </div>
       </div>
     </div>
+
+    <!-- Batch Operation Dialog -->
+    <BatchOperationDialog
+      :visible="showBatchDialog"
+      :operation="batchOperation"
+      :keys="batchKeys"
+      @close="showBatchDialog = false"
+      @confirm-delete="handleBatchDelete"
+      @confirm-set-ttl="handleBatchSetTtl"
+      @confirm-export="handleBatchExport"
+    />
   </div>
 </template>
 
@@ -270,9 +284,9 @@ import RedisResult from './RedisResult.vue'
 import RedisHistory from './RedisHistory.vue'
 import RedisKeyBrowser from './RedisKeyBrowser.vue'
 import RedisValueViewer from './RedisValueViewer.vue'
+import BatchOperationDialog from './BatchOperationDialog.vue'
 import type { RedisValue } from '@/api/redis'
 import type { KeyWithType, OutputEntry } from './types'
-
 const props = defineProps<{
   resourceId: string
   resourceName: string
@@ -307,6 +321,11 @@ const valueLoading = ref(false)
 
 const outputEntries = ref<OutputEntry[]>([])
 let nextEntryId = 0
+
+// Batch operation state
+const showBatchDialog = ref(false)
+const batchOperation = ref<'delete' | 'setTtl' | 'export'>('delete')
+const batchKeys = ref<string[]>([])
 
 async function handleConnect() {
   try {
@@ -451,6 +470,62 @@ async function handleKeyBrowserDelete(key: string) {
 async function handleKeyBrowserSetTtl(key: string, seconds: number) {
   if (!session.connected.value) return
   await session.execute(`EXPIRE ${key} ${seconds}`)
+}
+
+// ── 批量操作 ──────────────────────────────────────────
+function openBatchDialog(operation: 'delete' | 'setTtl' | 'export', keys: string[]) {
+  batchOperation.value = operation
+  batchKeys.value = keys
+  showBatchDialog.value = true
+}
+
+async function handleBatchDelete(keys: string[]) {
+  if (!session.connected.value || keys.length === 0) return
+  // DEL supports multiple keys
+  await session.execute(`DEL ${keys.join(' ')}`)
+  // Refresh key browser
+  handleKeyBrowserSearch(searchPattern.value || '*')
+  // Clear value viewer if any deleted key was selected
+  if (selectedKey.value && keys.includes(selectedKey.value)) {
+    selectedKey.value = null
+    selectedKeyValue.value = null
+  }
+  showBatchDialog.value = false
+}
+
+async function handleBatchSetTtl(keys: string[], seconds: number) {
+  if (!session.connected.value || keys.length === 0) return
+  for (const key of keys) {
+    await session.execute(`EXPIRE ${key} ${seconds}`)
+  }
+  showBatchDialog.value = false
+}
+
+function handleBatchExport(keys: string[], format: 'json' | 'csv') {
+  // Collect data from keyBrowserKeys
+  const exportData = keys.map(key => {
+    const kt = keyBrowserKeys.value.find(k => k.key === key)
+    return { key, type: kt?.type ?? 'unknown' }
+  })
+
+  if (format === 'json') {
+    const json = JSON.stringify(exportData, null, 2)
+    downloadFile(json, 'redis-keys-export.json', 'application/json')
+  } else {
+    const csv = 'key,type\n' + exportData.map(r => `"${r.key}","${r.type}"`).join('\n')
+    downloadFile(csv, 'redis-keys-export.csv', 'text/csv')
+  }
+  showBatchDialog.value = false
+}
+
+function downloadFile(content: string, filename: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 async function handleSaveString(key: string, value: string) {

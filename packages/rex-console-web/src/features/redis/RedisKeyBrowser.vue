@@ -12,7 +12,37 @@
       </button>
     </div>
 
+    <!-- Batch Action Toolbar -->
+    <div v-if="selectedKeys.size > 0" class="batch-toolbar">
+      <span class="batch-count">{{ selectedKeys.size }} {{ t('redis.keys.batch.selected') }}</span>
+      <button class="batch-btn batch-btn-delete" @click="$emit('batchDelete', [...selectedKeys])">
+        {{ t('redis.keys.batch.delete') }}
+      </button>
+      <button class="batch-btn batch-btn-ttl" @click="$emit('batchSetTtl', [...selectedKeys])">
+        {{ t('redis.keys.batch.setTtl') }}
+      </button>
+      <button class="batch-btn batch-btn-export" @click="$emit('batchExport', [...selectedKeys])">
+        {{ t('redis.keys.batch.export') }}
+      </button>
+      <button class="batch-btn batch-btn-clear" @click="clearSelection">
+        {{ t('redis.keys.batch.clearSelection') }}
+      </button>
+    </div>
+
     <div v-if="treeNodes.length > 0" class="key-list">
+      <!-- Select all in header -->
+      <div class="key-list-select-all" v-if="allVisibleKeys.length > 0">
+        <label class="key-checkbox-label">
+          <input
+            type="checkbox"
+            class="key-checkbox"
+            :checked="allSelected"
+            :indeterminate="someSelected"
+            @change="toggleSelectAll"
+          />
+          <span class="key-select-all-text">{{ t('redis.keys.batch.selectAll') }}</span>
+        </label>
+      </div>
       <template v-for="node in treeNodes" :key="node.key">
         <!-- Folder node -->
         <div
@@ -38,6 +68,14 @@
             @click.stop="$emit('selectKey', child.key)"
             @contextmenu.prevent="openContextMenu($event, child.key)"
           >
+            <label class="key-checkbox-label" @click.stop>
+              <input
+                type="checkbox"
+                class="key-checkbox"
+                :checked="selectedKeys.has(child.key)"
+                @change="toggleSelectKey(child.key)"
+              />
+            </label>
             <span class="key-type-icon" :class="child.keyType">{{ getTypeIcon(child.keyType) }}</span>
             <span class="key-name">{{ child.label }}</span>
           </div>
@@ -50,6 +88,14 @@
           @click="$emit('selectKey', node.key)"
           @contextmenu.prevent="openContextMenu($event, node.key)"
         >
+          <label class="key-checkbox-label" @click.stop>
+            <input
+              type="checkbox"
+              class="key-checkbox"
+              :checked="selectedKeys.has(node.key)"
+              @change="toggleSelectKey(node.key)"
+            />
+          </label>
           <span class="key-type-icon" :class="node.keyType">{{ getTypeIcon(node.keyType) }}</span>
           <span class="key-name">{{ node.label }}</span>
         </div>
@@ -111,12 +157,16 @@ const emit = defineEmits<{
   (e: 'search', pattern: string): void
   (e: 'deleteKey', key: string): void
   (e: 'setTtl', key: string, seconds: number): void
+  (e: 'batchDelete', keys: string[]): void
+  (e: 'batchSetTtl', keys: string[]): void
+  (e: 'batchExport', keys: string[]): void
 }>()
 
 const searchPattern = ref('*')
 const selectedKey = ref<string | null>(null)
 const loading = ref(false)
 const collapsedFolders = ref<Set<string>>(new Set())
+const selectedKeys = ref<Set<string>>(new Set())
 
 const contextMenu = reactive({
   visible: false,
@@ -182,6 +232,48 @@ const treeNodes = computed<TreeNode[]>(() => {
 
   return nodes
 })
+
+/** All visible leaf keys across folders and top-level */
+const allVisibleKeys = computed(() => {
+  const keys: string[] = []
+  for (const node of treeNodes.value) {
+    if (node.isFolder) {
+      for (const child of node.children ?? []) {
+        keys.push(child.key)
+      }
+    } else {
+      keys.push(node.key)
+    }
+  }
+  return keys
+})
+
+const allSelected = computed(() =>
+  allVisibleKeys.value.length > 0 && allVisibleKeys.value.every(k => selectedKeys.value.has(k)),
+)
+
+const someSelected = computed(() =>
+  !allSelected.value && allVisibleKeys.value.some(k => selectedKeys.value.has(k)),
+)
+
+function toggleSelectKey(key: string) {
+  const s = new Set(selectedKeys.value)
+  if (s.has(key)) s.delete(key)
+  else s.add(key)
+  selectedKeys.value = s
+}
+
+function toggleSelectAll() {
+  if (allSelected.value) {
+    selectedKeys.value = new Set()
+  } else {
+    selectedKeys.value = new Set(allVisibleKeys.value)
+  }
+}
+
+function clearSelection() {
+  selectedKeys.value = new Set()
+}
 
 function getTypeIcon(type: string | undefined): string {
   switch (type) {
@@ -297,10 +389,83 @@ onUnmounted(() => {
   border-color: var(--accent);
 }
 
+/* Batch Toolbar */
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--accent-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.batch-count {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  margin-right: auto;
+}
+
+.batch-btn {
+  padding: 2px 6px;
+  font-size: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.batch-btn:hover {
+  background: var(--bg-elevated);
+}
+
+.batch-btn-delete {
+  color: #f85149;
+  border-color: #f8514933;
+}
+
+.batch-btn-delete:hover {
+  background: #f8514922;
+}
+
+.batch-btn-clear {
+  color: var(--text-muted);
+}
+
 .key-list {
   flex: 1;
   overflow-y: auto;
   padding: 4px;
+}
+
+/* Select All */
+.key-list-select-all {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+}
+
+/* Checkbox */
+.key-checkbox-label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.key-checkbox {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  margin: 0;
+}
+
+.key-select-all-text {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 4px;
 }
 
 .key-folder {
