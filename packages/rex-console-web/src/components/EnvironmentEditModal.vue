@@ -1,9 +1,16 @@
 <template>
   <Transition name="modal" mode="out-in">
     <div v-if="visible" class="modal-overlay" @click.self="close">
-    <div class="modal-content">
+    <div
+      ref="dialogEl"
+      class="modal-content"
+      role="dialog"
+      aria-modal="true"
+      :aria-labelledby="titleId"
+      @keydown.tab="trapFocus"
+    >
       <div class="modal-header">
-        <span>{{ t('env.edit') }}</span>
+        <span :id="titleId">{{ t('env.edit') }}</span>
         <button @click="close">×</button>
       </div>
 
@@ -16,7 +23,7 @@
         <template v-else>
           <div class="form-group">
             <label class="form-label">{{ t('env.name') }}</label>
-            <input v-model="form.name" class="form-input" :placeholder="t('env.namePlaceholder')" required />
+            <input ref="firstFieldEl" v-model="form.name" class="form-input" :placeholder="t('env.namePlaceholder')" required />
           </div>
 
           <div class="form-group">
@@ -38,10 +45,14 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, computed, watch } from 'vue'
+import { reactive, ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { updateEnvironment, getEnvironment } from '@/api/env'
 import { useSidebar } from '@/composables/useSidebar'
+import { useToast } from '@/composables/useToast'
+import { useId } from '@/composables/useId'
+
+const titleId = useId('env-edit-title')
 
 const props = defineProps<{
   visible: boolean
@@ -54,10 +65,14 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { fetchEnvs: refetchEnvs } = useSidebar()
+const { error: toastError } = useToast()
+
+const dialogEl = ref<HTMLElement>()
+const firstFieldEl = ref<HTMLElement>()
+let previousActive: HTMLElement | null = null
 
 const loading = ref(false)
 const saving = ref(false)
-
 const form = reactive({
   name: '',
   description: null as string | null,
@@ -70,12 +85,40 @@ watch(() => props.visible, async (v) => {
     const env = await getEnvironment(props.envId)
     form.name = env.name
     form.description = env.description || null
-  } catch {
+  } catch (err) {
+    toastError(t('env.loadFailed'))
+    console.error('Failed to load environment:', err)
     emit('update:visible', false)
   } finally {
     loading.value = false
   }
 })
+
+watch(() => props.visible, (v) => {
+  if (v) {
+    previousActive = document.activeElement as HTMLElement | null
+    nextTick(() => firstFieldEl.value?.focus())
+  } else if (previousActive) {
+    previousActive.focus()
+    previousActive = null
+  }
+})
+
+function trapFocus(e: KeyboardEvent) {
+  const focusable = dialogEl.value?.querySelectorAll<HTMLElement>(
+    'a, button, input, textarea, select, [tabindex]:not([tabindex="-1"])',
+  )
+  if (!focusable || focusable.length === 0) return
+  const first = focusable[0]!
+  const last = focusable[focusable.length - 1]!
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault()
+    first.focus()
+  }
+}
 
 function buildUpdateData() {
   return {
@@ -91,15 +134,15 @@ const canSubmit = computed(() => {
 function close() {
   emit('update:visible', false)
 }
-
 async function submitUpdate() {
   saving.value = true
   try {
     await updateEnvironment(props.envId, buildUpdateData())
     refetchEnvs()
     close()
-  } catch {
-    // 错误处理可以在这里添加
+  } catch (err) {
+    toastError(t('env.saveFailed') || '保存环境失败')
+    console.error('Failed to update environment:', err)
   } finally {
     saving.value = false
   }

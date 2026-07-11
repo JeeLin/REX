@@ -400,6 +400,7 @@ export default {
     create: '创建环境',
     createTitle: '创建新环境',
     edit: '编辑环境',
+    deleteFailed: '删除环境失败',
     name: '环境名称',
     namePlaceholder: '输入环境名称',
     description: '描述',
@@ -504,6 +505,8 @@ export default {
     tagAdd: '创建标签',
     tagRemove: '移除标签',
     tagCreate: '创建新标签',
+    loadFailed: '加载资源失败',
+    saveFailed: '保存资源失败',
   },
   agent: {
     loadFailed: '加载 Agent 列表失败',

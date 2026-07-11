@@ -400,6 +400,7 @@ export default {
     create: 'Create Environment',
     createTitle: 'Create New Environment',
     edit: 'Edit Environment',
+    deleteFailed: 'Failed to delete environment',
     name: 'Environment Name',
     namePlaceholder: 'Enter environment name',
     description: 'Description',
@@ -504,6 +505,8 @@ export default {
     tagAdd: 'Create Tag',
     tagRemove: 'Remove tag',
     tagCreate: 'Create new tag',
+    loadFailed: 'Failed to load resource',
+    saveFailed: 'Failed to save resource',
   },
   agent: {
     loadFailed: 'Failed to load agent list',

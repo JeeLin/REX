@@ -163,6 +163,8 @@ import { reactive, ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getResource, updateResource } from '@/api/env'
 import { useSidebar } from '@/composables/useSidebar'
+import { useToast } from '@/composables/useToast'
+
 import TagSelector from '@/components/TagSelector.vue'
 import { getResourceTags, setResourceTags } from '@/api/tags'
 
@@ -175,6 +177,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:visible': [value: boolean]
 }>()
+
+const { error: toastError } = useToast()
 
 const { t } = useI18n()
 const { fetchEnvs } = useSidebar()
@@ -262,10 +266,9 @@ watch(() => props.visible, async (v) => {
     const resource = await getResource(props.envId, props.resourceId)
     form.protocol = resource.protocol
     form.name = resource.name
-    loadResource(parseConfigJson(resource.config_json), resource.protocol)
-    const tags = await getResourceTags(resource.id)
-    form.tags = tags.map(t => t.id)
-  } catch {
+  } catch (err) {
+    toastError(t('resource.loadFailed') || '加载失败')
+    console.error('Failed to load resource:', err)
     emit('update:visible', false)
   } finally {
     loading.value = false
@@ -310,11 +313,9 @@ async function submitUpdate() {
       name: form.name,
       config_json: buildConfigJson(),
     })
-    await setResourceTags(props.resourceId, form.tags)
-    fetchEnvs()
-    close()
-  } catch {
-    // 静默处理
+  } catch (err) {
+    toastError(t('resource.saveFailed') || '保存失败')
+    console.error('Failed to update resource:', err)
   } finally {
     saving.value = false
   }

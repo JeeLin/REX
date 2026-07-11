@@ -87,9 +87,13 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import client from '@/api/client'
 import { deleteEnvironment } from '@/api/env'
 import type { Environment } from '@/api/env'
+import { useToast } from '@/composables/useToast'
+
 
 const router = useRouter()
 const { t } = useI18n()
+const { error: toastError } = useToast()
+
 const { show: showMenu } = useContextMenu()
 const { connectToResource } = useProtocol()
 
@@ -120,8 +124,8 @@ async function openAllInWorkspace(env: Environment) {
     for (const res of resources) {
       connectToResource(res, env.name)
     }
-  } catch {
-    // silent
+  } catch (err) {
+    console.error('Failed to open all resources in workspace:', err)
   }
 }
 
@@ -139,14 +143,14 @@ async function confirmDeleteEnv() {
   try {
     await deleteEnvironment(deletingEnvId.value)
     environments.value = environments.value.filter(e => e.id !== deletingEnvId.value)
-  } catch {
-    // silent
+  } catch (err) {
+    toastError(t('env.deleteFailed') || '删除环境失败')
+    console.error('Failed to delete environment:', err)
   } finally {
     showDeleteConfirm.value = false
     deletingEnvId.value = ''
   }
 }
-
 onMounted(() => loadEnvs())
 
 async function loadEnvs() {
