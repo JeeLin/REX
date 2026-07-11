@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.82.0] - 2026-07-10
+
+### Added
+- 文件传输并发数量控制：基于 Semaphore 的并发限制器（默认 3 个并发）
+- 传输统计 API：GET /api/transfers/stats 返回并发数、可用槽位等信息
+- 传输队列面板：显示当前活跃/最大并发数
+
+### Changed
+- SQLite 自动连接优化：添加指数退避自动重连（最多 5 次）
+- sqlx 升级：从 0.8.0 升级到 0.8.6，消除 future-incompat 警告
+- TypeScript 目标版本：从 ES2020 升级到 ES2024
+
+### Fixed
+- SQLite 连接错误处理：移除静默错误吞没，连接失败时显示错误
+- sqlx-postgres future-incompat 警告：禁用默认 features 避免 sqlite 冲突
+- MySQL connector：移除 sqlx::types::JsonValue 使用，改用 serde_json::from_str
+
 ## [0.80.0] - 2026-07-10
 
 ### Added
