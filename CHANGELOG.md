@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.83.1] - 2026-07-11
+
+### Fixed
+- 分屏拖拽：修复标签拖拽到面板时 splice 索引偏移导致换位错误，新增 drop position 感知（左/右半区）
+- 全局快捷键：修正 Ctrl+K/Ctrl+N/Alt+1~5/F1 在 overlay 打开时误触发，contentEditable 元素跳过快捷键，i18n key 语义修正
+- SSH 终端复制粘贴：修复 Ctrl+C 选中文本时误发 SIGINT，统一复制粘贴处理逻辑
+
 ## [0.83.0] - 2026-07-10
 
 ### Changed
