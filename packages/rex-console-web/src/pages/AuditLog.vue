@@ -117,11 +117,14 @@
                   <div class="audit-detail-inner">
                     <div class="detail-title">{{ t(`audit.ops.${record.operation}`) }}</div>
                     <div class="detail-grid">
-                      <template v-if="record.detail">
+                      <template v-if="record.detail && Object.keys(record.detail).length > 0">
                         <template v-for="(value, key) in record.detail" :key="String(key)">
                           <span class="detail-label">{{ String(key) }}</span>
                           <span class="detail-value">{{ String(value) }}</span>
                         </template>
+                      </template>
+                      <template v-else>
+                        <span class="detail-empty">{{ t('audit.table.noDetail') }}</span>
                       </template>
                     </div>
                   </div>

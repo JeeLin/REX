@@ -126,6 +126,12 @@ pub async fn create_resource(
         })
     }).await.map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
 
+    let detail = serde_json::json!({
+        "资源名称": resource.name,
+        "协议": resource.protocol,
+        "资源ID": resource.id,
+        "环境ID": env_id,
+    }).to_string();
     write_audit_log(
         &state.db,
         "resource_create",
@@ -134,7 +140,7 @@ pub async fn create_resource(
         Some(&env_id),
         Some(&resource.id),
         resource.agent_id.as_deref(),
-        None,
+        Some(&detail),
         Some(&ip),
     );
 
@@ -216,6 +222,10 @@ pub async fn update_resource(
         })
     }).await.map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
 
+    let detail = serde_json::json!({
+        "资源名称": resource.name,
+        "资源ID": id,
+    }).to_string();
     write_audit_log(
         &state.db,
         "resource_update",
@@ -224,7 +234,7 @@ pub async fn update_resource(
         Some(&env_id),
         Some(&id),
         resource.agent_id.as_deref(),
-        None,
+        Some(&detail),
         Some(&ip),
     );
 
@@ -262,6 +272,9 @@ pub async fn delete_resource(
     .await
     .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
 
+    let detail = serde_json::json!({
+        "资源ID": id,
+    }).to_string();
     write_audit_log(
         &state.db,
         "resource_delete",
@@ -270,7 +283,7 @@ pub async fn delete_resource(
         Some(&env_id),
         Some(&id),
         None,
-        None,
+        Some(&detail),
         Some(&ip),
     );
 
@@ -574,6 +587,11 @@ pub async fn upload_ssh_key(
     let key_id = format!("key_{}", id);
     let size = data.len();
 
+    let detail = serde_json::json!({
+        "密钥格式": format,
+        "文件大小": size,
+        "资源ID": id,
+    }).to_string();
     write_audit_log(
         &state.db,
         "resource_key_upload",
@@ -582,7 +600,7 @@ pub async fn upload_ssh_key(
         Some(&env_id),
         Some(&id),
         None,
-        None,
+        Some(&detail),
         Some(&ip),
     );
 

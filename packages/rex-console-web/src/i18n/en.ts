@@ -1184,6 +1184,7 @@ export default {
       failed: '✕ Failed',
       showDetail: 'Show detail',
       hideDetail: 'Hide detail',
+      noDetail: 'No detail available',
     },
     ops: {
       connect: 'SSH Connect',
@@ -1193,6 +1194,8 @@ export default {
       download: 'File Download',
       delete: 'File Delete',
       login: 'Login',
+      logout: 'Logout',
+      config_update: 'Config Update',
       command: 'SSH Command',
       ssh_command: 'SSH Command',
       environment_create: 'Create Environment',

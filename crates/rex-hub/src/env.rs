@@ -157,6 +157,10 @@ pub async fn create_env(
     .await
     .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
 
+    let detail = serde_json::json!({
+        "环境名称": input.name,
+        "环境ID": id,
+    }).to_string();
     write_audit_log(
         &state.db,
         "environment_create",
@@ -165,7 +169,7 @@ pub async fn create_env(
         Some(&id),
         None,
         None,
-        None,
+        Some(&detail),
         Some(&ip),
     );
 
@@ -267,6 +271,10 @@ pub async fn update_env(
     .await
     .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
 
+    let detail = serde_json::json!({
+        "环境名称": env.name,
+        "环境ID": id,
+    }).to_string();
     write_audit_log(
         &state.db,
         "environment_update",
@@ -275,7 +283,7 @@ pub async fn update_env(
         Some(&id),
         None,
         None,
-        None,
+        Some(&detail),
         Some(&ip),
     );
 
@@ -338,6 +346,9 @@ pub async fn delete_env(
     .await
     .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
 
+    let detail = serde_json::json!({
+        "环境ID": id,
+    }).to_string();
     write_audit_log(
         &state.db,
         "environment_delete",
@@ -346,7 +357,7 @@ pub async fn delete_env(
         Some(&id),
         None,
         None,
-        None,
+        Some(&detail),
         Some(&ip),
     );
 

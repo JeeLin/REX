@@ -124,6 +124,9 @@ pub async fn login(
     )
     .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
 
+    let detail = serde_json::json!({
+        "ip": ip,
+    }).to_string();
     write_audit_log(
         &state.db,
         "login",
@@ -132,7 +135,7 @@ pub async fn login(
         None,
         None,
         None,
-        None,
+        Some(&detail),
         Some(&ip),
     );
 

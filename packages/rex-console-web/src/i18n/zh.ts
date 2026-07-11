@@ -1167,6 +1167,7 @@ export default {
       failed: '✕ 失败',
       showDetail: '展开详情',
       hideDetail: '收起详情',
+      noDetail: '暂无详细信息',
     },
     ops: {
       connect: 'SSH 连接',
@@ -1177,6 +1178,8 @@ export default {
       delete: '文件删除',
       login: '登录',
       command: 'SSH 命令',
+      logout: '登出',
+      config_update: '配置更新',
       ssh_command: 'SSH 命令',
       environment_create: '创建环境',
       environment_update: '更新环境',
