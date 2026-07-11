@@ -96,6 +96,7 @@ import { useSettingsStore } from '@/stores/settings'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import TerminalSftp from '@/features/terminal/TerminalSftp.vue'
 import TerminalMobileToolbar from '@/features/terminal/TerminalMobileToolbar.vue'
+import { copyWithFallback } from '@/utils/clipboard'
 
 const route = useRoute()
 const router = useRouter()
@@ -137,17 +138,35 @@ function initTerminal() {
   terminal.open(terminalContainer.value)
   fitAddon.fit()
 
-  // 拦截 Ctrl+V：阻止 xterm.js 内部调用 navigator.clipboard.readText()（需要 HTTPS）
-  // 返回 false 让 xterm 不处理该按键，浏览器原生粘贴行为会在 textarea 上触发 DOM paste 事件
+  // 拦截 Ctrl+C/V：智能处理复制粘贴
   terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
-    // Ctrl+V / Cmd+V → 不让 xterm 处理，交给浏览器原生 paste
-    if ((event.ctrlKey || event.metaKey) && event.key === 'v' && event.type === 'keydown') {
+    if (event.type !== 'keydown') return true
+    const ctrl = event.ctrlKey || event.metaKey
+
+    // Ctrl+V → 浏览器原生粘贴
+    if (ctrl && event.key === 'v') {
       return false
     }
-    // Ctrl+Shift+C → 由自定义 handleKeydown 处理
-    if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === 'C' || event.key === 'c') && event.type === 'keydown') {
+
+    // Ctrl+C → 有选中文本时复制，无选中时发送 SIGINT
+    if (ctrl && !event.shiftKey && (event.key === 'c' || event.key === 'C')) {
+      const selection = terminal?.getSelection()
+      if (selection) {
+        copyWithFallback(selection)
+        return false
+      }
+      return true
+    }
+
+    // Ctrl+Shift+C → 强制复制选中内容
+    if (ctrl && event.shiftKey && (event.key === 'c' || event.key === 'C')) {
+      const selection = terminal?.getSelection()
+      if (selection) {
+        copyWithFallback(selection)
+      }
       return false
     }
+
     return true
   })
 
@@ -251,7 +270,7 @@ function handleCopy() {
   if (!terminal) return
   const text = terminal.getSelection()
   if (text) {
-    navigator.clipboard.writeText(text).catch(() => {})
+    copyWithFallback(text)
   }
 }
 
