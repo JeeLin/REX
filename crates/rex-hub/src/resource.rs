@@ -131,7 +131,8 @@ pub async fn create_resource(
         "协议": resource.protocol,
         "资源ID": resource.id,
         "环境ID": env_id,
-    }).to_string();
+    })
+    .to_string();
     write_audit_log(
         &state.db,
         "resource_create",
@@ -225,7 +226,8 @@ pub async fn update_resource(
     let detail = serde_json::json!({
         "资源名称": resource.name,
         "资源ID": id,
-    }).to_string();
+    })
+    .to_string();
     write_audit_log(
         &state.db,
         "resource_update",
@@ -274,7 +276,8 @@ pub async fn delete_resource(
 
     let detail = serde_json::json!({
         "资源ID": id,
-    }).to_string();
+    })
+    .to_string();
     write_audit_log(
         &state.db,
         "resource_delete",
@@ -591,7 +594,8 @@ pub async fn upload_ssh_key(
         "密钥格式": format,
         "文件大小": size,
         "资源ID": id,
-    }).to_string();
+    })
+    .to_string();
     write_audit_log(
         &state.db,
         "resource_key_upload",

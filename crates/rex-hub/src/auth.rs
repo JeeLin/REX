@@ -126,7 +126,8 @@ pub async fn login(
 
     let detail = serde_json::json!({
         "ip": ip,
-    }).to_string();
+    })
+    .to_string();
     write_audit_log(
         &state.db,
         "login",

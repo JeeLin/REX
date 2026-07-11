@@ -160,7 +160,8 @@ pub async fn create_env(
     let detail = serde_json::json!({
         "环境名称": input.name,
         "环境ID": id,
-    }).to_string();
+    })
+    .to_string();
     write_audit_log(
         &state.db,
         "environment_create",
@@ -274,7 +275,8 @@ pub async fn update_env(
     let detail = serde_json::json!({
         "环境名称": env.name,
         "环境ID": id,
-    }).to_string();
+    })
+    .to_string();
     write_audit_log(
         &state.db,
         "environment_update",
@@ -348,7 +350,8 @@ pub async fn delete_env(
 
     let detail = serde_json::json!({
         "环境ID": id,
-    }).to_string();
+    })
+    .to_string();
     write_audit_log(
         &state.db,
         "environment_delete",
