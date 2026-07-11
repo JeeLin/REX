@@ -296,14 +296,14 @@ fn try_get_json_value(row: &sqlx::mysql::MySqlRow, index: usize) -> serde_json::
     if let Ok(v) = row.try_get::<f64, _>(index) {
         return serde_json::json!(v);
     }
-    if let Ok(v) = row.try_get::<String, _>(index) {
-        return serde_json::json!(v);
-    }
     if let Ok(v) = row.try_get::<bool, _>(index) {
         return serde_json::json!(v);
     }
-    if let Ok(v) = row.try_get::<sqlx::types::JsonValue, _>(index) {
-        return v;
+    if let Ok(v) = row.try_get::<String, _>(index) {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&v) {
+            return json;
+        }
+        return serde_json::json!(v);
     }
     if let Ok(v) = row.try_get::<Vec<u8>, _>(index) {
         return serde_json::json!(String::from_utf8_lossy(&v).to_string());
