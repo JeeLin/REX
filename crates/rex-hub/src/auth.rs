@@ -59,7 +59,7 @@ pub async fn login(
             None,
             None,
             None,
-            None,
+            Some(&serde_json::json!({"ip": ip, "reason": "rate_limit"}).to_string()),
             Some(&ip),
         );
         return Err((
@@ -92,7 +92,7 @@ pub async fn login(
             None,
             None,
             None,
-            None,
+            Some(&serde_json::json!({"ip": ip, "reason": "invalid_password"}).to_string()),
             Some(&ip),
         );
         return Err((
@@ -124,8 +124,14 @@ pub async fn login(
     )
     .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
 
+    let ua = headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string();
     let detail = serde_json::json!({
         "ip": ip,
+        "user_agent": ua,
     })
     .to_string();
     write_audit_log(

@@ -104,7 +104,8 @@ pub async fn create_resource(
     let ip = extract_client_ip(&headers);
     let db = state.db.clone();
     let env_id_clone = env_id.clone();
-
+    let config_json_for_audit = input.config_json.clone();
+    let protocol_for_audit = input.protocol.clone();
     let resource = tokio::task::spawn_blocking(move || {
         let conn = db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
         let env_exists: bool = conn.query_row(
@@ -126,13 +127,16 @@ pub async fn create_resource(
         })
     }).await.map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
 
+    let conn_info = extract_connection_info(&config_json_for_audit, &protocol_for_audit);
     let detail = serde_json::json!({
-        "资源名称": resource.name,
-        "协议": resource.protocol,
-        "资源ID": resource.id,
-        "环境ID": env_id,
+        "resource_name": resource.name,
+        "resource_id": resource.id,
+        "protocol": resource.protocol,
+        "env_id": env_id,
+        "connection_type": if resource.agent_id.is_some() { "agent_proxy" } else { "direct" },
     })
     .to_string();
+    let detail = enrich_with_connection_info(&detail, &conn_info);
     write_audit_log(
         &state.db,
         "resource_create",
@@ -179,6 +183,15 @@ pub async fn update_resource(
     let id_clone = id.clone();
     let env_id_clone = env_id.clone();
 
+    // Query old name before closure for audit detail
+    let old_name = {
+        let conn = state.db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+        conn.query_row(
+            "SELECT name FROM resources WHERE id = ?1 AND environment_id = ?2",
+            rusqlite::params![id, env_id],
+            |row| row.get::<_, String>(0),
+        ).ok()
+    };
     let resource = tokio::task::spawn_blocking(move || {
         let conn = db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
         let existing: Resource = conn.query_row(
@@ -224,8 +237,9 @@ pub async fn update_resource(
     }).await.map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
 
     let detail = serde_json::json!({
-        "资源名称": resource.name,
-        "资源ID": id,
+        "resource_name": resource.name,
+        "resource_id": id,
+        "old_name": old_name.as_deref().unwrap_or("unknown"),
     })
     .to_string();
     write_audit_log(
@@ -253,6 +267,16 @@ pub async fn delete_resource(
     let env_id_clone = env_id.clone();
     let id_clone = id.clone();
 
+    // Query resource name before deleting for audit detail
+    let res_info = {
+        let conn = state.db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+        conn.query_row(
+            "SELECT name, protocol FROM resources WHERE id = ?1 AND environment_id = ?2",
+            rusqlite::params![id, env_id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        ).ok()
+    };
+
     let _result = tokio::task::spawn_blocking(
         move || -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
             let conn = db
@@ -274,15 +298,18 @@ pub async fn delete_resource(
     .await
     .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
 
+    let (res_name, res_protocol) = res_info.unwrap_or((id.clone(), "unknown".to_string()));
     let detail = serde_json::json!({
-        "资源ID": id,
+        "resource_id": id,
+        "resource_name": res_name,
+        "protocol": res_protocol,
     })
     .to_string();
     write_audit_log(
         &state.db,
         "resource_delete",
         "success",
-        &format!("删除资源「{}」", id),
+        &format!("删除资源「{}」", res_name),
         Some(&env_id),
         Some(&id),
         None,
@@ -291,6 +318,49 @@ pub async fn delete_resource(
     );
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Extract connection info (host, port) from config_json based on protocol
+fn extract_connection_info(config_json: &str, protocol: &str) -> Option<serde_json::Value> {
+    let config: serde_json::Value = serde_json::from_str(config_json).ok()?;
+    match protocol {
+        "ssh" | "sftp" => {
+            let host = config.get("host")?.as_str()?;
+            let port = config.get("port").and_then(|p| p.as_u64()).unwrap_or(22);
+            Some(serde_json::json!({"host": host, "port": port}))
+        }
+        "mysql" => {
+            let host = config.get("host")?.as_str()?;
+            let port = config.get("port").and_then(|p| p.as_u64()).unwrap_or(3306);
+            Some(serde_json::json!({"host": host, "port": port}))
+        }
+        "postgresql" => {
+            let host = config.get("host")?.as_str()?;
+            let port = config.get("port").and_then(|p| p.as_u64()).unwrap_or(5432);
+            Some(serde_json::json!({"host": host, "port": port}))
+        }
+        "redis" => {
+            let host = config.get("host")?.as_str()?;
+            let port = config.get("port").and_then(|p| p.as_u64()).unwrap_or(6379);
+            Some(serde_json::json!({"host": host, "port": port}))
+        }
+        _ => None,
+    }
+}
+
+/// Merge connection info into detail JSON string
+fn enrich_with_connection_info(detail: &str, conn_info: &Option<serde_json::Value>) -> String {
+    if let Some(info) = conn_info {
+        if let Ok(mut val) = serde_json::from_str::<serde_json::Value>(detail) {
+            if let (Some(obj), Some(info_obj)) = (val.as_object_mut(), info.as_object()) {
+                for (k, v) in info_obj {
+                    obj.insert(k.clone(), v.clone());
+                }
+            }
+            return val.to_string();
+        }
+    }
+    detail.to_string()
 }
 
 #[derive(Debug, Deserialize)]
@@ -520,9 +590,9 @@ pub async fn upload_ssh_key(
                 .get()
                 .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
             conn.query_row(
-                "SELECT id, protocol FROM resources WHERE id = ?1 AND environment_id = ?2",
+                "SELECT id, protocol, name FROM resources WHERE id = ?1 AND environment_id = ?2",
                 rusqlite::params![id, env_id],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?)),
             )
             .map_err(|_| not_found("RESOURCE_NOT_FOUND", "资源不存在"))
         })
@@ -530,7 +600,7 @@ pub async fn upload_ssh_key(
         .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??
     };
 
-    let (_res_id, protocol) = resource_info;
+    let (_res_id, protocol, res_name) = resource_info;
     if protocol != "ssh" && protocol != "sftp" {
         return Err(bad_request("只有 SSH/SFTP 资源支持密钥上传"));
     }
@@ -591,16 +661,17 @@ pub async fn upload_ssh_key(
     let size = data.len();
 
     let detail = serde_json::json!({
-        "密钥格式": format,
-        "文件大小": size,
-        "资源ID": id,
+        "resource_name": res_name,
+        "resource_id": id,
+        "key_format": format,
+        "file_size": size,
     })
     .to_string();
     write_audit_log(
         &state.db,
         "resource_key_upload",
         "success",
-        &format!("上传 SSH 密钥到资源（格式: {}）", format),
+        &format!("上传 SSH 密钥到资源「{}」（格式: {}）", res_name, format),
         Some(&env_id),
         Some(&id),
         None,

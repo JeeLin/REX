@@ -158,8 +158,10 @@ pub async fn create_env(
     .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
 
     let detail = serde_json::json!({
-        "环境名称": input.name,
-        "环境ID": id,
+        "env_name": input.name,
+        "env_id": id,
+        "description": input.description,
+        "connection_mode": input.connection_mode,
     })
     .to_string();
     write_audit_log(
@@ -273,8 +275,9 @@ pub async fn update_env(
     .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
 
     let detail = serde_json::json!({
-        "环境名称": env.name,
-        "环境ID": id,
+        "env_name": env.name,
+        "env_id": id,
+        "description": env.description,
     })
     .to_string();
     write_audit_log(
@@ -300,6 +303,16 @@ pub async fn delete_env(
     let ip = extract_client_ip(&headers);
     let db = state.db.clone();
     let id_clone = id.clone();
+
+    // Query env name before deleting for audit detail
+    let env_name = {
+        let conn = state.db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+        conn.query_row(
+            "SELECT name FROM environments WHERE id = ?1",
+            rusqlite::params![id],
+            |row| row.get::<_, String>(0),
+        ).ok()
+    };
 
     let _result = tokio::task::spawn_blocking(
         move || -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
@@ -348,15 +361,17 @@ pub async fn delete_env(
     .await
     .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))??;
 
+    let display_name = env_name.as_deref().unwrap_or(&id);
     let detail = serde_json::json!({
-        "环境ID": id,
+        "env_id": id,
+        "env_name": display_name,
     })
     .to_string();
     write_audit_log(
         &state.db,
         "environment_delete",
         "success",
-        &format!("删除环境「{}」", id),
+        &format!("删除环境「{}」", display_name),
         Some(&id),
         None,
         None,
