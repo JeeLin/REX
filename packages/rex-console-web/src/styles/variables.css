@@ -139,3 +139,50 @@
 
   --shadow-glow: none;
 }
+
+/* ── Semantic Aliases (compatibility with feature subsystems) ── */
+:root {
+  --bg-secondary: var(--bg-surface);
+  --bg-tertiary: var(--bg-elevated);
+  --border-primary: var(--border);
+
+  /* ── Component Token Layers ── */
+  --bg-card: var(--bg-surface);
+  --bg-overlay: var(--bg-deep);
+  --text-inverse: #000;
+  --radius-full: 9999px;
+  --shadow-xs: var(--shadow-sm);
+  --ring-focus: 0 0 0 3px var(--accent-glow);
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.6, 1);
+
+  /* ── Spacing Scale (consistent 4px base) ── */
+  --sp-0: 0;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* ── Font Family Fallbacks ── */
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-display);
+}
+
+/* ── Light Theme Compatibility Aliases ── */
+[data-theme="light"] {
+  --bg-secondary: var(--bg-surface);
+  --bg-tertiary: var(--bg-elevated);
+  --border-primary: var(--border);
+  --bg-card: var(--bg-surface);
+  --bg-overlay: var(--bg-deep);
+  --text-inverse: #1F2328;
+  --shadow-xs: var(--shadow-sm);
+  --ring-focus: 0 0 0 3px var(--accent-glow);
+}
