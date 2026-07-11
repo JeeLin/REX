@@ -1,9 +1,17 @@
 <template>
   <Transition name="modal" mode="out-in">
     <div v-if="visible" class="modal-overlay" @click.self="close">
-    <div class="modal-content">
+    <div
+      ref="dialogEl"
+      class="modal-content"
+      role="dialog"
+      aria-modal="true"
+      :aria-labelledby="titleId"
+      @keydown.tab="trapFocus"
+      @keydown.esc="close"
+    >
       <div class="modal-header">
-        <span>{{ t('resource.edit') }}</span>
+        <span :id="titleId">{{ t('resource.edit') }}</span>
         <button @click="close">×</button>
       </div>
 
@@ -16,7 +24,7 @@
         <template v-else>
           <div class="form-group">
             <label class="form-label">{{ t('resource.name') }}</label>
-            <input v-model="form.name" class="form-input" :placeholder="t('resource.namePlaceholder')" required />
+            <input ref="firstFieldEl" v-model="form.name" class="form-input" :placeholder="t('resource.namePlaceholder')" required />
           </div>
 
           <!-- Redis -->
@@ -159,7 +167,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, computed, watch } from 'vue'
+import { reactive, ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getResource, updateResource } from '@/api/env'
 import { useSidebar } from '@/composables/useSidebar'
@@ -168,6 +176,7 @@ import { useToast } from '@/composables/useToast'
 import TagSelector from '@/components/TagSelector.vue'
 import { getResourceTags, setResourceTags } from '@/api/tags'
 
+import { useId } from '@/composables/useId'
 const props = defineProps<{
   visible: boolean
   envId: string
@@ -182,6 +191,36 @@ const { error: toastError } = useToast()
 
 const { t } = useI18n()
 const { fetchEnvs } = useSidebar()
+const titleId = useId('resource-edit-title')
+const dialogEl = ref<HTMLElement>()
+const firstFieldEl = ref<HTMLElement>()
+let previousActive: HTMLElement | null = null
+
+watch(() => props.visible, (v) => {
+  if (v) {
+    previousActive = document.activeElement as HTMLElement | null
+    nextTick(() => firstFieldEl.value?.focus())
+  } else if (previousActive) {
+    previousActive.focus()
+    previousActive = null
+  }
+})
+
+function trapFocus(e: KeyboardEvent) {
+  const focusable = dialogEl.value?.querySelectorAll<HTMLElement>(
+    'a, button, input, textarea, select, [tabindex]:not([tabindex="-1"])',
+  )
+  if (!focusable || focusable.length === 0) return
+  const first = focusable[0]!
+  const last = focusable[focusable.length - 1]!
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault()
+    first.focus()
+  }
+}
 
 const loading = ref(false)
 const saving = ref(false)
@@ -275,6 +314,7 @@ watch(() => props.visible, async (v) => {
     emit('update:visible', false)
   } finally {
     loading.value = false
+    if (props.visible) nextTick(() => firstFieldEl.value?.focus())
   }
 })
 

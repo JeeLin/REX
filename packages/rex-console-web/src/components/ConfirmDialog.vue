@@ -10,6 +10,7 @@
           :aria-labelledby="titleId"
           :aria-describedby="descId"
           @keydown.tab="trapFocus"
+          @keydown.esc="$emit('cancel')"
         >
           <h3 :id="titleId" class="confirm-title">{{ title }}</h3>
           <p :id="descId" class="confirm-message">{{ message }}</p>

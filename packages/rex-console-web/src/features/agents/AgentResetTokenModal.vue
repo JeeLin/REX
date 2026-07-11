@@ -2,8 +2,17 @@
   <Teleport to="body">
     <Transition name="modal">
     <div v-if="visible" class="modal-overlay" @click="$emit('close')">
-      <div class="confirm-panel" @click.stop>
-        <div class="confirm-title">{{ t('ctx.resetTokenTitle') }}</div>
+      <div
+        ref="dialogEl"
+        class="confirm-panel"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="titleId"
+        @click.stop
+        @keydown.tab="trapFocus"
+        @keydown.esc="$emit('close')"
+      >
+        <div class="confirm-title" :id="titleId">{{ t('ctx.resetTokenTitle') }}</div>
         <p class="confirm-desc">
           {{ t('ctx.resetTokenDesc1') }}
           <strong>{{ agent?.name }}</strong>
@@ -17,7 +26,7 @@
           </label>
         </div>
         <div class="confirm-actions">
-          <button class="btn btn-ghost" @click="$emit('close')">{{ t('common.cancel') }}</button>
+          <button ref="cancelBtnEl" class="btn btn-ghost" @click="$emit('close')">{{ t('common.cancel') }}</button>
           <button class="btn btn-danger" :disabled="!confirmed || loading" @click="handleReset">
             {{ t('ctx.confirmReset') }}
           </button>
@@ -29,7 +38,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch, nextTick } from 'vue'
+import { useId } from '@/composables/useId'
 import { useI18n } from 'vue-i18n'
 import { resetAgentToken } from '@/api/agent'
 import type { Agent } from '@/api/agent'
@@ -37,6 +47,36 @@ import type { Agent } from '@/api/agent'
 const props = defineProps<{ agent: Agent | null; visible: boolean }>()
 const emit = defineEmits<{ close: []; success: [] }>()
 
+const titleId = useId('agent-reset-token-title')
+const dialogEl = ref<HTMLElement>()
+const cancelBtnEl = ref<HTMLElement>()
+let previousActive: HTMLElement | null = null
+
+watch(() => props.visible, (v) => {
+  if (v) {
+    previousActive = document.activeElement as HTMLElement | null
+    nextTick(() => cancelBtnEl.value?.focus())
+  } else if (previousActive) {
+    previousActive.focus()
+    previousActive = null
+  }
+})
+
+function trapFocus(e: KeyboardEvent) {
+  const focusable = dialogEl.value?.querySelectorAll<HTMLElement>(
+    'a, button, input, textarea, select, [tabindex]:not([tabindex="-1"])',
+  )
+  if (!focusable || focusable.length === 0) return
+  const first = focusable[0]!
+  const last = focusable[focusable.length - 1]!
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault()
+    first.focus()
+  }
+}
 const { t } = useI18n()
 const confirmed = ref(false)
 const loading = ref(false)

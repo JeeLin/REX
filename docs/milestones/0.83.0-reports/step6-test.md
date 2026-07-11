@@ -2,44 +2,27 @@
 
 日期：2026-07-10
 
-## 质量门禁结果
+## 范围
+0.83.0 为纯前端 UI/UX 重新设计里程碑，不引入后端变更、不新增功能。测试验证聚焦于：
+- 设计令牌重构（Subtask 1）未破坏任何组件编译/类型
+- 布局响应式（Subtask 2）`100vh`→`100%` 与平板断点
+- 交互增强（Subtask 3）toast 反馈 + 焦点管理
+- 组件动画统一（Subtask 4）
+- 简化（Step 4）/ 代码评审（Step 5）回归
 
+## 质量门禁结果
 | 检查项 | 命令 | 结果 |
 |---|---|---|
-| 类型检查 | `bun run type-check` (`vue-tsc --noEmit`) | ✅ 通过（0 错误） |
-| Lint | `bun run lint` (`eslint .`) | ✅ 0 error / 428 warning（warning 为存量，不阻塞） |
-| 构建 | `bun run build` (`vue-tsc -b && vite build`) | ✅ 成功产出 dist |
-| 单元测试 | `bun run test` (`vitest run`) | ⚠️ 1 失败 / 292 通过（共 293） |
+| 类型检查 | `bun run type-check`（vue-tsc --noEmit） | ✅ 0 错误 |
+| Lint | `bun run lint`（eslint） | ✅ 0 error（仅存量 warning，与本次无关） |
+| 构建 | `bun run build`（vite build） | ✅ 成功产出 dist |
+| 单元测试 | `bun run test`（vitest） | ⚠️ 1 失败 / 292 通过 |
 
-## 失败项分析（非本里程碑引入）
-
-失败用例：`src/features/sql/__tests__/SqlResults.test.ts > renders column headers`
-
-```text
-AssertionError: expected '#' to contain 'id'
-   expect(headers[1]!.text()).toContain('id')
-```
-
-**根因**：`SqlResults.vue` 的 `<thead>` DOM 顺序为
-`th[0]=全选checkbox` → `th[1]=#（行号）` → `th[2]=id` → `th[3]=name`。
-测试断言 `headers[1]` 含 `'id'`，但实际应为 `headers[2]`。组件在某早期里程碑增加了全选列后，该测试断言未同步更新。
-
-**与本里程碑无关性确认**：
-- `git diff 86c8796^ HEAD -- src/features/sql/SqlResults.vue` → 空（本里程碑未触碰该组件）
-- `git diff 86c8796^ HEAD -- src/features/sql/__tests__/SqlResults.test.ts` → 空（测试文件与 0.83.0 基线完全一致）
-- 失败为**存量缺陷**，非 0.83.0 回归。
-
-## 门禁判定
-
-- 类型检查无 error ✅
-- Lint 无 error ✅
-- 构建成功 ✅
-- 测试：292/293 通过，**唯一失败项为存量、与本里程碑零文件交集**。
-
-0.83.0 涉及的所有文件（`EnvironmentEditModal` / `ResourceEditModal` / `Environments` / `AppLayout` / 三个 Agent 模态框 / `variables.css` / `components.css` / `i18n`）类型、Lint、构建、相关测试（如 `Environments.test.ts` 等）均通过。
-
-该失败项超出 0.83.0 范围（UI/UX 重新设计，不改动 SQL 结果表逻辑），不在本里程碑修改列表内，故不在此处修复，留待 SQL 相关里程碑处理。
+## 唯一失败分析：`SqlResults.test.ts`
+- 失败用例：`renders column headers`（断言 `headers[1]==='id'`、`headers[2]==='name'`）
+- 根因：表头 DOM 实际索引为 `0=复选框`、`1=#`、`2=首列(id)`、`3=次列(name)`；测试期望错位一位，应为 `[2]` 与 `[3]`。
+- 判定：**存量失败**。经比对 `SqlResults.vue` 与 `SqlResults.test.ts` 自 `86c8796^`（里程碑首个提交之前）起即与当前逐字节一致，非 0.83.0 引入。0.83.0 未触碰 SQL 结果表相关文件。
+- 处置：按里程碑范围（纯 UI/UX 重设计、不动 SQL 表格逻辑）**不修复**、**不缩水本里程碑验收**，仅在此记录为已知存量问题，留待后续相关里程碑处理。
 
 ## 结论
-
-本里程碑交付物全部通过质量门禁。唯一测试失败为存量缺陷、与本次变更无因果，不阻塞 0.83.0 完成。步骤6通过。
+前端四大质量门禁中三项全绿；唯一测试失败为与本次无关的存量断言问题，不影响 0.83.0 交付。步骤6通过（附带存量失败书面说明）。

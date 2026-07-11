@@ -2,11 +2,20 @@
   <Teleport to="body">
     <Transition name="modal">
     <div v-if="visible" class="modal-overlay" @click="$emit('close')">
-      <div class="modal-panel" @click.stop>
-        <div class="modal-header">
-          <div class="modal-title">{{ t('ctx.configTitle') }}</div>
-          <button class="modal-close" @click="$emit('close')">×</button>
-        </div>
+        <div
+          ref="dialogEl"
+          class="modal-panel"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="titleId"
+          @click.stop
+          @keydown.tab="trapFocus"
+          @keydown.esc="$emit('close')"
+        >
+          <div class="modal-header">
+            <div class="modal-title" :id="titleId">{{ t('ctx.configTitle') }}</div>
+            <button ref="closeBtnEl" class="modal-close" @click="$emit('close')">×</button>
+          </div>
         <div v-if="agent" class="modal-body">
           <div class="config-section">{{ t('ctx.basicInfo') }}</div>
           <div class="config-row">
@@ -55,7 +64,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, nextTick } from 'vue'
+import { useId } from '@/composables/useId'
 import { useI18n } from 'vue-i18n'
 import { getAgentConfig, updateAgentConfig } from '@/api/agent'
 import type { Agent } from '@/api/agent'
@@ -63,6 +73,36 @@ import type { Agent } from '@/api/agent'
 const props = defineProps<{ agent: Agent | null; visible: boolean }>()
 defineEmits<{ close: [] }>()
 
+const titleId = useId('agent-config-title')
+const dialogEl = ref<HTMLElement>()
+const closeBtnEl = ref<HTMLElement>()
+let previousActive: HTMLElement | null = null
+
+watch(() => props.visible, (v) => {
+  if (v) {
+    previousActive = document.activeElement as HTMLElement | null
+    nextTick(() => closeBtnEl.value?.focus())
+  } else if (previousActive) {
+    previousActive.focus()
+    previousActive = null
+  }
+})
+
+function trapFocus(e: KeyboardEvent) {
+  const focusable = dialogEl.value?.querySelectorAll<HTMLElement>(
+    'a, button, input, textarea, select, [tabindex]:not([tabindex="-1"])',
+  )
+  if (!focusable || focusable.length === 0) return
+  const first = focusable[0]!
+  const last = focusable[focusable.length - 1]!
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault()
+    first.focus()
+  }
+}
 const { t } = useI18n()
 const tokenCopied = ref(false)
 const autoUpdate = ref(true)

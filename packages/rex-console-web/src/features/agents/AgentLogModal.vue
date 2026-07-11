@@ -2,14 +2,23 @@
   <Teleport to="body">
     <Transition name="modal">
     <div v-if="visible" class="modal-overlay" @click="$emit('close')">
-      <div class="log-panel" @click.stop>
+      <div
+        ref="dialogEl"
+        class="log-panel"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="titleId"
+        @click.stop
+        @keydown.tab="trapFocus"
+        @keydown.esc="$emit('close')"
+      >
         <div class="log-header">
-          <div class="log-title">
+          <div class="log-title" :id="titleId">
             <span style="color: var(--success)">●</span>
             <span>{{ t('ctx.logTitle') }}</span>
           </div>
-          <button class="modal-close" @click="$emit('close')">×</button>
-        </div>
+          <button ref="closeBtnEl" class="modal-close" @click="$emit('close')">×</button>
+          </div>
         <div class="log-toolbar">
           <button
             v-for="level in logLevels"
@@ -52,6 +61,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
+import { useId } from '@/composables/useId'
 import { useI18n } from 'vue-i18n'
 import { getAgentLogs, type AgentLogEntry } from '@/api/agent'
 
@@ -59,6 +69,36 @@ const props = defineProps<{ visible: boolean; agentId?: string }>()
 defineEmits<{ close: [] }>()
 
 const { t } = useI18n()
+const titleId = useId('agent-log-title')
+const dialogEl = ref<HTMLElement>()
+const closeBtnEl = ref<HTMLElement>()
+let previousActive: HTMLElement | null = null
+
+watch(() => props.visible, (v) => {
+  if (v) {
+    previousActive = document.activeElement as HTMLElement | null
+    nextTick(() => closeBtnEl.value?.focus())
+  } else if (previousActive) {
+    previousActive.focus()
+    previousActive = null
+  }
+})
+
+function trapFocus(e: KeyboardEvent) {
+  const focusable = dialogEl.value?.querySelectorAll<HTMLElement>(
+    'a, button, input, textarea, select, [tabindex]:not([tabindex="-1"])',
+  )
+  if (!focusable || focusable.length === 0) return
+  const first = focusable[0]!
+  const last = focusable[focusable.length - 1]!
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault()
+    first.focus()
+  }
+}
 
 const activeLevel = ref('all')
 const autoScroll = ref(true)

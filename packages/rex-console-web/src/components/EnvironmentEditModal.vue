@@ -8,6 +8,7 @@
       aria-modal="true"
       :aria-labelledby="titleId"
       @keydown.tab="trapFocus"
+      @keydown.esc="close"
     >
       <div class="modal-header">
         <span :id="titleId">{{ t('env.edit') }}</span>
