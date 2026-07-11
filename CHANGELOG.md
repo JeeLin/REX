@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.83.0] - 2026-07-10
+
+### Changed
+- 设计令牌重构：消除 phantom tokens、补齐语义令牌（--bg-panel/--bg-deep/--border/--text-*）与组件令牌层、间距/字阶、浅色主题兼容
+- 响应式布局优化：AppLayout 新增平板断点（768px–1024px），独立路由页（Terminal/SqlConsole/Files）100vh→100% 修复移动端溢出
+- 交互与反馈增强：模态框错误反馈不再静默、统一 Toast；共享 <Transition name="modal"> 统一组件动画
+- 无障碍补齐：所有模态框（ResourceEditModal/EnvironmentEditModal/ConfirmDialog/Agent 三弹窗）增加焦点陷阱、Esc 关闭、ARIA 角色（沿用既有内联 a11y 约定，不引入新抽象）
+
+### Added
+- 全局 reduced-motion 守卫已覆盖组件 keyframes 动画
+
+
 ## [0.82.0] - 2026-07-10
 
 ### Added
