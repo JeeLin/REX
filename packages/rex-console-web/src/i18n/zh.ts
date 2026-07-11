@@ -180,7 +180,7 @@ export default {
       tab: '标签页',
       layout: '布局',
       other: '其他',
-      newTab: '新建连接',
+      newConnection: '新建连接',
       closeTab: '关闭当前标签',
       nextTab: '切换下一个标签',
       prevTab: '切换上一个标签',
@@ -203,7 +203,7 @@ export default {
       settings: '设置',
     },
     actions: {
-      newTab: '新建连接',
+      newConnection: '新建连接',
       layoutSingle: '切换单面板布局',
       layoutLeftRight: '切换左右分屏',
       layoutTopBottom: '切换上下分屏',

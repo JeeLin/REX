@@ -481,8 +481,9 @@ provide('globalShortcutsEnabled', globalShortcutsEnabled)
 
 function onGlobalKeyDown(e: KeyboardEvent) {
   if (!globalShortcutsEnabled.value) return
-  const tag = (e.target as HTMLElement).tagName
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return
+  const el = e.target as HTMLElement
+  const tag = el.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable) return
 
   const ctrl = e.ctrlKey || e.metaKey
 

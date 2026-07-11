@@ -180,7 +180,7 @@ export default {
       tab: 'Tabs',
       layout: 'Layout',
       other: 'Other',
-      newTab: 'New connection',
+      newConnection: 'New connection',
       closeTab: 'Close current tab',
       nextTab: 'Next tab',
       prevTab: 'Previous tab',
@@ -203,7 +203,7 @@ export default {
       settings: 'Settings',
     },
     actions: {
-      newTab: 'New connection',
+      newConnection: 'New connection',
       layoutSingle: 'Switch to single panel',
       layoutLeftRight: 'Switch to left-right split',
       layoutTopBottom: 'Switch to top-bottom split',

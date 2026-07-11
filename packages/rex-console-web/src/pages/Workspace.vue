@@ -248,7 +248,7 @@
         <h2>⌨ {{ t('ws.shortcuts.title') }}</h2>
         <div class="shortcut-group">
           <div class="shortcut-group-title">{{ t('ws.shortcuts.tab') }}</div>
-          <div class="shortcut-row"><span class="desc">{{ t('ws.shortcuts.newTab') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>N</kbd></span></div>
+          <div class="shortcut-row"><span class="desc">{{ t('ws.shortcuts.newConnection') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>N</kbd></span></div>
           <div class="shortcut-row"><span class="desc">{{ t('ws.shortcuts.closeTab') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>W</kbd></span></div>
           <div class="shortcut-row"><span class="desc">{{ t('ws.shortcuts.nextTab') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>Tab</kbd></span></div>
           <div class="shortcut-row"><span class="desc">{{ t('ws.shortcuts.prevTab') }}</span><span class="keys"><kbd>Ctrl</kbd><span class="key-plus">+</span><kbd>Shift</kbd><span class="key-plus">+</span><kbd>Tab</kbd></span></div>
@@ -636,7 +636,7 @@ const NAV_ITEMS: CommandItem[] = [
 ]
 
 const ACTION_ITEMS: CommandItem[] = [
-  { id: 'action:new-connection', label: t('ws.actions.newTab'), category: 'action', icon: '+', shortcut: 'Ctrl+N' },
+  { id: 'action:new-connection', label: t('ws.actions.newConnection'), category: 'action', icon: '+', shortcut: 'Ctrl+N' },
   { id: 'action:layout-single', label: t('ws.actions.layoutSingle'), category: 'action', icon: '⬜', shortcut: 'Alt+1' },
   { id: 'action:layout-left-right', label: t('ws.actions.layoutLeftRight'), category: 'action', icon: '🔲', shortcut: 'Alt+2' },
   { id: 'action:layout-top-bottom', label: t('ws.actions.layoutTopBottom'), category: 'action', icon: '🔳', shortcut: 'Alt+3' },
@@ -737,8 +737,20 @@ function onShortcut(e: Event) {
 
 // ── Global Keyboard Shortcuts ──
 function onKeyDown(e: KeyboardEvent) {
-  const tag = (e.target as HTMLElement).tagName
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return
+  const el = e.target as HTMLElement
+  const tag = el.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable) return
+
+  // Escape always works — close overlays in priority order
+  if (e.key === 'Escape') {
+    if (showCommandPalette.value) { showCommandPalette.value = false; return }
+    if (showConnMenu.value) { showConnMenu.value = false; return }
+    if (showShortcutsPanel.value) { showShortcutsPanel.value = false; return }
+    return
+  }
+
+  // Suppress workspace shortcuts when any overlay is open
+  if (showCommandPalette.value || showConnMenu.value || showShortcutsPanel.value) return
 
   const ctrl = e.ctrlKey || e.metaKey
 
@@ -768,10 +780,6 @@ function onKeyDown(e: KeyboardEvent) {
   } else if (e.key === 'F11') {
     e.preventDefault()
     toggleFullscreen()
-  } else if (e.key === 'Escape') {
-    if (showCommandPalette.value) showCommandPalette.value = false
-    else if (showConnMenu.value) showConnMenu.value = false
-    else if (showShortcutsPanel.value) showShortcutsPanel.value = false
   }
 }
 
