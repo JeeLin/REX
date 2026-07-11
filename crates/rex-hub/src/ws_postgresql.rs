@@ -158,7 +158,7 @@ async fn handle_postgresql_socket(socket: WebSocket, resource_id: String, state:
         }).to_string();
         write_audit_log(
             &state.db, "postgresql_disconnect", "success",
-            &format!("PostgreSQL 断开连接"),
+            "PostgreSQL 断开连接",
             None, Some(&resource_id), None, Some(&detail), None,
         );
     }

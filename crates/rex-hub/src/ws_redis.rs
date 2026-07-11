@@ -281,7 +281,7 @@ async fn handle_redis_socket(socket: WebSocket, resource_id: String, state: Arc<
         }).to_string();
         write_audit_log(
             &state.db, "redis_disconnect", "success",
-            &format!("Redis 断开连接"),
+            "Redis 断开连接",
             None, Some(&resource_id), None, Some(&detail), None,
         );
     }

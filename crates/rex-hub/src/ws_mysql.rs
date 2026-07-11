@@ -157,7 +157,7 @@ async fn handle_mysql_socket(socket: WebSocket, resource_id: String, state: Arc<
         }).to_string();
         write_audit_log(
             &state.db, "mysql_disconnect", "success",
-            &format!("MySQL 断开连接"),
+            "MySQL 断开连接",
             None, Some(&resource_id), None, Some(&detail), None,
         );
     }

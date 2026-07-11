@@ -141,7 +141,7 @@ async fn handle_sqlite_socket(socket: WebSocket, resource_id: String, state: Arc
         }).to_string();
         write_audit_log(
             &state.db, "sqlite_disconnect", "success",
-            &format!("SQLite 断开连接"),
+            "SQLite 断开连接",
             None, Some(&resource_id), None, Some(&detail), None,
         );
     }

@@ -1224,7 +1224,6 @@ export default {
       ip: 'IP 地址',
       browser: '浏览器',
       authMethod: '认证方式',
-      ip: 'IP 地址',
       user_agent: '浏览器标识',
       reason: '原因',
       env_name: '环境名称',
