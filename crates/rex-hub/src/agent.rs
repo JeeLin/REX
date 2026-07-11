@@ -305,26 +305,43 @@ pub async fn list_agents(
             return Err(not_found("ENVIRONMENT_NOT_FOUND", "环境不存在"));
         }
 
+        // 获取环境的当前 token_hash
+        let env_token_hash: String = conn
+            .query_row(
+                "SELECT agent_token_hash FROM environments WHERE id = ?1",
+                rusqlite::params![env_id],
+                |row| row.get(0),
+            )
+            .unwrap_or_default();
+
         let mut stmt = conn
             .prepare(
-                "SELECT id, environment_id, name, version, os, arch, hostname, os_version, status, last_seen_at
+                "SELECT id, environment_id, name, token_hash, version, os, arch, hostname, os_version, status, last_seen_at
                  FROM agents WHERE environment_id = ?1 ORDER BY created_at DESC",
             )
             .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
 
         let agents = stmt
             .query_map(rusqlite::params![env_id], |row| {
+                let token_hash: String = row.get(3)?;
+                let mut status: String = row.get(9)?;
+
+                // 如果 agent 的 token_hash 与环境的 token_hash 不匹配，标记为 offline
+                if !env_token_hash.is_empty() && token_hash != env_token_hash {
+                    status = "offline".to_string();
+                }
+
                 Ok(AgentListItem {
                     id: row.get(0)?,
                     environment_id: row.get(1)?,
                     name: row.get(2)?,
-                    version: row.get(3)?,
-                    os: row.get(4)?,
-                    arch: row.get(5)?,
-                    hostname: row.get(6)?,
-                    os_version: row.get(7)?,
-                    status: row.get(8)?,
-                    last_seen_at: row.get(9)?,
+                    version: row.get(4)?,
+                    os: row.get(5)?,
+                    arch: row.get(6)?,
+                    hostname: row.get(7)?,
+                    os_version: row.get(8)?,
+                    status,
+                    last_seen_at: row.get(10)?,
                 })
             })
             .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?
