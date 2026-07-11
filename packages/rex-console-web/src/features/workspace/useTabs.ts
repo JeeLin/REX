@@ -160,13 +160,16 @@ export function useTabs() {
     }
   }
 
-  function reorderTab(fromId: string, toId: string) {
+  function reorderTab(fromId: string, toId: string, position?: 'before' | 'after') {
     const allTabs = tabs.value
     const srcIdx = allTabs.findIndex((t) => t.id === fromId)
     const dstIdx = allTabs.findIndex((t) => t.id === toId)
     if (srcIdx === -1 || dstIdx === -1 || srcIdx === dstIdx) return
     const [moved] = allTabs.splice(srcIdx, 1)
-    allTabs.splice(dstIdx, 0, moved!)
+    // After splice, if source was before destination, destination shifted left
+    const adjustedDstIdx = srcIdx < dstIdx ? dstIdx - 1 : dstIdx
+    const insertIdx = position === 'after' ? adjustedDstIdx + 1 : adjustedDstIdx
+    allTabs.splice(insertIdx, 0, moved!)
   }
 
   function disconnectAll() {

@@ -429,7 +429,11 @@ function onPanelDragOver(e: DragEvent, panelIndex: number) {
   dragOverPanel.value = panelIndex
 }
 
-function onPanelDragLeave() {
+function onPanelDragLeave(e: DragEvent) {
+  const related = e.relatedTarget as HTMLElement | null
+  const current = e.currentTarget as HTMLElement
+  // Don't clear if still inside the same panel (child element traversal)
+  if (related && current.contains(related)) return
   dragOverPanel.value = null
 }
 

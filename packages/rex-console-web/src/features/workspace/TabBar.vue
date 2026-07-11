@@ -59,7 +59,7 @@ const emit = defineEmits<{
 
 // ── Tab drag-and-drop ──
 const localDragId = ref<string | null>(null)
-
+const dropPosition = ref<'before' | 'after' | null>(null)
 function onDragStart(e: DragEvent, id: string) {
   localDragId.value = id
   emit('update:dragId', id)
@@ -70,6 +70,7 @@ function onDragStart(e: DragEvent, id: string) {
 
 function onDragEnd() {
   localDragId.value = null
+  dropPosition.value = null
   emit('update:dragId', null)
 }
 
@@ -81,8 +82,10 @@ function onDragOver(e: DragEvent, targetId: string) {
   el.classList.remove('drag-over-left', 'drag-over-right')
   if (e.clientX < midX) {
     el.classList.add('drag-over-left')
+    dropPosition.value = 'before'
   } else {
     el.classList.add('drag-over-right')
+    dropPosition.value = 'after'
   }
 }
 
@@ -94,8 +97,12 @@ function onDragLeave(e: DragEvent) {
 function onDrop(e: DragEvent, targetId: string) {
   const el = e.currentTarget as HTMLElement
   el.classList.remove('drag-over-left', 'drag-over-right')
-  if (!localDragId.value || localDragId.value === targetId) return
-  reorderTab(localDragId.value, targetId)
+  if (!localDragId.value || localDragId.value === targetId) {
+    dropPosition.value = null
+    return
+  }
+  reorderTab(localDragId.value, targetId, dropPosition.value ?? 'before')
+  dropPosition.value = null
 }
 
 function onTabDblclick(e: MouseEvent, tab: Tab) {
