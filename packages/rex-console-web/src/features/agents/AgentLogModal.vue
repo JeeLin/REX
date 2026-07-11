@@ -1,5 +1,6 @@
 <template>
   <Teleport to="body">
+    <Transition name="modal">
     <div v-if="visible" class="modal-overlay" @click="$emit('close')">
       <div class="log-panel" @click.stop>
         <div class="log-header">
@@ -45,6 +46,7 @@
         </div>
       </div>
     </div>
+    </Transition>
   </Teleport>
 </template>
 
@@ -174,13 +176,7 @@ watch(filteredLogs, async () => {
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-lg);
-  animation: modalIn 0.2s ease;
   overflow: hidden;
-}
-
-@keyframes modalIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
 }
 
 .log-header {

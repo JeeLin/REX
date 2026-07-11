@@ -1,5 +1,6 @@
 <template>
   <Teleport to="body">
+    <Transition name="modal">
     <div v-if="visible" class="modal-overlay" @click="$emit('close')">
       <div class="modal-panel" @click.stop>
         <div class="modal-header">
@@ -49,6 +50,7 @@
         </div>
       </div>
     </div>
+    </Transition>
   </Teleport>
 </template>
 
@@ -104,23 +106,6 @@ function copyToken() {
   justify-content: center;
   background: rgba(0,0,0,0.5);
   backdrop-filter: blur(4px);
-}
-
-.modal-panel {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  width: 520px;
-  max-width: 90vw;
-  max-height: 80vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow-lg);
-  animation: modalIn 0.2s ease;
-}
-
-@keyframes modalIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
 }
 
 .modal-header {
