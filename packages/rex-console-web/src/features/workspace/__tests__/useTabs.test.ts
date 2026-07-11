@@ -114,7 +114,8 @@ describe('useTabs', () => {
     addTab('S3', 'redis', `r-${Date.now()}-re3`)
     reorderTab(tabs.value[0]!.id, tabs.value[2]!.id)
     expect(tabs.value[0]!.name).toBe('S2')
-    expect(tabs.value[2]!.name).toBe('S1')
+    expect(tabs.value[1]!.name).toBe('S1')
+    expect(tabs.value[2]!.name).toBe('S3')
   })
 
   it('nextTab/prevTab cycle through tabs', () => {
