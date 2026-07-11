@@ -190,9 +190,16 @@ function clearEditor() {
 }
 
 // ── 自动连接 ─────────────────────────────────────────────
-onMounted(() => {
+// ── Auto-connect ──────────────────────────────────────────
+onMounted(async () => {
   if (!session.connected.value) {
-    session.connect().then(() => refreshTables()).catch(() => {})
+    try {
+      await session.connect()
+      await refreshTables()
+    } catch (err) {
+      // Error is already set in session.error.value
+      console.warn('SQLite auto-connect failed:', err)
+    }
   }
 })
 </script>

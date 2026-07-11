@@ -30,6 +30,10 @@ export function useSqliteSession(resourceId: () => string) {
   const error = ref<string | null>(null)
 
   let ws: WebSocket | null = null
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  let reconnectAttempts = 0
+  const MAX_RECONNECT_ATTEMPTS = 5
+  const INITIAL_RECONNECT_DELAY = 1000
   const pendingCommands = new Map<string, {
     resolve: (value: SqliteServerMsg) => void
     reject: (reason: Error) => void
@@ -38,45 +42,57 @@ export function useSqliteSession(resourceId: () => string) {
 
   // ── 连接 ────────────────────────────────────────────────
   function connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (ws) {
-        ws.close()
-        ws = null
+    const { promise, resolve, reject } = Promise.withResolvers<void>()
+
+    if (ws) {
+      ws.close()
+      ws = null
+    }
+
+    const token = localStorage.getItem('rex-token') || ''
+    const rid = resourceId()
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const url = `${protocol}//${location.host}/ws/sqlite/${rid}?token=${token}`
+
+    ws = new WebSocket(url)
+
+    ws.onopen = () => {
+      error.value = null
+    }
+
+    ws.onmessage = (event) => {
+      try {
+        const msg: SqliteServerMsg = JSON.parse(event.data)
+        handleServerMsg(msg, resolve)
+      } catch {
+        // ignore parse errors
+      }
+    }
+
+    ws.onerror = () => {
+      error.value = 'WebSocket connection error'
+      reject(new Error('WebSocket connection error'))
+    }
+
+    ws.onclose = () => {
+      connected.value = false
+      for (const [id, { reject: rej }] of pendingCommands) {
+        rej(new Error('connection closed'))
+        pendingCommands.delete(id)
       }
 
-      const token = localStorage.getItem('rex-token') || ''
-      const rid = resourceId()
-      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const url = `${protocol}//${location.host}/ws/sqlite/${rid}?token=${token}`
-
-      ws = new WebSocket(url)
-
-      ws.onopen = () => {
-        error.value = null
+      // Auto-reconnect with exponential backoff (only if not intentionally disconnected)
+      if (ws && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        const delay = INITIAL_RECONNECT_DELAY * Math.pow(2, reconnectAttempts)
+        reconnectAttempts++
+        error.value = `Connection lost, reconnecting in ${delay / 1000}s...`
+        reconnectTimer = setTimeout(() => {
+          connect().catch(() => {})
+        }, delay)
       }
+    }
 
-      ws.onmessage = (event) => {
-        try {
-          const msg: SqliteServerMsg = JSON.parse(event.data)
-          handleServerMsg(msg, resolve)
-        } catch {
-          // ignore parse errors
-        }
-      }
-
-      ws.onerror = () => {
-        error.value = 'WebSocket connection error'
-        reject(new Error('WebSocket connection error'))
-      }
-
-      ws.onclose = () => {
-        connected.value = false
-        for (const [id, { reject: rej }] of pendingCommands) {
-          rej(new Error('connection closed'))
-          pendingCommands.delete(id)
-        }
-      }
-    })
+    return promise
   }
 
   function handleServerMsg(
@@ -88,6 +104,7 @@ export function useSqliteSession(resourceId: () => string) {
         connected.value = true
         serverInfo.value = msg.server
         error.value = null
+        reconnectAttempts = 0  // Reset on successful connection
         connectResolve?.()
         break
       case 'response': {
@@ -118,6 +135,13 @@ export function useSqliteSession(resourceId: () => string) {
 
   // ── 断开连接 ────────────────────────────────────────────
   function disconnect() {
+    // Clear any pending reconnect timer
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+    reconnectAttempts = MAX_RECONNECT_ATTEMPTS  // Prevent auto-reconnect
+
     if (ws) {
       ws.close()
       ws = null
@@ -128,26 +152,28 @@ export function useSqliteSession(resourceId: () => string) {
 
   // ── 发送命令 ────────────────────────────────────────────
   function sendCommand(action: string, params: Record<string, unknown> = {}): Promise<SqliteServerMsg> {
-    return new Promise((resolve, reject) => {
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        reject(new Error('not connected'))
-        return
+    const { promise, resolve, reject } = Promise.withResolvers<SqliteServerMsg>()
+
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      reject(new Error('not connected'))
+      return promise
+    }
+
+    const id = `cmd-${++nextId}`
+    const msg = JSON.stringify({ type: 'command', id, action, params })
+
+    pendingCommands.set(id, { resolve, reject })
+    ws.send(msg)
+
+    // 30s timeout
+    setTimeout(() => {
+      if (pendingCommands.has(id)) {
+        pendingCommands.delete(id)
+        reject(new Error('command timeout'))
       }
+    }, 30000)
 
-      const id = `cmd-${++nextId}`
-      const msg = JSON.stringify({ type: 'command', id, action, params })
-
-      pendingCommands.set(id, { resolve, reject })
-      ws.send(msg)
-
-      // 30s 超时
-      setTimeout(() => {
-        if (pendingCommands.has(id)) {
-          pendingCommands.delete(id)
-          reject(new Error('command timeout'))
-        }
-      }, 30000)
-    })
+    return promise
   }
 
   // ── SQL 操作 ────────────────────────────────────────────
