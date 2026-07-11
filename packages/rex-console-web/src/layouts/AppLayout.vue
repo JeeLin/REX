@@ -1081,6 +1081,37 @@ onUnmounted(() => {
   }
 }
 
+/* ── 平板断点（768px–1024px） ── */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .main-content {
+    margin-left: 60px !important;
+  }
+
+  .sidebar {
+    width: 60px !important;
+    overflow: hidden;
+  }
+
+  .sidebar:not(.sidebar-collapsed) {
+    width: 180px !important;
+  }
+
+  .page-header {
+    flex-wrap: wrap;
+    gap: var(--sp-sm);
+  }
+
+  /* 网格调整 */
+  .env-grid,
+  .resource-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+
+  .stat-row {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+}
+
 /* ── 底部导航栏 ── */
 .bottom-nav {
   display: none;
