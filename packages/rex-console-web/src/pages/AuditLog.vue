@@ -119,7 +119,7 @@
                     <div class="detail-grid">
                       <template v-if="record.detail && Object.keys(record.detail).length > 0">
                         <template v-for="(value, key) in record.detail" :key="String(key)">
-                          <span class="detail-label">{{ String(key) }}</span>
+                          <span class="detail-label">{{ t(`audit.detail.${String(key)}`) || String(key) }}</span>
                           <span class="detail-value">{{ String(value) }}</span>
                         </template>
                       </template>

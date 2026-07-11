@@ -8,6 +8,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use crate::audit::write_audit_log;
 use crate::auth;
 use crate::helpers::{bad_request, err_resp, not_found, ApiResponse, ErrorResponse};
 use crate::resource::Resource;
@@ -241,6 +242,21 @@ async fn handle_terminal_socket(socket: WebSocket, session_id: String, state: Ar
     }
 
     tracing::info!(session_id = %session_id, "terminal session connected");
+    // Audit: SSH 连接成功
+    {
+        let resource_name = crate::ws_common::read_resource_name(&state, &resource_id).await;
+        let name = resource_name.as_deref().unwrap_or(&resource_id);
+        let detail = serde_json::json!({
+            "resource_id": resource_id,
+            "resource_name": name,
+            "protocol": "ssh",
+        }).to_string();
+        write_audit_log(
+            &state.db, "ssh_connect", "success",
+            &format!("SSH 连接成功「{}」", name),
+            None, Some(&resource_id), None, Some(&detail), None,
+        );
+    }
 
     // 5. 双向桥接：WebSocket ↔ SSH
     loop {
@@ -329,6 +345,18 @@ async fn handle_terminal_socket(socket: WebSocket, session_id: String, state: Ar
     // 6. 清理
     let _ = session.close().await;
     tracing::info!(session_id = %session_id, "terminal session closed");
+    // Audit: SSH 断开
+    {
+        let detail = serde_json::json!({
+            "resource_id": resource_id,
+            "session_id": session_id,
+        }).to_string();
+        write_audit_log(
+            &state.db, "ssh_disconnect", "success",
+            &format!("SSH 断开连接（会话 {}）", session_id),
+            None, Some(&resource_id), None, Some(&detail), None,
+        );
+    }
 }
 
 // ── 工具函数 ──────────────────────────────────────────────

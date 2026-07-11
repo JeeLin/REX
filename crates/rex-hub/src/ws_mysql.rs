@@ -6,6 +6,7 @@ use futures_util::StreamExt;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::audit::write_audit_log;
 use crate::auth;
 use crate::routes::AppState;
 use crate::ws_common::{self, WsClientMsg, WsQuery, WsServerMsg};
@@ -88,6 +89,23 @@ async fn handle_mysql_socket(socket: WebSocket, resource_id: String, state: Arc<
     }
 
     tracing::info!(resource_id = %resource_id, "mysql websocket connected");
+    // Audit: MySQL 连接成功
+    {
+        let resource_name = ws_common::read_resource_name(&state, &resource_id).await;
+        let name = resource_name.as_deref().unwrap_or(&resource_id);
+        let detail = serde_json::json!({
+            "resource_id": resource_id,
+            "resource_name": name,
+            "protocol": "mysql",
+            "host": mysql_config.host,
+            "port": mysql_config.port,
+        }).to_string();
+        write_audit_log(
+            &state.db, "mysql_connect", "success",
+            &format!("MySQL 连接成功「{}」", name),
+            None, Some(&resource_id), None, Some(&detail), None,
+        );
+    }
 
     // 6. 消息循环
     loop {
@@ -132,6 +150,17 @@ async fn handle_mysql_socket(socket: WebSocket, resource_id: String, state: Arc<
     // 7. 清理
     let _ = connector.close().await;
     tracing::info!(resource_id = %resource_id, "mysql websocket disconnected");
+    // Audit: MySQL 断开
+    {
+        let detail = serde_json::json!({
+            "resource_id": resource_id,
+        }).to_string();
+        write_audit_log(
+            &state.db, "mysql_disconnect", "success",
+            &format!("MySQL 断开连接"),
+            None, Some(&resource_id), None, Some(&detail), None,
+        );
+    }
 }
 
 // ── MySQL 操作分发 ────────────────────────────────────────

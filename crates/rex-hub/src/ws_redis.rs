@@ -6,6 +6,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use crate::audit::write_audit_log;
 use crate::auth;
 use crate::routes::AppState;
 use rex_redis::RedisConnector;
@@ -137,6 +138,23 @@ async fn handle_redis_socket(socket: WebSocket, resource_id: String, state: Arc<
     }
 
     tracing::info!(resource_id = %resource_id, "redis websocket connected");
+    // Audit: Redis 连接成功
+    {
+        let resource_name = crate::ws_common::read_resource_name(&state, &resource_id).await;
+        let name = resource_name.as_deref().unwrap_or(&resource_id);
+        let detail = serde_json::json!({
+            "resource_id": resource_id,
+            "resource_name": name,
+            "protocol": "redis",
+            "host": redis_config.host,
+            "port": redis_config.port,
+        }).to_string();
+        write_audit_log(
+            &state.db, "redis_connect", "success",
+            &format!("Redis 连接成功「{}」", name),
+            None, Some(&resource_id), None, Some(&detail), None,
+        );
+    }
 
     // 6. 消息循环
     loop {
@@ -256,6 +274,17 @@ async fn handle_redis_socket(socket: WebSocket, resource_id: String, state: Arc<
     // 7. 清理
     let _ = connector.close().await;
     tracing::info!(resource_id = %resource_id, "redis websocket disconnected");
+    // Audit: Redis 断开
+    {
+        let detail = serde_json::json!({
+            "resource_id": resource_id,
+        }).to_string();
+        write_audit_log(
+            &state.db, "redis_disconnect", "success",
+            &format!("Redis 断开连接"),
+            None, Some(&resource_id), None, Some(&detail), None,
+        );
+    }
 }
 
 // ── 工具函数 ──────────────────────────────────────────────

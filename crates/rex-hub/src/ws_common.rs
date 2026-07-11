@@ -92,6 +92,20 @@ pub async fn read_resource_config(state: &Arc<AppState>, resource_id: &str) -> R
         _ => Err(()),
     }
 }
+/// 从数据库读取资源名称
+pub async fn read_resource_name(state: &Arc<AppState>, resource_id: &str) -> Option<String> {
+    let db = state.db.clone();
+    let rid = resource_id.to_string();
+    tokio::task::spawn_blocking(move || {
+        db.pool.get().ok().and_then(|conn| {
+            conn.query_row(
+                "SELECT name FROM resources WHERE id = ?1",
+                rusqlite::params![rid],
+                |row| row.get::<_, String>(0),
+            ).ok()
+        })
+    }).await.unwrap_or(None)
+}
 
 // ── Tests ──────────────────────────────────────────────────
 

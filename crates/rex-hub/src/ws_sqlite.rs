@@ -1,4 +1,5 @@
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use crate::audit::write_audit_log;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -73,6 +74,22 @@ async fn handle_sqlite_socket(socket: WebSocket, resource_id: String, state: Arc
     }
 
     tracing::info!(resource_id = %resource_id, "sqlite websocket connected");
+    // Audit: SQLite 连接成功
+    {
+        let resource_name = crate::ws_common::read_resource_name(&state, &resource_id).await;
+        let name = resource_name.as_deref().unwrap_or(&resource_id);
+        let detail = serde_json::json!({
+            "resource_id": resource_id,
+            "resource_name": name,
+            "protocol": "sqlite",
+            "db_path": sqlite_config.db_path,
+        }).to_string();
+        write_audit_log(
+            &state.db, "sqlite_connect", "success",
+            &format!("SQLite 连接成功「{}」", name),
+            None, Some(&resource_id), None, Some(&detail), None,
+        );
+    }
 
     // 6. 消息循环
     loop {
@@ -117,6 +134,17 @@ async fn handle_sqlite_socket(socket: WebSocket, resource_id: String, state: Arc
     // 7. 清理
     let _ = connector.close().await;
     tracing::info!(resource_id = %resource_id, "sqlite websocket disconnected");
+    // Audit: SQLite 断开
+    {
+        let detail = serde_json::json!({
+            "resource_id": resource_id,
+        }).to_string();
+        write_audit_log(
+            &state.db, "sqlite_disconnect", "success",
+            &format!("SQLite 断开连接"),
+            None, Some(&resource_id), None, Some(&detail), None,
+        );
+    }
 }
 
 /// 根据错误类型返回用户可读的 SQLite 连接错误消息
