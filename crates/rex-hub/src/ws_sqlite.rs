@@ -52,7 +52,8 @@ async fn handle_sqlite_socket(socket: WebSocket, resource_id: String, state: Arc
     // 3. 建立 SQLite 连接
     let mut connector = rex_sqlite::SqliteConnectorImpl::new(sqlite_config.clone());
     if let Err(e) = connector.connect().await {
-        let _ = ws_common::send_ws_error(&mut ws_write, &format!("SQLite 连接失败: {e}")).await;
+        let error_msg = classify_sqlite_error(&e, &sqlite_config.db_path);
+        let _ = ws_common::send_ws_error(&mut ws_write, &error_msg).await;
         return;
     }
 
@@ -116,6 +117,30 @@ async fn handle_sqlite_socket(socket: WebSocket, resource_id: String, state: Arc
     // 7. 清理
     let _ = connector.close().await;
     tracing::info!(resource_id = %resource_id, "sqlite websocket disconnected");
+}
+
+/// 根据错误类型返回用户可读的 SQLite 连接错误消息
+fn classify_sqlite_error(error: &anyhow::Error, db_path: &str) -> String {
+    let error_str = error.to_string().to_lowercase();
+
+    // 检查是否是 SQLite 特定错误
+    if error_str.contains("unable to open database file") {
+        format!("数据库文件不存在: {db_path}")
+    } else if error_str.contains("permission denied") || error_str.contains("access denied") {
+        format!("没有权限读取文件: {db_path}")
+    } else if error_str.contains("database is locked") {
+        "数据库被其他进程锁定".to_string()
+    } else if error_str.contains("readonly database") || error_str.contains("read-only") {
+        format!("数据库文件是只读的: {db_path}")
+    } else if error_str.contains("i/o error") || error_str.contains("disk i/o") {
+        format!("数据库文件 I/O 错误: {db_path}")
+    } else if error_str.contains("not a database") || error_str.contains("malformed") {
+        format!("数据库文件格式错误: {db_path}")
+    } else if error_str.contains("sqlite") {
+        format!("SQLite 错误: {error}")
+    } else {
+        format!("连接失败: {error}")
+    }
 }
 
 // ── SQLite 操作分发 ────────────────────────────────────────
