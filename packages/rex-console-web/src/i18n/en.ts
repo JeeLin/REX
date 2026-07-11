@@ -412,6 +412,7 @@ export default {
     directDesc: 'Hub connects directly to target servers',
     createBtn: 'Create Environment',
     save: 'Save Changes',
+    saveFailed: 'Failed to save environment',
     deleteTitle: 'Delete Environment?',
     deleteConfirm: 'Deleting this environment will also delete all resources under it. This action cannot be undone.',
     resources: 'Resources',

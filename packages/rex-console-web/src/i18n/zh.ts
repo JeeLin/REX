@@ -412,6 +412,7 @@ export default {
     directDesc: 'Hub 直接连接目标服务器',
     createBtn: '创建环境',
     save: '保存更改',
+    saveFailed: '保存环境失败',
     deleteTitle: '删除环境？',
     deleteConfirm: '删除环境将同时删除该环境下的所有资源，此操作不可撤销。',
     resources: '资源',
