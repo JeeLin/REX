@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.84.0] - 2026-07-11
+
+### Added
+- 审计日志详情丰富化：REST API 操作（登录、环境 CRUD、资源 CRUD）的 detail_json 字段现在包含结构化上下文信息（IP、User-Agent、资源名称、协议、连接信息等）
+- WebSocket 层操作审计：SSH/MySQL/PostgreSQL/SQLite/Redis 连接与断开事件写入审计日志
+- 前端审计详情展示优化：操作类型和详情键使用中文标签显示
+- 新增审计类型翻译：ssh_connect、ssh_disconnect、mysql_connect、mysql_disconnect、postgresql_connect、postgresql_disconnect、sqlite_connect、sqlite_disconnect、redis_connect、redis_disconnect
+
+### Fixed
+- 审计日志操作值显示英文而非中文的问题（AGENTS.md #10）：通过 i18n 翻译表解决
+- 审计日志详情无实际价值的问题（AGENTS.md #11）：通过丰富 detail_json 解决
+- 删除环境/资源时审计日志不包含名称的问题：在删除前查询记录名称
+
 ## [0.83.1] - 2026-07-11
 
 ### Fixed
