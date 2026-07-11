@@ -213,6 +213,10 @@ pub fn app_with_static(
                 get(crate::transfer::list_transfers).post(crate::transfer::create_transfer),
             )
             .route(
+                "/api/transfers/stats",
+                get(crate::transfer::get_transfer_stats),
+            )
+            .route(
                 "/api/transfers/:id",
                 get(crate::transfer::get_transfer).delete(crate::transfer::cancel_transfer),
             )

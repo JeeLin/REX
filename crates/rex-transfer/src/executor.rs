@@ -26,6 +26,9 @@ pub async fn execute_transfer(
         "transfer started"
     );
 
+    // Acquire semaphore permit for concurrency control
+    let _permit = manager.acquire_permit().await;
+
     // 设为 Running
     if let Err(e) = manager.set_status(&task_id, TransferStatus::Running).await {
         warn!(task_id = %task_id, error = %e, "failed to set status to Running");
@@ -63,6 +66,7 @@ pub async fn execute_transfer(
                 .await;
         }
     }
+    // _permit is dropped here, releasing the semaphore slot
 }
 
 /// 实际执行传输逻辑

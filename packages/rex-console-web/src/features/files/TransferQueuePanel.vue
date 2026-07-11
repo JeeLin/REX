@@ -3,6 +3,9 @@
     <div class="transfer-panel-header" @click="expanded = !expanded">
       <span class="panel-title">{{ t('files.transferQueue') }}</span>
       <span v-if="activeCount > 0" class="panel-badge">{{ activeCount }}</span>
+      <span v-if="stats" class="panel-stats">
+        {{ stats.active_transfers }}/{{ stats.max_concurrent }}
+      </span>
       <span class="panel-toggle">{{ expanded ? '▾' : '▴' }}</span>
     </div>
     <div v-if="expanded" class="transfer-panel-body">
@@ -23,10 +26,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TransferItem from './TransferItem.vue'
-import type { TransferTask } from '@/api/transfer'
+import type { TransferTask, TransferStats } from '@/api/transfer'
+import { getTransferStats } from '@/api/transfer'
 
 const { t } = useI18n()
 const props = defineProps<{
@@ -37,10 +41,30 @@ const props = defineProps<{
 defineEmits<{ cancel: [id: string]; remove: [id: string] }>()
 
 const expanded = ref(true)
+const stats = ref<TransferStats | null>(null)
 
 const activeCount = computed(() =>
   props.tasks.filter(t => t.status === 'pending' || t.status === 'running').length,
 )
+
+// Poll stats every 2 seconds
+let statsInterval: ReturnType<typeof setInterval> | null = null
+
+onMounted(() => {
+  const fetchStats = async () => {
+    try {
+      stats.value = await getTransferStats()
+    } catch {
+      // ignore
+    }
+  }
+  fetchStats()
+  statsInterval = setInterval(fetchStats, 2000)
+})
+
+onUnmounted(() => {
+  if (statsInterval) clearInterval(statsInterval)
+})
 </script>
 
 <style scoped>
@@ -78,6 +102,15 @@ const activeCount = computed(() =>
   padding: 1px 6px;
   border-radius: 10px;
   font-weight: 600;
+}
+
+.panel-stats {
+  font-size: var(--fs-xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-hover);
 }
 
 .panel-toggle {

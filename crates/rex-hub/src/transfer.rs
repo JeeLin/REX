@@ -54,6 +54,15 @@ impl From<rex_transfer::task::TransferTask> for TransferTaskResponse {
     }
 }
 
+/// 传输统计响应
+#[derive(Debug, serde::Serialize)]
+pub struct TransferStatsResponse {
+    pub max_concurrent: usize,
+    pub available_permits: usize,
+    pub active_transfers: usize,
+    pub pending_transfers: usize,
+}
+
 /// POST /api/transfers — 创建传输任务并启动执行
 pub async fn create_transfer(
     State(state): State<Arc<AppState>>,
@@ -127,6 +136,35 @@ pub async fn list_transfers(
     let responses: Vec<TransferTaskResponse> = tasks.into_iter().map(Into::into).collect();
 
     Ok(Json(ApiResponse { data: responses }))
+}
+
+/// GET /api/transfers/stats — 获取传输统计信息
+pub async fn get_transfer_stats(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<ApiResponse<TransferStatsResponse>>, (StatusCode, Json<ErrorResponse>)> {
+    let transfer_state = state
+        .transfer
+        .as_ref()
+        .ok_or_else(|| err_resp("INTERNAL_ERROR", "传输管理器未初始化"))?;
+
+    let tasks = transfer_state.manager.list_tasks().await;
+    let active_transfers = tasks
+        .iter()
+        .filter(|t| t.status == TransferStatus::Running)
+        .count();
+    let pending_transfers = tasks
+        .iter()
+        .filter(|t| t.status == TransferStatus::Pending)
+        .count();
+
+    Ok(Json(ApiResponse {
+        data: TransferStatsResponse {
+            max_concurrent: transfer_state.manager.max_concurrent(),
+            available_permits: transfer_state.manager.available_permits(),
+            active_transfers,
+            pending_transfers,
+        },
+    }))
 }
 
 /// GET /api/transfers/:id — 获取传输任务详情

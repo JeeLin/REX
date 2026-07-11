@@ -44,3 +44,15 @@ export function cancelTransfer(id: string): Promise<void> {
 export function removeTransfer(id: string): Promise<void> {
   return client.delete(`/transfers/${id}/remove`).then(() => {})
 }
+
+
+export interface TransferStats {
+  max_concurrent: number
+  available_permits: number
+  active_transfers: number
+  pending_transfers: number
+}
+
+export function getTransferStats(): Promise<TransferStats> {
+  return client.get('/transfers/stats').then(r => r.data.data)
+}

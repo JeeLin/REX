@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, Semaphore};
 use tracing::info;
 
 // ── 传输端点 ──────────────────────────────────────────────
@@ -135,13 +135,40 @@ pub enum TransferEvent {
 /// 内存中的传输任务管理器
 pub struct TransferManager {
     tasks: RwLock<Vec<Arc<RwLock<TransferTask>>>>,
+    semaphore: Arc<Semaphore>,
+    max_concurrent: usize,
 }
 
 impl TransferManager {
     pub fn new() -> Self {
+        Self::with_concurrency(3)
+    }
+
+    pub fn with_concurrency(max_concurrent: usize) -> Self {
         Self {
             tasks: RwLock::new(Vec::new()),
+            semaphore: Arc::new(Semaphore::new(max_concurrent)),
+            max_concurrent,
         }
+    }
+
+    /// 获取最大并发数
+    pub fn max_concurrent(&self) -> usize {
+        self.max_concurrent
+    }
+
+    /// 获取当前可用的并发槽位数
+    pub fn available_permits(&self) -> usize {
+        self.semaphore.available_permits()
+    }
+
+    /// 获取一个传输许可（用于并发控制）
+    pub async fn acquire_permit(&self) -> tokio::sync::OwnedSemaphorePermit {
+        self.semaphore
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("semaphore closed unexpectedly")
     }
 
     /// 创建新的传输任务，返回任务 ID
