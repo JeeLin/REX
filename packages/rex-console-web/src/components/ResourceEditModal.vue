@@ -266,6 +266,9 @@ watch(() => props.visible, async (v) => {
     const resource = await getResource(props.envId, props.resourceId)
     form.protocol = resource.protocol
     form.name = resource.name
+    loadResource(parseConfigJson(resource.config_json), resource.protocol)
+    const tags = await getResourceTags(resource.id)
+    form.tags = tags.map(t => t.id)
   } catch (err) {
     toastError(t('resource.loadFailed') || '加载失败')
     console.error('Failed to load resource:', err)
@@ -313,6 +316,9 @@ async function submitUpdate() {
       name: form.name,
       config_json: buildConfigJson(),
     })
+    await setResourceTags(props.resourceId, form.tags)
+    fetchEnvs()
+    close()
   } catch (err) {
     toastError(t('resource.saveFailed') || '保存失败')
     console.error('Failed to update resource:', err)
