@@ -699,6 +699,9 @@ export default {
     result: {
       copy: '复制',
       copySuccess: '已复制到剪贴板',
+      selected: '已选择 {count} 行',
+      batchUpdate: '批量 UPDATE',
+      batchDelete: '批量 DELETE',
       ctx: {
         copyRow: '复制行',
         copyCell: '复制单元格',

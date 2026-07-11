@@ -32,6 +32,13 @@
       <table v-if="result && result.rows.length > 0" class="results-table">
         <thead>
           <tr>
+            <th>
+              <input
+                type="checkbox"
+                :checked="result && selectedRows.size === paginatedRows.length && paginatedRows.length > 0"
+                @change="toggleSelectAll"
+              />
+            </th>
             <th>#</th>
             <th
               v-for="(col, colIdx) in result.columns"
@@ -47,17 +54,36 @@
         <tbody>
           <tr
             v-for="(row, i) in paginatedRows" :key="i"
-            :class="{ 'row-selected': selectedRow === i }"
+            :class="{ 'row-selected': selectedRow === i, 'row-checked': selectedRows.has((currentPage - 1) * pageSize + i) }"
             @click="handleRowClick(i)"
             @contextmenu.prevent="handleRowContextMenu($event, i)"
           >
+            <td class="checkbox-cell">
+              <input
+                type="checkbox"
+                :checked="selectedRows.has((currentPage - 1) * pageSize + i)"
+                @click.stop="toggleRowSelect((currentPage - 1) * pageSize + i)"
+              />
+            </td>
             <td class="text-muted">{{ i + 1 + (currentPage - 1) * pageSize }}</td>
             <td
               v-for="(cell, j) in row" :key="j"
               :class="cellClass(cell)"
               @contextmenu.prevent="handleCellContextMenu($event, i, j)"
+              @dblclick="handleCellDblClick(i, j, cell)"
             >
-              {{ formatCell(cell) }}
+              <template v-if="editingCell && editingCell.row === i && editingCell.col === j">
+                <input
+                  v-model="editValue"
+                  class="cell-editor"
+                  @keydown.enter.prevent="saveEdit"
+                  @keydown.escape="cancelEdit"
+                  @blur="saveEdit"
+                />
+              </template>
+              <template v-else>
+                {{ formatCell(cell) }}
+              </template>
             </td>
           </tr>
         </tbody>
@@ -132,6 +158,16 @@
         >
           ⬇ JSON
         </button>
+        <template v-if="selectedRows.size > 0">
+          <div class="results-sep"></div>
+          <span class="selected-count">{{ t('sql.result.selected', { count: selectedRows.size }) }}</span>
+          <button class="btn btn-ghost btn-xs" @click="emit('generateSql', generateBatchUpdateSql())">
+            ✏ {{ t('sql.result.batchUpdate') }}
+          </button>
+          <button class="btn btn-ghost btn-xs" @click="emit('generateSql', generateBatchDeleteSql())">
+            🗑 {{ t('sql.result.batchDelete') }}
+          </button>
+        </template>
       </div>
     </div>
 
@@ -201,6 +237,87 @@ const selectedRow = ref<number | null>(null)
 
 function handleRowClick(rowIdx: number) {
   selectedRow.value = selectedRow.value === rowIdx ? null : rowIdx
+}
+
+// ── Inline cell editing ──
+const editingCell = ref<{ row: number; col: number } | null>(null)
+const editValue = ref('')
+
+function handleCellDblClick(rowIdx: number, colIdx: number, cell: unknown) {
+  editingCell.value = { row: rowIdx, col: colIdx }
+  editValue.value = cell === null ? 'NULL' : String(cell)
+}
+
+function cancelEdit() {
+  editingCell.value = null
+  editValue.value = ''
+}
+
+function saveEdit() {
+  if (!editingCell.value || !props.result || !props.resourceId) {
+    cancelEdit()
+    return
+  }
+  const { row, col } = editingCell.value
+  const colName = props.result.columns[col]?.name
+  if (!colName) {
+    cancelEdit()
+    return
+  }
+  const cellValue = props.result.rows[row]?.[col]
+  if (cellValue === undefined) {
+    cancelEdit()
+    return
+  }
+  // Generate UPDATE SQL
+  const newVal = editValue.value === 'NULL' ? 'NULL' : `'${editValue.value.replace(/'/g, "''")}'`
+  const oldVal = cellValue === null ? 'IS NULL' : `= '${String(cellValue).replace(/'/g, "''")}'`
+  const sql = `UPDATE table_name SET ${colName} = ${newVal} WHERE ${colName} ${oldVal};`
+  emit('generateSql', sql)
+}
+
+// ── Batch operations ──
+const selectedRows = ref<Set<number>>(new Set())
+
+function toggleRowSelect(rowIdx: number) {
+  if (selectedRows.value.has(rowIdx)) {
+    selectedRows.value.delete(rowIdx)
+  } else {
+    selectedRows.value.add(rowIdx)
+  }
+  selectedRows.value = new Set(selectedRows.value)
+}
+
+function toggleSelectAll() {
+  if (!props.result) return
+  if (selectedRows.value.size === paginatedRows.value.length) {
+    selectedRows.value = new Set()
+  } else {
+    const allRowIndices = paginatedRows.value.map((_, i) => (currentPage.value - 1) * pageSize.value + i)
+    selectedRows.value = new Set(allRowIndices)
+  }
+}
+
+function generateBatchDeleteSql(): string {
+  if (!props.result || selectedRows.value.size === 0) return ''
+  const { columns, rows } = props.result
+  const pkCol = columns[0]?.name
+  if (!pkCol) return ''
+  const conditions = Array.from(selectedRows.value)
+    .map(i => `${pkCol} = ${rows[i]?.[0]}`)
+    .join(' OR ')
+  return `DELETE FROM table_name WHERE ${conditions};`
+}
+
+function generateBatchUpdateSql(): string {
+  if (!props.result || selectedRows.value.size === 0) return ''
+  const { columns, rows } = props.result
+  const pkCol = columns[0]?.name
+  if (!pkCol) return ''
+  const conditions = Array.from(selectedRows.value)
+    .map(i => `${pkCol} = ${rows[i]?.[0]}`)
+    .join(' OR ')
+  return `UPDATE table_name SET column = value WHERE ${conditions};`
 }
 
 // Explain tab state
@@ -465,6 +582,34 @@ function handleRowContextMenu(event: MouseEvent, paginatedIdx: number) {
   font-size: 10px;
 }
 
+.checkbox-cell {
+  width: 36px;
+  text-align: center;
+  padding: var(--sp-sm) !important;
+}
+
+.checkbox-cell input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.row-checked td {
+  background: rgba(232, 145, 45, 0.08) !important;
+}
+
+.results-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 var(--sp-sm);
+}
+
+.selected-count {
+  font-size: var(--fs-xs);
+  color: var(--accent);
+  margin-right: var(--sp-xs);
+}
+
 .results-table td {
   padding: var(--sp-sm) var(--sp-md);
   border-bottom: 1px solid var(--border);
@@ -498,6 +643,23 @@ function handleRowContextMenu(event: MouseEvent, paginatedIdx: number) {
 
 .text-muted {
   color: var(--text-muted);
+}
+
+.cell-editor {
+  width: 100%;
+  min-width: 80px;
+  padding: 2px 4px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  background: var(--bg-deep);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--text);
+  outline: none;
+}
+
+.cell-editor:focus {
+  box-shadow: 0 0 0 2px rgba(232, 145, 45, 0.2);
 }
 
 .results-empty {

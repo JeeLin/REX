@@ -699,6 +699,9 @@ export default {
     result: {
       copy: 'Copy',
       copySuccess: 'Copied to clipboard',
+      selected: '{count} rows selected',
+      batchUpdate: 'Batch UPDATE',
+      batchDelete: 'Batch DELETE',
       ctx: {
         copyRow: 'Copy Row',
         copyCell: 'Copy Cell',
