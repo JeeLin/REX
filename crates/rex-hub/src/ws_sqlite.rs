@@ -1,5 +1,5 @@
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use crate::audit::write_audit_log;
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -83,11 +83,18 @@ async fn handle_sqlite_socket(socket: WebSocket, resource_id: String, state: Arc
             "resource_name": name,
             "protocol": "sqlite",
             "db_path": sqlite_config.db_path,
-        }).to_string();
+        })
+        .to_string();
         write_audit_log(
-            &state.db, "sqlite_connect", "success",
+            &state.db,
+            "sqlite_connect",
+            "success",
             &format!("SQLite 连接成功「{}」", name),
-            None, Some(&resource_id), None, Some(&detail), None,
+            None,
+            Some(&resource_id),
+            None,
+            Some(&detail),
+            None,
         );
     }
 
@@ -138,11 +145,18 @@ async fn handle_sqlite_socket(socket: WebSocket, resource_id: String, state: Arc
     {
         let detail = serde_json::json!({
             "resource_id": resource_id,
-        }).to_string();
+        })
+        .to_string();
         write_audit_log(
-            &state.db, "sqlite_disconnect", "success",
+            &state.db,
+            "sqlite_disconnect",
+            "success",
             "SQLite 断开连接",
-            None, Some(&resource_id), None, Some(&detail), None,
+            None,
+            Some(&resource_id),
+            None,
+            Some(&detail),
+            None,
         );
     }
 }

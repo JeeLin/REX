@@ -100,11 +100,18 @@ async fn handle_postgresql_socket(socket: WebSocket, resource_id: String, state:
             "protocol": "postgresql",
             "host": pg_config.host,
             "port": pg_config.port,
-        }).to_string();
+        })
+        .to_string();
         write_audit_log(
-            &state.db, "postgresql_connect", "success",
+            &state.db,
+            "postgresql_connect",
+            "success",
             &format!("PostgreSQL 连接成功「{}」", name),
-            None, Some(&resource_id), None, Some(&detail), None,
+            None,
+            Some(&resource_id),
+            None,
+            Some(&detail),
+            None,
         );
     }
 
@@ -155,11 +162,18 @@ async fn handle_postgresql_socket(socket: WebSocket, resource_id: String, state:
     {
         let detail = serde_json::json!({
             "resource_id": resource_id,
-        }).to_string();
+        })
+        .to_string();
         write_audit_log(
-            &state.db, "postgresql_disconnect", "success",
+            &state.db,
+            "postgresql_disconnect",
+            "success",
             "PostgreSQL 断开连接",
-            None, Some(&resource_id), None, Some(&detail), None,
+            None,
+            Some(&resource_id),
+            None,
+            Some(&detail),
+            None,
         );
     }
 }

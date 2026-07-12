@@ -102,9 +102,12 @@ pub async fn read_resource_name(state: &Arc<AppState>, resource_id: &str) -> Opt
                 "SELECT name FROM resources WHERE id = ?1",
                 rusqlite::params![rid],
                 |row| row.get::<_, String>(0),
-            ).ok()
+            )
+            .ok()
         })
-    }).await.unwrap_or(None)
+    })
+    .await
+    .unwrap_or(None)
 }
 
 // ── Tests ──────────────────────────────────────────────────

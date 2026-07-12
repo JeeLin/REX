@@ -185,12 +185,17 @@ pub async fn update_resource(
 
     // Query old name before closure for audit detail
     let old_name = {
-        let conn = state.db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+        let conn = state
+            .db
+            .pool
+            .get()
+            .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
         conn.query_row(
             "SELECT name FROM resources WHERE id = ?1 AND environment_id = ?2",
             rusqlite::params![id, env_id],
             |row| row.get::<_, String>(0),
-        ).ok()
+        )
+        .ok()
     };
     let resource = tokio::task::spawn_blocking(move || {
         let conn = db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
@@ -269,12 +274,17 @@ pub async fn delete_resource(
 
     // Query resource name before deleting for audit detail
     let res_info = {
-        let conn = state.db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+        let conn = state
+            .db
+            .pool
+            .get()
+            .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
         conn.query_row(
             "SELECT name, protocol FROM resources WHERE id = ?1 AND environment_id = ?2",
             rusqlite::params![id, env_id],
             |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-        ).ok()
+        )
+        .ok()
     };
 
     let _result = tokio::task::spawn_blocking(
@@ -592,7 +602,13 @@ pub async fn upload_ssh_key(
             conn.query_row(
                 "SELECT id, protocol, name FROM resources WHERE id = ?1 AND environment_id = ?2",
                 rusqlite::params![id, env_id],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?)),
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
             )
             .map_err(|_| not_found("RESOURCE_NOT_FOUND", "资源不存在"))
         })

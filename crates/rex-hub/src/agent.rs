@@ -870,7 +870,9 @@ mod tests {
     #[test]
     fn is_last_seen_fresh_recent() {
         // 刚刚上报的心跳应判定为新鲜
-        let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+        let now = chrono::Utc::now()
+            .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+            .to_string();
         assert!(is_last_seen_fresh(&now));
     }
 
@@ -882,7 +884,6 @@ mod tests {
             .to_string();
         assert!(!is_last_seen_fresh(&stale));
     }
-
 }
 
 // ── HTTP Handler Tests ─────────────────────────────────────

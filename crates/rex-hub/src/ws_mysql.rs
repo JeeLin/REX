@@ -99,11 +99,18 @@ async fn handle_mysql_socket(socket: WebSocket, resource_id: String, state: Arc<
             "protocol": "mysql",
             "host": mysql_config.host,
             "port": mysql_config.port,
-        }).to_string();
+        })
+        .to_string();
         write_audit_log(
-            &state.db, "mysql_connect", "success",
+            &state.db,
+            "mysql_connect",
+            "success",
             &format!("MySQL 连接成功「{}」", name),
-            None, Some(&resource_id), None, Some(&detail), None,
+            None,
+            Some(&resource_id),
+            None,
+            Some(&detail),
+            None,
         );
     }
 
@@ -154,11 +161,18 @@ async fn handle_mysql_socket(socket: WebSocket, resource_id: String, state: Arc<
     {
         let detail = serde_json::json!({
             "resource_id": resource_id,
-        }).to_string();
+        })
+        .to_string();
         write_audit_log(
-            &state.db, "mysql_disconnect", "success",
+            &state.db,
+            "mysql_disconnect",
+            "success",
             "MySQL 断开连接",
-            None, Some(&resource_id), None, Some(&detail), None,
+            None,
+            Some(&resource_id),
+            None,
+            Some(&detail),
+            None,
         );
     }
 }

@@ -148,11 +148,18 @@ async fn handle_redis_socket(socket: WebSocket, resource_id: String, state: Arc<
             "protocol": "redis",
             "host": redis_config.host,
             "port": redis_config.port,
-        }).to_string();
+        })
+        .to_string();
         write_audit_log(
-            &state.db, "redis_connect", "success",
+            &state.db,
+            "redis_connect",
+            "success",
             &format!("Redis 连接成功「{}」", name),
-            None, Some(&resource_id), None, Some(&detail), None,
+            None,
+            Some(&resource_id),
+            None,
+            Some(&detail),
+            None,
         );
     }
 
@@ -278,11 +285,18 @@ async fn handle_redis_socket(socket: WebSocket, resource_id: String, state: Arc<
     {
         let detail = serde_json::json!({
             "resource_id": resource_id,
-        }).to_string();
+        })
+        .to_string();
         write_audit_log(
-            &state.db, "redis_disconnect", "success",
+            &state.db,
+            "redis_disconnect",
+            "success",
             "Redis 断开连接",
-            None, Some(&resource_id), None, Some(&detail), None,
+            None,
+            Some(&resource_id),
+            None,
+            Some(&detail),
+            None,
         );
     }
 }

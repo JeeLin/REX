@@ -250,11 +250,18 @@ async fn handle_terminal_socket(socket: WebSocket, session_id: String, state: Ar
             "resource_id": resource_id,
             "resource_name": name,
             "protocol": "ssh",
-        }).to_string();
+        })
+        .to_string();
         write_audit_log(
-            &state.db, "ssh_connect", "success",
+            &state.db,
+            "ssh_connect",
+            "success",
             &format!("SSH 连接成功「{}」", name),
-            None, Some(&resource_id), None, Some(&detail), None,
+            None,
+            Some(&resource_id),
+            None,
+            Some(&detail),
+            None,
         );
     }
 
@@ -350,11 +357,18 @@ async fn handle_terminal_socket(socket: WebSocket, session_id: String, state: Ar
         let detail = serde_json::json!({
             "resource_id": resource_id,
             "session_id": session_id,
-        }).to_string();
+        })
+        .to_string();
         write_audit_log(
-            &state.db, "ssh_disconnect", "success",
+            &state.db,
+            "ssh_disconnect",
+            "success",
             &format!("SSH 断开连接（会话 {}）", session_id),
-            None, Some(&resource_id), None, Some(&detail), None,
+            None,
+            Some(&resource_id),
+            None,
+            Some(&detail),
+            None,
         );
     }
 }

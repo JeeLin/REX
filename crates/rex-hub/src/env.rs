@@ -306,12 +306,17 @@ pub async fn delete_env(
 
     // Query env name before deleting for audit detail
     let env_name = {
-        let conn = state.db.pool.get().map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
+        let conn = state
+            .db
+            .pool
+            .get()
+            .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
         conn.query_row(
             "SELECT name FROM environments WHERE id = ?1",
             rusqlite::params![id],
             |row| row.get::<_, String>(0),
-        ).ok()
+        )
+        .ok()
     };
 
     let _result = tokio::task::spawn_blocking(
