@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.84.2] - 2026-07-13
+
+### Fixed
+- 工作空间布局持久化：分屏模式切换后刷新页面自动恢复
+- 全局快捷键作用域修复：Ctrl+K/Ctrl+N/F1 在终端聚焦时仍可用
+- 工作空间终端快捷键补全：Ctrl+Shift+F 切换 SFTP 面板
+- 移除 AppLayout 中未使用的 `globalShortcutsEnabled` 死代码
+
 ## [0.84.1] - 2026-07-12
 
 ### Fixed
