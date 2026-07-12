@@ -274,7 +274,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { getProtocolIcon } from '@/composables/useProtocol'
@@ -304,9 +304,6 @@ const router = useRouter()
 // ── Tabs ──
 const { tabs, activeTabId, addTab, closeTab, duplicateTab, nextTab, prevTab, switchTabByIndex, moveTabToPanel, swapPanels } = useTabs()
 
-// ── Workspace Persistence ──
-const { restore } = useWorkspacePersistence()
-
 // ── Layout ──
 type Layout = 'single' | 'left-right' | 'top-bottom' | 'quad' | 'sidebar-main'
 const LAYOUT_ORDER: Layout[] = ['single', 'left-right', 'top-bottom', 'quad', 'sidebar-main']
@@ -321,6 +318,9 @@ const LAYOUT_LABELS: Record<Layout, string> = {
 }
 
 const currentLayout = ref<Layout>('single')
+
+// ── Workspace Persistence ──
+const { restore } = useWorkspacePersistence(currentLayout as unknown as Ref<string>)
 const panelCount = computed(() => LAYOUT_PANELS[currentLayout.value])
 const layoutIcon = computed(() => LAYOUT_ICONS[currentLayout.value])
 const layoutLabel = computed(() => LAYOUT_LABELS[currentLayout.value])

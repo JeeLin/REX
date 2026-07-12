@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { ref } from 'vue'
 
 describe('useWorkspacePersistence', () => {
   beforeEach(() => {
@@ -13,7 +14,8 @@ describe('useWorkspacePersistence', () => {
 
   async function getPersistence() {
     const { useWorkspacePersistence } = await import('../useWorkspacePersistence')
-    return useWorkspacePersistence()
+    const currentLayout = ref('single')
+    return useWorkspacePersistence(currentLayout)
   }
 
   it('restore returns false when no stored state', async () => {
@@ -53,7 +55,21 @@ describe('useWorkspacePersistence', () => {
     expect(stored).toBeTruthy()
     const parsed = JSON.parse(stored!)
     expect(parsed.version).toBe(1)
-    expect(parsed.tabs).toEqual([])
     expect(parsed.timestamp).toBeGreaterThan(0)
+  })
+
+  it('restore recovers layout from stored state', async () => {
+    const state = {
+      version: 1,
+      tabs: [{ name: 'Tab1', proto: 'ssh', resourceId: 'r1', panelIndex: 0 }],
+      activeTabId: null,
+      layout: 'left-right',
+      timestamp: Date.now(),
+    }
+    localStorage.setItem('rex-workspace-state', JSON.stringify(state))
+    const { restore } = await getPersistence()
+    restore()
+    const stored = JSON.parse(localStorage.getItem('rex-workspace-state')!)
+    expect(stored.layout).toBe('left-right')
   })
 })

@@ -1,4 +1,4 @@
-import { watch } from 'vue'
+import { watch, type Ref } from 'vue'
 import type { Tab } from '@/features/workspace/useTabs'
 import { useTabs } from '@/features/workspace/useTabs'
 
@@ -9,6 +9,7 @@ interface WorkspaceState {
   version: number
   tabs: SerializedTab[]
   activeTabId: string | null
+  layout: string
   timestamp: number
 }
 
@@ -23,7 +24,7 @@ interface SerializedTab {
  * Auto-persist workspace state to localStorage and restore on init.
  * Call once in Workspace.vue setup.
  */
-export function useWorkspacePersistence() {
+export function useWorkspacePersistence(currentLayout: Ref<string>) {
   const { tabs, activeTabId, addTab } = useTabs()
 
   function restore(): boolean {
@@ -61,6 +62,11 @@ export function useWorkspacePersistence() {
         }
       }
 
+      // Restore layout
+      if (state.layout) {
+        currentLayout.value = state.layout
+      }
+
       return tabs.value.length > 0
     } catch {
       return false
@@ -78,6 +84,7 @@ export function useWorkspacePersistence() {
           panelIndex: t.panelIndex,
         })),
         activeTabId: activeTabId.value,
+        layout: currentLayout.value,
         timestamp: Date.now(),
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
@@ -87,7 +94,7 @@ export function useWorkspacePersistence() {
   }
 
   // Auto-save on state changes
-  watch([tabs, activeTabId], save, { deep: true })
+  watch([tabs, activeTabId, currentLayout], save, { deep: true })
 
   return { restore, save }
 }
