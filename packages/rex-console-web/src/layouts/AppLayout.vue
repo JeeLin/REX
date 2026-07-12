@@ -476,20 +476,16 @@ onMounted(() => {
 })
 
 // ── Global Keyboard Shortcuts ──
-const globalShortcutsEnabled = ref(true)
-provide('globalShortcutsEnabled', globalShortcutsEnabled)
-
 function onGlobalKeyDown(e: KeyboardEvent) {
-  if (!globalShortcutsEnabled.value) return
   const el = e.target as HTMLElement
   const tag = el.tagName
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable) return
+  const isInputFocused = tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable
 
   const ctrl = e.ctrlKey || e.metaKey
 
+  // Global shortcuts (Ctrl+K, Ctrl+N, F1) bypass input focus guard
   if (ctrl && e.key === 'k') {
     e.preventDefault()
-    // Emit event for child components to handle
     window.dispatchEvent(new CustomEvent('rex:shortcut', { detail: 'command-palette' }))
   } else if (ctrl && e.key === 'n') {
     e.preventDefault()
@@ -497,6 +493,10 @@ function onGlobalKeyDown(e: KeyboardEvent) {
   } else if (e.key === 'F1') {
     e.preventDefault()
     window.dispatchEvent(new CustomEvent('rex:shortcut', { detail: 'shortcuts-panel' }))
+  }
+  // Other global shortcuts require no input focus
+  else if (isInputFocused) {
+    return
   }
 }
 

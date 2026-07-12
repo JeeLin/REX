@@ -308,6 +308,11 @@ function initTerminal() {
       }
       return false
     }
+    // Ctrl+Shift+F → 切换 SFTP 面板
+    if (ctrl && event.shiftKey && (event.key === 'f' || event.key === 'F')) {
+      toggleSftp()
+      return false
+    }
 
     return true
   })
