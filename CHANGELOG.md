@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.84.1] - 2026-07-12
+
+### Fixed
+- SQLite 连接失败错误提示修复：前端 onclose 不再覆盖后端返回的真实错误消息
+- Agent 状态显示修正：基于 last_seen_at 新鲜度判定在线状态，消除 Hub 重启后的虚假在线
+- 未配置 Agent 提示：在线但未下发配置的 Agent 显示「⚠ 未配置」提示
+
 ## [0.84.0] - 2026-07-11
 
 ### Added
