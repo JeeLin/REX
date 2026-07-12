@@ -527,6 +527,7 @@ export default {
     connectionIp: '连接 IP',
     uptime: '运行时间',
     environment: '所属环境',
+    unconfigured: '未配置',
     binary: '二进制文件',
     docker: 'Docker',
     dockerCompose: 'Docker Compose',

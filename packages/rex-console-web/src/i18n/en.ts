@@ -527,6 +527,7 @@ export default {
     connectionIp: 'Connection IP',
     uptime: 'Uptime',
     environment: 'Environment',
+    unconfigured: 'Unconfigured',
     binary: 'Binary',
     docker: 'Docker',
     dockerCompose: 'Docker Compose',

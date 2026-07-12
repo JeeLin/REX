@@ -105,7 +105,7 @@ pub async fn list_envs(
 
             // Check if any agent in this environment is online
             let agent_online: bool = conn.query_row(
-                "SELECT EXISTS(SELECT 1 FROM agents WHERE environment_id = ?1 AND status = 'online' LIMIT 1)",
+                "SELECT EXISTS(SELECT 1 FROM agents WHERE environment_id = ?1 AND status = 'online' AND last_seen_at > datetime('now', '-3 minutes') LIMIT 1)",
                 rusqlite::params![env.id],
                 |row| row.get(0),
             ).unwrap_or(false);
@@ -217,11 +217,11 @@ pub async fn get_env(
         env.resource_types = Some(resource_types);
 
         // Check if any agent in this environment is online
-        let agent_online: bool = conn.query_row(
-            "SELECT EXISTS(SELECT 1 FROM agents WHERE environment_id = ?1 AND status = 'online' LIMIT 1)",
-            rusqlite::params![id],
-            |row| row.get(0),
-        ).unwrap_or(false);
+            let agent_online: bool = conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM agents WHERE environment_id = ?1 AND status = 'online' AND last_seen_at > datetime('now', '-3 minutes') LIMIT 1)",
+                rusqlite::params![id],
+                |row| row.get(0),
+            ).unwrap_or(false);
         env.agent_online = Some(agent_online);
 
         Ok::<_, (StatusCode, Json<ErrorResponse>)>(env)

@@ -6,6 +6,10 @@
       <span class="badge" :class="agent.status === 'online' ? 'badge-success' : 'badge-muted'">
         {{ agent.status === 'online' ? t('status.online') : t('status.offline') }}
       </span>
+      <span
+        v-if="agent.status === 'online' && (!agent.config_json || agent.config_json === '{}')"
+        class="unconfigured-hint"
+      >⚠ {{ t('agent.unconfigured') }}</span>
     </div>
 
     <div class="card-body">
@@ -182,4 +186,10 @@ function osIcon(os: string): string {
     font-size: var(--fs-xs);
   }
 }
+.unconfigured-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
 </style>

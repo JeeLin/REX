@@ -11,6 +11,7 @@ export interface Agent {
   os_version: string | null
   status: 'online' | 'offline'
   last_seen_at: string | null
+  config_json?: string | null
 }
 
 export async function listAgents(envId: string): Promise<Agent[]> {

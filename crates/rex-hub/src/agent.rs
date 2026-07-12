@@ -278,6 +278,7 @@ pub struct AgentListItem {
     pub os_version: Option<String>,
     pub status: String,
     pub last_seen_at: Option<String>,
+    pub config_json: Option<String>,
 }
 
 pub async fn list_agents(
@@ -316,7 +317,8 @@ pub async fn list_agents(
 
         let mut stmt = conn
             .prepare(
-                "SELECT id, environment_id, name, token_hash, version, os, arch, hostname, os_version, status, last_seen_at
+                "SELECT id, environment_id, name, token_hash, version, os, arch, hostname, os_version,
+                        status, last_seen_at, config_json
                  FROM agents WHERE environment_id = ?1 ORDER BY created_at DESC",
             )
             .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
@@ -325,10 +327,23 @@ pub async fn list_agents(
             .query_map(rusqlite::params![env_id], |row| {
                 let token_hash: String = row.get(3)?;
                 let mut status: String = row.get(9)?;
+                let last_seen_at: Option<String> = row.get(10)?;
 
                 // 如果 agent 的 token_hash 与环境的 token_hash 不匹配，标记为 offline
                 if !env_token_hash.is_empty() && token_hash != env_token_hash {
                     status = "offline".to_string();
+                }
+
+                // 基于 last_seen_at 新鲜度判定在线状态（心跳间隔约30秒，3分钟无心跳视为离线）
+                if status == "online" {
+                    if let Some(ts) = &last_seen_at {
+                        if !is_last_seen_fresh(ts) {
+                            status = "offline".to_string();
+                        }
+                    } else {
+                        // 从未上报心跳，视为离线
+                        status = "offline".to_string();
+                    }
                 }
 
                 Ok(AgentListItem {
@@ -342,6 +357,7 @@ pub async fn list_agents(
                     os_version: row.get(8)?,
                     status,
                     last_seen_at: row.get(10)?,
+                    config_json: row.get(11)?,
                 })
             })
             .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?
@@ -583,6 +599,21 @@ pub async fn restart_agent(
     }
 }
 
+/// Check if `last_seen_at` is within the freshness threshold (3 minutes).
+/// Returns true if fresh or if `last_seen_at` cannot be parsed (fail-open).
+fn is_last_seen_fresh(last_seen_at: &str) -> bool {
+    match chrono::NaiveDateTime::parse_from_str(
+        last_seen_at.trim_end_matches('Z'),
+        "%Y-%m-%dT%H:%M:%S%.3f",
+    ) {
+        Ok(parsed) => {
+            let now = chrono::Utc::now().naive_utc();
+            (now - parsed) <= chrono::Duration::minutes(3)
+        }
+        Err(_) => true, // 解析失败时假定新鲜，避免误判
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -705,7 +736,7 @@ mod tests {
         let conn = db.pool.get().unwrap();
         let mut stmt = conn
             .prepare(
-                "SELECT id, environment_id, name, version, os, arch, hostname, os_version, status, last_seen_at
+                "SELECT id, environment_id, name, version, os, arch, hostname, os_version, status, last_seen_at, config_json
                  FROM agents WHERE environment_id = ?1",
             )
             .unwrap();
@@ -721,6 +752,7 @@ mod tests {
                 os_version: row.get(7)?,
                 status: row.get(8)?,
                 last_seen_at: row.get(9)?,
+                config_json: row.get(10)?,
             })
         })
         .unwrap()
@@ -817,6 +849,7 @@ mod tests {
             os_version: Some("22.04".to_string()),
             status: "online".to_string(),
             last_seen_at: Some("2024-01-01".to_string()),
+            config_json: None,
         };
         let json = serde_json::to_string(&item).unwrap();
         assert!(json.contains("agt_123"));
@@ -834,6 +867,22 @@ mod tests {
         assert!(json.contains("agt_123"));
         assert!(json.contains("online"));
     }
+    #[test]
+    fn is_last_seen_fresh_recent() {
+        // 刚刚上报的心跳应判定为新鲜
+        let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+        assert!(is_last_seen_fresh(&now));
+    }
+
+    #[test]
+    fn is_last_seen_fresh_stale() {
+        // 5分钟前的心跳应判定为过期
+        let stale = (chrono::Utc::now() - chrono::Duration::minutes(5))
+            .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+            .to_string();
+        assert!(!is_last_seen_fresh(&stale));
+    }
+
 }
 
 // ── HTTP Handler Tests ─────────────────────────────────────

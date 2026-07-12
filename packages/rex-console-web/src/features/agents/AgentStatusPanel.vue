@@ -24,6 +24,10 @@
           <span class="badge" :class="agent.status === 'online' ? 'badge-success' : 'badge-offline'">
             {{ agent.status === 'online' ? t('status.online') : t('status.offline') }}
           </span>
+          <span
+            v-if="agent.status === 'online' && (!agent.config_json || agent.config_json === '{}')"
+            class="unconfigured-hint"
+          >⚠ {{ t('agent.unconfigured') }}</span>
           <span class="agent-version">v{{ agent.version }}</span>
         </div>
       </div>
@@ -168,4 +172,10 @@ watch(() => props.envId, (id) => {
   color: var(--text-muted);
   background: var(--bg-elevated);
 }
+.unconfigured-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
 </style>
