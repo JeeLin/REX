@@ -32,6 +32,7 @@ export function useSqliteSession(resourceId: () => string) {
   let ws: WebSocket | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let reconnectAttempts = 0
+  let closedByError = false
   const MAX_RECONNECT_ATTEMPTS = 5
   const INITIAL_RECONNECT_DELAY = 1000
   const pendingCommands = new Map<string, {
@@ -49,6 +50,7 @@ export function useSqliteSession(resourceId: () => string) {
       ws = null
     }
 
+    closedByError = false
     const token = localStorage.getItem('rex-token') || ''
     const rid = resourceId()
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -79,6 +81,12 @@ export function useSqliteSession(resourceId: () => string) {
       for (const [id, { reject: rej }] of pendingCommands) {
         rej(new Error('connection closed'))
         pendingCommands.delete(id)
+      }
+
+      // If the connection was closed because of a server error, keep the
+      // error message visible and do not auto-reconnect (the error is final).
+      if (closedByError) {
+        return
       }
 
       // Auto-reconnect with exponential backoff (only if not intentionally disconnected)
@@ -117,6 +125,7 @@ export function useSqliteSession(resourceId: () => string) {
       }
       case 'error': {
         error.value = msg.message
+        closedByError = true
         const pending = pendingCommands.get(msg.id)
         if (pending) {
           pending.resolve(msg)
@@ -124,11 +133,10 @@ export function useSqliteSession(resourceId: () => string) {
         }
         break
       }
-      case 'pong':
-        break
       case 'disconnected':
         connected.value = false
         error.value = msg.reason
+        closedByError = true
         break
     }
   }
