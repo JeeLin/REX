@@ -157,6 +157,7 @@ import { useTouchGestures } from '@/composables/useTouchGestures'
 import { useThemeObserver } from '@/composables/useThemeObserver'
 import { getErrorMessage } from '@/utils/error'
 import { copyWithFallback } from '@/utils/clipboard'
+import { useToast } from '@/composables/useToast'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import TerminalSftp from '@/features/terminal/TerminalSftp.vue'
 
@@ -164,6 +165,7 @@ const { t } = useI18n()
 const router = useRouter()
 const { show: showMenu } = useContextMenu()
 const settingsStore = useSettingsStore()
+const toast = useToast()
 
 const props = defineProps<{
   resourceId: string
@@ -295,6 +297,7 @@ function initTerminal() {
       const selection = terminal?.getSelection()
       if (selection) {
         copyWithFallback(selection)
+        toast.success(t('terminal.clipboard.copied'))
         return false
       }
       return true // 无选中文本，交给终端处理（发送 SIGINT）
@@ -305,6 +308,7 @@ function initTerminal() {
       const selection = terminal?.getSelection()
       if (selection) {
         copyWithFallback(selection)
+        toast.success(t('terminal.clipboard.copied'))
       }
       return false
     }
@@ -336,6 +340,8 @@ function initTerminal() {
   })
   resizeObserver.observe(terminalContainer.value)
   fitAddon.fit()
+  // 容器级 keydown 监听：当 xterm textarea 未聚焦时作为备用
+  terminalContainer.value?.addEventListener('keydown', onContainerKeyDown)
 
   terminal.onData((data: string) => {
     // 追踪命令历史（回车时记录）
@@ -520,6 +526,42 @@ function toggleSftp() {
   showSftp.value = !showSftp.value
   // Wait for layout to settle, then refit terminal
   nextTick(() => { fitAddon?.fit() })
+}
+// 容器级快捷键处理（当 xterm textarea 未聚焦时的备用）
+function onContainerKeyDown(e: KeyboardEvent) {
+  // 如果 xterm textarea 已聚焦，由 attachCustomKeyEventHandler 处理
+  if (document.activeElement === terminal?.textarea) return
+
+  const ctrl = e.ctrlKey || e.metaKey
+
+  // Ctrl+C → 复制选中文本或发送 SIGINT
+  if (ctrl && !e.shiftKey && (e.key === 'c' || e.key === 'C')) {
+    const selection = terminal?.getSelection()
+    if (selection) {
+      e.preventDefault()
+      copyWithFallback(selection)
+      toast.success(t('terminal.clipboard.copied'))
+    }
+    return
+  }
+
+  // Ctrl+Shift+C → 强制复制
+  if (ctrl && e.shiftKey && (e.key === 'c' || e.key === 'C')) {
+    const selection = terminal?.getSelection()
+    if (selection) {
+      e.preventDefault()
+      copyWithFallback(selection)
+      toast.success(t('terminal.clipboard.copied'))
+    }
+    return
+  }
+
+  // Ctrl+Shift+F → 切换 SFTP 面板
+  if (ctrl && e.shiftKey && (e.key === 'f' || e.key === 'F')) {
+    e.preventDefault()
+    toggleSftp()
+    return
+  }
 }
 
 // ── 拖拽分隔条 ──────────────────────────────────────
