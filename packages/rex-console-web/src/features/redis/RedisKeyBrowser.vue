@@ -15,6 +15,9 @@
       <button class="batch-btn batch-btn-ttl" @click="$emit('batchSetTtl', [...selectedKeys])">
         {{ t('redis.keys.batch.setTtl') }}
       </button>
+      <button class="batch-btn batch-btn-import" @click="$emit('batchImport')">
+        {{ t('redis.keys.batch.import') }}
+      </button>
       <button class="batch-btn batch-btn-export" @click="$emit('batchExport', [...selectedKeys])">
         {{ t('redis.keys.batch.export') }}
       </button>
@@ -156,6 +159,7 @@ const emit = defineEmits<{
   (e: 'batchDelete', keys: string[]): void
   (e: 'batchSetTtl', keys: string[]): void
   (e: 'batchExport', keys: string[]): void
+  (e: 'batchImport'): void
 }>()
 
 const searchFilterRef = ref<InstanceType<typeof SearchFilter> | null>(null)

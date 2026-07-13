@@ -20,14 +20,29 @@ const emit = defineEmits<{
 
 const records = ref<HistoryRecord[]>([])
 const search = ref('')
+const databaseFilter = ref('')
 const loading = ref(false)
 
+const uniqueDatabases = computed(() => {
+  const dbs = new Set<string>()
+  for (const r of records.value) {
+    if (r.database) dbs.add(r.database)
+  }
+  return Array.from(dbs).sort()
+})
+
 const filtered = computed(() => {
-  if (!search.value.trim()) return records.value
-  const q = search.value.toLowerCase()
-  return records.value.filter(
-    (r) => r.sql.toLowerCase().includes(q) || r.database.toLowerCase().includes(q),
-  )
+  let result = records.value
+  if (databaseFilter.value) {
+    result = result.filter((r) => r.database === databaseFilter.value)
+  }
+  if (search.value.trim()) {
+    const q = search.value.toLowerCase()
+    result = result.filter(
+      (r) => r.sql.toLowerCase().includes(q) || r.database.toLowerCase().includes(q),
+    )
+  }
+  return result
 })
 
 interface TimeGroup {
@@ -127,6 +142,14 @@ watch(
     <div class="history-header">
       <span class="history-title">{{ t('sql.history.title') }}</span>
       <div class="history-actions">
+        <select
+          v-if="uniqueDatabases.length > 1"
+          v-model="databaseFilter"
+          class="history-db-filter"
+        >
+          <option value="">{{ t('sql.history.allDatabases') }}</option>
+          <option v-for="db in uniqueDatabases" :key="db" :value="db">{{ db }}</option>
+        </select>
         <input
           v-model="search"
           class="history-search"
@@ -195,6 +218,22 @@ watch(
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.history-db-filter {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  outline: none;
+  cursor: pointer;
+  max-width: 120px;
+}
+
+.history-db-filter:focus {
+  border-color: var(--accent);
 }
 
 .history-search {

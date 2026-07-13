@@ -56,6 +56,7 @@
         @batch-delete="openBatchDialog('delete', $event)"
         @batch-set-ttl="openBatchDialog('setTtl', $event)"
         @batch-export="openBatchDialog('export', $event)"
+        @batch-import="handleBatchImport"
       />
 
       <!-- 历史记录面板 -->
@@ -273,6 +274,14 @@
       @confirm-set-ttl="handleBatchSetTtl"
       @confirm-export="handleBatchExport"
     />
+
+    <!-- Batch Import Dialog -->
+    <BatchImportDialog
+      :visible="showImportDialog"
+      :connection-id="props.resourceId"
+      @update:visible="showImportDialog = $event"
+      @import-complete="handleImportComplete"
+    />
   </div>
 </template>
 
@@ -285,6 +294,7 @@ import RedisHistory from './RedisHistory.vue'
 import RedisKeyBrowser from './RedisKeyBrowser.vue'
 import RedisValueViewer from './RedisValueViewer.vue'
 import BatchOperationDialog from './BatchOperationDialog.vue'
+import BatchImportDialog from './BatchImportDialog.vue'
 import type { RedisValue } from '@/api/redis'
 import type { KeyWithType, OutputEntry } from './types'
 const props = defineProps<{
@@ -325,6 +335,7 @@ let nextEntryId = 0
 // Batch operation state
 const showBatchDialog = ref(false)
 const batchOperation = ref<'delete' | 'setTtl' | 'export'>('delete')
+const showImportDialog = ref(false)
 const batchKeys = ref<string[]>([])
 
 async function handleConnect() {
@@ -499,11 +510,19 @@ async function handleKeyBrowserSetTtl(key: string, seconds: number) {
   await session.execute(`EXPIRE ${key} ${seconds}`)
 }
 
+function handleImportComplete(_count: number) {
+  handleKeyBrowserSearch(searchPattern.value || '*')
+}
+
 // ── 批量操作 ──────────────────────────────────────────
 function openBatchDialog(operation: 'delete' | 'setTtl' | 'export', keys: string[]) {
   batchOperation.value = operation
   batchKeys.value = keys
   showBatchDialog.value = true
+}
+
+function handleBatchImport() {
+  showImportDialog.value = true
 }
 
 async function handleBatchDelete(keys: string[]) {

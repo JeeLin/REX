@@ -32,22 +32,29 @@
       <table v-if="result && result.rows.length > 0" class="results-table">
         <thead>
           <tr>
-            <th>
+            <th class="sticky-col sticky-first">
               <input
                 type="checkbox"
                 :checked="result && selectedRows.size === paginatedRows.length && paginatedRows.length > 0"
                 @change="toggleSelectAll"
               />
             </th>
-            <th>#</th>
+            <th class="sticky-col sticky-second">#</th>
             <th
               v-for="(col, colIdx) in result.columns"
               :key="col.name"
               class="sortable-th"
+              :style="{ width: getColWidth(colIdx), minWidth: '60px' }"
               @click="handleHeaderSort(colIdx)"
             >
               {{ col.name }}
               <span v-if="sortColumn === colIdx" class="sort-indicator">{{ sortDirection === 'asc' ? ' ↑' : ' ↓' }}</span>
+              <div
+                v-if="colIdx < result.columns.length - 1"
+                class="resize-handle"
+                @mousedown.stop="initResize(colIdx, $event)"
+                @click.stop
+              />
             </th>
           </tr>
         </thead>
@@ -58,17 +65,18 @@
             @click="handleRowClick(i)"
             @contextmenu.prevent="handleRowContextMenu($event, i)"
           >
-            <td class="checkbox-cell">
+            <td class="checkbox-cell sticky-col sticky-first">
               <input
                 type="checkbox"
                 :checked="selectedRows.has((currentPage - 1) * pageSize + i)"
                 @click.stop="toggleRowSelect((currentPage - 1) * pageSize + i)"
               />
             </td>
-            <td class="text-muted">{{ i + 1 + (currentPage - 1) * pageSize }}</td>
+            <td class="text-muted sticky-col sticky-second">{{ i + 1 + (currentPage - 1) * pageSize }}</td>
             <td
               v-for="(cell, j) in row" :key="j"
               :class="cellClass(cell)"
+              :style="{ width: getColWidth(j), minWidth: '60px' }"
               @contextmenu.prevent="handleCellContextMenu($event, i, j)"
               @dblclick="handleCellDblClick(i, j, cell)"
             >
@@ -235,6 +243,34 @@ const sortColumn = ref<number | null>(null)
 const sortDirection = ref<'asc' | 'desc'>('asc')
 const selectedRow = ref<number | null>(null)
 
+// ── Resizable columns ──
+const colWidths = ref<Map<number, number>>(new Map())
+
+function getColWidth(colIdx: number): string {
+  return (colWidths.value.get(colIdx) ?? 150) + 'px'
+}
+
+function initResize(colIdx: number, event: MouseEvent) {
+  event.preventDefault()
+  const startX = event.clientX
+  const startWidth = colWidths.value.get(colIdx) ?? 150
+
+  function onMove(e: MouseEvent) {
+    const delta = e.clientX - startX
+    const newWidth = Math.max(60, startWidth + delta)
+    colWidths.value.set(colIdx, newWidth)
+    colWidths.value = new Map(colWidths.value)
+  }
+
+  function onUp() {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
 function handleRowClick(rowIdx: number) {
   selectedRow.value = selectedRow.value === rowIdx ? null : rowIdx
 }
@@ -356,6 +392,7 @@ watch(() => props.result, () => {
   selectedRow.value = null
   sortColumn.value = null
   sortDirection.value = 'asc'
+  colWidths.value = new Map()
   if (props.isError) {
     activeTab.value = 'message'
   }
@@ -551,7 +588,8 @@ function handleRowContextMenu(event: MouseEvent, paginatedIdx: number) {
 
 .results-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: var(--fs-sm);
   font-family: var(--font-mono);
 }
@@ -571,10 +609,53 @@ function handleRowContextMenu(event: MouseEvent, paginatedIdx: number) {
 .results-table th.sortable-th {
   cursor: pointer;
   user-select: none;
+  position: relative;
 }
 
 .results-table th.sortable-th:hover {
   color: var(--text-primary);
+}
+
+.results-table th.sticky-col {
+  z-index: 2;
+}
+
+.results-table td.sticky-col {
+  z-index: 1;
+}
+
+.results-table .sticky-first {
+  position: sticky;
+  left: 0;
+  background: var(--bg-elevated);
+}
+
+.results-table tbody .sticky-first {
+  background: var(--bg-surface);
+}
+
+.results-table .sticky-second {
+  position: sticky;
+  left: 36px;
+  background: var(--bg-elevated);
+}
+
+.results-table tbody .sticky-second {
+  background: var(--bg-surface);
+}
+
+.resize-handle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+}
+
+.resize-handle:hover {
+  background: var(--accent);
 }
 
 .sort-indicator {

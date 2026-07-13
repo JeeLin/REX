@@ -32,6 +32,10 @@ export interface PreviewResult {
 
 // ── API 函数 ──────────────────────────────────────────────
 
+function getAuthHeader(): Record<string, string> {
+  const token = localStorage.getItem('rex-token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
 /** 导出备份文件，返回 Blob 供下载 */
 export async function exportBackup(options?: {
   envIds?: string[]
@@ -48,12 +52,11 @@ export async function exportBackup(options?: {
   }
 
   const url = `/api/backup/export${params.toString() ? '?' + params.toString() : ''}`
-  const token = localStorage.getItem('rex-token')
   const resp = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...getAuthHeader(),
     },
     body: JSON.stringify(body),
   })
@@ -77,7 +80,7 @@ export async function previewBackup(
 
   const resp = await fetch('/api/backup/preview', {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: getAuthHeader(),
     body: form,
   })
 
@@ -104,7 +107,7 @@ export async function importBackup(
 
   const resp = await fetch('/api/backup/import', {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: getAuthHeader(),
     body: form,
   })
 
