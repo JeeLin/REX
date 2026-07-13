@@ -170,6 +170,8 @@ export function useTabs() {
     const adjustedDstIdx = srcIdx < dstIdx ? dstIdx - 1 : dstIdx
     const insertIdx = position === 'after' ? adjustedDstIdx + 1 : adjustedDstIdx
     allTabs.splice(insertIdx, 0, moved!)
+    // Sync content panel: activate the dragged tab so v-show follows
+    activeTabId.value = fromId
   }
 
   function disconnectAll() {

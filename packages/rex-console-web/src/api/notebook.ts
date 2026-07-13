@@ -63,12 +63,12 @@ export interface BlockExport {
 // ── API 函数 ──────────────────────────────────────────────
 
 export async function listNotebooks(): Promise<Notebook[]> {
-  const res = await client.get<{ data: Notebook[] }>('/api/notebooks')
+  const res = await client.get<{ data: Notebook[] }>('/notebooks')
   return res.data.data
 }
 
 export async function getNotebook(id: string): Promise<NotebookWithBlocks> {
-  const res = await client.get<{ data: NotebookWithBlocks }>(`/api/notebooks/${id}`)
+  const res = await client.get<{ data: NotebookWithBlocks }>(`/notebooks/${id}`)
   return res.data.data
 }
 
@@ -76,7 +76,7 @@ export async function createNotebook(data: {
   title: string
   description?: string
 }): Promise<Notebook> {
-  const res = await client.post<{ data: Notebook }>('/api/notebooks', data)
+  const res = await client.post<{ data: Notebook }>('/notebooks', data)
   return res.data.data
 }
 
@@ -84,12 +84,12 @@ export async function updateNotebook(
   id: string,
   data: { title?: string; description?: string }
 ): Promise<Notebook> {
-  const res = await client.put<{ data: Notebook }>(`/api/notebooks/${id}`, data)
+  const res = await client.put<{ data: Notebook }>(`/notebooks/${id}`, data)
   return res.data.data
 }
 
 export async function deleteNotebook(id: string): Promise<void> {
-  await client.delete(`/api/notebooks/${id}`)
+  await client.delete(`/notebooks/${id}`)
 }
 
 export async function updateBlocks(
@@ -104,14 +104,14 @@ export async function updateBlocks(
   }>
 ): Promise<NotebookBlock[]> {
   const res = await client.put<{ data: NotebookBlock[] }>(
-    `/api/notebooks/${notebookId}/blocks`,
+    `/notebooks/${notebookId}/blocks`,
     { blocks }
   )
   return res.data.data
 }
 
 export async function exportNotebook(id: string): Promise<NotebookExport> {
-  const res = await client.get<{ data: NotebookExport }>(`/api/notebooks/export/${id}`)
+  const res = await client.get<{ data: NotebookExport }>(`/notebooks/export/${id}`)
   return res.data.data
 }
 
@@ -120,12 +120,12 @@ export async function importNotebook(data: {
   description?: string
   blocks?: BlockExport[]
 }): Promise<Notebook> {
-  const res = await client.post<{ data: Notebook }>('/api/notebooks/import', data)
+  const res = await client.post<{ data: Notebook }>('/notebooks/import', data)
   return res.data.data
 }
 
 export async function executeCommand(blockId: string): Promise<NotebookExecution> {
-  const res = await client.post<{ data: NotebookExecution }>('/api/notebooks/execute', {
+  const res = await client.post<{ data: NotebookExecution }>('/notebooks/execute', {
     block_id: blockId,
   })
   return res.data.data
@@ -133,7 +133,7 @@ export async function executeCommand(blockId: string): Promise<NotebookExecution
 
 export async function listExecutions(blockId: string): Promise<NotebookExecution[]> {
   const res = await client.get<{ data: NotebookExecution[] }>(
-    `/api/notebooks/executions/${blockId}`
+    `/notebooks/executions/${blockId}`
   )
   return res.data.data
 }

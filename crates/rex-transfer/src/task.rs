@@ -4,6 +4,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, Semaphore};
+use parking_lot::Mutex;
 use tracing::info;
 
 // ── 传输端点 ──────────────────────────────────────────────
@@ -135,8 +136,8 @@ pub enum TransferEvent {
 /// 内存中的传输任务管理器
 pub struct TransferManager {
     tasks: RwLock<Vec<Arc<RwLock<TransferTask>>>>,
-    semaphore: Arc<Semaphore>,
-    max_concurrent: usize,
+    semaphore: Mutex<Arc<Semaphore>>,
+    max_concurrent: Mutex<usize>,
 }
 
 impl TransferManager {
@@ -147,14 +148,14 @@ impl TransferManager {
     pub fn with_concurrency(max_concurrent: usize) -> Self {
         Self {
             tasks: RwLock::new(Vec::new()),
-            semaphore: Arc::new(Semaphore::new(max_concurrent)),
-            max_concurrent,
+            semaphore: Mutex::new(Arc::new(Semaphore::new(max_concurrent))),
+            max_concurrent: Mutex::new(max_concurrent),
         }
     }
 
     /// 获取最大并发数
     pub fn max_concurrent(&self) -> usize {
-        self.max_concurrent
+        *self.max_concurrent.lock()
     }
 
     /// 设置最大并发数（动态调整）
@@ -166,8 +167,8 @@ impl TransferManager {
         let running = self.running_count();
         // 新 semaphore 的许可数 = 新上限 - 当前正在运行的任务数（保证运行中的任务可以继续）
         let permits = new_max.saturating_sub(running);
-        self.semaphore = Arc::new(Semaphore::new(permits));
-        self.max_concurrent = new_max;
+        *self.semaphore.lock() = Arc::new(Semaphore::new(permits));
+        *self.max_concurrent.lock() = new_max;
     }
 
     /// 当前正在运行的任务数
@@ -189,14 +190,12 @@ impl TransferManager {
 
     /// 获取当前可用的并发槽位数
     pub fn available_permits(&self) -> usize {
-        self.semaphore.available_permits()
+        self.semaphore.lock().available_permits()
     }
 
-    /// 获取一个传输许可（用于并发控制）
     pub async fn acquire_permit(&self) -> tokio::sync::OwnedSemaphorePermit {
-        self.semaphore
-            .clone()
-            .acquire_owned()
+        let sem = { self.semaphore.lock().clone() };
+        sem.acquire_owned()
             .await
             .expect("semaphore closed unexpectedly")
     }

@@ -10,17 +10,17 @@ export interface ChangePasswordRequest {
 }
 
 export async function getUserProfile(): Promise<UserProfile> {
-  const res = await client.get('/api/user/profile')
+  const res = await client.get('/user/profile')
   return res.data.data
 }
 
 export async function updateUserProfile(username: string): Promise<UserProfile> {
-  const res = await client.put('/api/user/profile', { username })
+  const res = await client.put('/user/profile', { username })
   return res.data.data
 }
 
 export async function changePassword(data: ChangePasswordRequest): Promise<void> {
-  await client.put('/api/user/password', data)
+  await client.put('/user/password', data)
 }
 
 // ── User Settings ──────────────────────────────────────────
@@ -42,11 +42,11 @@ export interface UserSettings {
 }
 
 export async function getUserSettings(): Promise<UserSettings> {
-  const res = await client.get('/api/user/settings')
+  const res = await client.get('/user/settings')
   return res.data.data
 }
 
 export async function updateUserSettings(settings: UserSettings): Promise<UserSettings> {
-  const res = await client.put('/api/user/settings', settings)
+  const res = await client.put('/user/settings', settings)
   return res.data.data
 }

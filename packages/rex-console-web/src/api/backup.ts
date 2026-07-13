@@ -47,7 +47,7 @@ export async function exportBackup(options?: {
     body.password = options.password
   }
 
-  const url = `/backup/export${params.toString() ? '?' + params.toString() : ''}`
+  const url = `/api/backup/export${params.toString() ? '?' + params.toString() : ''}`
   const token = localStorage.getItem('rex-token')
   const resp = await fetch(url, {
     method: 'POST',
@@ -75,8 +75,7 @@ export async function previewBackup(
   form.append('file', file)
   if (password) form.append('password', password)
 
-  const token = localStorage.getItem('rex-token')
-  const resp = await fetch('/backup/preview', {
+  const resp = await fetch('/api/backup/preview', {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: form,
@@ -103,8 +102,7 @@ export async function importBackup(
   if (options?.password) form.append('password', options.password)
   if (options?.strategy) form.append('strategy', options.strategy)
 
-  const token = localStorage.getItem('rex-token')
-  const resp = await fetch('/backup/import', {
+  const resp = await fetch('/api/backup/import', {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: form,

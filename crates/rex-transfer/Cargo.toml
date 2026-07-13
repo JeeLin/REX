@@ -13,6 +13,7 @@ uuid = { workspace = true }
 rex-ssh = { workspace = true }
 russh-sftp = { workspace = true }
 tracing = { workspace = true }
+parking_lot = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

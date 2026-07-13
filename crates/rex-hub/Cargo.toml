@@ -32,6 +32,7 @@ sha2 = { workspace = true }
 rex-ssh = { workspace = true }
 rex-transfer = { workspace = true }
 reqwest = { workspace = true }
+zip = { workspace = true }
 rex-mysql = { workspace = true }
 rex-postgresql = { workspace = true }
 rex-redis = { workspace = true }
