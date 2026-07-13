@@ -280,8 +280,13 @@ pub async fn set_transfer_concurrency(
         return Err(bad_request("并发数必须在 1-32 之间"));
     }
 
-    transfer_state.manager.set_max_concurrent(input.max_concurrent);
-    tracing::info!(max_concurrent = input.max_concurrent, "transfer concurrency updated");
+    transfer_state
+        .manager
+        .set_max_concurrent(input.max_concurrent);
+    tracing::info!(
+        max_concurrent = input.max_concurrent,
+        "transfer concurrency updated"
+    );
 
     Ok(Json(ApiResponse {
         data: ConcurrencyResponse {

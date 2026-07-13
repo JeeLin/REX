@@ -213,7 +213,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { explainSql, type ExplainResult, type SqlResult } from '@/api/sql'
@@ -245,6 +245,7 @@ const selectedRow = ref<number | null>(null)
 
 // ── Resizable columns ──
 const colWidths = ref<Map<number, number>>(new Map())
+let cleanupResize: (() => void) | null = null
 
 function getColWidth(colIdx: number): string {
   return (colWidths.value.get(colIdx) ?? 150) + 'px'
@@ -265,11 +266,18 @@ function initResize(colIdx: number, event: MouseEvent) {
   function onUp() {
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
+    cleanupResize = null
   }
 
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp)
+  cleanupResize = () => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
 }
+
+onBeforeUnmount(() => cleanupResize?.())
 
 function handleRowClick(rowIdx: number) {
   selectedRow.value = selectedRow.value === rowIdx ? null : rowIdx

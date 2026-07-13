@@ -342,11 +342,9 @@ function buildCommand(entry: ImportEntry): string {
         .join(' ')
       return `ZADD ${escapeRedisArg(entry.key)} ${args}`
     }
-
-    default: {
-      const jsonStr = JSON.stringify(entry.value)
-      return `SET ${escapeRedisArg(entry.key)} ${escapeRedisArg(jsonStr)}`
-    }
+    default:
+      // 类型均已穷尽，保持默认分支用于边界保护
+      return `SET ${escapeRedisArg(entry.key)} ${escapeRedisArg(String(entry.value))}`
   }
 }
 

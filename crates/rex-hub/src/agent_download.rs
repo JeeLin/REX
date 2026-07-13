@@ -162,8 +162,7 @@ fn respond_binary(data: Vec<u8>, os: &str, arch: &str, version: &str) -> axum::r
     );
     headers.insert(
         header::CONTENT_DISPOSITION,
-        header::HeaderValue::from_str(&format!("attachment; filename=\"{filename}\""))
-            .unwrap(),
+        header::HeaderValue::from_str(&format!("attachment; filename=\"{filename}\"")).unwrap(),
     );
     headers.insert(
         "X-Agent-Version".parse::<header::HeaderName>().unwrap(),
@@ -224,10 +223,7 @@ async fn download_from_github(os: &str, arch: &str) -> Result<Vec<u8>, String> {
     if !resp.status().is_success() {
         return Err(format!("download status {}", resp.status()));
     }
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| format!("read body: {e}"))?;
+    let bytes = resp.bytes().await.map_err(|e| format!("read body: {e}"))?;
 
     // 解压 zip 提取对应平台的二进制
     extract_agent_binary(&bytes, os)
@@ -248,7 +244,8 @@ fn extract_agent_binary(zip_bytes: &[u8], os: &str) -> Result<Vec<u8>, String> {
         let base = name.rsplit('/').next().unwrap_or(&name);
         if base == target && !file.is_dir() {
             let mut buf = Vec::with_capacity(file.size() as usize);
-            file.read_to_end(&mut buf).map_err(|e| format!("zip extract: {e}"))?;
+            file.read_to_end(&mut buf)
+                .map_err(|e| format!("zip extract: {e}"))?;
             return Ok(buf);
         }
     }
