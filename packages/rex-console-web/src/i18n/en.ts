@@ -235,6 +235,10 @@ export default {
         connecting: 'Connecting...',
         disconnected: 'Disconnected',
       },
+      clipboard: {
+        copied: 'Copied',
+        pasteFailed: 'Paste failed',
+      },
       reconnect: {
         title: 'Disconnected',
         btn: 'Reconnect',

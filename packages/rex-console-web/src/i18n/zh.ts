@@ -235,6 +235,10 @@ export default {
         connecting: '连接中...',
         disconnected: '未连接',
       },
+      clipboard: {
+        copied: '已复制',
+        pasteFailed: '粘贴失败',
+      },
       reconnect: {
         title: '连接已断开',
         btn: '重新连接',
