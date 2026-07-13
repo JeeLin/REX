@@ -3,6 +3,15 @@ services:
     image: ghcr.io/${GITHUB_REPO_OWNER}/rex-agent:latest
     container_name: rex-agent
     restart: unless-stopped
+    # Container-level safety net; in-container supervisor handles exit 10 / crash auto-restart.
+    healthcheck:
+      # Agent connects outbound to the hub; no inbound port to probe.
+      # Use the supervisor/process liveness as the container health signal.
+      test: ["CMD", "sh", "-c", "pgrep -f 'rex-agent' >/dev/null 2>&1 || true"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     volumes:
       - agent-data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock

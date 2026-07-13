@@ -1,8 +1,15 @@
 services:
   hub:
     image: ghcr.io/${GITHUB_REPO_OWNER}/rex-hub:latest
-    container_name: rex-hub
     restart: unless-stopped
+    # Container-level safety net; in-container supervisor handles exit 10 / crash auto-restart.
+    healthcheck:
+      # Hub serves HTTP on 3000 even without TLS; probe the listen port.
+      test: ["CMD", "sh", "-c", "wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1 || true"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     ports:
       # 端口说明：
       # - 3000：始终监听。无 TLS 时为 HTTP，启用 TLS 后为 HTTPS
