@@ -76,7 +76,7 @@ jobs:
           save-if: ${{ github.event_name == 'push' }}
       - name: Install cargo-zigbuild
         if: matrix.zig
-        run: pip3 install ziglang cargo-zigbuild
+        run: pip3 install ziglang && cargo install cargo-zigbuild
       - name: Build
         run: cargo zigbuild --release -p rex-agent --target ${{ matrix.target }}
       - uses: actions/upload-artifact@v6
@@ -119,7 +119,7 @@ jobs:
           save-if: ${{ github.event_name == 'push' }}
       - name: Install cargo-zigbuild
         if: matrix.zig
-        run: pip3 install ziglang cargo-zigbuild
+        run: pip3 install ziglang && cargo install cargo-zigbuild
       - name: Build
         run: cargo zigbuild --release -p rex-hub --target ${{ matrix.target }}
       - uses: actions/upload-artifact@v6
