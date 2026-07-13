@@ -1121,6 +1121,7 @@ export default {
       andMoreErrors: '...及另外 {count} 条错误',
       errorNotJson: '请选择 .json 文件',
       errorInvalidJson: '无效的 JSON 文件',
+      errorReadFailed: '文件读取失败',
     },
     value: {
       refresh: '刷新',

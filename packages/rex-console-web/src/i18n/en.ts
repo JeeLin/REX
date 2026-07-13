@@ -1121,6 +1121,7 @@ export default {
       andMoreErrors: '...and {count} more errors',
       errorNotJson: 'Please select a .json file',
       errorInvalidJson: 'Invalid JSON file',
+      errorReadFailed: 'Failed to read file',
     },
     value: {
       refresh: 'Refresh',

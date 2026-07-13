@@ -232,6 +232,9 @@ function processFile(file: File) {
       parseError.value = t('redis.import.errorInvalidJson')
     }
   }
+  reader.onerror = () => {
+    parseError.value = t('redis.import.errorReadFailed')
+  }
   reader.readAsText(file)
 }
 
