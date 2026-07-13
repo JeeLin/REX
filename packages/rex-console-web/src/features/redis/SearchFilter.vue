@@ -1,12 +1,27 @@
 <template>
   <div class="search-filter">
     <div class="filter-row">
-      <input
-        v-model="pattern"
-        class="filter-pattern"
-        :placeholder="t('redis.keys.filter.patternPlaceholder')"
-        @keydown.enter="applySearch"
-      />
+      <div class="pattern-wrapper">
+        <input
+          v-model="pattern"
+          class="filter-pattern"
+          :placeholder="t('redis.keys.filter.patternPlaceholder')"
+          @keydown.enter="applySearch"
+          @focus="showHistory = true"
+          @blur="hideHistoryDelayed"
+        />
+        <div v-if="showHistory && history.length > 0" class="history-dropdown">
+          <div
+            v-for="item in history"
+            :key="item"
+            class="history-item"
+            @mousedown.prevent="selectHistory(item)"
+          >
+            <span class="history-value">{{ item }}</span>
+            <span class="history-remove" @mousedown.stop="removeHistoryItem(item)">✕</span>
+          </div>
+        </div>
+      </div>
       <button class="redis-btn-sm" @click="applySearch">
         {{ t('redis.keys.search') }}
       </button>
@@ -81,16 +96,51 @@ const hasActiveFilter = computed(() => {
   return type.value !== '' || ttlMin.value !== null || ttlMax.value !== null
 })
 
+// ── Search History ──
+const HISTORY_KEY = 'rex-redis-search-history'
+const MAX_HISTORY = 10
+
+const history = ref<string[]>([])
+const showHistory = ref(false)
+
+function getHistory(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
+
+function addToHistory(val: string) {
+  if (!val || val === '*') return
+  const filtered = history.value.filter(h => h !== val)
+  filtered.unshift(val)
+  history.value = filtered.slice(0, MAX_HISTORY)
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.value))
+}
+
+function selectHistory(val: string) {
+  pattern.value = val
+  showHistory.value = false
+  applySearch()
+}
+
+function removeHistoryItem(val: string) {
+  history.value = history.value.filter(h => h !== val)
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.value))
+}
+
+function hideHistoryDelayed() {
+  setTimeout(() => { showHistory.value = false }, 200)
+}
+
 function applySearch() {
+  addToHistory(pattern.value)
   emit('search', pattern.value)
 }
 
 function applyFilter() {
-  emit('filter', {
-    type: type.value,
-    ttlMin: ttlMin.value,
-    ttlMax: ttlMax.value,
-  })
+  emit('filter', { type: type.value, ttlMin: ttlMin.value, ttlMax: ttlMax.value })
 }
 
 function clearType() {
@@ -110,6 +160,8 @@ function clearAll() {
   ttlMax.value = null
   applyFilter()
 }
+
+history.value = getHistory()
 </script>
 
 <style scoped>
@@ -130,6 +182,55 @@ function clearAll() {
   border-radius: var(--radius-sm);
   background: var(--bg-input);
   color: var(--text);
+}
+.pattern-wrapper {
+  position: relative;
+  flex: 1;
+  min-width: 150px;
+}
+.pattern-wrapper .filter-pattern {
+  width: 100%;
+  flex: none;
+}
+.history-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  margin-top: 2px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  max-height: 200px;
+  overflow-y: auto;
+}
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  font-size: var(--fs-sm);
+}
+.history-item:hover {
+  background: var(--bg-hover);
+}
+.history-value {
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-remove {
+  margin-left: 0.5rem;
+  opacity: 0.5;
+  cursor: pointer;
+}
+.history-remove:hover {
+  opacity: 1;
+  color: var(--danger);
 }
 .filter-select {
   padding: 0.4rem 0.6rem;
