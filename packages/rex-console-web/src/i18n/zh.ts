@@ -975,6 +975,11 @@ export default {
       hasNewVersion: '有新版本',
       offline: '离线',
     },
+    files: {
+      title: '文件传输',
+      maxConcurrent: '最大并发传输数',
+      maxConcurrentDesc: '同时进行的最大文件传输任务数',
+    },
   },
   sqlite: {
     title: 'SQLite 数据库',

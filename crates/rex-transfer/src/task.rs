@@ -157,6 +157,36 @@ impl TransferManager {
         self.max_concurrent
     }
 
+    /// 设置最大并发数（动态调整）
+    ///
+    /// 创建新的 Semaphore 并补偿当前正在运行的任务许可。
+    /// 如果减少并发数且当前运行任务数超过新值，已运行的任务不受影响（其持有的 permit 仍有效）。
+    pub fn set_max_concurrent(&self, new_max: usize) {
+        let new_max = new_max.clamp(1, 32);
+        let running = self.running_count();
+        // 新 semaphore 的许可数 = 新上限 - 当前正在运行的任务数（保证运行中的任务可以继续）
+        let permits = new_max.saturating_sub(running);
+        self.semaphore = Arc::new(Semaphore::new(permits));
+        self.max_concurrent = new_max;
+    }
+
+    /// 当前正在运行的任务数
+    fn running_count(&self) -> usize {
+        self.tasks
+            .try_read()
+            .map(|tasks| {
+                tasks
+                    .iter()
+                    .filter(|t| {
+                        t.try_read()
+                            .map(|t| matches!(t.status, TransferStatus::Running))
+                            .unwrap_or(false)
+                    })
+                    .count()
+            })
+            .unwrap_or(0)
+    }
+
     /// 获取当前可用的并发槽位数
     pub fn available_permits(&self) -> usize {
         self.semaphore.available_permits()

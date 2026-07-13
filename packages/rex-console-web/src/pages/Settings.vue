@@ -5,7 +5,7 @@
       <AppearanceSection />
       <TerminalSection />
       <SecuritySection />
-      <TlsSection />
+      <FilesSection />
       <BackupSection />
       <UpdateSection />
       <LoadingSpinner v-if="loading" :text="t('common.loading')" />
@@ -27,6 +27,7 @@ import ProfileSection from '@/features/settings/ProfileSection.vue'
 import AppearanceSection from '@/features/settings/AppearanceSection.vue'
 import TerminalSection from '@/features/settings/TerminalSection.vue'
 import SecuritySection from '@/features/settings/SecuritySection.vue'
+import FilesSection from '@/features/settings/FilesSection.vue'
 import TlsSection from '@/features/settings/TlsSection.vue'
 import BackupSection from '@/features/settings/BackupSection.vue'
 import UpdateSection from '@/features/settings/UpdateSection.vue'

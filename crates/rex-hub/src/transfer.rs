@@ -238,6 +238,58 @@ pub async fn remove_transfer(
     }
 }
 
+/// 并发配置请求
+#[derive(Debug, Deserialize)]
+pub struct ConcurrencyRequest {
+    pub max_concurrent: usize,
+}
+
+/// 并发配置响应
+#[derive(Debug, serde::Serialize)]
+pub struct ConcurrencyResponse {
+    pub max_concurrent: usize,
+}
+
+/// GET /api/transfer/concurrency — 获取当前传输并发配置
+pub async fn get_transfer_concurrency(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<ApiResponse<ConcurrencyResponse>>, (StatusCode, Json<ErrorResponse>)> {
+    let transfer_state = state
+        .transfer
+        .as_ref()
+        .ok_or_else(|| err_resp("INTERNAL_ERROR", "传输管理器未初始化"))?;
+
+    Ok(Json(ApiResponse {
+        data: ConcurrencyResponse {
+            max_concurrent: transfer_state.manager.max_concurrent(),
+        },
+    }))
+}
+
+/// PUT /api/transfer/concurrency — 更新传输并发数
+pub async fn set_transfer_concurrency(
+    State(state): State<Arc<AppState>>,
+    Json(input): Json<ConcurrencyRequest>,
+) -> Result<Json<ApiResponse<ConcurrencyResponse>>, (StatusCode, Json<ErrorResponse>)> {
+    let transfer_state = state
+        .transfer
+        .as_ref()
+        .ok_or_else(|| err_resp("INTERNAL_ERROR", "传输管理器未初始化"))?;
+
+    if input.max_concurrent == 0 || input.max_concurrent > 32 {
+        return Err(bad_request("并发数必须在 1-32 之间"));
+    }
+
+    transfer_state.manager.set_max_concurrent(input.max_concurrent);
+    tracing::info!(max_concurrent = input.max_concurrent, "transfer concurrency updated");
+
+    Ok(Json(ApiResponse {
+        data: ConcurrencyResponse {
+            max_concurrent: input.max_concurrent,
+        },
+    }))
+}
+
 /// 验证传输端点参数
 fn validate_endpoint(
     ep: &TransferEndpoint,

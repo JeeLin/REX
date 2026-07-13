@@ -975,6 +975,11 @@ export default {
       hasNewVersion: 'Update available',
       offline: 'Offline',
     },
+    files: {
+      title: 'Files',
+      maxConcurrent: 'Max Concurrent Transfers',
+      maxConcurrentDesc: 'Maximum number of simultaneous file transfers',
+    },
   },
   sqlite: {
     title: 'SQLite Database',

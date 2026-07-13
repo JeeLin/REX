@@ -217,6 +217,11 @@ pub fn app_with_static(
                 get(crate::transfer::get_transfer_stats),
             )
             .route(
+                "/api/transfers/concurrency",
+                get(crate::transfer::get_transfer_concurrency)
+                    .put(crate::transfer::set_transfer_concurrency),
+            )
+            .route(
                 "/api/transfers/:id",
                 get(crate::transfer::get_transfer).delete(crate::transfer::cancel_transfer),
             )

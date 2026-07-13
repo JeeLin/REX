@@ -56,3 +56,15 @@ export interface TransferStats {
 export function getTransferStats(): Promise<TransferStats> {
   return client.get('/transfers/stats').then(r => r.data.data)
 }
+
+export interface TransferConcurrency {
+  max_concurrent: number
+}
+
+export function getTransferConcurrency(): Promise<number> {
+  return client.get('/transfers/concurrency').then(r => r.data.data.max_concurrent)
+}
+
+export function setTransferConcurrency(maxConcurrent: number): Promise<number> {
+  return client.put('/transfers/concurrency', { max_concurrent: maxConcurrent }).then(r => r.data.data.max_concurrent)
+}
