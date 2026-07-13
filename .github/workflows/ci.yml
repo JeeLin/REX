@@ -111,6 +111,7 @@ jobs:
             arch: windows-amd64
     runs-on: ${{ matrix.os }}
     steps:
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
