@@ -54,7 +54,7 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             arch: linux-arm64
-            zig: true
+            cross: true
           - target: x86_64-apple-darwin
             os: macos-14
             arch: mac-amd64
@@ -74,11 +74,13 @@ jobs:
         with:
           shared-key: build-${{ matrix.target }}
           save-if: ${{ github.event_name == 'push' }}
-      - name: Install cargo-zigbuild
-        if: matrix.zig
-        run: pip3 install ziglang && cargo install cargo-zigbuild
+      - name: Install cross-compilation tools
+        if: matrix.cross
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
       - name: Build
-        run: cargo zigbuild --release -p rex-agent --target ${{ matrix.target }}
+        run: cargo build --release -p rex-agent --target ${{ matrix.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
       - uses: actions/upload-artifact@v6
         with:
           name: agent-${{ matrix.arch }}
@@ -97,7 +99,7 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             arch: linux-arm64
-            zig: true
+            cross: true
           - target: x86_64-apple-darwin
             os: macos-14
             arch: mac-amd64
@@ -109,7 +111,6 @@ jobs:
             arch: windows-amd64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -117,11 +118,13 @@ jobs:
         with:
           shared-key: build-${{ matrix.target }}
           save-if: ${{ github.event_name == 'push' }}
-      - name: Install cargo-zigbuild
-        if: matrix.zig
-        run: pip3 install ziglang && cargo install cargo-zigbuild
+      - name: Install cross-compilation tools
+        if: matrix.cross
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
       - name: Build
-        run: cargo zigbuild --release -p rex-hub --target ${{ matrix.target }}
+        run: cargo build --release -p rex-hub --target ${{ matrix.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
       - uses: actions/upload-artifact@v6
         with:
           name: hub-${{ matrix.arch }}
