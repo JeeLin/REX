@@ -19,6 +19,9 @@ jobs:
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: check
+          save-if: ${{ github.event_name == 'push' }}
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets
       - run: cargo test --workspace
@@ -51,7 +54,7 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             arch: linux-arm64
-            cross: true
+            zig: true
           - target: x86_64-apple-darwin
             os: macos-14
             arch: mac-amd64
@@ -69,14 +72,13 @@ jobs:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.target }}
-      - name: Install cross-compilation tools
-        if: matrix.cross
-        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+          shared-key: build-${{ matrix.target }}
+          save-if: ${{ github.event_name == 'push' }}
+      - name: Install cargo-zigbuild
+        if: matrix.zig
+        run: pip3 install ziglang cargo-zigbuild
       - name: Build
-        run: cargo build --release -p rex-agent --target ${{ matrix.target }}
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: cargo zigbuild --release -p rex-agent --target ${{ matrix.target }}
       - uses: actions/upload-artifact@v6
         with:
           name: agent-${{ matrix.arch }}
@@ -85,7 +87,7 @@ jobs:
   # ── 构建 Hub 二进制（全平台矩阵） ────────────────────
   # 产物用于：Docker Hub 镜像内嵌 + Release 发布
   build-hub:
-    needs: [check-rust, build-frontend]
+    needs: [check-rust]
     strategy:
       matrix:
         include:
@@ -95,7 +97,7 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             arch: linux-arm64
-            cross: true
+            zig: true
           - target: x86_64-apple-darwin
             os: macos-14
             arch: mac-amd64
@@ -113,14 +115,13 @@ jobs:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.target }}
-      - name: Install cross-compilation tools
-        if: matrix.cross
-        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+          shared-key: build-${{ matrix.target }}
+          save-if: ${{ github.event_name == 'push' }}
+      - name: Install cargo-zigbuild
+        if: matrix.zig
+        run: pip3 install ziglang cargo-zigbuild
       - name: Build
-        run: cargo build --release -p rex-hub --target ${{ matrix.target }}
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: cargo zigbuild --release -p rex-hub --target ${{ matrix.target }}
       - uses: actions/upload-artifact@v6
         with:
           name: hub-${{ matrix.arch }}
