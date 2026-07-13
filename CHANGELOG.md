@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.85.1] - 2026-07-13
+
+### Changed
+- CI 构建优化：Docker layer caching（GHA cache）复用构建层
+- CI 构建优化：rust-cache 添加 shared-key 和 save-if，提升缓存命中率
+- CI 构建优化：build-hub 解耦 build-frontend 依赖，构建并行度提升
+- CI 构建优化：aarch64 交叉编译从 cross 切换到 cargo-zigbuild，缩短编译时间
+
 ## [0.85.0] - 2026-07-13
 
 ### Fixed
