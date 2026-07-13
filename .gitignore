@@ -46,3 +46,6 @@ frontend/vite.config.js
 # AI agent context
 .cursorrules
 .dev-flow
+
+# Local analysis documents
+local/
