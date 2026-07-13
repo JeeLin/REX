@@ -6,7 +6,7 @@ use std::sync::Arc;
 ///
 /// 用于构建自定义 TLS 信任配置的 reqwest Client 和 tokio-tungstenite 连接器。
 /// 支持自定义 CA 证书和跳过证书验证（insecure 模式）。
-
+///
 /// 构建自定义 TLS 配置的 reqwest Client
 ///
 /// - `ca_cert`: 可选的 CA 证书文件路径（PEM 格式）

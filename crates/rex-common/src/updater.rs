@@ -217,11 +217,10 @@ impl UpdateChecker {
             downloaded += chunk.len() as u64;
             bytes.extend_from_slice(&chunk);
             if let Some(ref cb) = on_progress {
-                let percent = if total > 0 {
-                    (downloaded * 100 / total) as u32
-                } else {
-                    0
-                };
+                let percent = (downloaded * 100)
+                    .checked_div(total)
+                    .map(|v| v as u32)
+                    .unwrap_or(0);
                 cb(percent);
             }
         }
@@ -296,11 +295,10 @@ impl UpdateChecker {
             downloaded += chunk.len() as u64;
             bytes.extend_from_slice(&chunk);
             if let Some(ref cb) = on_progress {
-                let percent = if total > 0 {
-                    (downloaded * 100 / total) as u32
-                } else {
-                    0
-                };
+                let percent = (downloaded * 100)
+                    .checked_div(total)
+                    .map(|v| v as u32)
+                    .unwrap_or(0);
                 cb(percent);
             }
         }

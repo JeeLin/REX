@@ -48,6 +48,7 @@ impl AgentWs {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     /// 使用自定义 TLS 配置创建 AgentWs
     pub fn with_tls(
         server_ws_url: String,

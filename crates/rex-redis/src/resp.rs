@@ -195,12 +195,7 @@ impl Encoder<String> for RespEncoder {
 
 /// 在缓冲区中查找 \r\n 的位置
 fn find_crlf(src: &[u8]) -> Option<usize> {
-    for i in 0..src.len().saturating_sub(1) {
-        if src[i] == b'\r' && src[i + 1] == b'\n' {
-            return Some(i);
-        }
-    }
-    None
+    (0..src.len().saturating_sub(1)).find(|&i| src[i] == b'\r' && src[i + 1] == b'\n')
 }
 
 // ── Tests ────────────────────────────────────────────────
