@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.86.0] - 2026-07-13
+
+### Added
+- 文件传输并发数量控制：用户可在设置页面配置同时传输的最大任务数（1-10），修改后立即生效
+- Redis 批量导入：支持 JSON 格式批量导入 Redis 数据，带预览和进度展示
+- Agent 二进制下载 GitHub Release 兜底：本地缺失时自动从 GitHub 下载
+- SQL 查询历史数据库筛选：历史面板新增数据库下拉筛选器
+- SQL 结果表格固定列与列宽拖拽：首列固定，列宽可拖拽调整
+
+### Fixed
+- 前端 API 路径修正：settings.ts /api/ 前缀重复（5处）、notebook.ts /api/ 前缀重复（10处）
+- 备份导出/导入 API 路径修正：backup.ts raw fetch 缺少 /api 前缀（3处）
+- 备份 API 认证头作用域修正：token 变量作用域修复
+- Agent 下载路径匹配：同时支持扁平布局和嵌套布局（CI 子目录结构）
+- 标签页拖拽同步：reorderTab 后内容面板跟随激活
+- 传输并发管理器内部可变性修复：使用 parking_lot::Mutex 替代裸字段赋值
+
 ## [0.85.1] - 2026-07-13
 
 ### Changed
