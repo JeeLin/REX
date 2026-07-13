@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.85.0] - 2026-07-13
+
+### Fixed
+- 工作空间稳定性确认：分屏拖拽、CI 构建已验证正常
+- SqlResults 测试修复：更新表头索引以匹配 checkbox 列
+
+### Removed
+- 删除废弃的 continue.sh 脚本
+
+
 ## [0.84.3] - 2026-07-13
 
 ### Fixed
