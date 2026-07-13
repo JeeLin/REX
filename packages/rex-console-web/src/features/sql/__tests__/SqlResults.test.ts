@@ -35,10 +35,10 @@ describe('SqlResults', () => {
       props: { result: mockResult, loading: false },
     })
     const headers = wrapper.findAll('th')
-    // First th is row number (#), then data columns
-    expect(headers.length).toBeGreaterThanOrEqual(3)
-    expect(headers[1]!.text()).toContain('id')
-    expect(headers[2]!.text()).toContain('name')
+    // th order: checkbox, #, then data columns
+    expect(headers.length).toBeGreaterThanOrEqual(4)
+    expect(headers[2]!.text()).toContain('id')
+    expect(headers[3]!.text()).toContain('name')
   })
 
   it('renders data rows', () => {
