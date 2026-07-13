@@ -559,4 +559,62 @@ mod tests {
         let task = mgr.get_task(&id).await.unwrap();
         assert_eq!(task.status, TransferStatus::Cancelled);
     }
+    // ── Concurrency tests ──────────────────────────────────
+
+    #[test]
+    fn manager_default_concurrency() {
+        let mgr = TransferManager::new();
+        assert_eq!(mgr.max_concurrent(), 3);
+        assert_eq!(mgr.available_permits(), 3);
+    }
+
+    #[test]
+    fn manager_custom_concurrency() {
+        let mgr = TransferManager::with_concurrency(5);
+        assert_eq!(mgr.max_concurrent(), 5);
+        assert_eq!(mgr.available_permits(), 5);
+    }
+
+    #[test]
+    fn manager_set_max_concurrent() {
+        let mgr = TransferManager::new();
+        mgr.set_max_concurrent(10);
+        assert_eq!(mgr.max_concurrent(), 10);
+    }
+
+    #[test]
+    fn manager_set_max_concurrent_clamps() {
+        let mgr = TransferManager::new();
+        mgr.set_max_concurrent(0);
+        assert_eq!(mgr.max_concurrent(), 1);
+        mgr.set_max_concurrent(100);
+        assert_eq!(mgr.max_concurrent(), 32);
+    }
+
+    #[tokio::test]
+    async fn manager_acquire_and_release_permit() {
+        let mgr = TransferManager::with_concurrency(1);
+        assert_eq!(mgr.available_permits(), 1);
+        let _permit = mgr.acquire_permit().await;
+        assert_eq!(mgr.available_permits(), 0);
+        drop(_permit);
+        assert_eq!(mgr.available_permits(), 1);
+    }
+
+    #[tokio::test]
+    async fn manager_running_count() {
+        let mgr = TransferManager::new();
+        assert_eq!(mgr.running_count(), 0);
+
+        let id = mgr
+            .create_task(make_endpoint("/a"), make_endpoint("/b"))
+            .await;
+        mgr.set_status(&id, TransferStatus::Running).await.unwrap();
+        assert_eq!(mgr.running_count(), 1);
+
+        mgr.set_status(&id, TransferStatus::Completed)
+            .await
+            .unwrap();
+        assert_eq!(mgr.running_count(), 0);
+    }
 }
