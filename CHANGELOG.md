@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.84.3] - 2026-07-13
+
+### Fixed
+- SSH 终端复制粘贴修复：Ctrl+C/V 在终端容器任意位置聚焦时均可用（不再要求 xterm textarea 必须获得焦点）
+- 终端复制操作增加 toast 反馈：复制成功时右上角显示「已复制」
+- 工作空间终端同步修复：WorkspaceTerminal 同样支持容器级快捷键和 toast 反馈
+
 ## [0.84.2] - 2026-07-13
 
 ### Fixed
