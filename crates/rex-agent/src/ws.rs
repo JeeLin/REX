@@ -266,35 +266,30 @@ impl AgentWs {
             }
 
             // --- Version gating: Hub must serve a binary matching the expected version ---
-            let served_version = resp
+            if let Some(served) = resp
                 .headers()
                 .get("X-Agent-Version")
                 .and_then(|v| v.to_str().ok())
-                .unwrap_or("")
-                .to_string();
-
-            if !served_version.is_empty() && served_version != hub_version {
-                tracing::error!(
-                    expected = %hub_version,
-                    served = %served_version,
-                    "version mismatch — hub served a binary for a different version"
-                );
-                // Version mismatch is not retryable.
-                return;
+            {
+                if !served.is_empty() && served != hub_version {
+                    tracing::error!(
+                        expected = %hub_version,
+                        served,
+                        "version mismatch — hub served a binary for a different version"
+                    );
+                    return;
+                }
             }
 
             // --- SHA256: required, not optional ---
-            let expected_sha256 = resp
+            let sha256 = match resp
                 .headers()
                 .get("X-Agent-SHA256")
                 .and_then(|v| v.to_str().ok())
-                .map(|s| s.to_string());
-
-            let sha256 = match &expected_sha256 {
-                Some(h) => h.clone(),
+            {
+                Some(h) => h.to_string(),
                 None => {
                     tracing::error!("hub did not provide X-Agent-SHA256 — refusing to proceed without checksum");
-                    // Omitting SHA256 is not retryable.
                     return;
                 }
             };
