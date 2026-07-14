@@ -2,6 +2,7 @@
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import ResourcePanel from '@/features/resource-panel/ResourcePanel.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -20,6 +21,7 @@ const bottomNav = [
 
 const collapsed = ref(localStorage.getItem('sidebar-collapsed') === 'true')
 const fullscreen = ref(false)
+const mobileMenuOpen = ref(false)
 
 watch(collapsed, (v) => localStorage.setItem('sidebar-collapsed', String(v)))
 
@@ -33,8 +35,11 @@ const currentTitle = computed(() => {
 
 <template>
   <div class="app-layout" :class="{ 'app-layout--collapsed': collapsed, 'app-layout--fullscreen': fullscreen && isWorkspace }">
-    <!-- 侧栏：工作区全屏时隐藏 -->
-    <aside v-if="!(fullscreen && isWorkspace)" class="sidebar">
+    <!-- 移动端菜单遮罩 -->
+    <div v-if="mobileMenuOpen" class="mobile-overlay" @click="mobileMenuOpen = false" />
+
+    <!-- 侧栏：工作区全屏时隐藏，移动端为抽屉 -->
+    <aside v-if="!(fullscreen && isWorkspace)" class="sidebar" :class="{ 'sidebar--mobile-open': mobileMenuOpen }">
       <div class="sidebar-brand mono">
         <span v-if="!collapsed">REX<span class="accent">Hub</span></span>
         <span v-else class="brand-mini">R</span>
@@ -46,12 +51,16 @@ const currentTitle = computed(() => {
           :to="item.to"
           class="nav-item"
           :title="collapsed ? t(item.key) : undefined"
+          @click="mobileMenuOpen = false"
         >
           <span class="nav-icon">{{ item.icon }}</span>
           <span v-if="!collapsed" class="nav-label">{{ t(item.key) }}</span>
         </RouterLink>
       </nav>
-      <div class="sidebar-spacer" />
+
+      <!-- 资源栏：嵌入侧栏，agents 和 audit-log 之间 -->
+      <ResourcePanel v-if="!(fullscreen && isWorkspace)" class="sidebar-resource" />
+
       <nav class="sidebar-nav sidebar-bottom">
         <RouterLink
           v-for="item in bottomNav"
@@ -59,6 +68,7 @@ const currentTitle = computed(() => {
           :to="item.to"
           class="nav-item"
           :title="collapsed ? t(item.key) : undefined"
+          @click="mobileMenuOpen = false"
         >
           <span class="nav-icon">{{ item.icon }}</span>
           <span v-if="!collapsed" class="nav-label">{{ t(item.key) }}</span>
@@ -69,11 +79,14 @@ const currentTitle = computed(() => {
         </button>
       </nav>
     </aside>
+
     <div class="main">
       <header v-if="!(fullscreen && isWorkspace)" class="topbar">
+        <!-- 移动端汉堡按钮 -->
+        <button class="hamburger-btn" @click="mobileMenuOpen = !mobileMenuOpen">☰</button>
         <span class="topbar-title mono">{{ currentTitle }}</span>
-        <div v-if="isWorkspace" class="topbar-actions">
-          <button class="fullscreen-btn mono" @click="fullscreen = !fullscreen" :title="fullscreen ? 'Exit fullscreen' : 'Fullscreen'">
+        <div class="topbar-actions">
+          <button v-if="isWorkspace" class="fullscreen-btn mono" @click="fullscreen = !fullscreen" :title="fullscreen ? 'Exit fullscreen' : 'Fullscreen'">
             {{ fullscreen ? '⊟' : '⊞' }}
           </button>
         </div>
@@ -90,6 +103,13 @@ const currentTitle = computed(() => {
       <main class="content">
         <RouterView />
       </main>
+    </div>
+
+    <!-- 移动端浮动快捷按钮 -->
+    <div v-if="isWorkspace" class="mobile-fab">
+      <button class="fab-btn" title="New tab">+</button>
+      <button class="fab-btn" title="Split">⊞</button>
+      <button class="fab-btn" title="Find">🔍</button>
     </div>
   </div>
 </template>
@@ -256,5 +276,91 @@ const currentTitle = computed(() => {
   flex: 1;
   overflow: auto;
   padding: var(--space-5);
+}
+
+/* 移动端适配 */
+.hamburger-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+  cursor: pointer;
+  padding: 0 var(--space-2) 0 0;
+}
+.mobile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 998;
+}
+.sidebar-resource {
+  border-top: 1px solid var(--border);
+  flex: 1;
+  min-height: 0;
+}
+
+/* 移动端浮动快捷按钮 */
+.mobile-fab {
+  display: none;
+  position: fixed;
+  bottom: var(--space-5);
+  right: var(--space-5);
+  z-index: 999;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.fab-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border: none;
+  font-size: var(--text-lg);
+  cursor: pointer;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--transition);
+}
+.fab-btn:active {
+  transform: scale(0.92);
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--sidebar-width);
+    z-index: 999;
+    transform: translateX(-100%);
+    transition: transform var(--transition);
+  }
+  .sidebar--mobile-open {
+    transform: translateX(0);
+  }
+  .app-layout--collapsed .sidebar {
+    width: var(--sidebar-width);
+  }
+  .hamburger-btn {
+    display: block;
+  }
+  .resource-panel-desktop {
+    display: none;
+  }
+  .app-layout--collapsed .nav-item {
+    justify-content: flex-start;
+    padding: var(--space-2) var(--space-3);
+  }
+  .content {
+    padding: var(--space-3);
+  }
+  .mobile-fab {
+    display: flex;
+  }
 }
 </style>

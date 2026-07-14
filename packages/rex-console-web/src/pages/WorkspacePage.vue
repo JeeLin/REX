@@ -5,88 +5,53 @@ import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import Toast from '@/components/ui/Toast.vue'
 
-interface Connection {
+interface Tab {
   id: string
-  name: string
-  host: string
+  label: string
   protocol: 'ssh' | 'mysql' | 'redis' | 'postgresql' | 'sftp' | 'sqlite' | 's3'
-  status: StatusDotStatus
-  group: string
+  host?: string
+  status?: StatusDotStatus
 }
 
-const groups = ['Production', 'Staging']
-
-const connections: Connection[] = [
-  { id: '1', name: 'Web Server', host: '10.0.1.5', protocol: 'ssh', status: 'online', group: 'Production' },
-  { id: '2', name: 'DB Primary', host: 'db.internal', protocol: 'mysql', status: 'online', group: 'Production' },
-  { id: '3', name: 'Cache', host: 'cache.local', protocol: 'redis', status: 'offline', group: 'Production' },
-  { id: '4', name: 'Analytics', host: 'analytics.db', protocol: 'postgresql', status: 'connecting', group: 'Staging' },
-]
-
+const tabs = ref<Tab[]>([
+  { id: 'ssh-1', label: 'Web Server', protocol: 'ssh', host: '10.0.1.5', status: 'online' },
+  { id: 'mysql-1', label: 'DB Primary', protocol: 'mysql', host: 'db.internal', status: 'online' },
+])
 const activeTab = ref('ssh-1')
-const tabs = [
-  { id: 'ssh-1', label: 'SSH · 10.0.1.5', protocol: 'ssh' as const },
-  { id: 'mysql-1', label: 'MySQL · db.internal', protocol: 'mysql' as const },
-]
 
-const protoColor = (proto: Connection['protocol']) => `var(--proto-${proto})`
+const protoColor = (proto: Tab['protocol']) => `var(--proto-${proto})`
 const now = ref(new Date().toLocaleTimeString('zh-CN', { hour12: false }))
 setInterval(() => {
   now.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
 }, 1000)
 
-// 右键菜单
-const contextMenu = ref({ show: false, x: 0, y: 0, conn: null as Connection | null })
 const toastRef = ref<InstanceType<typeof Toast> | null>(null)
-function onContextMenu(e: MouseEvent, conn: Connection) {
-  e.preventDefault()
-  contextMenu.value = { show: true, x: e.clientX, y: e.clientY, conn }
-}
-function closeContextMenu() {
-  contextMenu.value.show = false
-}
-function ctxAction(action: string) {
-  const conn = contextMenu.value.conn
-  if (conn) {
-    toastRef.value?.push(`${action}: ${conn.name} (${conn.host})`, 'info')
-  }
-  closeContextMenu()
-}
-
-// 连接树折叠
-const collapsedGroups = ref(new Set<string>())
-function toggleGroup(group: string) {
-  if (collapsedGroups.value.has(group)) {
-    collapsedGroups.value.delete(group)
-  } else {
-    collapsedGroups.value.add(group)
-  }
-}
 
 // 快捷键
 useKeyboardShortcuts([
   { key: 't', ctrl: true, handler: () => {
     const id = `tab-${Date.now()}`
-    tabs.push({ id, label: 'New Tab', protocol: 'ssh' })
+    tabs.value.push({ id, label: 'New Tab', protocol: 'ssh' })
     activeTab.value = id
   } },
   { key: 'w', ctrl: true, handler: () => {
-    const idx = tabs.findIndex(t => t.id === activeTab.value)
-    if (idx >= 0 && tabs.length > 1) {
-      tabs.splice(idx, 1)
-      activeTab.value = tabs[Math.max(0, idx - 1)]!.id
+    const idx = tabs.value.findIndex(t => t.id === activeTab.value)
+    if (idx >= 0 && tabs.value.length > 1) {
+      tabs.value.splice(idx, 1)
+      activeTab.value = tabs.value[Math.max(0, idx - 1)]!.id
     }
   } },
   { key: 'Tab', ctrl: true, handler: () => {
-    const idx = tabs.findIndex(t => t.id === activeTab.value)
-    activeTab.value = tabs[(idx + 1) % tabs.length]!.id
+    const idx = tabs.value.findIndex(t => t.id === activeTab.value)
+    activeTab.value = tabs.value[(idx + 1) % tabs.value.length]!.id
   } },
 ])
 </script>
 
 <template>
-  <div class="workspace" @click="closeContextMenu">
+  <div class="workspace">
     <Toast ref="toastRef" />
+
     <!-- Tab bar -->
     <div class="ws-tabs">
       <div
@@ -97,51 +62,23 @@ useKeyboardShortcuts([
         @click="activeTab = tab.id"
       >
         <span class="ws-tab-dot" :style="{ background: protoColor(tab.protocol) }" />
-        {{ tab.label }}
+        <span>{{ tab.label }}</span>
+        <span v-if="tab.host" class="ws-tab-host muted">{{ tab.host }}</span>
+        <button class="ws-tab-close" @click.stop="() => { const i = tabs.findIndex(t => t.id === tab.id); if (i >= 0 && tabs.length > 1) { tabs.splice(i, 1); activeTab = tabs[Math.max(0, i - 1)]!.id } }">×</button>
       </div>
-      <button class="ws-tab-add" title="New connection">+</button>
+      <button class="ws-tab-add" title="New connection (Ctrl+T)">+</button>
     </div>
 
-    <div class="ws-body">
-      <!-- Connection tree -->
-      <aside class="ws-tree">
-        <div class="ws-tree-header mono">Connections</div>
-        <div class="ws-tree-list">
-          <template v-for="group in groups" :key="group">
-            <div class="ws-tree-group" @click="toggleGroup(group)">
-              <span class="ws-tree-chevron" :class="{ 'ws-collapsed': collapsedGroups.has(group) }">▸</span>
-              <span class="ws-tree-group-name mono">{{ group }}</span>
-            </div>
-            <div v-if="!collapsedGroups.has(group)">
-              <div
-                v-for="conn in connections.filter(c => c.group === group)"
-                :key="conn.id"
-                class="ws-tree-item"
-                @contextmenu="onContextMenu($event, conn)"
-              >
-                <StatusDot :status="conn.status" />
-                <span class="ws-tree-proto mono" :style="{ color: protoColor(conn.protocol) }">
-                  {{ conn.protocol.toUpperCase() }}
-                </span>
-                <span class="ws-tree-name">{{ conn.name }}</span>
-                <span class="ws-tree-host mono muted">{{ conn.host }}</span>
-              </div>
-            </div>
-          </template>
+    <!-- Content area -->
+    <div class="ws-content">
+      <div class="ws-terminal">
+        <div class="ws-term-line muted">
+          <span class="mono" style="color: var(--success)">$</span>
+          Connected to {{ tabs.find(t => t.id === activeTab)?.host || 'localhost' }} via {{ tabs.find(t => t.id === activeTab)?.protocol.toUpperCase() || 'SSH' }}
         </div>
-      </aside>
-
-      <!-- Content area -->
-      <div class="ws-content">
-        <div class="ws-terminal">
-          <div class="ws-term-line muted">
-            <span class="mono" style="color: var(--success)">$</span>
-            Connected to 10.0.1.5 via SSH
-          </div>
-          <div class="ws-term-line muted">
-            <span class="mono" style="color: var(--accent)">▸</span>
-            Terminal / SQL console will render here (M2+)
-          </div>
+        <div class="ws-term-line muted">
+          <span class="mono" style="color: var(--accent)">▸</span>
+          Terminal / SQL console will render here (M3+)
         </div>
       </div>
     </div>
@@ -149,29 +86,19 @@ useKeyboardShortcuts([
     <!-- Status bar -->
     <div class="ws-statusbar mono">
       <span class="ws-status-item">
-        <StatusDot status="online" />
-        SSH · 10.0.1.5
+        <StatusDot :status="tabs.find(t => t.id === activeTab)?.status || 'online'" />
+        {{ tabs.find(t => t.id === activeTab)?.protocol.toUpperCase() }} · {{ tabs.find(t => t.id === activeTab)?.host }}
       </span>
       <span class="ws-status-item">UTF-8</span>
       <span class="ws-status-item">LF</span>
       <span class="ws-status-spacer" />
+      <span class="ws-status-item ws-quick-actions">
+        <button class="ws-action-btn" title="New tab (Ctrl+T)">+</button>
+        <button class="ws-action-btn" title="Split view">⊞</button>
+        <button class="ws-action-btn" title="Find">🔍</button>
+      </span>
       <span class="ws-status-item">{{ now }}</span>
     </div>
-
-    <!-- 右键菜单 -->
-    <Teleport to="body">
-      <div
-        v-if="contextMenu.show"
-        class="ws-context-menu"
-        :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
-        @click.stop
-      >
-        <div class="ws-ctx-item" @click="ctxAction('Open in new tab')">Open in new tab</div>
-        <div class="ws-ctx-item" @click="ctxAction('Edit connection')">Edit connection</div>
-        <div class="ws-ctx-divider" />
-        <div class="ws-ctx-item ws-ctx-item--danger" @click="ctxAction('Disconnect')">Disconnect</div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
@@ -199,7 +126,7 @@ useKeyboardShortcuts([
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 0 var(--space-4);
+  padding: 0 var(--space-3);
   font-size: var(--text-sm);
   color: var(--text-muted);
   border-right: 1px solid var(--border);
@@ -222,6 +149,24 @@ useKeyboardShortcuts([
   border-radius: 50%;
   flex-shrink: 0;
 }
+.ws-tab-host {
+  font-size: var(--text-xs);
+}
+.ws-tab-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--text-md);
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition), background var(--transition);
+}
+.ws-tab-close:hover {
+  color: var(--danger);
+  background: rgba(248, 81, 73, 0.15);
+}
 .ws-tab-add {
   padding: 0 var(--space-3);
   background: none;
@@ -233,85 +178,6 @@ useKeyboardShortcuts([
 }
 .ws-tab-add:hover {
   color: var(--accent);
-}
-
-/* Body */
-.ws-body {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-}
-
-/* Connection tree */
-.ws-tree {
-  width: 220px;
-  flex-shrink: 0;
-  background: var(--bg-page);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-}
-.ws-tree-header {
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 1px solid var(--border);
-}
-.ws-tree-list {
-  padding: var(--space-2) 0;
-  overflow-y: auto;
-}
-.ws-tree-group {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-3);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  cursor: pointer;
-  user-select: none;
-}
-.ws-tree-group:hover {
-  color: var(--text-secondary);
-}
-.ws-tree-chevron {
-  font-size: 10px;
-  transition: transform var(--transition);
-}
-.ws-collapsed {
-  transform: rotate(0deg);
-}
-.ws-tree-group-name {
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-.ws-tree-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
-  padding-left: var(--space-6);
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: background var(--transition);
-}
-.ws-tree-item:hover {
-  background: var(--bg-hover);
-}
-.ws-tree-proto {
-  font-size: var(--text-xs);
-  font-weight: 600;
-}
-.ws-tree-name {
-  color: var(--text-primary);
-}
-.ws-tree-host {
-  font-size: var(--text-xs);
-  margin-left: auto;
 }
 
 /* Content area */
@@ -353,34 +219,38 @@ useKeyboardShortcuts([
 .ws-status-spacer {
   flex: 1;
 }
-
-/* 右键菜单 */
-.ws-context-menu {
-  position: fixed;
-  z-index: 9999;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  padding: var(--space-1) 0;
-  min-width: 160px;
-  box-shadow: var(--shadow-lg);
+.ws-quick-actions {
+  display: flex;
+  gap: var(--space-1);
 }
-.ws-ctx-item {
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
+.ws-action-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
   cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition), background var(--transition);
 }
-.ws-ctx-item:hover {
-  background: var(--bg-hover);
+.ws-action-btn:hover {
   color: var(--text-primary);
+  background: var(--bg-hover);
 }
-.ws-ctx-item--danger {
-  color: var(--danger);
-}
-.ws-ctx-divider {
-  height: 1px;
-  background: var(--border);
-  margin: var(--space-1) 0;
+
+/* 手机端适配 */
+@media (max-width: 768px) {
+  .ws-tab-host {
+    display: none;
+  }
+  .ws-statusbar .ws-status-item:nth-child(n+2) {
+    display: none;
+  }
+  .ws-statusbar .ws-status-item:last-child {
+    display: flex;
+  }
+  .ws-quick-actions {
+    display: flex !important;
+  }
 }
 </style>
