@@ -34,3 +34,5 @@ M0 里程碑文档（`docs/milestones/M0-project-skeleton.md`）+ 已实现骨�
 ## 修正记录
 - 组件库统一引用 `--bg-elevated` 变量（原部分组件用 `--bg-surface` 不一致），已对齐
 - 版本号归零至 0.1.0（与 CHANGELOG Unreleased 一致）
+- DEVELOPMENT.md M0 版本号从 1.0.0 → 0.1.0（与里程碑文档一致）
+- DEVELOPMENT.md M7 移除硬编码版本号（由里程碑文档确定）

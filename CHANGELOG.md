@@ -4,14 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [0.1.0] - Unreleased
-
-2.0 重设计起点，从 0 开始全面重写前后端。当前处于早期开发阶段。
+## [0.1.0] - 2026-07-14
 
 ### Added
-- 全新设计基调：视觉语言 REX 自有，交互布局对标 Xshell / Navicat / ARDM / Xftp
 - Rust workspace 骨架（10 crate，supervisor + worker 进程模型）
-- Vue 3 前端骨架（按功能域组织、设计令牌、路由、i18n）
-- 重写产品文档与开发里程碑（M0–M7）
-
-> 历史 0.x 变更记录保留在 git 历史（`backup/before-reset` 分支），不在此重复罗列。
+- 前端骨架（Vue 3 + Vite + TypeScript + Pinia + Router + i18n）
+- 基础组件库（11 个 UI 组件：Button/Card/Badge/StatusDot/Tabs/Table/Drawer/Modal/ContextMenu/Tooltip/Toast）
+- 设计系统预览页（/design-preview，token 可视化 + 暗/亮切换）
+- 导航框架（AppLayout 侧栏 + 6 个 stub 页面）
+- 后端代理前端（RexHub axum 静态文件服务，单端口 REX_PORT 默认 3000）
+- 侧栏收起（localStorage 持久化）
+- 工作区全屏模式
+- 资源栏嵌入侧栏（连接树/收藏/最近）
+- 工作区分栏（splitpanes，Ctrl+\ 水平/垂直分栏）
+- Agent 绑定环境（环境卡片显示 Agent 状态，Agent 表格显示所属环境）
+- 手机端适配（汉堡菜单 + 浮动快捷按钮）
+- 多语言 zh/en 骨架
+- 主题暗/亮切换
