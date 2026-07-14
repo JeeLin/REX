@@ -987,15 +987,17 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: var(--sp-lg) var(--sp-xl);
-  background: var(--bg-surface);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
   border-bottom: 1px solid var(--border-subtle);
   min-height: var(--header-height);
 }
-
 .page-title {
   font-family: var(--font-code);
-  font-size: var(--fs-md);
-  font-weight: 600;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: var(--ls-tight);
 }
 
 .header-actions {
@@ -1183,7 +1185,7 @@ onUnmounted(() => {
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: var(--accent, #3b82f6);
+    background: var(--primary);
     color: white;
     font-size: 20px;
     font-weight: bold;
