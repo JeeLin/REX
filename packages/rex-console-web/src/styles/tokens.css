@@ -79,15 +79,46 @@
   /* 过渡 */
   --transition: 0.15s ease;
 
+  /* 动画 */
+  --duration-fast: 0.1s;
+  --duration-normal: 0.2s;
+  --duration-slow: 0.3s;
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --scale-in: scale(0.95);
+  --slide-up: translateY(4px);
+  --slide-down: translateY(-4px);
+  --fade-in: fadeIn 0.2s ease-out;
+
   /* 焦点环 */
   --ring: 0 0 0 2px var(--accent);
   --ring-inset: inset 0 0 0 1px var(--accent);
 
   /* 禁用 */
   --disabled-opacity: 0.5;
+
+  /* 组件令牌 */
+  --btn-height-sm: 28px;
+  --btn-height-md: 36px;
+  --btn-height-lg: 42px;
+  --input-height-sm: 28px;
+  --input-height-md: 36px;
+  --input-height-lg: 42px;
+  --badge-radius: var(--radius-pill);
+  --card-radius: var(--radius-lg);
+  --table-row-hover: var(--bg-hover);
+  --scrollbar-width: 6px;
+  --scrollbar-thumb: var(--border-strong);
+  --scrollbar-thumb-hover: var(--text-muted);
 }
 
-/* 浅色主题（后续设置页切换） */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 浅色主题 */
 :root[data-theme='light'] {
   --bg-deep: #ffffff;
   --bg-page: #f6f8fa;
@@ -101,4 +132,6 @@
   --border-strong: #afb8c1;
   --border-subtle: #eaeef2;
   --accent-soft: rgba(232, 145, 45, 0.12);
+  --scrollbar-thumb: #d0d7de;
+  --scrollbar-thumb-hover: #afb8c1;
 }
