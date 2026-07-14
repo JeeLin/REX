@@ -16,23 +16,28 @@
 /* Shared settings section styles (not scoped — used by child components) */
 .settings-section {
   background: var(--bg-surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   margin-bottom: var(--sp-lg);
   overflow: hidden;
-  transition: border-color var(--transition-base);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
 }
 
 .settings-section:hover {
-  border-color: rgba(232,145,45,0.15);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary-subtle);
 }
 
 .settings-section-header {
   padding: var(--sp-lg) var(--sp-xl);
-  border-bottom: 1px solid var(--border);
-  font-family: var(--font-mono);
-  font-weight: 600;
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: var(--font-code);
+  font-weight: 700;
   font-size: var(--fs-md);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
 }
 
 .settings-section-body {
@@ -44,7 +49,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--sp-md) 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .settings-row:last-child {
@@ -56,29 +61,31 @@
 }
 
 .settings-row-label {
-  font-weight: 500;
+  font-weight: 600;
   margin-bottom: 2px;
+  color: var(--text-primary);
 }
 
 .settings-row-desc {
   font-size: var(--fs-sm);
-  color: var(--text-secondary);
+  color: var(--text-muted);
 }
 
 /* Toggle switch */
 .settings-toggle {
-  width: 40px;
-  height: 22px;
-  background: var(--border);
-  border-radius: 11px;
+  width: 44px;
+  height: 24px;
+  background: var(--border-default);
+  border-radius: 12px;
   position: relative;
   cursor: pointer;
-  transition: background var(--transition-fast);
+  transition: background var(--transition-fast), box-shadow var(--transition-fast);
   flex-shrink: 0;
 }
 
 .settings-toggle.active {
-  background: var(--accent);
+  background: var(--primary);
+  box-shadow: var(--glow-sm);
 }
 
 .settings-toggle::after {
