@@ -794,7 +794,7 @@ onMounted(() => {
   height: 100%;
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: var(--font-code);
 }
 
 /* 顶部状态栏 */
@@ -803,8 +803,9 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  border-bottom: 1px solid var(--border-primary);
-  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
   font-size: 13px;
   flex-shrink: 0;
 }
@@ -812,42 +813,58 @@ onMounted(() => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #f85149;
+  background: var(--danger);
+  transition: all var(--transition-fast);
 }
-.redis-status-dot.connected { background: #3fb950; }
-.redis-topbar-label { font-weight: 600; color: #f85149; }
-.redis-topbar-name { color: var(--text-secondary); }
-.redis-topbar-state { color: var(--text-secondary); font-size: 12px; }
+.redis-status-dot.connected { 
+  background: var(--success);
+  box-shadow: 0 0 8px var(--success-glow);
+}
+.redis-topbar-label { font-weight: 700; color: var(--danger); font-family: var(--font-code); }
+.redis-topbar-name { color: var(--text-secondary); font-family: var(--font-code); }
+.redis-topbar-state { color: var(--text-muted); font-size: 12px; font-family: var(--font-code); }
 .redis-topbar-spacer { flex: 1; }
 
 /* 按钮 */
 .redis-btn {
   background: var(--bg-tertiary);
-  border: 1px solid var(--border-primary);
+  border: 1px solid var(--border-default);
   color: var(--text-primary);
   padding: 3px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   font-size: 12px;
+  font-family: var(--font-code);
+  transition: all var(--transition-fast);
 }
-.redis-btn:hover { background: var(--bg-hover); }
-.redis-btn-connect { border-color: #3fb950; color: #3fb950; }
-.redis-btn-disconnect { border-color: #f85149; color: #f85149; }
+.redis-btn:hover { 
+  background: var(--bg-hover);
+  border-color: var(--primary);
+}
+.redis-btn-connect { 
+  border-color: var(--success); 
+  color: var(--success); 
+}
+.redis-btn-disconnect { 
+  border-color: var(--danger); 
+  color: var(--danger); 
+}
 
 /* 数据库选择器 */
 .redis-db-select {
   background: var(--bg-tertiary);
-  border: 1px solid var(--border-primary);
+  border: 1px solid var(--border-default);
   color: var(--text-primary);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   font-size: 12px;
-  font-family: inherit;
+  font-family: var(--font-code);
   cursor: pointer;
 }
 .redis-db-select:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-subtle);
 }
 
 /* 主区域 */
@@ -870,17 +887,19 @@ onMounted(() => {
   padding: 12px;
 }
 .redis-welcome {
-  color: var(--text-secondary);
+  color: var(--text-muted);
   font-size: 13px;
   padding: 20px 0;
+  font-family: var(--font-code);
 }
 .redis-error-banner {
-  color: #f85149;
+  color: var(--danger);
   padding: 8px 12px;
   margin-bottom: 8px;
-  border: 1px solid #f8514933;
-  border-radius: 4px;
-  background: #f8514911;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md);
+  background: rgba(239, 68, 68, 0.1);
+  font-family: var(--font-code);
 }
 
 /* 命令/响应条目 */
@@ -890,16 +909,16 @@ onMounted(() => {
   gap: 8px;
   margin-bottom: 2px;
 }
-.redis-prompt { color: #3fb950; font-weight: 600; }
-.redis-command { color: #e6edf3; }
+.redis-prompt { color: var(--success); font-weight: 700; font-family: var(--font-code); }
+.redis-command { color: var(--text-primary); font-family: var(--font-code); }
 .redis-response-line {
   display: flex;
   align-items: baseline;
   gap: 8px;
   padding-left: 16px;
 }
-.redis-elapsed { color: var(--text-secondary); font-size: 11px; }
-.redis-error { color: #f85149; }
+.redis-elapsed { color: var(--text-muted); font-size: 11px; font-family: var(--font-code); }
+.redis-error { color: var(--danger); font-family: var(--font-code); }
 
 /* 输入区域 */
 .redis-input-area {
@@ -907,8 +926,9 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-top: 1px solid var(--border-primary);
-  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
   flex-shrink: 0;
 }
 .redis-input {
@@ -917,10 +937,10 @@ onMounted(() => {
   border: none;
   outline: none;
   color: var(--text-primary);
-  font-family: inherit;
+  font-family: var(--font-code);
   font-size: 13px;
 }
-.redis-input::placeholder { color: var(--text-secondary); }
+.redis-input::placeholder { color: var(--text-muted); }
 
 /* 自动补全 */
 .redis-input-wrapper {
@@ -934,23 +954,24 @@ onMounted(() => {
   right: 0;
   max-height: 200px;
   overflow-y: auto;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-bottom: none;
-  border-radius: 4px 4px 0 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
   z-index: 10;
+  box-shadow: var(--shadow-lg);
 }
 .redis-autocomplete-item {
   padding: 4px 12px;
   font-size: 12px;
-  font-family: inherit;
+  font-family: var(--font-code);
   color: var(--text-primary);
   cursor: pointer;
 }
 .redis-autocomplete-item:hover,
 .redis-autocomplete-item.active {
-  background: var(--bg-hover);
-  color: var(--accent);
+  background: var(--primary-subtle);
+  color: var(--primary);
 }
 
 /* Create Key Modal */
