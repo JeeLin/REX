@@ -206,8 +206,13 @@ impl AgentWs {
     }
 
     /// Perform the auto-update sequence: download → verify SHA256 → backup → write state → exit
+    ///
+    /// Retries up to 3 times with exponential backoff on network/HTTP errors.
+    /// Aborts if Hub omits the SHA256 checksum (no blind trust).
+    /// Aborts if Hub serves a binary whose version header mismatches the expected `hub_version`.
     async fn perform_update(&self, hub_version: &str) {
         use sha2::{Digest, Sha256};
+        use std::time::Duration;
 
         let hub_url = self
             .server_ws_url
@@ -215,7 +220,6 @@ impl AgentWs {
             .replace("ws://", "http://")
             .replace("/ws/agent", "");
 
-        // Download new binary from Hub
         let url = format!(
             "{}/api/agent/download?os={}&arch={}",
             hub_url,
@@ -223,119 +227,187 @@ impl AgentWs {
             rex_common::updater::UpdateChecker::current_arch(),
         );
 
-        let resp = match self
-            .http_client
-            .get(&url)
-            .bearer_auth(&self.token)
-            .send()
-            .await
-        {
-            Ok(r) => r,
-            Err(e) => {
-                tracing::error!(error = %e, "failed to download update from hub");
+        const MAX_RETRIES: u32 = 3;
+        let mut last_err: Option<String> = None;
+
+        // --- Retry loop: download + verify only. Staging/backup/exit runs once after success. ---
+        for attempt in 1..=MAX_RETRIES {
+            if attempt > 1 {
+                let backoff_secs = 1u64 << (attempt - 2); // 1s, 2s
+                tracing::info!(
+                    attempt,
+                    backoff_secs,
+                    "retrying download after backoff"
+                );
+                tokio::time::sleep(Duration::from_secs(backoff_secs)).await;
+            }
+
+            let resp = match self
+                .http_client
+                .get(&url)
+                .bearer_auth(&self.token)
+                .send()
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    let msg = format!("HTTP request failed: {e}");
+                    tracing::warn!(attempt, error = %e, "download attempt failed");
+                    last_err = Some(msg);
+                    continue;
+                }
+            };
+
+            if !resp.status().is_success() {
+                let msg = format!("hub returned HTTP {}", resp.status());
+                tracing::warn!(attempt, status = %resp.status(), "download attempt rejected");
+                last_err = Some(msg);
+                continue;
+            }
+
+            // --- Version gating: Hub must serve a binary matching the expected version ---
+            let served_version = resp
+                .headers()
+                .get("X-Agent-Version")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .to_string();
+
+            if !served_version.is_empty() && served_version != hub_version {
+                tracing::error!(
+                    expected = %hub_version,
+                    served = %served_version,
+                    "version mismatch — hub served a binary for a different version"
+                );
+                // Version mismatch is not retryable.
                 return;
             }
-        };
 
-        if !resp.status().is_success() {
-            tracing::error!(status = %resp.status(), "hub returned error for download");
-            return;
-        }
+            // --- SHA256: required, not optional ---
+            let expected_sha256 = resp
+                .headers()
+                .get("X-Agent-SHA256")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_string());
 
-        let expected_sha256 = resp
-            .headers()
-            .get("X-Agent-SHA256")
-            .and_then(|v| v.to_str().ok())
-            .map(|s| s.to_string());
-
-        let total = resp.content_length().unwrap_or(0);
-        let mut bytes = Vec::with_capacity(total as usize);
-
-        let mut stream = resp.bytes_stream();
-        use futures_util::StreamExt;
-        while let Some(chunk) = stream.next().await {
-            match chunk {
-                Ok(c) => {
-                    bytes.extend_from_slice(&c);
+            let sha256 = match &expected_sha256 {
+                Some(h) => h.clone(),
+                None => {
+                    tracing::error!("hub did not provide X-Agent-SHA256 — refusing to proceed without checksum");
+                    // Omitting SHA256 is not retryable.
+                    return;
                 }
-                Err(e) => {
-                    tracing::error!(error = %e, "download stream error");
+            };
+
+            // --- Stream download into memory ---
+            let total = resp.content_length().unwrap_or(0);
+            let mut bytes = Vec::with_capacity(total as usize);
+            let mut stream = resp.bytes_stream();
+            use futures_util::StreamExt;
+            let mut stream_ok = true;
+            while let Some(chunk) = stream.next().await {
+                match chunk {
+                    Ok(c) => {
+                        bytes.extend_from_slice(&c);
+                    }
+                    Err(e) => {
+                        let msg = format!("stream error: {e}");
+                        tracing::warn!(attempt, error = %e, "download stream interrupted");
+                        last_err = Some(msg);
+                        stream_ok = false;
+                        break;
+                    }
+                }
+            }
+            if !stream_ok {
+                continue;
+            }
+
+            // --- SHA256 verification (required) ---
+            {
+                let mut hasher = Sha256::new();
+                hasher.update(&bytes);
+                let actual = format!("{:x}", hasher.finalize());
+                if actual != sha256 {
+                    tracing::error!(
+                        expected = %sha256,
+                        actual = %actual,
+                        "SHA256 verification failed"
+                    );
+                    // Checksum mismatch is not retryable.
                     return;
                 }
             }
-        }
+            tracing::info!(version = %hub_version, sha256 = %sha256, "download verified OK");
 
-        // SHA256 verification
-        if let Some(ref expected) = expected_sha256 {
-            let mut hasher = Sha256::new();
-            hasher.update(&bytes);
-            let actual = format!("{:x}", hasher.finalize());
-            if actual != *expected {
-                tracing::error!(expected = %expected, actual = %actual, "SHA256 verification failed");
+            // --- All checks passed — proceed to staging, backup, and exit ---
+            let staging_dir = self.data_dir.join("updates").join("staging");
+            if let Err(e) = std::fs::create_dir_all(&staging_dir) {
+                tracing::error!(error = %e, "failed to create staging directory");
                 return;
             }
-            tracing::info!("SHA256 verification passed");
-        } else {
-            tracing::warn!("no SHA256 checksum provided by hub, skipping verification");
+
+            let filename = format!(
+                "agent-{}-{}",
+                rex_common::updater::UpdateChecker::current_os(),
+                rex_common::updater::UpdateChecker::current_arch(),
+            );
+            let staged_path = staging_dir.join(&filename);
+            if let Err(e) = std::fs::write(&staged_path, &bytes) {
+                tracing::error!(error = %e, "failed to write staged binary");
+                return;
+            }
+
+            // chmod +x on Unix
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = std::fs::metadata(&staged_path)
+                    .map(|m| m.permissions())
+                    .unwrap_or_else(|_| std::fs::Permissions::from_mode(0o755));
+                perms.set_mode(0o755);
+                let _ = std::fs::set_permissions(&staged_path, perms);
+            }
+
+            // Backup current binary
+            let rollback_path =
+                match rex_common::updater::UpdateChecker::backup_current(&self.data_dir) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        tracing::error!(error = %e, "failed to backup current binary");
+                        return;
+                    }
+                };
+
+            // Write update state
+            let state = rex_common::update_state::UpdateState {
+                phase: rex_common::update_state::UpdatePhase::Requested,
+                target_version: hub_version.to_string(),
+                old_version: self.version.clone(),
+                staged_path: staged_path.to_string_lossy().to_string(),
+                rollback_path: rollback_path.to_string_lossy().to_string(),
+                attempt: 0,
+            };
+
+            let state_path = self.data_dir.join("update-state.json");
+            if let Err(e) = state.write(&state_path) {
+                tracing::error!(error = %e, "failed to write update state");
+                return;
+            }
+
+            tracing::info!(
+                version = %hub_version,
+                "update state written, exiting for supervisor replacement"
+            );
+            std::process::exit(10);
         }
 
-        // Write to staging directory
-        let staging_dir = self.data_dir.join("updates").join("staging");
-        if let Err(e) = std::fs::create_dir_all(&staging_dir) {
-            tracing::error!(error = %e, "failed to create staging directory");
-            return;
-        }
-
-        let filename = format!(
-            "agent-{}-{}",
-            rex_common::updater::UpdateChecker::current_os(),
-            rex_common::updater::UpdateChecker::current_arch(),
+        // All retries exhausted.
+        tracing::error!(
+            attempts = MAX_RETRIES,
+            last_error = last_err.as_deref().unwrap_or("unknown"),
+            "download failed after all retries"
         );
-        let staged_path = staging_dir.join(&filename);
-        if let Err(e) = std::fs::write(&staged_path, &bytes) {
-            tracing::error!(error = %e, "failed to write staged binary");
-            return;
-        }
-
-        // chmod +x on Unix
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&staged_path)
-                .map(|m| m.permissions())
-                .unwrap_or_else(|_| std::fs::Permissions::from_mode(0o755));
-            perms.set_mode(0o755);
-            let _ = std::fs::set_permissions(&staged_path, perms);
-        }
-
-        // Backup current binary
-        let rollback_path = match rex_common::updater::UpdateChecker::backup_current(&self.data_dir)
-        {
-            Ok(p) => p,
-            Err(e) => {
-                tracing::error!(error = %e, "failed to backup current binary");
-                return;
-            }
-        };
-
-        // Write update state
-        let state = rex_common::update_state::UpdateState {
-            phase: rex_common::update_state::UpdatePhase::Requested,
-            target_version: hub_version.to_string(),
-            old_version: self.version.clone(),
-            staged_path: staged_path.to_string_lossy().to_string(),
-            rollback_path: rollback_path.to_string_lossy().to_string(),
-            attempt: 0,
-        };
-
-        let state_path = self.data_dir.join("update-state.json");
-        if let Err(e) = state.write(&state_path) {
-            tracing::error!(error = %e, "failed to write update state");
-            return;
-        }
-
-        tracing::info!(version = %hub_version, "update state written, exiting for supervisor replacement");
-        std::process::exit(10);
     }
 }
 

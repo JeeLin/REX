@@ -89,7 +89,7 @@ pub async fn check_update(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<ApiResponse<UpdateStatusResponse>>, (StatusCode, Json<ErrorResponse>)> {
     let current = rex_common::version::VersionInfo::current();
-    let checker = rex_common::updater::UpdateChecker::new("user/rex", &current.version);
+    let checker = rex_common::updater::UpdateChecker::new("JeeLin/REX", &current.version);
 
     let result = checker.check_for_update().await;
 
@@ -138,7 +138,7 @@ pub async fn download_update(
     let data_dir =
         std::env::current_dir().map_err(|_| err_resp("INTERNAL_ERROR", "无法获取工作目录"))?;
 
-    let checker = rex_common::updater::UpdateChecker::new("user/rex", &current.version);
+    let checker = rex_common::updater::UpdateChecker::new("JeeLin/REX", &current.version);
 
     // 下载
     let staged_path = checker
@@ -146,14 +146,26 @@ pub async fn download_update(
         .await
         .map_err(|e| err_resp("DOWNLOAD_FAILED", &format!("下载失败: {e}")))?;
 
-    // SHA256 校验（如果有 checksums）
+    // SHA256 校验：从 GitHub Release 的 SHA256SUMS 验证，校验失败则拒绝应用
     let binary_name = staged_path
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
-    let checksums_url = format!("https://api.github.com/repos/user/rex/releases/latest",);
-    // 尝试获取 checksums，但不强制要求
-    let _ = rex_common::updater::verify_download(&staged_path, &checksums_url, &binary_name).await;
+    let checksums_url = "https://api.github.com/repos/JeeLin/REX/releases/latest";
+    match rex_common::updater::verify_download(&staged_path, checksums_url, &binary_name).await {
+        Ok(true) => {
+            tracing::info!(binary = %binary_name, "SHA256 verification passed");
+        }
+        Ok(false) => {
+            // 校验不通过：清理已下载文件，拒绝更新
+            let _ = std::fs::remove_file(&staged_path);
+            return Err(err_resp("SHA256_MISMATCH", "下载的二进制 SHA256 校验失败"));
+        }
+        Err(e) => {
+            // checksums 缺失或网络错误：记录但不强制阻断（与现有行为一致）
+            tracing::warn!(error = %e, "SHA256 verification skipped/unavailable");
+        }
+    }
 
     // 写入 update-state.json
     let state_path = data_dir.join("update-state.json");
@@ -198,11 +210,19 @@ pub async fn apply_update(
         return Err(err_resp("NO_UPDATE_PENDING", "没有待应用的更新"));
     }
 
+    // 验证 staged 二进制文件存在，防止 supervisor 用残留状态替换
+    let staged = std::path::PathBuf::from(&update_state.staged_path);
+    if !staged.exists() {
+        return Err(err_resp(
+            "STAGED_BINARY_MISSING",
+            "staged binary file missing — re-download the update",
+        ));
+    }
+
     // worker 以 exit code 10 退出，通知 supervisor 执行替换
     tracing::info!(version = %update_state.target_version, "applying update, exiting with code 10");
     std::process::exit(10);
 }
-
 /// GET /api/update/agents — 获取所有 Agent 版本信息
 pub async fn list_agent_versions(
     State(state): State<Arc<AppState>>,

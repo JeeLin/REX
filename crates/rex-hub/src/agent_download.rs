@@ -18,6 +18,10 @@ const AGENT_REPO: &str = "JeeLin/REX";
 pub struct DownloadQuery {
     os: String,
     arch: String,
+    /// Optional: the Hub version the agent expects. Used for tracing/audit only;
+    /// the binary returned is the one bundled with the running Hub.
+    #[allow(dead_code)]
+    version: Option<String>,
 }
 
 const VALID_OS: &[&str] = &["linux", "darwin", "windows"];
@@ -103,8 +107,8 @@ pub async fn download_agent(
     // 本地缺失 → 从 GitHub Release 兜底下载
     match download_from_github(&query.os, &query.arch).await {
         Ok(data) => {
-            let version =
-                std::env::var("REX_AGENT_VERSION").unwrap_or_else(|_| "unknown".to_string());
+            let version = std::env::var("REX_AGENT_VERSION")
+                .unwrap_or_else(|_| rex_common::version::VERSION.to_string());
             respond_binary(data, &query.os, &query.arch, &version)
         }
         Err(e) => (
@@ -131,8 +135,8 @@ async fn serve_local(
 ) -> axum::response::Response {
     match tokio::fs::read(path).await {
         Ok(data) => {
-            let version =
-                std::env::var("REX_AGENT_VERSION").unwrap_or_else(|_| "unknown".to_string());
+            let version = std::env::var("REX_AGENT_VERSION")
+                .unwrap_or_else(|_| rex_common::version::VERSION.to_string());
             respond_binary(data, os, arch, &version)
         }
         Err(_) => (
