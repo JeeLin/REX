@@ -6,17 +6,20 @@ import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
 const route = useRoute()
 
-const nav = [
+const mainNav = [
   { to: '/workspace', key: 'nav.workspace', icon: '▤' },
   { to: '/dashboard', key: 'nav.dashboard', icon: '◧' },
   { to: '/environments', key: 'nav.environments', icon: '⛁' },
   { to: '/agents', key: 'nav.agents', icon: '⬡' },
+]
+
+const bottomNav = [
   { to: '/audit-log', key: 'nav.auditLog', icon: '☰' },
   { to: '/settings', key: 'nav.settings', icon: '⚙' },
 ]
 
 const currentTitle = computed(() => {
-  const match = nav.find((n) => route.path.startsWith(n.to))
+  const match = [...mainNav, ...bottomNav].find((n) => route.path.startsWith(n.to))
   return match ? t(match.key) : 'REX Hub'
 })
 </script>
@@ -26,7 +29,14 @@ const currentTitle = computed(() => {
     <aside class="sidebar">
       <div class="sidebar-brand mono">REX<span class="accent">Hub</span></div>
       <nav class="sidebar-nav">
-        <RouterLink v-for="item in nav" :key="item.to" :to="item.to" class="nav-item">
+        <RouterLink v-for="item in mainNav" :key="item.to" :to="item.to" class="nav-item">
+          <span class="nav-icon">{{ item.icon }}</span>
+          <span class="nav-label">{{ t(item.key) }}</span>
+        </RouterLink>
+      </nav>
+      <div class="sidebar-spacer" />
+      <nav class="sidebar-nav sidebar-bottom">
+        <RouterLink v-for="item in bottomNav" :key="item.to" :to="item.to" class="nav-item">
           <span class="nav-icon">{{ item.icon }}</span>
           <span class="nav-label">{{ t(item.key) }}</span>
         </RouterLink>
@@ -73,6 +83,13 @@ const currentTitle = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+.sidebar-bottom {
+  padding-bottom: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+.sidebar-spacer {
+  flex: 1;
 }
 .nav-item {
   display: flex;

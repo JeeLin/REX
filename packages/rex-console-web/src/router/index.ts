@@ -12,20 +12,14 @@ const routes: RouteRecordRaw[] = [
     path: '/',
     component: () => import('../layouts/AppLayout.vue'),
     children: [
-      { path: '', redirect: '/dashboard' },
+      { path: '', redirect: '/workspace' },
+      { path: 'workspace', name: 'workspace', component: () => import('../pages/WorkspacePage.vue') },
       { path: 'dashboard', name: 'dashboard', component: () => import('../pages/DashboardPage.vue') },
       { path: 'environments', name: 'environments', component: () => import('../pages/EnvironmentsPage.vue') },
       { path: 'agents', name: 'agents', component: () => import('../pages/AgentsPage.vue') },
       { path: 'audit-log', name: 'audit-log', component: () => import('../pages/AuditLogPage.vue') },
       { path: 'settings', name: 'settings', component: () => import('../pages/SettingsPage.vue') },
     ],
-  },
-  // 全屏工作区（含工作空间外壳）
-  {
-    path: '/workspace',
-    name: 'workspace',
-    component: () => import('../pages/WorkspacePage.vue'),
-    meta: { fullscreen: true },
   },
   // 设计系统预览（开发期可视化，2.0 打磨阶段保留）
   {
