@@ -1,0 +1,68 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+
+[workspace.dependencies]
+rex-common = { path = "crates/rex-common" }
+rex-ssh = { path = "crates/rex-ssh" }
+rex-transfer = { path = "crates/rex-transfer" }
+rex-mysql = { path = "crates/rex-mysql" }
+rex-postgresql = { path = "crates/rex-postgresql" }
+rex-redis = { path = "crates/rex-redis" }
+rex-sqlite = { path = "crates/rex-sqlite" }
+rex-s3 = { path = "crates/rex-s3" }
+hmac = "0.12"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+async-trait = "0.1"
+serde_yaml = "0.9"
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive"] }
+axum = { version = "0.7", features = ["ws", "multipart"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "mysql", "postgres"] }
+jsonwebtoken = "9"
+argon2 = { version = "0.5", features = ["password-hash", "rand"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+uuid = { version = "1", features = ["v4"] }
+tower = { version = "0.4", features = ["util"] }
+r2d2 = "0.8"
+tempfile = "3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-webpki-roots", "stream"] }
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+sha2 = "0.10"
+hex = "0.4"
+hostname = "0.4"
+russh = { version = "=0.50.0-beta.7" }
+russh-keys = { version = "=0.50.0-beta.7" }
+russh-sftp = "2.3"
+aes-gcm = "0.10"
+base64 = "0.22"
+tower-http = { version = "0.5", features = ["fs", "cors"] }
+tokio-rustls = { version = "0.26" }
+rustls = "0.23"
+rustls-pemfile = "2"
+hyper-util = { version = "0.1", features = ["tokio", "server-auto", "http1"] }
+rustls-acme = { version = "0.15", features = ["ring", "tokio", "tower"] }
+rcgen = { version = "0.13", features = ["pem"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+bytes = "1"
+dotenvy = "0.15"
+futures = { version = "0.3", features = ["alloc"] }
+futures-util = { version = "0.3", features = ["alloc"] }
+async-stream = { version = "0.3" }
+chrono = { version = "0.4", features = ["serde"] }
+getrandom = "0.2"
+aws-sdk-s3 = { version = "1.137.0", features = ["rt-tokio"] }
+aws-config = { version = "1.6.3", features = ["behavior-version-latest"] }
+sysinfo = "0.30"
+zip = "2"
+parking_lot = "0.12"
+webpki-roots = "0.26"

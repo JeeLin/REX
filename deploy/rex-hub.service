@@ -1,0 +1,28 @@
+[Unit]
+Description=REX Hub — self-hosted remote resource management console
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/rex-hub
+Restart=on-failure
+RestartSec=3
+# Supervisor runs as PID 1, spawns worker child process.
+# Crash restart, exit 10 (manual update/apply), rollback, and health checks
+# are handled by the built-in supervisor.
+
+# Directories — adjust to match your deployment
+WorkingDirectory=/opt/rex-hub
+Environment=DATA_DIR=/opt/rex-hub/data
+Environment=REX_SECRET_KEY=CHANGE_ME
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/rex-hub/data
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

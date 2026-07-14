@@ -1,0 +1,35 @@
+# Agent Docker 镜像：复制 CI 预构建的二进制
+#
+# CI 流程：
+# 1. build-agent → dist/rex-agent (amd64), dist/arm64/rex-agent (arm64)
+# 2. 本 Dockerfile 根据 TARGETARCH 选择对应二进制
+
+FROM debian:bookworm-slim
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN useradd -r -s /bin/false agent
+
+WORKDIR /app
+RUN mkdir -p /app/data && chown agent:agent /app/data
+
+# 复制两个架构的二进制，根据 TARGETARCH 选择
+COPY dist/rex-agent /tmp/rex-agent-amd64
+COPY dist/arm64/rex-agent /tmp/rex-agent-arm64
+ARG TARGETARCH
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+      cp /tmp/rex-agent-arm64 /app/rex-agent; \
+    else \
+      cp /tmp/rex-agent-amd64 /app/rex-agent; \
+    fi && \
+    rm -f /tmp/rex-agent-amd64 /tmp/rex-agent-arm64 && \
+    chmod +x /app/rex-agent
+
+USER agent
+ENV DATA_DIR=/app/data
+
+# No --worker: supervisor runs as PID 1, spawns worker child process.
+# Supervisor handles crash restart and exit 10 (update-from-hub) with rollback/health checks.
+CMD ["/app/rex-agent"]
