@@ -234,11 +234,7 @@ impl AgentWs {
         for attempt in 1..=MAX_RETRIES {
             if attempt > 1 {
                 let backoff_secs = 1u64 << (attempt - 2); // 1s, 2s
-                tracing::info!(
-                    attempt,
-                    backoff_secs,
-                    "retrying download after backoff"
-                );
+                tracing::info!(attempt, backoff_secs, "retrying download after backoff");
                 tokio::time::sleep(Duration::from_secs(backoff_secs)).await;
             }
 
@@ -289,7 +285,9 @@ impl AgentWs {
             {
                 Some(h) => h.to_string(),
                 None => {
-                    tracing::error!("hub did not provide X-Agent-SHA256 — refusing to proceed without checksum");
+                    tracing::error!(
+                        "hub did not provide X-Agent-SHA256 — refusing to proceed without checksum"
+                    );
                     return;
                 }
             };
