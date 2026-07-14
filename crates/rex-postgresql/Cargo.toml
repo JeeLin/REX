@@ -1,0 +1,6 @@
+[package]
+name = "rex-postgresql"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

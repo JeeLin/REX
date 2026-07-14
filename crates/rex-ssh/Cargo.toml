@@ -1,0 +1,6 @@
+[package]
+name = "rex-ssh"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

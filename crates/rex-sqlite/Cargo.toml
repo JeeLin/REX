@@ -1,0 +1,6 @@
+[package]
+name = "rex-sqlite"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

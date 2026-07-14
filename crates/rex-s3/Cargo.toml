@@ -1,0 +1,6 @@
+[package]
+name = "rex-s3"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

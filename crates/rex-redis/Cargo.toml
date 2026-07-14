@@ -1,0 +1,6 @@
+[package]
+name = "rex-redis"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
