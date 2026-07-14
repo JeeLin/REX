@@ -112,6 +112,7 @@ pub fn run_update_supervisor(
                         if let Err(e) = perform_replacement(&state, &config.data_dir) {
                             tracing::error!(error = %e, "binary replacement failed");
                             state.phase = UpdatePhase::Failed;
+                            state.error = e.to_string();
                             state.write(&state_path)?;
                             break;
                         }
@@ -237,6 +238,7 @@ fn rollback(
     if !rollback.exists() {
         tracing::error!("rollback binary not found, cannot rollback");
         state.phase = crate::update_state::UpdatePhase::Failed;
+        state.error = "rollback binary not found".to_string();
         state.write(state_path)?;
         return Ok(());
     }

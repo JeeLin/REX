@@ -136,6 +136,13 @@ fn run_migrations(conn: &Connection) -> Result<()> {
     // Migration: add config_json to agents table for agent configuration
     let _ =
         conn.execute_batch("ALTER TABLE agents ADD COLUMN config_json TEXT NOT NULL DEFAULT '{}'");
+    // Migration: add update_phase and update_error columns to agents table
+    let _ = conn.execute_batch(
+        "ALTER TABLE agents ADD COLUMN update_phase TEXT NOT NULL DEFAULT 'idle'",
+    );
+    let _ = conn.execute_batch(
+        "ALTER TABLE agents ADD COLUMN update_error TEXT",
+    );
 
     Ok(())
 }

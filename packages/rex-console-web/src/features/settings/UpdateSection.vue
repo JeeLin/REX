@@ -56,8 +56,23 @@
           <span class="version-platform">{{ av.platform }}</span>
           <template v-if="av.status === 'online'">
             <span class="version-ver">{{ av.version }}</span>
-            <span class="version-tag" :class="av.needs_update ? 'outdated' : 'latest'">
+            <span v-if="av.update_phase && av.update_phase !== 'idle'" class="version-tag updating">
+              {{ t('settings.update.agentUpdating') }}
+            </span>
+            <span v-else class="version-tag" :class="av.needs_update ? 'outdated' : 'latest'">
               {{ agentStatusLabel(av) }}
+            </span>
+            <span v-if="av.update_phase === 'rolled_back'" class="version-tag rolled-back">
+              {{ t('settings.update.agentRolledBack') }}
+            </span>
+            <span v-if="av.update_error" class="version-error" :title="av.update_error">
+              ✗
+            </span>
+            <span v-if="av.auto_update" class="auto-update-badge on">
+              {{ t('settings.update.autoUpdateOn') }}
+            </span>
+            <span v-else class="auto-update-badge off">
+              {{ t('settings.update.autoUpdateOff') }}
             </span>
             <span v-if="av.sha256" class="version-sha" :title="av.sha256">
               {{ av.sha256.slice(0, 8) }}
@@ -347,6 +362,41 @@ function agentStatusLabel(av: AgentVersionInfo): string {
 
 .version-tag.outdated {
   color: var(--warning, #ffc107);
+}
+.version-tag.updating {
+  color: var(--info, #17a2b8);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.version-tag.rolled-back {
+  color: var(--danger, #dc3545);
+}
+
+.version-error {
+  margin-left: var(--sp-xs);
+  color: var(--danger, #dc3545);
+  font-size: var(--fs-xs);
+  cursor: help;
+}
+
+.auto-update-badge {
+  margin-left: var(--sp-xs);
+  font-size: var(--fs-xs);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.auto-update-badge.on {
+  color: var(--success, #28a745);
+}
+
+.auto-update-badge.off {
+  color: var(--text-muted);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 .version-sha {

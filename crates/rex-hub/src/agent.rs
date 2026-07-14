@@ -390,12 +390,14 @@ pub fn update_heartbeat_with_config(
     version: &str,
     sha256: &str,
     config_json: &str,
+    update_phase: &str,
+    update_error: Option<&str>,
 ) {
     let now = now_iso();
     if let Ok(conn) = db.pool.get() {
         let _ = conn.execute(
-            "UPDATE agents SET version = ?1, sha256 = ?2, last_seen_at = ?3, status = 'online', config_json = ?4, updated_at = ?3 WHERE id = ?5",
-            rusqlite::params![version, sha256, now, config_json, agent_id],
+            "UPDATE agents SET version = ?1, sha256 = ?2, last_seen_at = ?3, status = 'online', config_json = ?4, update_phase = ?5, update_error = ?6, updated_at = ?3 WHERE id = ?7",
+            rusqlite::params![version, sha256, now, config_json, update_phase, update_error, agent_id],
         );
     }
 }

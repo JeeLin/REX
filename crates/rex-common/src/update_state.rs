@@ -31,6 +31,8 @@ pub struct UpdateState {
     pub staged_path: String,
     pub rollback_path: String,
     pub attempt: u32,
+    #[serde(default)]
+    pub error: String,
 }
 
 impl Default for UpdateState {
@@ -42,6 +44,7 @@ impl Default for UpdateState {
             staged_path: String::new(),
             rollback_path: String::new(),
             attempt: 0,
+            error: String::new(),
         }
     }
 }
@@ -99,6 +102,7 @@ mod tests {
             staged_path: "/tmp/rex-new".to_string(),
             rollback_path: "/tmp/rex-old".to_string(),
             attempt: 1,
+            error: String::new(),
         };
 
         state.write(&path).unwrap();

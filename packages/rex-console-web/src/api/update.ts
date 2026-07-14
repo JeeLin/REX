@@ -21,6 +21,9 @@ export interface AgentVersionInfo {
   status: string
   last_seen_at: string | null
   platform: string
+  update_phase: string
+  update_error: string | null
+  auto_update: boolean
 }
 
 export interface DownloadProgress {

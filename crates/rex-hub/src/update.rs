@@ -20,8 +20,8 @@ pub struct UpdateStatusResponse {
     pub auto_check_enabled: bool,
 }
 
-/// Agent 版本信息
 #[derive(Debug, Serialize)]
+/// Agent 版本信息
 pub struct AgentVersionInfo {
     pub agent_id: String,
     pub name: String,
@@ -32,6 +32,9 @@ pub struct AgentVersionInfo {
     pub status: String,
     pub last_seen_at: Option<String>,
     pub platform: String,
+    pub update_phase: String,
+    pub update_error: Option<String>,
+    pub auto_update: bool,
 }
 
 /// 下载进度
@@ -181,6 +184,7 @@ pub async fn download_update(
         staged_path: staged_path.to_string_lossy().to_string(),
         rollback_path: rollback_path.to_string_lossy().to_string(),
         attempt: 0,
+        error: String::new(),
     };
 
     update_state
@@ -238,16 +242,23 @@ pub async fn list_agent_versions(
 
         let mut stmt = conn
             .prepare(
-                "SELECT id, name, environment_id, version, sha256, status, last_seen_at, os, arch
+                "SELECT id, name, environment_id, version, sha256, status, last_seen_at, os, arch,
+                        update_phase, update_error, config_json
                  FROM agents ORDER BY environment_id, name",
             )
             .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?;
-
         let agents = stmt
             .query_map([], |row| {
                 let version: String = row.get(3)?;
                 let os: String = row.get(7)?;
                 let arch: String = row.get(8)?;
+                let update_phase: String = row.get(9)?;
+                let update_error: Option<String> = row.get(10)?;
+                let config_json: String = row.get(11)?;
+                let auto_update: bool = serde_json::from_str::<serde_json::Value>(&config_json)
+                    .ok()
+                    .and_then(|v| v.get("auto_update").and_then(|b| b.as_bool()))
+                    .unwrap_or(true);
                 Ok(AgentVersionInfo {
                     agent_id: row.get(0)?,
                     name: row.get(1)?,
@@ -258,6 +269,9 @@ pub async fn list_agent_versions(
                     status: row.get(5)?,
                     last_seen_at: row.get(6)?,
                     platform: format!("{} · {}", os, arch),
+                    update_phase,
+                    update_error,
+                    auto_update,
                 })
             })
             .map_err(|_| err_resp("INTERNAL_ERROR", "内部错误"))?

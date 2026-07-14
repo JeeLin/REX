@@ -200,7 +200,9 @@ async fn handle_agent_socket(socket: WebSocket, state: Arc<AppState>) {
                                         let config_json = serde_json::json!({
                                             "auto_update": auto_update.as_bool().unwrap_or(true),
                                         });
-                                        agent::update_heartbeat_with_config(&db, &aid, ver, sha, &config_json.to_string());
+                                        let update_phase = ws_msg.payload["update_phase"].as_str().unwrap_or("idle");
+                                        let update_error = ws_msg.payload["update_error"].as_str().map(|s| s.to_string());
+                                        agent::update_heartbeat_with_config(&db, &aid, ver, sha, &config_json.to_string(), update_phase, update_error.as_deref());
                                     } else {
                                         agent::update_heartbeat(&db, &aid, ver, sha);
                                     }

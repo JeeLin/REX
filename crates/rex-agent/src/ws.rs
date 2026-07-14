@@ -136,18 +136,24 @@ impl AgentWs {
         let agent_id = self.agent_id.clone();
         let auto_update = self.auto_update;
         let log_collector = self.log_collector.clone();
+        let data_dir = self.data_dir.clone();
         let mut heartbeat_timer = interval(Duration::from_secs(30));
 
         loop {
             tokio::select! {
                 _ = heartbeat_timer.tick() => {
                     let recent_logs = log_collector.drain_since();
+                    // Read update state from disk
+                    let state_path = data_dir.join("update-state.json");
+                    let update_state = rex_common::update_state::UpdateState::read(&state_path);
                     let heartbeat = WsMessage {
                         msg_type: "heartbeat".to_string(),
                         payload: serde_json::json!({
                             "agent_id": agent_id,
                             "version": version,
                             "auto_update": auto_update,
+                            "update_phase": serde_json::to_value(&update_state.phase).unwrap_or_default(),
+                            "update_error": if update_state.error.is_empty() { None } else { Some(&update_state.error) },
                             "recent_logs": recent_logs,
                         }),
                     };
@@ -380,6 +386,7 @@ impl AgentWs {
                 staged_path: staged_path.to_string_lossy().to_string(),
                 rollback_path: rollback_path.to_string_lossy().to_string(),
                 attempt: 0,
+                error: String::new(),
             };
 
             let state_path = self.data_dir.join("update-state.json");
