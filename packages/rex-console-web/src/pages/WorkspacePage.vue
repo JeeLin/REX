@@ -2,6 +2,8 @@
 import { ref } from 'vue'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
+import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
+import Toast from '@/components/ui/Toast.vue'
 
 interface Connection {
   id: string
@@ -35,12 +37,20 @@ setInterval(() => {
 
 // 右键菜单
 const contextMenu = ref({ show: false, x: 0, y: 0, conn: null as Connection | null })
+const toastRef = ref<InstanceType<typeof Toast> | null>(null)
 function onContextMenu(e: MouseEvent, conn: Connection) {
   e.preventDefault()
   contextMenu.value = { show: true, x: e.clientX, y: e.clientY, conn }
 }
 function closeContextMenu() {
   contextMenu.value.show = false
+}
+function ctxAction(action: string) {
+  const conn = contextMenu.value.conn
+  if (conn) {
+    toastRef.value?.push(`${action}: ${conn.name} (${conn.host})`, 'info')
+  }
+  closeContextMenu()
 }
 
 // 连接树折叠
@@ -52,10 +62,31 @@ function toggleGroup(group: string) {
     collapsedGroups.value.add(group)
   }
 }
+
+// 快捷键
+useKeyboardShortcuts([
+  { key: 't', ctrl: true, handler: () => {
+    const id = `tab-${Date.now()}`
+    tabs.push({ id, label: 'New Tab', protocol: 'ssh' })
+    activeTab.value = id
+  } },
+  { key: 'w', ctrl: true, handler: () => {
+    const idx = tabs.findIndex(t => t.id === activeTab.value)
+    if (idx >= 0 && tabs.length > 1) {
+      tabs.splice(idx, 1)
+      activeTab.value = tabs[Math.max(0, idx - 1)]!.id
+    }
+  } },
+  { key: 'Tab', ctrl: true, handler: () => {
+    const idx = tabs.findIndex(t => t.id === activeTab.value)
+    activeTab.value = tabs[(idx + 1) % tabs.length]!.id
+  } },
+])
 </script>
 
 <template>
   <div class="workspace" @click="closeContextMenu">
+    <Toast ref="toastRef" />
     <!-- Tab bar -->
     <div class="ws-tabs">
       <div
@@ -135,10 +166,10 @@ function toggleGroup(group: string) {
         :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
         @click.stop
       >
-        <div class="ws-ctx-item">Open in new tab</div>
-        <div class="ws-ctx-item">Edit connection</div>
+        <div class="ws-ctx-item" @click="ctxAction('Open in new tab')">Open in new tab</div>
+        <div class="ws-ctx-item" @click="ctxAction('Edit connection')">Edit connection</div>
         <div class="ws-ctx-divider" />
-        <div class="ws-ctx-item ws-ctx-item--danger">Disconnect</div>
+        <div class="ws-ctx-item ws-ctx-item--danger" @click="ctxAction('Disconnect')">Disconnect</div>
       </div>
     </Teleport>
   </div>
