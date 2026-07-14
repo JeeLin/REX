@@ -78,6 +78,13 @@
 
   /* 过渡 */
   --transition: 0.15s ease;
+
+  /* 焦点环 */
+  --ring: 0 0 0 2px var(--accent);
+  --ring-inset: inset 0 0 0 1px var(--accent);
+
+  /* 禁用 */
+  --disabled-opacity: 0.5;
 }
 
 /* 浅色主题（后续设置页切换） */
