@@ -4,9 +4,9 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [1.0.0] - 2026-07-14
+## [0.1.0] - Unreleased
 
-2.0 重设计首个版本。从 0 开始全面重写前后端。
+2.0 重设计起点，从 0 开始全面重写前后端。当前处于早期开发阶段。
 
 ### Added
 - 全新设计基调：视觉语言 REX 自有，交互布局对标 Xshell / Navicat / ARDM / Xftp
