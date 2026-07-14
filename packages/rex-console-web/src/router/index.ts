@@ -27,6 +27,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../pages/WorkspacePage.vue'),
     meta: { fullscreen: true },
   },
+  // 设计系统预览（开发期可视化，2.0 打磨阶段保留）
+  {
+    path: '/design-preview',
+    name: 'design-preview',
+    component: () => import('../features/design-preview/DesignPreview.vue'),
+  },
 ]
 
 const router = createRouter({
