@@ -59,6 +59,9 @@
             <span class="version-tag" :class="av.needs_update ? 'outdated' : 'latest'">
               {{ agentStatusLabel(av) }}
             </span>
+            <span v-if="av.sha256" class="version-sha" :title="av.sha256">
+              {{ av.sha256.slice(0, 8) }}
+            </span>
           </template>
           <span v-else class="version-offline">{{ t('settings.update.offline') }}</span>
         </div>
@@ -344,6 +347,13 @@ function agentStatusLabel(av: AgentVersionInfo): string {
 
 .version-tag.outdated {
   color: var(--warning, #ffc107);
+}
+
+.version-sha {
+  margin-left: var(--sp-xs);
+  font-size: var(--fs-xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
 }
 
 .version-offline {
