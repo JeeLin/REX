@@ -417,9 +417,6 @@
 .transition-colors {
   transition: color var(--transition-fast), background-color var(--transition-fast);
 }
-.transition-colors {
-  transition: color var(--transition-fast), background-color var(--transition-fast);
-}
 
 /* ── SQL Console ── */
 .sql-layout {
