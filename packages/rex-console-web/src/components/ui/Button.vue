@@ -4,13 +4,20 @@ withDefaults(
     variant?: 'primary' | 'secondary' | 'danger' | 'ghost'
     size?: 'sm' | 'md' | 'lg'
     disabled?: boolean
+    loading?: boolean
+    block?: boolean
   }>(),
-  { variant: 'secondary', size: 'md', disabled: false },
+  { variant: 'secondary', size: 'md', disabled: false, loading: false, block: false },
 )
 </script>
 
 <template>
-  <button class="btn" :class="[`btn--${variant}`, `btn--${size}`]" :disabled="disabled">
+  <button
+    class="btn"
+    :class="[`btn--${variant}`, `btn--${size}`, { 'btn--block': block, 'btn--loading': loading }]"
+    :disabled="disabled || loading"
+  >
+    <span v-if="loading" class="btn-spinner" />
     <slot />
   </button>
 </template>
@@ -82,5 +89,28 @@ withDefaults(
 .btn--ghost:hover:not(:disabled) {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+.btn--block {
+  width: 100%;
+}
+.btn--loading {
+  position: relative;
+  color: transparent;
+}
+.btn-spinner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+.btn--primary .btn-spinner {
+  border-color: var(--text-on-accent);
+  border-right-color: transparent;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>

@@ -2,13 +2,16 @@
 withDefaults(
   defineProps<{
     tone?: 'neutral' | 'accent' | 'success' | 'danger' | 'info' | 'purple' | 'warning'
+    size?: 'sm' | 'md'
+    dot?: boolean
   }>(),
-  { tone: 'neutral' },
+  { tone: 'neutral', size: 'md', dot: false },
 )
 </script>
 
 <template>
-  <span class="badge" :class="`badge--${tone}`">
+  <span class="badge" :class="[`badge--${tone}`, `badge--${size}`, { 'badge--dot': dot }]">
+    <span v-if="dot" class="badge-dot" />
     <slot />
   </span>
 </template>

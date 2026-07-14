@@ -1,16 +1,18 @@
 <script setup lang="ts" generic="T extends Record<string, any>">
-defineProps<{
+withDefaults(defineProps<{
   columns: { key: string; label: string; width?: string; align?: 'left' | 'right' | 'center' }[]
   rows: T[]
   rowKey?: (row: T, index: number) => string | number
-}>()
+  striped?: boolean
+  compact?: boolean
+}>(), { striped: false, compact: false })
 
 defineEmits<{ rowClick: [row: T, index: number] }>()
 </script>
 
 <template>
   <div class="table-wrap">
-    <table class="table">
+    <table class="table" :class="{ 'table--striped': striped, 'table--compact': compact }">
       <thead>
         <tr>
           <th
@@ -24,20 +26,29 @@ defineEmits<{ rowClick: [row: T, index: number] }>()
         </tr>
       </thead>
       <tbody>
-        <tr
-          v-for="(row, i) in rows"
-          :key="rowKey ? rowKey(row, i) : i"
-          class="tr"
-          @click="$emit('rowClick', row, i)"
-        >
-          <td
-            v-for="col in columns"
-            :key="col.key"
-            :style="{ textAlign: col.align }"
-            class="td"
+        <template v-if="rows.length">
+          <tr
+            v-for="(row, i) in rows"
+            :key="rowKey ? rowKey(row, i) : i"
+            class="tr"
+            @click="$emit('rowClick', row, i)"
           >
-            <slot :name="`cell-${col.key}`" :row="row" :value="row[col.key]">
-              {{ row[col.key] }}
+            <td
+              v-for="col in columns"
+              :key="col.key"
+              :style="{ textAlign: col.align }"
+              class="td"
+            >
+              <slot :name="`cell-${col.key}`" :row="row" :value="row[col.key]">
+                {{ row[col.key] }}
+              </slot>
+            </td>
+          </tr>
+        </template>
+        <tr v-else>
+          <td :colspan="columns.length" class="td td--empty">
+            <slot name="empty">
+              <span class="muted">No data</span>
             </slot>
           </td>
         </tr>
@@ -77,5 +88,17 @@ defineEmits<{ rowClick: [row: T, index: number] }>()
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border-subtle);
   color: var(--text-primary);
+}
+.td--empty {
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+}
+.table--striped .tr:nth-child(even) {
+  background: var(--bg-elevated);
+}
+.table--compact .th,
+.table--compact .td {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
 }
 </style>

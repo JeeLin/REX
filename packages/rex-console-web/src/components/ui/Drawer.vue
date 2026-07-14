@@ -1,7 +1,7 @@
 <script setup lang="ts">
 withDefaults(
-  defineProps<{ modelValue: boolean; side?: 'left' | 'right' | 'bottom'; title?: string }>(),
-  { side: 'right', title: '' },
+  defineProps<{ modelValue: boolean; side?: 'left' | 'right' | 'bottom'; title?: string; width?: string }>(),
+  { side: 'right', title: '', width: '420px' },
 )
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 </script>
@@ -12,7 +12,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
       <div v-if="modelValue" class="overlay" @click="emit('update:modelValue', false)" />
     </Transition>
     <Transition :name="`drawer-${side}`">
-      <aside v-if="modelValue" class="drawer" :class="`drawer--${side}`">
+      <aside v-if="modelValue" class="drawer" :class="`drawer--${side}`" :style="side !== 'bottom' ? { width } : {}">
         <header v-if="title || $slots.header" class="drawer-header">
           <slot name="header"><h3 class="drawer-title">{{ title }}</h3></slot>
           <button class="drawer-close" @click="emit('update:modelValue', false)">✕</button>
