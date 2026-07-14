@@ -8,10 +8,8 @@ name = "rex-hub"
 path = "src/bin/rex-hub.rs"
 
 [dependencies]
-rex-common = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 axum = { workspace = true }
-tower = { workspace = true }
 tower-http = { workspace = true }

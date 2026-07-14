@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onBeforeUnmount } from 'vue'
 import { Splitpanes, Pane } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
-import Toast from '@/components/ui/Toast.vue'
 
 interface Tab {
   id: string
@@ -32,11 +31,10 @@ const splitCount = ref(1)
 
 const protoColor = (proto: Tab['protocol']) => `var(--proto-${proto})`
 const now = ref(new Date().toLocaleTimeString('zh-CN', { hour12: false }))
-setInterval(() => {
+const timer = setInterval(() => {
   now.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
 }, 1000)
-
-const toastRef = ref<InstanceType<typeof Toast> | null>(null)
+onBeforeUnmount(() => clearInterval(timer))
 
 const activeTabInfo = computed(() => tabs.value.find(t => t.id === activeTab.value))
 
@@ -80,8 +78,6 @@ useKeyboardShortcuts([
 
 <template>
   <div class="workspace">
-    <Toast ref="toastRef" />
-
     <!-- Tab bar -->
     <div class="ws-tabs">
       <div

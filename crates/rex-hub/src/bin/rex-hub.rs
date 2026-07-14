@@ -66,7 +66,8 @@ fn build_router(static_dir: PathBuf) -> Router {
     Router::new()
         // TODO: M2+ 在此添加 /api/* 路由
         .fallback(get_service(serve_dir).handle_error(|err| async move {
-            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("static serve error: {err}"))
+            tracing::error!(error = %err, "static file serve error");
+            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
         }))
 }
 
