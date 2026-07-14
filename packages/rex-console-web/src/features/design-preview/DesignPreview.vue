@@ -11,6 +11,7 @@ import Drawer from '@/components/ui/Drawer.vue'
 import Modal from '@/components/ui/Modal.vue'
 import Tooltip from '@/components/ui/Tooltip.vue'
 import Toast from '@/components/ui/Toast.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
 const theme = ref<'dark' | 'light'>('dark')
 function toggleTheme() {
@@ -183,6 +184,20 @@ function fireToast(tone: 'success' | 'error' | 'info') {
         <Button variant="ghost" @click="fireToast('error')">✕ Error</Button>
         <Button variant="ghost" @click="fireToast('info')">ℹ Info</Button>
       </div>
+    </section>
+
+    <!-- Empty State -->
+    <section class="dp-section">
+      <h2 class="dp-h2">Empty State</h2>
+      <Card>
+        <EmptyState
+          icon="⌘"
+          title="No connections yet"
+          description="Add a connection to get started. Connect to SSH, MySQL, Redis, or any supported protocol."
+        >
+          <Button variant="primary">Add Connection</Button>
+        </EmptyState>
+      </Card>
     </section>
 
     <Drawer v-model="showDrawer" title="Sample Drawer">

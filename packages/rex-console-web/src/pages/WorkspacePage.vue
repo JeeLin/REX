@@ -9,13 +9,16 @@ interface Connection {
   host: string
   protocol: 'ssh' | 'mysql' | 'redis' | 'postgresql' | 'sftp' | 'sqlite' | 's3'
   status: StatusDotStatus
+  group: string
 }
 
+const groups = ['Production', 'Staging']
+
 const connections: Connection[] = [
-  { id: '1', name: 'Web Server', host: '10.0.1.5', protocol: 'ssh', status: 'online' },
-  { id: '2', name: 'DB Primary', host: 'db.internal', protocol: 'mysql', status: 'online' },
-  { id: '3', name: 'Cache', host: 'cache.local', protocol: 'redis', status: 'offline' },
-  { id: '4', name: 'Analytics', host: 'analytics.db', protocol: 'postgresql', status: 'connecting' },
+  { id: '1', name: 'Web Server', host: '10.0.1.5', protocol: 'ssh', status: 'online', group: 'Production' },
+  { id: '2', name: 'DB Primary', host: 'db.internal', protocol: 'mysql', status: 'online', group: 'Production' },
+  { id: '3', name: 'Cache', host: 'cache.local', protocol: 'redis', status: 'offline', group: 'Production' },
+  { id: '4', name: 'Analytics', host: 'analytics.db', protocol: 'postgresql', status: 'connecting', group: 'Staging' },
 ]
 
 const activeTab = ref('ssh-1')
@@ -29,10 +32,30 @@ const now = ref(new Date().toLocaleTimeString('zh-CN', { hour12: false }))
 setInterval(() => {
   now.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
 }, 1000)
+
+// 右键菜单
+const contextMenu = ref({ show: false, x: 0, y: 0, conn: null as Connection | null })
+function onContextMenu(e: MouseEvent, conn: Connection) {
+  e.preventDefault()
+  contextMenu.value = { show: true, x: e.clientX, y: e.clientY, conn }
+}
+function closeContextMenu() {
+  contextMenu.value.show = false
+}
+
+// 连接树折叠
+const collapsedGroups = ref(new Set<string>())
+function toggleGroup(group: string) {
+  if (collapsedGroups.value.has(group)) {
+    collapsedGroups.value.delete(group)
+  } else {
+    collapsedGroups.value.add(group)
+  }
+}
 </script>
 
 <template>
-  <div class="workspace">
+  <div class="workspace" @click="closeContextMenu">
     <!-- Tab bar -->
     <div class="ws-tabs">
       <div
@@ -53,17 +76,31 @@ setInterval(() => {
       <aside class="ws-tree">
         <div class="ws-tree-header mono">Connections</div>
         <div class="ws-tree-list">
-          <div v-for="conn in connections" :key="conn.id" class="ws-tree-item">
-            <StatusDot :status="conn.status" />
-            <span class="ws-tree-proto mono" :style="{ color: protoColor(conn.protocol) }">
-              {{ conn.protocol.toUpperCase() }}
-            </span>
-            <span class="ws-tree-name">{{ conn.name }}</span>
-          </div>
+          <template v-for="group in groups" :key="group">
+            <div class="ws-tree-group" @click="toggleGroup(group)">
+              <span class="ws-tree-chevron" :class="{ 'ws-collapsed': collapsedGroups.has(group) }">▸</span>
+              <span class="ws-tree-group-name mono">{{ group }}</span>
+            </div>
+            <div v-if="!collapsedGroups.has(group)">
+              <div
+                v-for="conn in connections.filter(c => c.group === group)"
+                :key="conn.id"
+                class="ws-tree-item"
+                @contextmenu="onContextMenu($event, conn)"
+              >
+                <StatusDot :status="conn.status" />
+                <span class="ws-tree-proto mono" :style="{ color: protoColor(conn.protocol) }">
+                  {{ conn.protocol.toUpperCase() }}
+                </span>
+                <span class="ws-tree-name">{{ conn.name }}</span>
+                <span class="ws-tree-host mono muted">{{ conn.host }}</span>
+              </div>
+            </div>
+          </template>
         </div>
       </aside>
 
-      <!-- Content area (terminal placeholder) -->
+      <!-- Content area -->
       <div class="ws-content">
         <div class="ws-terminal">
           <div class="ws-term-line muted">
@@ -89,6 +126,21 @@ setInterval(() => {
       <span class="ws-status-spacer" />
       <span class="ws-status-item">{{ now }}</span>
     </div>
+
+    <!-- 右键菜单 -->
+    <Teleport to="body">
+      <div
+        v-if="contextMenu.show"
+        class="ws-context-menu"
+        :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+        @click.stop
+      >
+        <div class="ws-ctx-item">Open in new tab</div>
+        <div class="ws-ctx-item">Edit connection</div>
+        <div class="ws-ctx-divider" />
+        <div class="ws-ctx-item ws-ctx-item--danger">Disconnect</div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -161,7 +213,7 @@ setInterval(() => {
 
 /* Connection tree */
 .ws-tree {
-  width: 200px;
+  width: 220px;
   flex-shrink: 0;
   background: var(--bg-page);
   border-right: 1px solid var(--border);
@@ -180,11 +232,37 @@ setInterval(() => {
   padding: var(--space-2) 0;
   overflow-y: auto;
 }
+.ws-tree-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.ws-tree-group:hover {
+  color: var(--text-secondary);
+}
+.ws-tree-chevron {
+  font-size: 10px;
+  transition: transform var(--transition);
+}
+.ws-collapsed {
+  transform: rotate(0deg);
+}
+.ws-tree-group-name {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
 .ws-tree-item {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-1) var(--space-3);
+  padding-left: var(--space-6);
   font-size: var(--text-sm);
   color: var(--text-secondary);
   cursor: pointer;
@@ -199,6 +277,10 @@ setInterval(() => {
 }
 .ws-tree-name {
   color: var(--text-primary);
+}
+.ws-tree-host {
+  font-size: var(--text-xs);
+  margin-left: auto;
 }
 
 /* Content area */
@@ -239,5 +321,35 @@ setInterval(() => {
 }
 .ws-status-spacer {
   flex: 1;
+}
+
+/* 右键菜单 */
+.ws-context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: var(--space-1) 0;
+  min-width: 160px;
+  box-shadow: var(--shadow-lg);
+}
+.ws-ctx-item {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.ws-ctx-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.ws-ctx-item--danger {
+  color: var(--danger);
+}
+.ws-ctx-divider {
+  height: 1px;
+  background: var(--border);
+  margin: var(--space-1) 0;
 }
 </style>
