@@ -602,7 +602,7 @@ onUnmounted(() => {
   align-items: center;
   gap: var(--sp-sm);
   padding: var(--sp-lg);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
   min-height: var(--header-height);
   flex-shrink: 0;
 }
@@ -663,7 +663,7 @@ onUnmounted(() => {
 .search-input {
   width: 100%;
   padding: var(--sp-xs) var(--sp-sm);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   background: var(--bg-deep);
   color: var(--text-primary);
@@ -673,7 +673,8 @@ onUnmounted(() => {
 }
 
 .search-input:focus {
-  border-color: var(--accent);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-subtle);
 }
 
 .search-input::placeholder {
@@ -714,7 +715,7 @@ onUnmounted(() => {
 
 .nav-item.active {
   background: var(--bg-hover);
-  color: var(--accent);
+  color: var(--primary);
 }
 
 .nav-icon {
@@ -866,7 +867,7 @@ onUnmounted(() => {
 /* ── Sidebar Sections (Favorites, Recent) ── */
 .sidebar-section {
   padding: var(--sp-sm);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-subtle);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -964,7 +965,7 @@ onUnmounted(() => {
 /* ── Footer ─────────────────────────────── */
 .sidebar-footer {
   padding: var(--sp-sm);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 
@@ -987,12 +988,12 @@ onUnmounted(() => {
   justify-content: space-between;
   padding: var(--sp-lg) var(--sp-xl);
   background: var(--bg-surface);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
   min-height: var(--header-height);
 }
 
 .page-title {
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--fs-md);
   font-weight: 600;
 }
@@ -1127,7 +1128,7 @@ onUnmounted(() => {
     right: 0;
     height: 56px;
     background: var(--bg-surface);
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--border-subtle);
     z-index: var(--z-sticky);
     align-items: center;
     justify-content: space-around;
@@ -1152,7 +1153,7 @@ onUnmounted(() => {
   }
 
   .bottom-nav-item.active {
-    color: var(--accent);
+    color: var(--primary);
   }
 
   .bottom-nav-item:hover {
