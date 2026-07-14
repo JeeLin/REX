@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.87.0] - 2026-07-14
+
+### Added
+- Agent 自动更新可靠性：下载失败重试（3次，指数退避）、SHA256 校验（必须）、版本门禁（不匹配则中止）
+- Hub 更新可靠性：GitHub 仓库修正（JeeLin/REX）、SHA256 校验强制执行、staged 二进制文件存在性检查
+- Agent 二进制随 Hub 镜像打包：CI 构建自动将 Agent 二进制复制到 agent-binaries/，内网环境可从 Hub 拉取更新
+- Agent 版本 SHA256 指纹展示：设置页版本总览显示 Agent SHA256 前 8 位
+- Docker supervisor 模式：Hub/Agent Dockerfile CMD 改为 supervisor 模式，支持崩溃自动重启和更新替换
+- Docker compose 健康检查：Hub/Agent compose 文件新增 healthcheck
+- systemd 服务模板：deploy/rex-hub.service 和 deploy/rex-agent.service 模板
+
+### Fixed
+- Hub 自动更新 GitHub 仓库硬编码错误：`user/rex` → `JeeLin/REX`
+- Hub SHA256 校验静默忽略：现在正确处理校验结果（失败则拒绝，API 不可用则警告）
+- Agent 下载版本回退：从 `"unknown"` 改为 `CARGO_PKG_VERSION`，确保版本一致
+
 ## [0.86.0] - 2026-07-13
 
 ### Added
