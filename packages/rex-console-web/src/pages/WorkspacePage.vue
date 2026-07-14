@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { Splitpanes, Pane } from 'splitpanes'
+import 'splitpanes/dist/splitpanes.css'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
@@ -13,11 +15,20 @@ interface Tab {
   status?: StatusDotStatus
 }
 
+interface SplitPane {
+  id: string
+  direction: 'row' | 'column'
+  children: (SplitPane | string)[]
+}
+
 const tabs = ref<Tab[]>([
   { id: 'ssh-1', label: 'Web Server', protocol: 'ssh', host: '10.0.1.5', status: 'online' },
   { id: 'mysql-1', label: 'DB Primary', protocol: 'mysql', host: 'db.internal', status: 'online' },
 ])
 const activeTab = ref('ssh-1')
+const splitDirection = ref<'row' | 'column'>('row')
+const panes = ref<string[]>(['ssh-1'])
+const splitCount = ref(1)
 
 const protoColor = (proto: Tab['protocol']) => `var(--proto-${proto})`
 const now = ref(new Date().toLocaleTimeString('zh-CN', { hour12: false }))
@@ -26,6 +37,23 @@ setInterval(() => {
 }, 1000)
 
 const toastRef = ref<InstanceType<typeof Toast> | null>(null)
+
+const activeTabInfo = computed(() => tabs.value.find(t => t.id === activeTab.value))
+
+// 分栏操作
+function splitHorizontal() {
+  splitCount.value++
+  splitDirection.value = 'row'
+}
+function splitVertical() {
+  splitCount.value++
+  splitDirection.value = 'column'
+}
+function closePane(idx: number) {
+  if (splitCount.value > 1) {
+    splitCount.value--
+  }
+}
 
 // 快捷键
 useKeyboardShortcuts([
@@ -45,6 +73,8 @@ useKeyboardShortcuts([
     const idx = tabs.value.findIndex(t => t.id === activeTab.value)
     activeTab.value = tabs.value[(idx + 1) % tabs.value.length]!.id
   } },
+  { key: '\\', ctrl: true, handler: splitHorizontal },
+  { key: '\\', ctrl: true, shift: true, handler: splitVertical },
 ])
 </script>
 
@@ -69,32 +99,50 @@ useKeyboardShortcuts([
       <button class="ws-tab-add" title="New connection (Ctrl+T)">+</button>
     </div>
 
-    <!-- Content area -->
-    <div class="ws-content">
-      <div class="ws-terminal">
-        <div class="ws-term-line muted">
-          <span class="mono" style="color: var(--success)">$</span>
-          Connected to {{ tabs.find(t => t.id === activeTab)?.host || 'localhost' }} via {{ tabs.find(t => t.id === activeTab)?.protocol.toUpperCase() || 'SSH' }}
-        </div>
-        <div class="ws-term-line muted">
-          <span class="mono" style="color: var(--accent)">▸</span>
-          Terminal / SQL console will render here (M3+)
-        </div>
-      </div>
+    <!-- Split panes -->
+    <div class="ws-body">
+      <Splitpanes
+        :horizontal="splitDirection === 'column'"
+        class="ws-split"
+        @resized="() => {}"
+      >
+        <Pane v-for="i in splitCount" :key="i" :size="100 / splitCount" :min-size="20">
+          <div class="ws-pane">
+            <div class="ws-pane-header mono">
+              <span>{{ activeTabInfo?.label || 'Tab' }}</span>
+              <div class="ws-pane-actions">
+                <button class="ws-pane-btn" @click="splitHorizontal" title="Split horizontal (Ctrl+\)">⊞</button>
+                <button class="ws-pane-btn" @click="splitVertical" title="Split vertical (Ctrl+Shift+\)">⊟</button>
+                <button v-if="splitCount > 1" class="ws-pane-btn" @click="closePane(i - 1)" title="Close pane">×</button>
+              </div>
+            </div>
+            <div class="ws-terminal">
+              <div class="ws-term-line muted">
+                <span class="mono" style="color: var(--success)">$</span>
+                Connected to {{ activeTabInfo?.host || 'localhost' }} via {{ activeTabInfo?.protocol.toUpperCase() || 'SSH' }}
+              </div>
+              <div class="ws-term-line muted">
+                <span class="mono" style="color: var(--accent)">▸</span>
+                Terminal / SQL console will render here (M3+)
+              </div>
+            </div>
+          </div>
+        </Pane>
+      </Splitpanes>
     </div>
 
     <!-- Status bar -->
     <div class="ws-statusbar mono">
       <span class="ws-status-item">
-        <StatusDot :status="tabs.find(t => t.id === activeTab)?.status || 'online'" />
-        {{ tabs.find(t => t.id === activeTab)?.protocol.toUpperCase() }} · {{ tabs.find(t => t.id === activeTab)?.host }}
+        <StatusDot :status="activeTabInfo?.status || 'online'" />
+        {{ activeTabInfo?.protocol.toUpperCase() }} · {{ activeTabInfo?.host }}
       </span>
       <span class="ws-status-item">UTF-8</span>
       <span class="ws-status-item">LF</span>
       <span class="ws-status-spacer" />
       <span class="ws-status-item ws-quick-actions">
-        <button class="ws-action-btn" title="New tab (Ctrl+T)">+</button>
-        <button class="ws-action-btn" title="Split view">⊞</button>
+        <button class="ws-action-btn" @click="splitHorizontal" title="Split horizontal">⊞</button>
+        <button class="ws-action-btn" @click="splitVertical" title="Split vertical">⊟</button>
         <button class="ws-action-btn" title="Find">🔍</button>
       </span>
       <span class="ws-status-item">{{ now }}</span>
@@ -180,14 +228,61 @@ useKeyboardShortcuts([
   color: var(--accent);
 }
 
-/* Content area */
-.ws-content {
+/* Split panes */
+.ws-body {
   flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.ws-split {
+  height: 100%;
+}
+:deep(.splitpanes__splitter) {
+  background-color: var(--border);
+  min-width: 3px;
+  min-height: 3px;
+}
+:deep(.splitpanes__splitter:hover) {
+  background-color: var(--accent);
+}
+
+/* Pane */
+.ws-pane {
+  height: 100%;
   display: flex;
   flex-direction: column;
-  min-width: 0;
   background: var(--bg-deep);
 }
+.ws-pane-header {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-3);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.ws-pane-actions {
+  display: flex;
+  gap: var(--space-1);
+}
+.ws-pane-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition);
+}
+.ws-pane-btn:hover {
+  color: var(--accent);
+}
+
+/* Terminal */
 .ws-terminal {
   flex: 1;
   padding: var(--space-4);
@@ -240,17 +335,9 @@ useKeyboardShortcuts([
 
 /* 手机端适配 */
 @media (max-width: 768px) {
-  .ws-tab-host {
-    display: none;
-  }
-  .ws-statusbar .ws-status-item:nth-child(n+2) {
-    display: none;
-  }
-  .ws-statusbar .ws-status-item:last-child {
-    display: flex;
-  }
-  .ws-quick-actions {
-    display: flex !important;
-  }
+  .ws-tab-host { display: none; }
+  .ws-statusbar .ws-status-item:nth-child(n+2) { display: none; }
+  .ws-statusbar .ws-status-item:last-child { display: flex; }
+  .ws-quick-actions { display: flex !important; }
 }
 </style>
