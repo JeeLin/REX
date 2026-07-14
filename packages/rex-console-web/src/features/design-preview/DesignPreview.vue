@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import Button from '@/components/ui/Button.vue'
 import Card from '@/components/ui/Card.vue'
 import Badge from '@/components/ui/Badge.vue'
@@ -200,6 +201,24 @@ function fireToast(tone: 'success' | 'error' | 'info') {
       </Card>
     </section>
 
+    <!-- Page Navigation -->
+    <section class="dp-section">
+      <h2 class="dp-h2">Pages</h2>
+      <div class="page-links">
+        <RouterLink v-for="p in [
+          { to: '/workspace', label: 'Workspace', desc: 'Terminal, SQL, Redis console' },
+          { to: '/dashboard', label: 'Dashboard', desc: 'Stats and quick connect' },
+          { to: '/environments', label: 'Environments', desc: 'Group connections' },
+          { to: '/agents', label: 'Agents', desc: 'Manage agent nodes' },
+          { to: '/audit-log', label: 'Audit Log', desc: 'Connection history' },
+          { to: '/settings', label: 'Settings', desc: 'Appearance and terminal' },
+        ]" :key="p.to" :to="p.to" class="page-link">
+          <span class="page-link-label">{{ p.label }}</span>
+          <span class="page-link-desc muted">{{ p.desc }}</span>
+        </RouterLink>
+      </div>
+    </section>
+
     <Drawer v-model="showDrawer" title="Sample Drawer">
       <p style="color: var(--text-secondary)">Drawer content goes here. Side: right, blurred overlay.</p>
     </Drawer>
@@ -321,5 +340,33 @@ function fireToast(tone: 'success' | 'error' | 'info') {
 .label {
   font-size: var(--text-xs);
   color: var(--text-muted);
+}
+.page-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
+.page-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-decoration: none;
+  transition: border-color var(--transition), background var(--transition);
+}
+.page-link:hover {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+}
+.page-link-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.page-link-desc {
+  font-size: var(--text-xs);
 }
 </style>
