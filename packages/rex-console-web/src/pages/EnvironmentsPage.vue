@@ -2,18 +2,27 @@
 import Card from '@/components/ui/Card.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
+import StatusDot from '@/components/ui/StatusDot.vue'
+import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+
+interface EnvAgent {
+  name: string
+  status: StatusDotStatus
+  version: string
+}
 
 interface Env {
   name: string
   description: string
   connections: number
   icon: string
+  agent?: EnvAgent
 }
 
 const environments: Env[] = [
-  { name: 'Production', description: '生产环境服务器和数据库', connections: 8, icon: '🚀' },
-  { name: 'Staging', description: '预发布环境', connections: 4, icon: '🔬' },
+  { name: 'Production', description: '生产环境服务器和数据库', connections: 8, icon: '🚀', agent: { name: 'prod-agent-01', status: 'online', version: '0.1.0' } },
+  { name: 'Staging', description: '预发布环境', connections: 4, icon: '🔬', agent: { name: 'staging-agent', status: 'offline', version: '0.1.0' } },
   { name: 'Development', description: '开发和测试环境', connections: 6, icon: '🔧' },
 ]
 
@@ -44,6 +53,15 @@ const hasEnvironments = environments.length > 0
             <div class="env-name">{{ env.name }}</div>
             <div class="env-desc muted">{{ env.description }}</div>
           </div>
+        </div>
+        <div class="env-agent" v-if="env.agent">
+          <StatusDot :status="env.agent.status" />
+          <span class="mono env-agent-name">{{ env.agent.name }}</span>
+          <span class="muted env-agent-version">v{{ env.agent.version }}</span>
+        </div>
+        <div class="env-agent env-agent--none" v-else>
+          <span class="muted">No agent</span>
+          <span class="muted env-agent-hint">· 内网资源需要 Agent 代理</span>
         </div>
         <div class="env-footer">
           <Badge tone="accent">{{ env.connections }} connections</Badge>
@@ -103,5 +121,27 @@ const hasEnvironments = environments.length > 0
 .env-footer {
   display: flex;
   justify-content: flex-end;
+}
+.env-agent {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border);
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
+}
+.env-agent-name {
+  color: var(--text-secondary);
+}
+.env-agent-version {
+  font-size: var(--text-xs);
+  margin-left: auto;
+}
+.env-agent--none {
+  color: var(--text-muted);
+}
+.env-agent-hint {
+  font-size: 11px;
 }
 </style>

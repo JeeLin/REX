@@ -22,6 +22,7 @@ const connections = ref<Connection[]>([
   { id: '2', name: 'DB Primary', host: 'db.internal', protocol: 'mysql', status: 'online', group: 'Production', favorite: true, lastUsed: '5m ago' },
   { id: '3', name: 'Cache', host: 'cache.local', protocol: 'redis', status: 'offline', group: 'Production', lastUsed: '1h ago' },
   { id: '4', name: 'Analytics', host: 'analytics.db', protocol: 'postgresql', status: 'connecting', group: 'Staging', lastUsed: '3h ago' },
+  { id: '5', name: 'Dev API', host: 'localhost:3000', protocol: 'ssh', status: 'online', group: 'Development', lastUsed: '1d ago' },
 ])
 
 const groups = computed(() => [...new Set(connections.value.map(c => c.group))])

@@ -13,17 +13,19 @@ interface Agent {
   status: StatusDotStatus
   version: string
   lastSeen: string
+  environment: string
 }
 
 const agents: Agent[] = [
-  { id: '1', name: 'Agent-US-East', host: 'agent-1.internal', status: 'online', version: '0.1.0', lastSeen: '12s ago' },
-  { id: '2', name: 'Agent-EU-West', host: 'agent-2.internal', status: 'connecting', version: '0.1.0', lastSeen: '—' },
-  { id: '3', name: 'Agent-AP-South', host: 'agent-3.internal', status: 'offline', version: '0.0.9', lastSeen: '2h ago' },
+  { id: '1', name: 'prod-agent-01', host: 'prod-server-01', status: 'online', version: '0.1.0', lastSeen: '12s ago', environment: 'Production' },
+  { id: '2', name: 'staging-agent', host: 'staging-server', status: 'connecting', version: '0.1.0', lastSeen: '—', environment: 'Staging' },
+  { id: '3', name: 'dev-agent', host: 'dev-workstation', status: 'offline', version: '0.0.9', lastSeen: '2h ago', environment: 'Development' },
 ]
 
 const columns = [
   { key: 'name', label: 'Agent' },
-  { key: 'host', label: 'Host', width: '180px' },
+  { key: 'environment', label: 'Environment', width: '140px' },
+  { key: 'host', label: 'Host', width: '160px' },
   { key: 'status', label: 'Status', width: '110px', align: 'left' as const },
   { key: 'version', label: 'Version', width: '90px' },
   { key: 'lastSeen', label: 'Last Seen', width: '100px' },
