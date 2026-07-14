@@ -6,6 +6,7 @@ import { i18n } from './i18n'
 import './styles/variables.css'
 import './styles/base.css'
 import './styles/components.css'
+import './styles/sidebar.css'
 
 const app = createApp(App)
 app.use(createPinia())
