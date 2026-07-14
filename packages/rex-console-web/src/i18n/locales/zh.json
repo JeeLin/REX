@@ -1,0 +1,12 @@
+{
+  "app": { "name": "REX Hub" },
+  "nav": {
+    "workspace": "工作区",
+    "dashboard": "仪表盘",
+    "environments": "环境",
+    "agents": "Agent",
+    "auditLog": "审计日志",
+    "settings": "设置"
+  },
+  "common": { "loading": "加载中…", "save": "保存", "cancel": "取消", "delete": "删除", "confirm": "确认" }
+}

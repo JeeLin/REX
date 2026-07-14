@@ -1,0 +1,12 @@
+{
+  "app": { "name": "REX Hub" },
+  "nav": {
+    "workspace": "Workspace",
+    "dashboard": "Dashboard",
+    "environments": "Environments",
+    "agents": "Agents",
+    "auditLog": "Audit Log",
+    "settings": "Settings"
+  },
+  "common": { "loading": "Loading…", "save": "Save", "cancel": "Cancel", "delete": "Delete", "confirm": "Confirm" }
+}
