@@ -1,6 +1,7 @@
 import { ref, shallowRef, onBeforeUnmount } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { getTerminalTheme } from './terminal-themes'
 
 interface TerminalOptions {
   host: string
@@ -28,28 +29,7 @@ export function useTerminal() {
       cursorBlink: true,
       fontSize: 14,
       fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
-      theme: {
-        background: '#0D1117',
-        foreground: '#E6EDF3',
-        cursor: '#E6EDF3',
-        selectionBackground: '#264F78',
-        black: '#484F58',
-        red: '#FF7B72',
-        green: '#3FB950',
-        yellow: '#D29922',
-        blue: '#58A6FF',
-        magenta: '#BC8CFF',
-        cyan: '#39C5CF',
-        white: '#B1BAC4',
-        brightBlack: '#6E7681',
-        brightRed: '#FFA198',
-        brightGreen: '#56D364',
-        brightYellow: '#E3B341',
-        brightBlue: '#79C0FF',
-        brightMagenta: '#D2A8FF',
-        brightCyan: '#56D4DD',
-        brightWhite: '#F0F6FC',
-      },
+      theme: getTerminalTheme('default'),
       allowProposedApi: true,
       ...options,
     })
@@ -180,6 +160,14 @@ export function useTerminal() {
     fitAddon.value?.fit()
   }
 
+  /** 切换终端主题 */
+  function setTheme(themeName: string) {
+    const theme = getTerminalTheme(themeName)
+    if (terminal.value) {
+      terminal.value.options.theme = theme
+    }
+  }
+
   /** 销毁终端 */
   function dispose() {
     disposed = true
@@ -203,6 +191,7 @@ export function useTerminal() {
     connect,
     disconnect,
     fit,
+    setTheme,
     dispose,
   }
 }
