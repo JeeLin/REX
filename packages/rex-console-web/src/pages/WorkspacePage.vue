@@ -8,6 +8,7 @@ import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import ConnectionTree from '@/features/workspace/ConnectionTree.vue'
 import QuickConnect from '@/features/workspace/QuickConnect.vue'
 import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
+import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
 
 interface Tab {
   id: string
@@ -111,6 +112,33 @@ function finishRename(id: string, newLabel: string) {
     tab.renaming = false
   }
 }
+
+// 资源属性
+const showProps = ref(false)
+const propsTabId = ref('')
+
+function openProperties(tabId: string) {
+  propsTabId.value = tabId
+  showProps.value = true
+  tabContextMenu.value.show = false
+}
+
+const propsResource = computed(() => {
+  const tab = tabs.value.find(t => t.id === propsTabId.value)
+  if (!tab) return undefined
+  const [host, port] = (tab.host || '').split(':')
+  return {
+    name: tab.label,
+    protocol: tab.protocol,
+    host: host || '',
+    port: port || '',
+    user: '',
+    password: '',
+    encoding: 'UTF-8',
+    color: tab.color || '',
+    notes: '',
+  }
+})
 
 // 分栏操作
 function splitHorizontal() {
@@ -242,6 +270,8 @@ useKeyboardShortcuts([
         <div class="tab-ctx-item" @click="closeOtherTabs(tabContextMenu.tabId)">Close Others</div>
         <div class="tab-ctx-item" @click="closeTabsRight(tabContextMenu.tabId)">Close Right</div>
         <div class="tab-ctx-separator" />
+        <div class="tab-ctx-item" @click="openProperties(tabContextMenu.tabId)">⚙ Properties</div>
+        <div class="tab-ctx-separator" />
         <div class="tab-ctx-label muted">Color</div>
         <div class="tab-ctx-colors">
           <button
@@ -319,6 +349,12 @@ useKeyboardShortcuts([
 
     <!-- Shortcut panel -->
     <ShortcutPanel :show="showShortcuts" @close="showShortcuts = false" />
+
+    <!-- Resource properties dialog -->
+    <ResourceProperties
+      v-model:show="showProps"
+      :resource="propsResource"
+    />
   </div>
 </template>
 
