@@ -4,6 +4,7 @@ import { useTerminal } from './useTerminal'
 import { SearchAddon } from '@xterm/addon-search'
 import TerminalSearch from './TerminalSearch.vue'
 import TerminalContextMenu from './TerminalContextMenu.vue'
+import MobileTerminalBar from './MobileTerminalBar.vue'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 
@@ -152,6 +153,9 @@ function handleReconnect() {
         <button class="tv-reconnect-btn" @click="handleReconnect">Reconnect</button>
       </div>
     </div>
+
+    <!-- 移动端浮动工具栏 -->
+    <MobileTerminalBar :terminal="terminal" />
   </div>
 </template>
 
