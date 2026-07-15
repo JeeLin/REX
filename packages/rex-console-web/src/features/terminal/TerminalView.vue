@@ -3,6 +3,7 @@ import { ref, shallowRef, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useTerminal } from './useTerminal'
 import { SearchAddon } from '@xterm/addon-search'
 import TerminalSearch from './TerminalSearch.vue'
+import TerminalContextMenu from './TerminalContextMenu.vue'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 
@@ -21,6 +22,11 @@ const { terminal, status, errorMessage, createTerminal, connect, disconnect, fit
 // Search
 const searchAddon = shallowRef<SearchAddon | null>(null)
 const showSearch = ref(false)
+
+// Context menu
+const showContextMenu = ref(false)
+const contextMenuX = ref(0)
+const contextMenuY = ref(0)
 
 const statusDot = ref<StatusDotStatus>('offline')
 
@@ -77,6 +83,16 @@ onMounted(() => {
   })
 })
 
+function onContextMenu(e: MouseEvent) {
+  contextMenuX.value = e.clientX
+  contextMenuY.value = e.clientY
+  showContextMenu.value = true
+}
+
+function handleFind() {
+  showSearch.value = true
+}
+
 function handleReconnect() {
   if (props.host && props.protocol === 'ssh') {
     connect({
@@ -103,12 +119,27 @@ function handleReconnect() {
     </div>
 
     <!-- 终端容器 -->
-    <div ref="containerRef" class="tv-container">
+    <div
+      ref="containerRef"
+      class="tv-container"
+      @contextmenu.prevent="onContextMenu"
+    >
       <!-- 终端内查找栏 -->
       <TerminalSearch
         :visible="showSearch"
         :search-addon="searchAddon"
         @close="showSearch = false"
+      />
+      <!-- 终端右键菜单 -->
+      <TerminalContextMenu
+        :visible="showContextMenu"
+        :x="contextMenuX"
+        :y="contextMenuY"
+        :terminal="terminal"
+        @close="showContextMenu = false"
+        @find="handleFind"
+        @reconnect="handleReconnect"
+        @disconnect="disconnect"
       />
     </div>
 
