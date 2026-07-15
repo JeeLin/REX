@@ -2,6 +2,11 @@
 
 const API_BASE = '/api/sql'
 
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem('rex-token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 export interface ConnectRequest {
   type: string
   host: string
@@ -33,7 +38,7 @@ export interface QueryResult {
 export async function connect(req: ConnectRequest): Promise<string> {
   const res = await fetch(`${API_BASE}/connect`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(req),
   })
   if (!res.ok) {
@@ -46,7 +51,7 @@ export async function connect(req: ConnectRequest): Promise<string> {
 export async function disconnect(sessionId: string): Promise<void> {
   await fetch(`${API_BASE}/disconnect`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ session_id: sessionId }),
   })
 }
@@ -54,7 +59,7 @@ export async function disconnect(sessionId: string): Promise<void> {
 export async function executeQuery(sessionId: string, sql: string): Promise<QueryResult> {
   const res = await fetch(`${API_BASE}/query`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ session_id: sessionId, sql }),
   })
   if (!res.ok) {
@@ -65,13 +70,13 @@ export async function executeQuery(sessionId: string, sql: string): Promise<Quer
 }
 
 export async function getDatabases(sessionId: string): Promise<string[]> {
-  const res = await fetch(`${API_BASE}/databases?session_id=${sessionId}`)
+  const res = await fetch(`${API_BASE}/databases?session_id=${sessionId}`, { headers: authHeaders() })
   if (!res.ok) throw new Error('Failed to fetch databases')
   return await res.json()
 }
 
 export async function getTables(sessionId: string, db: string): Promise<TableInfo[]> {
-  const res = await fetch(`${API_BASE}/tables?session_id=${sessionId}&db=${encodeURIComponent(db)}`)
+  const res = await fetch(`${API_BASE}/tables?session_id=${sessionId}&db=${encodeURIComponent(db)}`, { headers: authHeaders() })
   if (!res.ok) throw new Error('Failed to fetch tables')
   return await res.json()
 }
@@ -79,6 +84,7 @@ export async function getTables(sessionId: string, db: string): Promise<TableInf
 export async function getColumns(sessionId: string, db: string, table: string): Promise<ColumnInfo[]> {
   const res = await fetch(
     `${API_BASE}/columns?session_id=${sessionId}&db=${encodeURIComponent(db)}&table=${encodeURIComponent(table)}`,
+    { headers: authHeaders() },
   )
   if (!res.ok) throw new Error('Failed to fetch columns')
   return await res.json()
