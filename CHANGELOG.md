@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.0] - 2026-07-15
+
+### Added
+- 工作空间外壳：连接树侧栏（可折叠、搜索、环境→资源分组、颜色标签）
+- Tab 管理增强：右键菜单（关闭/关闭其他/关闭右侧）、设色（8 色圆点）、重命名（双击编辑）
+- 分屏布局预设（Alt+1~5：单面板/左右/上下/四宫格/主+侧）
+- Quick Connect 栏（协议选择 + 主机/端口/用户名 + 连接按钮）
+- F1 快捷键面板（分组展示所有快捷键）
+- 资源属性对话框（连接/认证/终端/笔记 4 个分类 Tab）
+- UI 组件：Input、Select、Checkbox、Switch、Avatar、Alert、ToggleGroup、Scrollbar
+
 ## [0.2.0] - 2026-07-14
 
 ### Added
