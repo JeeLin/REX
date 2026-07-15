@@ -13,6 +13,8 @@ interface Tab {
   protocol: 'ssh' | 'mysql' | 'redis' | 'postgresql' | 'sftp' | 'sqlite' | 's3'
   host?: string
   status?: StatusDotStatus
+  color?: string
+  renaming?: boolean
 }
 
 interface SplitPane {
@@ -54,6 +56,58 @@ function openResourceFromTree(node: { id: string; name: string; protocol?: strin
     })
   }
   activeTab.value = id
+}
+
+// Tab 右键菜单
+const tabContextMenu = ref<{ show: boolean; x: number; y: number; tabId: string }>({ show: false, x: 0, y: 0, tabId: '' })
+const tabColors = ['#f85149', '#3fb950', '#58a6ff', '#d29922', '#8b5cf6', '#e8912d', '#f0883e', '#a371f7']
+
+function onTabContextMenu(e: MouseEvent, tabId: string) {
+  e.preventDefault()
+  tabContextMenu.value = { show: true, x: e.clientX, y: e.clientY, tabId }
+}
+
+function closeTab(id: string) {
+  const idx = tabs.value.findIndex(t => t.id === id)
+  if (idx >= 0 && tabs.value.length > 1) {
+    tabs.value.splice(idx, 1)
+    if (activeTab.value === id) {
+      activeTab.value = tabs.value[Math.max(0, idx - 1)]!.id
+    }
+  }
+}
+
+function closeOtherTabs(id: string) {
+  tabs.value = tabs.value.filter(t => t.id === id)
+  activeTab.value = id
+}
+
+function closeTabsRight(id: string) {
+  const idx = tabs.value.findIndex(t => t.id === id)
+  if (idx >= 0) tabs.value.splice(idx + 1)
+  if (!tabs.value.find(t => t.id === activeTab.value)) {
+    activeTab.value = tabs.value[tabs.value.length - 1]!.id
+  }
+}
+
+function setTabColor(color: string) {
+  const tab = tabs.value.find(t => t.id === tabContextMenu.value.tabId)
+  if (tab) tab.color = color
+  tabContextMenu.value.show = false
+}
+
+function startRename(id: string) {
+  const tab = tabs.value.find(t => t.id === id)
+  if (tab) tab.renaming = true
+  tabContextMenu.value.show = false
+}
+
+function finishRename(id: string, newLabel: string) {
+  const tab = tabs.value.find(t => t.id === id)
+  if (tab) {
+    tab.label = newLabel || tab.label
+    tab.renaming = false
+  }
 }
 
 // 分栏操作
@@ -104,14 +158,49 @@ useKeyboardShortcuts([
         class="ws-tab mono"
         :class="{ 'ws-tab--active': activeTab === tab.id }"
         @click="activeTab = tab.id"
+        @contextmenu="onTabContextMenu($event, tab.id)"
       >
+        <span class="ws-tab-color" v-if="tab.color" :style="{ background: tab.color }" />
         <span class="ws-tab-dot" :style="{ background: protoColor(tab.protocol) }" />
-        <span>{{ tab.label }}</span>
+        <input
+          v-if="tab.renaming"
+          class="ws-tab-rename-input mono"
+          :value="tab.label"
+          @blur="finishRename(tab.id, ($event.target as HTMLInputElement).value)"
+          @keydown.enter="($event.target as HTMLInputElement).blur()"
+          @keydown.escape="finishRename(tab.id, tab.label)"
+          @click.stop
+          autofocus
+        />
+        <span v-else>{{ tab.label }}</span>
         <span v-if="tab.host" class="ws-tab-host muted">{{ tab.host }}</span>
-        <button class="ws-tab-close" @click.stop="() => { const i = tabs.findIndex(t => t.id === tab.id); if (i >= 0 && tabs.length > 1) { tabs.splice(i, 1); activeTab = tabs[Math.max(0, i - 1)]!.id } }">×</button>
+        <button class="ws-tab-close" @click.stop="closeTab(tab.id)">×</button>
       </div>
       <button class="ws-tab-add" title="New connection (Ctrl+T)">+</button>
     </div>
+
+    <!-- Tab context menu -->
+    <Teleport to="body">
+      <div v-if="tabContextMenu.show" class="tab-ctx-overlay" @click="tabContextMenu.show = false" @contextmenu.prevent="tabContextMenu.show = false" />
+      <div v-if="tabContextMenu.show" class="tab-ctx-menu" :style="{ top: tabContextMenu.y + 'px', left: tabContextMenu.x + 'px' }">
+        <div class="tab-ctx-item" @click="startRename(tabContextMenu.tabId)">✏️ Rename</div>
+        <div class="tab-ctx-separator" />
+        <div class="tab-ctx-item" @click="closeTab(tabContextMenu.tabId)">Close</div>
+        <div class="tab-ctx-item" @click="closeOtherTabs(tabContextMenu.tabId)">Close Others</div>
+        <div class="tab-ctx-item" @click="closeTabsRight(tabContextMenu.tabId)">Close Right</div>
+        <div class="tab-ctx-separator" />
+        <div class="tab-ctx-label muted">Color</div>
+        <div class="tab-ctx-colors">
+          <button
+            v-for="c in tabColors"
+            :key="c"
+            class="tab-ctx-color"
+            :style="{ background: c }"
+            @click="setTabColor(c)"
+          />
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Connection tree sidebar -->
     <div v-show="!treeCollapsed" class="ws-tree" :style="{ width: '220px' }">
@@ -218,6 +307,23 @@ useKeyboardShortcuts([
   height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+.ws-tab-color {
+  width: 4px;
+  height: 16px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.ws-tab-rename-input {
+  background: var(--bg-deep);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  padding: 0 4px;
+  width: 120px;
+  outline: none;
 }
 .ws-tab-host {
   font-size: var(--text-xs);
@@ -383,5 +489,57 @@ useKeyboardShortcuts([
   .ws-statusbar .ws-status-item:nth-child(n+2) { display: none; }
   .ws-statusbar .ws-status-item:last-child { display: flex; }
   .ws-quick-actions { display: flex !important; }
+}
+
+/* Tab 右键菜单 */
+.tab-ctx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+}
+.tab-ctx-menu {
+  position: fixed;
+  z-index: 210;
+  min-width: 180px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: var(--space-1) 0;
+}
+.tab-ctx-item {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.tab-ctx-item:hover {
+  background: var(--bg-hover);
+}
+.tab-ctx-separator {
+  height: 1px;
+  background: var(--border);
+  margin: var(--space-1) 0;
+}
+.tab-ctx-label {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+}
+.tab-ctx-colors {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3) var(--space-2);
+}
+.tab-ctx-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+.tab-ctx-color:hover {
+  border-color: var(--text-primary);
 }
 </style>
