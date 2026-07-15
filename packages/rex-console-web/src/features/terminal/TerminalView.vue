@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, shallowRef, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useTerminal } from './useTerminal'
+import { SearchAddon } from '@xterm/addon-search'
+import TerminalSearch from './TerminalSearch.vue'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 
@@ -15,6 +17,10 @@ const props = defineProps<{
 const containerRef = ref<HTMLDivElement>()
 const { terminal, status, errorMessage, createTerminal, connect, disconnect, fit, dispose } =
   useTerminal()
+
+// Search
+const searchAddon = shallowRef<SearchAddon | null>(null)
+const showSearch = ref(false)
 
 const statusDot = ref<StatusDotStatus>('offline')
 
@@ -34,7 +40,21 @@ watch(status, (s) => {
 onMounted(() => {
   if (!containerRef.value) return
 
-  createTerminal(containerRef.value)
+  const term = createTerminal(containerRef.value)
+
+  // 加载搜索 addon
+  const search = new SearchAddon()
+  term.loadAddon(search)
+  searchAddon.value = search
+
+  // Ctrl+F 打开搜索栏
+  term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+    if (e.ctrlKey && e.key === 'f' && e.type === 'keydown') {
+      e.preventDefault()
+      showSearch.value = !showSearch.value
+    }
+    return true
+  })
 
   // 如果有连接信息，自动连接
   if (props.host && props.protocol === 'ssh') {
@@ -83,7 +103,14 @@ function handleReconnect() {
     </div>
 
     <!-- 终端容器 -->
-    <div ref="containerRef" class="tv-container" />
+    <div ref="containerRef" class="tv-container">
+      <!-- 终端内查找栏 -->
+      <TerminalSearch
+        :visible="showSearch"
+        :search-addon="searchAddon"
+        @close="showSearch = false"
+      />
+    </div>
 
     <!-- 断开覆盖层 -->
     <div v-if="status === 'disconnected' || status === 'error'" class="tv-overlay">
@@ -133,6 +160,7 @@ function handleReconnect() {
   min-height: 0;
   background: #0d1117; /* 终端背景色 */
   overflow: hidden;
+  position: relative;
 }
 
 .tv-container :deep(.xterm) {
