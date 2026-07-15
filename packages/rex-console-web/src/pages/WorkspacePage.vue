@@ -6,6 +6,8 @@ import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import ConnectionTree from '@/features/workspace/ConnectionTree.vue'
+import QuickConnect from '@/features/workspace/QuickConnect.vue'
+import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
 
 interface Tab {
   id: string
@@ -125,6 +127,21 @@ function closePane(idx: number) {
   }
 }
 
+// 快捷键面板
+const showShortcuts = ref(false)
+
+function onQuickConnect(config: { protocol: string; host: string; port: string; user: string }) {
+  const id = `tab-${Date.now()}`
+  tabs.value.push({
+    id,
+    label: config.host,
+    protocol: config.protocol as Tab['protocol'],
+    host: config.port ? `${config.host}:${config.port}` : config.host,
+    status: 'connecting',
+  })
+  activeTab.value = id
+}
+
 // 布局预设
 type LayoutPreset = 'single' | 'left-right' | 'top-bottom' | 'grid-four' | 'main-side'
 const currentLayout = ref<LayoutPreset>('single')
@@ -180,6 +197,7 @@ useKeyboardShortcuts([
   { key: '3', alt: true, handler: () => applyLayout('top-bottom') },
   { key: '4', alt: true, handler: () => applyLayout('grid-four') },
   { key: '5', alt: true, handler: () => applyLayout('main-side') },
+  { key: 'F1', handler: () => { showShortcuts.value = !showShortcuts.value } },
 ])
 </script>
 
@@ -245,25 +263,29 @@ useKeyboardShortcuts([
       {{ treeCollapsed ? '»' : '«' }}
     </button>
 
-    <!-- Split panes -->
-    <div class="ws-body">
-      <Splitpanes
-        :horizontal="splitDirection === 'column'"
-        class="ws-split"
-        @resized="() => {}"
-      >
-        <Pane v-for="i in splitCount" :key="i" :size="100 / splitCount" :min-size="20">
-          <div class="ws-pane">
-            <div class="ws-pane-header mono">
-              <span>{{ activeTabInfo?.label || 'Tab' }}</span>
-              <div class="ws-pane-actions">
-                <button class="ws-pane-btn" @click="splitHorizontal" title="Split horizontal (Ctrl+\)">⊞</button>
-                <button class="ws-pane-btn" @click="splitVertical" title="Split vertical (Ctrl+Shift+\)">⊟</button>
-                <button v-if="splitCount > 1" class="ws-pane-btn" @click="closePane(i - 1)" title="Close pane">×</button>
+    <div class="ws-main-area">
+      <!-- Quick Connect bar -->
+      <QuickConnect @connect="onQuickConnect" />
+
+      <!-- Split panes -->
+      <div class="ws-body">
+        <Splitpanes
+          :horizontal="splitDirection === 'column'"
+          class="ws-split"
+          @resized="() => {}"
+        >
+          <Pane v-for="i in splitCount" :key="i" :size="100 / splitCount" :min-size="20">
+            <div class="ws-pane">
+              <div class="ws-pane-header mono">
+                <span>{{ activeTabInfo?.label || 'Tab' }}</span>
+                <div class="ws-pane-actions">
+                  <button class="ws-pane-btn" @click="splitHorizontal" title="Split horizontal (Ctrl+\)">⊞</button>
+                  <button class="ws-pane-btn" @click="splitVertical" title="Split vertical (Ctrl+Shift+\)">⊟</button>
+                  <button v-if="splitCount > 1" class="ws-pane-btn" @click="closePane(i - 1)" title="Close pane">×</button>
+                </div>
               </div>
-            </div>
-            <div class="ws-terminal">
-              <div class="ws-term-line muted">
+              <div class="ws-terminal">
+                <div class="ws-term-line muted">
                 <span class="mono" style="color: var(--success)">$</span>
                 Connected to {{ activeTabInfo?.host || 'localhost' }} via {{ activeTabInfo?.protocol.toUpperCase() || 'SSH' }}
               </div>
@@ -275,6 +297,7 @@ useKeyboardShortcuts([
           </div>
         </Pane>
       </Splitpanes>
+      </div>
     </div>
 
     <!-- Status bar -->
@@ -293,6 +316,9 @@ useKeyboardShortcuts([
       </span>
       <span class="ws-status-item">{{ now }}</span>
     </div>
+
+    <!-- Shortcut panel -->
+    <ShortcutPanel :show="showShortcuts" @close="showShortcuts = false" />
   </div>
 </template>
 
@@ -411,6 +437,14 @@ useKeyboardShortcuts([
 }
 .ws-tree-toggle:hover {
   color: var(--accent);
+}
+
+/* Main area */
+.ws-main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 /* Split panes */
