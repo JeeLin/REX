@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.0] - 2026-07-15
+
+### Added
+- Redis 控制台：后端 Redis 连接器（`RedisConnector` trait + REST API）
+- Redis 控制台：前端键树（命名空间分组、搜索、DB 选择器、右键菜单）
+- Redis 控制台：值查看器（String/Hash/List/Set/ZSet 类型表格展示）
+- Redis 控制台：CLI（命令输入 + 历史 + 结果日志）
+- Redis 控制台：Server Status 卡片仪表盘（版本/内存/统计/键空间）
+
 ## [0.5.0] - 2026-07-15
 
 ### Added
