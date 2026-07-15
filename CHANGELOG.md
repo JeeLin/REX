@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.7.0] - 2026-07-15
+
+### Added
+- 文件管理：后端 SFTP 连接器（基于 russh-sftp，支持 list/upload/download/delete/rename/mkdir）
+- 文件管理：后端 S3 连接器（基于 AWS SDK，支持 multipart 上传）
+- 文件管理：文件传输 REST API（connect/list/stat/upload/download/delete/rename/mkdir）
+- 文件管理：前端双面板文件浏览器（SFTP/S3 支持、活动面板模型、路径栏、面包屑、右键菜单）
+
 ## [0.6.0] - 2026-07-15
 
 ### Added
