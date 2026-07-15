@@ -9,6 +9,7 @@ import ConnectionTree from '@/features/workspace/ConnectionTree.vue'
 import QuickConnect from '@/features/workspace/QuickConnect.vue'
 import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
 import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
+import TerminalView from '@/features/terminal/TerminalView.vue'
 
 interface Tab {
   id: string
@@ -314,10 +315,18 @@ useKeyboardShortcuts([
                   <button v-if="splitCount > 1" class="ws-pane-btn" @click="closePane(i - 1)" title="Close pane">×</button>
                 </div>
               </div>
-              <div class="ws-terminal">
+              <TerminalView
+                v-if="activeTabInfo?.protocol === 'ssh'"
+                :tab-id="activeTab"
+                :host="activeTabInfo?.host"
+                :port="22"
+                :username="'root'"
+                :protocol="activeTabInfo?.protocol"
+              />
+              <div v-else class="ws-terminal">
                 <div class="ws-term-line muted">
                 <span class="mono" style="color: var(--success)">$</span>
-                Connected to {{ activeTabInfo?.host || 'localhost' }} via {{ activeTabInfo?.protocol.toUpperCase() || 'SSH' }}
+                Connected to {{ activeTabInfo?.host || 'localhost' }} via {{ activeTabInfo?.protocol?.toUpperCase() || 'SSH' }}
               </div>
               <div class="ws-term-line muted">
                 <span class="mono" style="color: var(--accent)">▸</span>
