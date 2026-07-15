@@ -10,7 +10,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
 use rex_common::sql::{
-    ConnectRequest, DatabaseType, QueryResult, SqlConnector, SqlConnectorFactory,
+    ConnectRequest, DatabaseType, SqlConnector, SqlConnectorFactory,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -77,6 +77,7 @@ struct QueryBody {
     session_id: String,
     sql: String,
     #[serde(default)]
+    #[allow(dead_code)]
     database: Option<String>,
 }
 

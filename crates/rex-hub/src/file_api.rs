@@ -7,7 +7,7 @@ use axum::extract::{Multipart, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
-use rex_common::file_transfer::{FileConnectRequest, FileConnector, FileEntry};
+use rex_common::file_transfer::{FileConnectRequest, FileConnector};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
@@ -65,6 +65,7 @@ struct DisconnectBody {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct SessionQuery {
     session_id: String,
 }

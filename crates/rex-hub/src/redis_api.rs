@@ -7,7 +7,7 @@ use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
-use rex_common::redis::{RedisConnectRequest, RedisConnector, RedisValue};
+use rex_common::redis::{RedisConnectRequest, RedisConnector};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
