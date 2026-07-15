@@ -16,10 +16,10 @@ M0 完成了项目骨架（Rust workspace + Vue 3 前端 + 12 个基础组件 + 
 
 | # | 内容 | 状态 |
 |---|------|------|
-| 1 | Token 完善（组件令牌 + 动画 + 亮色主题补全） | ⬜ |
-| 2 | 组件增强（Button/Input/Select/Badge/Card/Table/Modal/Drawer/Toast） | ⬜ |
-| 3 | 新增组件（Scrollbar/Checkbox/Radio/Switch/Avatar/Alert/ToggleGroup） | ⬜ |
-| 4 | 设计预览页更新 + 组件文档 | ⬜ |
+| 1 | Token 完善（组件令牌 + 动画 + 亮色主题补全） | ✅ |
+| 2 | 组件增强（Button/Input/Select/Badge/Card/Table/Modal/Drawer/Toast） | ✅ |
+| 3 | 新增组件（Scrollbar/Checkbox/Radio/Switch/Avatar/Alert/ToggleGroup） | ✅ |
+| 4 | 设计预览页更新 + 组件文档 | ✅ |
 
 ## 子任务详细设计
 
@@ -108,14 +108,14 @@ M0 完成了项目骨架（Rust workspace + Vue 3 前端 + 12 个基础组件 + 
 
 ## Flow Status
 
-- [ ] 步骤1：编写里程碑文档
-- [ ] 步骤2：设计核对
-- [ ] 步骤3：开发
-- [ ] 步骤4：代码精简
-- [ ] 步骤5：代码审查
-- [ ] 步骤6：测试验证
-- [ ] 步骤7：设计再确认
-- [ ] 步骤8：提交
+- [x] 步骤1：编写里程碑文档
+- [x] 步骤2：设计核对
+- [x] 步骤3：开发
+- [x] 步骤4：代码精简
+- [x] 步骤5：代码审查
+- [x] 步骤6：测试验证
+- [x] 步骤7：设计再确认
+- [x] 步骤8：提交
 
 ## 打回记录
 

@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.0] - 2026-07-14
+
+### Added
+- 设计系统 token 完善（组件令牌、动画变量、亮色主题完整映射）
+- 组件增强：Button (loading/block)、Input (clearable/error)、Select、Badge (size/dot)、Card (hoverable/footer)、Table (striped/compact/empty)、Modal (ESC/scroll lock)、Drawer (width)
+- 新增组件：Checkbox、Switch、Avatar、Alert、ToggleGroup、Scrollbar
+- 设计预览页更新（全部组件变体展示）
+
 ## [0.1.0] - 2026-07-14
 
 ### Added
