@@ -13,6 +13,14 @@ import Modal from '@/components/ui/Modal.vue'
 import Tooltip from '@/components/ui/Tooltip.vue'
 import Toast from '@/components/ui/Toast.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import Input from '@/components/ui/Input.vue'
+import Select from '@/components/ui/Select.vue'
+import Checkbox from '@/components/ui/Checkbox.vue'
+import Switch from '@/components/ui/Switch.vue'
+import Avatar from '@/components/ui/Avatar.vue'
+import Alert from '@/components/ui/Alert.vue'
+import ToggleGroup from '@/components/ui/ToggleGroup.vue'
+import Scrollbar from '@/components/ui/Scrollbar.vue'
 
 const theme = ref<'dark' | 'light'>('dark')
 function toggleTheme() {
@@ -47,6 +55,19 @@ function fireToast(tone: 'success' | 'error' | 'info') {
   const msgs = { success: 'Saved successfully', error: 'Connection failed', info: 'Operation queued' }
   toastRef.value?.push(msgs[tone], tone)
 }
+
+// Form demos
+const inputVal = ref('')
+const selectVal = ref('')
+const checkboxVal = ref(false)
+const switchVal = ref(false)
+const toggleVal = ref('dark')
+const selectOptions = [
+  { label: 'SSH', value: 'ssh' },
+  { label: 'MySQL', value: 'mysql' },
+  { label: 'Redis', value: 'redis' },
+  { label: 'PostgreSQL', value: 'postgresql', disabled: true },
+]
 </script>
 
 <template>
@@ -185,6 +206,99 @@ function fireToast(tone: 'success' | 'error' | 'info') {
         <Button variant="ghost" @click="fireToast('error')">✕ Error</Button>
         <Button variant="ghost" @click="fireToast('info')">ℹ Info</Button>
       </div>
+    </section>
+
+    <!-- Form Components -->
+    <section class="dp-section">
+      <h2 class="dp-h2">Form Components</h2>
+      <div class="comp-grid">
+        <div class="comp-cell">
+          <span class="label mono">Input</span>
+          <Input v-model="inputVal" placeholder="Search connections..." clearable />
+        </div>
+        <div class="comp-cell">
+          <span class="label mono">Input (error)</span>
+          <Input model-value="invalid" error="Connection refused" />
+        </div>
+        <div class="comp-cell">
+          <span class="label mono">Select</span>
+          <Select v-model="selectVal" :options="selectOptions" placeholder="Protocol" />
+        </div>
+        <div class="comp-cell">
+          <span class="label mono">Checkbox</span>
+          <Checkbox v-model="checkboxVal" label="Remember me" />
+        </div>
+        <div class="comp-cell">
+          <span class="label mono">Switch</span>
+          <div class="comp-row">
+            <Switch v-model="switchVal" />
+            <span class="label">{{ switchVal ? 'ON' : 'OFF' }}</span>
+          </div>
+        </div>
+        <div class="comp-cell">
+          <span class="label mono">ToggleGroup</span>
+          <ToggleGroup v-model="toggleVal" :options="[
+            { label: 'Dark', value: 'dark', icon: '●' },
+            { label: 'Light', value: 'light', icon: '☀' },
+          ]" />
+        </div>
+        <div class="comp-cell">
+          <span class="label mono">Avatar</span>
+          <div class="comp-row">
+            <Avatar size="sm" fallback="S" />
+            <Avatar size="md" fallback="M" />
+            <Avatar size="lg" fallback="R" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Feedback Components -->
+    <section class="dp-section">
+      <h2 class="dp-h2">Feedback Components</h2>
+      <div class="comp-grid">
+        <div class="comp-cell">
+          <span class="label mono">Alert</span>
+          <Alert type="info" title="Info">This is an informational message.</Alert>
+        </div>
+        <div class="comp-cell">
+          <span class="label mono">Alert (success)</span>
+          <Alert type="success">Connection established successfully.</Alert>
+        </div>
+        <div class="comp-cell">
+          <span class="label mono">Alert (warning)</span>
+          <Alert type="warning" closable>Agent version mismatch detected.</Alert>
+        </div>
+        <div class="comp-cell">
+          <span class="label mono">Alert (error)</span>
+          <Alert type="error">Connection refused.</Alert>
+        </div>
+        <div class="comp-cell">
+          <span class="label mono">Badge sizes</span>
+          <div class="comp-row">
+            <Badge tone="accent" size="sm">Small</Badge>
+            <Badge tone="accent" size="md">Medium</Badge>
+            <Badge tone="success" dot>Online</Badge>
+          </div>
+        </div>
+        <div class="comp-cell">
+          <span class="label mono">Button loading</span>
+          <div class="comp-row">
+            <Button variant="primary" loading>Loading</Button>
+            <Button variant="secondary" block style="max-width:200px">Block</Button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scrollbar -->
+    <section class="dp-section">
+      <h2 class="dp-h2">Scrollbar</h2>
+      <Scrollbar height="120px">
+        <div style="padding: 12px; color: var(--text-secondary); line-height: 2">
+          <div v-for="i in 20" :key="i">Scroll item {{ i }} — custom 6px thin scrollbar with hover effect</div>
+        </div>
+      </Scrollbar>
     </section>
 
     <!-- Empty State -->
@@ -336,6 +450,16 @@ function fireToast(tone: 'success' | 'error' | 'info') {
 }
 .mt {
   margin-top: var(--space-3);
+}
+.comp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4);
+}
+.comp-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 .label {
   font-size: var(--text-xs);
