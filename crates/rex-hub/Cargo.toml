@@ -31,3 +31,8 @@ futures-util = { workspace = true }
 tokio-util = { workspace = true }
 bytes = { workspace = true }
 uuid = { workspace = true }
+rusqlite = { workspace = true }
+r2d2 = { workspace = true }
+chrono = { workspace = true }
+argon2 = { workspace = true }
+jsonwebtoken = { workspace = true }
