@@ -148,11 +148,7 @@ async fn connect(
         Ok(conn) => {
             let session_id = format!("sql_{}", &uuid::Uuid::new_v4().to_string()[..8]);
             state.lock().await.insert(session_id.clone(), conn);
-            (
-                StatusCode::OK,
-                Json(ConnectResponse { session_id }),
-            )
-                .into_response()
+            (StatusCode::OK, Json(ConnectResponse { session_id })).into_response()
         }
         Err(e) => error_response("CONNECTION_FAILED", &e.to_string()).into_response(),
     }
@@ -173,10 +169,7 @@ async fn disconnect(
 }
 
 /// POST /api/sql/query
-async fn query(
-    State(state): State<SqlState>,
-    Json(body): Json<QueryBody>,
-) -> impl IntoResponse {
+async fn query(State(state): State<SqlState>, Json(body): Json<QueryBody>) -> impl IntoResponse {
     let mut pool = state.lock().await;
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,

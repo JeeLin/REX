@@ -107,7 +107,10 @@ impl SqlConnector for SqliteConnector {
                 elapsed_ms: elapsed,
             })
         } else {
-            let affected = self.conn.execute(sql, []).context("failed to execute SQL")?;
+            let affected = self
+                .conn
+                .execute(sql, [])
+                .context("failed to execute SQL")?;
             let elapsed = start.elapsed().as_millis() as u64;
             Ok(QueryResult {
                 columns: Vec::new(),
@@ -119,8 +122,9 @@ impl SqlConnector for SqliteConnector {
     }
 
     async fn databases(&mut self) -> Result<Vec<String>> {
-        let name: String =
-            self.conn.query_row("PRAGMA database_list", [], |row| row.get(1))?;
+        let name: String = self
+            .conn
+            .query_row("PRAGMA database_list", [], |row| row.get(1))?;
         Ok(vec![name])
     }
 

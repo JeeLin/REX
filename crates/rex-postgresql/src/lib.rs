@@ -23,14 +23,12 @@ impl PostgresConnector {
             database
         );
 
-        let pool = PgPool::connect(&url)
-            .await
-            .with_context(|| {
-                format!(
-                    "failed to connect to PostgreSQL at {}:{}",
-                    req.host, req.port
-                )
-            })?;
+        let pool = PgPool::connect(&url).await.with_context(|| {
+            format!(
+                "failed to connect to PostgreSQL at {}:{}",
+                req.host, req.port
+            )
+        })?;
 
         Ok(Self { pool })
     }
@@ -130,9 +128,7 @@ impl SqlConnector for PostgresConnector {
              AND c.relkind IN ('r', 'v') \
              ORDER BY c.relname"
         );
-        let mut result_rows = sqlx::query(&sql)
-            .fetch_all(&self.pool)
-            .await?;
+        let mut result_rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
         Ok(result_rows
             .iter_mut()
             .map(|r| TableInfo {
@@ -161,9 +157,7 @@ impl SqlConnector for PostgresConnector {
              AND c.table_name = '{table}' \
              ORDER BY c.ordinal_position"
         );
-        let mut result_rows = sqlx::query(&sql)
-            .fetch_all(&self.pool)
-            .await?;
+        let mut result_rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
         Ok(result_rows
             .iter_mut()
             .map(|r| {

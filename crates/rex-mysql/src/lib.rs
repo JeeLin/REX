@@ -124,9 +124,7 @@ impl SqlConnector for MySqlConnector {
              WHERE TABLE_SCHEMA = '{db}' \
              ORDER BY TABLE_NAME"
         );
-        let mut result_rows = sqlx::query(&sql)
-            .fetch_all(&self.pool)
-            .await?;
+        let mut result_rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
         Ok(result_rows
             .iter_mut()
             .map(|r| TableInfo {
@@ -145,9 +143,7 @@ impl SqlConnector for MySqlConnector {
              WHERE TABLE_SCHEMA = '{db}' AND TABLE_NAME = '{table}' \
              ORDER BY ORDINAL_POSITION"
         );
-        let mut result_rows = sqlx::query(&sql)
-            .fetch_all(&self.pool)
-            .await?;
+        let mut result_rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
         Ok(result_rows
             .iter_mut()
             .map(|r| {
