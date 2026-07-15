@@ -9,7 +9,7 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "rex-hub"
-path = "src/bin/rex-hub.rs"
+path = "src/rex-hub.rs"
 
 [dependencies]
 tokio = { workspace = true }

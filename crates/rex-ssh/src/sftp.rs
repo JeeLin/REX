@@ -36,9 +36,8 @@ impl SftpConnector {
         .context("SSH connection failed for SFTP")?;
 
         if let Some(ref key_pem) = config.private_key {
-            let private_key =
-                russh::keys::decode_secret_key(key_pem, config.password.as_deref())
-                    .context("failed to decode private key")?;
+            let private_key = russh::keys::decode_secret_key(key_pem, config.password.as_deref())
+                .context("failed to decode private key")?;
             let key_with_hash =
                 russh::keys::PrivateKeyWithHashAlg::new(Arc::new(private_key), None);
             handle

@@ -24,7 +24,7 @@ impl RedisConnectorImpl {
             .with_context(|| format!("failed to create Redis client for {url}"))?;
 
         let mut conn = client
-            .get_tokio_connection_manager()
+            .get_connection_manager()
             .await
             .with_context(|| format!("failed to connect to Redis at {}:{}", req.host, req.port))?;
 

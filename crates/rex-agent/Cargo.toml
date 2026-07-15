@@ -5,7 +5,7 @@ edition.workspace = true
 
 [[bin]]
 name = "rex-agent"
-path = "src/bin/rex-agent.rs"
+path = "src/rex-agent.rs"
 
 [dependencies]
 rex-common = { workspace = true }

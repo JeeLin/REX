@@ -75,7 +75,8 @@ fn build_router(static_dir: PathBuf) -> Router {
     ));
 
     // 文件管理连接池状态
-    let file_state: FileState = Arc::new(tokio::sync::Mutex::new(file_api::FileConnectionPool::new()));
+    let file_state: FileState =
+        Arc::new(tokio::sync::Mutex::new(file_api::FileConnectionPool::new()));
 
     Router::new()
         // WebSocket 终端桥接
@@ -88,10 +89,7 @@ fn build_router(static_dir: PathBuf) -> Router {
             redis_api::redis_routes().with_state(redis_state),
         )
         // 文件管理 API
-        .nest(
-            "/api/files",
-            file_api::file_routes().with_state(file_state),
-        )
+        .nest("/api/files", file_api::file_routes().with_state(file_state))
         .fallback(get_service(serve_dir).handle_error(|err| async move {
             tracing::error!(error = %err, "static file serve error");
             (

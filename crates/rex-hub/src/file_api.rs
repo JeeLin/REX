@@ -19,7 +19,9 @@ pub struct FileConnectionPool {
 
 impl FileConnectionPool {
     pub fn new() -> Self {
-        Self { connectors: HashMap::new() }
+        Self {
+            connectors: HashMap::new(),
+        }
     }
     pub fn insert(&mut self, id: String, conn: Box<dyn FileConnector>) {
         self.connectors.insert(id, conn);
@@ -53,36 +55,66 @@ struct ConnectBody {
 }
 
 #[derive(Debug, Serialize)]
-struct ConnectResponse { session_id: String }
+struct ConnectResponse {
+    session_id: String,
+}
 
 #[derive(Debug, Deserialize)]
-struct DisconnectBody { session_id: String }
+struct DisconnectBody {
+    session_id: String,
+}
 
 #[derive(Debug, Deserialize)]
-struct SessionQuery { session_id: String }
+struct SessionQuery {
+    session_id: String,
+}
 
 #[derive(Debug, Deserialize)]
-struct PathQuery { session_id: String, path: String }
+struct PathQuery {
+    session_id: String,
+    path: String,
+}
 
 #[derive(Debug, Deserialize)]
-struct DeleteBody { session_id: String, path: String }
+struct DeleteBody {
+    session_id: String,
+    path: String,
+}
 
 #[derive(Debug, Deserialize)]
-struct RenameBody { session_id: String, from: String, to: String }
+struct RenameBody {
+    session_id: String,
+    from: String,
+    to: String,
+}
 
 #[derive(Debug, Deserialize)]
-struct MkdirBody { session_id: String, path: String }
+struct MkdirBody {
+    session_id: String,
+    path: String,
+}
 
 #[derive(Debug, Serialize)]
-struct ErrorBody { error: ErrorDetail }
+struct ErrorBody {
+    error: ErrorDetail,
+}
 
 #[derive(Debug, Serialize)]
-struct ErrorDetail { code: String, message: String }
+struct ErrorDetail {
+    code: String,
+    message: String,
+}
 
 fn error_response(code: &str, message: &str) -> (StatusCode, Json<ErrorBody>) {
-    (StatusCode::BAD_REQUEST, Json(ErrorBody {
-        error: ErrorDetail { code: code.to_string(), message: message.to_string() },
-    }))
+    (
+        StatusCode::BAD_REQUEST,
+        Json(ErrorBody {
+            error: ErrorDetail {
+                code: code.to_string(),
+                message: message.to_string(),
+            },
+        }),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -96,20 +128,29 @@ async fn connect(
     let req = body.req;
     let conn: Box<dyn FileConnector> = match req.protocol.as_str() {
         "sftp" => {
-            let conn = rex_ssh::sftp::SftpConnector::connect_with_config(
-                rex_ssh::SshConfig {
-                    host: req.host,
-                    port: req.port,
-                    username: req.username.unwrap_or_default(),
-                    password: req.password,
-                    private_key: req.private_key,
+            let conn = rex_ssh::sftp::SftpConnector::connect_with_config(rex_ssh::SshConfig {
+                host: req.host,
+                port: req.port,
+                username: req.username.unwrap_or_default(),
+                password: req.password,
+                private_key: req.private_key,
+            })
+            .await;
+            match conn {
+                Ok(c) => Box::new(c),
+                Err(e) => {
+                    return error_response("CONNECTION_FAILED", &e.to_string()).into_response()
                 }
-            ).await;
-            match conn { Ok(c) => Box::new(c), Err(e) => return error_response("CONNECTION_FAILED", &e.to_string()).into_response() }
+            }
         }
         "s3" => {
             let conn = rex_s3::S3Connector::connect_from_request(&req).await;
-            match conn { Ok(c) => Box::new(c), Err(e) => return error_response("CONNECTION_FAILED", &e.to_string()).into_response() }
+            match conn {
+                Ok(c) => Box::new(c),
+                Err(e) => {
+                    return error_response("CONNECTION_FAILED", &e.to_string()).into_response()
+                }
+            }
         }
         _ => return error_response("UNSUPPORTED_PROTOCOL", "unsupported protocol").into_response(),
     };
@@ -174,10 +215,12 @@ async fn upload(
         let name = field.name().unwrap_or_default().to_string();
         match name.as_str() {
             "session_id" => {
-                session_id = String::from_utf8_lossy(&field.bytes().await.unwrap_or_default()).to_string();
+                session_id =
+                    String::from_utf8_lossy(&field.bytes().await.unwrap_or_default()).to_string();
             }
             "path" => {
-                remote_path = String::from_utf8_lossy(&field.bytes().await.unwrap_or_default()).to_string();
+                remote_path =
+                    String::from_utf8_lossy(&field.bytes().await.unwrap_or_default()).to_string();
             }
             "file" => {
                 file_data = Some(field.bytes().await.unwrap_or_default().to_vec());
@@ -216,10 +259,16 @@ async fn download(
             let filename = params.path.rsplit('/').next().unwrap_or("file");
             (
                 StatusCode::OK,
-                [("Content-Type", "application/octet-stream"),
-                 ("Content-Disposition", &format!("attachment; filename=\"{filename}\""))],
+                [
+                    ("Content-Type", "application/octet-stream"),
+                    (
+                        "Content-Disposition",
+                        &format!("attachment; filename=\"{filename}\""),
+                    ),
+                ],
                 data,
-            ).into_response()
+            )
+                .into_response()
         }
         Err(e) => error_response("DOWNLOAD_FAILED", &e.to_string()).into_response(),
     }

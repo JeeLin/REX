@@ -1,8 +1,8 @@
 //! S3 协议实现 — 基于 AWS SDK 的 FileConnector。
 
 use anyhow::{Context, Result};
-use aws_sdk_s3::Client;
 use async_trait::async_trait;
+use aws_sdk_s3::Client;
 use rex_common::file_transfer::{FileConnector, FileEntry, ProgressCallback};
 
 /// S3 连接器
@@ -31,13 +31,8 @@ impl S3Connector {
         }
 
         if let (Some(ak), Some(sk)) = (&access_key, &secret_key) {
-            let credentials = aws_sdk_s3::config::Credentials::new(
-                ak.clone(),
-                sk.clone(),
-                None,
-                None,
-                "rex-hub",
-            );
+            let credentials =
+                aws_sdk_s3::config::Credentials::new(ak.clone(), sk.clone(), None, None, "rex-hub");
             config_loader = config_loader.credentials_provider(credentials);
         }
 
@@ -48,14 +43,17 @@ impl S3Connector {
     }
 
     /// 从 FileConnectRequest 建立连接
-    pub async fn connect_from_request(req: &rex_common::file_transfer::FileConnectRequest) -> Result<Self> {
+    pub async fn connect_from_request(
+        req: &rex_common::file_transfer::FileConnectRequest,
+    ) -> Result<Self> {
         Self::connect(
             req.bucket.clone().unwrap_or_default(),
             req.region.clone(),
             req.endpoint.clone(),
             req.access_key.clone(),
             req.secret_key.clone(),
-        ).await
+        )
+        .await
     }
 }
 
@@ -69,7 +67,8 @@ impl FileConnector for S3Connector {
             format!("{p}/")
         };
 
-        let result = self.client
+        let result = self
+            .client
             .list_objects_v2()
             .bucket(&self.bucket)
             .prefix(&prefix)
@@ -84,7 +83,10 @@ impl FileConnector for S3Connector {
         if let Some(prefixes) = result.common_prefixes {
             for p in prefixes {
                 if let Some(name) = p.prefix {
-                    let name = name.strip_prefix(&prefix).unwrap_or(&name).trim_end_matches('/');
+                    let name = name
+                        .strip_prefix(&prefix)
+                        .unwrap_or(&name)
+                        .trim_end_matches('/');
                     if !name.is_empty() {
                         entries.push(FileEntry {
                             name: name.to_string(),
@@ -127,7 +129,8 @@ impl FileConnector for S3Connector {
 
     async fn stat(&mut self, path: &str) -> Result<FileEntry> {
         let key = path.trim_start_matches('/');
-        let result = self.client
+        let result = self
+            .client
             .head_object()
             .bucket(&self.bucket)
             .key(key)
@@ -187,7 +190,8 @@ impl FileConnector for S3Connector {
         } else {
             // 分片上传
             let part_size = 5 * 1024 * 1024; // 5MB
-            let multipart = self.client
+            let multipart = self
+                .client
                 .create_multipart_upload()
                 .bucket(&self.bucket)
                 .key(key)
@@ -201,7 +205,8 @@ impl FileConnector for S3Connector {
             let mut part_number = 1i32;
 
             for chunk in data.chunks(part_size) {
-                let result = self.client
+                let result = self
+                    .client
                     .upload_part()
                     .bucket(&self.bucket)
                     .key(key)
@@ -246,7 +251,8 @@ impl FileConnector for S3Connector {
 
     async fn download(&mut self, path: &str) -> Result<Vec<u8>> {
         let key = path.trim_start_matches('/');
-        let result = self.client
+        let result = self
+            .client
             .get_object()
             .bucket(&self.bucket)
             .key(key)
@@ -254,7 +260,10 @@ impl FileConnector for S3Connector {
             .await
             .with_context(|| format!("failed to download {key}"))?;
 
-        let bytes = result.body.collect().await
+        let bytes = result
+            .body
+            .collect()
+            .await
             .with_context(|| format!("failed to read body of {key}"))?;
         Ok(bytes.into_bytes().to_vec())
     }
