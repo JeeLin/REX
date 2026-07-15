@@ -29,13 +29,12 @@ M0–M7 完成了设计系统、组件库和 UI 壳，4 个功能模块（SQL/Re
 | # | 内容 | 状态 |
 |---|------|------|
 | 1 | SQLite schema + Database struct + 迁移 | ⬜ |
-| 2 | 认证系统（JWT + argon2 + auth 中间件） | ⬜ |
-| 3 | AppState 重构 + 路由重组 | ⬜ |
-| 4 | 审计日志写入函数 | ⬜ |
-| 5 | 前端 API 客户端封装（client.ts） | ⬜ |
-| 6 | auth Pinia store | ⬜ |
-| 7 | 路由守卫 + 登录页改造 | ⬜ |
-| 8 | 首次设置密码页面 | ⬜ |
+| 2 | 认证系统 + AppState 重构 + 路由重组（合并，紧耦合） | ⬜ |
+| 3 | 现有 API 模块注入 auth header + WebSocket token 认证 | ⬜ |
+| 4 | 前端 API 客户端封装（client.ts） | ⬜ |
+| 5 | auth Pinia store | ⬜ |
+| 6 | 路由守卫 + 登录页改造 | ⬜ |
+| 7 | 首次设置密码页面 | ⬜ |
 
 ## 子任务详细设计
 
@@ -52,7 +51,8 @@ M0–M7 完成了设计系统、组件库和 UI 壳，4 个功能模块（SQL/Re
 - `crates/rex-hub/src/models.rs` — 所有数据模型 Rust struct（Serialize/Deserialize）
 
 修改：
-- `crates/rex-hub/Cargo.toml` — 添加 `rusqlite`（bundled）、`r2d2` 依赖
+- `crates/rex-hub/Cargo.toml` — 添加 `rusqlite`（bundled）、`r2d2`、`r2d2_sqlite` 依赖
+- 根 `Cargo.toml` — workspace.dependencies 中添加 `r2d2_sqlite = "0.2"`
 - `crates/rex-hub/src/lib.rs` — 添加 `pub mod db; pub mod models;`
 
 **数据库路径**
@@ -227,15 +227,29 @@ pub struct AuditFilter {
 - `write_audit_log` / `query_audit_log` 写入和查询正常
 - `list_environments` / `create_environment` / `delete_environment` 基础 CRUD 正常
 
+**审计日志写入模式**
+
+```rust
+// handler 中一行调用，审计失败不阻断主流程：
+state.db.write_audit_log(&NewAuditEntry {
+    action: "SQL_QUERY".into(),
+    target: Some(body.session_id.clone()),
+    result: "success".into(),
+    ..Default::default()
+}).ok();
+```
+
 **提交信息**
 
 ```
-feat(db): add SQLite schema, migration runner, and Database struct
+feat(db): add SQLite schema, migration runner, Database struct, and audit logging
 ```
 
 ---
 
-### 2 认证系统（JWT + argon2 + auth 中间件）
+### 2 认证系统 + AppState 重构 + 路由重组
+
+> 注意：Tasks 2 和 3 紧耦合（auth 中间件需要 AppState，AppState 路由需要 auth 中间件），合并为一个任务在同一个 commit 中实现。
 
 **功能目标**
 
@@ -393,10 +407,42 @@ impl<S: Send + Sync> axum::extract::FromRequestParts<S> for AuthUser {
 
 以下路径不需要认证：
 - `POST /api/auth/login`
-- `POST /api/auth/password`
+- `POST /api/auth/password`（仅首次，已设置密码后返回 409）
 - `GET /api/auth/check`
 - `GET /healthz`
 - 静态文件（SPA fallback）
+
+**WebSocket 认证**
+
+浏览器 WebSocket API 不支持自定义 HTTP header。终端 WebSocket 采用 **query param** 方案：
+
+```
+ws://host/ws/terminal?token=<jwt_token>
+```
+
+`terminal_ws.rs` 的 `ws_handler` 从 query param 提取 token 并验证。前端 `useTerminal.ts` 构建 WebSocket URL 时附加 token。
+
+**`error_response` 适配**
+
+现有 `error_response` 固定返回 400。auth 中间件需要返回 401。方案：新增 `auth_error_response(code, message, status)` 函数，auth 相关 handler 使用此函数返回正确的 HTTP 状态码（401 Unauthorized）。
+
+**`set_password` 保护**
+
+`POST /api/auth/password` handler 增加检查：若密码已设置，返回 409 Conflict，防止重复设置。
+
+```rust
+pub async fn set_password(...) -> Result<...> {
+    if !state.auth.requires_setup()? {
+        return Err(error_response("PASSWORD_ALREADY_SET", "密码已设置"));
+    }
+    state.auth.set_password(&body.password)?;
+    // ...
+}
+```
+
+**子任务依赖**
+
+Tasks 1→2→3 顺序执行（2 和 3 紧耦合：auth 中间件需要 AppState，AppState 路由需要 auth 中间件，必须在同一个 commit 中实现）。Task 4 依赖 Task 1（使用 db.rs 的审计方法）。Tasks 5–8 为前端，其中 Task 7 依赖 Task 6（路由守卫需要 auth store）。
 
 **测试标准**
 
@@ -412,20 +458,6 @@ impl<S: Send + Sync> axum::extract::FromRequestParts<S> for AuthUser {
 ```
 feat(auth): add JWT authentication with argon2 password hashing
 ```
-
----
-
-### 3 AppState 重构 + 路由重组
-
-**功能目标**
-
-将当前分散的 state（SqlState/RedisState/FileState）统一到 AppState 中，所有路由共享一个 State，auth 中间件可访问。
-
-**文件结构**
-
-修改：
-- `crates/rex-hub/src/rex-hub.rs` — 重构 `worker_main()` 和 `build_router()`
-- `crates/rex-hub/src/lib.rs` — 添加 AppState 定义（或新建 `app.rs`）
 
 **AppState 设计**
 
@@ -495,89 +527,67 @@ sql_api.rs / redis_api.rs / file_api.rs 中的 handler 需要从 `AppState` 中�
 **提交信息**
 
 ```
-refactor(hub): introduce AppState and restructure router with auth middleware
+feat(auth): add JWT authentication, AppState, and restructure router
 ```
 
 ---
 
-### 4 审计日志写入函数
+### 3 现有 API 模块注入 auth header + WebSocket token 认证
 
 **功能目标**
 
-封装审计日志写入工具，在关键操作的 handler 中一行调用。
+M8 完成后所有后端 API 和 WebSocket 都需要认证。确保现有前端功能（SQL/Redis/Files/Terminal）在认证后不中断。
 
 **文件结构**
 
 修改：
-- `crates/rex-hub/src/db.rs` — 在子任务 1 中已包含 audit 相关方法
+- `packages/rex-console-web/src/api/sql.ts` — 注入 auth header
+- `packages/rex-console-web/src/api/redis.ts` — 注入 auth header
+- `packages/rex-console-web/src/api/files.ts` — 注入 auth header
+- `packages/rex-console-web/src/features/terminal/useTerminal.ts` — WebSocket URL 附加 token query param
 
-**审计写入模式**
+**前端 API 模块适配（最小改动）**
 
-```rust
-// db.rs 中已有的方法
-impl Database {
-    pub fn write_audit_log(&self, entry: &NewAuditEntry) -> Result<()> {
-        let conn = self.conn()?;
-        let id = uuid::Uuid::new_v4().to_string();
-        let time = chrono::Utc::now().to_rfc3339();
-        conn.execute(
-            "INSERT INTO audit_log (id, time, action, target, environment_id, resource_id, agent_id, result, detail)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            rusqlite::params![
-                id, time, entry.action, entry.target,
-                entry.environment_id, entry.resource_id, entry.agent_id,
-                entry.result, entry.detail,
-            ],
-        )?;
-        Ok(())
-    }
+```typescript
+// 在每个 API 模块顶部添加：
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem('rex-token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
 }
+
+// 每个 fetch 调用添加 headers：
+const res = await fetch(url, {
+  headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+})
 ```
 
-**在 handler 中的使用**
+**WebSocket 认证**
 
-```rust
-// 任何需要审计的 handler 中：
-state.db.write_audit_log(&NewAuditEntry {
-    action: "SQL_QUERY".into(),
-    target: Some(body.session_id.clone()),
-    result: "success".into(),
-    ..Default::default()
-}).ok(); // 审计失败不阻断主流程
+`useTerminal.ts` 构建 WebSocket URL 时附加 token：
+
+```typescript
+const token = localStorage.getItem('rex-token')
+const url = `ws://${location.host}/ws/terminal?token=${token}`
+ws = new WebSocket(url)
 ```
 
-**审计事件类型（后续里程碑使用）**
-
-```text
-AUTH_LOGIN          登录
-AUTH_PASSWORD_SET   设置密码
-SQL_CONNECT         SQL 连接
-SQL_QUERY           SQL 查询
-REDIS_CONNECT       Redis 连接
-REDIS_COMMAND       Redis 命令
-FILE_CONNECT        文件连接
-FILE_UPLOAD         文件上传
-FILE_DOWNLOAD       文件下载
-FILE_DELETE         文件删除
-AGENT_REGISTER      Agent 注册
-AGENT_HEARTBEAT     Agent 心跳
-```
+后端 `terminal_ws.rs` 的 `ws_handler` 从 query param 提取并验证 token，无效则拒绝升级。
 
 **测试标准**
 
-- `write_audit_log` 写入后 `query_audit_log` 可查询
-- 多次写入后按时间排序正确
-- audit 失败不 panic、不阻断主流程
+- SQL/Redis/Files 页面在登录后正常调用 API（不 401）
+- 终端 WebSocket 连接正常建立（token query param 验证通过）
+- 未登录时终端 WebSocket 被拒绝
 
 **提交信息**
 
 ```
-feat(audit): add audit log writing infrastructure
+fix(web): inject auth headers in existing API modules and WebSocket token auth
 ```
 
 ---
 
-### 5 前端 API 客户端封装（client.ts）
+### 4 前端 API 客户端封装（client.ts）
 
 **功能目标**
 
@@ -684,9 +694,24 @@ class ApiClient {
 export const api = new ApiClient()
 ```
 
-**现有 API 模块改造（后续）**
+**现有 API 模块适配**
 
-现有 sql.ts、redis.ts、files.ts 暂不改造（M10 时逐步迁移），新模块（auth 等）直接使用 client.ts。
+M8 完成后所有 `/api/*` 和 `/ws/*` 路由都需要认证。现有 sql.ts、redis.ts、files.ts 使用原始 `fetch()` 且不携带 `Authorization` header，**必须在 M8 中修复**否则这三个模块会全部 401。
+
+修复方案（最小改动）：在每个现有 API 模块的 `fetch` 调用中注入 auth header：
+
+```typescript
+// 在每个 API 模块顶部添加：
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem('rex-token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+// 在每个 fetch 调用中添加 headers：
+const res = await fetch(url, { headers: { ...authHeaders(), ... } })
+```
+
+完整迁移到 `client.ts` 延迟到 M10，M8 只做 header 注入。
 
 **测试标准**
 
@@ -704,7 +729,7 @@ feat(web): add centralized API client with auth header injection
 
 ---
 
-### 6 auth Pinia store
+### 5 auth Pinia store
 
 **功能目标**
 
@@ -742,7 +767,7 @@ export const useAuthStore = defineStore('auth', () => {
   /** 检查认证状态（页面加载时调用） */
   async function checkAuth() {
     try {
-      const res = await api.request<AuthCheckResponse>('/api/auth/check')
+      const res = await api.request<AuthCheckResponse>('/auth/check')
       requiresSetup.value = res.requires_setup
     } catch {
       // 无法连接后端时假设需要设置
@@ -755,7 +780,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     error.value = null
     try {
-      const res = await api.post<LoginResponse>('/api/auth/password', { password })
+      const res = await api.post<LoginResponse>('/auth/password', { password })
       token.value = res.token
       localStorage.setItem('rex-token', res.token)
       requiresSetup.value = false
@@ -772,7 +797,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     error.value = null
     try {
-      const res = await api.post<LoginResponse>('/api/auth/login', { password })
+      const res = await api.post<LoginResponse>('/auth/login', { password })
       token.value = res.token
       localStorage.setItem('rex-token', res.token)
     } catch (e: any) {
@@ -811,7 +836,7 @@ feat(web): add auth Pinia store with login/logout token management
 
 ---
 
-### 7 路由守卫 + 登录页改造
+### 6 路由守卫 + 登录页改造
 
 **功能目标**
 
@@ -907,7 +932,7 @@ feat(web): add route guard and real authentication to login page
 
 ---
 
-### 8 首次设置密码页面
+### 7 首次设置密码页面
 
 **功能目标**
 
@@ -985,8 +1010,8 @@ feat(web): add password setup page for first-time use
 
 ## Flow Status
 
-- [ ] 步骤1：编写里程碑文档
-- [ ] 步骤2：设计核对
+- [x] 步骤1：编写里程碑文档
+- [x] 步骤2：设计核对
 - [ ] 步骤3：开发
 - [ ] 步骤4：代码精简
 - [ ] 步骤5：代码审查
