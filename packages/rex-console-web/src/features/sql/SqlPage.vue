@@ -3,6 +3,8 @@ import { ref, computed, onBeforeUnmount } from 'vue'
 import { useSqlNav } from './useSqlNav'
 import SqlNavTree from './SqlNavTree.vue'
 import SqlEditor from './SqlEditor.vue'
+import SqlResultGrid from './SqlResultGrid.vue'
+import { executeQuery, type QueryResult } from '@/api/sql'
 
 const sessionId = ref<string | null>(null)
 const { databases, loading, searchQuery, loadDatabases } = useSqlNav(sessionId)
@@ -41,12 +43,47 @@ onBeforeUnmount(() => {
   document.removeEventListener('mouseup', onDragEnd)
 })
 
+/* ---- vertical split (editor / result) ---- */
+const editorHeight = ref(50) // percent
+const vDragging = ref(false)
+let vStartY = 0
+let vStartH = 0
+
+function onVDragStart(e: MouseEvent) {
+  vDragging.value = true
+  vStartY = e.clientY
+  vStartH = editorHeight.value
+  document.addEventListener('mousemove', onVDragMove)
+  document.addEventListener('mouseup', onVDragEnd)
+  document.body.style.cursor = 'row-resize'
+  document.body.style.userSelect = 'none'
+}
+
+function onVDragMove(e: MouseEvent) {
+  const container = document.querySelector('.sql-right-split') as HTMLElement
+  if (!container) return
+  const rect = container.getBoundingClientRect()
+  const pct = ((e.clientY - rect.top) / rect.height) * 100
+  editorHeight.value = Math.min(80, Math.max(20, pct))
+}
+
+function onVDragEnd() {
+  vDragging.value = false
+  document.removeEventListener('mousemove', onVDragMove)
+  document.removeEventListener('mouseup', onVDragEnd)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+}
+
 /* ---- query tabs ---- */
 interface QueryTab {
   id: number
   title: string
   sql: string
   dirty: boolean
+  result: QueryResult | null
+  loading: boolean
+  error: string | null
 }
 
 let nextTabId = 1
@@ -59,6 +96,9 @@ function createTab(initialSql = ''): QueryTab {
     title: `Query ${tabs.value.length + 1}`,
     sql: initialSql,
     dirty: false,
+    result: null,
+    loading: false,
+    error: null,
   }
   tabs.value.push(tab)
   activeTabId.value = tab.id
@@ -84,14 +124,23 @@ function onSelectTable(db: string, table: string) {
   createTab(sql)
 }
 
-function onExecute(sql: string) {
-  console.log('execute', sql)
-  // TODO: subtask 5 — query execution
+async function onExecute(sql: string) {
+  const tab = activeTab.value
+  if (!tab || !sessionId.value) return
+  tab.loading = true
+  tab.error = null
+  try {
+    tab.result = await executeQuery(sessionId.value, sql)
+  } catch (e: unknown) {
+    tab.error = e instanceof Error ? e.message : String(e)
+    tab.result = null
+  } finally {
+    tab.loading = false
+  }
 }
 
 function onSave(sql: string) {
   console.log('save', sql)
-  // TODO: save to file
 }
 
 const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.value))
@@ -118,7 +167,7 @@ const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.val
       @mousedown.prevent="onDragStart"
     />
 
-    <!-- Right panel: tabs + editor -->
+    <!-- Right panel: tabs + editor + result -->
     <div class="sql-page-content">
       <!-- Tab bar -->
       <div class="sql-tabs">
@@ -132,25 +181,44 @@ const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.val
           <span class="sql-tab-title">{{ tab.title }}</span>
           <span class="sql-tab-close" @click.stop="closeTab(tab.id)">×</span>
         </div>
-        <button class="sql-tab-add" @click="createTab()" title="New Query (Ctrl+T)">+</button>
+        <button class="sql-tab-add" @click="createTab()" title="New Query">+</button>
       </div>
 
-      <!-- Editor area -->
-      <div class="sql-editor-area">
-        <SqlEditor
-          v-if="activeTab"
-          :key="activeTab.id"
-          :model-value="activeTab.sql"
-          @update:model-value="activeTab.sql = $event; activeTab.dirty = true"
-          @execute="onExecute"
-          @save="onSave"
-        />
-        <div v-else class="sql-page-placeholder">
-          <div class="placeholder-icon">📋</div>
-          <div class="placeholder-title">SQL Console</div>
-          <div class="placeholder-desc">
-            Select a table or click + to create a new query
+      <!-- Split: editor top / result bottom -->
+      <div class="sql-right-split">
+        <!-- Editor -->
+        <div class="sql-split-editor" :style="{ height: editorHeight + '%' }">
+          <SqlEditor
+            v-if="activeTab"
+            :key="activeTab.id"
+            :model-value="activeTab.sql"
+            @update:model-value="activeTab.sql = $event; activeTab.dirty = true"
+            @execute="onExecute"
+            @save="onSave"
+          />
+          <div v-else class="sql-page-placeholder">
+            <div class="placeholder-title">SQL Console</div>
+            <div class="placeholder-desc">
+              Select a table or click + to create a new query
+            </div>
           </div>
+        </div>
+
+        <!-- Vertical resize handle -->
+        <div
+          class="sql-vhandle"
+          :class="{ 'sql-vhandle--active': vDragging }"
+          @mousedown.prevent="onVDragStart"
+        />
+
+        <!-- Result grid -->
+        <div class="sql-split-result">
+          <SqlResultGrid
+            v-if="activeTab"
+            :result="activeTab.result"
+            :loading="activeTab.loading"
+            :error="activeTab.error"
+          />
         </div>
       </div>
     </div>
@@ -260,10 +328,36 @@ const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.val
   color: var(--accent);
 }
 
-/* ---- editor area ---- */
-.sql-editor-area {
+/* ---- split ---- */
+.sql-right-split {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
+  overflow: hidden;
+}
+
+.sql-split-editor {
+  min-height: 80px;
+  overflow: hidden;
+}
+
+.sql-vhandle {
+  height: 4px;
+  flex-shrink: 0;
+  cursor: row-resize;
+  background: var(--border);
+  transition: background var(--transition);
+}
+
+.sql-vhandle:hover,
+.sql-vhandle--active {
+  background: var(--accent);
+}
+
+.sql-split-result {
+  flex: 1;
+  min-height: 80px;
   overflow: hidden;
 }
 
@@ -275,11 +369,6 @@ const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.val
   height: 100%;
   color: var(--text-muted);
   gap: var(--space-2);
-}
-
-.placeholder-icon {
-  font-size: 48px;
-  opacity: 0.4;
 }
 
 .placeholder-title {
