@@ -5,6 +5,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use rex_hub::redis_api::{self, RedisState};
 use rex_hub::sql_api::{self, SqlState};
 use rex_hub::terminal_ws;
 
@@ -57,7 +58,7 @@ fn worker_main() {
     });
 }
 
-/// 构建路由：WebSocket 终端 + SQL API + 静态文件 + SPA fallback
+/// 构建路由：WebSocket 终端 + SQL API + Redis API + 静态文件 + SPA fallback
 fn build_router(static_dir: PathBuf) -> Router {
     let index_path = static_dir.join("index.html");
 
@@ -67,11 +68,21 @@ fn build_router(static_dir: PathBuf) -> Router {
     // SQL 连接池状态
     let sql_state: SqlState = Arc::new(tokio::sync::Mutex::new(sql_api::SqlConnectionPool::new()));
 
+    // Redis 连接池状态
+    let redis_state: RedisState = Arc::new(tokio::sync::Mutex::new(
+        redis_api::RedisConnectionPool::new(),
+    ));
+
     Router::new()
         // WebSocket 终端桥接
         .route("/ws/terminal", axum::routing::get(terminal_ws::ws_handler))
         // SQL 控制台 API
         .nest("/api/sql", sql_api::sql_routes().with_state(sql_state))
+        // Redis 控制台 API
+        .nest(
+            "/api/redis",
+            redis_api::redis_routes().with_state(redis_state),
+        )
         .fallback(get_service(serve_dir).handle_error(|err| async move {
             tracing::error!(error = %err, "static file serve error");
             (
