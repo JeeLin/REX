@@ -125,6 +125,36 @@ function closePane(idx: number) {
   }
 }
 
+// 布局预设
+type LayoutPreset = 'single' | 'left-right' | 'top-bottom' | 'grid-four' | 'main-side'
+const currentLayout = ref<LayoutPreset>('single')
+
+function applyLayout(preset: LayoutPreset) {
+  currentLayout.value = preset
+  switch (preset) {
+    case 'single':
+      splitCount.value = 1
+      splitDirection.value = 'row'
+      break
+    case 'left-right':
+      splitCount.value = 2
+      splitDirection.value = 'row'
+      break
+    case 'top-bottom':
+      splitCount.value = 2
+      splitDirection.value = 'column'
+      break
+    case 'grid-four':
+      splitCount.value = 4
+      splitDirection.value = 'row'
+      break
+    case 'main-side':
+      splitCount.value = 2
+      splitDirection.value = 'row'
+      break
+  }
+}
+
 // 快捷键
 useKeyboardShortcuts([
   { key: 't', ctrl: true, handler: () => {
@@ -145,6 +175,11 @@ useKeyboardShortcuts([
   } },
   { key: '\\', ctrl: true, handler: splitHorizontal },
   { key: '\\', ctrl: true, shift: true, handler: splitVertical },
+  { key: '1', alt: true, handler: () => applyLayout('single') },
+  { key: '2', alt: true, handler: () => applyLayout('left-right') },
+  { key: '3', alt: true, handler: () => applyLayout('top-bottom') },
+  { key: '4', alt: true, handler: () => applyLayout('grid-four') },
+  { key: '5', alt: true, handler: () => applyLayout('main-side') },
 ])
 </script>
 
