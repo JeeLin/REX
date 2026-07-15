@@ -3,7 +3,9 @@
 //! 2.0 重设计骨架。worker 启动 axum HTTP server，托管前端静态资源（单端口代理）。
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
+use rex_hub::sql_api::{self, SqlState};
 use rex_hub::terminal_ws;
 
 use axum::routing::get_service;
@@ -55,17 +57,21 @@ fn worker_main() {
     });
 }
 
-/// 构建路由：WebSocket 终端 + 静态文件 + SPA fallback
+/// 构建路由：WebSocket 终端 + SQL API + 静态文件 + SPA fallback
 fn build_router(static_dir: PathBuf) -> Router {
     let index_path = static_dir.join("index.html");
 
     // 静态文件服务（按文件实际路径响应，找不到文件时回退到 index.html）
     let serve_dir = ServeDir::new(&static_dir).not_found_service(ServeFile::new(index_path));
 
+    // SQL 连接池状态
+    let sql_state: SqlState = Arc::new(tokio::sync::Mutex::new(sql_api::SqlConnectionPool::new()));
+
     Router::new()
         // WebSocket 终端桥接
         .route("/ws/terminal", axum::routing::get(terminal_ws::ws_handler))
-        // TODO: M4+ 在此添加 /api/* 路由
+        // SQL 控制台 API
+        .nest("/api/sql", sql_api::sql_routes().with_state(sql_state))
         .fallback(get_service(serve_dir).handle_error(|err| async move {
             tracing::error!(error = %err, "static file serve error");
             (
