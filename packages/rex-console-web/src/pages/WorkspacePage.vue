@@ -5,6 +5,7 @@ import 'splitpanes/dist/splitpanes.css'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
+import ConnectionTree from '@/features/workspace/ConnectionTree.vue'
 
 interface Tab {
   id: string
@@ -37,6 +38,23 @@ const timer = setInterval(() => {
 onBeforeUnmount(() => clearInterval(timer))
 
 const activeTabInfo = computed(() => tabs.value.find(t => t.id === activeTab.value))
+
+// 连接树
+const treeCollapsed = ref(false)
+
+function openResourceFromTree(node: { id: string; name: string; protocol?: string; host?: string; status?: StatusDotStatus }) {
+  const id = `tab-${node.id}`
+  if (!tabs.value.find(t => t.id === id)) {
+    tabs.value.push({
+      id,
+      label: node.name,
+      protocol: (node.protocol || 'ssh') as Tab['protocol'],
+      host: node.host,
+      status: node.status,
+    })
+  }
+  activeTab.value = id
+}
 
 // 分栏操作
 function splitHorizontal() {
@@ -94,6 +112,14 @@ useKeyboardShortcuts([
       </div>
       <button class="ws-tab-add" title="New connection (Ctrl+T)">+</button>
     </div>
+
+    <!-- Connection tree sidebar -->
+    <div v-show="!treeCollapsed" class="ws-tree" :style="{ width: '220px' }">
+      <ConnectionTree @open-resource="openResourceFromTree" />
+    </div>
+    <button class="ws-tree-toggle" @click="treeCollapsed = !treeCollapsed" :title="treeCollapsed ? 'Show tree' : 'Hide tree'">
+      {{ treeCollapsed ? '»' : '«' }}
+    </button>
 
     <!-- Split panes -->
     <div class="ws-body">
@@ -221,6 +247,28 @@ useKeyboardShortcuts([
   transition: color var(--transition);
 }
 .ws-tab-add:hover {
+  color: var(--accent);
+}
+
+/* Connection tree sidebar */
+.ws-tree {
+  flex-shrink: 0;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+.ws-tree-toggle {
+  width: 16px;
+  flex-shrink: 0;
+  background: var(--bg-surface);
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 10px;
+  cursor: pointer;
+  transition: color var(--transition);
+}
+.ws-tree-toggle:hover {
   color: var(--accent);
 }
 
