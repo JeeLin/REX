@@ -3354,6 +3354,7 @@ dependencies = [
  "rex-mysql",
  "rex-postgresql",
  "rex-redis",
+ "rex-s3",
  "rex-sqlite",
  "rex-ssh",
  "serde",

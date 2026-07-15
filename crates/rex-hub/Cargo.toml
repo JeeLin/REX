@@ -26,6 +26,7 @@ rex-mysql = { workspace = true }
 rex-postgresql = { workspace = true }
 rex-sqlite = { workspace = true }
 rex-redis = { workspace = true }
+rex-s3 = { workspace = true }
 futures-util = { workspace = true }
 tokio-util = { workspace = true }
 bytes = { workspace = true }
