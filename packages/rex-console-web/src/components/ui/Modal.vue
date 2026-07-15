@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { watch, onBeforeUnmount } from 'vue'
 
 const props = withDefaults(defineProps<{ modelValue: boolean; title?: string; width?: string }>(), {
   title: '',
@@ -21,6 +21,11 @@ watch(() => props.modelValue, (open) => {
     document.removeEventListener('keydown', onKeydown)
     document.body.style.overflow = ''
   }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onKeydown)
+  document.body.style.overflow = ''
 })
 </script>
 

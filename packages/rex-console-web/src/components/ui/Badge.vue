@@ -28,6 +28,14 @@ withDefaults(
   line-height: 1.5;
   border: 1px solid transparent;
 }
+.badge--sm {
+  padding: 1px 6px;
+  font-size: var(--text-xs);
+}
+.badge--md {
+  padding: 2px 8px;
+  font-size: var(--text-sm);
+}
 .badge--neutral {
   background: var(--bg-elevated);
   color: var(--text-secondary);

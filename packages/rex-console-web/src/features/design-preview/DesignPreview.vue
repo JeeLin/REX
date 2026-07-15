@@ -25,7 +25,11 @@ import Scrollbar from '@/components/ui/Scrollbar.vue'
 const theme = ref<'dark' | 'light'>('dark')
 function toggleTheme() {
   theme.value = theme.value === 'dark' ? 'light' : 'dark'
-  document.documentElement.dataset.theme = theme.value === 'light' ? 'light' : undefined
+  if (theme.value === 'light') {
+    document.documentElement.dataset.theme = 'light'
+  } else {
+    delete document.documentElement.dataset.theme
+  }
 }
 
 // Tabs demo

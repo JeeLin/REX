@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 
 interface Option {
   label: string
@@ -18,7 +18,27 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ 'update:modelValue': [value: string | number] }>()
 
 const open = ref(false)
+const triggerRef = ref<HTMLElement | null>(null)
+const dropdownStyle = ref<Record<string, string>>({})
 const selectedLabel = computed(() => props.options.find(o => o.value === props.modelValue)?.label ?? '')
+
+function updatePosition() {
+  if (!triggerRef.value) return
+  const rect = triggerRef.value.getBoundingClientRect()
+  dropdownStyle.value = {
+    position: 'fixed',
+    top: `${rect.bottom + 4}px`,
+    left: `${rect.left}px`,
+    minWidth: `${rect.width}px`,
+  }
+}
+
+watch(open, async (v) => {
+  if (v) {
+    await nextTick()
+    updatePosition()
+  }
+})
 
 function select(option: Option) {
   if (!option.disabled) {
@@ -31,6 +51,7 @@ function select(option: Option) {
 <template>
   <div class="select-wrap" :class="[`select-wrap--${size}`, { 'select-wrap--disabled': disabled }]">
     <button
+      ref="triggerRef"
       class="select-trigger"
       :disabled="disabled"
       @click="open = !open"
@@ -41,7 +62,7 @@ function select(option: Option) {
     <Teleport to="body">
       <div v-if="open" class="select-overlay" @click="open = false" />
       <Transition name="select">
-        <div v-if="open" class="select-dropdown" :class="`select-dropdown--${size}`">
+        <div v-if="open" class="select-dropdown" :class="`select-dropdown--${size}`" :style="dropdownStyle">
           <div
             v-for="option in options"
             :key="option.value"
@@ -99,8 +120,6 @@ function select(option: Option) {
   z-index: 90;
 }
 .select-dropdown {
-  position: fixed;
-  min-width: 160px;
   max-height: 240px;
   overflow-y: auto;
   background: var(--bg-elevated);

@@ -5,11 +5,11 @@ interface Option {
   icon?: string
 }
 
-defineProps<{
+withDefaults(defineProps<{
   modelValue?: string | number
   options: Option[]
   size?: 'sm' | 'md'
-}>()
+}>(), { size: 'md' })
 
 const emit = defineEmits<{ 'update:modelValue': [value: string | number] }>()
 </script>

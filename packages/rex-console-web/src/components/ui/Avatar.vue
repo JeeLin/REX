@@ -1,15 +1,19 @@
 <script setup lang="ts">
+import { ref } from 'vue'
+
 withDefaults(defineProps<{
   src?: string
   size?: 'sm' | 'md' | 'lg'
   fallback?: string
 }>(), { size: 'md', fallback: '?' })
+
+const imgError = ref(false)
 </script>
 
 <template>
   <div class="avatar" :class="`avatar--${size}`">
-    <img v-if="src" :src="src" class="avatar-img" @error="($event.target as HTMLImageElement).style.display='none'" />
-    <span v-if="!src" class="avatar-fallback">{{ fallback }}</span>
+    <img v-if="src" :src="src" class="avatar-img" @error="imgError = true" />
+    <span v-if="!src || imgError" class="avatar-fallback">{{ fallback }}</span>
   </div>
 </template>
 

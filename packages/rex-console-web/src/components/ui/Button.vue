@@ -101,7 +101,7 @@ withDefaults(
   position: absolute;
   width: 14px;
   height: 14px;
-  border: 2px solid currentColor;
+  border: 2px solid var(--text-secondary);
   border-right-color: transparent;
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
