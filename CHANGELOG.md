@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.5.0] - 2026-07-15
+
+### Added
+- SQL 控制台：后端 MySQL/PostgreSQL/SQLite 协议接入（`SqlConnector` trait + REST API）
+- SQL 控制台：前端导航树（库→表/视图分组、搜索过滤、右键菜单）
+- SQL 控制台：CodeMirror 6 查询编辑器（多 Tab、SQL 语法高亮、`.` 补全、代码折叠、查找替换）
+- SQL 控制台：结果网格（表格视图、状态栏、行数/耗时显示）
+- SQL 控制台：执行模式工具栏（Run All / Run Current / Run Selected）
+
 ## [0.4.0] - 2026-07-15
 
 ### Added

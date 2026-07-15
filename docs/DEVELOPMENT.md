@@ -49,7 +49,7 @@ rex-agent = 所有 crate（无前端）
 | **M1** | 设计系统与组件库 | REX 自有 | ✅ |
 | **M2** | 工作空间外壳 | Xshell | ✅ |
 | **M3** | SSH 终端 | Xshell | ✅ |
-| **M4** | 数据库控制台 | Navicat | ⬜ |
+| **M4** | 数据库控制台 | Navicat | ✅ |
 | **M5** | Redis 控制台 | ARDM | ⬜ |
 | **M6** | 文件管理（SFTP+S3） | Xftp | ⬜ |
 | **M7** | 管理模块 + 打磨收尾 | REX 自有 | ⬜ |
