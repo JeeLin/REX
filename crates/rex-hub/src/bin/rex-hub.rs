@@ -4,6 +4,8 @@
 
 use std::path::PathBuf;
 
+use rex_hub::terminal_ws;
+
 use axum::routing::get_service;
 use axum::Router;
 use tower_http::services::{ServeDir, ServeFile};
@@ -49,25 +51,27 @@ fn worker_main() {
             .await
             .expect("failed to bind");
 
-        axum::serve(listener, app)
-            .await
-            .expect("server error");
+        axum::serve(listener, app).await.expect("server error");
     });
 }
 
-/// 构建路由：静态文件 + SPA fallback
+/// 构建路由：WebSocket 终端 + 静态文件 + SPA fallback
 fn build_router(static_dir: PathBuf) -> Router {
     let index_path = static_dir.join("index.html");
 
     // 静态文件服务（按文件实际路径响应，找不到文件时回退到 index.html）
-    let serve_dir = ServeDir::new(&static_dir)
-        .not_found_service(ServeFile::new(index_path));
+    let serve_dir = ServeDir::new(&static_dir).not_found_service(ServeFile::new(index_path));
 
     Router::new()
-        // TODO: M2+ 在此添加 /api/* 路由
+        // WebSocket 终端桥接
+        .route("/ws/terminal", axum::routing::get(terminal_ws::ws_handler))
+        // TODO: M4+ 在此添加 /api/* 路由
         .fallback(get_service(serve_dir).handle_error(|err| async move {
             tracing::error!(error = %err, "static file serve error");
-            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal Server Error",
+            )
         }))
 }
 
