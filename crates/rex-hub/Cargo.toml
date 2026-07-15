@@ -36,3 +36,5 @@ r2d2 = { workspace = true }
 chrono = { workspace = true }
 argon2 = { workspace = true }
 jsonwebtoken = { workspace = true }
+rand_core = { workspace = true }
+async-trait = { workspace = true }

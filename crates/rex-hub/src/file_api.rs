@@ -7,6 +7,7 @@ use axum::extract::{Multipart, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
+use crate::AppState;
 use rex_common::file_transfer::{FileConnectRequest, FileConnector};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -31,7 +32,7 @@ impl FileConnectionPool {
     }
 }
 
-pub fn file_routes() -> axum::Router<FileState> {
+pub fn file_routes() -> axum::Router<AppState> {
     axum::Router::new()
         .route("/connect", axum::routing::post(connect))
         .route("/disconnect", axum::routing::post(disconnect))
@@ -123,7 +124,7 @@ fn error_response(code: &str, message: &str) -> (StatusCode, Json<ErrorBody>) {
 // ---------------------------------------------------------------------------
 
 async fn connect(
-    State(state): State<FileState>,
+    State(state): State<AppState>,
     Json(body): Json<ConnectBody>,
 ) -> axum::response::Response {
     let req = body.req;
@@ -157,15 +158,15 @@ async fn connect(
     };
 
     let session_id = format!("file_{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    state.lock().await.insert(session_id.clone(), conn);
+    state.file_pool.lock().await.insert(session_id.clone(), conn);
     (StatusCode::OK, Json(ConnectResponse { session_id })).into_response()
 }
 
 async fn disconnect(
-    State(state): State<FileState>,
+    State(state): State<AppState>,
     Json(body): Json<DisconnectBody>,
 ) -> axum::response::Response {
-    let mut pool = state.lock().await;
+    let mut pool = state.file_pool.lock().await;
     if let Some(mut conn) = pool.remove(&body.session_id) {
         let _ = conn.close().await;
         (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response()
@@ -175,10 +176,10 @@ async fn disconnect(
 }
 
 async fn list(
-    State(state): State<FileState>,
+    State(state): State<AppState>,
     Query(params): Query<PathQuery>,
 ) -> axum::response::Response {
-    let mut pool = state.lock().await;
+    let mut pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -190,10 +191,10 @@ async fn list(
 }
 
 async fn stat(
-    State(state): State<FileState>,
+    State(state): State<AppState>,
     Query(params): Query<PathQuery>,
 ) -> axum::response::Response {
-    let mut pool = state.lock().await;
+    let mut pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -205,7 +206,7 @@ async fn stat(
 }
 
 async fn upload(
-    State(state): State<FileState>,
+    State(state): State<AppState>,
     mut multipart: Multipart,
 ) -> axum::response::Response {
     let mut session_id = String::new();
@@ -235,7 +236,7 @@ async fn upload(
         None => return error_response("MISSING_FILE", "no file uploaded").into_response(),
     };
 
-    let mut pool = state.lock().await;
+    let mut pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get_mut(&session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -247,10 +248,10 @@ async fn upload(
 }
 
 async fn download(
-    State(state): State<FileState>,
+    State(state): State<AppState>,
     Query(params): Query<PathQuery>,
 ) -> axum::response::Response {
-    let mut pool = state.lock().await;
+    let mut pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -276,10 +277,10 @@ async fn download(
 }
 
 async fn delete(
-    State(state): State<FileState>,
+    State(state): State<AppState>,
     Json(body): Json<DeleteBody>,
 ) -> axum::response::Response {
-    let mut pool = state.lock().await;
+    let mut pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -291,10 +292,10 @@ async fn delete(
 }
 
 async fn rename(
-    State(state): State<FileState>,
+    State(state): State<AppState>,
     Json(body): Json<RenameBody>,
 ) -> axum::response::Response {
-    let mut pool = state.lock().await;
+    let mut pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -306,10 +307,10 @@ async fn rename(
 }
 
 async fn mkdir(
-    State(state): State<FileState>,
+    State(state): State<AppState>,
     Json(body): Json<MkdirBody>,
 ) -> axum::response::Response {
-    let mut pool = state.lock().await;
+    let mut pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),

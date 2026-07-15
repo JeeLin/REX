@@ -9,6 +9,7 @@ use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
+use crate::AppState;
 use rex_common::sql::{
     ConnectRequest, DatabaseType, SqlConnector, SqlConnectorFactory,
 };
@@ -40,7 +41,7 @@ impl SqlConnectionPool {
 }
 
 /// 创建 SQL API 路由
-pub fn sql_routes() -> axum::Router<SqlState> {
+pub fn sql_routes() -> axum::Router<AppState> {
     axum::Router::new()
         .route("/connect", axum::routing::post(connect))
         .route("/disconnect", axum::routing::post(disconnect))
@@ -128,7 +129,7 @@ fn error_response(code: &str, message: &str) -> (StatusCode, Json<ErrorBody>) {
 
 /// POST /api/sql/connect
 async fn connect(
-    State(state): State<SqlState>,
+    State(state): State<AppState>,
     Json(body): Json<ConnectBody>,
 ) -> axum::response::Response {
     let db_type = match body.db_type.to_lowercase().as_str() {
@@ -148,7 +149,7 @@ async fn connect(
     match factory.connect(body.req).await {
         Ok(conn) => {
             let session_id = format!("sql_{}", &uuid::Uuid::new_v4().to_string()[..8]);
-            state.lock().await.insert(session_id.clone(), conn);
+            state.sql_pool.lock().await.insert(session_id.clone(), conn);
             (StatusCode::OK, Json(ConnectResponse { session_id })).into_response()
         }
         Err(e) => error_response("CONNECTION_FAILED", &e.to_string()).into_response(),
@@ -157,10 +158,10 @@ async fn connect(
 
 /// POST /api/sql/disconnect
 async fn disconnect(
-    State(state): State<SqlState>,
+    State(state): State<AppState>,
     Json(body): Json<DisconnectBody>,
 ) -> impl IntoResponse {
-    let mut pool = state.lock().await;
+    let mut pool = state.sql_pool.lock().await;
     if let Some(mut conn) = pool.remove(&body.session_id) {
         let _ = conn.close().await;
         (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response()
@@ -170,8 +171,11 @@ async fn disconnect(
 }
 
 /// POST /api/sql/query
-async fn query(State(state): State<SqlState>, Json(body): Json<QueryBody>) -> impl IntoResponse {
-    let mut pool = state.lock().await;
+async fn query(
+    State(state): State<AppState>,
+    Json(body): Json<QueryBody>,
+) -> impl IntoResponse {
+    let mut pool = state.sql_pool.lock().await;
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,
         None => {
@@ -187,10 +191,10 @@ async fn query(State(state): State<SqlState>, Json(body): Json<QueryBody>) -> im
 
 /// GET /api/sql/databases?session_id=xxx
 async fn databases(
-    State(state): State<SqlState>,
+    State(state): State<AppState>,
     Query(params): Query<SessionQuery>,
 ) -> impl IntoResponse {
-    let mut pool = state.lock().await;
+    let mut pool = state.sql_pool.lock().await;
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
         None => {
@@ -206,10 +210,10 @@ async fn databases(
 
 /// GET /api/sql/tables?session_id=xxx&db=xxx
 async fn tables(
-    State(state): State<SqlState>,
+    State(state): State<AppState>,
     Query(params): Query<TablesQuery>,
 ) -> impl IntoResponse {
-    let mut pool = state.lock().await;
+    let mut pool = state.sql_pool.lock().await;
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
         None => {
@@ -225,10 +229,10 @@ async fn tables(
 
 /// GET /api/sql/columns?session_id=xxx&db=xxx&table=xxx
 async fn columns(
-    State(state): State<SqlState>,
+    State(state): State<AppState>,
     Query(params): Query<ColumnsQuery>,
 ) -> impl IntoResponse {
-    let mut pool = state.lock().await;
+    let mut pool = state.sql_pool.lock().await;
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
         None => {

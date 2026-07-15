@@ -7,6 +7,7 @@ use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
+use crate::AppState;
 use rex_common::redis::{RedisConnectRequest, RedisConnector};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -35,7 +36,7 @@ impl RedisConnectionPool {
 }
 
 /// 创建 Redis API 路由
-pub fn redis_routes() -> axum::Router<RedisState> {
+pub fn redis_routes() -> axum::Router<AppState> {
     axum::Router::new()
         .route("/connect", axum::routing::post(connect))
         .route("/disconnect", axum::routing::post(disconnect))
@@ -169,7 +170,7 @@ fn error_response(code: &str, message: &str) -> (StatusCode, Json<ErrorBody>) {
 // ---------------------------------------------------------------------------
 
 async fn connect(
-    State(state): State<RedisState>,
+    State(state): State<AppState>,
     Json(body): Json<ConnectBody>,
 ) -> axum::response::Response {
     let req = RedisConnectRequest {
@@ -183,6 +184,7 @@ async fn connect(
         Ok(conn) => {
             let session_id = format!("redis_{}", &uuid::Uuid::new_v4().to_string()[..8]);
             state
+                .redis_pool
                 .lock()
                 .await
                 .insert(session_id.clone(), Box::new(conn));
@@ -193,10 +195,10 @@ async fn connect(
 }
 
 async fn disconnect(
-    State(state): State<RedisState>,
+    State(state): State<AppState>,
     Json(body): Json<DisconnectBody>,
 ) -> axum::response::Response {
-    let mut pool = state.lock().await;
+    let mut pool = state.redis_pool.lock().await;
     if let Some(mut conn) = pool.remove(&body.session_id) {
         let _ = conn.close().await;
         (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response()
@@ -206,10 +208,10 @@ async fn disconnect(
 }
 
 async fn databases(
-    State(state): State<RedisState>,
+    State(state): State<AppState>,
     Query(params): Query<SessionQuery>,
 ) -> axum::response::Response {
-    let mut pool = state.lock().await;
+    let mut pool = state.redis_pool.lock().await;
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -221,10 +223,10 @@ async fn databases(
 }
 
 async fn select_db(
-    State(state): State<RedisState>,
+    State(state): State<AppState>,
     Json(body): Json<SelectBody>,
 ) -> axum::response::Response {
-    let mut pool = state.lock().await;
+    let mut pool = state.redis_pool.lock().await;
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -236,10 +238,10 @@ async fn select_db(
 }
 
 async fn scan(
-    State(state): State<RedisState>,
+    State(state): State<AppState>,
     Query(params): Query<ScanQuery>,
 ) -> axum::response::Response {
-    let mut pool = state.lock().await;
+    let mut pool = state.redis_pool.lock().await;
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -251,10 +253,10 @@ async fn scan(
 }
 
 async fn get_key(
-    State(state): State<RedisState>,
+    State(state): State<AppState>,
     Query(params): Query<KeyQuery>,
 ) -> axum::response::Response {
-    let mut pool = state.lock().await;
+    let mut pool = state.redis_pool.lock().await;
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -266,10 +268,10 @@ async fn get_key(
 }
 
 async fn set_key(
-    State(state): State<RedisState>,
+    State(state): State<AppState>,
     Json(body): Json<SetBody>,
 ) -> axum::response::Response {
-    let mut pool = state.lock().await;
+    let mut pool = state.redis_pool.lock().await;
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -281,10 +283,10 @@ async fn set_key(
 }
 
 async fn del_keys(
-    State(state): State<RedisState>,
+    State(state): State<AppState>,
     Json(body): Json<DelBody>,
 ) -> axum::response::Response {
-    let mut pool = state.lock().await;
+    let mut pool = state.redis_pool.lock().await;
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -296,10 +298,10 @@ async fn del_keys(
 }
 
 async fn get_ttl(
-    State(state): State<RedisState>,
+    State(state): State<AppState>,
     Query(params): Query<TtlQuery>,
 ) -> axum::response::Response {
-    let mut pool = state.lock().await;
+    let mut pool = state.redis_pool.lock().await;
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -311,10 +313,10 @@ async fn get_ttl(
 }
 
 async fn set_ttl(
-    State(state): State<RedisState>,
+    State(state): State<AppState>,
     Json(body): Json<SetTtlBody>,
 ) -> axum::response::Response {
-    let mut pool = state.lock().await;
+    let mut pool = state.redis_pool.lock().await;
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -326,10 +328,10 @@ async fn set_ttl(
 }
 
 async fn info(
-    State(state): State<RedisState>,
+    State(state): State<AppState>,
     Query(params): Query<SessionQuery>,
 ) -> axum::response::Response {
-    let mut pool = state.lock().await;
+    let mut pool = state.redis_pool.lock().await;
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -341,10 +343,10 @@ async fn info(
 }
 
 async fn run_command(
-    State(state): State<RedisState>,
+    State(state): State<AppState>,
     Json(body): Json<CommandBody>,
 ) -> axum::response::Response {
-    let mut pool = state.lock().await;
+    let mut pool = state.redis_pool.lock().await;
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
