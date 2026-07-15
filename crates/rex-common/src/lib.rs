@@ -31,5 +31,6 @@ impl From<std::io::Error> for RExError {
 
 pub type Result<T> = std::result::Result<T, RExError>;
 
+pub mod file_transfer;
 pub mod redis;
 pub mod sql;

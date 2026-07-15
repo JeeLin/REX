@@ -1,5 +1,7 @@
 //! SSH protocol implementation — 连接、认证、终端会话。
 
+pub mod sftp;
+
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -165,7 +167,7 @@ impl SshSession {
 }
 
 /// SSH 客户端事件处理器（开发阶段跳过主机密钥校验）
-struct SshHandler;
+pub struct SshHandler;
 
 impl client::Handler for SshHandler {
     type Error = russh::Error;
