@@ -1,5 +1,5 @@
 import { ref, shallowRef, onBeforeUnmount } from 'vue'
-import { Terminal } from '@xterm/xterm'
+import { Terminal, type IDisposable } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { getTerminalTheme } from './terminal-themes'
 
@@ -22,6 +22,8 @@ export function useTerminal() {
 
   let ws: WebSocket | null = null
   let disposed = false
+  let dataSub: IDisposable | null = null
+  let resizeSub: IDisposable | null = null
 
   /** 创建终端实例并挂载到 DOM */
   function createTerminal(container: HTMLElement, options?: Partial<Terminal['options']>) {
@@ -55,6 +57,12 @@ export function useTerminal() {
       ws.close()
       ws = null
     }
+
+    // 清理之前的事件订阅
+    dataSub?.dispose()
+    resizeSub?.dispose()
+    dataSub = null
+    resizeSub = null
 
     status.value = 'connecting'
     errorMessage.value = ''
@@ -119,7 +127,7 @@ export function useTerminal() {
     // 监听终端输入 → 发送到 WebSocket
     const term = terminal.value
     if (term) {
-      term.onData((data) => {
+      dataSub = term.onData((data) => {
         if (ws?.readyState === WebSocket.OPEN) {
           ws.send(
             JSON.stringify({
@@ -131,7 +139,7 @@ export function useTerminal() {
       })
 
       // 监听终端 resize → 发送到 WebSocket
-      term.onResize(({ cols, rows }) => {
+      resizeSub = term.onResize(({ cols, rows }) => {
         if (ws?.readyState === WebSocket.OPEN) {
           ws.send(
             JSON.stringify({
@@ -172,6 +180,10 @@ export function useTerminal() {
   function dispose() {
     disposed = true
     disconnect()
+    dataSub?.dispose()
+    resizeSub?.dispose()
+    dataSub = null
+    resizeSub = null
     terminal.value?.dispose()
     terminal.value = null
     fitAddon.value = null

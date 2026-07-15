@@ -39,13 +39,34 @@ enum ClientMsg {
 #[serde(tag = "type")]
 enum ServerMsg {
     #[serde(rename = "terminal.connected")]
-    Connected { session_id: String },
+    Connected { payload: ConnectedPayload },
     #[serde(rename = "terminal.data")]
-    Data { data: String },
+    Data { payload: DataPayload },
     #[serde(rename = "terminal.disconnected")]
-    Disconnected { reason: String },
+    Disconnected { payload: DisconnectedPayload },
     #[serde(rename = "terminal.error")]
-    Error { message: String },
+    Error { payload: ErrorPayload },
+}
+
+#[derive(Debug, Serialize)]
+struct ConnectedPayload {
+    #[serde(rename = "sessionId")]
+    session_id: String,
+}
+
+#[derive(Debug, Serialize)]
+struct DataPayload {
+    data: String,
+}
+
+#[derive(Debug, Serialize)]
+struct DisconnectedPayload {
+    reason: String,
+}
+
+#[derive(Debug, Serialize)]
+struct ErrorPayload {
+    message: String,
 }
 
 /// 处理 WebSocket 升级请求
@@ -96,7 +117,9 @@ async fn handle_socket(mut ws: WebSocket) {
     let _ = ws
         .send(Message::Text(
             serde_json::to_string(&ServerMsg::Connected {
-                session_id: session_id.clone(),
+                payload: ConnectedPayload {
+                    session_id: session_id.clone(),
+                },
             })
             .unwrap(),
         ))
@@ -168,7 +191,9 @@ async fn handle_socket(mut ws: WebSocket) {
                             }
                         }
                         Some(TerminalEvent::Disconnected(reason)) => {
-                            let msg = ServerMsg::Disconnected { reason };
+                            let msg = ServerMsg::Disconnected {
+                                payload: DisconnectedPayload { reason },
+                            };
                             let _ = data_tx.send(serde_json::to_string(&msg).unwrap_or_default()).await;
                             break;
                         }
@@ -189,7 +214,9 @@ async fn handle_socket(mut ws: WebSocket) {
                 Message::Text(data)
             } else {
                 // base64 编码的终端数据
-                let wrapped = ServerMsg::Data { data };
+                let wrapped = ServerMsg::Data {
+                    payload: DataPayload { data },
+                };
                 Message::Text(serde_json::to_string(&wrapped).unwrap())
             };
             if ws_sink.send(msg).await.is_err() {
@@ -211,7 +238,9 @@ async fn handle_socket(mut ws: WebSocket) {
 async fn send_ws_error(ws: &mut WebSocket, msg: &str) -> Result<(), axum::Error> {
     ws.send(Message::Text(
         serde_json::to_string(&ServerMsg::Error {
-            message: msg.into(),
+            payload: ErrorPayload {
+                message: msg.into(),
+            },
         })
         .unwrap(),
     ))

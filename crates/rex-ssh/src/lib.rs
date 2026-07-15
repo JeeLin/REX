@@ -174,7 +174,8 @@ impl client::Handler for SshHandler {
         &mut self,
         _server_public_key: &PublicKey,
     ) -> Result<bool, Self::Error> {
-        // TODO: 生产环境应校验 known_hosts
+        // DEV ONLY: 跳过主机密钥校验（生产环境应校验 known_hosts）
+        tracing::warn!("SSH host key verification disabled (dev mode) — MITM risk");
         Ok(true)
     }
 }
