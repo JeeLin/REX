@@ -4,7 +4,8 @@ import { useSqlNav } from './useSqlNav'
 import SqlNavTree from './SqlNavTree.vue'
 import SqlEditor from './SqlEditor.vue'
 import SqlResultGrid from './SqlResultGrid.vue'
-import { executeQuery, type QueryResult } from '@/api/sql'
+import { useSqlQuery, type ExecuteMode } from './useSqlQuery'
+import type { QueryResult } from '@/api/sql'
 
 const sessionId = ref<string | null>(null)
 const { databases, loading, searchQuery, loadDatabases } = useSqlNav(sessionId)
@@ -124,19 +125,12 @@ function onSelectTable(db: string, table: string) {
   createTab(sql)
 }
 
+const { mode: execMode, run: runQuery } = useSqlQuery(() => sessionId.value)
+
 async function onExecute(sql: string) {
   const tab = activeTab.value
-  if (!tab || !sessionId.value) return
-  tab.loading = true
-  tab.error = null
-  try {
-    tab.result = await executeQuery(sessionId.value, sql)
-  } catch (e: unknown) {
-    tab.error = e instanceof Error ? e.message : String(e)
-    tab.result = null
-  } finally {
-    tab.loading = false
-  }
+  if (!tab) return
+  await runQuery(sql, tab)
 }
 
 function onSave(sql: string) {
@@ -169,19 +163,36 @@ const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.val
 
     <!-- Right panel: tabs + editor + result -->
     <div class="sql-page-content">
-      <!-- Tab bar -->
-      <div class="sql-tabs">
-        <div
-          v-for="tab in tabs"
-          :key="tab.id"
-          class="sql-tab"
-          :class="{ 'sql-tab--active': tab.id === activeTabId }"
-          @click="activeTabId = tab.id"
-        >
-          <span class="sql-tab-title">{{ tab.title }}</span>
-          <span class="sql-tab-close" @click.stop="closeTab(tab.id)">×</span>
+      <!-- Tab bar + toolbar -->
+      <div class="sql-tab-bar">
+        <div class="sql-tabs">
+          <div
+            v-for="tab in tabs"
+            :key="tab.id"
+            class="sql-tab"
+            :class="{ 'sql-tab--active': tab.id === activeTabId }"
+            @click="activeTabId = tab.id"
+          >
+            <span class="sql-tab-title">{{ tab.title }}</span>
+            <span class="sql-tab-close" @click.stop="closeTab(tab.id)">×</span>
+          </div>
+          <button class="sql-tab-add" @click="createTab()" title="New Query">+</button>
         </div>
-        <button class="sql-tab-add" @click="createTab()" title="New Query">+</button>
+        <div class="sql-toolbar">
+          <select v-model="execMode" class="sql-toolbar-select mono" title="Execute mode">
+            <option value="all">Run All</option>
+            <option value="current">Run Current</option>
+            <option value="selected">Run Selected</option>
+          </select>
+          <button
+            class="sql-toolbar-btn sql-run-btn"
+            title="Execute (Ctrl+Enter)"
+            :disabled="!activeTab || activeTab.loading"
+            @click="activeTab && onExecute(activeTab.sql)"
+          >
+            ▶ Run
+          </button>
+        </div>
       </div>
 
       <!-- Split: editor top / result bottom -->
@@ -261,14 +272,19 @@ const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.val
   overflow: hidden;
 }
 
-/* ---- tabs ---- */
+/* ---- tab bar + toolbar ---- */
+.sql-tab-bar {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
 .sql-tabs {
   display: flex;
   align-items: center;
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border);
   overflow-x: auto;
-  flex-shrink: 0;
 }
 
 .sql-tab {
@@ -326,6 +342,53 @@ const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.val
 
 .sql-tab-add:hover {
   color: var(--accent);
+}
+
+/* ---- toolbar ---- */
+.sql-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.sql-toolbar-select {
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  outline: none;
+  cursor: pointer;
+}
+
+.sql-toolbar-select:focus {
+  border-color: var(--accent);
+}
+
+.sql-toolbar-btn {
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: background var(--transition), opacity var(--transition);
+}
+
+.sql-toolbar-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sql-run-btn {
+  background: var(--accent);
+  color: #fff;
+}
+
+.sql-run-btn:hover:not(:disabled) {
+  background: #d6820f;
 }
 
 /* ---- split ---- */
