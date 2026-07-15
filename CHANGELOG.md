@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.8.0] - 2026-07-15
+
+### Added
+- 管理模块：仪表盘/环境管理/Agent 管理/审计日志/设置页面使用 REX 设计系统统一视觉
+- SFTP 连接器：修复 russh-sftp API 兼容性
+
+### Changed
+- 所有管理页面统一使用 Card/Badge/Button/StatusDot/Table 等 REX 设计系统组件
+
 ## [0.7.0] - 2026-07-15
 
 ### Added
