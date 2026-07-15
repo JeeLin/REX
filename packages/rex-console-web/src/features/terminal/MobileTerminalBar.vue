@@ -4,24 +4,6 @@ import type { Terminal } from '@xterm/xterm'
 defineProps<{
   terminal: Terminal | null
 }>()
-
-function sendKey(key: string) {
-  // 按钮发送的特殊键序列
-  const keys: Record<string, string> = {
-    up: '\x1b[A',
-    down: '\x1b[B',
-    left: '\x1b[D',
-    right: '\x1b[C',
-    enter: '\r',
-    tab: '\t',
-    ctrl_c: '\x03',
-    ctrl_l: '\x0c',
-  }
-}
-
-function sendSequence(seq: string) {
-  // 通过 props 发送
-}
 </script>
 
 <template>
