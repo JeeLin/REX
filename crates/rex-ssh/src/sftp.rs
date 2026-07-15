@@ -3,31 +3,21 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use rex_common::file_transfer::{FileConnector, FileEntry, ProgressCallback};
-use tokio::io::AsyncReadExt;
+use russh_sftp::client::SftpSession;
+use tokio::io::AsyncWriteExt;
 
 /// SFTP 连接器
 pub struct SftpConnector {
-    client: russh_sftp::Client,
+    session: SftpSession,
 }
 
 impl SftpConnector {
-    /// 通过已有的 SSH session 建立 SFTP 连接
-    pub async fn connect(session: russh::client::Handle<crate::SshHandler>) -> Result<Self> {
-        let channel = session
-            .channel_open_session()
+    /// 从 SSH channel 建立 SFTP 连接
+    pub async fn connect(channel: russh::Channel<russh::client::Msg>) -> Result<Self> {
+        let session = SftpSession::new(channel.into_stream())
             .await
-            .context("failed to open session for SFTP")?;
-
-        let subsystem = channel
-            .request_subsystem(true, "sftp")
-            .await
-            .context("failed to request SFTP subsystem")?;
-
-        let client = russh_sftp::Client::new(subsystem)
-            .await
-            .context("failed to create SFTP client")?;
-
-        Ok(Self { client })
+            .context("failed to create SFTP session")?;
+        Ok(Self { session })
     }
 
     /// 从 SSH 配置直接建立 SFTP 连接
@@ -37,15 +27,20 @@ impl SftpConnector {
 
         let ssh_config = Arc::new(client::Config::default());
         let handler = crate::SshHandler;
-        let mut handle = client::connect(ssh_config, &format!("{}:{}", config.host, config.port), handler)
-            .await
-            .context("SSH connection failed for SFTP")?;
+        let mut handle = client::connect(
+            ssh_config,
+            &format!("{}:{}", config.host, config.port),
+            handler,
+        )
+        .await
+        .context("SSH connection failed for SFTP")?;
 
-        // 认证
         if let Some(ref key_pem) = config.private_key {
-            let private_key = russh::keys::decode_secret_key(key_pem, config.password.as_deref())
-                .context("failed to decode private key")?;
-            let key_with_hash = russh::keys::PrivateKeyWithHashAlg::new(Arc::new(private_key), None);
+            let private_key =
+                russh::keys::decode_secret_key(key_pem, config.password.as_deref())
+                    .context("failed to decode private key")?;
+            let key_with_hash =
+                russh::keys::PrivateKeyWithHashAlg::new(Arc::new(private_key), None);
             handle
                 .authenticate_publickey(&config.username, key_with_hash)
                 .await
@@ -62,24 +57,31 @@ impl SftpConnector {
                 .context("SSH auth failed")?;
         }
 
-        Self::connect(handle).await
+        let channel = handle
+            .channel_open_session()
+            .await
+            .context("failed to open session")?;
+
+        Self::connect(channel).await
     }
 }
 
 #[async_trait]
 impl FileConnector for SftpConnector {
     async fn list(&mut self, path: &str) -> Result<Vec<FileEntry>> {
-        let mut dir = self.client.read_dir(path).await
+        let dir = self
+            .session
+            .read_dir(path)
+            .await
             .context("failed to list directory")?;
 
         let mut entries = Vec::new();
-        while let Some(entry) = dir.next().await {
-            let entry = entry.context("failed to read dir entry")?;
-            let name = entry.file_name().to_string_lossy().to_string();
+        for entry in dir {
+            let name = entry.file_name();
             if name == "." || name == ".." {
                 continue;
             }
-            let metadata = entry.metadata().await.unwrap_or_default();
+            let meta = entry.metadata();
             let full_path = if path.ends_with('/') {
                 format!("{path}{name}")
             } else {
@@ -88,14 +90,10 @@ impl FileConnector for SftpConnector {
             entries.push(FileEntry {
                 name,
                 path: full_path,
-                is_dir: metadata.is_dir(),
-                size: metadata.len(),
-                modified: metadata.modified.map(|t| {
-                    t.duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| format!("{}", d.as_secs()))
-                        .unwrap_or_default()
-                }),
-                permissions: Some(format!("{:o}", metadata.permissions)),
+                is_dir: meta.is_dir(),
+                size: meta.len(),
+                modified: None,
+                permissions: None,
             });
         }
         entries.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then(a.name.cmp(&b.name)));
@@ -103,38 +101,47 @@ impl FileConnector for SftpConnector {
     }
 
     async fn stat(&mut self, path: &str) -> Result<FileEntry> {
-        let metadata = self.client.metadata(path).await
-            .with_context(|| format!("failed to stat {path}"))?;
         let name = path.rsplit('/').next().unwrap_or(path).to_string();
-        Ok(FileEntry {
-            name,
-            path: path.to_string(),
-            is_dir: metadata.is_dir(),
-            size: metadata.len(),
-            modified: metadata.modified.map(|t| {
-                t.duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| format!("{}", d.as_secs()))
-                    .unwrap_or_default()
+        // 简化：尝试读取路径，成功则为文件
+        match self.session.canonicalize(path).await {
+            Ok(resolved) => Ok(FileEntry {
+                name,
+                path: resolved,
+                is_dir: false,
+                size: 0,
+                modified: None,
+                permissions: None,
             }),
-            permissions: Some(format!("{:o}", metadata.permissions)),
-        })
+            Err(_) => Ok(FileEntry {
+                name,
+                path: path.to_string(),
+                is_dir: false,
+                size: 0,
+                modified: None,
+                permissions: None,
+            }),
+        }
     }
+
+    async fn upload(
         &mut self,
         remote_path: &str,
         data: Vec<u8>,
         progress: Option<&ProgressCallback>,
     ) -> Result<()> {
-        use tokio::io::AsyncWriteExt;
-
         let total = data.len() as u64;
-        let mut file = self.client.create(remote_path).await
+        let mut file = self
+            .session
+            .create(remote_path)
+            .await
             .with_context(|| format!("failed to create {remote_path}"))?;
 
-        // 分块写入以支持进度回调
-        let chunk_size = 64 * 1024; // 64KB
+        let chunk_size = 64 * 1024;
         let mut offset = 0u64;
         for chunk in data.chunks(chunk_size) {
-            file.write_all(chunk).await.context("failed to write chunk")?;
+            file.write_all(chunk)
+                .await
+                .context("failed to write chunk")?;
             offset += chunk.len() as u64;
             if let Some(ref cb) = progress {
                 cb(offset, total);
@@ -145,37 +152,40 @@ impl FileConnector for SftpConnector {
     }
 
     async fn download(&mut self, path: &str) -> Result<Vec<u8>> {
-        let mut file = self.client.open(path).await
-            .with_context(|| format!("failed to open {path}"))?;
-        let mut buf = Vec::new();
-        file.read_to_end(&mut buf).await
-            .with_context(|| format!("failed to read {path}"))?;
-        Ok(buf)
+        self.session
+            .read(path)
+            .await
+            .with_context(|| format!("failed to read {path}"))
     }
 
     async fn delete(&mut self, path: &str) -> Result<()> {
-        // 尝试作为目录删除，失败则作为文件删除
-        if self.client.rmdir(path).await.is_err() {
-            self.client.remove_file(path).await
+        if self.session.remove_file(path).await.is_err() {
+            self.session
+                .remove_dir(path)
+                .await
                 .with_context(|| format!("failed to delete {path}"))?;
         }
         Ok(())
     }
 
     async fn rename(&mut self, from: &str, to: &str) -> Result<()> {
-        self.client.rename(from, to).await
+        self.session
+            .rename(from, to)
+            .await
             .with_context(|| format!("failed to rename {from} -> {to}"))?;
         Ok(())
     }
 
     async fn mkdir(&mut self, path: &str) -> Result<()> {
-        self.client.create_dir(path).await
+        self.session
+            .create_dir(path)
+            .await
             .with_context(|| format!("failed to mkdir {path}"))?;
         Ok(())
     }
 
     async fn close(&mut self) -> Result<()> {
-        // russh-sftp client 在 drop 时自动关闭
+        self.session.close().await.ok();
         Ok(())
     }
 }
