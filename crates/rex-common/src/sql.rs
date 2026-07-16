@@ -85,10 +85,7 @@ pub enum DatabaseType {
     SQLite,
 }
 
-/// 连接器工厂，根据数据库类型创建对应的 [`SqlConnector`] 实例。
-///
-/// 实际的 `connect` 实现在 `rex-hub` 层通过注册表注入，
-/// 此处仅提供类型枚举和 trait 签名。
+/// 连接器工厂，根据数据库类型创建对应的 [`SqlConnector`] 实现。
 pub struct SqlConnectorFactory {
     db_type: DatabaseType,
 }
@@ -104,12 +101,8 @@ impl SqlConnectorFactory {
 
     /// 根据连接请求创建并返回一个 [`SqlConnector`] 实现。
     ///
-    /// 默认返回 `Err`——调用方应在 `rex-hub` 中提供具体的工厂函数
-    /// 并通过 [`Self::new_with_connector`] 注入。
+    /// 由 rex-hub 层提供实际分发，此处仅作类型封装。
     pub async fn connect(&self, _req: ConnectRequest) -> anyhow::Result<Box<dyn SqlConnector>> {
-        anyhow::bail!(
-            "no connector registered for {:?}; wire the factory in rex-hub",
-            self.db_type
-        )
+        anyhow::bail!("connect must be wired in rex-hub")
     }
 }

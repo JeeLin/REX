@@ -10,7 +10,7 @@ use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
-use rex_common::sql::{ConnectRequest, DatabaseType, SqlConnector, SqlConnectorFactory};
+use rex_common::sql::{ConnectRequest, SqlConnector};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
@@ -130,10 +130,13 @@ async fn connect(
     State(state): State<AppState>,
     Json(body): Json<ConnectBody>,
 ) -> axum::response::Response {
-    let db_type = match body.db_type.to_lowercase().as_str() {
-        "mysql" => DatabaseType::MySQL,
-        "postgresql" | "postgres" => DatabaseType::PostgreSQL,
-        "sqlite" => DatabaseType::SQLite,
+    let conn_result = match body.db_type.to_lowercase().as_str() {
+        "mysql" => rex_mysql::MySqlConnector::connect(body.req).await
+            .map(|c| Box::new(c) as Box<dyn SqlConnector>),
+        "postgresql" | "postgres" => rex_postgresql::PostgresConnector::connect(body.req).await
+            .map(|c| Box::new(c) as Box<dyn SqlConnector>),
+        "sqlite" => rex_sqlite::SqliteConnector::connect(body.req).await
+            .map(|c| Box::new(c) as Box<dyn SqlConnector>),
         _ => {
             return error_response(
                 "INVALID_DB_TYPE",
@@ -143,8 +146,7 @@ async fn connect(
         }
     };
 
-    let factory = SqlConnectorFactory::new(db_type);
-    match factory.connect(body.req).await {
+    match conn_result {
         Ok(conn) => {
             let session_id = format!("sql_{}", &uuid::Uuid::new_v4().to_string()[..8]);
             state.sql_pool.lock().await.insert(session_id.clone(), conn);
