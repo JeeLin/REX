@@ -12,6 +12,7 @@ import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
 import TerminalView from '@/features/terminal/TerminalView.vue'
 import SqlPage from '@/features/sql/SqlPage.vue'
 import RedisPage from '@/features/redis/RedisPage.vue'
+import FilesPage from '@/features/files/FilesPage.vue'
 import { PROTOCOL_COLORS } from '@/features/resource/protocols'
 
 interface Tab {
@@ -392,13 +393,15 @@ useKeyboardShortcuts([
               />
 
               <!-- Files (SFTP / S3) -->
-              <div v-else-if="['sftp', 's3'].includes(activeTabInfo?.protocol || '')" class="ws-component-placeholder">
-                <div class="ws-placeholder-text muted">
-                  <span class="mono" style="color: var(--purple)">📁</span>
-                  {{ activeTabInfo?.protocol?.toUpperCase() }} file manager — {{ activeTabInfo?.host || 'localhost' }}
-                </div>
-                <div class="ws-placeholder-sub muted">FilesPage integration (sub-task 5)</div>
-              </div>
+              <FilesPage
+                v-else-if="['sftp', 's3'].includes(activeTabInfo?.protocol || '')"
+                :resource-id="activeTabInfo?.resourceId"
+                :protocol="activeTabInfo?.protocol as 'sftp' | 's3'"
+                :host="activeTabInfo?.host"
+                :port="activeTabInfo?.port"
+                :username="activeTabInfo?.username"
+                :password="activeTabInfo?.password"
+              />
 
               <!-- Empty state -->
               <div v-else class="ws-component-placeholder">

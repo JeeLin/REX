@@ -1,19 +1,35 @@
 <script setup lang="ts">
-import { ref, reactive, onBeforeUnmount } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import * as filesApi from '@/api/files'
 import type { FileEntry } from '@/api/files'
 
+const props = defineProps<{
+  resourceId?: string
+  protocol?: 'sftp' | 's3'
+  host?: string
+  port?: number
+  username?: string
+  password?: string
+}>()
+
 // Connection
 const sessionId = ref<string | null>(null)
-const showConnect = ref(true)
-const connProtocol = ref('sftp')
-const connHost = ref('')
-const connPort = ref(22)
-const connUsername = ref('')
-const connPassword = ref('')
+const showConnect = ref(!props.host)
+const connProtocol = ref(props.protocol || 'sftp')
+const connHost = ref(props.host || '')
+const connPort = ref(props.port || 22)
+const connUsername = ref(props.username || '')
+const connPassword = ref(props.password || '')
 const connError = ref('')
 const connLoading = ref(false)
+
+// Auto-connect on mount if props provided
+onMounted(async () => {
+  if (props.host) {
+    await doConnect()
+  }
+})
 
 async function doConnect() {
   connLoading.value = true; connError.value = ''
@@ -100,7 +116,13 @@ const leftW = ref(400); const dragging = ref(false); let sx = 0, sw = 0
 function onDS(e: MouseEvent) { dragging.value = true; sx = e.clientX; sw = leftW.value; document.addEventListener('mousemove', onDM); document.addEventListener('mouseup', onDE); document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none' }
 function onDM(e: MouseEvent) { leftW.value = Math.min(800, Math.max(250, sw + (e.clientX - sx))) }
 function onDE() { dragging.value = false; document.removeEventListener('mousemove', onDM); document.removeEventListener('mouseup', onDE); document.body.style.cursor = ''; document.body.style.userSelect = '' }
-onBeforeUnmount(() => { document.removeEventListener('mousemove', onDM); document.removeEventListener('mouseup', onDE) })
+onBeforeUnmount(async () => {
+  document.removeEventListener('mousemove', onDM)
+  document.removeEventListener('mouseup', onDE)
+  if (sessionId.value) {
+    try { await filesApi.disconnect(sessionId.value) } catch { /* ignore */ }
+  }
+})
 
 function fmtSize(b: number) { if (!b) return '-'; const u = ['B','KB','MB','GB']; let i = 0, s = b; while (s >= 1024 && i < 3) { s /= 1024; i++ } return `${s.toFixed(i ? 1 : 0)} ${u[i]}` }
 </script>
