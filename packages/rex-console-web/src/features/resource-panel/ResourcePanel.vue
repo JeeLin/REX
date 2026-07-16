@@ -1,63 +1,67 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import StatusDot from '@/components/ui/StatusDot.vue'
-import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
-import { useI18n } from 'vue-i18n'
+import { ref, computed, onMounted } from 'vue'
+import { useEnvironmentsStore } from '@/stores/environments'
+import type { Environment } from '@/api/environments'
+import type { Resource } from '@/api/resources'
+import { resourcesApi } from '@/api/resources'
 
-const { t } = useI18n()
+const store = useEnvironmentsStore()
 
-interface Connection {
-  id: string
-  name: string
-  host: string
-  protocol: 'ssh' | 'mysql' | 'redis' | 'postgresql' | 'sftp' | 'sqlite' | 's3'
-  status: StatusDotStatus
-  group: string
-  favorite?: boolean
-  lastUsed?: string
+const searchQuery = ref('')
+const collapsedEnvs = ref(new Set<string>())
+const envResources = ref<Map<string, Resource[]>>(new Map())
+const expandedEnvIds = ref(new Set<string>())
+
+const protocolIcons: Record<string, string> = {
+  ssh: '$', sftp: '📁', mysql: 'dB', postgresql: 'pg',
+  redis: 'R', sqlite: 'S', s3: '☁',
 }
 
-const connections = ref<Connection[]>([
-  { id: '1', name: 'Web Server', host: '10.0.1.5', protocol: 'ssh', status: 'online', group: 'Production', favorite: true, lastUsed: '2m ago' },
-  { id: '2', name: 'DB Primary', host: 'db.internal', protocol: 'mysql', status: 'online', group: 'Production', favorite: true, lastUsed: '5m ago' },
-  { id: '3', name: 'Cache', host: 'cache.local', protocol: 'redis', status: 'offline', group: 'Production', lastUsed: '1h ago' },
-  { id: '4', name: 'Analytics', host: 'analytics.db', protocol: 'postgresql', status: 'connecting', group: 'Staging', lastUsed: '3h ago' },
-  { id: '5', name: 'Dev API', host: 'localhost:3000', protocol: 'ssh', status: 'online', group: 'Development', lastUsed: '1d ago' },
-])
+const protocolColors: Record<string, string> = {
+  ssh: '#3FB950', sftp: '#8B5CF6', mysql: '#58A6FF', postgresql: '#8B5CF6',
+  redis: '#F85149', sqlite: '#D29922', s3: '#E8912D',
+}
 
-const groups = computed(() => [...new Set(connections.value.map(c => c.group))])
-const favorites = computed(() => connections.value.filter(c => c.favorite))
-const recent = computed(() => connections.value.filter(c => c.lastUsed).slice(0, 5))
-
-const activeTab = ref<'all' | 'favorites' | 'recent'>('all')
-const searchQuery = ref('')
-const collapsedGroups = ref(new Set<string>())
-
-const filteredConnections = computed(() => {
-  let list = connections.value
-  if (searchQuery.value) {
-    const q = searchQuery.value.toLowerCase()
-    list = list.filter(c => c.name.toLowerCase().includes(q) || c.host.toLowerCase().includes(q))
+onMounted(async () => {
+  await store.fetchEnvironments()
+  // 预加载每个环境的资源
+  for (const env of store.environments) {
+    try {
+      const resources = await resourcesApi.listByEnv(env.id)
+      envResources.value.set(env.id, resources)
+    } catch {
+      // ignore
+    }
   }
-  return list
 })
 
-const protoColor = (proto: Connection['protocol']) => `var(--proto-${proto})`
+const filteredEnvs = computed(() => {
+  let envs = store.environments
+  if (searchQuery.value) {
+    const q = searchQuery.value.toLowerCase()
+    envs = envs.filter(e =>
+      e.name.toLowerCase().includes(q) ||
+      (envResources.value.get(e.id) || []).some(r =>
+        r.name.toLowerCase().includes(q) || r.host.toLowerCase().includes(q)
+      )
+    )
+  }
+  return envs
+})
 
-function toggleGroup(group: string) {
-  if (collapsedGroups.value.has(group)) {
-    collapsedGroups.value.delete(group)
+function toggleEnv(envId: string) {
+  if (collapsedEnvs.value.has(envId)) {
+    collapsedEnvs.value.delete(envId)
   } else {
-    collapsedGroups.value.add(group)
+    collapsedEnvs.value.add(envId)
   }
 }
 
-function toggleFavorite(id: string) {
-  const conn = connections.value.find(c => c.id === id)
-  if (conn) conn.favorite = !conn.favorite
+function getResources(envId: string): Resource[] {
+  return envResources.value.get(envId) || []
 }
 
-defineExpose({ connections })
+defineExpose({ envResources })
 </script>
 
 <template>
@@ -65,21 +69,8 @@ defineExpose({ connections })
     <!-- Header -->
     <div class="rp-header">
       <div class="rp-tabs">
-        <button
-          v-for="tab in [
-            { key: 'all' as const, label: 'All' },
-            { key: 'favorites' as const, label: '★' },
-            { key: 'recent' as const, label: 'Recent' },
-          ]"
-          :key="tab.key"
-          class="rp-tab mono"
-          :class="{ 'rp-tab--active': activeTab === tab.key }"
-          @click="activeTab = tab.key"
-        >
-          {{ tab.label }}
-        </button>
+        <button class="rp-tab mono rp-tab--active">Connections</button>
       </div>
-      <button class="rp-add" title="New connection">+</button>
     </div>
 
     <!-- Search -->
@@ -94,62 +85,35 @@ defineExpose({ connections })
 
     <!-- Content -->
     <div class="rp-content">
-      <!-- Favorites tab -->
-      <template v-if="activeTab === 'favorites'">
-        <div v-if="favorites.length === 0" class="rp-empty muted">No favorites yet</div>
-        <div v-for="conn in favorites" :key="conn.id" class="rp-item">
-          <StatusDot :status="conn.status" />
-          <span class="rp-item-proto mono" :style="{ color: protoColor(conn.protocol) }">
-            {{ conn.protocol.toUpperCase() }}
-          </span>
-          <span class="rp-item-name">{{ conn.name }}</span>
-          <span class="rp-item-host mono muted">{{ conn.host }}</span>
-        </div>
-      </template>
+      <div v-if="filteredEnvs.length === 0 && !store.loading" class="rp-empty muted">
+        No environments yet
+      </div>
 
-      <!-- Recent tab -->
-      <template v-else-if="activeTab === 'recent'">
-        <div v-if="recent.length === 0" class="rp-empty muted">No recent connections</div>
-        <div v-for="conn in recent" :key="conn.id" class="rp-item">
-          <StatusDot :status="conn.status" />
-          <span class="rp-item-proto mono" :style="{ color: protoColor(conn.protocol) }">
-            {{ conn.protocol.toUpperCase() }}
-          </span>
-          <span class="rp-item-name">{{ conn.name }}</span>
-          <span class="rp-item-time muted">{{ conn.lastUsed }}</span>
+      <template v-for="env in filteredEnvs" :key="env.id">
+        <!-- Environment group -->
+        <div class="rp-group" @click="toggleEnv(env.id)">
+          <span class="rp-chevron" :class="{ 'rp-collapsed': collapsedEnvs.has(env.id) }">▸</span>
+          <span class="rp-group-name mono">{{ env.name }}</span>
+          <span class="rp-group-count muted">{{ env.resource_count }}</span>
         </div>
-      </template>
 
-      <!-- All connections (grouped) -->
-      <template v-else>
-        <template v-for="group in groups" :key="group">
-          <div class="rp-group" @click="toggleGroup(group)">
-            <span class="rp-chevron" :class="{ 'rp-collapsed': collapsedGroups.has(group) }">▸</span>
-            <span class="rp-group-name mono">{{ group }}</span>
+        <!-- Resources under this environment -->
+        <div v-if="!collapsedEnvs.has(env.id)">
+          <div
+            v-for="res in getResources(env.id)"
+            :key="res.id"
+            class="rp-item"
+          >
+            <span class="rp-item-icon" :style="{ color: res.color || protocolColors[res.protocol] || 'var(--text-secondary)' }">
+              {{ protocolIcons[res.protocol] || '?' }}
+            </span>
+            <span class="rp-item-name">{{ res.name }}</span>
+            <span class="rp-item-host mono muted">{{ res.host }}</span>
           </div>
-          <div v-if="!collapsedGroups.has(group)">
-            <div
-              v-for="conn in filteredConnections.filter(c => c.group === group)"
-              :key="conn.id"
-              class="rp-item"
-            >
-              <StatusDot :status="conn.status" />
-              <span class="rp-item-proto mono" :style="{ color: protoColor(conn.protocol) }">
-                {{ conn.protocol.toUpperCase() }}
-              </span>
-              <span class="rp-item-name">{{ conn.name }}</span>
-              <span class="rp-item-host mono muted">{{ conn.host }}</span>
-              <button
-                class="rp-fav"
-                :class="{ 'rp-fav--active': conn.favorite }"
-                @click.stop="toggleFavorite(conn.id)"
-                title="Toggle favorite"
-              >
-                {{ conn.favorite ? '★' : '☆' }}
-              </button>
-            </div>
+          <div v-if="getResources(env.id).length === 0" class="rp-item rp-empty-item muted">
+            No resources
           </div>
-        </template>
+        </div>
       </template>
     </div>
   </div>
@@ -162,8 +126,6 @@ defineExpose({ connections })
   overflow: hidden;
   min-height: 0;
 }
-
-/* Header */
 .rp-header {
   display: flex;
   align-items: center;
@@ -181,28 +143,11 @@ defineExpose({ connections })
   border: none;
   border-bottom: 2px solid transparent;
   cursor: pointer;
-  transition: color var(--transition);
-}
-.rp-tab:hover {
-  color: var(--text-secondary);
 }
 .rp-tab--active {
   color: var(--accent);
   border-bottom-color: var(--accent);
 }
-.rp-add {
-  padding: 0 var(--space-3);
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: var(--text-lg);
-  cursor: pointer;
-}
-.rp-add:hover {
-  color: var(--accent);
-}
-
-/* Search */
 .rp-search {
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border);
@@ -224,8 +169,6 @@ defineExpose({ connections })
 .rp-search-input:focus {
   border-color: var(--accent);
 }
-
-/* Content */
 .rp-content {
   flex: 1;
   overflow-y: auto;
@@ -260,6 +203,10 @@ defineExpose({ connections })
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
+.rp-group-count {
+  margin-left: auto;
+  font-size: 10px;
+}
 .rp-item {
   display: flex;
   align-items: center;
@@ -274,9 +221,11 @@ defineExpose({ connections })
 .rp-item:hover {
   background: var(--bg-hover);
 }
-.rp-item-proto {
-  font-size: var(--text-xs);
-  font-weight: 600;
+.rp-item-icon {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  width: 16px;
+  text-align: center;
 }
 .rp-item-name {
   color: var(--text-primary);
@@ -285,22 +234,15 @@ defineExpose({ connections })
   font-size: var(--text-xs);
   margin-left: auto;
 }
-.rp-item-time {
+.rp-empty-item {
+  cursor: default;
   font-size: var(--text-xs);
-  margin-left: auto;
+  font-style: italic;
 }
-.rp-fav {
-  background: none;
-  border: none;
+.muted {
   color: var(--text-muted);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  padding: 0 2px;
 }
-.rp-fav--active {
-  color: var(--accent);
-}
-.rp-fav:hover {
-  color: var(--accent);
+.mono {
+  font-family: var(--font-mono);
 }
 </style>
