@@ -21,8 +21,8 @@ M10 完成了工作区 Tab 系统改造和组件嵌入，SqlPage 已能接收 pr
 
 | # | 内容 | 状态 |
 |---|------|------|
-| 1 | SqlConnectorFactory 重写（rex-hub 层分发） | ⬜ |
-| 2 | sql_api.rs connect handler 适配 + 前端验证 | ⬜ |
+| 1 | SqlConnectorFactory 重写（rex-hub 层分发） | ✅ |
+| 2 | sql_api.rs connect handler 适配 + 前端验证 | ✅ |
 
 ## 子任务详细设计
 
@@ -103,14 +103,14 @@ fix(sql): wire connect handler and verify end-to-end SQL flow
 
 ## Flow Status
 
-- [ ] 步骤1：编写里程碑文档
-- [ ] 步骤2：设计核对
-- [ ] 步骤3：开发
-- [ ] 步骤4：代码精简
-- [ ] 步骤5：代码审查
-- [ ] 步骤6：测试验证
-- [ ] 步骤7：设计再确认
-- [ ] 步骤8：提交
+- [x] 步骤1：编写里程碑文档
+- [x] 步骤2：设计核对
+- [x] 步骤3：开发
+- [x] 步骤4：代码精简
+- [x] 步骤5：代码审查
+- [x] 步骤6：测试验证
+- [x] 步骤7：设计再确认
+- [x] 步骤8：提交
 
 ## 打回记录
 
