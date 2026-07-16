@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0] - 2026-07-16
+
+### Added
+- 环境管理：CRUD API（列表/详情/创建/编辑/删除）+ 环境详情页（Agent 面板 + 资源表格）
+- 资源管理：CRUD API + 测试连接（SSH/MySQL/PG/Redis/SQLite/S3）+ 4 步创建向导
+- 环境管理页：卡片网格展示，对接真实 API，支持创建/编辑/删除
+- 资源创建向导：选择协议 → 基本信息 → 连接详情（含测试连接） → 确认
+- 侧栏连接树：从 API 读取环境→资源数据，替代硬编码假数据
+- 前端 API 层：environments.ts + resources.ts + environments Pinia store
+- 共享协议常量：PROTOCOL_ICONS / PROTOCOL_COLORS / PROTOCOL_NAMES
+
 ## [0.9.0] - 2026-07-15
 
 ### Added
