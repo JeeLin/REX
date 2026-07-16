@@ -12,6 +12,7 @@ import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import Modal from '@/components/ui/Modal.vue'
 import WizardModal from '@/features/resource/WizardModal.vue'
+import { PROTOCOL_ICONS, PROTOCOL_COLORS } from '@/features/resource/protocols'
 
 const route = useRoute()
 const router = useRouter()
@@ -29,26 +30,6 @@ const editDesc = ref('')
 const editMode = ref('direct')
 const editError = ref('')
 const editLoading = ref(false)
-
-const protocolIcons: Record<string, string> = {
-  ssh: '$',
-  sftp: '📁',
-  mysql: 'dB',
-  postgresql: 'pg',
-  redis: 'R',
-  sqlite: 'S',
-  s3: '☁',
-}
-
-const protocolColors: Record<string, string> = {
-  ssh: '#3FB950',
-  sftp: '#8B5CF6',
-  mysql: '#58A6FF',
-  postgresql: '#8B5CF6',
-  redis: '#F85149',
-  sqlite: '#D29922',
-  s3: '#E8912D',
-}
 
 onMounted(async () => {
   try {
@@ -192,8 +173,8 @@ function agentStatus(status: string | null): StatusDotStatus {
             <tr v-for="res in resources" :key="res.id">
               <td>
                 <span class="res-name">
-                  <span class="res-icon" :style="{ color: protocolColors[res.protocol] || 'var(--text-secondary)' }">
-                    {{ protocolIcons[res.protocol] || '?' }}
+                  <span class="res-icon" :style="{ color: PROTOCOL_COLORS[res.protocol] || 'var(--text-secondary)' }">
+                    {{ PROTOCOL_ICONS[res.protocol] || '?' }}
                   </span>
                   {{ res.name }}
                 </span>

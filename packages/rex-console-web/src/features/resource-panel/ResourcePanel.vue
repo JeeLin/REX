@@ -4,6 +4,7 @@ import { useEnvironmentsStore } from '@/stores/environments'
 import type { Environment } from '@/api/environments'
 import type { Resource } from '@/api/resources'
 import { resourcesApi } from '@/api/resources'
+import { PROTOCOL_ICONS, PROTOCOL_COLORS } from '@/features/resource/protocols'
 
 const store = useEnvironmentsStore()
 
@@ -11,16 +12,6 @@ const searchQuery = ref('')
 const collapsedEnvs = ref(new Set<string>())
 const envResources = ref<Map<string, Resource[]>>(new Map())
 const expandedEnvIds = ref(new Set<string>())
-
-const protocolIcons: Record<string, string> = {
-  ssh: '$', sftp: '📁', mysql: 'dB', postgresql: 'pg',
-  redis: 'R', sqlite: 'S', s3: '☁',
-}
-
-const protocolColors: Record<string, string> = {
-  ssh: '#3FB950', sftp: '#8B5CF6', mysql: '#58A6FF', postgresql: '#8B5CF6',
-  redis: '#F85149', sqlite: '#D29922', s3: '#E8912D',
-}
 
 onMounted(async () => {
   await store.fetchEnvironments()
@@ -104,8 +95,8 @@ defineExpose({ envResources })
             :key="res.id"
             class="rp-item"
           >
-            <span class="rp-item-icon" :style="{ color: res.color || protocolColors[res.protocol] || 'var(--text-secondary)' }">
-              {{ protocolIcons[res.protocol] || '?' }}
+            <span class="rp-item-icon" :style="{ color: res.color || PROTOCOL_COLORS[res.protocol] || 'var(--text-secondary)' }">
+              {{ PROTOCOL_ICONS[res.protocol] || '?' }}
             </span>
             <span class="rp-item-name">{{ res.name }}</span>
             <span class="rp-item-host mono muted">{{ res.host }}</span>

@@ -5,6 +5,7 @@ import { resourcesApi, type TestConnectionResult } from '@/api/resources'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Modal from '@/components/ui/Modal.vue'
+import { PROTOCOL_ICONS, PROTOCOL_COLORS } from './protocols'
 
 const props = defineProps<{
   visible: boolean
@@ -24,13 +25,13 @@ const error = ref('')
 
 // Step 1: Protocol
 const protocols = [
-  { id: 'ssh', name: 'SSH', icon: '$', color: '#3FB950', desc: 'Remote terminal' },
-  { id: 'sftp', name: 'SFTP', icon: '📁', color: '#8B5CF6', desc: 'File transfer' },
-  { id: 'mysql', name: 'MySQL', icon: 'dB', color: '#58A6FF', desc: 'Database' },
-  { id: 'postgresql', name: 'PostgreSQL', icon: 'pg', color: '#8B5CF6', desc: 'Database' },
-  { id: 'redis', name: 'Redis', icon: 'R', color: '#F85149', desc: 'Cache' },
-  { id: 'sqlite', name: 'SQLite', icon: 'S', color: '#D29922', desc: 'Local DB' },
-  { id: 's3', name: 'S3 / MinIO', icon: '☁', color: '#E8912D', desc: 'Object storage' },
+  { id: 'ssh', desc: 'Remote terminal' },
+  { id: 'sftp', desc: 'File transfer' },
+  { id: 'mysql', desc: 'Database' },
+  { id: 'postgresql', desc: 'Database' },
+  { id: 'redis', desc: 'Cache' },
+  { id: 'sqlite', desc: 'Local DB' },
+  { id: 's3', desc: 'Object storage' },
 ]
 const selectedProtocol = ref('')
 
@@ -85,8 +86,7 @@ function selectProtocol(id: string) {
   port.value = defaultPorts[id] ?? null
   // Auto-fill name
   if (!resName.value) {
-    const p = protocols.find(p => p.id === id)
-    resName.value = p?.name || ''
+    resName.value = id === 's3' ? 'S3 / MinIO' : id.charAt(0).toUpperCase() + id.slice(1)
   }
 }
 
@@ -207,8 +207,8 @@ const colorOptions = [
         :class="{ selected: selectedProtocol === p.id }"
         @click="selectProtocol(p.id)"
       >
-        <span class="protocol-icon" :style="{ color: p.color }">{{ p.icon }}</span>
-        <span class="protocol-name">{{ p.name }}</span>
+        <span class="protocol-icon" :style="{ color: PROTOCOL_COLORS[p.id] }">{{ PROTOCOL_ICONS[p.id] }}</span>
+        <span class="protocol-name">{{ p.id === 's3' ? 'S3 / MinIO' : p.id.charAt(0).toUpperCase() + p.id.slice(1) }}</span>
         <span class="protocol-desc muted">{{ p.desc }}</span>
       </button>
     </div>
