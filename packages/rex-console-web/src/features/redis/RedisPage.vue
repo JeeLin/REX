@@ -1,18 +1,33 @@
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import * as redisApi from '@/api/redis'
 import type { DbInfo, KeyInfo, RedisValue } from '@/api/redis'
+
+const props = defineProps<{
+  resourceId?: string
+  host?: string
+  port?: number
+  password?: string
+  db?: number
+}>()
 
 const sessionId = ref<string | null>(null)
 const connecting = ref(false)
 const connectError = ref('')
 
 // Connection form
-const connHost = ref('127.0.0.1')
-const connPort = ref(6379)
-const connPassword = ref('')
-const showConnect = ref(true)
+const connHost = ref(props.host || '127.0.0.1')
+const connPort = ref(props.port || 6379)
+const connPassword = ref(props.password || '')
+const showConnect = ref(!props.host)
+
+// Auto-connect on mount if props provided
+onMounted(async () => {
+  if (props.host) {
+    await doConnect()
+  }
+})
 
 async function doConnect() {
   connecting.value = true
@@ -156,9 +171,12 @@ function onDragEnd() {
   document.body.style.userSelect = ''
 }
 
-onBeforeUnmount(() => {
+onBeforeUnmount(async () => {
   document.removeEventListener('mousemove', onDragMove)
   document.removeEventListener('mouseup', onDragEnd)
+  if (sessionId.value) {
+    try { await redisApi.disconnect(sessionId.value) } catch { /* ignore */ }
+  }
 })
 
 // Context menu

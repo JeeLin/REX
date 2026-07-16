@@ -11,6 +11,7 @@ import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
 import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
 import TerminalView from '@/features/terminal/TerminalView.vue'
 import SqlPage from '@/features/sql/SqlPage.vue'
+import RedisPage from '@/features/redis/RedisPage.vue'
 import { PROTOCOL_COLORS } from '@/features/resource/protocols'
 
 interface Tab {
@@ -382,13 +383,13 @@ useKeyboardShortcuts([
               />
 
               <!-- Redis -->
-              <div v-else-if="activeTabInfo?.protocol === 'redis'" class="ws-component-placeholder">
-                <div class="ws-placeholder-text muted">
-                  <span class="mono" style="color: var(--danger)">R</span>
-                  Redis console — {{ activeTabInfo?.host || 'localhost' }}
-                </div>
-                <div class="ws-placeholder-sub muted">RedisPage integration (sub-task 4)</div>
-              </div>
+              <RedisPage
+                v-else-if="activeTabInfo?.protocol === 'redis'"
+                :resource-id="activeTabInfo?.resourceId"
+                :host="activeTabInfo?.host"
+                :port="activeTabInfo?.port"
+                :password="activeTabInfo?.password"
+              />
 
               <!-- Files (SFTP / S3) -->
               <div v-else-if="['sftp', 's3'].includes(activeTabInfo?.protocol || '')" class="ws-component-placeholder">
