@@ -10,6 +10,7 @@ import QuickConnect from '@/features/workspace/QuickConnect.vue'
 import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
 import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
 import TerminalView from '@/features/terminal/TerminalView.vue'
+import SqlPage from '@/features/sql/SqlPage.vue'
 import { PROTOCOL_COLORS } from '@/features/resource/protocols'
 
 interface Tab {
@@ -368,13 +369,17 @@ useKeyboardShortcuts([
               />
 
               <!-- SQL (MySQL / PostgreSQL / SQLite) -->
-              <div v-else-if="['mysql', 'postgresql', 'sqlite'].includes(activeTabInfo?.protocol || '')" class="ws-component-placeholder">
-                <div class="ws-placeholder-text muted">
-                  <span class="mono" style="color: var(--info)">dB</span>
-                  {{ activeTabInfo?.protocol?.toUpperCase() }} console — {{ activeTabInfo?.host || 'localhost' }}
-                </div>
-                <div class="ws-placeholder-sub muted">SqlPage integration (sub-task 3)</div>
-              </div>
+              <SqlPage
+                v-else-if="['mysql', 'postgresql', 'sqlite'].includes(activeTabInfo?.protocol || '')"
+                :resource-id="activeTabInfo?.resourceId"
+                :host="activeTabInfo?.host"
+                :port="activeTabInfo?.port"
+                :username="activeTabInfo?.username"
+                :password="activeTabInfo?.password"
+                :database="activeTabInfo?.database"
+                :db-type="activeTabInfo?.protocol"
+                :protocol="activeTabInfo?.protocol"
+              />
 
               <!-- Redis -->
               <div v-else-if="activeTabInfo?.protocol === 'redis'" class="ws-component-placeholder">

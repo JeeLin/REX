@@ -1,14 +1,57 @@
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useSqlNav } from './useSqlNav'
 import SqlNavTree from './SqlNavTree.vue'
 import SqlEditor from './SqlEditor.vue'
 import SqlResultGrid from './SqlResultGrid.vue'
 import { useSqlQuery, type ExecuteMode } from './useSqlQuery'
+import { connect as sqlConnect, disconnect as sqlDisconnect, type ConnectRequest } from '@/api/sql'
 import type { QueryResult } from '@/api/sql'
 
+const props = defineProps<{
+  resourceId?: string
+  host?: string
+  port?: number
+  username?: string
+  password?: string
+  database?: string
+  dbType?: string
+  protocol?: string
+}>()
+
 const sessionId = ref<string | null>(null)
+const connectError = ref<string | null>(null)
 const { databases, loading, searchQuery, loadDatabases } = useSqlNav(sessionId)
+
+// Auto-connect on mount if props provided
+onMounted(async () => {
+  if (props.host) {
+    try {
+      const req: ConnectRequest = {
+        type: props.dbType || props.protocol || 'mysql',
+        host: props.host,
+        port: props.port || 3306,
+        username: props.username || 'root',
+        password: props.password,
+        database: props.database,
+      }
+      sessionId.value = await sqlConnect(req)
+    } catch (e: unknown) {
+      connectError.value = e instanceof Error ? e.message : String(e)
+    }
+  }
+})
+
+// Disconnect on unmount
+onBeforeUnmount(async () => {
+  if (sessionId.value) {
+    try {
+      await sqlDisconnect(sessionId.value)
+    } catch {
+      // ignore
+    }
+  }
+})
 
 /* ---- resizable panel ---- */
 const panelWidth = ref(280)
