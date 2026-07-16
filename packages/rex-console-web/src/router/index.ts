@@ -23,6 +23,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'workspace', name: 'workspace', component: () => import('../pages/WorkspacePage.vue') },
       { path: 'dashboard', name: 'dashboard', component: () => import('../pages/DashboardPage.vue') },
       { path: 'environments', name: 'environments', component: () => import('../pages/EnvironmentsPage.vue') },
+      { path: 'environments/:id', name: 'environment-detail', component: () => import('../pages/EnvironmentDetailPage.vue') },
       { path: 'agents', name: 'agents', component: () => import('../pages/AgentsPage.vue') },
       { path: 'audit-log', name: 'audit-log', component: () => import('../pages/AuditLogPage.vue') },
       { path: 'settings', name: 'settings', component: () => import('../pages/SettingsPage.vue') },

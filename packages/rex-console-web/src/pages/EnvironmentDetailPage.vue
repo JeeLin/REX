@@ -1,0 +1,411 @@
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useEnvironmentsStore } from '@/stores/environments'
+import { environmentsApi, type Environment } from '@/api/environments'
+import { resourcesApi, type Resource } from '@/api/resources'
+import Card from '@/components/ui/Card.vue'
+import Badge from '@/components/ui/Badge.vue'
+import Button from '@/components/ui/Button.vue'
+import StatusDot from '@/components/ui/StatusDot.vue'
+import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import Modal from '@/components/ui/Modal.vue'
+
+const route = useRoute()
+const router = useRouter()
+const store = useEnvironmentsStore()
+
+const envId = route.params.id as string
+const env = ref<Environment | null>(null)
+const resources = ref<Resource[]>([])
+const loading = ref(true)
+const showWizard = ref(false)
+const deleteConfirmId = ref<string | null>(null)
+const editModal = ref(false)
+const editName = ref('')
+const editDesc = ref('')
+const editMode = ref('direct')
+const editError = ref('')
+const editLoading = ref(false)
+
+const protocolIcons: Record<string, string> = {
+  ssh: '$',
+  sftp: '📁',
+  mysql: 'dB',
+  postgresql: 'pg',
+  redis: 'R',
+  sqlite: 'S',
+  s3: '☁',
+}
+
+const protocolColors: Record<string, string> = {
+  ssh: '#3FB950',
+  sftp: '#8B5CF6',
+  mysql: '#58A6FF',
+  postgresql: '#8B5CF6',
+  redis: '#F85149',
+  sqlite: '#D29922',
+  s3: '#E8912D',
+}
+
+onMounted(async () => {
+  try {
+    env.value = await environmentsApi.get(envId)
+    resources.value = await resourcesApi.listByEnv(envId)
+  } catch {
+    router.push('/environments')
+  } finally {
+    loading.value = false
+  }
+})
+
+function openEdit() {
+  if (!env.value) return
+  editName.value = env.value.name
+  editDesc.value = env.value.description
+  editMode.value = env.value.connection_mode
+  editError.value = ''
+  editModal.value = true
+}
+
+async function submitEdit() {
+  if (!editName.value.trim()) {
+    editError.value = 'Name is required'
+    return
+  }
+  editLoading.value = true
+  try {
+    const updated = await store.updateEnvironment(envId, {
+      name: editName.value.trim(),
+      description: editDesc.value.trim(),
+      connection_mode: editMode.value,
+    })
+    env.value = { ...env.value!, ...updated }
+    editModal.value = false
+  } catch (e: unknown) {
+    editError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    editLoading.value = false
+  }
+}
+
+async function deleteResource(id: string) {
+  try {
+    await resourcesApi.delete(envId, id)
+    resources.value = resources.value.filter(r => r.id !== id)
+    if (env.value) env.value.resource_count--
+  } catch {
+    // ignore
+  }
+}
+
+function agentStatus(status: string | null): StatusDotStatus {
+  if (status === 'online') return 'online'
+  return 'offline'
+}
+</script>
+
+<template>
+  <div class="env-detail">
+    <!-- Breadcrumb -->
+    <div class="breadcrumb">
+      <router-link to="/environments" class="breadcrumb-link">Environments</router-link>
+      <span class="breadcrumb-sep">›</span>
+      <span class="breadcrumb-current">{{ env?.name || '...' }}</span>
+    </div>
+
+    <div v-if="loading" class="loading">Loading...</div>
+
+    <template v-else-if="env">
+      <!-- Header -->
+      <div class="env-header">
+        <div class="env-header-info">
+          <h1 class="page-title">{{ env.name }}</h1>
+          <p class="env-description muted">{{ env.description || 'No description' }}</p>
+        </div>
+        <div class="env-header-actions">
+          <Button variant="secondary" size="sm" @click="openEdit">Edit</Button>
+        </div>
+      </div>
+
+      <!-- Meta info -->
+      <div class="env-meta">
+        <Badge :tone="env.connection_mode === 'agent' ? 'warning' : 'info'">
+          {{ env.connection_mode }}
+        </Badge>
+        <Badge tone="accent">{{ env.resource_count }} resources</Badge>
+        <span class="muted" style="font-size: var(--text-xs)">
+          Created {{ new Date(env.created_at).toLocaleDateString() }}
+        </span>
+      </div>
+
+      <!-- Agent Panel (placeholder for M12) -->
+      <Card class="section-card">
+        <h2 class="section-title">Agent</h2>
+        <div v-if="env.agent_status" class="agent-info">
+          <StatusDot :status="agentStatus(env.agent_status)" />
+          <span>Agent {{ env.agent_status }}</span>
+        </div>
+        <div v-else class="agent-empty muted">
+          No agent registered. Deploy an agent to proxy connections for this environment.
+        </div>
+      </Card>
+
+      <!-- Resources Table -->
+      <Card class="section-card">
+        <div class="section-header">
+          <h2 class="section-title">Resources</h2>
+          <Button variant="primary" size="sm" @click="showWizard = true">+ Add Resource</Button>
+        </div>
+
+        <EmptyState
+          v-if="resources.length === 0"
+          icon="⊕"
+          title="No resources"
+          description="Add a resource to start managing remote connections."
+        >
+          <Button variant="primary" size="sm" @click="showWizard = true">Add Resource</Button>
+        </EmptyState>
+
+        <table v-else class="resource-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Protocol</th>
+              <th>Host</th>
+              <th>Port</th>
+              <th>Username</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="res in resources" :key="res.id">
+              <td>
+                <span class="res-name">
+                  <span class="res-icon" :style="{ color: protocolColors[res.protocol] || 'var(--text-secondary)' }">
+                    {{ protocolIcons[res.protocol] || '?' }}
+                  </span>
+                  {{ res.name }}
+                </span>
+              </td>
+              <td>
+                <Badge :tone="res.protocol === 'redis' ? 'danger' : res.protocol === 'ssh' ? 'success' : 'info'">
+                  {{ res.protocol }}
+                </Badge>
+              </td>
+              <td class="mono">{{ res.host }}</td>
+              <td class="mono">{{ res.port || '—' }}</td>
+              <td>{{ res.username || '—' }}</td>
+              <td>
+                <button class="icon-btn danger" title="Delete" @click="deleteResource(res.id)">✕</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </Card>
+    </template>
+
+    <!-- Edit Modal -->
+    <Modal v-model="editModal">
+      <template #title>Edit Environment</template>
+      <form class="env-form" @submit.prevent="submitEdit">
+        <label class="form-label">
+          <span>Name</span>
+          <input v-model="editName" type="text" class="form-input" />
+        </label>
+        <label class="form-label">
+          <span>Description</span>
+          <input v-model="editDesc" type="text" class="form-input" />
+        </label>
+        <label class="form-label">
+          <span>Connection Mode</span>
+          <select v-model="editMode" class="form-input">
+            <option value="direct">Direct</option>
+            <option value="agent">Agent</option>
+          </select>
+        </label>
+        <div v-if="editError" class="form-error">{{ editError }}</div>
+        <div class="form-actions">
+          <Button type="button" variant="secondary" @click="editModal = false">Cancel</Button>
+          <Button type="submit" variant="primary" :loading="editLoading">Save</Button>
+        </div>
+      </form>
+    </Modal>
+  </div>
+</template>
+
+<style scoped>
+.env-detail {
+  max-width: 900px;
+}
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  font-size: var(--text-sm);
+}
+.breadcrumb-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.breadcrumb-link:hover {
+  color: var(--accent);
+}
+.breadcrumb-sep {
+  color: var(--text-muted);
+}
+.breadcrumb-current {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.loading {
+  color: var(--text-muted);
+  padding: var(--space-8) 0;
+  text-align: center;
+}
+.env-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-4);
+}
+.page-title {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+.env-description {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+}
+.env-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+}
+.section-card {
+  margin-bottom: var(--space-4);
+}
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+.section-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+.agent-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.agent-empty {
+  font-size: var(--text-sm);
+  padding: var(--space-4) 0;
+}
+.resource-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.resource-table th {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.resource-table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.resource-table tr:hover td {
+  background: var(--bg-hover);
+}
+.res-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.res-icon {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  width: 20px;
+  text-align: center;
+}
+.mono {
+  font-family: var(--font-mono);
+}
+.muted {
+  color: var(--text-muted);
+}
+.icon-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.icon-btn:hover {
+  background: var(--bg-hover);
+}
+.icon-btn.danger:hover {
+  color: var(--danger);
+}
+.env-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.form-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.form-input {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  outline: none;
+}
+.form-input:focus {
+  border-color: var(--accent);
+}
+.form-error {
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+</style>
