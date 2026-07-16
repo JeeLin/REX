@@ -1,73 +1,193 @@
 <script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useEnvironmentsStore } from '@/stores/environments'
 import Card from '@/components/ui/Card.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import Modal from '@/components/ui/Modal.vue'
 
-interface EnvAgent {
-  name: string
-  status: StatusDotStatus
-  version: string
+const router = useRouter()
+const store = useEnvironmentsStore()
+
+const showCreateModal = ref(false)
+const editingEnv = ref<{ id: string; name: string; description: string; connection_mode: string } | null>(null)
+const formName = ref('')
+const formDesc = ref('')
+const formMode = ref('direct')
+const formError = ref('')
+const formLoading = ref(false)
+const deleteConfirmId = ref<string | null>(null)
+
+onMounted(() => {
+  store.fetchEnvironments()
+})
+
+const hasEnvironments = computed(() => store.environments.length > 0)
+
+function openCreate() {
+  editingEnv.value = null
+  formName.value = ''
+  formDesc.value = ''
+  formMode.value = 'direct'
+  formError.value = ''
+  showCreateModal.value = true
 }
 
-interface Env {
-  name: string
-  description: string
-  connections: number
-  icon: string
-  agent?: EnvAgent
+function openEdit(env: typeof editingEnv.value extends null ? never : NonNullable<typeof editingEnv.value>) {
+  editingEnv.value = env
+  formName.value = env.name
+  formDesc.value = env.description
+  formMode.value = env.connection_mode
+  formError.value = ''
+  showCreateModal.value = true
 }
 
-const environments: Env[] = [
-  { name: 'Production', description: '生产环境服务器和数据库', connections: 8, icon: '🚀', agent: { name: 'prod-agent-01', status: 'online', version: '0.1.0' } },
-  { name: 'Staging', description: '预发布环境', connections: 4, icon: '🔬', agent: { name: 'staging-agent', status: 'offline', version: '0.1.0' } },
-  { name: 'Development', description: '开发和测试环境', connections: 6, icon: '🔧' },
-]
+async function submitForm() {
+  if (!formName.value.trim()) {
+    formError.value = 'Name is required'
+    return
+  }
+  formLoading.value = true
+  formError.value = ''
+  try {
+    if (editingEnv.value) {
+      await store.updateEnvironment(editingEnv.value.id, {
+        name: formName.value.trim(),
+        description: formDesc.value.trim(),
+        connection_mode: formMode.value,
+      })
+    } else {
+      await store.createEnvironment({
+        name: formName.value.trim(),
+        description: formDesc.value.trim(),
+        connection_mode: formMode.value,
+      })
+    }
+    showCreateModal.value = false
+  } catch (e: unknown) {
+    formError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    formLoading.value = false
+  }
+}
 
-const hasEnvironments = environments.length > 0
+async function confirmDelete() {
+  if (!deleteConfirmId.value) return
+  try {
+    await store.deleteEnvironment(deleteConfirmId.value)
+  } catch {
+    // ignore
+  }
+  deleteConfirmId.value = null
+}
+
+function agentStatus(status: string | null): StatusDotStatus {
+  if (status === 'online') return 'online'
+  if (status === 'offline') return 'offline'
+  return 'offline'
+}
+
+function envIcon(mode: string): string {
+  return mode === 'agent' ? '⬡' : '◉'
+}
 </script>
 
 <template>
   <div class="environments">
     <header class="page-header">
       <h1 class="page-title">Environments</h1>
-      <Button variant="primary" size="sm">+ New Environment</Button>
+      <Button variant="primary" size="sm" @click="openCreate">+ New Environment</Button>
     </header>
 
     <EmptyState
-      v-if="!hasEnvironments"
+      v-if="!store.loading && !hasEnvironments"
       icon="⛁"
       title="No environments yet"
       description="Environments group your connections by context — production, staging, or development."
     >
-      <Button variant="primary">Create Environment</Button>
+      <Button variant="primary" @click="openCreate">Create Environment</Button>
     </EmptyState>
 
     <div v-else class="env-grid">
-      <Card v-for="env in environments" :key="env.name" class="env-card">
+      <Card
+        v-for="env in store.environments"
+        :key="env.id"
+        class="env-card"
+        @click="router.push(`/environments/${env.id}`)"
+      >
         <div class="env-card-header">
-          <span class="env-icon">{{ env.icon }}</span>
+          <span class="env-icon" :class="env.connection_mode">{{ envIcon(env.connection_mode) }}</span>
           <div class="env-info">
             <div class="env-name">{{ env.name }}</div>
-            <div class="env-desc muted">{{ env.description }}</div>
+            <div class="env-desc muted">{{ env.description || 'No description' }}</div>
+          </div>
+          <div class="env-actions" @click.stop>
+            <button class="icon-btn" title="Edit" @click="openEdit(env)">✎</button>
+            <button class="icon-btn danger" title="Delete" @click="deleteConfirmId = env.id">✕</button>
           </div>
         </div>
-        <div class="env-agent" v-if="env.agent">
-          <StatusDot :status="env.agent.status" />
-          <span class="mono env-agent-name">{{ env.agent.name }}</span>
-          <span class="muted env-agent-version">v{{ env.agent.version }}</span>
-        </div>
-        <div class="env-agent env-agent--none" v-else>
-          <span class="muted">No agent</span>
-          <span class="muted env-agent-hint">· 内网资源需要 Agent 代理</span>
+        <div class="env-agent">
+          <template v-if="env.agent_status">
+            <StatusDot :status="agentStatus(env.agent_status)" />
+            <span class="mono env-agent-status">Agent {{ env.agent_status }}</span>
+          </template>
+          <template v-else>
+            <span class="muted">No agent</span>
+          </template>
         </div>
         <div class="env-footer">
-          <Badge tone="accent">{{ env.connections }} connections</Badge>
+          <Badge tone="accent">{{ env.resource_count }} resources</Badge>
+          <Badge :tone="env.connection_mode === 'agent' ? 'warning' : 'info'" style="margin-left: 8px">
+            {{ env.connection_mode }}
+          </Badge>
         </div>
       </Card>
     </div>
+
+    <!-- Create / Edit Modal -->
+    <Modal v-model="showCreateModal">
+      <template #title>{{ editingEnv ? 'Edit Environment' : 'New Environment' }}</template>
+      <form class="env-form" @submit.prevent="submitForm">
+        <label class="form-label">
+          <span>Name</span>
+          <input v-model="formName" type="text" class="form-input" placeholder="e.g. Production" autofocus />
+        </label>
+        <label class="form-label">
+          <span>Description</span>
+          <input v-model="formDesc" type="text" class="form-input" placeholder="Optional description" />
+        </label>
+        <label class="form-label">
+          <span>Connection Mode</span>
+          <select v-model="formMode" class="form-input">
+            <option value="direct">Direct (console connects directly)</option>
+            <option value="agent">Agent (via reverse tunnel)</option>
+          </select>
+        </label>
+        <div v-if="formError" class="form-error">{{ formError }}</div>
+        <div class="form-actions">
+          <Button type="button" variant="secondary" @click="showCreateModal = false">Cancel</Button>
+          <Button type="submit" variant="primary" :loading="formLoading">
+            {{ editingEnv ? 'Save' : 'Create' }}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+
+    <!-- Delete Confirmation -->
+    <Modal :model-value="!!deleteConfirmId" @update:model-value="deleteConfirmId = null">
+      <template #title>Delete Environment</template>
+      <p style="color: var(--text-secondary); margin-bottom: 16px">
+        This will permanently delete the environment and all its resources. This action cannot be undone.
+      </p>
+      <div class="form-actions">
+        <Button variant="secondary" @click="deleteConfirmId = null">Cancel</Button>
+        <Button variant="danger" @click="confirmDelete">Delete</Button>
+      </div>
+    </Modal>
   </div>
 </template>
 
@@ -88,7 +208,7 @@ const hasEnvironments = environments.length > 0
 }
 .env-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: var(--space-4);
 }
 .env-card {
@@ -101,13 +221,29 @@ const hasEnvironments = environments.length > 0
 .env-card-header {
   display: flex;
   gap: var(--space-3);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-3);
 }
 .env-icon {
-  font-size: 24px;
+  font-size: 20px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.env-icon.direct {
+  color: var(--info);
+  background: rgba(88, 166, 255, 0.1);
+}
+.env-icon.agent {
+  color: var(--accent);
+  background: rgba(232, 145, 45, 0.1);
 }
 .env-info {
   flex: 1;
+  min-width: 0;
 }
 .env-name {
   font-size: var(--text-md);
@@ -117,10 +253,38 @@ const hasEnvironments = environments.length > 0
 .env-desc {
   font-size: var(--text-sm);
   margin-top: var(--space-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.env-footer {
+.env-actions {
   display: flex;
-  justify-content: flex-end;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+.env-card:hover .env-actions {
+  opacity: 1;
+}
+.icon-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.icon-btn.danger:hover {
+  color: var(--danger);
 }
 .env-agent {
   display: flex;
@@ -128,20 +292,58 @@ const hasEnvironments = environments.length > 0
   gap: var(--space-2);
   padding: var(--space-2) 0;
   border-top: 1px solid var(--border);
-  margin-top: var(--space-3);
+  margin-top: var(--space-2);
   font-size: var(--text-xs);
 }
-.env-agent-name {
+.env-agent-status {
   color: var(--text-secondary);
 }
-.env-agent-version {
-  font-size: var(--text-xs);
-  margin-left: auto;
+.env-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: var(--space-2);
 }
-.env-agent--none {
+.muted {
   color: var(--text-muted);
 }
-.env-agent-hint {
-  font-size: 11px;
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* Form styles */
+.env-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.form-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.form-input {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  outline: none;
+}
+.form-input:focus {
+  border-color: var(--accent);
+}
+.form-error {
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
 }
 </style>
