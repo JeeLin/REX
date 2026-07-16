@@ -4,6 +4,7 @@ pub mod agent_api;
 pub mod app;
 pub mod audit_api;
 pub mod auth;
+pub mod crypto;
 pub mod dashboard_api;
 pub mod db;
 pub mod env_api;

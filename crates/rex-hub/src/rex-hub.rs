@@ -6,6 +6,7 @@ use std::sync::Arc;
 use rex_hub::agent_api;
 use rex_hub::audit_api;
 use rex_hub::auth;
+use rex_hub::crypto;
 use rex_hub::dashboard_api;
 use rex_hub::db::Database;
 use rex_hub::env_api;
@@ -58,6 +59,10 @@ fn worker_main() {
         let db_path = data_dir.join("rex.db");
         let db = Arc::new(Database::open(&db_path).expect("failed to open database"));
         let auth = Arc::new(auth::AuthConfig::new(db.clone()).expect("failed to init auth"));
+        let crypto = Arc::new(
+            crypto::CredentialCrypto::from_data_dir(&data_dir)
+                .expect("failed to init credential crypto"),
+        );
 
         let sql_pool: SqlState =
             Arc::new(tokio::sync::Mutex::new(sql_api::SqlConnectionPool::new()));
@@ -70,6 +75,7 @@ fn worker_main() {
         let state = AppState {
             db,
             auth,
+            crypto,
             sql_pool,
             redis_pool,
             file_pool,

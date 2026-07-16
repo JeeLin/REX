@@ -39,10 +39,18 @@ async fn list_resources(
     Path(env_id): Path<String>,
 ) -> ApiResult<Vec<Resource>> {
     let db = state.db.clone();
-    let resources = tokio::task::spawn_blocking(move || db.list_resources_by_env(&env_id))
+    let mut resources = tokio::task::spawn_blocking(move || db.list_resources_by_env(&env_id))
         .await
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
+    // 解密每条资源的 config_json
+    for r in &mut resources {
+        if !r.config_json.is_empty() && r.config_json != "{}" {
+            if let Ok(dec) = state.crypto.decrypt(&r.config_json) {
+                r.config_json = dec;
+            }
+        }
+    }
     Ok(Json(resources))
 }
 
@@ -51,24 +59,37 @@ async fn get_resource(
     Path((env_id, id)): Path<(String, String)>,
 ) -> ApiResult<Resource> {
     let db = state.db.clone();
-    let resource = tokio::task::spawn_blocking(move || db.get_resource(&env_id, &id))
+    let mut resource = tokio::task::spawn_blocking(move || db.get_resource(&env_id, &id))
         .await
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
         .ok_or_else(|| err(StatusCode::NOT_FOUND, "resource not found"))?;
+    // 解密 config_json
+    if !resource.config_json.is_empty() && resource.config_json != "{}" {
+        if let Ok(dec) = state.crypto.decrypt(&resource.config_json) {
+            resource.config_json = dec;
+        }
+    }
     Ok(Json(resource))
 }
 
 async fn create_resource(
     State(state): State<AppState>,
     Path(env_id): Path<String>,
-    Json(body): Json<NewResource>,
+    Json(mut body): Json<NewResource>,
 ) -> ApiResult<Resource> {
     if body.name.trim().is_empty() {
         return Err(err(StatusCode::BAD_REQUEST, "name is required"));
     }
     if body.host.trim().is_empty() {
         return Err(err(StatusCode::BAD_REQUEST, "host is required"));
+    }
+    // 加密 config_json 中的凭据
+    if let Some(ref cfg) = body.config_json {
+        match state.crypto.encrypt(cfg) {
+            Ok(enc) => body.config_json = Some(enc),
+            Err(e) => return Err(err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string())),
+        }
     }
     // 验证环境存在
     let db = state.db.clone();
@@ -106,8 +127,15 @@ async fn create_resource(
 async fn update_resource(
     State(state): State<AppState>,
     Path((env_id, id)): Path<(String, String)>,
-    Json(body): Json<NewResource>,
+    Json(mut body): Json<NewResource>,
 ) -> ApiResult<Resource> {
+    // 加密 config_json 中的凭据
+    if let Some(ref cfg) = body.config_json {
+        match state.crypto.encrypt(cfg) {
+            Ok(enc) => body.config_json = Some(enc),
+            Err(e) => return Err(err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string())),
+        }
+    }
     let db = state.db.clone();
     let resource = tokio::task::spawn_blocking(move || db.update_resource(&env_id, &id, &body))
         .await
