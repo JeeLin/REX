@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.13.0] - 2026-07-16
+
+### Added
+- Agent 管理：注册 API（POST /api/agents/register）+ 心跳 API（POST /api/agents/:id/heartbeat）
+- Agent 管理页：重写为真实 API 数据，支持令牌重置
+
 ## [0.12.0] - 2026-07-16
 
 ### Fixed
