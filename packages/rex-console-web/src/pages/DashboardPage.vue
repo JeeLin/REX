@@ -1,130 +1,91 @@
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { dashboardApi, type DashboardStats } from '@/api/dashboard'
+import { useEnvironmentsStore } from '@/stores/environments'
 import Card from '@/components/ui/Card.vue'
 import Badge from '@/components/ui/Badge.vue'
-import Button from '@/components/ui/Button.vue'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 
-const stats = [
-  { label: 'Connections', value: '12', icon: '⬡', color: 'var(--accent)' },
-  { label: 'Online', value: '8', icon: '●', color: 'var(--success)' },
-  { label: 'Offline', value: '4', icon: '●', color: 'var(--danger)' },
-  { label: 'Active Sessions', value: '3', icon: '▸', color: 'var(--info)' },
-]
+const router = useRouter()
+const store = useEnvironmentsStore()
 
-const recent = [
-  { name: 'Web Server', host: '10.0.1.5', protocol: 'SSH', status: 'online' as StatusDotStatus, time: '2m ago' },
-  { name: 'DB Primary', host: 'db.internal', protocol: 'MySQL', status: 'online' as StatusDotStatus, time: '5m ago' },
-  { name: 'Cache', host: 'cache.local', protocol: 'Redis', status: 'offline' as StatusDotStatus, time: '1h ago' },
-]
+const stats = ref<DashboardStats>({ environment_count: 0, resource_count: 0, online_agents: 0 })
+const loading = ref(true)
+
+onMounted(async () => {
+  try {
+    const [s] = await Promise.all([
+      dashboardApi.stats(),
+      store.fetchEnvironments(),
+    ])
+    stats.value = s
+  } catch {
+    // ignore
+  } finally {
+    loading.value = false
+  }
+})
+
+function agentStatus(status: string | null): StatusDotStatus {
+  if (status === 'online') return 'online'
+  return 'offline'
+}
 </script>
 
 <template>
   <div class="dashboard">
-    <header class="dash-header">
-      <h1 class="dash-title">Dashboard</h1>
-      <Button variant="primary" size="sm">+ New Connection</Button>
-    </header>
+    <h1 class="page-title">Dashboard</h1>
 
-    <!-- Stats -->
     <div class="stats-grid">
-      <div v-for="s in stats" :key="s.label" class="stat-card">
-        <div class="stat-icon" :style="{ color: s.color }">{{ s.icon }}</div>
-        <div class="stat-value mono">{{ s.value }}</div>
-        <div class="stat-label">{{ s.label }}</div>
-      </div>
+      <Card class="stat-card">
+        <div class="stat-value mono">{{ stats.environment_count }}</div>
+        <div class="stat-label">Environments</div>
+      </Card>
+      <Card class="stat-card">
+        <div class="stat-value mono">{{ stats.resource_count }}</div>
+        <div class="stat-label">Resources</div>
+      </Card>
+      <Card class="stat-card">
+        <div class="stat-value mono">{{ stats.online_agents }}</div>
+        <div class="stat-label">Agents Online</div>
+      </Card>
     </div>
 
-    <!-- Recent -->
-    <Card title="Recent Connections">
-      <div class="recent-list">
-        <div v-for="conn in recent" :key="conn.host" class="recent-item">
-          <StatusDot :status="conn.status" />
-          <span class="recent-name">{{ conn.name }}</span>
-          <span class="recent-proto mono muted">{{ conn.protocol }}</span>
-          <span class="recent-host mono muted">{{ conn.host }}</span>
-          <span class="recent-time muted">{{ conn.time }}</span>
+    <h2 class="section-title">Environments</h2>
+    <div v-if="store.environments.length === 0" class="muted">No environments yet</div>
+    <div v-else class="env-grid">
+      <Card
+        v-for="env in store.environments"
+        :key="env.id"
+        class="env-card"
+        @click="router.push(`/environments/${env.id}`)"
+      >
+        <div class="env-name">{{ env.name }}</div>
+        <div class="env-meta">
+          <StatusDot :status="agentStatus(env.agent_status)" />
+          <span class="muted">{{ env.agent_status || 'no agent' }}</span>
+          <Badge tone="accent" style="margin-left: auto">{{ env.resource_count }} resources</Badge>
         </div>
-      </div>
-    </Card>
+      </Card>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.dashboard {
-  max-width: 900px;
-}
-.dash-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--space-6);
-}
-.dash-title {
-  font-size: var(--text-xl);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-/* Stats */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-4);
-  margin-bottom: var(--space-6);
-}
-.stat-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.stat-icon {
-  font-size: var(--text-lg);
-  margin-bottom: var(--space-1);
-}
-.stat-value {
-  font-size: var(--text-2xl);
-  font-weight: 700;
-  color: var(--text-primary);
-}
-.stat-label {
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-}
-
-/* Recent */
-.recent-list {
-  display: flex;
-  flex-direction: column;
-}
-.recent-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--border-subtle);
-  font-size: var(--text-sm);
-}
-.recent-item:last-child {
-  border-bottom: none;
-}
-.recent-name {
-  color: var(--text-primary);
-  min-width: 100px;
-}
-.recent-proto {
-  font-size: var(--text-xs);
-  width: 60px;
-}
-.recent-host {
-  font-size: var(--text-xs);
-}
-.recent-time {
-  margin-left: auto;
-  font-size: var(--text-xs);
-}
+.dashboard { max-width: 900px; }
+.page-title { font-size: var(--text-xl); font-weight: 600; color: var(--text-primary); margin-bottom: var(--space-6); }
+.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); margin-bottom: var(--space-6); }
+.stat-card { text-align: center; padding: var(--space-4); }
+.stat-value { font-size: var(--text-2xl); font-weight: 700; color: var(--accent); }
+.stat-label { font-size: var(--text-sm); color: var(--text-muted); margin-top: var(--space-1); }
+.section-title { font-size: var(--text-md); font-weight: 600; color: var(--text-primary); margin-bottom: var(--space-3); }
+.env-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--space-3); }
+.env-card { cursor: pointer; transition: border-color var(--transition); }
+.env-card:hover { border-color: var(--accent); }
+.env-name { font-weight: 600; color: var(--text-primary); margin-bottom: var(--space-2); }
+.env-meta { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+.muted { color: var(--text-muted); }
+.mono { font-family: var(--font-mono); }
 </style>
