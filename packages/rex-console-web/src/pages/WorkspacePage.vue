@@ -6,7 +6,6 @@ import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import ConnectionTree from '@/features/workspace/ConnectionTree.vue'
-import QuickConnect from '@/features/workspace/QuickConnect.vue'
 import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
 import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
 import TerminalView from '@/features/terminal/TerminalView.vue'
@@ -183,20 +182,6 @@ function closePane(idx: number) {
 // 快捷键面板
 const showShortcuts = ref(false)
 
-function onQuickConnect(config: { protocol: string; host: string; port: string; user: string }) {
-  const id = `tab-${Date.now()}`
-  tabs.value.push({
-    id,
-    label: config.host,
-    protocol: config.protocol as Tab['protocol'],
-    host: config.host,
-    port: config.port ? parseInt(config.port) : undefined,
-    username: config.user || undefined,
-    status: 'connecting',
-  })
-  activeTab.value = id
-}
-
 // Tab status 更新
 function onTabStatusChange(tabId: string, status: Tab['status']) {
   const tab = tabs.value.find(t => t.id === tabId)
@@ -338,9 +323,6 @@ useKeyboardShortcuts([
     </button>
 
     <div class="ws-main-area">
-      <!-- Quick Connect bar -->
-      <QuickConnect @connect="onQuickConnect" />
-
       <!-- Split panes -->
       <div class="ws-body">
         <Splitpanes
