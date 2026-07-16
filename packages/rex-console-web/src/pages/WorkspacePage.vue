@@ -10,13 +10,20 @@ import QuickConnect from '@/features/workspace/QuickConnect.vue'
 import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
 import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
 import TerminalView from '@/features/terminal/TerminalView.vue'
+import { PROTOCOL_COLORS } from '@/features/resource/protocols'
 
 interface Tab {
   id: string
   label: string
   protocol: 'ssh' | 'mysql' | 'redis' | 'postgresql' | 'sftp' | 'sqlite' | 's3'
+  resourceId?: string
+  environmentId?: string
   host?: string
-  status?: StatusDotStatus
+  port?: number
+  username?: string
+  password?: string
+  database?: string
+  status: 'connecting' | 'connected' | 'disconnected' | 'error'
   color?: string
   renaming?: boolean
 }
@@ -27,16 +34,12 @@ interface SplitPane {
   children: (SplitPane | string)[]
 }
 
-const tabs = ref<Tab[]>([
-  { id: 'ssh-1', label: 'Web Server', protocol: 'ssh', host: '10.0.1.5', status: 'online' },
-  { id: 'mysql-1', label: 'DB Primary', protocol: 'mysql', host: 'db.internal', status: 'online' },
-])
-const activeTab = ref('ssh-1')
+const tabs = ref<Tab[]>([])
+const activeTab = ref<string>('')
 const splitDirection = ref<'row' | 'column'>('row')
-const panes = ref<string[]>(['ssh-1'])
+const panes = ref<string[]>([])
 const splitCount = ref(1)
 
-const protoColor = (proto: Tab['protocol']) => `var(--proto-${proto})`
 const now = ref(new Date().toLocaleTimeString('zh-CN', { hour12: false }))
 const timer = setInterval(() => {
   now.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
@@ -48,17 +51,36 @@ const activeTabInfo = computed(() => tabs.value.find(t => t.id === activeTab.val
 // 连接树
 const treeCollapsed = ref(false)
 
-function openResourceFromTree(node: { id: string; name: string; protocol?: string; host?: string; status?: StatusDotStatus }) {
-  const id = `tab-${node.id}`
-  if (!tabs.value.find(t => t.id === id)) {
-    tabs.value.push({
-      id,
-      label: node.name,
-      protocol: (node.protocol || 'ssh') as Tab['protocol'],
-      host: node.host,
-      status: node.status,
-    })
+function openResourceFromTree(node: {
+  id: string
+  name: string
+  protocol?: string
+  host?: string
+  port?: number
+  username?: string
+  environmentId?: string
+}) {
+  // 去重：相同 resourceId 不重复打开
+  const resourceId = node.id
+  const existing = tabs.value.find(t => t.resourceId === resourceId)
+  if (existing) {
+    activeTab.value = existing.id
+    return
   }
+
+  const id = `tab-${Date.now()}`
+  const protocol = (node.protocol || 'ssh') as Tab['protocol']
+  tabs.value.push({
+    id,
+    label: node.name,
+    protocol,
+    resourceId,
+    environmentId: node.environmentId,
+    host: node.host,
+    port: node.port,
+    username: node.username,
+    status: 'connecting',
+  })
   activeTab.value = id
 }
 
@@ -127,13 +149,12 @@ function openProperties(tabId: string) {
 const propsResource = computed(() => {
   const tab = tabs.value.find(t => t.id === propsTabId.value)
   if (!tab) return undefined
-  const [host, port] = (tab.host || '').split(':')
   return {
     name: tab.label,
     protocol: tab.protocol,
-    host: host || '',
-    port: port || '',
-    user: '',
+    host: tab.host || '',
+    port: tab.port?.toString() || '',
+    user: tab.username || '',
     password: '',
     encoding: 'UTF-8',
     color: tab.color || '',
@@ -165,10 +186,18 @@ function onQuickConnect(config: { protocol: string; host: string; port: string; 
     id,
     label: config.host,
     protocol: config.protocol as Tab['protocol'],
-    host: config.port ? `${config.host}:${config.port}` : config.host,
+    host: config.host,
+    port: config.port ? parseInt(config.port) : undefined,
+    username: config.user || undefined,
     status: 'connecting',
   })
   activeTab.value = id
+}
+
+// Tab status 更新
+function onTabStatusChange(tabId: string, status: Tab['status']) {
+  const tab = tabs.value.find(t => t.id === tabId)
+  if (tab) tab.status = status
 }
 
 // 布局预设
@@ -201,11 +230,22 @@ function applyLayout(preset: LayoutPreset) {
   }
 }
 
+// 协议状态点颜色
+function statusColor(status: Tab['status']): StatusDotStatus {
+  switch (status) {
+    case 'connected': return 'online'
+    case 'connecting': return 'connecting'
+    case 'error': return 'error'
+    default: return 'offline'
+  }
+}
+
 // 快捷键
 useKeyboardShortcuts([
   { key: 't', ctrl: true, handler: () => {
+    // Ctrl+T 打开 Quick Connect 或新 SSH tab
     const id = `tab-${Date.now()}`
-    tabs.value.push({ id, label: 'New Tab', protocol: 'ssh' })
+    tabs.value.push({ id, label: 'New Tab', protocol: 'ssh', status: 'connecting' })
     activeTab.value = id
   } },
   { key: 'w', ctrl: true, handler: () => {
@@ -243,7 +283,7 @@ useKeyboardShortcuts([
         @contextmenu="onTabContextMenu($event, tab.id)"
       >
         <span class="ws-tab-color" v-if="tab.color" :style="{ background: tab.color }" />
-        <span class="ws-tab-dot" :style="{ background: protoColor(tab.protocol) }" />
+        <span class="ws-tab-dot" :style="{ background: PROTOCOL_COLORS[tab.protocol] || 'var(--text-muted)' }" />
         <input
           v-if="tab.renaming"
           class="ws-tab-rename-input mono"
@@ -255,7 +295,7 @@ useKeyboardShortcuts([
           autofocus
         />
         <span v-else>{{ tab.label }}</span>
-        <span v-if="tab.host" class="ws-tab-host muted">{{ tab.host }}</span>
+        <StatusDot :status="statusColor(tab.status)" style="margin-left: 4px" />
         <button class="ws-tab-close" @click.stop="closeTab(tab.id)">×</button>
       </div>
       <button class="ws-tab-add" title="New connection (Ctrl+T)">+</button>
@@ -308,45 +348,71 @@ useKeyboardShortcuts([
           <Pane v-for="i in splitCount" :key="i" :size="100 / splitCount" :min-size="20">
             <div class="ws-pane">
               <div class="ws-pane-header mono">
-                <span>{{ activeTabInfo?.label || 'Tab' }}</span>
+                <span>{{ activeTabInfo?.label || 'No tab open' }}</span>
                 <div class="ws-pane-actions">
                   <button class="ws-pane-btn" @click="splitHorizontal" title="Split horizontal (Ctrl+\)">⊞</button>
                   <button class="ws-pane-btn" @click="splitVertical" title="Split vertical (Ctrl+Shift+\)">⊟</button>
                   <button v-if="splitCount > 1" class="ws-pane-btn" @click="closePane(i - 1)" title="Close pane">×</button>
                 </div>
               </div>
+
+              <!-- Terminal (SSH) -->
               <TerminalView
                 v-if="activeTabInfo?.protocol === 'ssh'"
                 :tab-id="activeTab"
                 :host="activeTabInfo?.host"
-                :port="22"
-                :username="'root'"
+                :port="activeTabInfo?.port"
+                :username="activeTabInfo?.username"
                 :protocol="activeTabInfo?.protocol"
+                @update:status="onTabStatusChange(activeTab, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
               />
-              <div v-else class="ws-terminal">
-                <div class="ws-term-line muted">
-                <span class="mono" style="color: var(--success)">$</span>
-                Connected to {{ activeTabInfo?.host || 'localhost' }} via {{ activeTabInfo?.protocol?.toUpperCase() || 'SSH' }}
+
+              <!-- SQL (MySQL / PostgreSQL / SQLite) -->
+              <div v-else-if="['mysql', 'postgresql', 'sqlite'].includes(activeTabInfo?.protocol || '')" class="ws-component-placeholder">
+                <div class="ws-placeholder-text muted">
+                  <span class="mono" style="color: var(--info)">dB</span>
+                  {{ activeTabInfo?.protocol?.toUpperCase() }} console — {{ activeTabInfo?.host || 'localhost' }}
+                </div>
+                <div class="ws-placeholder-sub muted">SqlPage integration (sub-task 3)</div>
               </div>
-              <div class="ws-term-line muted">
-                <span class="mono" style="color: var(--accent)">▸</span>
-                Terminal / SQL console will render here (M3+)
+
+              <!-- Redis -->
+              <div v-else-if="activeTabInfo?.protocol === 'redis'" class="ws-component-placeholder">
+                <div class="ws-placeholder-text muted">
+                  <span class="mono" style="color: var(--danger)">R</span>
+                  Redis console — {{ activeTabInfo?.host || 'localhost' }}
+                </div>
+                <div class="ws-placeholder-sub muted">RedisPage integration (sub-task 4)</div>
+              </div>
+
+              <!-- Files (SFTP / S3) -->
+              <div v-else-if="['sftp', 's3'].includes(activeTabInfo?.protocol || '')" class="ws-component-placeholder">
+                <div class="ws-placeholder-text muted">
+                  <span class="mono" style="color: var(--purple)">📁</span>
+                  {{ activeTabInfo?.protocol?.toUpperCase() }} file manager — {{ activeTabInfo?.host || 'localhost' }}
+                </div>
+                <div class="ws-placeholder-sub muted">FilesPage integration (sub-task 5)</div>
+              </div>
+
+              <!-- Empty state -->
+              <div v-else class="ws-component-placeholder">
+                <div class="ws-placeholder-text muted">
+                  No connection open. Click a resource in the sidebar or use Quick Connect.
+                </div>
               </div>
             </div>
-          </div>
-        </Pane>
-      </Splitpanes>
+          </Pane>
+        </Splitpanes>
       </div>
     </div>
 
     <!-- Status bar -->
     <div class="ws-statusbar mono">
       <span class="ws-status-item">
-        <StatusDot :status="activeTabInfo?.status || 'online'" />
-        {{ activeTabInfo?.protocol.toUpperCase() }} · {{ activeTabInfo?.host }}
+        <StatusDot :status="activeTabInfo ? statusColor(activeTabInfo.status) : 'offline'" />
+        {{ activeTabInfo ? `${activeTabInfo.protocol.toUpperCase()} · ${activeTabInfo.host || 'no host'}` : 'No tab' }}
       </span>
-      <span class="ws-status-item">UTF-8</span>
-      <span class="ws-status-item">LF</span>
+      <span v-if="activeTabInfo?.protocol === 'ssh'" class="ws-status-item">UTF-8</span>
       <span class="ws-status-spacer" />
       <span class="ws-status-item ws-quick-actions">
         <button class="ws-action-btn" @click="splitHorizontal" title="Split horizontal">⊞</button>
@@ -430,9 +496,6 @@ useKeyboardShortcuts([
   padding: 0 4px;
   width: 120px;
   outline: none;
-}
-.ws-tab-host {
-  font-size: var(--text-xs);
 }
 .ws-tab-close {
   background: none;
@@ -546,16 +609,23 @@ useKeyboardShortcuts([
   color: var(--accent);
 }
 
-/* Terminal */
-.ws-terminal {
+/* Placeholder for non-SSH protocols */
+.ws-component-placeholder {
   flex: 1;
-  padding: var(--space-4);
-  font-family: var(--font-mono);
-  font-size: var(--text-base);
-  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
 }
-.ws-term-line {
-  margin-bottom: var(--space-1);
+.ws-placeholder-text {
+  font-size: var(--text-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.ws-placeholder-sub {
+  font-size: var(--text-xs);
 }
 
 /* Status bar */
@@ -599,7 +669,6 @@ useKeyboardShortcuts([
 
 /* 手机端适配 */
 @media (max-width: 768px) {
-  .ws-tab-host { display: none; }
   .ws-statusbar .ws-status-item:nth-child(n+2) { display: none; }
   .ws-statusbar .ws-status-item:last-child { display: flex; }
   .ws-quick-actions { display: flex !important; }

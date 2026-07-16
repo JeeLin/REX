@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
+import { useEnvironmentsStore } from '@/stores/environments'
+import { resourcesApi, type Resource } from '@/api/resources'
+import { PROTOCOL_ICONS, PROTOCOL_COLORS } from '@/features/resource/protocols'
 
 interface TreeNode {
   id: string
@@ -9,6 +12,9 @@ interface TreeNode {
   name: string
   protocol?: 'ssh' | 'mysql' | 'redis' | 'postgresql' | 'sftp' | 'sqlite' | 's3'
   host?: string
+  port?: number
+  username?: string
+  environmentId?: string
   status?: StatusDotStatus
   color?: string
   children?: TreeNode[]
@@ -16,28 +22,42 @@ interface TreeNode {
 
 const emit = defineEmits<{ openResource: [node: TreeNode] }>()
 
+const store = useEnvironmentsStore()
 const searchQuery = ref('')
 const collapsedGroups = ref(new Set<string>())
+const envResources = ref<Map<string, Resource[]>>(new Map())
 
-const treeData = ref<TreeNode[]>([
-  {
-    id: 'prod', type: 'group', name: 'Production', children: [
-      { id: 'r1', type: 'resource', name: 'Web Server', protocol: 'ssh', host: '10.0.1.5', status: 'online', color: '#f85149' },
-      { id: 'r2', type: 'resource', name: 'DB Primary', protocol: 'mysql', host: 'db.internal', status: 'online' },
-      { id: 'r3', type: 'resource', name: 'Cache', protocol: 'redis', host: 'cache.local', status: 'offline' },
-    ],
-  },
-  {
-    id: 'staging', type: 'group', name: 'Staging', children: [
-      { id: 'r4', type: 'resource', name: 'Analytics', protocol: 'postgresql', host: 'analytics.db', status: 'connecting' },
-    ],
-  },
-  {
-    id: 'dev', type: 'group', name: 'Development', children: [
-      { id: 'r5', type: 'resource', name: 'Dev API', protocol: 'ssh', host: 'localhost:3000', status: 'online' },
-    ],
-  },
-])
+onMounted(async () => {
+  await store.fetchEnvironments()
+  for (const env of store.environments) {
+    try {
+      const resources = await resourcesApi.listByEnv(env.id)
+      envResources.value.set(env.id, resources)
+    } catch {
+      // ignore
+    }
+  }
+})
+
+const treeData = computed<TreeNode[]>(() => {
+  return store.environments.map(env => ({
+    id: env.id,
+    type: 'group' as const,
+    name: env.name,
+    children: (envResources.value.get(env.id) || []).map(res => ({
+      id: res.id,
+      type: 'resource' as const,
+      name: res.name,
+      protocol: res.protocol as TreeNode['protocol'],
+      host: res.host,
+      port: res.port || undefined,
+      username: res.username || undefined,
+      environmentId: env.id,
+      status: 'offline' as StatusDotStatus,
+      color: res.color || undefined,
+    })),
+  }))
+})
 
 const filteredTree = computed(() => {
   if (!searchQuery.value) return treeData.value
@@ -59,14 +79,10 @@ function toggleGroup(id: string) {
     collapsedGroups.value.add(id)
   }
 }
-
-const protoColor = (proto?: TreeNode['protocol']) => proto ? `var(--proto-${proto})` : 'var(--text-muted)'
-
-defineExpose({ treeData })
 </script>
 
 <template>
-  <div class="connection-tree">
+  <div class="conn-tree">
     <div class="ct-search">
       <input
         v-model="searchQuery"
@@ -76,11 +92,14 @@ defineExpose({ treeData })
       />
     </div>
     <div class="ct-content">
+      <div v-if="filteredTree.length === 0 && !store.loading" class="ct-empty muted">
+        No environments
+      </div>
       <template v-for="group in filteredTree" :key="group.id">
         <div class="ct-group" @click="toggleGroup(group.id)">
           <span class="ct-chevron" :class="{ 'ct-collapsed': collapsedGroups.has(group.id) }">▸</span>
           <span class="ct-group-name mono">{{ group.name }}</span>
-          <span class="ct-group-count muted">{{ group.children?.length }}</span>
+          <span class="ct-group-count muted">{{ group.children?.length || 0 }}</span>
         </div>
         <div v-if="!collapsedGroups.has(group.id)">
           <div
@@ -89,13 +108,11 @@ defineExpose({ treeData })
             class="ct-item"
             @dblclick="emit('openResource', item)"
           >
-            <span class="ct-color-dot" v-if="item.color" :style="{ background: item.color }" />
-            <span class="ct-proto mono" :style="{ color: protoColor(item.protocol) }">
-              {{ item.protocol?.toUpperCase() }}
+            <span class="ct-item-icon" :style="{ color: item.color || PROTOCOL_COLORS[item.protocol || ''] || 'var(--text-secondary)' }">
+              {{ PROTOCOL_ICONS[item.protocol || ''] || '?' }}
             </span>
-            <span class="ct-name">{{ item.name }}</span>
-            <span class="ct-host mono muted">{{ item.host }}</span>
-            <StatusDot v-if="item.status" :status="item.status" />
+            <span class="ct-item-name">{{ item.name }}</span>
+            <span class="ct-item-host mono muted">{{ item.host }}</span>
           </div>
         </div>
       </template>
@@ -104,11 +121,10 @@ defineExpose({ treeData })
 </template>
 
 <style scoped>
-.connection-tree {
+.conn-tree {
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow: hidden;
 }
 .ct-search {
   padding: var(--space-2);
@@ -132,22 +148,31 @@ defineExpose({ treeData })
   flex: 1;
   overflow-y: auto;
 }
+.ct-empty {
+  padding: var(--space-4);
+  text-align: center;
+  font-size: var(--text-sm);
+}
 .ct-group {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  padding: var(--space-2) var(--space-2);
+  padding: var(--space-1) var(--space-2);
   font-size: var(--text-xs);
   color: var(--text-muted);
   cursor: pointer;
   user-select: none;
 }
-.ct-group:hover { color: var(--text-secondary); }
+.ct-group:hover {
+  color: var(--text-secondary);
+}
 .ct-chevron {
   font-size: 10px;
   transition: transform var(--transition);
 }
-.ct-collapsed { transform: rotate(0deg); }
+.ct-collapsed {
+  transform: rotate(0deg);
+}
 .ct-group-name {
   font-weight: 600;
   text-transform: uppercase;
@@ -168,22 +193,26 @@ defineExpose({ treeData })
   cursor: pointer;
   transition: background var(--transition);
 }
-.ct-item:hover { background: var(--bg-hover); }
-.ct-color-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
+.ct-item:hover {
+  background: var(--bg-hover);
 }
-.ct-proto {
-  font-size: var(--text-xs);
-  font-weight: 600;
-  width: 40px;
-  flex-shrink: 0;
+.ct-item-icon {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  width: 16px;
+  text-align: center;
 }
-.ct-name { color: var(--text-primary); }
-.ct-host {
+.ct-item-name {
+  color: var(--text-primary);
+}
+.ct-item-host {
   font-size: var(--text-xs);
   margin-left: auto;
+}
+.muted {
+  color: var(--text-muted);
+}
+.mono {
+  font-family: var(--font-mono);
 }
 </style>
