@@ -111,6 +111,29 @@ const currentTitle = computed(() => {
       <button class="fab-btn" title="Split">⊞</button>
       <button class="fab-btn" title="Find">🔍</button>
     </div>
+
+    <!-- 移动端底部导航 -->
+    <nav class="bottom-nav">
+      <RouterLink to="/dashboard" class="bottom-nav-item">
+        <span class="bottom-nav-icon">◧</span>
+        <span class="bottom-nav-label">{{ t('nav.dashboard') }}</span>
+      </RouterLink>
+      <RouterLink to="/environments" class="bottom-nav-item">
+        <span class="bottom-nav-icon">⛁</span>
+        <span class="bottom-nav-label">{{ t('nav.environments') }}</span>
+      </RouterLink>
+      <button class="bottom-nav-item bottom-nav-fab" @click="mobileMenuOpen = !mobileMenuOpen">
+        <span class="bottom-nav-icon">☰</span>
+      </button>
+      <RouterLink to="/agents" class="bottom-nav-item">
+        <span class="bottom-nav-icon">⬡</span>
+        <span class="bottom-nav-label">{{ t('nav.agents') }}</span>
+      </RouterLink>
+      <RouterLink to="/settings" class="bottom-nav-item">
+        <span class="bottom-nav-icon">⚙</span>
+        <span class="bottom-nav-label">{{ t('nav.settings') }}</span>
+      </RouterLink>
+    </nav>
   </div>
 </template>
 
@@ -362,5 +385,53 @@ const currentTitle = computed(() => {
   .mobile-fab {
     display: flex;
   }
+  .bottom-nav {
+    display: flex;
+  }
+  .content {
+    padding-bottom: 64px;
+  }
+}
+
+/* Bottom nav (mobile only) */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  z-index: 997;
+  justify-content: space-around;
+  align-items: center;
+}
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-decoration: none;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius);
+  transition: color var(--transition);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.bottom-nav-item.router-link-active,
+.bottom-nav-item.bottom-nav-fab {
+  color: var(--accent);
+}
+.bottom-nav-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+.bottom-nav-label {
+  font-size: 10px;
+  line-height: 1;
 }
 </style>
