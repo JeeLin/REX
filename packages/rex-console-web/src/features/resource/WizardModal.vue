@@ -1,0 +1,537 @@
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { useEnvironmentsStore } from '@/stores/environments'
+import { resourcesApi, type TestConnectionResult } from '@/api/resources'
+import Button from '@/components/ui/Button.vue'
+import Badge from '@/components/ui/Badge.vue'
+import Modal from '@/components/ui/Modal.vue'
+
+const props = defineProps<{
+  visible: boolean
+  environmentId: string
+}>()
+
+const emit = defineEmits<{
+  close: []
+  created: []
+}>()
+
+const store = useEnvironmentsStore()
+
+const step = ref(1)
+const loading = ref(false)
+const error = ref('')
+
+// Step 1: Protocol
+const protocols = [
+  { id: 'ssh', name: 'SSH', icon: '$', color: '#3FB950', desc: 'Remote terminal' },
+  { id: 'sftp', name: 'SFTP', icon: '📁', color: '#8B5CF6', desc: 'File transfer' },
+  { id: 'mysql', name: 'MySQL', icon: 'dB', color: '#58A6FF', desc: 'Database' },
+  { id: 'postgresql', name: 'PostgreSQL', icon: 'pg', color: '#8B5CF6', desc: 'Database' },
+  { id: 'redis', name: 'Redis', icon: 'R', color: '#F85149', desc: 'Cache' },
+  { id: 'sqlite', name: 'SQLite', icon: 'S', color: '#D29922', desc: 'Local DB' },
+  { id: 's3', name: 'S3 / MinIO', icon: '☁', color: '#E8912D', desc: 'Object storage' },
+]
+const selectedProtocol = ref('')
+
+// Step 2: Basic info
+const resName = ref('')
+const connectionMode = ref('direct')
+const resColor = ref('')
+
+// Step 3: Connection details
+const host = ref('')
+const port = ref<number | null>(null)
+const username = ref('')
+const password = ref('')
+const privateKey = ref('')
+const databaseName = ref('')
+const filePath = ref('')
+const s3Endpoint = ref('')
+const s3AccessKey = ref('')
+const s3SecretKey = ref('')
+const s3Bucket = ref('')
+const s3Region = ref('')
+const redisDb = ref(0)
+
+// Test connection
+const testResult = ref<TestConnectionResult | null>(null)
+const testLoading = ref(false)
+
+const defaultPorts: Record<string, number> = {
+  ssh: 22, sftp: 22, mysql: 3306, postgresql: 5432, redis: 6379,
+}
+
+const stepTitle = computed(() => {
+  switch (step.value) {
+    case 1: return 'Select Protocol'
+    case 2: return 'Basic Information'
+    case 3: return 'Connection Details'
+    case 4: return 'Confirm'
+    default: return ''
+  }
+})
+
+const canProceedStep1 = computed(() => !!selectedProtocol.value)
+const canProceedStep2 = computed(() => resName.value.trim().length > 0)
+const canProceedStep3 = computed(() => {
+  if (selectedProtocol.value === 'sqlite') return filePath.value.trim().length > 0
+  if (selectedProtocol.value === 's3') return s3Endpoint.value.trim().length > 0 && s3AccessKey.value.trim().length > 0 && s3SecretKey.value.trim().length > 0 && s3Bucket.value.trim().length > 0
+  return host.value.trim().length > 0
+})
+
+function selectProtocol(id: string) {
+  selectedProtocol.value = id
+  port.value = defaultPorts[id] ?? null
+  // Auto-fill name
+  if (!resName.value) {
+    const p = protocols.find(p => p.id === id)
+    resName.value = p?.name || ''
+  }
+}
+
+function nextStep() {
+  if (step.value < 4) step.value++
+}
+
+function prevStep() {
+  if (step.value > 1) step.value--
+}
+
+async function testConnection() {
+  testLoading.value = true
+  testResult.value = null
+  try {
+    testResult.value = await store.testConnection({
+      protocol: selectedProtocol.value,
+      host: host.value,
+      port: port.value,
+      username: username.value,
+      config_json: JSON.stringify(buildConfig()),
+    })
+  } catch (e: unknown) {
+    testResult.value = { ok: false, error: e instanceof Error ? e.message : String(e) }
+  } finally {
+    testLoading.value = false
+  }
+}
+
+function buildConfig(): Record<string, unknown> {
+  const cfg: Record<string, unknown> = {}
+  if (['ssh', 'sftp'].includes(selectedProtocol.value)) {
+    if (password.value) cfg.password = password.value
+    if (privateKey.value) cfg.private_key = privateKey.value
+  } else if (['mysql', 'postgresql'].includes(selectedProtocol.value)) {
+    if (password.value) cfg.password = password.value
+    if (databaseName.value) cfg.database_name = databaseName.value
+  } else if (selectedProtocol.value === 'redis') {
+    if (password.value) cfg.password = password.value
+    cfg.db = redisDb.value
+  } else if (selectedProtocol.value === 'sqlite') {
+    cfg.file_path = filePath.value
+  } else if (selectedProtocol.value === 's3') {
+    cfg.endpoint = s3Endpoint.value
+    cfg.access_key = s3AccessKey.value
+    cfg.secret_key = s3SecretKey.value
+    cfg.bucket = s3Bucket.value
+    cfg.region = s3Region.value || 'us-east-1'
+  }
+  return cfg
+}
+
+async function submit() {
+  loading.value = true
+  error.value = ''
+  try {
+    await store.createResource(props.environmentId, {
+      name: resName.value.trim(),
+      protocol: selectedProtocol.value,
+      host: selectedProtocol.value === 'sqlite' ? 'localhost' : host.value,
+      port: port.value,
+      username: username.value || undefined,
+      config_json: JSON.stringify(buildConfig()),
+      color: resColor.value || undefined,
+    })
+    emit('created')
+    reset()
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    loading.value = false
+  }
+}
+
+function reset() {
+  step.value = 1
+  selectedProtocol.value = ''
+  resName.value = ''
+  connectionMode.value = 'direct'
+  resColor.value = ''
+  host.value = ''
+  port.value = null
+  username.value = ''
+  password.value = ''
+  privateKey.value = ''
+  databaseName.value = ''
+  filePath.value = ''
+  s3Endpoint.value = ''
+  s3AccessKey.value = ''
+  s3SecretKey.value = ''
+  s3Bucket.value = ''
+  s3Region.value = ''
+  redisDb.value = 0
+  testResult.value = null
+  error.value = ''
+}
+
+function handleClose() {
+  reset()
+  emit('close')
+}
+
+const colorOptions = [
+  '', '#3FB950', '#58A6FF', '#8B5CF6', '#F85149', '#D29922', '#E8912D', '#F0883E', '#8B949E',
+]
+</script>
+
+<template>
+  <Modal :model-value="visible" @update:model-value="handleClose">
+    <template #title>{{ stepTitle }} <span class="step-indicator">Step {{ step }}/4</span></template>
+
+    <!-- Step 1: Protocol -->
+    <div v-if="step === 1" class="protocol-grid">
+      <button
+        v-for="p in protocols"
+        :key="p.id"
+        class="protocol-card"
+        :class="{ selected: selectedProtocol === p.id }"
+        @click="selectProtocol(p.id)"
+      >
+        <span class="protocol-icon" :style="{ color: p.color }">{{ p.icon }}</span>
+        <span class="protocol-name">{{ p.name }}</span>
+        <span class="protocol-desc muted">{{ p.desc }}</span>
+      </button>
+    </div>
+
+    <!-- Step 2: Basic Info -->
+    <div v-if="step === 2" class="step-form">
+      <label class="form-label">
+        <span>Name</span>
+        <input v-model="resName" type="text" class="form-input" placeholder="e.g. Web Server" autofocus />
+      </label>
+      <label class="form-label">
+        <span>Connection Mode</span>
+        <select v-model="connectionMode" class="form-input">
+          <option value="direct">Direct (console connects directly)</option>
+          <option value="agent">Agent (via reverse tunnel)</option>
+        </select>
+      </label>
+      <label class="form-label">
+        <span>Color Tag</span>
+        <div class="color-picker">
+          <button
+            v-for="c in colorOptions"
+            :key="c"
+            class="color-dot"
+            :class="{ selected: resColor === c }"
+            :style="{ background: c || 'var(--border)' }"
+            @click="resColor = c"
+          />
+        </div>
+      </label>
+    </div>
+
+    <!-- Step 3: Connection Details -->
+    <div v-if="step === 3" class="step-form">
+      <!-- SSH / SFTP -->
+      <template v-if="['ssh', 'sftp'].includes(selectedProtocol)">
+        <label class="form-label">
+          <span>Host</span>
+          <input v-model="host" type="text" class="form-input" placeholder="e.g. 192.168.1.100" />
+        </label>
+        <label class="form-label">
+          <span>Port</span>
+          <input v-model.number="port" type="number" class="form-input" />
+        </label>
+        <label class="form-label">
+          <span>Username</span>
+          <input v-model="username" type="text" class="form-input" placeholder="e.g. root" />
+        </label>
+        <label class="form-label">
+          <span>Password</span>
+          <input v-model="password" type="password" class="form-input" placeholder="(optional if using key)" />
+        </label>
+        <label class="form-label">
+          <span>Private Key</span>
+          <textarea v-model="privateKey" class="form-input form-textarea" placeholder="(optional) Paste private key" rows="3"></textarea>
+        </label>
+      </template>
+
+      <!-- MySQL / PostgreSQL -->
+      <template v-if="['mysql', 'postgresql'].includes(selectedProtocol)">
+        <label class="form-label">
+          <span>Host</span>
+          <input v-model="host" type="text" class="form-input" placeholder="e.g. 10.0.0.5" />
+        </label>
+        <label class="form-label">
+          <span>Port</span>
+          <input v-model.number="port" type="number" class="form-input" />
+        </label>
+        <label class="form-label">
+          <span>Username</span>
+          <input v-model="username" type="text" class="form-input" placeholder="e.g. root" />
+        </label>
+        <label class="form-label">
+          <span>Password</span>
+          <input v-model="password" type="password" class="form-input" />
+        </label>
+        <label class="form-label">
+          <span>Default Database</span>
+          <input v-model="databaseName" type="text" class="form-input" placeholder="(optional)" />
+        </label>
+      </template>
+
+      <!-- Redis -->
+      <template v-if="selectedProtocol === 'redis'">
+        <label class="form-label">
+          <span>Host</span>
+          <input v-model="host" type="text" class="form-input" placeholder="e.g. 127.0.0.1" />
+        </label>
+        <label class="form-label">
+          <span>Port</span>
+          <input v-model.number="port" type="number" class="form-input" />
+        </label>
+        <label class="form-label">
+          <span>Password</span>
+          <input v-model="password" type="password" class="form-input" placeholder="(optional)" />
+        </label>
+        <label class="form-label">
+          <span>DB Index</span>
+          <input v-model.number="redisDb" type="number" class="form-input" min="0" max="15" />
+        </label>
+      </template>
+
+      <!-- SQLite -->
+      <template v-if="selectedProtocol === 'sqlite'">
+        <label class="form-label">
+          <span>File Path</span>
+          <input v-model="filePath" type="text" class="form-input" placeholder="/path/to/database.sqlite" />
+        </label>
+      </template>
+
+      <!-- S3 -->
+      <template v-if="selectedProtocol === 's3'">
+        <label class="form-label">
+          <span>Endpoint URL</span>
+          <input v-model="s3Endpoint" type="text" class="form-input" placeholder="https://s3.amazonaws.com" />
+        </label>
+        <label class="form-label">
+          <span>Access Key</span>
+          <input v-model="s3AccessKey" type="text" class="form-input" />
+        </label>
+        <label class="form-label">
+          <span>Secret Key</span>
+          <input v-model="s3SecretKey" type="password" class="form-input" />
+        </label>
+        <label class="form-label">
+          <span>Bucket</span>
+          <input v-model="s3Bucket" type="text" class="form-input" />
+        </label>
+        <label class="form-label">
+          <span>Region</span>
+          <input v-model="s3Region" type="text" class="form-input" placeholder="us-east-1" />
+        </label>
+      </template>
+
+      <!-- Test connection -->
+      <div class="test-section">
+        <Button variant="secondary" size="sm" :loading="testLoading" @click="testConnection">
+          Test Connection
+        </Button>
+        <span v-if="testResult?.ok" class="test-ok">✓ Connected ({{ testResult.latency_ms }}ms)</span>
+        <span v-else-if="testResult && !testResult.ok" class="test-fail">✕ {{ testResult.error }}</span>
+      </div>
+    </div>
+
+    <!-- Step 4: Confirm -->
+    <div v-if="step === 4" class="step-confirm">
+      <div class="confirm-row">
+        <span class="confirm-label">Protocol</span>
+        <Badge :tone="selectedProtocol === 'redis' ? 'danger' : 'info'">{{ selectedProtocol }}</Badge>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Name</span>
+        <span>{{ resName }}</span>
+      </div>
+      <div v-if="host" class="confirm-row">
+        <span class="confirm-label">Host</span>
+        <span class="mono">{{ host }}{{ port ? `:${port}` : '' }}</span>
+      </div>
+      <div v-if="username" class="confirm-row">
+        <span class="confirm-label">Username</span>
+        <span>{{ username }}</span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Connection</span>
+        <span>{{ connectionMode }}</span>
+      </div>
+      <div v-if="error" class="form-error">{{ error }}</div>
+    </div>
+
+    <!-- Actions -->
+    <div class="form-actions">
+      <Button v-if="step > 1" variant="secondary" @click="prevStep">Back</Button>
+      <div style="flex:1"></div>
+      <Button variant="secondary" @click="handleClose">Cancel</Button>
+      <Button v-if="step < 4" variant="primary" :disabled="step === 1 ? !canProceedStep1 : step === 2 ? !canProceedStep2 : !canProceedStep3" @click="nextStep">
+        Next
+      </Button>
+      <Button v-if="step === 4" variant="primary" :loading="loading" @click="submit">
+        Create
+      </Button>
+    </div>
+  </Modal>
+</template>
+
+<style scoped>
+.step-indicator {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: var(--space-2);
+}
+.protocol-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.protocol-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-deep);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.protocol-card:hover {
+  border-color: var(--text-muted);
+}
+.protocol-card.selected {
+  border-color: var(--accent);
+  background: rgba(232, 145, 45, 0.05);
+}
+.protocol-icon {
+  font-size: 24px;
+  font-family: var(--font-mono);
+}
+.protocol-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.protocol-desc {
+  font-size: var(--text-xs);
+}
+.step-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.form-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.form-input {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  outline: none;
+}
+.form-input:focus {
+  border-color: var(--accent);
+}
+.form-textarea {
+  font-family: var(--font-mono);
+  resize: vertical;
+}
+.color-picker {
+  display: flex;
+  gap: var(--space-2);
+}
+.color-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+.color-dot:hover {
+  border-color: var(--text-muted);
+}
+.color-dot.selected {
+  border-color: var(--text-primary);
+}
+.test-section {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+.test-ok {
+  color: var(--success);
+  font-size: var(--text-sm);
+}
+.test-fail {
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+.step-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.confirm-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.confirm-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.mono {
+  font-family: var(--font-mono);
+}
+.muted {
+  color: var(--text-muted);
+}
+.form-error {
+  color: var(--danger);
+  font-size: var(--text-sm);
+  margin-top: var(--space-2);
+}
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+</style>

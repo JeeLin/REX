@@ -11,6 +11,7 @@ import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import Modal from '@/components/ui/Modal.vue'
+import WizardModal from '@/features/resource/WizardModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -97,6 +98,14 @@ async function deleteResource(id: string) {
     if (env.value) env.value.resource_count--
   } catch {
     // ignore
+  }
+}
+
+async function refreshResources() {
+  resources.value = await resourcesApi.listByEnv(envId)
+  // 刷新环境的 resource_count
+  if (env.value) {
+    env.value.resource_count = resources.value.length
   }
 }
 
@@ -205,6 +214,14 @@ function agentStatus(status: string | null): StatusDotStatus {
         </table>
       </Card>
     </template>
+
+    <!-- Resource Creation Wizard -->
+    <WizardModal
+      :visible="showWizard"
+      :environment-id="envId"
+      @close="showWizard = false"
+      @created="showWizard = false; refreshResources()"
+    />
 
     <!-- Edit Modal -->
     <Modal v-model="editModal">
