@@ -1,5 +1,6 @@
 //! REX Hub 共享模块
 
+pub mod agent_api;
 pub mod app;
 pub mod auth;
 pub mod db;

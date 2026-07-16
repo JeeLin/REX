@@ -490,4 +490,129 @@ impl Database {
         .map_err(|e| RExError::Message(e.to_string()))?;
         Ok(())
     }
+
+    // --- Agents ---
+
+    pub fn list_agents_by_env(&self, env_id: &str) -> Result<Vec<Agent>> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, environment_id, name, version, os, arch, hostname, ip, status, last_seen_at, created_at, updated_at
+                 FROM agents WHERE environment_id = ?1 ORDER BY name",
+            )
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let rows = stmt
+            .query_map(rusqlite::params![env_id], |row| {
+                Ok(Agent {
+                    id: row.get(0)?,
+                    environment_id: row.get(1)?,
+                    name: row.get(2)?,
+                    version: row.get(3)?,
+                    os: row.get(4)?,
+                    arch: row.get(5)?,
+                    hostname: row.get(6)?,
+                    ip: row.get(7)?,
+                    status: row.get(8)?,
+                    last_seen_at: row.get(9)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
+                })
+            })
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let mut agents = Vec::new();
+        for row in rows {
+            agents.push(row.map_err(|e| RExError::Message(e.to_string()))?);
+        }
+        Ok(agents)
+    }
+
+    pub fn get_agent(&self, id: &str) -> Result<Option<Agent>> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, environment_id, name, version, os, arch, hostname, ip, status, last_seen_at, created_at, updated_at
+                 FROM agents WHERE id = ?1",
+            )
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let mut rows = stmt
+            .query_map(rusqlite::params![id], |row| {
+                Ok(Agent {
+                    id: row.get(0)?,
+                    environment_id: row.get(1)?,
+                    name: row.get(2)?,
+                    version: row.get(3)?,
+                    os: row.get(4)?,
+                    arch: row.get(5)?,
+                    hostname: row.get(6)?,
+                    ip: row.get(7)?,
+                    status: row.get(8)?,
+                    last_seen_at: row.get(9)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
+                })
+            })
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        match rows.next() {
+            Some(Ok(a)) => Ok(Some(a)),
+            Some(Err(e)) => Err(RExError::Message(e.to_string())),
+            None => Ok(None),
+        }
+    }
+
+    pub fn create_agent(
+        &self,
+        env_id: &str,
+        name: &str,
+        token_hash: &str,
+        version: &str,
+        os: &str,
+        arch: &str,
+        hostname: &str,
+    ) -> Result<Agent> {
+        let conn = self.conn()?;
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO agents (id, environment_id, name, token_hash, version, os, arch, hostname, status, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'online', ?9, ?9)",
+            rusqlite::params![id, env_id, name, token_hash, version, os, arch, hostname, now],
+        )
+        .map_err(|e| RExError::Message(e.to_string()))?;
+        Ok(Agent {
+            id,
+            environment_id: env_id.to_string(),
+            name: name.to_string(),
+            version: version.to_string(),
+            os: os.to_string(),
+            arch: arch.to_string(),
+            hostname: hostname.to_string(),
+            ip: String::new(),
+            status: "online".to_string(),
+            last_seen_at: Some(now.clone()),
+            created_at: now.clone(),
+            updated_at: now,
+        })
+    }
+
+    pub fn update_agent_heartbeat(&self, id: &str, version: &str, ip: &str) -> Result<()> {
+        let conn = self.conn()?;
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE agents SET version = ?1, ip = ?2, status = 'online', last_seen_at = ?3, updated_at = ?3 WHERE id = ?4",
+            rusqlite::params![version, ip, now, id],
+        )
+        .map_err(|e| RExError::Message(e.to_string()))?;
+        Ok(())
+    }
+
+    pub fn reset_agent_token(&self, id: &str, new_token_hash: &str) -> Result<()> {
+        let conn = self.conn()?;
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE agents SET token_hash = ?1, updated_at = ?2 WHERE id = ?3",
+            rusqlite::params![new_token_hash, now, id],
+        )
+        .map_err(|e| RExError::Message(e.to_string()))?;
+        Ok(())
+    }
 }

@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use rex_hub::agent_api;
 use rex_hub::auth;
 use rex_hub::db::Database;
 use rex_hub::env_api;
@@ -102,8 +103,9 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
         );
 
     let protected_routes = Router::new()
-        .nest("/api/environments", env_api::env_routes())
+        .nest("/api/environments", env_api::env_routes().merge(agent_api::env_agent_routes()))
         .nest("/api/environments", resource_api::resource_routes())
+        .nest("/api/agents", agent_api::agent_routes())
         .route(
             "/api/resources/test-connection",
             axum::routing::post(resource_api::test_connection),
