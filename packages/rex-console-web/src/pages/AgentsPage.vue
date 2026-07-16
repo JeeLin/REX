@@ -1,69 +1,136 @@
 <script setup lang="ts">
+import { ref, onMounted, computed } from 'vue'
+import { agentsApi, type Agent } from '@/api/agents'
+import { useEnvironmentsStore } from '@/stores/environments'
 import Card from '@/components/ui/Card.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
-import Table from '@/components/ui/Table.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import Modal from '@/components/ui/Modal.vue'
 
-interface Agent {
-  id: string
-  name: string
-  host: string
-  status: StatusDotStatus
-  version: string
-  lastSeen: string
-  environment: string
+const store = useEnvironmentsStore()
+const agents = ref<Agent[]>([])
+const loading = ref(true)
+const resetModal = ref(false)
+const resetAgentId = ref('')
+const resetToken = ref('')
+
+onMounted(async () => {
+  await store.fetchEnvironments()
+  // 加载所有环境的 agents
+  const allAgents: Agent[] = []
+  for (const env of store.environments) {
+    try {
+      const envAgents = await agentsApi.listByEnv(env.id)
+      allAgents.push(...envAgents)
+    } catch {
+      // ignore
+    }
+  }
+  agents.value = allAgents
+  loading.value = false
+})
+
+const hasAgents = computed(() => agents.value.length > 0)
+
+function agentStatus(status: string): StatusDotStatus {
+  if (status === 'online') return 'online'
+  if (status === 'connecting') return 'connecting'
+  return 'offline'
 }
 
-const agents: Agent[] = [
-  { id: '1', name: 'prod-agent-01', host: 'prod-server-01', status: 'online', version: '0.1.0', lastSeen: '12s ago', environment: 'Production' },
-  { id: '2', name: 'staging-agent', host: 'staging-server', status: 'connecting', version: '0.1.0', lastSeen: '—', environment: 'Staging' },
-  { id: '3', name: 'dev-agent', host: 'dev-workstation', status: 'offline', version: '0.0.9', lastSeen: '2h ago', environment: 'Development' },
-]
+function envName(envId: string): string {
+  return store.environments.find(e => e.id === envId)?.name || envId
+}
 
-const columns = [
-  { key: 'name', label: 'Agent' },
-  { key: 'environment', label: 'Environment', width: '140px' },
-  { key: 'host', label: 'Host', width: '160px' },
-  { key: 'status', label: 'Status', width: '110px', align: 'left' as const },
-  { key: 'version', label: 'Version', width: '90px' },
-  { key: 'lastSeen', label: 'Last Seen', width: '100px' },
-]
+async function openResetToken(agentId: string) {
+  resetAgentId.value = agentId
+  resetToken.value = ''
+  resetModal.value = true
+}
+
+async function doResetToken() {
+  try {
+    const result = await agentsApi.resetToken(resetAgentId.value)
+    resetToken.value = result.token
+  } catch {
+    // ignore
+  }
+}
 </script>
 
 <template>
-  <div class="agents">
+  <div class="agents-page">
     <header class="page-header">
       <h1 class="page-title">Agents</h1>
-      <div class="page-actions">
-        <Button variant="secondary" size="sm">Deployment Guide</Button>
-        <Button variant="primary" size="sm">+ Register Agent</Button>
-      </div>
     </header>
 
-    <Card :padded="false" title="Registered Agents">
-      <Table :columns="columns" :rows="agents" :row-key="(r: Agent) => r.id">
-        <template #cell-name="{ row }">
-          <span class="agent-name">{{ row.name }}</span>
-        </template>
-        <template #cell-status="{ row }">
-          <Badge :tone="row.status === 'online' ? 'success' : row.status === 'connecting' ? 'warning' : 'danger'">
-            <StatusDot :status="row.status" />
-            {{ row.status }}
-          </Badge>
-        </template>
-        <template #cell-version="{ row }">
-          <span class="mono">{{ row.version }}</span>
-        </template>
-      </Table>
-    </Card>
+    <EmptyState
+      v-if="!loading && !hasAgents"
+      icon="⬡"
+      title="No agents registered"
+      description="Deploy an agent to proxy connections for internal network resources."
+    />
+
+    <div v-else class="agent-grid">
+      <Card v-for="agent in agents" :key="agent.id" class="agent-card">
+        <div class="agent-card-header">
+          <div class="agent-info">
+            <div class="agent-name">
+              <StatusDot :status="agentStatus(agent.status)" />
+              <span class="mono">{{ agent.name }}</span>
+            </div>
+            <div class="agent-meta muted">
+              {{ envName(agent.environment_id) }} · {{ agent.hostname || agent.ip || '—' }}
+            </div>
+          </div>
+        </div>
+        <div class="agent-details">
+          <div class="agent-detail">
+            <span class="muted">Version</span>
+            <span class="mono">{{ agent.version || '—' }}</span>
+          </div>
+          <div class="agent-detail">
+            <span class="muted">OS</span>
+            <span>{{ agent.os || '—' }} {{ agent.arch }}</span>
+          </div>
+          <div class="agent-detail">
+            <span class="muted">Last seen</span>
+            <span>{{ agent.last_seen_at ? new Date(agent.last_seen_at).toLocaleString() : '—' }}</span>
+          </div>
+        </div>
+        <div class="agent-footer">
+          <Button variant="secondary" size="sm" @click="openResetToken(agent.id)">Reset Token</Button>
+        </div>
+      </Card>
+    </div>
+
+    <!-- Reset Token Modal -->
+    <Modal v-model="resetModal">
+      <template #title>Reset Agent Token</template>
+      <div v-if="!resetToken" class="modal-content">
+        <p class="muted">Generate a new registration token for this agent.</p>
+        <div class="form-actions">
+          <Button variant="secondary" @click="resetModal = false">Cancel</Button>
+          <Button variant="primary" @click="doResetToken">Generate</Button>
+        </div>
+      </div>
+      <div v-else class="modal-content">
+        <p class="muted">New token (copy and update your agent config):</p>
+        <code class="token-display mono">{{ resetToken }}</code>
+        <div class="form-actions">
+          <Button variant="primary" @click="resetModal = false">Done</Button>
+        </div>
+      </div>
+    </Modal>
   </div>
 </template>
 
 <style scoped>
-.agents {
-  max-width: 1000px;
+.agents-page {
+  max-width: 900px;
 }
 .page-header {
   display: flex;
@@ -76,12 +143,79 @@ const columns = [
   font-weight: 600;
   color: var(--text-primary);
 }
-.page-actions {
+.agent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--space-4);
+}
+.agent-card {
   display: flex;
-  gap: var(--space-2);
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.agent-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.agent-info {
+  flex: 1;
 }
 .agent-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-md);
+  font-weight: 600;
   color: var(--text-primary);
-  font-weight: 500;
+}
+.agent-meta {
+  font-size: var(--text-sm);
+  margin-top: var(--space-1);
+}
+.agent-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+.agent-detail {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.agent-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+.muted {
+  color: var(--text-muted);
+}
+.mono {
+  font-family: var(--font-mono);
+}
+.modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.token-display {
+  display: block;
+  padding: var(--space-3);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: var(--text-sm);
+  word-break: break-all;
+  color: var(--accent);
+}
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
 }
 </style>
