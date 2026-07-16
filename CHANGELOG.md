@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.9.0] - 2026-07-15
+
+### Added
+- 数据库层：SQLite schema + 迁移 + Database struct（环境/资源/Agent/审计日志/设置表）
+- 认证系统：单用户密码认证（argon2 + JWT），首次设置密码 → 登录 → 路由守卫
+- 路由框架：统一 AppState + auth 中间件，公开路由（认证）+ 受保护路由分离
+- 审计日志：写入基础设施，所有关键操作自动记录
+- 前端 API 客户端：统一 fetch 封装，自动注入 auth header，处理 401
+- 前端 auth store：Pinia 状态管理，token 持久化
+- 前端路由守卫：未登录跳转登录页，首次使用引导设置密码
+- 登录页 / 设置密码页：真实认证对接
+
+### Changed
+- 现有 API 模块（SQL/Redis/Files）注入 auth header，支持认证后正常工作
+- WebSocket 终端支持 token query param 认证
+
 ## [0.8.0] - 2026-07-15
 
 ### Added
