@@ -19,12 +19,13 @@ pub fn env_routes() -> axum::Router<AppState> {
 }
 
 fn err(status: StatusCode, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
-    (status, Json(serde_json::json!({ "error": { "code": "ERROR", "message": msg } })))
+    (
+        status,
+        Json(serde_json::json!({ "error": { "code": "ERROR", "message": msg } })),
+    )
 }
 
-async fn list_environments(
-    State(state): State<AppState>,
-) -> ApiResult<Vec<EnvironmentDetail>> {
+async fn list_environments(State(state): State<AppState>) -> ApiResult<Vec<EnvironmentDetail>> {
     let envs = tokio::task::spawn_blocking(move || state.db.list_environments_with_stats())
         .await
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?

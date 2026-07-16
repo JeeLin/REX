@@ -57,12 +57,19 @@ fn worker_main() {
 
         let sql_pool: SqlState =
             Arc::new(tokio::sync::Mutex::new(sql_api::SqlConnectionPool::new()));
-        let redis_pool: RedisState =
-            Arc::new(tokio::sync::Mutex::new(redis_api::RedisConnectionPool::new()));
+        let redis_pool: RedisState = Arc::new(tokio::sync::Mutex::new(
+            redis_api::RedisConnectionPool::new(),
+        ));
         let file_pool: FileState =
             Arc::new(tokio::sync::Mutex::new(file_api::FileConnectionPool::new()));
 
-        let state = AppState { db, auth, sql_pool, redis_pool, file_pool };
+        let state = AppState {
+            db,
+            auth,
+            sql_pool,
+            redis_pool,
+            file_pool,
+        };
 
         tracing::info!("serving frontend from: {}", static_dir.display());
         tracing::info!("listening on 0.0.0.0:{port}");
@@ -89,12 +96,18 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
     let public_routes = Router::new()
         .route("/api/auth/check", axum::routing::get(auth::check_auth))
         .route("/api/auth/login", axum::routing::post(auth::login))
-        .route("/api/auth/password", axum::routing::post(auth::set_password));
+        .route(
+            "/api/auth/password",
+            axum::routing::post(auth::set_password),
+        );
 
     let protected_routes = Router::new()
         .nest("/api/environments", env_api::env_routes())
         .nest("/api/environments", resource_api::resource_routes())
-        .route("/api/resources/test-connection", axum::routing::post(resource_api::test_connection))
+        .route(
+            "/api/resources/test-connection",
+            axum::routing::post(resource_api::test_connection),
+        )
         .nest("/api/sql", sql_api::sql_routes())
         .nest("/api/redis", redis_api::redis_routes())
         .nest("/api/files", file_api::file_routes())

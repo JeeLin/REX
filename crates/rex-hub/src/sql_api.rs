@@ -5,14 +5,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::AppState;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
-use crate::AppState;
-use rex_common::sql::{
-    ConnectRequest, DatabaseType, SqlConnector, SqlConnectorFactory,
-};
+use rex_common::sql::{ConnectRequest, DatabaseType, SqlConnector, SqlConnectorFactory};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
@@ -171,10 +169,7 @@ async fn disconnect(
 }
 
 /// POST /api/sql/query
-async fn query(
-    State(state): State<AppState>,
-    Json(body): Json<QueryBody>,
-) -> impl IntoResponse {
+async fn query(State(state): State<AppState>, Json(body): Json<QueryBody>) -> impl IntoResponse {
     let mut pool = state.sql_pool.lock().await;
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,

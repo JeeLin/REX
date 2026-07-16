@@ -10,7 +10,10 @@ use crate::AppState;
 type ApiResult<T> = Result<Json<T>, (StatusCode, Json<serde_json::Value>)>;
 
 fn err(status: StatusCode, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
-    (status, Json(serde_json::json!({ "error": { "code": "ERROR", "message": msg } })))
+    (
+        status,
+        Json(serde_json::json!({ "error": { "code": "ERROR", "message": msg } })),
+    )
 }
 
 /// 资源路由（嵌套在 /api/environments 下）
@@ -19,8 +22,14 @@ pub fn resource_routes() -> axum::Router<AppState> {
         .route("/{env_id}/resources", axum::routing::get(list_resources))
         .route("/{env_id}/resources", axum::routing::post(create_resource))
         .route("/{env_id}/resources/{id}", axum::routing::get(get_resource))
-        .route("/{env_id}/resources/{id}", axum::routing::put(update_resource))
-        .route("/{env_id}/resources/{id}", axum::routing::delete(delete_resource))
+        .route(
+            "/{env_id}/resources/{id}",
+            axum::routing::put(update_resource),
+        )
+        .route(
+            "/{env_id}/resources/{id}",
+            axum::routing::delete(delete_resource),
+        )
 }
 
 // --- API handlers ---
@@ -194,23 +203,20 @@ pub async fn test_connection(
         }
         "redis" => {
             let addr = format!("redis://{}:{}/", body.host, body.port.unwrap_or(6379));
-            match tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                async {
-                    let client =
-                        redis::Client::open(addr.as_str()).map_err(|e| format!("redis error: {e}"))?;
-                    let mut conn = client
-                        .get_multiplexed_async_connection()
-                        .await
-                        .map_err(|e| format!("redis connect error: {e}"))?;
-                    redis::Cmd::new()
-                        .arg("PING")
-                        .query_async::<String>(&mut conn)
-                        .await
-                        .map_err(|e| format!("redis PING failed: {e}"))?;
-                    Ok::<(), String>(())
-                },
-            )
+            match tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                let client =
+                    redis::Client::open(addr.as_str()).map_err(|e| format!("redis error: {e}"))?;
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| format!("redis connect error: {e}"))?;
+                redis::Cmd::new()
+                    .arg("PING")
+                    .query_async::<String>(&mut conn)
+                    .await
+                    .map_err(|e| format!("redis PING failed: {e}"))?;
+                Ok::<(), String>(())
+            })
             .await
             {
                 Ok(r) => r,
@@ -237,7 +243,9 @@ pub async fn test_connection(
         }
         "mysql" | "postgresql" => {
             let host = body.host.clone();
-            let port = body.port.unwrap_or(if body.protocol == "mysql" { 3306 } else { 5432 });
+            let port = body
+                .port
+                .unwrap_or(if body.protocol == "mysql" { 3306 } else { 5432 });
             match tokio::time::timeout(
                 std::time::Duration::from_secs(5),
                 tokio::net::TcpStream::connect(format!("{host}:{port}")),
@@ -249,46 +257,47 @@ pub async fn test_connection(
                 Err(_) => Err("connection timed out".into()),
             }
         }
-        "s3" => {
-            match body.config_json {
-                Some(ref cfg) => {
-                    let v: serde_json::Value =
-                        serde_json::from_str(cfg).unwrap_or(serde_json::Value::Null);
-                    let endpoint = v.get("endpoint").and_then(|e| e.as_str()).unwrap_or("");
-                    let access_key = v.get("access_key").and_then(|e| e.as_str()).unwrap_or("");
-                    let secret_key = v.get("secret_key").and_then(|e| e.as_str()).unwrap_or("");
-                    let region = v.get("region").and_then(|e| e.as_str()).unwrap_or("us-east-1");
-                    if endpoint.is_empty() || access_key.is_empty() || secret_key.is_empty() {
-                        Err("missing endpoint, access_key, or secret_key".into())
-                    } else {
-                        let config = aws_sdk_s3::Config::builder()
-                            .endpoint_url(endpoint)
-                            .region(aws_sdk_s3::config::Region::new(region.to_string()))
-                            .credentials_provider(aws_sdk_s3::config::Credentials::new(
-                                access_key.to_string(),
-                                secret_key.to_string(),
-                                None,
-                                None,
-                                "rex-hub-test",
-                            ))
-                            .behavior_version_latest()
-                            .build();
-                        let client = aws_sdk_s3::Client::from_conf(config);
-                        match tokio::time::timeout(
-                            std::time::Duration::from_secs(5),
-                            client.list_buckets().send(),
-                        )
-                        .await
-                        {
-                            Ok(Ok(_)) => Ok(()),
-                            Ok(Err(e)) => Err(format!("S3 ListBuckets failed: {e}")),
-                            Err(_) => Err("S3 request timed out".into()),
-                        }
+        "s3" => match body.config_json {
+            Some(ref cfg) => {
+                let v: serde_json::Value =
+                    serde_json::from_str(cfg).unwrap_or(serde_json::Value::Null);
+                let endpoint = v.get("endpoint").and_then(|e| e.as_str()).unwrap_or("");
+                let access_key = v.get("access_key").and_then(|e| e.as_str()).unwrap_or("");
+                let secret_key = v.get("secret_key").and_then(|e| e.as_str()).unwrap_or("");
+                let region = v
+                    .get("region")
+                    .and_then(|e| e.as_str())
+                    .unwrap_or("us-east-1");
+                if endpoint.is_empty() || access_key.is_empty() || secret_key.is_empty() {
+                    Err("missing endpoint, access_key, or secret_key".into())
+                } else {
+                    let config = aws_sdk_s3::Config::builder()
+                        .endpoint_url(endpoint)
+                        .region(aws_sdk_s3::config::Region::new(region.to_string()))
+                        .credentials_provider(aws_sdk_s3::config::Credentials::new(
+                            access_key.to_string(),
+                            secret_key.to_string(),
+                            None,
+                            None,
+                            "rex-hub-test",
+                        ))
+                        .behavior_version_latest()
+                        .build();
+                    let client = aws_sdk_s3::Client::from_conf(config);
+                    match tokio::time::timeout(
+                        std::time::Duration::from_secs(5),
+                        client.list_buckets().send(),
+                    )
+                    .await
+                    {
+                        Ok(Ok(_)) => Ok(()),
+                        Ok(Err(e)) => Err(format!("S3 ListBuckets failed: {e}")),
+                        Err(_) => Err("S3 request timed out".into()),
                     }
                 }
-                None => Err("missing config_json for S3".into()),
             }
-        }
+            None => Err("missing config_json for S3".into()),
+        },
         _ => Err(format!("unsupported protocol: {}", body.protocol)),
     };
     let latency = start.elapsed().as_millis() as u64;

@@ -3,11 +3,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::AppState;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
-use crate::AppState;
 use rex_common::redis::{RedisConnectRequest, RedisConnector};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;

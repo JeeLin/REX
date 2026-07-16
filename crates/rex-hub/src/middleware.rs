@@ -21,12 +21,13 @@ impl<S: Send + Sync> FromRequestParts<S> for AuthUser {
     type Rejection = (StatusCode, axum::Json<ErrorBody>);
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        let app_state = parts
-            .extensions
-            .get::<AppState>()
-            .ok_or_else(|| {
-                error_with_status(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "missing app state")
-            })?;
+        let app_state = parts.extensions.get::<AppState>().ok_or_else(|| {
+            error_with_status(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "INTERNAL_ERROR",
+                "missing app state",
+            )
+        })?;
 
         // 方式 1: Authorization header
         if let Some(header) = parts.headers.get("Authorization") {

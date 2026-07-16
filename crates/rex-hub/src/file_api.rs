@@ -3,11 +3,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::AppState;
 use axum::extract::{Multipart, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
-use crate::AppState;
 use rex_common::file_transfer::{FileConnectRequest, FileConnector};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -158,7 +158,11 @@ async fn connect(
     };
 
     let session_id = format!("file_{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    state.file_pool.lock().await.insert(session_id.clone(), conn);
+    state
+        .file_pool
+        .lock()
+        .await
+        .insert(session_id.clone(), conn);
     (StatusCode::OK, Json(ConnectResponse { session_id })).into_response()
 }
 

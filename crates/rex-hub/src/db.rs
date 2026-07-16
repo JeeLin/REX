@@ -156,7 +156,8 @@ impl Database {
             sql.push_str(&format!(" OFFSET {offset}"));
         }
 
-        let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params.iter().map(|p| p.as_ref()).collect();
         let mut stmt = conn
             .prepare(&sql)
             .map_err(|e| RExError::Message(e.to_string()))?;
@@ -255,11 +256,15 @@ impl Database {
     }
 
     pub fn update_environment(&self, id: &str, env: &UpdateEnvironment) -> Result<Environment> {
-        let existing = self.get_environment(id)?
+        let existing = self
+            .get_environment(id)?
             .ok_or_else(|| RExError::Message("environment not found".into()))?;
         let name = env.name.as_deref().unwrap_or(&existing.name);
         let desc = env.description.as_deref().unwrap_or(&existing.description);
-        let mode = env.connection_mode.as_deref().unwrap_or(&existing.connection_mode);
+        let mode = env
+            .connection_mode
+            .as_deref()
+            .unwrap_or(&existing.connection_mode);
         let now = chrono::Utc::now().to_rfc3339();
         let conn = self.conn()?;
         conn.execute(
@@ -273,8 +278,11 @@ impl Database {
 
     pub fn delete_environment(&self, id: &str) -> Result<()> {
         let conn = self.conn()?;
-        conn.execute("DELETE FROM environments WHERE id = ?1", rusqlite::params![id])
-            .map_err(|e| RExError::Message(e.to_string()))?;
+        conn.execute(
+            "DELETE FROM environments WHERE id = ?1",
+            rusqlite::params![id],
+        )
+        .map_err(|e| RExError::Message(e.to_string()))?;
         Ok(())
     }
 
@@ -449,20 +457,19 @@ impl Database {
         })
     }
 
-    pub fn update_resource(
-        &self,
-        env_id: &str,
-        id: &str,
-        res: &NewResource,
-    ) -> Result<Resource> {
-        let existing = self.get_resource(env_id, id)?
+    pub fn update_resource(&self, env_id: &str, id: &str, res: &NewResource) -> Result<Resource> {
+        let existing = self
+            .get_resource(env_id, id)?
             .ok_or_else(|| RExError::Message("resource not found".into()))?;
         let conn = self.conn()?;
         let now = chrono::Utc::now().to_rfc3339();
         let config = res.config_json.as_deref().unwrap_or(&existing.config_json);
         let color = res.color.as_deref().or(existing.color.as_deref());
         let sort = res.sort_order.unwrap_or(existing.sort_order);
-        let port = res.port.map(|p| p as i64).or_else(|| existing.port.map(|p| p as i64));
+        let port = res
+            .port
+            .map(|p| p as i64)
+            .or_else(|| existing.port.map(|p| p as i64));
         let username = res.username.as_deref().unwrap_or(&existing.username);
         conn.execute(
             "UPDATE resources SET name = ?1, protocol = ?2, host = ?3, port = ?4, username = ?5, config_json = ?6, color = ?7, sort_order = ?8, updated_at = ?9

@@ -33,19 +33,16 @@ impl AuthConfig {
     pub fn new(db: Arc<Database>) -> AuthResult<Self> {
         // JWT secret: 从 settings 读取，首次自动生成并存储
         let jwt_secret = match db.get_setting("jwt_secret")? {
-            Some(secret) => base64::Engine::decode(
-                &base64::engine::general_purpose::STANDARD,
-                &secret,
-            )
-            .map_err(|e| RExError::Message(format!("invalid jwt_secret: {e}")))?,
+            Some(secret) => {
+                base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &secret)
+                    .map_err(|e| RExError::Message(format!("invalid jwt_secret: {e}")))?
+            }
             None => {
                 use rand_core::RngCore;
                 let mut secret = vec![0u8; 64];
                 rand_core::OsRng.fill_bytes(&mut secret);
-                let encoded = base64::Engine::encode(
-                    &base64::engine::general_purpose::STANDARD,
-                    &secret,
-                );
+                let encoded =
+                    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &secret);
                 db.set_setting("jwt_secret", &encoded)?;
                 secret
             }
@@ -138,25 +135,38 @@ pub async fn login(
 ) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<crate::error::ErrorBody>)> {
     match state.auth.login(&body.password) {
         Ok(token) => {
-            state.db.write_audit_log(&crate::models::NewAuditEntry {
-                action: "AUTH_LOGIN".into(),
-                result: "success".into(),
-                ..Default::default()
-            }).ok();
+            state
+                .db
+                .write_audit_log(&crate::models::NewAuditEntry {
+                    action: "AUTH_LOGIN".into(),
+                    result: "success".into(),
+                    ..Default::default()
+                })
+                .ok();
             let expires = chrono::Utc::now() + chrono::Duration::days(7);
-            Ok((StatusCode::OK, Json(serde_json::json!({
-                "token": token,
-                "expiresAt": expires.to_rfc3339()
-            }))))
+            Ok((
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "token": token,
+                    "expiresAt": expires.to_rfc3339()
+                })),
+            ))
         }
         Err(e) => {
-            state.db.write_audit_log(&crate::models::NewAuditEntry {
-                action: "AUTH_LOGIN".into(),
-                result: "failure".into(),
-                detail: Some(e.to_string()),
-                ..Default::default()
-            }).ok();
-            Err(error_with_status(StatusCode::UNAUTHORIZED, "AUTH_INVALID", "密码错误"))
+            state
+                .db
+                .write_audit_log(&crate::models::NewAuditEntry {
+                    action: "AUTH_LOGIN".into(),
+                    result: "failure".into(),
+                    detail: Some(e.to_string()),
+                    ..Default::default()
+                })
+                .ok();
+            Err(error_with_status(
+                StatusCode::UNAUTHORIZED,
+                "AUTH_INVALID",
+                "密码错误",
+            ))
         }
     }
 }
@@ -167,19 +177,38 @@ pub async fn set_password(
     Json(body): Json<PasswordRequest>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<crate::error::ErrorBody>)> {
     if !state.auth.requires_setup().map_err(|e| {
-        error_with_status(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", &e.to_string())
+        error_with_status(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "INTERNAL_ERROR",
+            &e.to_string(),
+        )
     })? {
-        return Err(error_with_status(StatusCode::CONFLICT, "PASSWORD_ALREADY_SET", "密码已设置"));
+        return Err(error_with_status(
+            StatusCode::CONFLICT,
+            "PASSWORD_ALREADY_SET",
+            "密码已设置",
+        ));
     }
     state.auth.set_password(&body.password).map_err(|e| {
-        error_with_status(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", &e.to_string())
+        error_with_status(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "INTERNAL_ERROR",
+            &e.to_string(),
+        )
     })?;
     let token = state.auth.generate_token().map_err(|e| {
-        error_with_status(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", &e.to_string())
+        error_with_status(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "INTERNAL_ERROR",
+            &e.to_string(),
+        )
     })?;
     let expires = chrono::Utc::now() + chrono::Duration::days(7);
-    Ok((StatusCode::OK, Json(serde_json::json!({
-        "token": token,
-        "expiresAt": expires.to_rfc3339()
-    }))))
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "token": token,
+            "expiresAt": expires.to_rfc3339()
+        })),
+    ))
 }
