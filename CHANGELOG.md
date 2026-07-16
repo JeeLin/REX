@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.11.0] - 2026-07-16
+
+### Added
+- 工作区核心：Tab 系统协议路由（7 种协议动态渲染对应组件）
+- 连接树重写：从 API 读取环境→资源数据，替代硬编码假数据
+- SqlPage/RedisPage/FilesPage 嵌入工作区 Tab，支持 auto-connect/disconnect
+
+### Changed
+- Quick Connect 降级为临时连接模式（不保存为资源）
+- 状态栏显示当前 Tab 真实资源信息
+
 ## [0.10.0] - 2026-07-16
 
 ### Added
