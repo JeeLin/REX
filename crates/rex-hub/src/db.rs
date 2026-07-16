@@ -277,4 +277,210 @@ impl Database {
             .map_err(|e| RExError::Message(e.to_string()))?;
         Ok(())
     }
+
+    // --- Environments with stats ---
+
+    pub fn list_environments_with_stats(&self) -> Result<Vec<EnvironmentDetail>> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT e.id, e.name, e.description, e.connection_mode, e.created_at, e.updated_at,
+                        COALESCE(r.res_count, 0) AS resource_count,
+                        (SELECT a.status FROM agents a WHERE a.environment_id = e.id LIMIT 1) AS agent_status
+                 FROM environments e
+                 LEFT JOIN (SELECT environment_id, COUNT(*) AS res_count FROM resources GROUP BY environment_id) r ON r.environment_id = e.id
+                 ORDER BY e.name",
+            )
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(EnvironmentDetail {
+                    environment: Environment {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        description: row.get(2)?,
+                        connection_mode: row.get(3)?,
+                        created_at: row.get(4)?,
+                        updated_at: row.get(5)?,
+                    },
+                    resource_count: row.get(6)?,
+                    agent_status: row.get(7)?,
+                })
+            })
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let mut envs = Vec::new();
+        for row in rows {
+            envs.push(row.map_err(|e| RExError::Message(e.to_string()))?);
+        }
+        Ok(envs)
+    }
+
+    pub fn get_environment_with_stats(&self, id: &str) -> Result<Option<EnvironmentDetail>> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT e.id, e.name, e.description, e.connection_mode, e.created_at, e.updated_at,
+                        COALESCE(r.res_count, 0) AS resource_count,
+                        (SELECT a.status FROM agents a WHERE a.environment_id = e.id LIMIT 1) AS agent_status
+                 FROM environments e
+                 LEFT JOIN (SELECT environment_id, COUNT(*) AS res_count FROM resources GROUP BY environment_id) r ON r.environment_id = e.id
+                 WHERE e.id = ?1",
+            )
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let mut rows = stmt
+            .query_map(rusqlite::params![id], |row| {
+                Ok(EnvironmentDetail {
+                    environment: Environment {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        description: row.get(2)?,
+                        connection_mode: row.get(3)?,
+                        created_at: row.get(4)?,
+                        updated_at: row.get(5)?,
+                    },
+                    resource_count: row.get(6)?,
+                    agent_status: row.get(7)?,
+                })
+            })
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        match rows.next() {
+            Some(Ok(env)) => Ok(Some(env)),
+            Some(Err(e)) => Err(RExError::Message(e.to_string())),
+            None => Ok(None),
+        }
+    }
+
+    // --- Resources ---
+
+    pub fn list_resources_by_env(&self, env_id: &str) -> Result<Vec<Resource>> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, environment_id, name, protocol, host, port, username, config_json, color, sort_order, created_at, updated_at
+                 FROM resources WHERE environment_id = ?1 ORDER BY sort_order, name",
+            )
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let rows = stmt
+            .query_map(rusqlite::params![env_id], |row| {
+                Ok(Resource {
+                    id: row.get(0)?,
+                    environment_id: row.get(1)?,
+                    name: row.get(2)?,
+                    protocol: row.get(3)?,
+                    host: row.get(4)?,
+                    port: row.get(5)?,
+                    username: row.get(6)?,
+                    config_json: row.get(7)?,
+                    color: row.get(8)?,
+                    sort_order: row.get(9)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
+                })
+            })
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let mut resources = Vec::new();
+        for row in rows {
+            resources.push(row.map_err(|e| RExError::Message(e.to_string()))?);
+        }
+        Ok(resources)
+    }
+
+    pub fn get_resource(&self, env_id: &str, id: &str) -> Result<Option<Resource>> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, environment_id, name, protocol, host, port, username, config_json, color, sort_order, created_at, updated_at
+                 FROM resources WHERE environment_id = ?1 AND id = ?2",
+            )
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let mut rows = stmt
+            .query_map(rusqlite::params![env_id, id], |row| {
+                Ok(Resource {
+                    id: row.get(0)?,
+                    environment_id: row.get(1)?,
+                    name: row.get(2)?,
+                    protocol: row.get(3)?,
+                    host: row.get(4)?,
+                    port: row.get(5)?,
+                    username: row.get(6)?,
+                    config_json: row.get(7)?,
+                    color: row.get(8)?,
+                    sort_order: row.get(9)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
+                })
+            })
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        match rows.next() {
+            Some(Ok(r)) => Ok(Some(r)),
+            Some(Err(e)) => Err(RExError::Message(e.to_string())),
+            None => Ok(None),
+        }
+    }
+
+    pub fn create_resource(&self, env_id: &str, res: &NewResource) -> Result<Resource> {
+        let conn = self.conn()?;
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+        let config = res.config_json.as_deref().unwrap_or("{}");
+        let color = res.color.as_deref();
+        let sort = res.sort_order.unwrap_or(0);
+        let port = res.port.map(|p| p as i64);
+        let username = res.username.as_deref().unwrap_or("");
+        conn.execute(
+            "INSERT INTO resources (id, environment_id, name, protocol, host, port, username, config_json, color, sort_order, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            rusqlite::params![id, env_id, res.name, res.protocol, res.host, port, username, config, color, sort, now, now],
+        )
+        .map_err(|e| RExError::Message(e.to_string()))?;
+        Ok(Resource {
+            id,
+            environment_id: env_id.to_string(),
+            name: res.name.clone(),
+            protocol: res.protocol.clone(),
+            host: res.host.clone(),
+            port: res.port,
+            username: username.to_string(),
+            config_json: config.to_string(),
+            color: color.map(|s| s.to_string()),
+            sort_order: sort,
+            created_at: now.clone(),
+            updated_at: now,
+        })
+    }
+
+    pub fn update_resource(
+        &self,
+        env_id: &str,
+        id: &str,
+        res: &NewResource,
+    ) -> Result<Resource> {
+        let existing = self.get_resource(env_id, id)?
+            .ok_or_else(|| RExError::Message("resource not found".into()))?;
+        let conn = self.conn()?;
+        let now = chrono::Utc::now().to_rfc3339();
+        let config = res.config_json.as_deref().unwrap_or(&existing.config_json);
+        let color = res.color.as_deref().or(existing.color.as_deref());
+        let sort = res.sort_order.unwrap_or(existing.sort_order);
+        let port = res.port.map(|p| p as i64).or_else(|| existing.port.map(|p| p as i64));
+        let username = res.username.as_deref().unwrap_or(&existing.username);
+        conn.execute(
+            "UPDATE resources SET name = ?1, protocol = ?2, host = ?3, port = ?4, username = ?5, config_json = ?6, color = ?7, sort_order = ?8, updated_at = ?9
+             WHERE environment_id = ?10 AND id = ?11",
+            rusqlite::params![res.name, res.protocol, res.host, port, username, config, color, sort, now, env_id, id],
+        )
+        .map_err(|e| RExError::Message(e.to_string()))?;
+        self.get_resource(env_id, id)?
+            .ok_or_else(|| RExError::Message("resource not found after update".into()))
+    }
+
+    pub fn delete_resource(&self, env_id: &str, id: &str) -> Result<()> {
+        let conn = self.conn()?;
+        conn.execute(
+            "DELETE FROM resources WHERE environment_id = ?1 AND id = ?2",
+            rusqlite::params![env_id, id],
+        )
+        .map_err(|e| RExError::Message(e.to_string()))?;
+        Ok(())
+    }
 }

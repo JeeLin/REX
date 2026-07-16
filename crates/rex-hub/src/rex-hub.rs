@@ -5,9 +5,11 @@ use std::sync::Arc;
 
 use rex_hub::auth;
 use rex_hub::db::Database;
+use rex_hub::env_api;
 use rex_hub::file_api::{self, FileState};
 use rex_hub::middleware::AuthUser;
 use rex_hub::redis_api::{self, RedisState};
+use rex_hub::resource_api;
 use rex_hub::sql_api::{self, SqlState};
 use rex_hub::terminal_ws;
 use rex_hub::AppState;
@@ -90,6 +92,9 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
         .route("/api/auth/password", axum::routing::post(auth::set_password));
 
     let protected_routes = Router::new()
+        .nest("/api/environments", env_api::env_routes())
+        .nest("/api/environments", resource_api::resource_routes())
+        .route("/api/resources/test-connection", axum::routing::post(resource_api::test_connection))
         .nest("/api/sql", sql_api::sql_routes())
         .nest("/api/redis", redis_api::redis_routes())
         .nest("/api/files", file_api::file_routes())

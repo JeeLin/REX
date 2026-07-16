@@ -26,7 +26,27 @@ pub struct UpdateEnvironment {
     pub connection_mode: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnvironmentDetail {
+    #[serde(flatten)]
+    pub environment: Environment,
+    pub resource_count: i64,
+    pub agent_status: Option<String>,
+}
+
 // --- Resource ---
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct NewResource {
+    pub name: String,
+    pub protocol: String,
+    pub host: String,
+    pub port: Option<u16>,
+    pub username: Option<String>,
+    pub config_json: Option<String>,
+    pub color: Option<String>,
+    pub sort_order: Option<i64>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Resource {
