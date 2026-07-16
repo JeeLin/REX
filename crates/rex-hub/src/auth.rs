@@ -212,3 +212,43 @@ pub async fn set_password(
         })),
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::Database;
+    use tempfile::tempdir;
+
+    fn test_auth() -> (tempfile::TempDir, AuthConfig) {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Arc::new(Database::open(&db_path).unwrap());
+        let auth = AuthConfig::new(db).unwrap();
+        (dir, auth)
+    }
+
+    #[test]
+    fn test_jwt_roundtrip() {
+        let (_dir, auth) = test_auth();
+        let token = auth.generate_token().unwrap();
+        let claims = auth.verify_token(&token).unwrap();
+        assert_eq!(claims.sub, "admin");
+    }
+
+    #[test]
+    fn test_password_set_and_login() {
+        let (_dir, auth) = test_auth();
+        assert!(auth.requires_setup().unwrap());
+        auth.set_password("test123").unwrap();
+        assert!(!auth.requires_setup().unwrap());
+        let token = auth.login("test123").unwrap();
+        assert!(!token.is_empty());
+    }
+
+    #[test]
+    fn test_login_wrong_password() {
+        let (_dir, auth) = test_auth();
+        auth.set_password("correct").unwrap();
+        assert!(auth.login("wrong").is_err());
+    }
+}
