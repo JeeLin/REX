@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
 import { environmentsApi, type Environment } from '@/api/environments'
 import { resourcesApi, type Resource } from '@/api/resources'
@@ -14,6 +15,7 @@ import Modal from '@/components/ui/Modal.vue'
 import WizardModal from '@/features/resource/WizardModal.vue'
 import { PROTOCOL_ICONS, PROTOCOL_COLORS } from '@/features/resource/protocols'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useEnvironmentsStore()
@@ -53,7 +55,7 @@ function openEdit() {
 
 async function submitEdit() {
   if (!editName.value.trim()) {
-    editError.value = 'Name is required'
+    editError.value = t('common.nameRequired')
     return
   }
   editLoading.value = true
@@ -100,22 +102,22 @@ function agentStatus(status: string | null): StatusDotStatus {
   <div class="env-detail">
     <!-- Breadcrumb -->
     <div class="breadcrumb">
-      <router-link to="/environments" class="breadcrumb-link">Environments</router-link>
+      <router-link to="/environments" class="breadcrumb-link">{{ t('nav.environments') }}</router-link>
       <span class="breadcrumb-sep">›</span>
       <span class="breadcrumb-current">{{ env?.name || '...' }}</span>
     </div>
 
-    <div v-if="loading" class="loading">Loading...</div>
+    <div v-if="loading" class="loading">{{ t('common.loadingEllipsis') }}</div>
 
     <template v-else-if="env">
       <!-- Header -->
       <div class="env-header">
         <div class="env-header-info">
           <h1 class="page-title">{{ env.name }}</h1>
-          <p class="env-description muted">{{ env.description || 'No description' }}</p>
+          <p class="env-description muted">{{ env.description || t('common.noDescription') }}</p>
         </div>
         <div class="env-header-actions">
-          <Button variant="secondary" size="sm" @click="openEdit">Edit</Button>
+          <Button variant="secondary" size="sm" @click="openEdit">{{ t('common.edit') }}</Button>
         </div>
       </div>
 
@@ -124,48 +126,48 @@ function agentStatus(status: string | null): StatusDotStatus {
         <Badge :tone="env.connection_mode === 'agent' ? 'warning' : 'info'">
           {{ env.connection_mode }}
         </Badge>
-        <Badge tone="accent">{{ env.resource_count }} resources</Badge>
+        <Badge tone="accent">{{ env.resource_count }} {{ t('common.resources') }}</Badge>
         <span class="muted" style="font-size: var(--text-xs)">
-          Created {{ new Date(env.created_at).toLocaleDateString() }}
+          {{ t('environmentDetail.created', { date: new Date(env.created_at).toLocaleDateString() }) }}
         </span>
       </div>
 
       <!-- Agent Panel (placeholder for M12) -->
       <Card class="section-card">
-        <h2 class="section-title">Agent</h2>
+        <h2 class="section-title">{{ t('environmentDetail.agentSection') }}</h2>
         <div v-if="env.agent_status" class="agent-info">
           <StatusDot :status="agentStatus(env.agent_status)" />
-          <span>Agent {{ env.agent_status }}</span>
+          <span>{{ t('environments.agentStatus', { status: env.agent_status }) }}</span>
         </div>
         <div v-else class="agent-empty muted">
-          No agent registered. Deploy an agent to proxy connections for this environment.
+          {{ t('environmentDetail.noAgent') }}
         </div>
       </Card>
 
       <!-- Resources Table -->
       <Card class="section-card">
         <div class="section-header">
-          <h2 class="section-title">Resources</h2>
-          <Button variant="primary" size="sm" @click="showWizard = true">+ Add Resource</Button>
+          <h2 class="section-title">{{ t('environmentDetail.resourcesSection') }}</h2>
+          <Button variant="primary" size="sm" @click="showWizard = true">+ {{ t('environmentDetail.addResource') }}</Button>
         </div>
 
         <EmptyState
           v-if="resources.length === 0"
           icon="⊕"
-          title="No resources"
-          description="Add a resource to start managing remote connections."
+          :title="t('environmentDetail.noResources')"
+          :description="t('environmentDetail.addResourceDesc')"
         >
-          <Button variant="primary" size="sm" @click="showWizard = true">Add Resource</Button>
+          <Button variant="primary" size="sm" @click="showWizard = true">{{ t('environmentDetail.addResource') }}</Button>
         </EmptyState>
 
         <table v-else class="resource-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Protocol</th>
-              <th>Host</th>
-              <th>Port</th>
-              <th>Username</th>
+              <th>{{ t('common.name') }}</th>
+              <th>{{ t('wizard.protocol') }}</th>
+              <th>{{ t('wizard.host') }}</th>
+              <th>{{ t('wizard.port') }}</th>
+              <th>{{ t('wizard.username') }}</th>
               <th></th>
             </tr>
           </thead>
@@ -188,7 +190,7 @@ function agentStatus(status: string | null): StatusDotStatus {
               <td class="mono">{{ res.port || '—' }}</td>
               <td>{{ res.username || '—' }}</td>
               <td>
-                <button class="icon-btn danger" title="Delete" @click="deleteResource(res.id)">✕</button>
+                <button class="icon-btn danger" :title="t('common.delete')" @click="deleteResource(res.id)">✕</button>
               </td>
             </tr>
           </tbody>
@@ -206,27 +208,27 @@ function agentStatus(status: string | null): StatusDotStatus {
 
     <!-- Edit Modal -->
     <Modal v-model="editModal">
-      <template #title>Edit Environment</template>
+      <template #title>{{ t('environments.editEnvironment') }}</template>
       <form class="env-form" @submit.prevent="submitEdit">
         <label class="form-label">
-          <span>Name</span>
+          <span>{{ t('common.name') }}</span>
           <input v-model="editName" type="text" class="form-input" />
         </label>
         <label class="form-label">
-          <span>Description</span>
+          <span>{{ t('common.description') }}</span>
           <input v-model="editDesc" type="text" class="form-input" />
         </label>
         <label class="form-label">
-          <span>Connection Mode</span>
+          <span>{{ t('environments.connectionMode') }}</span>
           <select v-model="editMode" class="form-input">
-            <option value="direct">Direct</option>
-            <option value="agent">Agent</option>
+            <option value="direct">{{ t('environments.direct') }}</option>
+            <option value="agent">{{ t('environments.agent') }}</option>
           </select>
         </label>
         <div v-if="editError" class="form-error">{{ editError }}</div>
         <div class="form-actions">
-          <Button type="button" variant="secondary" @click="editModal = false">Cancel</Button>
-          <Button type="submit" variant="primary" :loading="editLoading">Save</Button>
+          <Button type="button" variant="secondary" @click="editModal = false">{{ t('common.cancel') }}</Button>
+          <Button type="submit" variant="primary" :loading="editLoading">{{ t('common.save') }}</Button>
         </div>
       </form>
     </Modal>

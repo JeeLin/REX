@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { auditApi, type AuditEntry } from '@/api/audit'
 import Card from '@/components/ui/Card.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 
+const { t } = useI18n()
 const entries = ref<AuditEntry[]>([])
 const loading = ref(true)
 const actionFilter = ref('')
@@ -45,47 +47,47 @@ function resultBadge(result: string) {
 function timeAgo(time: string): string {
   const diff = Date.now() - new Date(time).getTime()
   const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
+  if (mins < 1) return t('auditLog.justNow')
+  if (mins < 60) return t('auditLog.minutesAgo', { n: mins })
   const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h ago`
-  return `${Math.floor(hours / 24)}d ago`
+  if (hours < 24) return t('auditLog.hoursAgo', { n: hours })
+  return t('auditLog.daysAgo', { n: Math.floor(hours / 24) })
 }
 </script>
 
 <template>
   <div class="audit-page">
     <header class="page-header">
-      <h1 class="page-title">Audit Log</h1>
+      <h1 class="page-title">{{ t('auditLog.title') }}</h1>
       <div class="filters">
         <select v-model="actionFilter" class="filter-select" @change="fetchEntries">
           <option v-for="opt in actionOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
         <select v-model="resultFilter" class="filter-select" @change="fetchEntries">
-          <option value="">All Results</option>
-          <option value="success">Success</option>
-          <option value="failure">Failure</option>
+          <option value="">{{ t('auditLog.allResults') }}</option>
+          <option value="success">{{ t('auditLog.success') }}</option>
+          <option value="failure">{{ t('auditLog.failure') }}</option>
         </select>
-        <Button variant="secondary" size="sm" @click="fetchEntries">Refresh</Button>
+        <Button variant="secondary" size="sm" @click="fetchEntries">{{ t('common.refresh') }}</Button>
       </div>
     </header>
 
     <EmptyState
       v-if="!loading && entries.length === 0"
       icon="📋"
-      title="No audit entries"
-      description="Operations will be logged here as they occur."
+      :title="t('auditLog.noEntries')"
+      :description="t('auditLog.emptyDesc')"
     />
 
     <Card v-else class="log-card">
-      <div v-if="loading" class="loading muted">Loading...</div>
+      <div v-if="loading" class="loading muted">{{ t('common.loadingEllipsis') }}</div>
       <table v-else class="log-table">
         <thead>
           <tr>
-            <th>Time</th>
-            <th>Action</th>
-            <th>Target</th>
-            <th>Result</th>
+            <th>{{ t('auditLog.time') }}</th>
+            <th>{{ t('auditLog.action') }}</th>
+            <th>{{ t('auditLog.target') }}</th>
+            <th>{{ t('auditLog.result') }}</th>
           </tr>
         </thead>
         <tbody>

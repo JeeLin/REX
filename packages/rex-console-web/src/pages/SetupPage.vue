@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import Button from '@/components/ui/Button.vue'
 
+const { t } = useI18n()
 const auth = useAuthStore()
 const router = useRouter()
 
@@ -14,18 +16,18 @@ const errorMsg = ref('')
 async function handleSetup() {
   errorMsg.value = ''
   if (password.value.length < 6) {
-    errorMsg.value = '密码至少 6 位'
+    errorMsg.value = t('setup.errorMinLength')
     return
   }
   if (password.value !== confirmPassword.value) {
-    errorMsg.value = '两次输入的密码不一致'
+    errorMsg.value = t('setup.errorMismatch')
     return
   }
   try {
     await auth.setupPassword(password.value)
     router.push('/workspace')
   } catch (e: unknown) {
-    errorMsg.value = e instanceof Error ? e.message : '设置失败'
+    errorMsg.value = e instanceof Error ? e.message : t('setup.errorFailed')
   }
 }
 </script>
@@ -36,27 +38,27 @@ async function handleSetup() {
       <div class="setup-brand mono">
         REX<span class="accent">Hub</span>
       </div>
-      <div class="setup-subtitle">首次使用，请设置密码</div>
+      <div class="setup-subtitle">{{ t('setup.subtitle') }}</div>
 
       <form class="setup-form" @submit.prevent="handleSetup">
         <div class="field">
-          <label class="field-label mono">密码</label>
+          <label class="field-label mono">{{ t('setup.password') }}</label>
           <input
             v-model="password"
             type="password"
             class="field-input"
-            placeholder="至少 6 位"
+            :placeholder="t('setup.passwordPlaceholder')"
             autocomplete="new-password"
             autofocus
           />
         </div>
         <div class="field">
-          <label class="field-label mono">确认密码</label>
+          <label class="field-label mono">{{ t('setup.confirmPassword') }}</label>
           <input
             v-model="confirmPassword"
             type="password"
             class="field-input"
-            placeholder="再次输入密码"
+            :placeholder="t('setup.confirmPlaceholder')"
             autocomplete="new-password"
           />
         </div>
@@ -67,12 +69,12 @@ async function handleSetup() {
           :disabled="auth.loading || !password || !confirmPassword"
           style="width: 100%; margin-top: var(--space-4)"
         >
-          {{ auth.loading ? '设置中...' : '设置密码' }}
+          {{ auth.loading ? t('setup.setting') : t('setup.setPassword') }}
         </Button>
       </form>
 
       <div class="setup-hint muted">
-        密码用于登录和 API 认证，请牢记。
+        {{ t('setup.hint') }}
       </div>
     </div>
   </div>

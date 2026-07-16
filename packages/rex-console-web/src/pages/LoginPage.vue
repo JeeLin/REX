@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import Button from '@/components/ui/Button.vue'
 
+const { t } = useI18n()
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
@@ -19,7 +21,7 @@ async function handleLogin() {
     const redirect = (route.query.redirect as string) || '/workspace'
     router.push(redirect)
   } catch (e: unknown) {
-    errorMsg.value = e instanceof Error ? e.message : '登录失败'
+    errorMsg.value = e instanceof Error ? e.message : t('login.loginFailed')
   }
 }
 </script>
@@ -30,11 +32,11 @@ async function handleLogin() {
       <div class="login-brand mono">
         REX<span class="accent">Hub</span>
       </div>
-      <div class="login-subtitle">Remote Resource Management</div>
+      <div class="login-subtitle">{{ t('login.subtitle') }}</div>
 
       <form class="login-form" @submit.prevent="handleLogin">
         <div class="field">
-          <label class="field-label mono">Password</label>
+          <label class="field-label mono">{{ t('login.password') }}</label>
           <input
             v-model="password"
             type="password"
@@ -51,7 +53,7 @@ async function handleLogin() {
           :disabled="auth.loading || !password"
           style="width: 100%; margin-top: var(--space-4)"
         >
-          {{ auth.loading ? 'Signing in...' : 'Sign in' }}
+          {{ auth.loading ? t('login.signingIn') : t('login.signIn') }}
         </Button>
       </form>
 

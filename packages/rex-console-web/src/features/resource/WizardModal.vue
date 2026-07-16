@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
 import { resourcesApi, type TestConnectionResult } from '@/api/resources'
 import Button from '@/components/ui/Button.vue'
@@ -7,6 +8,7 @@ import Badge from '@/components/ui/Badge.vue'
 import Modal from '@/components/ui/Modal.vue'
 import { PROTOCOL_ICONS, PROTOCOL_COLORS } from './protocols'
 
+const { t } = useI18n()
 const props = defineProps<{
   visible: boolean
   environmentId: string
@@ -25,13 +27,13 @@ const error = ref('')
 
 // Step 1: Protocol
 const protocols = [
-  { id: 'ssh', desc: 'Remote terminal' },
-  { id: 'sftp', desc: 'File transfer' },
-  { id: 'mysql', desc: 'Database' },
-  { id: 'postgresql', desc: 'Database' },
-  { id: 'redis', desc: 'Cache' },
-  { id: 'sqlite', desc: 'Local DB' },
-  { id: 's3', desc: 'Object storage' },
+  { id: 'ssh', descKey: 'wizard.sshDesc' },
+  { id: 'sftp', descKey: 'wizard.sftpDesc' },
+  { id: 'mysql', descKey: 'wizard.mysqlDesc' },
+  { id: 'postgresql', descKey: 'wizard.postgresqlDesc' },
+  { id: 'redis', descKey: 'wizard.redisDesc' },
+  { id: 'sqlite', descKey: 'wizard.sqliteDesc' },
+  { id: 's3', descKey: 'wizard.s3Desc' },
 ]
 const selectedProtocol = ref('')
 
@@ -65,10 +67,10 @@ const defaultPorts: Record<string, number> = {
 
 const stepTitle = computed(() => {
   switch (step.value) {
-    case 1: return 'Select Protocol'
-    case 2: return 'Basic Information'
-    case 3: return 'Connection Details'
-    case 4: return 'Confirm'
+    case 1: return t('wizard.step1Title')
+    case 2: return t('wizard.step2Title')
+    case 3: return t('wizard.step3Title')
+    case 4: return t('wizard.step4Title')
     default: return ''
   }
 })
@@ -209,25 +211,25 @@ const colorOptions = [
       >
         <span class="protocol-icon" :style="{ color: PROTOCOL_COLORS[p.id] }">{{ PROTOCOL_ICONS[p.id] }}</span>
         <span class="protocol-name">{{ p.id === 's3' ? 'S3 / MinIO' : p.id.charAt(0).toUpperCase() + p.id.slice(1) }}</span>
-        <span class="protocol-desc muted">{{ p.desc }}</span>
+        <span class="protocol-desc muted">{{ t(p.descKey) }}</span>
       </button>
     </div>
 
     <!-- Step 2: Basic Info -->
     <div v-if="step === 2" class="step-form">
       <label class="form-label">
-        <span>Name</span>
+        <span>{{ t('common.name') }}</span>
         <input v-model="resName" type="text" class="form-input" placeholder="e.g. Web Server" autofocus />
       </label>
       <label class="form-label">
-        <span>Connection Mode</span>
+        <span>{{ t('wizard.connectionMode') }}</span>
         <select v-model="connectionMode" class="form-input">
-          <option value="direct">Direct (console connects directly)</option>
-          <option value="agent">Agent (via reverse tunnel)</option>
+          <option value="direct">{{ t('environments.direct') }}</option>
+          <option value="agent">{{ t('environments.agent') }}</option>
         </select>
       </label>
       <label class="form-label">
-        <span>Color Tag</span>
+        <span>{{ t('wizard.color') }}</span>
         <div class="color-picker">
           <button
             v-for="c in colorOptions"
@@ -246,23 +248,23 @@ const colorOptions = [
       <!-- SSH / SFTP -->
       <template v-if="['ssh', 'sftp'].includes(selectedProtocol)">
         <label class="form-label">
-          <span>Host</span>
+          <span>{{ t('wizard.host') }}</span>
           <input v-model="host" type="text" class="form-input" placeholder="e.g. 192.168.1.100" />
         </label>
         <label class="form-label">
-          <span>Port</span>
+          <span>{{ t('wizard.port') }}</span>
           <input v-model.number="port" type="number" class="form-input" />
         </label>
         <label class="form-label">
-          <span>Username</span>
+          <span>{{ t('wizard.username') }}</span>
           <input v-model="username" type="text" class="form-input" placeholder="e.g. root" />
         </label>
         <label class="form-label">
-          <span>Password</span>
+          <span>{{ t('wizard.password') }}</span>
           <input v-model="password" type="password" class="form-input" placeholder="(optional if using key)" />
         </label>
         <label class="form-label">
-          <span>Private Key</span>
+          <span>{{ t('wizard.privateKey') }}</span>
           <textarea v-model="privateKey" class="form-input form-textarea" placeholder="(optional) Paste private key" rows="3"></textarea>
         </label>
       </template>
@@ -270,23 +272,23 @@ const colorOptions = [
       <!-- MySQL / PostgreSQL -->
       <template v-if="['mysql', 'postgresql'].includes(selectedProtocol)">
         <label class="form-label">
-          <span>Host</span>
+          <span>{{ t('wizard.host') }}</span>
           <input v-model="host" type="text" class="form-input" placeholder="e.g. 10.0.0.5" />
         </label>
         <label class="form-label">
-          <span>Port</span>
+          <span>{{ t('wizard.port') }}</span>
           <input v-model.number="port" type="number" class="form-input" />
         </label>
         <label class="form-label">
-          <span>Username</span>
+          <span>{{ t('wizard.username') }}</span>
           <input v-model="username" type="text" class="form-input" placeholder="e.g. root" />
         </label>
         <label class="form-label">
-          <span>Password</span>
+          <span>{{ t('wizard.password') }}</span>
           <input v-model="password" type="password" class="form-input" />
         </label>
         <label class="form-label">
-          <span>Default Database</span>
+          <span>{{ t('wizard.database') }}</span>
           <input v-model="databaseName" type="text" class="form-input" placeholder="(optional)" />
         </label>
       </template>
@@ -294,19 +296,19 @@ const colorOptions = [
       <!-- Redis -->
       <template v-if="selectedProtocol === 'redis'">
         <label class="form-label">
-          <span>Host</span>
+          <span>{{ t('wizard.host') }}</span>
           <input v-model="host" type="text" class="form-input" placeholder="e.g. 127.0.0.1" />
         </label>
         <label class="form-label">
-          <span>Port</span>
+          <span>{{ t('wizard.port') }}</span>
           <input v-model.number="port" type="number" class="form-input" />
         </label>
         <label class="form-label">
-          <span>Password</span>
+          <span>{{ t('wizard.password') }}</span>
           <input v-model="password" type="password" class="form-input" placeholder="(optional)" />
         </label>
         <label class="form-label">
-          <span>DB Index</span>
+          <span>{{ t('wizard.redisDb') }}</span>
           <input v-model.number="redisDb" type="number" class="form-input" min="0" max="15" />
         </label>
       </template>
@@ -314,7 +316,7 @@ const colorOptions = [
       <!-- SQLite -->
       <template v-if="selectedProtocol === 'sqlite'">
         <label class="form-label">
-          <span>File Path</span>
+          <span>{{ t('wizard.filePath') }}</span>
           <input v-model="filePath" type="text" class="form-input" placeholder="/path/to/database.sqlite" />
         </label>
       </template>
@@ -322,23 +324,23 @@ const colorOptions = [
       <!-- S3 -->
       <template v-if="selectedProtocol === 's3'">
         <label class="form-label">
-          <span>Endpoint URL</span>
+          <span>{{ t('wizard.s3Endpoint') }}</span>
           <input v-model="s3Endpoint" type="text" class="form-input" placeholder="https://s3.amazonaws.com" />
         </label>
         <label class="form-label">
-          <span>Access Key</span>
+          <span>{{ t('wizard.s3AccessKey') }}</span>
           <input v-model="s3AccessKey" type="text" class="form-input" />
         </label>
         <label class="form-label">
-          <span>Secret Key</span>
+          <span>{{ t('wizard.s3SecretKey') }}</span>
           <input v-model="s3SecretKey" type="password" class="form-input" />
         </label>
         <label class="form-label">
-          <span>Bucket</span>
+          <span>{{ t('wizard.s3Bucket') }}</span>
           <input v-model="s3Bucket" type="text" class="form-input" />
         </label>
         <label class="form-label">
-          <span>Region</span>
+          <span>{{ t('wizard.s3Region') }}</span>
           <input v-model="s3Region" type="text" class="form-input" placeholder="us-east-1" />
         </label>
       </template>
@@ -346,9 +348,9 @@ const colorOptions = [
       <!-- Test connection -->
       <div class="test-section">
         <Button variant="secondary" size="sm" :loading="testLoading" @click="testConnection">
-          Test Connection
+          {{ t('wizard.testConnection') }}
         </Button>
-        <span v-if="testResult?.ok" class="test-ok">✓ Connected ({{ testResult.latency_ms }}ms)</span>
+        <span v-if="testResult?.ok" class="test-ok">✓ {{ t('wizard.testSuccess') }} ({{ testResult.latency_ms }}ms)</span>
         <span v-else-if="testResult && !testResult.ok" class="test-fail">✕ {{ testResult.error }}</span>
       </div>
     </div>
@@ -356,23 +358,23 @@ const colorOptions = [
     <!-- Step 4: Confirm -->
     <div v-if="step === 4" class="step-confirm">
       <div class="confirm-row">
-        <span class="confirm-label">Protocol</span>
+        <span class="confirm-label">{{ t('wizard.protocol') }}</span>
         <Badge :tone="selectedProtocol === 'redis' ? 'danger' : 'info'">{{ selectedProtocol }}</Badge>
       </div>
       <div class="confirm-row">
-        <span class="confirm-label">Name</span>
+        <span class="confirm-label">{{ t('common.name') }}</span>
         <span>{{ resName }}</span>
       </div>
       <div v-if="host" class="confirm-row">
-        <span class="confirm-label">Host</span>
+        <span class="confirm-label">{{ t('wizard.host') }}</span>
         <span class="mono">{{ host }}{{ port ? `:${port}` : '' }}</span>
       </div>
       <div v-if="username" class="confirm-row">
-        <span class="confirm-label">Username</span>
+        <span class="confirm-label">{{ t('wizard.username') }}</span>
         <span>{{ username }}</span>
       </div>
       <div class="confirm-row">
-        <span class="confirm-label">Connection</span>
+        <span class="confirm-label">{{ t('wizard.connectionMode') }}</span>
         <span>{{ connectionMode }}</span>
       </div>
       <div v-if="error" class="form-error">{{ error }}</div>
@@ -380,14 +382,14 @@ const colorOptions = [
 
     <!-- Actions -->
     <div class="form-actions">
-      <Button v-if="step > 1" variant="secondary" @click="prevStep">Back</Button>
+      <Button v-if="step > 1" variant="secondary" @click="prevStep">{{ t('wizard.back') }}</Button>
       <div style="flex:1"></div>
-      <Button variant="secondary" @click="handleClose">Cancel</Button>
+      <Button variant="secondary" @click="handleClose">{{ t('common.cancel') }}</Button>
       <Button v-if="step < 4" variant="primary" :disabled="step === 1 ? !canProceedStep1 : step === 2 ? !canProceedStep2 : !canProceedStep3" @click="nextStep">
-        Next
+        {{ t('wizard.next') }}
       </Button>
       <Button v-if="step === 4" variant="primary" :loading="loading" @click="submit">
-        Create
+        {{ t('wizard.create') }}
       </Button>
     </div>
   </Modal>

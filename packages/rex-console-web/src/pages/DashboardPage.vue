@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { dashboardApi, type DashboardStats } from '@/api/dashboard'
 import { useEnvironmentsStore } from '@/stores/environments'
 import Card from '@/components/ui/Card.vue'
@@ -8,6 +9,7 @@ import Badge from '@/components/ui/Badge.vue'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 
+const { t } = useI18n()
 const router = useRouter()
 const store = useEnvironmentsStore()
 
@@ -36,25 +38,25 @@ function agentStatus(status: string | null): StatusDotStatus {
 
 <template>
   <div class="dashboard">
-    <h1 class="page-title">Dashboard</h1>
+    <h1 class="page-title">{{ t('dashboard.title') }}</h1>
 
     <div class="stats-grid">
       <Card class="stat-card">
         <div class="stat-value mono">{{ stats.environment_count }}</div>
-        <div class="stat-label">Environments</div>
+        <div class="stat-label">{{ t('dashboard.environments') }}</div>
       </Card>
       <Card class="stat-card">
         <div class="stat-value mono">{{ stats.resource_count }}</div>
-        <div class="stat-label">Resources</div>
+        <div class="stat-label">{{ t('dashboard.resources') }}</div>
       </Card>
       <Card class="stat-card">
         <div class="stat-value mono">{{ stats.online_agents }}</div>
-        <div class="stat-label">Agents Online</div>
+        <div class="stat-label">{{ t('dashboard.agentsOnline') }}</div>
       </Card>
     </div>
 
-    <h2 class="section-title">Environments</h2>
-    <div v-if="store.environments.length === 0" class="muted">No environments yet</div>
+    <h2 class="section-title">{{ t('dashboard.environmentsSection') }}</h2>
+    <div v-if="store.environments.length === 0" class="muted">{{ t('dashboard.noEnvironments') }}</div>
     <div v-else class="env-grid">
       <Card
         v-for="env in store.environments"
@@ -65,8 +67,8 @@ function agentStatus(status: string | null): StatusDotStatus {
         <div class="env-name">{{ env.name }}</div>
         <div class="env-meta">
           <StatusDot :status="agentStatus(env.agent_status)" />
-          <span class="muted">{{ env.agent_status || 'no agent' }}</span>
-          <Badge tone="accent" style="margin-left: auto">{{ env.resource_count }} resources</Badge>
+          <span class="muted">{{ env.agent_status || t('dashboard.noAgent') }}</span>
+          <Badge tone="accent" style="margin-left: auto">{{ env.resource_count }} {{ t('common.resources') }}</Badge>
         </div>
       </Card>
     </div>

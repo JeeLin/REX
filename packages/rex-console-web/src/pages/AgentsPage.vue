@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { agentsApi, type Agent } from '@/api/agents'
 import { useEnvironmentsStore } from '@/stores/environments'
 import Card from '@/components/ui/Card.vue'
@@ -10,6 +11,7 @@ import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import Modal from '@/components/ui/Modal.vue'
 
+const { t } = useI18n()
 const store = useEnvironmentsStore()
 const agents = ref<Agent[]>([])
 const loading = ref(true)
@@ -64,14 +66,14 @@ async function doResetToken() {
 <template>
   <div class="agents-page">
     <header class="page-header">
-      <h1 class="page-title">Agents</h1>
+      <h1 class="page-title">{{ t('agents.title') }}</h1>
     </header>
 
     <EmptyState
       v-if="!loading && !hasAgents"
       icon="⬡"
-      title="No agents registered"
-      description="Deploy an agent to proxy connections for internal network resources."
+      :title="t('agents.noAgents')"
+      :description="t('agents.noAgentsDesc')"
     />
 
     <div v-else class="agent-grid">
@@ -89,39 +91,39 @@ async function doResetToken() {
         </div>
         <div class="agent-details">
           <div class="agent-detail">
-            <span class="muted">Version</span>
+            <span class="muted">{{ t('agents.version') }}</span>
             <span class="mono">{{ agent.version || '—' }}</span>
           </div>
           <div class="agent-detail">
-            <span class="muted">OS</span>
+            <span class="muted">{{ t('agents.os') }}</span>
             <span>{{ agent.os || '—' }} {{ agent.arch }}</span>
           </div>
           <div class="agent-detail">
-            <span class="muted">Last seen</span>
+            <span class="muted">{{ t('agents.lastSeen') }}</span>
             <span>{{ agent.last_seen_at ? new Date(agent.last_seen_at).toLocaleString() : '—' }}</span>
           </div>
         </div>
         <div class="agent-footer">
-          <Button variant="secondary" size="sm" @click="openResetToken(agent.id)">Reset Token</Button>
+          <Button variant="secondary" size="sm" @click="openResetToken(agent.id)">{{ t('agents.resetToken') }}</Button>
         </div>
       </Card>
     </div>
 
     <!-- Reset Token Modal -->
     <Modal v-model="resetModal">
-      <template #title>Reset Agent Token</template>
+      <template #title>{{ t('agents.resetTitle') }}</template>
       <div v-if="!resetToken" class="modal-content">
-        <p class="muted">Generate a new registration token for this agent.</p>
+        <p class="muted">{{ t('agents.resetDesc') }}</p>
         <div class="form-actions">
-          <Button variant="secondary" @click="resetModal = false">Cancel</Button>
-          <Button variant="primary" @click="doResetToken">Generate</Button>
+          <Button variant="secondary" @click="resetModal = false">{{ t('common.cancel') }}</Button>
+          <Button variant="primary" @click="doResetToken">{{ t('agents.generate') }}</Button>
         </div>
       </div>
       <div v-else class="modal-content">
-        <p class="muted">New token (copy and update your agent config):</p>
+        <p class="muted">{{ t('agents.newToken') }}</p>
         <code class="token-display mono">{{ resetToken }}</code>
         <div class="form-actions">
-          <Button variant="primary" @click="resetModal = false">Done</Button>
+          <Button variant="primary" @click="resetModal = false">{{ t('agents.done') }}</Button>
         </div>
       </div>
     </Modal>

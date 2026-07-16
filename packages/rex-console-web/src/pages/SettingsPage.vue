@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { settingsApi, type Settings } from '@/api/settings'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 
+const { t } = useI18n()
 const settings = ref<Settings>({
   theme: 'dark',
   language: 'zh',
@@ -33,10 +35,10 @@ async function saveSettings() {
     await settingsApi.update(settings.value)
     // 应用主题
     document.documentElement.dataset.theme = settings.value.theme === 'light' ? 'light' : undefined
-    saveMessage.value = 'Settings saved'
+    saveMessage.value = t('settings.saved')
     setTimeout(() => saveMessage.value = '', 2000)
   } catch (e: unknown) {
-    saveMessage.value = e instanceof Error ? e.message : 'Save failed'
+    saveMessage.value = e instanceof Error ? e.message : t('settings.saveFailed')
   } finally {
     saving.value = false
   }
@@ -45,19 +47,19 @@ async function saveSettings() {
 
 <template>
   <div class="settings-page">
-    <h1 class="page-title">Settings</h1>
+    <h1 class="page-title">{{ t('settings.title') }}</h1>
 
     <Card class="settings-section">
-      <h2 class="section-title">Appearance</h2>
+      <h2 class="section-title">{{ t('settings.appearance') }}</h2>
       <div class="form-group">
-        <label class="form-label">Theme</label>
+        <label class="form-label">{{ t('settings.theme') }}</label>
         <select v-model="settings.theme" class="form-input">
-          <option value="dark">Dark</option>
-          <option value="light">Light</option>
+          <option value="dark">{{ t('settings.dark') }}</option>
+          <option value="light">{{ t('settings.light') }}</option>
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Language</label>
+        <label class="form-label">{{ t('settings.language') }}</label>
         <select v-model="settings.language" class="form-input">
           <option value="zh">中文</option>
           <option value="en">English</option>
@@ -66,20 +68,20 @@ async function saveSettings() {
     </Card>
 
     <Card class="settings-section">
-      <h2 class="section-title">Terminal</h2>
+      <h2 class="section-title">{{ t('settings.terminal') }}</h2>
       <div class="form-group">
-        <label class="form-label">Font Family</label>
+        <label class="form-label">{{ t('settings.fontFamily') }}</label>
         <input v-model="settings.terminal_font" type="text" class="form-input" />
       </div>
       <div class="form-group">
-        <label class="form-label">Font Size</label>
+        <label class="form-label">{{ t('settings.fontSize') }}</label>
         <input v-model="settings.terminal_font_size" type="number" class="form-input" min="10" max="24" />
       </div>
     </Card>
 
     <div class="save-bar">
       <span v-if="saveMessage" class="save-message" :class="{ error: saveMessage.includes('failed') }">{{ saveMessage }}</span>
-      <Button variant="primary" :loading="saving" @click="saveSettings">Save Settings</Button>
+      <Button variant="primary" :loading="saving" @click="saveSettings">{{ t('settings.saveSettings') }}</Button>
     </div>
   </div>
 </template>

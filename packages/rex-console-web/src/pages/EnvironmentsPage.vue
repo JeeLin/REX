@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
 import Card from '@/components/ui/Card.vue'
 import Badge from '@/components/ui/Badge.vue'
@@ -10,6 +11,7 @@ import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import Modal from '@/components/ui/Modal.vue'
 
+const { t } = useI18n()
 const router = useRouter()
 const store = useEnvironmentsStore()
 
@@ -48,7 +50,7 @@ function openEdit(env: typeof editingEnv.value extends null ? never : NonNullabl
 
 async function submitForm() {
   if (!formName.value.trim()) {
-    formError.value = 'Name is required'
+    formError.value = t('common.nameRequired')
     return
   }
   formLoading.value = true
@@ -99,17 +101,17 @@ function envIcon(mode: string): string {
 <template>
   <div class="environments">
     <header class="page-header">
-      <h1 class="page-title">Environments</h1>
-      <Button variant="primary" size="sm" @click="openCreate">+ New Environment</Button>
+      <h1 class="page-title">{{ t('environments.title') }}</h1>
+      <Button variant="primary" size="sm" @click="openCreate">+ {{ t('environments.newEnvironment') }}</Button>
     </header>
 
     <EmptyState
       v-if="!store.loading && !hasEnvironments"
       icon="⛁"
-      title="No environments yet"
-      description="Environments group your connections by context — production, staging, or development."
+      :title="t('environments.noEnvironments')"
+      :description="t('environments.emptyDescription')"
     >
-      <Button variant="primary" @click="openCreate">Create Environment</Button>
+      <Button variant="primary" @click="openCreate">{{ t('environments.createEnvironment') }}</Button>
     </EmptyState>
 
     <div v-else class="env-grid">
@@ -123,11 +125,11 @@ function envIcon(mode: string): string {
           <span class="env-icon" :class="env.connection_mode">{{ envIcon(env.connection_mode) }}</span>
           <div class="env-info">
             <div class="env-name">{{ env.name }}</div>
-            <div class="env-desc muted">{{ env.description || 'No description' }}</div>
+            <div class="env-desc muted">{{ env.description || t('common.noDescription') }}</div>
           </div>
           <div class="env-actions" @click.stop>
-            <button class="icon-btn" title="Edit" @click="openEdit(env)">✎</button>
-            <button class="icon-btn danger" title="Delete" @click="deleteConfirmId = env.id">✕</button>
+            <button class="icon-btn" :title="t('common.edit')" @click="openEdit(env)">✎</button>
+            <button class="icon-btn danger" :title="t('common.delete')" @click="deleteConfirmId = env.id">✕</button>
           </div>
         </div>
         <div class="env-agent">
@@ -136,11 +138,11 @@ function envIcon(mode: string): string {
             <span class="mono env-agent-status">Agent {{ env.agent_status }}</span>
           </template>
           <template v-else>
-            <span class="muted">No agent</span>
+            <span class="muted">{{ t('dashboard.noAgent') }}</span>
           </template>
         </div>
         <div class="env-footer">
-          <Badge tone="accent">{{ env.resource_count }} resources</Badge>
+          <Badge tone="accent">{{ env.resource_count }} {{ t('common.resources') }}</Badge>
           <Badge :tone="env.connection_mode === 'agent' ? 'warning' : 'info'" style="margin-left: 8px">
             {{ env.connection_mode }}
           </Badge>
@@ -150,28 +152,28 @@ function envIcon(mode: string): string {
 
     <!-- Create / Edit Modal -->
     <Modal v-model="showCreateModal">
-      <template #title>{{ editingEnv ? 'Edit Environment' : 'New Environment' }}</template>
+      <template #title>{{ editingEnv ? t('environments.editEnvironment') : t('environments.newEnvironment') }}</template>
       <form class="env-form" @submit.prevent="submitForm">
         <label class="form-label">
-          <span>Name</span>
+          <span>{{ t('common.name') }}</span>
           <input v-model="formName" type="text" class="form-input" placeholder="e.g. Production" autofocus />
         </label>
         <label class="form-label">
-          <span>Description</span>
+          <span>{{ t('common.description') }}</span>
           <input v-model="formDesc" type="text" class="form-input" placeholder="Optional description" />
         </label>
         <label class="form-label">
-          <span>Connection Mode</span>
+          <span>{{ t('environments.connectionMode') }}</span>
           <select v-model="formMode" class="form-input">
-            <option value="direct">Direct (console connects directly)</option>
-            <option value="agent">Agent (via reverse tunnel)</option>
+            <option value="direct">{{ t('environments.direct') }}</option>
+            <option value="agent">{{ t('environments.agent') }}</option>
           </select>
         </label>
         <div v-if="formError" class="form-error">{{ formError }}</div>
         <div class="form-actions">
-          <Button type="button" variant="secondary" @click="showCreateModal = false">Cancel</Button>
+          <Button type="button" variant="secondary" @click="showCreateModal = false">{{ t('common.cancel') }}</Button>
           <Button type="submit" variant="primary" :loading="formLoading">
-            {{ editingEnv ? 'Save' : 'Create' }}
+            {{ editingEnv ? t('common.save') : t('common.create') }}
           </Button>
         </div>
       </form>
@@ -179,13 +181,13 @@ function envIcon(mode: string): string {
 
     <!-- Delete Confirmation -->
     <Modal :model-value="!!deleteConfirmId" @update:model-value="deleteConfirmId = null">
-      <template #title>Delete Environment</template>
+      <template #title>{{ t('environments.deleteEnvironment') }}</template>
       <p style="color: var(--text-secondary); margin-bottom: 16px">
-        This will permanently delete the environment and all its resources. This action cannot be undone.
+        {{ t('environments.deleteConfirm') }}
       </p>
       <div class="form-actions">
-        <Button variant="secondary" @click="deleteConfirmId = null">Cancel</Button>
-        <Button variant="danger" @click="confirmDelete">Delete</Button>
+        <Button variant="secondary" @click="deleteConfirmId = null">{{ t('common.cancel') }}</Button>
+        <Button variant="danger" @click="confirmDelete">{{ t('common.delete') }}</Button>
       </div>
     </Modal>
   </div>
