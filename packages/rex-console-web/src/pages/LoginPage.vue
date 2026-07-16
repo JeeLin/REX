@@ -1,18 +1,26 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import Button from '@/components/ui/Button.vue'
 
-const username = ref('')
-const password = ref('')
-const loading = ref(false)
+const auth = useAuthStore()
+const router = useRouter()
+const route = useRoute()
 
-function handleLogin() {
-  if (!username.value || !password.value) return
-  loading.value = true
-  setTimeout(() => {
-    loading.value = false
-    window.location.href = '/workspace'
-  }, 800)
+const password = ref('')
+const errorMsg = ref('')
+
+async function handleLogin() {
+  if (!password.value) return
+  errorMsg.value = ''
+  try {
+    await auth.login(password.value)
+    const redirect = (route.query.redirect as string) || '/workspace'
+    router.push(redirect)
+  } catch (e: unknown) {
+    errorMsg.value = e instanceof Error ? e.message : '登录失败'
+  }
 }
 </script>
 
@@ -26,16 +34,6 @@ function handleLogin() {
 
       <form class="login-form" @submit.prevent="handleLogin">
         <div class="field">
-          <label class="field-label mono">Username</label>
-          <input
-            v-model="username"
-            type="text"
-            class="field-input"
-            placeholder="admin"
-            autocomplete="username"
-          />
-        </div>
-        <div class="field">
           <label class="field-label mono">Password</label>
           <input
             v-model="password"
@@ -43,15 +41,17 @@ function handleLogin() {
             class="field-input"
             placeholder="••••••••"
             autocomplete="current-password"
+            autofocus
           />
         </div>
+        <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
         <Button
           variant="primary"
           size="lg"
-          :disabled="loading || !username || !password"
+          :disabled="auth.loading || !password"
           style="width: 100%; margin-top: var(--space-4)"
         >
-          {{ loading ? 'Signing in...' : 'Sign in' }}
+          {{ auth.loading ? 'Signing in...' : 'Sign in' }}
         </Button>
       </form>
 
@@ -124,6 +124,11 @@ function handleLogin() {
 }
 .field-input:focus {
   border-color: var(--accent);
+}
+.error-msg {
+  color: var(--danger);
+  font-size: var(--text-sm);
+  text-align: center;
 }
 .login-footer {
   text-align: center;

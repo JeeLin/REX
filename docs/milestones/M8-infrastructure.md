@@ -33,7 +33,7 @@ M0–M7 完成了设计系统、组件库和 UI 壳，4 个功能模块（SQL/Re
 | 3 | 现有 API 模块注入 auth header + WebSocket token 认证 | ✅ |
 | 4 | 前端 API 客户端封装（client.ts） | ✅ |
 | 5 | auth Pinia store | ✅ |
-| 6 | 路由守卫 + 登录页改造 | ⬜ |
+| 6 | 路由守卫 + 登录页改造 | ✅ |
 | 7 | 首次设置密码页面 | ⬜ |
 
 ## 子任务详细设计
