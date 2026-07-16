@@ -19,8 +19,9 @@ const saveMessage = ref('')
 onMounted(async () => {
   try {
     settings.value = await settingsApi.get()
-    // 应用主题
+    // 应用主题并缓存
     document.documentElement.dataset.theme = settings.value.theme === 'light' ? 'light' : undefined
+    localStorage.setItem('rex-theme', settings.value.theme)
   } catch {
     // ignore
   } finally {
@@ -33,8 +34,9 @@ async function saveSettings() {
   saveMessage.value = ''
   try {
     await settingsApi.update(settings.value)
-    // 应用主题
+    // 应用主题并持久化
     document.documentElement.dataset.theme = settings.value.theme === 'light' ? 'light' : undefined
+    localStorage.setItem('rex-theme', settings.value.theme)
     saveMessage.value = t('settings.saved')
     setTimeout(() => saveMessage.value = '', 2000)
   } catch (e: unknown) {

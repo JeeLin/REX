@@ -12,4 +12,10 @@ export const i18n = createI18n({
   messages: { zh, en },
 })
 
+// 早期应用主题（避免闪烁）
+if (typeof localStorage !== 'undefined') {
+  const theme = localStorage.getItem('rex-theme') || 'dark'
+  document.documentElement.dataset.theme = theme === 'light' ? 'light' : undefined
+}
+
 export type AppLocale = 'zh' | 'en'
