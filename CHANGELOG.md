@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.14.0] - 2026-07-16
+
+### Added
+- Dashboard：统计 API（环境数/资源数/在线 Agent）+ 页面重写
+- 审计日志：查询 API（时间/操作/结果筛选）+ 页面重写
+- 设置：设置 API + 页面重写，主题/语言/终端配置持久化
+
 ## [0.13.0] - 2026-07-16
 
 ### Added
