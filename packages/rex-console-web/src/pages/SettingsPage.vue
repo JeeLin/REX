@@ -2,9 +2,8 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { settingsApi, type Settings } from '@/api/settings'
-import { updateApi, type VersionInfo } from '@/api/agents'
 import Card from '@/components/ui/Card.vue'
-import Badge from '@/components/ui/Badge.vue'
+import Button from '@/components/ui/Button.vue'
 
 const { t } = useI18n()
 const settings = ref<Settings>({
@@ -17,9 +16,6 @@ const loading = ref(true)
 const saving = ref(false)
 const saveMessage = ref('')
 
-// 更新相关
-const versionInfo = ref<VersionInfo | null>(null)
-
 onMounted(async () => {
   try {
     settings.value = await settingsApi.get()
@@ -29,13 +25,6 @@ onMounted(async () => {
     // ignore
   } finally {
     loading.value = false
-  }
-
-  // 加载版本信息
-  try {
-    versionInfo.value = await updateApi.getVersion()
-  } catch {
-    // ignore
   }
 })
 
@@ -54,8 +43,6 @@ async function saveSettings() {
     saving.value = false
   }
 }
-
-
 </script>
 
 <template>
@@ -92,31 +79,6 @@ async function saveSettings() {
       </div>
     </Card>
 
-    <Card class="settings-section">
-      <h2 class="section-title">{{ t('settings.updates') }}</h2>
-      <div class="version-row">
-        <span class="muted">{{ t('settings.hubVersion') }}</span>
-        <span class="mono">{{ versionInfo?.hub_version || '—' }}</span>
-      </div>
-
-      <!-- Agent 版本总览 -->
-      <div v-if="versionInfo?.agents?.length" class="agent-versions">
-        <h3 class="sub-title">{{ t('settings.agentVersions') }}</h3>
-        <div class="version-table">
-          <div class="version-row" v-for="a in versionInfo.agents" :key="a.agent_id">
-            <span class="agent-name-cell">
-              <span class="status-dot" :class="a.is_online ? 'online' : 'offline'"></span>
-              {{ a.name }}
-            </span>
-            <span class="mono">{{ a.version || '—' }}</span>
-            <Badge :variant="a.is_up_to_date ? 'success' : a.is_online ? 'warning' : 'default'" size="sm">
-              {{ a.is_up_to_date ? '✓' : a.is_online ? t('settings.canUpdate') : t('agents.offline') }}
-            </Badge>
-          </div>
-        </div>
-      </div>
-    </Card>
-
     <div class="save-bar">
       <span v-if="saveMessage" class="save-message" :class="{ error: saveMessage.includes('failed') }">{{ saveMessage }}</span>
       <Button variant="primary" :loading="saving" @click="saveSettings">{{ t('settings.saveSettings') }}</Button>
@@ -139,16 +101,4 @@ async function saveSettings() {
 .save-bar { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-4); }
 .save-message { font-size: var(--text-sm); color: var(--success); }
 .save-message.error { color: var(--danger); }
-.version-row { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); font-size: var(--text-sm); }
-.muted { color: var(--text-muted); }
-.mono { font-family: var(--font-mono); }
-.check-result { margin-top: var(--space-3); }
-.release-notes { font-size: var(--text-sm); color: var(--text-secondary); margin-top: var(--space-2); white-space: pre-wrap; max-height: 200px; overflow-y: auto; }
-.agent-versions { margin-top: var(--space-4); border-top: 1px solid var(--border); padding-top: var(--space-3); }
-.sub-title { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); margin-bottom: var(--space-2); }
-.version-table { display: flex; flex-direction: column; gap: var(--space-1); }
-.agent-name-cell { display: flex; align-items: center; gap: var(--space-2); min-width: 120px; }
-.status-dot { width: 6px; height: 6px; border-radius: 50%; }
-.status-dot.online { background: var(--success); }
-.status-dot.offline { background: var(--text-muted); }
 </style>

@@ -68,22 +68,7 @@
     "resetDesc": "为此 Agent 生成新的注册令牌。",
     "generate": "生成",
     "newToken": "新令牌（请复制并更新 Agent 配置）：",
-    "done": "完成",
-    "upToDate": "最新",
-    "canUpdate": "可更新",
-    "offline": "离线",
-    "update": "更新",
-    "updateTitle": "更新 Agent",
-    "updateDesc": "将 {name} 更新到 v{version}，Agent 将自动重启。",
-    "updateConfirm": "确认更新",
-    "updatePhase": {
-      "idle": "空闲",
-      "downloading": "下载中…",
-      "verifying": "校验中…",
-      "replacing": "替换中…",
-      "restarting": "重启中…",
-      "error": "更新失败"
-    }
+    "done": "完成"
   },
   "auditLog": {
     "title": "审计日志",
@@ -114,16 +99,7 @@
     "fontSize": "字号",
     "saveSettings": "保存设置",
     "saved": "设置已保存",
-    "saveFailed": "保存失败",
-    "updates": "更新",
-    "hubVersion": "Hub 版本",
-    "latestVersion": "最新版本",
-    "canUpdateHub": "可更新",
-    "checkUpdate": "检查更新",
-    "updateAvailable": "有新版本 v{version}",
-    "upToDate": "已是最新",
-    "agentVersions": "Agent 版本",
-    "canUpdate": "可更新"
+    "saveFailed": "保存失败"
   },
   "login": {
     "subtitle": "远程资源管理",

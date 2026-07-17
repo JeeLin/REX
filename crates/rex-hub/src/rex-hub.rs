@@ -19,7 +19,7 @@ use rex_hub::settings_api;
 use rex_hub::sql_api::{self, SqlState};
 use rex_hub::terminal_ws;
 use rex_hub::tunnel_ws;
-use rex_hub::update_api::{self, UpdateState};
+use rex_hub::update_api;
 use rex_hub::AppState;
 
 use axum::routing::get_service;
@@ -76,7 +76,7 @@ fn worker_main() {
             Arc::new(tokio::sync::Mutex::new(file_api::FileConnectionPool::new()));
 
         let agent_tunnel = Arc::new(agent_ws::AgentTunnelState::new());
-        let update_state = Arc::new(UpdateState::new());
+        let agent_binaries = Arc::new(update_api::AgentBinaries::new());
 
         let state = AppState {
             db,
@@ -86,7 +86,7 @@ fn worker_main() {
             redis_pool,
             file_pool,
             agent_tunnel,
-            update_state,
+            agent_binaries,
         };
 
         tracing::info!("serving frontend from: {}", static_dir.display());
@@ -121,10 +121,6 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
 
     let protected_routes = Router::new()
         .route(
-            "/api/version",
-            axum::routing::get(update_api::get_version_info),
-        )
-        .route(
             "/api/agents/download",
             axum::routing::get(update_api::download_agent_binary),
         )
@@ -134,7 +130,6 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
         )
         .nest("/api/environments", resource_api::resource_routes())
         .nest("/api/agents", agent_api::agent_routes())
-        .nest("/api/agents", update_api::update_routes())
         .nest("/api/dashboard", dashboard_api::dashboard_routes())
         .nest("/api/audit-log", audit_api::audit_routes())
         .nest("/api/settings", settings_api::settings_routes())

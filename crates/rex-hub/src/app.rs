@@ -9,7 +9,7 @@ use crate::db::Database;
 use crate::file_api::FileState;
 use crate::redis_api::RedisState;
 use crate::sql_api::SqlState;
-use crate::update_api::UpdateState;
+use crate::update_api::AgentBinaries;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -20,5 +20,5 @@ pub struct AppState {
     pub redis_pool: RedisState,
     pub file_pool: FileState,
     pub agent_tunnel: Arc<AgentTunnelState>,
-    pub update_state: Arc<UpdateState>,
+    pub agent_binaries: Arc<AgentBinaries>,
 }
