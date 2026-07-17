@@ -68,7 +68,22 @@
     "resetDesc": "Generate a new registration token for this agent.",
     "generate": "Generate",
     "newToken": "New token (copy and update your agent config):",
-    "done": "Done"
+    "done": "Done",
+    "upToDate": "Up to date",
+    "canUpdate": "Update available",
+    "offline": "Offline",
+    "update": "Update",
+    "updateTitle": "Update Agent",
+    "updateDesc": "Update {name} to v{version}. Agent will restart automatically.",
+    "updateConfirm": "Confirm Update",
+    "updatePhase": {
+      "idle": "Idle",
+      "downloading": "Downloading…",
+      "verifying": "Verifying…",
+      "replacing": "Replacing…",
+      "restarting": "Restarting…",
+      "error": "Update failed"
+    }
   },
   "auditLog": {
     "title": "Audit Log",
@@ -99,7 +114,16 @@
     "fontSize": "Font Size",
     "saveSettings": "Save Settings",
     "saved": "Settings saved",
-    "saveFailed": "Save failed"
+    "saveFailed": "Save failed",
+    "updates": "Updates",
+    "hubVersion": "Hub Version",
+    "latestVersion": "Latest Version",
+    "canUpdateHub": "Update available",
+    "checkUpdate": "Check for Updates",
+    "updateAvailable": "New version v{version} available",
+    "upToDate": "Up to date",
+    "agentVersions": "Agent Versions",
+    "canUpdate": "Update available"
   },
   "login": {
     "subtitle": "Remote Resource Management",

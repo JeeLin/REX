@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { agentsApi, type Agent } from '@/api/agents'
+import { agentsApi, updateApi, type Agent, type UpdateStatus } from '@/api/agents'
 import { useEnvironmentsStore } from '@/stores/environments'
 import Card from '@/components/ui/Card.vue'
 import Badge from '@/components/ui/Badge.vue'
@@ -18,10 +18,12 @@ const loading = ref(true)
 const resetModal = ref(false)
 const resetAgentId = ref('')
 const resetToken = ref('')
+const hubVersion = ref('')
+const updateStatuses = ref<Record<string, UpdateStatus>>({})
+const pollingTimers = ref<Record<string, ReturnType<typeof setInterval>>>({})
 
 onMounted(async () => {
   await store.fetchEnvironments()
-  // 加载所有环境的 agents
   const allAgents: Agent[] = []
   for (const env of store.environments) {
     try {
@@ -32,6 +34,15 @@ onMounted(async () => {
     }
   }
   agents.value = allAgents
+
+  // 获取 Hub 版本
+  try {
+    const info = await updateApi.getVersion()
+    hubVersion.value = info.hub_version
+  } catch {
+    // ignore
+  }
+
   loading.value = false
 })
 
@@ -47,6 +58,11 @@ function envName(envId: string): string {
   return store.environments.find(e => e.id === envId)?.name || envId
 }
 
+function versionStatus(agent: Agent): 'up-to-date' | 'outdated' | 'unknown' {
+  if (!agent.version || !hubVersion.value) return 'unknown'
+  return agent.version === hubVersion.value ? 'up-to-date' : 'outdated'
+}
+
 async function openResetToken(agentId: string) {
   resetAgentId.value = agentId
   resetToken.value = ''
@@ -60,6 +76,63 @@ async function doResetToken() {
   } catch {
     // ignore
   }
+}
+
+const updateConfirmModal = ref(false)
+const updateConfirmAgent = ref<Agent | null>(null)
+
+function confirmUpdate(agent: Agent) {
+  updateConfirmAgent.value = agent
+  updateConfirmModal.value = true
+}
+
+async function doUpdate() {
+  if (!updateConfirmAgent.value) return
+  const agentId = updateConfirmAgent.value.id
+  updateConfirmModal.value = false
+  updateConfirmAgent.value = null
+
+  try {
+    await updateApi.triggerUpdate(agentId)
+    startPolling(agentId)
+  } catch {
+    // ignore
+  }
+}
+
+function startPolling(agentId: string) {
+  if (pollingTimers.value[agentId]) return
+  pollingTimers.value[agentId] = setInterval(async () => {
+    try {
+      const status = await updateApi.getUpdateStatus(agentId)
+      updateStatuses.value[agentId] = status
+      if (status.phase === 'restarting' || status.phase === 'error') {
+        clearInterval(pollingTimers.value[agentId])
+        delete pollingTimers.value[agentId]
+        // 刷新 agent 列表
+        if (status.phase === 'restarting') {
+          setTimeout(async () => {
+            await refreshAgents()
+          }, 5000)
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, 2000)
+}
+
+async function refreshAgents() {
+  const allAgents: Agent[] = []
+  for (const env of store.environments) {
+    try {
+      const envAgents = await agentsApi.listByEnv(env.id)
+      allAgents.push(...envAgents)
+    } catch {
+      // ignore
+    }
+  }
+  agents.value = allAgents
 }
 </script>
 
@@ -92,22 +165,50 @@ async function doResetToken() {
         <div class="agent-details">
           <div class="agent-detail">
             <span class="muted">{{ t('agents.version') }}</span>
-            <span class="mono">{{ agent.version || '—' }}</span>
+            <span class="version-cell">
+              <span class="mono">{{ agent.version || '—' }}</span>
+              <Badge v-if="hubVersion && agent.version" :variant="versionStatus(agent) === 'up-to-date' ? 'success' : 'warning'" size="sm">
+                {{ versionStatus(agent) === 'up-to-date' ? t('agents.upToDate') : t('agents.canUpdate') }}
+              </Badge>
+            </span>
           </div>
           <div class="agent-detail">
             <span class="muted">{{ t('agents.os') }}</span>
-            <span>{{ agent.os || '—' }} {{ agent.arch }}</span>
+            <span>{{ agent.os || '—' }}/{{ agent.arch }}</span>
           </div>
           <div class="agent-detail">
             <span class="muted">{{ t('agents.lastSeen') }}</span>
             <span>{{ agent.last_seen_at ? new Date(agent.last_seen_at).toLocaleString() : '—' }}</span>
           </div>
+          <!-- 更新进度 -->
+          <div v-if="updateStatuses[agent.id]" class="update-progress">
+            <div class="progress-bar">
+              <div class="progress-fill" :style="{ width: ((updateStatuses[agent.id]?.progress ?? 0) * 100) + '%' }"></div>
+            </div>
+            <span class="progress-text mono">{{ t('agents.updatePhase.' + (updateStatuses[agent.id]?.phase ?? 'idle')) }}</span>
+            <span v-if="updateStatuses[agent.id]?.error" class="update-error">{{ updateStatuses[agent.id]?.error }}</span>
+          </div>
         </div>
         <div class="agent-footer">
+          <Button v-if="agent.status === 'online' && versionStatus(agent) === 'outdated'" variant="secondary" size="sm" @click="confirmUpdate(agent)">
+            {{ t('agents.update') }}
+          </Button>
           <Button variant="secondary" size="sm" @click="openResetToken(agent.id)">{{ t('agents.resetToken') }}</Button>
         </div>
       </Card>
     </div>
+
+    <!-- Update Confirmation Modal -->
+    <Modal v-model="updateConfirmModal">
+      <template #title>{{ t('agents.updateTitle') }}</template>
+      <div class="modal-content">
+        <p class="muted">{{ t('agents.updateDesc', { version: hubVersion, name: updateConfirmAgent?.name }) }}</p>
+        <div class="form-actions">
+          <Button variant="secondary" @click="updateConfirmModal = false">{{ t('common.cancel') }}</Button>
+          <Button variant="primary" @click="doUpdate">{{ t('agents.updateConfirm') }}</Button>
+        </div>
+      </div>
+    </Modal>
 
     <!-- Reset Token Modal -->
     <Modal v-model="resetModal">
@@ -219,5 +320,38 @@ async function doResetToken() {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);
+}
+.version-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.update-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+.progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--bg-deep);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+.progress-text {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.update-error {
+  font-size: var(--text-xs);
+  color: var(--danger);
 }
 </style>
