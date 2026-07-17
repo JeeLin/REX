@@ -146,6 +146,7 @@ pub enum AgentEvent {
 }
 
 /// Agent connect 请求的响应
+#[derive(Debug)]
 pub struct ConnectResponse {
     pub channel_id: Option<String>,
     pub error: Option<String>,
@@ -423,4 +424,121 @@ async fn recv_agent_msg(stream: &mut (impl StreamExt<Item = Result<Message, axum
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_agent_msg_auth_deserialize() {
+        let json = r#"{"type":"auth","payload":{"agent_id":"a1","token":"tok1"}}"#;
+        let msg: AgentMsg = serde_json::from_str(json).unwrap();
+        match msg {
+            AgentMsg::Auth { payload } => {
+                assert_eq!(payload.agent_id, "a1");
+                assert_eq!(payload.token, "tok1");
+            }
+            _ => panic!("expected Auth"),
+        }
+    }
+
+    #[test]
+    fn test_agent_msg_heartbeat_deserialize() {
+        let json = r#"{"type":"heartbeat","payload":{"version":"0.16.0","os":"linux","arch":"x86_64","hostname":"server1"}}"#;
+        let msg: AgentMsg = serde_json::from_str(json).unwrap();
+        match msg {
+            AgentMsg::Heartbeat { payload } => {
+                assert_eq!(payload.version, "0.16.0");
+                assert_eq!(payload.os, "linux");
+            }
+            _ => panic!("expected Heartbeat"),
+        }
+    }
+
+    #[test]
+    fn test_agent_msg_connected_deserialize() {
+        let json = r#"{"type":"connected","payload":{"request_id":"req_1","channel_id":"ch_1"}}"#;
+        let msg: AgentMsg = serde_json::from_str(json).unwrap();
+        match msg {
+            AgentMsg::Connected { payload } => {
+                assert_eq!(payload.request_id, "req_1");
+                assert_eq!(payload.channel_id, "ch_1");
+            }
+            _ => panic!("expected Connected"),
+        }
+    }
+
+    #[test]
+    fn test_hub_msg_auth_ok_serialize() {
+        let msg = HubMsg::AuthOk {
+            payload: AuthOkPayload {
+                agent_id: "a1".into(),
+            },
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("auth_ok"));
+        assert!(json.contains("a1"));
+    }
+
+    #[test]
+    fn test_hub_msg_connect_serialize() {
+        let msg = HubMsg::Connect {
+            payload: ConnectRequest {
+                request_id: "req_1".into(),
+                resource_id: "res_1".into(),
+                protocol: "ssh".into(),
+                config: serde_json::json!({"host": "10.0.0.1", "port": 22}),
+            },
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("connect"));
+        assert!(json.contains("req_1"));
+    }
+
+    #[tokio::test]
+    async fn test_tunnel_state_default() {
+        let state = AgentTunnelState::default();
+        assert!(state.connections.read().await.is_empty());
+        assert!(state.channels.read().await.is_empty());
+        assert!(state.pending_requests.read().await.is_empty());
+        assert!(state.tunnel_data.read().await.is_empty());
+    }
+
+    #[test]
+    fn test_connect_response_pending() {
+        let (tx, mut rx) = tokio::sync::oneshot::channel();
+        let mut pending = HashMap::new();
+        pending.insert("req_1".to_string(), tx);
+
+        // Simulate Agent response
+        let resp = ConnectResponse {
+            channel_id: Some("ch_1".to_string()),
+            error: None,
+        };
+        let sender = pending.remove("req_1").unwrap();
+        sender.send(resp).unwrap();
+
+        let result = rx.try_recv().unwrap();
+        assert_eq!(result.channel_id.unwrap(), "ch_1");
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn test_connect_response_error() {
+        let (tx, mut rx) = tokio::sync::oneshot::channel();
+        let mut pending = HashMap::new();
+        pending.insert("req_2".to_string(), tx);
+
+        let resp = ConnectResponse {
+            channel_id: None,
+            error: Some("connection refused".into()),
+        };
+        let sender = pending.remove("req_2").unwrap();
+        sender.send(resp).unwrap();
+
+        let result = rx.try_recv().unwrap();
+        assert!(result.channel_id.is_none());
+        assert_eq!(result.error.unwrap(), "connection refused");
+    }
 }
