@@ -133,6 +133,52 @@ function closeTabsRight(id: string) {
   }
 }
 
+function closeTabsLeft(id: string) {
+  const idx = tabs.value.findIndex(t => t.id === id)
+  if (idx > 0) tabs.value.splice(0, idx)
+  if (!tabs.value.find(t => t.id === activeTab.value)) {
+    activeTab.value = tabs.value[0]!.id
+  }
+}
+
+function closeAllTabs() {
+  tabs.value = []
+  activeTab.value = ''
+}
+
+function duplicateTab(id: string) {
+  const tab = tabs.value.find(t => t.id === id)
+  if (!tab) return
+  const newId = `tab-${Date.now()}`
+  tabs.value.push({ ...tab, id: newId, status: 'connecting' })
+  activeTab.value = newId
+  tabContextMenu.value.show = false
+}
+
+// Tab 拖拽排序
+const dragTabId = ref('')
+
+function onTabDragStart(e: DragEvent, tabId: string) {
+  dragTabId.value = tabId
+  e.dataTransfer!.effectAllowed = 'move'
+}
+
+function onTabDragOver(e: DragEvent, targetId: string) {
+  e.preventDefault()
+  e.dataTransfer!.dropEffect = 'move'
+}
+
+function onTabDrop(e: DragEvent, targetId: string) {
+  e.preventDefault()
+  if (!dragTabId.value || dragTabId.value === targetId) return
+  const fromIdx = tabs.value.findIndex(t => t.id === dragTabId.value)
+  const toIdx = tabs.value.findIndex(t => t.id === targetId)
+  if (fromIdx < 0 || toIdx < 0) return
+  const moved = tabs.value.splice(fromIdx, 1)[0]
+  if (moved) tabs.value.splice(toIdx, 0, moved)
+  dragTabId.value = ''
+}
+
 function setTabColor(color: string) {
   const tab = tabs.value.find(t => t.id === tabContextMenu.value.tabId)
   if (tab) tab.color = color
@@ -282,8 +328,12 @@ useKeyboardShortcuts([
         :key="tab.id"
         class="ws-tab mono"
         :class="{ 'ws-tab--active': activeTab === tab.id }"
+        draggable="true"
         @click="activeTab = tab.id"
         @contextmenu="onTabContextMenu($event, tab.id)"
+        @dragstart="onTabDragStart($event, tab.id)"
+        @dragover="onTabDragOver($event, tab.id)"
+        @drop="onTabDrop($event, tab.id)"
       >
         <span class="ws-tab-color" v-if="tab.color" :style="{ background: tab.color }" />
         <span class="ws-tab-dot" :style="{ background: PROTOCOL_COLORS[tab.protocol] || 'var(--text-muted)' }" />
@@ -309,10 +359,13 @@ useKeyboardShortcuts([
       <div v-if="tabContextMenu.show" class="tab-ctx-overlay" @click="tabContextMenu.show = false" @contextmenu.prevent="tabContextMenu.show = false" />
       <div v-if="tabContextMenu.show" class="tab-ctx-menu" :style="{ top: tabContextMenu.y + 'px', left: tabContextMenu.x + 'px' }">
         <div class="tab-ctx-item" @click="startRename(tabContextMenu.tabId)">✏️ Rename</div>
+        <div class="tab-ctx-item" @click="duplicateTab(tabContextMenu.tabId)">📋 Duplicate</div>
         <div class="tab-ctx-separator" />
         <div class="tab-ctx-item" @click="closeTab(tabContextMenu.tabId)">Close</div>
         <div class="tab-ctx-item" @click="closeOtherTabs(tabContextMenu.tabId)">Close Others</div>
+        <div class="tab-ctx-item" @click="closeTabsLeft(tabContextMenu.tabId)">Close Left</div>
         <div class="tab-ctx-item" @click="closeTabsRight(tabContextMenu.tabId)">Close Right</div>
+        <div class="tab-ctx-item" @click="closeAllTabs()">Close All</div>
         <div class="tab-ctx-separator" />
         <div class="tab-ctx-item" @click="openProperties(tabContextMenu.tabId)">⚙ Properties</div>
         <div class="tab-ctx-separator" />
