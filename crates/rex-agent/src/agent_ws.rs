@@ -1,4 +1,4 @@
-//! Agent WebSocket 客户端 — 连接 Hub，处理认证、心跳、资源连接代理。
+//! Agent WebSocket 客户端 — 连接 Hub，处理认证、心跳、资源连接代理、更新。
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -29,6 +29,8 @@ enum HubMsg {
     Connect { payload: ConnectRequest },
     #[serde(rename = "close")]
     Close { payload: ChannelPayload },
+    #[serde(rename = "update")]
+    Update { payload: UpdateCmdPayload },
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,6 +50,14 @@ struct ConnectRequest {
     resource_id: String,
     protocol: String,
     config: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateCmdPayload {
+    version: String,
+    download_url: String,
+    fallback_url: String,
+    sha256: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -71,6 +81,17 @@ enum AgentMsg {
     ConnectError { payload: ConnectErrorPayload },
     #[serde(rename = "closed")]
     Closed { payload: ChannelPayload },
+    #[serde(rename = "update_progress")]
+    UpdateProgress { payload: UpdateProgressPayload },
+}
+
+#[derive(Debug, Serialize)]
+struct UpdateProgressPayload {
+    phase: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    progress: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -105,6 +126,7 @@ struct ConnectErrorPayload {
 pub struct AgentConfig {
     pub hub_url: String,
     pub agent_token: String,
+    pub auto_update: bool,
 }
 
 impl AgentConfig {
@@ -113,9 +135,14 @@ impl AgentConfig {
             std::env::var("REX_HUB_URL").map_err(|_| "REX_HUB_URL not set".to_string())?;
         let agent_token = std::env::var("REX_AGENT_TOKEN")
             .map_err(|_| "REX_AGENT_TOKEN not set".to_string())?;
+        let auto_update = std::env::var("REX_AUTO_UPDATE")
+            .unwrap_or_else(|_| "true".into())
+            .parse::<bool>()
+            .unwrap_or(true);
         Ok(Self {
             hub_url,
             agent_token,
+            auto_update,
         })
     }
 }
@@ -257,6 +284,18 @@ async fn connect_and_run(
                         }
                         HubMsg::HeartbeatAck => {
                             tracing::trace!("heartbeat ack");
+                        }
+                        HubMsg::Update { payload } => {
+                            if !config.auto_update {
+                                tracing::info!("auto_update disabled, ignoring update command");
+                                continue;
+                            }
+                            let evt_tx = evt_tx.clone();
+                            let version = payload.version.clone();
+                            tokio::spawn(async move {
+                                handle_update(payload, evt_tx).await;
+                            });
+                            tracing::info!(version = %version, "update started");
                         }
                         _ => {}
                     }
@@ -430,6 +469,63 @@ enum AgentEvent {
     Binary(Vec<u8>),
     #[allow(dead_code)]
     Close,
+}
+
+/// 处理 Hub 发来的更新指令
+async fn handle_update(payload: UpdateCmdPayload, evt_tx: mpsc::Sender<AgentEvent>) {
+    let cmd = rex_common::update::UpdateCommand {
+        version: payload.version,
+        download_url: payload.download_url,
+        fallback_url: payload.fallback_url,
+        sha256: payload.sha256,
+    };
+
+    let current_exe = match std::env::current_exe() {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::error!(error = %e, "failed to get current exe path");
+            return;
+        }
+    };
+
+    let report: crate::updater::ProgressReporter = Box::new(move |progress| {
+        let evt_tx = evt_tx.clone();
+        Box::pin(async move {
+            let phase_str = match progress.phase {
+                rex_common::update::UpdatePhase::Idle => "idle",
+                rex_common::update::UpdatePhase::Downloading => "downloading",
+                rex_common::update::UpdatePhase::Verifying => "verifying",
+                rex_common::update::UpdatePhase::Replacing => "replacing",
+                rex_common::update::UpdatePhase::Restarting => "restarting",
+                rex_common::update::UpdatePhase::Error => "error",
+            };
+            let msg = serde_json::to_string(&AgentMsg::UpdateProgress {
+                payload: UpdateProgressPayload {
+                    phase: phase_str.to_string(),
+                    progress: if progress.progress > 0.0 {
+                        Some(progress.progress)
+                    } else {
+                        None
+                    },
+                    error: progress.error,
+                },
+            })
+            .unwrap();
+            let _ = evt_tx.send(AgentEvent::Text(msg)).await;
+        })
+    });
+
+    match crate::updater::run_update(cmd, current_exe, &report).await {
+        Ok(()) => {
+            tracing::info!("update prepared, exiting for supervisor");
+            // 等一小段时间让进度消息发出去
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            std::process::exit(42);
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "update failed");
+        }
+    }
 }
 
 fn build_ws_url(hub_url: &str, token: &str) -> Result<String, Box<dyn std::error::Error>> {

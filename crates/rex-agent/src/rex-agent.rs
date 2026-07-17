@@ -1,27 +1,35 @@
 //! REX Agent 入口 — supervisor + worker 进程模型。
+//!
+//! PID 1 = supervisor（启动 worker、监控退出、处理更新替换）
+//! Worker = 实际业务逻辑（WebSocket 连接、资源代理）
+//!
+//! REX_WORKER=1 → 运行 worker
+//! 否则 → 运行 supervisor
 
 mod agent_ws;
-
-use tracing_subscriber::EnvFilter;
+mod supervisor;
+mod updater;
 
 fn main() {
-    if std::env::var("REX_WORKER").is_err() {
-        std::env::set_var("REX_WORKER", "1");
+    if std::env::var("REX_WORKER").is_ok() {
         worker_main();
     } else {
-        worker_main();
+        crate::supervisor::run_supervisor();
     }
 }
 
 fn worker_main() {
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env().add_directive("info".parse().unwrap()))
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive("info".parse().unwrap()),
+        )
         .init();
 
     tracing::info!(
         name = "REX Agent",
         version = env!("CARGO_PKG_VERSION"),
-        status = "starting"
+        status = "worker starting"
     );
 
     let config = match agent_ws::AgentConfig::from_env() {
@@ -29,13 +37,16 @@ fn worker_main() {
         Err(e) => {
             tracing::error!(error = %e, "failed to load agent config");
             eprintln!("Error: {e}");
-            eprintln!("Required environment variables: REX_HUB_URL, REX_AGENT_TOKEN, REX_AGENT_ID");
+            eprintln!(
+                "Required environment variables: REX_HUB_URL, REX_AGENT_TOKEN"
+            );
             std::process::exit(1);
         }
     };
 
     tracing::info!(
         hub_url = %config.hub_url,
+        auto_update = config.auto_update,
         "agent configured"
     );
 
