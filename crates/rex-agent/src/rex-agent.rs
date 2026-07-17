@@ -1,11 +1,10 @@
 //! REX Agent 入口 — supervisor + worker 进程模型。
-//!
-//! 2.0 重设计骨架。后续里程碑逐步实现 WebSocket 反向隧道 / Agent 代理逻辑。
+
+mod agent_ws;
 
 use tracing_subscriber::EnvFilter;
 
 fn main() {
-    // supervisor 模式：开发阶段直接调用 worker（不 fork 子进程）
     if std::env::var("REX_WORKER").is_err() {
         std::env::set_var("REX_WORKER", "1");
         worker_main();
@@ -25,11 +24,24 @@ fn worker_main() {
         status = "starting"
     );
 
+    let config = match agent_ws::AgentConfig::from_env() {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!(error = %e, "failed to load agent config");
+            eprintln!("Error: {e}");
+            eprintln!("Required environment variables: REX_HUB_URL, REX_AGENT_TOKEN, REX_AGENT_ID");
+            std::process::exit(1);
+        }
+    };
+
+    tracing::info!(
+        hub_url = %config.hub_url,
+        agent_id = %config.agent_id,
+        "agent configured"
+    );
+
     let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
     rt.block_on(async {
-        tracing::info!("worker runtime ready — agent logic will go here");
-        // 占位：后续实现 WebSocket 反向隧道
-        tokio::signal::ctrl_c().await.ok();
-        tracing::info!("shutting down");
+        agent_ws::run_agent(config).await;
     });
 }
