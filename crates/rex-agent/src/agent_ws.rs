@@ -12,6 +12,59 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 use url::Url;
 
 // ═══════════════════════════════════════
+// TLS Insecure 模式（自签名证书跳过验证）
+// ═══════════════════════════════════════
+
+#[derive(Debug)]
+struct InsecureVerifier;
+
+impl rustls::client::danger::ServerCertVerifier for InsecureVerifier {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::pki_types::CertificateDer<'_>,
+        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
+        _server_name: &rustls::pki_types::ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: rustls::pki_types::UnixTime,
+    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::danger::ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &rustls::pki_types::CertificateDer<'_>,
+        _dcsa: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &rustls::pki_types::CertificateDer<'_>,
+        _dcsa: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        vec![
+            rustls::SignatureScheme::RSA_PKCS1_SHA256,
+            rustls::SignatureScheme::RSA_PKCS1_SHA384,
+            rustls::SignatureScheme::RSA_PKCS1_SHA512,
+            rustls::SignatureScheme::ECDSA_NISTP256_SHA256,
+            rustls::SignatureScheme::ECDSA_NISTP384_SHA384,
+            rustls::SignatureScheme::ECDSA_NISTP521_SHA512,
+            rustls::SignatureScheme::ED25519,
+            rustls::SignatureScheme::RSA_PSS_SHA256,
+            rustls::SignatureScheme::RSA_PSS_SHA384,
+            rustls::SignatureScheme::RSA_PSS_SHA512,
+        ]
+    }
+}
+
+// ═══════════════════════════════════════
 // 消息协议（与 Hub 侧 agent_ws.rs 对称）
 // ═══════════════════════════════════════
 
@@ -121,6 +174,7 @@ pub struct AgentConfig {
     pub hub_url: String,
     pub agent_token: String,
     pub auto_update: bool,
+    pub tls_insecure: bool,
 }
 
 impl AgentConfig {
@@ -133,10 +187,14 @@ impl AgentConfig {
             .unwrap_or_else(|_| "true".into())
             .parse::<bool>()
             .unwrap_or(true);
+        let tls_insecure = std::env::var("REX_TLS_INSECURE")
+            .map(|v| v == "true")
+            .unwrap_or(false);
         Ok(Self {
             hub_url,
             agent_token,
             auto_update,
+            tls_insecure,
         })
     }
 }
@@ -185,7 +243,22 @@ async fn connect_and_run(
     let ws_url = build_ws_url(&config.hub_url, &config.agent_token)?;
     tracing::info!(url = %ws_url, "connecting");
 
-    let (ws_stream, _) = connect_async(&ws_url).await?;
+    // 根据 TLS 配置选择连接方式
+    let (ws_stream, _) = if config.tls_insecure && ws_url.starts_with("wss://") {
+        use tokio_tungstenite::connect_async_tls_with_config;
+        use tokio_tungstenite::Connector;
+
+        let request = ws_url.as_str();
+        let connector = Connector::Rustls(Arc::new(
+            rustls::ClientConfig::builder()
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(InsecureVerifier))
+                .with_no_client_auth(),
+        ));
+        connect_async_tls_with_config(request, None, false, Some(connector)).await?
+    } else {
+        connect_async(&ws_url).await?
+    };
     let (mut ws_sink, mut ws_stream) = ws_stream.split();
 
     // 1. 发送 auth（只传 token，Hub 通过 token 查找 agent_id）

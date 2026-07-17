@@ -90,14 +90,23 @@ fn worker_main() {
         };
 
         tracing::info!("serving frontend from: {}", static_dir.display());
-        tracing::info!("listening on 0.0.0.0:{port}");
 
+        let tls_config = rex_hub::tls::TlsConfig::from_env();
         let app = build_router(state, static_dir);
         let addr = format!("0.0.0.0:{port}");
         let listener = tokio::net::TcpListener::bind(&addr)
             .await
             .expect("failed to bind");
-        axum::serve(listener, app).await.expect("server error");
+
+        if tls_config.is_enabled() {
+            tracing::info!("listening on HTTPS 0.0.0.0:{port}");
+        } else {
+            tracing::info!("listening on HTTP 0.0.0.0:{port}");
+        }
+
+        rex_hub::tls::serve(app, listener, tls_config)
+            .await
+            .expect("server error");
     });
 }
 

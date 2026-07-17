@@ -22,3 +22,5 @@ hostname = { workspace = true }
 reqwest = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }
+rustls = { workspace = true }
+webpki-roots = { workspace = true }
