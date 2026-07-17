@@ -23,10 +23,13 @@ services:
     environment:
       - REX_SECRET_KEY=${REX_SECRET_KEY}
       - DATA_DIR=/app/data
-      # 手动 TLS 配置（最高优先级，启用后 ACME 和自签名不生效）
+      # ═══ TLS 配置（三选一，都不设置则为 HTTP）══
+      # 自签名模式（开发/测试，浏览器会警告证书不可信）
+      # - REX_TLS_SELF_SIGNED=true
+      # 手动证书模式（生产，提供 PEM 证书和私钥）
       # - REX_TLS_CERT=/app/data/certs/hub.crt
       # - REX_TLS_KEY=/app/data/certs/hub.key
-      # ACME 自动证书配置（次优先级，domain 为域名时需要 80 端口）
+      # ACME 模式（生产，自动从 Let's Encrypt 签发证书，需要域名指向此服务器）
       # - REX_ACME_DOMAIN=hub.example.com
       # - REX_ACME_EMAIL=admin@example.com
       # - REX_ACME_STAGING=false
