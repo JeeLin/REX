@@ -20,6 +20,8 @@ interface Tab {
   protocol: 'ssh' | 'mysql' | 'redis' | 'postgresql' | 'sftp' | 'sqlite' | 's3'
   resourceId?: string
   environmentId?: string
+  connectionMode?: string
+  agentId?: string
   host?: string
   port?: number
   username?: string
@@ -349,6 +351,9 @@ useKeyboardShortcuts([
                 :port="activeTabInfo?.port"
                 :username="activeTabInfo?.username"
                 :protocol="activeTabInfo?.protocol"
+                :agent-mode="activeTabInfo?.connectionMode === 'agent'"
+                :agent-id="activeTabInfo?.agentId"
+                :resource-id="activeTabInfo?.resourceId"
                 @update:status="onTabStatusChange(activeTab, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
               />
 

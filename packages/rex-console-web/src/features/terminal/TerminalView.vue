@@ -14,6 +14,9 @@ const props = defineProps<{
   port?: number
   username?: string
   protocol?: string
+  agentMode?: boolean
+  agentId?: string
+  resourceId?: string
 }>()
 
 const containerRef = ref<HTMLDivElement>()
@@ -69,6 +72,9 @@ onMounted(() => {
       host: props.host,
       port: props.port || 22,
       username: props.username || 'root',
+      agentMode: props.agentMode,
+      agentId: props.agentId,
+      resourceId: props.resourceId,
     })
   }
 
@@ -100,6 +106,9 @@ function handleReconnect() {
       host: props.host,
       port: props.port || 22,
       username: props.username || 'root',
+      agentMode: props.agentMode,
+      agentId: props.agentId,
+      resourceId: props.resourceId,
     })
   }
 }
