@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use rex_hub::agent_api;
+use rex_hub::agent_ws;
 use rex_hub::audit_api;
 use rex_hub::auth;
 use rex_hub::crypto;
@@ -72,6 +73,8 @@ fn worker_main() {
         let file_pool: FileState =
             Arc::new(tokio::sync::Mutex::new(file_api::FileConnectionPool::new()));
 
+        let agent_tunnel = Arc::new(agent_ws::AgentTunnelState::new());
+
         let state = AppState {
             db,
             auth,
@@ -79,6 +82,7 @@ fn worker_main() {
             sql_pool,
             redis_pool,
             file_pool,
+            agent_tunnel,
         };
 
         tracing::info!("serving frontend from: {}", static_dir.display());
@@ -133,9 +137,14 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
             state.clone(),
         ));
 
+    // Agent WebSocket — 使用 Agent 自己的 token 认证，不走 JWT 中间件
+    let agent_ws_route = Router::new()
+        .route("/ws/agent", axum::routing::get(agent_ws::ws_handler));
+
     Router::new()
         .merge(public_routes)
         .merge(protected_routes)
+        .merge(agent_ws_route)
         .with_state(state)
         .fallback(get_service(serve_dir).handle_error(|err| async move {
             tracing::error!(error = %err, "static file serve error");

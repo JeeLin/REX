@@ -493,6 +493,22 @@ impl Database {
 
     // --- Agents ---
 
+    /// 验证 agent token，返回 agent ID（如果匹配）
+    pub fn verify_agent_token(&self, agent_id: &str, token: &str) -> Result<Option<String>> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare("SELECT id FROM agents WHERE id = ?1 AND token_hash = ?2")
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let mut rows = stmt
+            .query_map(rusqlite::params![agent_id, token], |row| row.get::<_, String>(0))
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        match rows.next() {
+            Some(Ok(id)) => Ok(Some(id)),
+            Some(Err(e)) => Err(RExError::Message(e.to_string())),
+            None => Ok(None),
+        }
+    }
+
     pub fn list_agents_by_env(&self, env_id: &str) -> Result<Vec<Agent>> {
         let conn = self.conn()?;
         let mut stmt = conn
@@ -600,6 +616,17 @@ impl Database {
         conn.execute(
             "UPDATE agents SET version = ?1, ip = ?2, status = 'online', last_seen_at = ?3, updated_at = ?3 WHERE id = ?4",
             rusqlite::params![version, ip, now, id],
+        )
+        .map_err(|e| RExError::Message(e.to_string()))?;
+        Ok(())
+    }
+
+    pub fn set_agent_offline(&self, id: &str) -> Result<()> {
+        let conn = self.conn()?;
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE agents SET status = 'offline', updated_at = ?1 WHERE id = ?2",
+            rusqlite::params![now, id],
         )
         .map_err(|e| RExError::Message(e.to_string()))?;
         Ok(())

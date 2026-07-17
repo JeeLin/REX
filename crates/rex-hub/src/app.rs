@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use crate::agent_ws::AgentTunnelState;
 use crate::auth::AuthConfig;
 use crate::crypto::CredentialCrypto;
 use crate::db::Database;
@@ -17,4 +18,5 @@ pub struct AppState {
     pub sql_pool: SqlState,
     pub redis_pool: RedisState,
     pub file_pool: FileState,
+    pub agent_tunnel: Arc<AgentTunnelState>,
 }
