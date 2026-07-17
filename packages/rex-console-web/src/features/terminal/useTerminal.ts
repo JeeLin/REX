@@ -4,15 +4,8 @@ import { FitAddon } from '@xterm/addon-fit'
 import { getTerminalTheme } from './terminal-themes'
 
 interface TerminalOptions {
-  host: string
-  port?: number
-  username: string
-  password?: string
-  privateKey?: string
-  /** Agent 模式：通过 Agent 隧道连接 */
-  agentMode?: boolean
-  agentId?: string
-  resourceId?: string
+  /** 资源 ID — Hub 从 DB 读取所有连接信息，自动判断直连/Agent 隧道 */
+  resourceId: string
 }
 
 type TerminalStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
@@ -44,7 +37,6 @@ export function useTerminal() {
     term.loadAddon(fit)
     term.open(container)
 
-    // 延迟一帧后 fit，确保 DOM 已渲染
     requestAnimationFrame(() => {
       fit.fit()
     })
@@ -55,14 +47,13 @@ export function useTerminal() {
     return term
   }
 
-  /** 连接到后端 WebSocket → SSH */
+  /** 连接到后端 WebSocket → SSH（Hub 自动判断直连/Agent） */
   function connect(opts: TerminalOptions) {
     if (ws) {
       ws.close()
       ws = null
     }
 
-    // 清理之前的事件订阅
     dataSub?.dispose()
     resizeSub?.dispose()
     dataSub = null
@@ -73,40 +64,9 @@ export function useTerminal() {
 
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
     const token = localStorage.getItem('rex-token') || ''
-
-    let wsUrl: string
-    let firstMessage: string
-
-    if (opts.agentMode && opts.agentId && opts.resourceId) {
-      // Agent 模式：通过 /ws/tunnel 连接
-      wsUrl = `${protocol}//${location.host}/ws/tunnel?agent_id=${encodeURIComponent(opts.agentId)}&resource_id=${encodeURIComponent(opts.resourceId)}`
-      // 第一条消息是连接配置
-      firstMessage = JSON.stringify({
-        protocol: 'ssh',
-        host: opts.host,
-        port: opts.port || 22,
-        username: opts.username,
-        password: opts.password,
-        privateKey: opts.privateKey,
-      })
-    } else {
-      // 直连模式：通过 /ws/terminal 连接
-      wsUrl = `${protocol}//${location.host}/ws/terminal?token=${encodeURIComponent(token)}`
-      firstMessage = JSON.stringify({
-        type: 'terminal.connect',
-        host: opts.host,
-        port: opts.port || 22,
-        username: opts.username,
-        password: opts.password,
-        privateKey: opts.privateKey,
-      })
-    }
+    const wsUrl = `${protocol}//${location.host}/ws/terminal?token=${encodeURIComponent(token)}&resourceId=${encodeURIComponent(opts.resourceId)}`
 
     ws = new WebSocket(wsUrl)
-
-    ws.onopen = () => {
-      ws?.send(firstMessage)
-    }
 
     ws.onmessage = (event) => {
       try {
@@ -147,7 +107,7 @@ export function useTerminal() {
       errorMessage.value = 'WebSocket connection failed'
     }
 
-    // 监听终端输入 → 发送到 WebSocket
+    // 终端输入 → WebSocket
     const term = terminal.value
     if (term) {
       dataSub = term.onData((data) => {
@@ -161,7 +121,6 @@ export function useTerminal() {
         }
       })
 
-      // 监听终端 resize → 发送到 WebSocket
       resizeSub = term.onResize(({ cols, rows }) => {
         if (ws?.readyState === WebSocket.OPEN) {
           ws.send(
@@ -186,7 +145,7 @@ export function useTerminal() {
     status.value = 'disconnected'
   }
 
-  /** 调整终端大小（由 FitAddon 触发） */
+  /** 调整终端大小 */
   function fit() {
     fitAddon.value?.fit()
   }

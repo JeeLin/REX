@@ -56,10 +56,10 @@ async fn list_resources(
 
 async fn get_resource(
     State(state): State<AppState>,
-    Path((env_id, id)): Path<(String, String)>,
+    Path((_env_id, id)): Path<(String, String)>,
 ) -> ApiResult<Resource> {
     let db = state.db.clone();
-    let mut resource = tokio::task::spawn_blocking(move || db.get_resource(&env_id, &id))
+    let mut resource = tokio::task::spawn_blocking(move || db.get_resource(&id))
         .await
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
@@ -156,9 +156,8 @@ async fn delete_resource(
     Path((env_id, id)): Path<(String, String)>,
 ) -> ApiResult<serde_json::Value> {
     let db = state.db.clone();
-    let check_env_id = env_id.clone();
     let check_id = id.clone();
-    let resource = tokio::task::spawn_blocking(move || db.get_resource(&check_env_id, &check_id))
+    let resource = tokio::task::spawn_blocking(move || db.get_resource(&check_id))
         .await
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;

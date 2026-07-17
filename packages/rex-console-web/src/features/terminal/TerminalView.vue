@@ -10,13 +10,11 @@ import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 
 const props = defineProps<{
   tabId: string
+  resourceId: string
+  /** 以下字段仅用于状态栏显示，不用于连接 */
   host?: string
   port?: number
-  username?: string
   protocol?: string
-  agentMode?: boolean
-  agentId?: string
-  resourceId?: string
 }>()
 
 const containerRef = ref<HTMLDivElement>()
@@ -52,12 +50,10 @@ onMounted(() => {
 
   const term = createTerminal(containerRef.value)
 
-  // 加载搜索 addon
   const search = new SearchAddon()
   term.loadAddon(search)
   searchAddon.value = search
 
-  // Ctrl+F 打开搜索栏
   term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
     if (e.ctrlKey && e.key === 'f' && e.type === 'keydown') {
       e.preventDefault()
@@ -66,19 +62,9 @@ onMounted(() => {
     return true
   })
 
-  // 如果有连接信息，自动连接
-  if (props.host && props.protocol === 'ssh') {
-    connect({
-      host: props.host,
-      port: props.port || 22,
-      username: props.username || 'root',
-      agentMode: props.agentMode,
-      agentId: props.agentId,
-      resourceId: props.resourceId,
-    })
-  }
+  // Hub 自动判断直连/Agent 隧道
+  connect({ resourceId: props.resourceId })
 
-  // 监听窗口 resize
   const resizeObserver = new ResizeObserver(() => {
     fit()
   })
@@ -101,16 +87,7 @@ function handleFind() {
 }
 
 function handleReconnect() {
-  if (props.host && props.protocol === 'ssh') {
-    connect({
-      host: props.host,
-      port: props.port || 22,
-      username: props.username || 'root',
-      agentMode: props.agentMode,
-      agentId: props.agentId,
-      resourceId: props.resourceId,
-    })
-  }
+  connect({ resourceId: props.resourceId })
 }
 </script>
 
@@ -134,13 +111,11 @@ function handleReconnect() {
       class="tv-container"
       @contextmenu.prevent="onContextMenu"
     >
-      <!-- 终端内查找栏 -->
       <TerminalSearch
         :visible="showSearch"
         :search-addon="searchAddon"
         @close="showSearch = false"
       />
-      <!-- 终端右键菜单 -->
       <TerminalContextMenu
         :visible="showContextMenu"
         :x="contextMenuX"
@@ -202,7 +177,7 @@ function handleReconnect() {
 .tv-container {
   flex: 1;
   min-height: 0;
-  background: #0d1117; /* 终端背景色 */
+  background: #0d1117;
   overflow: hidden;
   position: relative;
 }
@@ -213,7 +188,7 @@ function handleReconnect() {
 
 .tv-overlay {
   position: absolute;
-  inset: 24px 0 0 0; /* 避开状态栏 */
+  inset: 24px 0 0 0;
   display: flex;
   align-items: center;
   justify-content: center;

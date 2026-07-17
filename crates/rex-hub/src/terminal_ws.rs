@@ -1,31 +1,27 @@
-//! WebSocket 终端桥接 — 浏览器 ↔ Hub ↔ SSH 服务器。
+//! WebSocket 终端桥接 — 浏览器 ↔ Hub ↔ SSH 服务器 / Agent。
 //!
-//! 协议：JSON 消息，数据部分 base64 编码。
+//! 统一入口：/ws/terminal?token=jwt&resourceId=xxx
+//! Hub 从 DB 读取资源连接信息，自动判断直连或 Agent 隧道。
+//! 前端完全不感知底层连接方式。
 
 use std::sync::Arc;
 
 use axum::extract::ws::{Message, WebSocket};
-use axum::extract::WebSocketUpgrade;
+use axum::extract::{Query, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use rex_ssh::{SshConfig, SshSession, TerminalEvent};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, oneshot, Mutex};
 
-/// 前端 → 后端的消息
+use crate::agent_ws::{AgentEvent, ConnectResponse};
+use crate::AppState;
+
+/// 前端 → 后端的消息（连接建立后的控制消息）
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 enum ClientMsg {
-    #[serde(rename = "terminal.connect")]
-    Connect {
-        host: String,
-        port: u16,
-        username: String,
-        password: Option<String>,
-        #[serde(rename = "privateKey")]
-        private_key: Option<String>,
-    },
     #[serde(rename = "terminal.data")]
     Data { data: String },
     #[serde(rename = "terminal.resize")]
@@ -69,42 +65,152 @@ struct ErrorPayload {
     message: String,
 }
 
-/// 处理 WebSocket 升级请求
-pub async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
-    ws.on_upgrade(handle_socket)
+/// URL 查询参数
+#[derive(Deserialize)]
+pub struct TerminalQuery {
+    pub token: String,
+    #[serde(rename = "resourceId")]
+    pub resource_id: String,
+}
+
+/// 资源连接信息
+struct ResourceConnInfo {
+    host: String,
+    port: u16,
+    username: String,
+    password: Option<String>,
+    private_key: Option<String>,
+    use_agent: bool,
+    agent_id: Option<String>,
+}
+
+/// GET /ws/terminal?token=jwt&resourceId=xxx
+pub async fn ws_handler(
+    ws: WebSocketUpgrade,
+    Query(query): Query<TerminalQuery>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_socket(socket, state, query.resource_id))
 }
 
 /// WebSocket 连接处理主循环
-async fn handle_socket(mut ws: WebSocket) {
+async fn handle_socket(mut ws: WebSocket, state: AppState, resource_id: String) {
     let session_id = format!("sess_{}", &uuid::Uuid::new_v4().to_string()[..8]);
 
-    // 等待客户端发送 terminal.connect
-    let connect_msg = match ws.recv().await {
-        Some(Ok(Message::Text(text))) => serde_json::from_str::<ClientMsg>(&text).ok(),
-        _ => None,
-    };
-
-    let config = match connect_msg {
-        Some(ClientMsg::Connect {
-            host,
-            port,
-            username,
-            password,
-            private_key,
-        }) => SshConfig {
-            host,
-            port,
-            username,
-            password,
-            private_key,
-        },
-        _ => {
-            let _ = send_ws_error(&mut ws, "expected terminal.connect").await;
+    // 从 DB 读取资源连接信息（含解密密码）
+    let conn_info = match load_resource_conn(&state, &resource_id).await {
+        Ok(info) => info,
+        Err(e) => {
+            let _ = send_ws_error(&mut ws, &e).await;
             return;
         }
     };
 
-    // 建立 SSH 连接
+    if conn_info.use_agent {
+        handle_agent_terminal(ws, &state, &conn_info, &resource_id, &session_id).await;
+    } else {
+        handle_direct_terminal(ws, &conn_info, &session_id).await;
+    }
+}
+
+/// 从 DB 读取资源连接信息（解密 config_json）
+async fn load_resource_conn(
+    state: &AppState,
+    resource_id: &str,
+) -> Result<ResourceConnInfo, String> {
+    let db = state.db.clone();
+    let rid = resource_id.to_string();
+    let crypto = state.crypto.clone();
+
+    tokio::task::spawn_blocking(move || {
+        // 获取资源
+        let resource = db
+            .get_resource(&rid)
+            .map_err(|e| format!("db error: {e}"))?
+            .ok_or_else(|| "resource not found".to_string())?;
+
+        // 解密 config_json
+        let config_str = if !resource.config_json.is_empty() && resource.config_json != "{}" {
+            crypto
+                .decrypt(&resource.config_json)
+                .map_err(|e| format!("decrypt failed: {e}"))?
+        } else {
+            resource.config_json.clone()
+        };
+
+        let config: serde_json::Value = serde_json::from_str(&config_str)
+            .map_err(|e| format!("invalid config json: {e}"))?;
+
+        let host = config
+            .get("host")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let port = config
+            .get("port")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(22) as u16;
+        let username = config
+            .get("username")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let password = config
+            .get("password")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let private_key = config
+            .get("privateKey")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
+        // 获取环境信息
+        let env = db
+            .get_environment(&resource.environment_id)
+            .map_err(|e| format!("db error: {e}"))?
+            .ok_or_else(|| "environment not found".to_string())?;
+
+        let use_agent = env.connection_mode == "agent";
+
+        let agent_id = if use_agent {
+            let agents = db
+                .list_agents_by_env(&resource.environment_id)
+                .unwrap_or_default();
+            agents
+                .into_iter()
+                .find(|a| a.status == "online")
+                .map(|a| a.id)
+        } else {
+            None
+        };
+
+        Ok(ResourceConnInfo {
+            host,
+            port,
+            username,
+            password,
+            private_key,
+            use_agent,
+            agent_id,
+        })
+    })
+    .await
+    .map_err(|e| format!("task join error: {e}"))?
+}
+
+// ═══════════════════════════════════════
+// 直连模式
+// ═══════════════════════════════════════
+
+async fn handle_direct_terminal(mut ws: WebSocket, conn: &ResourceConnInfo, session_id: &str) {
+    let config = SshConfig {
+        host: conn.host.clone(),
+        port: conn.port,
+        username: conn.username.clone(),
+        password: conn.password.clone(),
+        private_key: conn.private_key.clone(),
+    };
+
     let session = match SshSession::connect(config).await {
         Ok(s) => s,
         Err(e) => {
@@ -113,12 +219,11 @@ async fn handle_socket(mut ws: WebSocket) {
         }
     };
 
-    // 发送 connected 确认
     let _ = ws
         .send(Message::Text(
             serde_json::to_string(&ServerMsg::Connected {
                 payload: ConnectedPayload {
-                    session_id: session_id.clone(),
+                    session_id: session_id.to_string(),
                 },
             })
             .unwrap(),
@@ -126,16 +231,10 @@ async fn handle_socket(mut ws: WebSocket) {
         .await;
 
     let session = Arc::new(Mutex::new(session));
-
-    // 拆分 WebSocket 为读/写两半
     let (mut ws_sink, mut ws_stream) = ws.split();
-
-    // WS → SSH 命令通道
     let (cmd_tx, mut cmd_rx) = mpsc::channel::<ClientMsg>(64);
-    // SSH → WS 数据通道
     let (data_tx, mut data_rx) = mpsc::channel::<String>(512);
 
-    // 任务1：WS 读取 → cmd_tx
     let ws_read_task = tokio::spawn(async move {
         while let Some(msg) = ws_stream.next().await {
             match msg {
@@ -156,13 +255,11 @@ async fn handle_socket(mut ws: WebSocket) {
         }
     });
 
-    // 任务2：SSH 收发（cmd_rx + session → data_tx）
     let session_for_ssh = session.clone();
     let ssh_task = tokio::spawn(async move {
         loop {
             let mut session = session_for_ssh.lock().await;
             tokio::select! {
-                // 接收来自 WS 的命令
                 cmd = cmd_rx.recv() => {
                     match cmd {
                         Some(ClientMsg::Data { data }) => {
@@ -177,12 +274,10 @@ async fn handle_socket(mut ws: WebSocket) {
                             let _ = session.disconnect().await;
                             break;
                         }
-                        _ => {}
                     }
                 }
-                // 接收来自 SSH 的事件
                 event = session.recv() => {
-                    drop(session); // 释放锁
+                    drop(session);
                     match event {
                         Some(TerminalEvent::Data(data)) => {
                             let encoded = base64::engine::general_purpose::STANDARD.encode(data.as_bytes());
@@ -199,21 +294,18 @@ async fn handle_socket(mut ws: WebSocket) {
                         }
                         None => break,
                     }
-                    continue; // 不需要重新获取锁
+                    continue;
                 }
             }
             drop(session);
         }
     });
 
-    // 任务3：data_rx → WebSocket 写入
     let ws_write_task = tokio::spawn(async move {
         while let Some(data) = data_rx.recv().await {
             let msg = if data.starts_with('{') {
-                // JSON 控制消息（disconnected）直接发送
                 Message::Text(data)
             } else {
-                // base64 编码的终端数据
                 let wrapped = ServerMsg::Data {
                     payload: DataPayload { data },
                 };
@@ -225,7 +317,6 @@ async fn handle_socket(mut ws: WebSocket) {
         }
     });
 
-    // 等待任一任务结束
     tokio::select! {
         _ = ws_read_task => {},
         _ = ssh_task => {},
@@ -233,6 +324,187 @@ async fn handle_socket(mut ws: WebSocket) {
     }
 
     tracing::debug!(session_id, "terminal session ended");
+}
+
+// ═══════════════════════════════════════
+// Agent 隧道模式
+// ═══════════════════════════════════════
+
+async fn handle_agent_terminal(
+    mut ws: WebSocket,
+    state: &AppState,
+    conn: &ResourceConnInfo,
+    resource_id: &str,
+    session_id: &str,
+) {
+    let agent_id = match conn.agent_id.as_ref() {
+        Some(id) => id.clone(),
+        None => {
+            let _ = send_ws_error(&mut ws, "no online agent for this environment").await;
+            return;
+        }
+    };
+
+    let agent_conn = {
+        let conns = state.agent_tunnel.connections.read().await;
+        conns.get(&agent_id).cloned()
+    };
+
+    let agent_conn = match agent_conn {
+        Some(c) => c,
+        None => {
+            let _ = send_ws_error(&mut ws, "agent not connected").await;
+            return;
+        }
+    };
+
+    // 发送 connect 到 Agent
+    let request_id = format!("req_{}", &uuid::Uuid::new_v4().to_string()[..8]);
+    let (resp_tx, resp_rx) = oneshot::channel();
+
+    {
+        let mut pending = state.agent_tunnel.pending_requests.write().await;
+        pending.insert(request_id.clone(), resp_tx);
+    }
+
+    let connect_msg = serde_json::json!({
+        "type": "connect",
+        "payload": {
+            "request_id": request_id,
+            "resource_id": resource_id,
+            "protocol": "ssh",
+            "config": {
+                "host": conn.host,
+                "port": conn.port,
+                "username": conn.username,
+                "password": conn.password,
+                "privateKey": conn.private_key,
+            }
+        }
+    });
+
+    if agent_conn
+        .sender
+        .send(AgentEvent::Text(connect_msg.to_string()))
+        .await
+        .is_err()
+    {
+        let _ = send_ws_error(&mut ws, "failed to contact agent").await;
+        return;
+    }
+
+    // 等待 Agent 响应
+    let channel_id = match tokio::time::timeout(std::time::Duration::from_secs(10), resp_rx).await {
+        Ok(Ok(ConnectResponse { channel_id: Some(id), .. })) => id,
+        Ok(Ok(ConnectResponse { error: Some(e), .. })) => {
+            let _ = send_ws_error(&mut ws, &e).await;
+            return;
+        }
+        _ => {
+            let _ = send_ws_error(&mut ws, "agent connection timeout").await;
+            return;
+        }
+    };
+
+    tracing::info!(channel_id = %channel_id, session_id = %session_id, "agent terminal connected");
+
+    // 通知前端连接成功
+    let _ = ws
+        .send(Message::Text(
+            serde_json::to_string(&ServerMsg::Connected {
+                payload: ConnectedPayload {
+                    session_id: session_id.to_string(),
+                },
+            })
+            .unwrap(),
+        ))
+        .await;
+
+    // 注册 tunnel data channel
+    let (data_tx, mut data_rx) = mpsc::channel::<Vec<u8>>(512);
+    {
+        let mut tunnel_data = state.agent_tunnel.tunnel_data.write().await;
+        tunnel_data.insert(channel_id.clone(), data_tx);
+    }
+
+    // 桥接：前端 ↔ Agent
+    let (mut ws_sink, mut ws_stream) = ws.split();
+    let ch_id_num = channel_id.parse::<u32>().unwrap_or(0);
+
+    let agent_for_send = agent_conn.clone();
+    let channel_id_clone = channel_id.clone();
+    let frontend_to_agent = tokio::spawn(async move {
+        while let Some(msg) = ws_stream.next().await {
+            match msg {
+                Ok(Message::Text(text)) => {
+                    if let Ok(client_msg) = serde_json::from_str::<ClientMsg>(&text) {
+                        match client_msg {
+                            ClientMsg::Data { data } => {
+                                if let Ok(decoded) =
+                                    base64::engine::general_purpose::STANDARD.decode(&data)
+                                {
+                                    let mut frame =
+                                        Vec::with_capacity(4 + decoded.len());
+                                    frame.extend_from_slice(&ch_id_num.to_be_bytes());
+                                    frame.extend_from_slice(&decoded);
+                                    let _ = agent_for_send
+                                        .sender
+                                        .send(AgentEvent::Bytes(frame))
+                                        .await;
+                                }
+                            }
+                            ClientMsg::Resize { cols, rows } => {
+                                let resize_msg = serde_json::json!({
+                                    "type": "resize",
+                                    "payload": { "channelId": channel_id_clone, "cols": cols, "rows": rows }
+                                });
+                                let _ = agent_for_send
+                                    .sender
+                                    .send(AgentEvent::Text(resize_msg.to_string()))
+                                    .await;
+                            }
+                            ClientMsg::Disconnect => break,
+                        }
+                    }
+                }
+                Ok(Message::Close(_)) | Err(_) => break,
+                _ => {}
+            }
+        }
+    });
+
+    let agent_to_frontend = tokio::spawn(async move {
+        while let Some(data) = data_rx.recv().await {
+            let encoded = base64::engine::general_purpose::STANDARD.encode(&data);
+            let msg = ServerMsg::Data {
+                payload: DataPayload { data: encoded },
+            };
+            if ws_sink
+                .send(Message::Text(serde_json::to_string(&msg).unwrap()))
+                .await
+                .is_err()
+            {
+                break;
+            }
+        }
+    });
+
+    tokio::select! {
+        _ = frontend_to_agent => {},
+        _ = agent_to_frontend => {},
+    }
+
+    // 清理
+    {
+        let mut tunnel_data = state.agent_tunnel.tunnel_data.write().await;
+        tunnel_data.remove(&channel_id);
+    }
+    {
+        let mut channels = state.agent_tunnel.channels.write().await;
+        channels.remove(&channel_id);
+    }
+
+    tracing::debug!(session_id, "agent terminal session ended");
 }
 
 async fn send_ws_error(ws: &mut WebSocket, msg: &str) -> Result<(), axum::Error> {

@@ -75,7 +75,6 @@ enum AgentMsg {
 
 #[derive(Debug, Serialize)]
 struct AuthPayload {
-    agent_id: String,
     token: String,
 }
 
@@ -106,7 +105,6 @@ struct ConnectErrorPayload {
 pub struct AgentConfig {
     pub hub_url: String,
     pub agent_token: String,
-    pub agent_id: String,
 }
 
 impl AgentConfig {
@@ -115,12 +113,9 @@ impl AgentConfig {
             std::env::var("REX_HUB_URL").map_err(|_| "REX_HUB_URL not set".to_string())?;
         let agent_token = std::env::var("REX_AGENT_TOKEN")
             .map_err(|_| "REX_AGENT_TOKEN not set".to_string())?;
-        let agent_id =
-            std::env::var("REX_AGENT_ID").map_err(|_| "REX_AGENT_ID not set".to_string())?;
         Ok(Self {
             hub_url,
             agent_token,
-            agent_id,
         })
     }
 }
@@ -171,10 +166,9 @@ async fn connect_and_run(
     let (ws_stream, _) = connect_async(&ws_url).await?;
     let (mut ws_sink, mut ws_stream) = ws_stream.split();
 
-    // 1. 发送 auth
+    // 1. 发送 auth（只传 token，Hub 通过 token 查找 agent_id）
     let auth_msg = serde_json::to_string(&AgentMsg::Auth {
         payload: AuthPayload {
-            agent_id: config.agent_id.clone(),
             token: config.agent_token.clone(),
         },
     })?;

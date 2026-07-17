@@ -393,16 +393,16 @@ impl Database {
         Ok(resources)
     }
 
-    pub fn get_resource(&self, env_id: &str, id: &str) -> Result<Option<Resource>> {
+    pub fn get_resource(&self, id: &str) -> Result<Option<Resource>> {
         let conn = self.conn()?;
         let mut stmt = conn
             .prepare(
                 "SELECT id, environment_id, name, protocol, host, port, username, config_json, color, sort_order, created_at, updated_at
-                 FROM resources WHERE environment_id = ?1 AND id = ?2",
+                 FROM resources WHERE id = ?1",
             )
             .map_err(|e| RExError::Message(e.to_string()))?;
         let mut rows = stmt
-            .query_map(rusqlite::params![env_id, id], |row| {
+            .query_map(rusqlite::params![id], |row| {
                 Ok(Resource {
                     id: row.get(0)?,
                     environment_id: row.get(1)?,
@@ -459,7 +459,7 @@ impl Database {
 
     pub fn update_resource(&self, env_id: &str, id: &str, res: &NewResource) -> Result<Resource> {
         let existing = self
-            .get_resource(env_id, id)?
+            .get_resource(id)?
             .ok_or_else(|| RExError::Message("resource not found".into()))?;
         let conn = self.conn()?;
         let now = chrono::Utc::now().to_rfc3339();
@@ -477,7 +477,7 @@ impl Database {
             rusqlite::params![res.name, res.protocol, res.host, port, username, config, color, sort, now, env_id, id],
         )
         .map_err(|e| RExError::Message(e.to_string()))?;
-        self.get_resource(env_id, id)?
+        self.get_resource(id)?
             .ok_or_else(|| RExError::Message("resource not found after update".into()))
     }
 
@@ -493,14 +493,14 @@ impl Database {
 
     // --- Agents ---
 
-    /// 验证 agent token，返回 agent ID（如果匹配）
-    pub fn verify_agent_token(&self, agent_id: &str, token: &str) -> Result<Option<String>> {
+    /// 通过 token 查找 agent，返回 agent ID
+    pub fn find_agent_by_token(&self, token: &str) -> Result<Option<String>> {
         let conn = self.conn()?;
         let mut stmt = conn
-            .prepare("SELECT id FROM agents WHERE id = ?1 AND token_hash = ?2")
+            .prepare("SELECT id FROM agents WHERE token_hash = ?1")
             .map_err(|e| RExError::Message(e.to_string()))?;
         let mut rows = stmt
-            .query_map(rusqlite::params![agent_id, token], |row| row.get::<_, String>(0))
+            .query_map(rusqlite::params![token], |row| row.get::<_, String>(0))
             .map_err(|e| RExError::Message(e.to_string()))?;
         match rows.next() {
             Some(Ok(id)) => Ok(Some(id)),

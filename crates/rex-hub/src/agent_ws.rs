@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use axum::extract::ws::{Message, WebSocket};
-use axum::extract::{Query, State, WebSocketUpgrade};
+use axum::extract::{State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -44,8 +44,6 @@ enum AgentMsg {
 
 #[derive(Debug, Deserialize)]
 struct AuthPayload {
-    agent_id: String,
-    #[allow(dead_code)]
     token: String,
 }
 
@@ -185,23 +183,16 @@ impl Default for AgentTunnelState {
 // WebSocket 入口
 // ═══════════════════════════════════════
 
-#[derive(Deserialize)]
-pub struct AgentQuery {
-    #[allow(dead_code)]
-    pub token: String,
-}
-
-/// GET /ws/agent?token=<agent_token>
+/// GET /ws/agent — Agent 通过 WebSocket auth 消息认证
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
-    Query(query): Query<AgentQuery>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_agent_socket(socket, query.token, state))
+    ws.on_upgrade(move |socket| handle_agent_socket(socket, state))
 }
 
 /// Agent WebSocket 主处理循环
-async fn handle_agent_socket(ws: WebSocket, token: String, state: AppState) {
+async fn handle_agent_socket(ws: WebSocket, state: AppState) {
     // 拆分 WebSocket
     let (mut ws_sink, mut ws_stream) = ws.split();
 
@@ -220,11 +211,10 @@ async fn handle_agent_socket(ws: WebSocket, token: String, state: AppState) {
         }
     };
 
-    // 2. 验证 token
+    // 2. 通过 token 查找 Agent
     let db = state.db.clone();
-    let agent_id = auth_msg.agent_id.clone();
-    let token_clone = token.clone();
-    let verified = tokio::task::spawn_blocking(move || db.verify_agent_token(&agent_id, &token_clone))
+    let token_for_lookup = auth_msg.token.clone();
+    let verified = tokio::task::spawn_blocking(move || db.find_agent_by_token(&token_for_lookup))
         .await;
     let verified_id = match verified {
         Ok(Ok(Some(id))) => id,
@@ -432,11 +422,10 @@ mod tests {
 
     #[test]
     fn test_agent_msg_auth_deserialize() {
-        let json = r#"{"type":"auth","payload":{"agent_id":"a1","token":"tok1"}}"#;
+        let json = r#"{"type":"auth","payload":{"token":"tok1"}}"#;
         let msg: AgentMsg = serde_json::from_str(json).unwrap();
         match msg {
             AgentMsg::Auth { payload } => {
-                assert_eq!(payload.agent_id, "a1");
                 assert_eq!(payload.token, "tok1");
             }
             _ => panic!("expected Auth"),

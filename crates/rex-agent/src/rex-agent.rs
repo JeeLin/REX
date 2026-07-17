@@ -36,7 +36,6 @@ fn worker_main() {
 
     tracing::info!(
         hub_url = %config.hub_url,
-        agent_id = %config.agent_id,
         "agent configured"
     );
 

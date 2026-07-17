@@ -347,13 +347,10 @@ useKeyboardShortcuts([
               <TerminalView
                 v-if="activeTabInfo?.protocol === 'ssh'"
                 :tab-id="activeTab"
+                :resource-id="activeTabInfo?.resourceId || ''"
                 :host="activeTabInfo?.host"
                 :port="activeTabInfo?.port"
-                :username="activeTabInfo?.username"
                 :protocol="activeTabInfo?.protocol"
-                :agent-mode="activeTabInfo?.connectionMode === 'agent'"
-                :agent-id="activeTabInfo?.agentId"
-                :resource-id="activeTabInfo?.resourceId"
                 @update:status="onTabStatusChange(activeTab, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
               />
 
