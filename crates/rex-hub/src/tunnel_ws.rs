@@ -127,14 +127,13 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
     }
 
     // 4. 等待 Agent 响应（5 秒超时）
-    let connect_result = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        resp_rx,
-    )
-    .await;
+    let connect_result = tokio::time::timeout(std::time::Duration::from_secs(5), resp_rx).await;
 
     let channel_id = match connect_result {
-        Ok(Ok(ConnectResponse { channel_id: Some(id), .. })) => id,
+        Ok(Ok(ConnectResponse {
+            channel_id: Some(id),
+            ..
+        })) => id,
         Ok(Ok(ConnectResponse { error: Some(e), .. })) => {
             let _ = send_error(&mut ws, &e).await;
             return;

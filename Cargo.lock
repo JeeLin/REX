@@ -3475,10 +3475,13 @@ name = "rex-agent"
 version = "0.16.0"
 dependencies = [
  "futures-util",
+ "hex",
  "hostname",
+ "reqwest",
  "rex-common",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tokio",
  "tokio-tungstenite",
  "tracing",
@@ -3495,6 +3498,7 @@ dependencies = [
  "async-trait",
  "clap",
  "futures-util",
+ "hex",
  "rcgen",
  "reqwest",
  "rustls 0.23.40",
@@ -3516,7 +3520,6 @@ name = "rex-hub"
 version = "0.16.0"
 dependencies = [
  "aes-gcm 0.10.3",
- "anyhow",
  "argon2 0.5.3",
  "async-trait",
  "aws-config",
@@ -3530,7 +3533,6 @@ dependencies = [
  "r2d2",
  "rand_core 0.6.4",
  "redis",
- "reqwest",
  "rex-common",
  "rex-mysql",
  "rex-postgresql",

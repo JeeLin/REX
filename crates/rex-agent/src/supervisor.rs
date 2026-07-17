@@ -64,9 +64,7 @@ pub fn run_supervisor() {
                         // 更新失败，用旧版本重试
                         restart_count += 1;
                         if restart_count >= MAX_RESTARTS {
-                            tracing::error!(
-                                "worker crashed {MAX_RESTARTS} times, giving up"
-                            );
+                            tracing::error!("worker crashed {MAX_RESTARTS} times, giving up");
                             std::process::exit(1);
                         }
                         // 删除可能损坏的 update-state.json
@@ -87,9 +85,7 @@ pub fn run_supervisor() {
 
                 restart_count += 1;
                 if restart_count >= MAX_RESTARTS {
-                    tracing::error!(
-                        "worker crashed {MAX_RESTARTS} times, giving up"
-                    );
+                    tracing::error!("worker crashed {MAX_RESTARTS} times, giving up");
                     std::process::exit(1);
                 }
                 tracing::info!(
@@ -104,11 +100,11 @@ pub fn run_supervisor() {
 /// 读取 update-state.json 并应用更新（rename tmp → current）
 fn apply_update(current_exe: &Path) -> Result<String, String> {
     let state_path = state_file_path(current_exe);
-    let state_json = std::fs::read_to_string(&state_path)
-        .map_err(|e| format!("read update-state.json: {e}"))?;
+    let state_json =
+        std::fs::read_to_string(&state_path).map_err(|e| format!("read update-state.json: {e}"))?;
 
-    let state: rex_common::update::UpdateStateFile = serde_json::from_str(&state_json)
-        .map_err(|e| format!("parse update-state.json: {e}"))?;
+    let state: rex_common::update::UpdateStateFile =
+        serde_json::from_str(&state_json).map_err(|e| format!("parse update-state.json: {e}"))?;
 
     let tmp_path = PathBuf::from(&state.tmp_path);
     if !tmp_path.exists() {
@@ -117,8 +113,7 @@ fn apply_update(current_exe: &Path) -> Result<String, String> {
 
     // 校验 SHA256（如果提供了）
     if !state.sha256.is_empty() {
-        let data = std::fs::read(&tmp_path)
-            .map_err(|e| format!("read tmp file: {e}"))?;
+        let data = std::fs::read(&tmp_path).map_err(|e| format!("read tmp file: {e}"))?;
         let hash = sha256_hex(&data);
         if hash != state.sha256 {
             return Err(format!(
@@ -135,8 +130,7 @@ fn apply_update(current_exe: &Path) -> Result<String, String> {
     }
 
     // rename tmp → current（原子操作）
-    std::fs::rename(&tmp_path, current_exe)
-        .map_err(|e| format!("rename tmp to current: {e}"))?;
+    std::fs::rename(&tmp_path, current_exe).map_err(|e| format!("rename tmp to current: {e}"))?;
 
     // 清理 update-state.json
     let _ = std::fs::remove_file(&state_path);
@@ -166,10 +160,7 @@ fn state_file_path(current_exe: &Path) -> PathBuf {
 }
 
 fn sha256_hex(data: &[u8]) -> String {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    hex::encode(hasher.finalize())
+    rex_common::update::sha256_hex(data)
 }
 
 #[cfg(test)]

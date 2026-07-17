@@ -21,25 +21,15 @@ use crate::AppState;
 #[serde(tag = "type")]
 enum AgentMsg {
     #[serde(rename = "auth")]
-    Auth {
-        payload: AuthPayload,
-    },
+    Auth { payload: AuthPayload },
     #[serde(rename = "heartbeat")]
-    Heartbeat {
-        payload: HeartbeatPayload,
-    },
+    Heartbeat { payload: HeartbeatPayload },
     #[serde(rename = "connected")]
-    Connected {
-        payload: ConnectedPayload,
-    },
+    Connected { payload: ConnectedPayload },
     #[serde(rename = "connect_error")]
-    ConnectError {
-        payload: ConnectErrorPayload,
-    },
+    ConnectError { payload: ConnectErrorPayload },
     #[serde(rename = "closed")]
-    Closed {
-        payload: ChannelIdPayload,
-    },
+    Closed { payload: ChannelIdPayload },
 }
 
 #[derive(Debug, Deserialize)]
@@ -88,23 +78,15 @@ struct ChannelIdPayload {
 #[allow(dead_code)]
 enum HubMsg {
     #[serde(rename = "auth_ok")]
-    AuthOk {
-        payload: AuthOkPayload,
-    },
+    AuthOk { payload: AuthOkPayload },
     #[serde(rename = "auth_fail")]
-    AuthFail {
-        payload: AuthFailPayload,
-    },
+    AuthFail { payload: AuthFailPayload },
     #[serde(rename = "heartbeat_ack")]
     HeartbeatAck,
     #[serde(rename = "connect")]
-    Connect {
-        payload: ConnectRequest,
-    },
+    Connect { payload: ConnectRequest },
     #[serde(rename = "close")]
-    Close {
-        payload: ChannelIdPayload,
-    },
+    Close { payload: ChannelIdPayload },
 }
 
 #[derive(Debug, Serialize)]
@@ -184,10 +166,7 @@ impl Default for AgentTunnelState {
 // ═══════════════════════════════════════
 
 /// GET /ws/agent — Agent 通过 WebSocket auth 消息认证
-pub async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_agent_socket(socket, state))
 }
 
@@ -214,8 +193,8 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
     // 2. 通过 token 查找 Agent
     let db = state.db.clone();
     let token_for_lookup = auth_msg.token.clone();
-    let verified = tokio::task::spawn_blocking(move || db.find_agent_by_token(&token_for_lookup))
-        .await;
+    let verified =
+        tokio::task::spawn_blocking(move || db.find_agent_by_token(&token_for_lookup)).await;
     let verified_id = match verified {
         Ok(Ok(Some(id))) => id,
         _ => {
@@ -233,8 +212,7 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
     // 3. 认证成功 — 标记 online
     let db = state.db.clone();
     let aid = verified_id.clone();
-    let _ = tokio::task::spawn_blocking(move || db.update_agent_heartbeat(&aid, "", ""))
-        .await;
+    let _ = tokio::task::spawn_blocking(move || db.update_agent_heartbeat(&aid, "", "")).await;
 
     let ok_msg = serde_json::to_string(&HubMsg::AuthOk {
         payload: AuthOkPayload {
@@ -284,12 +262,7 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
         match msg {
             Ok(Message::Text(text)) => {
                 if let Ok(agent_msg) = serde_json::from_str::<AgentMsg>(&text) {
-                    handle_agent_msg(
-                        agent_msg,
-                        &agent_id,
-                        &state_clone,
-                    )
-                    .await;
+                    handle_agent_msg(agent_msg, &agent_id, &state_clone).await;
                 }
             }
             Ok(Message::Binary(data)) => {
@@ -335,10 +308,8 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
             let db = state.db.clone();
             let aid = agent_id.to_string();
             let ver = payload.version.clone();
-            let _ = tokio::task::spawn_blocking(move || {
-                db.update_agent_heartbeat(&aid, &ver, "")
-            })
-            .await;
+            let _ = tokio::task::spawn_blocking(move || db.update_agent_heartbeat(&aid, &ver, ""))
+                .await;
 
             // 回复 ack
             if let Some(conn) = state.agent_tunnel.connections.read().await.get(agent_id) {
@@ -357,8 +328,16 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
                     // 构造 Agent 下载 URL（Hub 提供二进制）
                     let download_url = format!(
                         "/api/agents/download?os={}&arch={}",
-                        if payload.os.is_empty() { "linux" } else { &payload.os },
-                        if payload.arch.is_empty() { "amd64" } else { &payload.arch },
+                        if payload.os.is_empty() {
+                            "linux"
+                        } else {
+                            &payload.os
+                        },
+                        if payload.arch.is_empty() {
+                            "amd64"
+                        } else {
+                            &payload.arch
+                        },
                     );
 
                     let update_cmd = rex_common::update::UpdateCommand {
@@ -396,19 +375,10 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
                 });
             }
 
-            tracing::info!(
-                agent_id,
-                request_id,
-                channel_id,
-                "agent resource connected"
-            );
+            tracing::info!(agent_id, request_id, channel_id, "agent resource connected");
         }
         AgentMsg::ConnectError {
-            payload:
-                ConnectErrorPayload {
-                    request_id,
-                    error,
-                },
+            payload: ConnectErrorPayload { request_id, error },
         } => {
             // 通知等待此 requestId 的 tunnel
             let mut pending = state.agent_tunnel.pending_requests.write().await;
@@ -435,7 +405,9 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
 }
 
 /// 从 WebSocket 流读取下一条文本消息并解析为 AgentMsg
-async fn recv_agent_msg(stream: &mut (impl StreamExt<Item = Result<Message, axum::Error>> + Unpin)) -> Option<AgentMsg> {
+async fn recv_agent_msg(
+    stream: &mut (impl StreamExt<Item = Result<Message, axum::Error>> + Unpin),
+) -> Option<AgentMsg> {
     while let Some(msg) = stream.next().await {
         if let Ok(Message::Text(text)) = msg {
             if let Ok(parsed) = serde_json::from_str::<AgentMsg>(&text) {

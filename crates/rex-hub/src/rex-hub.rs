@@ -147,13 +147,13 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
         .nest("/api/files", file_api::file_routes())
         .route("/ws/terminal", axum::routing::get(terminal_ws::ws_handler))
         .route("/ws/tunnel", axum::routing::get(tunnel_ws::ws_handler))
-        .layer(axum::middleware::from_extractor_with_state::<AuthUser, AppState>(
-            state.clone(),
-        ));
+        .layer(axum::middleware::from_extractor_with_state::<
+            AuthUser,
+            AppState,
+        >(state.clone()));
 
     // Agent WebSocket — 使用 Agent 自己的 token 认证，不走 JWT 中间件
-    let agent_ws_route = Router::new()
-        .route("/ws/agent", axum::routing::get(agent_ws::ws_handler));
+    let agent_ws_route = Router::new().route("/ws/agent", axum::routing::get(agent_ws::ws_handler));
 
     Router::new()
         .merge(public_routes)

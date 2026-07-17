@@ -37,9 +37,7 @@ fn worker_main() {
         Err(e) => {
             tracing::error!(error = %e, "failed to load agent config");
             eprintln!("Error: {e}");
-            eprintln!(
-                "Required environment variables: REX_HUB_URL, REX_AGENT_TOKEN"
-            );
+            eprintln!("Required environment variables: REX_HUB_URL, REX_AGENT_TOKEN");
             std::process::exit(1);
         }
     };

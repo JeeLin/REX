@@ -30,7 +30,9 @@ enum HubMsg {
     #[serde(rename = "close")]
     Close { payload: ChannelPayload },
     #[serde(rename = "update")]
-    Update { payload: UpdateCmdPayload },
+    Update {
+        payload: rex_common::update::UpdateCommand,
+    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -50,14 +52,6 @@ struct ConnectRequest {
     resource_id: String,
     protocol: String,
     config: serde_json::Value,
-}
-
-#[derive(Debug, Deserialize)]
-struct UpdateCmdPayload {
-    version: String,
-    download_url: String,
-    fallback_url: String,
-    sha256: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -133,8 +127,8 @@ impl AgentConfig {
     pub fn from_env() -> Result<Self, String> {
         let hub_url =
             std::env::var("REX_HUB_URL").map_err(|_| "REX_HUB_URL not set".to_string())?;
-        let agent_token = std::env::var("REX_AGENT_TOKEN")
-            .map_err(|_| "REX_AGENT_TOKEN not set".to_string())?;
+        let agent_token =
+            std::env::var("REX_AGENT_TOKEN").map_err(|_| "REX_AGENT_TOKEN not set".to_string())?;
         let auto_update = std::env::var("REX_AUTO_UPDATE")
             .unwrap_or_else(|_| "true".into())
             .parse::<bool>()
@@ -162,7 +156,8 @@ struct LocalChannel {
 // ═══════════════════════════════════════
 
 pub async fn run_agent(config: AgentConfig) {
-    let channels: Arc<RwLock<HashMap<String, LocalChannel>>> = Arc::new(RwLock::new(HashMap::new()));
+    let channels: Arc<RwLock<HashMap<String, LocalChannel>>> =
+        Arc::new(RwLock::new(HashMap::new()));
 
     loop {
         tracing::info!(hub_url = %config.hub_url, "connecting to hub");
@@ -335,8 +330,16 @@ async fn handle_connect(
     let channel_id = format!("ch_{}", &uuid::Uuid::new_v4().to_string()[..8]);
 
     // 解析目标地址
-    let host = req.config.get("host").and_then(|v| v.as_str()).unwrap_or("");
-    let port = req.config.get("port").and_then(|v| v.as_u64()).unwrap_or(22) as u16;
+    let host = req
+        .config
+        .get("host")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let port = req
+        .config
+        .get("port")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(22) as u16;
 
     if host.is_empty() {
         let err_msg = serde_json::to_string(&AgentMsg::ConnectError {
@@ -472,14 +475,7 @@ enum AgentEvent {
 }
 
 /// 处理 Hub 发来的更新指令
-async fn handle_update(payload: UpdateCmdPayload, evt_tx: mpsc::Sender<AgentEvent>) {
-    let cmd = rex_common::update::UpdateCommand {
-        version: payload.version,
-        download_url: payload.download_url,
-        fallback_url: payload.fallback_url,
-        sha256: payload.sha256,
-    };
-
+async fn handle_update(cmd: rex_common::update::UpdateCommand, evt_tx: mpsc::Sender<AgentEvent>) {
     let current_exe = match std::env::current_exe() {
         Ok(p) => p,
         Err(e) => {

@@ -9,7 +9,8 @@ use rex_common::update::{UpdateCommand, UpdatePhase, UpdateProgress};
 use tokio::io::AsyncWriteExt;
 
 /// 向 Hub 报告更新进度的回调
-pub type ProgressReporter = Box<dyn Fn(UpdateProgress) -> futures_util::future::BoxFuture<'static, ()> + Send + Sync>;
+pub type ProgressReporter =
+    Box<dyn Fn(UpdateProgress) -> futures_util::future::BoxFuture<'static, ()> + Send + Sync>;
 
 /// 执行 Agent 更新流程
 ///
@@ -93,8 +94,8 @@ pub async fn run_update(
         tmp_path: tmp_path.to_string_lossy().to_string(),
         sha256: cmd.sha256.clone(),
     };
-    let state_json = serde_json::to_string_pretty(&state)
-        .map_err(|e| UpdateError::Io(e.to_string()))?;
+    let state_json =
+        serde_json::to_string_pretty(&state).map_err(|e| UpdateError::Io(e.to_string()))?;
     tokio::fs::write(&state_file, state_json)
         .await
         .map_err(|e| UpdateError::Io(e.to_string()))?;
@@ -116,10 +117,7 @@ pub async fn run_update(
 }
 
 /// 下载二进制（优先 Hub，fallback GitHub）
-async fn download(
-    cmd: &UpdateCommand,
-    report: &ProgressReporter,
-) -> Result<Vec<u8>, UpdateError> {
+async fn download(cmd: &UpdateCommand, report: &ProgressReporter) -> Result<Vec<u8>, UpdateError> {
     match try_download(&cmd.download_url, report).await {
         Ok(bytes) => Ok(bytes),
         Err(e) => {
@@ -129,10 +127,7 @@ async fn download(
     }
 }
 
-async fn try_download(
-    url: &str,
-    report: &ProgressReporter,
-) -> Result<Vec<u8>, UpdateError> {
+async fn try_download(url: &str, report: &ProgressReporter) -> Result<Vec<u8>, UpdateError> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(300))
         .build()

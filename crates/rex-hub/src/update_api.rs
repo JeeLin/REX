@@ -98,11 +98,10 @@ impl Default for UpdateState {
 // ═══════════════════════════════════════
 
 pub fn update_routes() -> axum::Router<AppState> {
-    axum::Router::new()
-        .route(
-            "/api/agents/{id}/update/status",
-            axum::routing::get(get_update_status),
-        )
+    axum::Router::new().route(
+        "/api/agents/{id}/update/status",
+        axum::routing::get(get_update_status),
+    )
 }
 
 // ═══════════════════════════════════════
@@ -110,9 +109,7 @@ pub fn update_routes() -> axum::Router<AppState> {
 // ═══════════════════════════════════════
 
 /// GET /api/version — 返回 Hub 版本 + 所有 Agent 版本
-pub async fn get_version_info(
-    State(state): State<AppState>,
-) -> ApiResult<VersionInfo> {
+pub async fn get_version_info(State(state): State<AppState>) -> ApiResult<VersionInfo> {
     let hub_version = env!("CARGO_PKG_VERSION").to_string();
 
     let db = state.db.clone();
@@ -163,10 +160,7 @@ pub async fn download_agent_binary(
     if let Some(path) = state.update_state.find_agent_binary(os, arch) {
         match tokio::fs::read(&path).await {
             Ok(bytes) => {
-                let ext = path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("");
+                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
                 let filename = if ext.is_empty() {
                     format!("rex-agent-{os}-{arch}")
                 } else {
@@ -176,7 +170,10 @@ pub async fn download_agent_binary(
                     StatusCode::OK,
                     [
                         ("Content-Type", "application/octet-stream"),
-                        ("Content-Disposition", &format!("attachment; filename=\"{filename}\"")),
+                        (
+                            "Content-Disposition",
+                            &format!("attachment; filename=\"{filename}\""),
+                        ),
                     ],
                     bytes,
                 )

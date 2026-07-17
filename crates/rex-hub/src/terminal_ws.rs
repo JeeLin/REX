@@ -137,18 +137,15 @@ async fn load_resource_conn(
             resource.config_json.clone()
         };
 
-        let config: serde_json::Value = serde_json::from_str(&config_str)
-            .map_err(|e| format!("invalid config json: {e}"))?;
+        let config: serde_json::Value =
+            serde_json::from_str(&config_str).map_err(|e| format!("invalid config json: {e}"))?;
 
         let host = config
             .get("host")
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
-        let port = config
-            .get("port")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(22) as u16;
+        let port = config.get("port").and_then(|v| v.as_u64()).unwrap_or(22) as u16;
         let username = config
             .get("username")
             .and_then(|v| v.as_str())
@@ -394,7 +391,10 @@ async fn handle_agent_terminal(
 
     // 等待 Agent 响应
     let channel_id = match tokio::time::timeout(std::time::Duration::from_secs(10), resp_rx).await {
-        Ok(Ok(ConnectResponse { channel_id: Some(id), .. })) => id,
+        Ok(Ok(ConnectResponse {
+            channel_id: Some(id),
+            ..
+        })) => id,
         Ok(Ok(ConnectResponse { error: Some(e), .. })) => {
             let _ = send_ws_error(&mut ws, &e).await;
             return;
@@ -442,14 +442,11 @@ async fn handle_agent_terminal(
                                 if let Ok(decoded) =
                                     base64::engine::general_purpose::STANDARD.decode(&data)
                                 {
-                                    let mut frame =
-                                        Vec::with_capacity(4 + decoded.len());
+                                    let mut frame = Vec::with_capacity(4 + decoded.len());
                                     frame.extend_from_slice(&ch_id_num.to_be_bytes());
                                     frame.extend_from_slice(&decoded);
-                                    let _ = agent_for_send
-                                        .sender
-                                        .send(AgentEvent::Bytes(frame))
-                                        .await;
+                                    let _ =
+                                        agent_for_send.sender.send(AgentEvent::Bytes(frame)).await;
                                 }
                             }
                             ClientMsg::Resize { cols, rows } => {
