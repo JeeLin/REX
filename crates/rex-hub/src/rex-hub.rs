@@ -125,10 +125,6 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
             axum::routing::get(update_api::get_version_info),
         )
         .route(
-            "/api/version/check",
-            axum::routing::get(update_api::check_latest_version),
-        )
-        .route(
             "/api/agents/download",
             axum::routing::get(update_api::download_agent_binary),
         )

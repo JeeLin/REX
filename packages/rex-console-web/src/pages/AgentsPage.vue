@@ -78,28 +78,6 @@ async function doResetToken() {
   }
 }
 
-const updateConfirmModal = ref(false)
-const updateConfirmAgent = ref<Agent | null>(null)
-
-function confirmUpdate(agent: Agent) {
-  updateConfirmAgent.value = agent
-  updateConfirmModal.value = true
-}
-
-async function doUpdate() {
-  if (!updateConfirmAgent.value) return
-  const agentId = updateConfirmAgent.value.id
-  updateConfirmModal.value = false
-  updateConfirmAgent.value = null
-
-  try {
-    await updateApi.triggerUpdate(agentId)
-    startPolling(agentId)
-  } catch {
-    // ignore
-  }
-}
-
 function startPolling(agentId: string) {
   if (pollingTimers.value[agentId]) return
   pollingTimers.value[agentId] = setInterval(async () => {
@@ -190,25 +168,10 @@ async function refreshAgents() {
           </div>
         </div>
         <div class="agent-footer">
-          <Button v-if="agent.status === 'online' && versionStatus(agent) === 'outdated'" variant="secondary" size="sm" @click="confirmUpdate(agent)">
-            {{ t('agents.update') }}
-          </Button>
           <Button variant="secondary" size="sm" @click="openResetToken(agent.id)">{{ t('agents.resetToken') }}</Button>
         </div>
       </Card>
     </div>
-
-    <!-- Update Confirmation Modal -->
-    <Modal v-model="updateConfirmModal">
-      <template #title>{{ t('agents.updateTitle') }}</template>
-      <div class="modal-content">
-        <p class="muted">{{ t('agents.updateDesc', { version: hubVersion, name: updateConfirmAgent?.name }) }}</p>
-        <div class="form-actions">
-          <Button variant="secondary" @click="updateConfirmModal = false">{{ t('common.cancel') }}</Button>
-          <Button variant="primary" @click="doUpdate">{{ t('agents.updateConfirm') }}</Button>
-        </div>
-      </div>
-    </Modal>
 
     <!-- Reset Token Modal -->
     <Modal v-model="resetModal">

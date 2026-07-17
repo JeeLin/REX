@@ -17,8 +17,6 @@ export interface Agent {
 
 export interface VersionInfo {
   hub_version: string
-  latest_version: string | null
-  download_url: string | null
   agents: AgentVersionInfo[]
 }
 
@@ -59,10 +57,6 @@ export const agentsApi = {
 export const updateApi = {
   getVersion: () =>
     api.get<VersionInfo>('/version'),
-  checkLatest: () =>
-    api.get<UpdateCheckResult>('/version/check'),
-  triggerUpdate: (agentId: string) =>
-    api.post<{ ok: boolean; message: string }>(`/agents/${agentId}/update/trigger`),
   getUpdateStatus: (agentId: string) =>
     api.get<UpdateStatus>(`/agents/${agentId}/update/status`),
 }

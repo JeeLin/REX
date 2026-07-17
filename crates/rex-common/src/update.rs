@@ -6,8 +6,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize)]
 pub struct VersionInfo {
     pub hub_version: String,
-    pub latest_version: Option<String>,
-    pub download_url: Option<String>,
     pub agents: Vec<AgentVersionInfo>,
 }
 
@@ -18,16 +16,6 @@ pub struct AgentVersionInfo {
     pub version: String,
     pub is_online: bool,
     pub is_up_to_date: bool,
-}
-
-/// 更新检查结果
-#[derive(Debug, Clone, Serialize)]
-pub struct UpdateCheckResult {
-    pub current_version: String,
-    pub latest_version: String,
-    pub update_available: bool,
-    pub download_url: String,
-    pub release_notes: String,
 }
 
 /// 更新阶段
@@ -68,7 +56,7 @@ impl Default for UpdateStatus {
 }
 
 /// 更新指令（Hub → Agent）
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateCommand {
     pub version: String,
     pub download_url: String,
@@ -95,4 +83,12 @@ pub struct UpdateStateFile {
     pub target_version: String,
     pub tmp_path: String,
     pub sha256: String,
+}
+
+/// 计算 SHA256 哈希值并返回十六进制字符串。
+pub fn sha256_hex(data: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    hex::encode(hasher.finalize())
 }

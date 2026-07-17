@@ -42,8 +42,6 @@ redis = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-config = { workspace = true }
 aes-gcm = { workspace = true }
-reqwest = { workspace = true }
-anyhow = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

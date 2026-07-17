@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 import { settingsApi, type Settings } from '@/api/settings'
 import { updateApi, type VersionInfo } from '@/api/agents'
 import Card from '@/components/ui/Card.vue'
-import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
 
 const { t } = useI18n()
@@ -20,8 +19,6 @@ const saveMessage = ref('')
 
 // 更新相关
 const versionInfo = ref<VersionInfo | null>(null)
-const checkingUpdate = ref(false)
-const checkResult = ref<{ available: boolean; version: string; notes: string } | null>(null)
 
 onMounted(async () => {
   try {
@@ -58,22 +55,7 @@ async function saveSettings() {
   }
 }
 
-async function checkForUpdate() {
-  checkingUpdate.value = true
-  checkResult.value = null
-  try {
-    const result = await updateApi.checkLatest()
-    checkResult.value = {
-      available: result.update_available,
-      version: result.latest_version,
-      notes: result.release_notes,
-    }
-  } catch {
-    checkResult.value = { available: false, version: '', notes: '' }
-  } finally {
-    checkingUpdate.value = false
-  }
-}
+
 </script>
 
 <template>
@@ -115,23 +97,6 @@ async function checkForUpdate() {
       <div class="version-row">
         <span class="muted">{{ t('settings.hubVersion') }}</span>
         <span class="mono">{{ versionInfo?.hub_version || '—' }}</span>
-      </div>
-      <div v-if="versionInfo?.latest_version && versionInfo.latest_version !== versionInfo.hub_version" class="version-row">
-        <span class="muted">{{ t('settings.latestVersion') }}</span>
-        <span class="mono">{{ versionInfo.latest_version }}</span>
-        <Badge variant="warning" size="sm">{{ t('settings.canUpdateHub') }}</Badge>
-      </div>
-      <Button variant="secondary" size="sm" :loading="checkingUpdate" @click="checkForUpdate" style="margin-top: var(--space-3)">
-        {{ t('settings.checkUpdate') }}
-      </Button>
-      <div v-if="checkResult" class="check-result">
-        <template v-if="checkResult.available">
-          <Badge variant="warning">{{ t('settings.updateAvailable', { version: checkResult.version }) }}</Badge>
-          <p v-if="checkResult.notes" class="release-notes">{{ checkResult.notes }}</p>
-        </template>
-        <template v-else>
-          <Badge variant="success">{{ t('settings.upToDate') }}</Badge>
-        </template>
       </div>
 
       <!-- Agent 版本总览 -->

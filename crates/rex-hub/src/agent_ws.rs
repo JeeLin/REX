@@ -334,7 +334,7 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
         AgentMsg::Heartbeat { payload } => {
             let db = state.db.clone();
             let aid = agent_id.to_string();
-            let ver = payload.version;
+            let ver = payload.version.clone();
             let _ = tokio::task::spawn_blocking(move || {
                 db.update_agent_heartbeat(&aid, &ver, "")
             })
@@ -344,6 +344,36 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
             if let Some(conn) = state.agent_tunnel.connections.read().await.get(agent_id) {
                 let ack = serde_json::to_string(&HubMsg::HeartbeatAck).unwrap();
                 let _ = conn.sender.send(AgentEvent::Text(ack)).await;
+
+                // 版本对比 — Hub 版本 ≠ Agent 版本时推送更新
+                let hub_version = env!("CARGO_PKG_VERSION");
+                if !payload.version.is_empty() && payload.version != hub_version {
+                    tracing::info!(
+                        agent_id = %agent_id,
+                        agent_version = %payload.version,
+                        hub_version = hub_version,
+                        "version mismatch detected, pushing update"
+                    );
+                    // 构造 Agent 下载 URL（Hub 提供二进制）
+                    let download_url = format!(
+                        "/api/agents/download?os={}&arch={}",
+                        if payload.os.is_empty() { "linux" } else { &payload.os },
+                        if payload.arch.is_empty() { "amd64" } else { &payload.arch },
+                    );
+
+                    let update_cmd = rex_common::update::UpdateCommand {
+                        version: hub_version.to_string(),
+                        download_url,
+                        fallback_url: String::new(),
+                        sha256: String::new(),
+                    };
+                    let msg = serde_json::to_string(&serde_json::json!({
+                        "type": "update",
+                        "payload": update_cmd
+                    }))
+                    .unwrap();
+                    let _ = conn.sender.send(AgentEvent::Text(msg)).await;
+                }
             }
         }
         AgentMsg::Connected {
