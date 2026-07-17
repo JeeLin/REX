@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.16.0] - 2026-07-17
+
+### Added
+- Agent WebSocket 隧道：单一 WebSocket 连接完成认证、心跳、资源连接、数据转发
+- Hub 自动路由：前端只传 resourceId，Hub 从 DB 读取连接信息，自动判断直连/Agent 隧道
+- Agent 部署指南：二进制、Docker、Docker Compose 三种方式
+- Agent 隧道协议测试（8 个新测试）
+
+### Changed
+- Agent 认证：token-only（不再需要 agent_id，Hub 通过 token 查找）
+- 终端 WebSocket：统一为 /ws/terminal?resourceId=xxx，前端无感知连接方式
+- get_resource API：简化为只用 resource_id（resource ID 全局唯一）
+
+### Fixed
+- 全项目 0 clippy warnings（修复 rex-s3/rex-mysql/rex-postgresql/rex-hub 所有预存 warning）
+
 ## [0.15.0] - 2026-07-17
 
 ### Added
