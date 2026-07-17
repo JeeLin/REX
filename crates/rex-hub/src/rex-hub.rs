@@ -112,7 +112,10 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
         );
 
     let protected_routes = Router::new()
-        .nest("/api/environments", env_api::env_routes().merge(agent_api::env_agent_routes()))
+        .nest(
+            "/api/environments",
+            env_api::env_routes().merge(agent_api::env_agent_routes()),
+        )
         .nest("/api/environments", resource_api::resource_routes())
         .nest("/api/agents", agent_api::agent_routes())
         .nest("/api/dashboard", dashboard_api::dashboard_routes())
@@ -126,7 +129,9 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
         .nest("/api/redis", redis_api::redis_routes())
         .nest("/api/files", file_api::file_routes())
         .route("/ws/terminal", axum::routing::get(terminal_ws::ws_handler))
-        .layer(axum::middleware::from_extractor::<AuthUser>());
+        .layer(axum::middleware::from_extractor_with_state::<AuthUser, AppState>(
+            state.clone(),
+        ));
 
     Router::new()
         .merge(public_routes)

@@ -165,7 +165,7 @@ pub async fn login(
             Err(error_with_status(
                 StatusCode::UNAUTHORIZED,
                 "AUTH_INVALID",
-                "密码错误",
+                "invalid password",
             ))
         }
     }
@@ -186,7 +186,7 @@ pub async fn set_password(
         return Err(error_with_status(
             StatusCode::CONFLICT,
             "PASSWORD_ALREADY_SET",
-            "密码已设置",
+            "password already set",
         ));
     }
     state.auth.set_password(&body.password).map_err(|e| {

@@ -17,23 +17,18 @@ use crate::AppState;
 pub struct AuthUser(pub Claims);
 
 #[async_trait]
-impl<S: Send + Sync> FromRequestParts<S> for AuthUser {
+impl FromRequestParts<AppState> for AuthUser {
     type Rejection = (StatusCode, axum::Json<ErrorBody>);
 
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        let app_state = parts.extensions.get::<AppState>().ok_or_else(|| {
-            error_with_status(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "INTERNAL_ERROR",
-                "missing app state",
-            )
-        })?;
-
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
         // 方式 1: Authorization header
         if let Some(header) = parts.headers.get("Authorization") {
             if let Ok(val) = header.to_str() {
                 if let Some(token) = val.strip_prefix("Bearer ") {
-                    match app_state.auth.verify_token(token) {
+                    match state.auth.verify_token(token) {
                         Ok(claims) => return Ok(AuthUser(claims)),
                         Err(_) => {
                             return Err(error_with_status(
@@ -52,7 +47,7 @@ impl<S: Send + Sync> FromRequestParts<S> for AuthUser {
             for pair in query.split('&') {
                 if let Some((key, value)) = pair.split_once('=') {
                     if key == "token" {
-                        match app_state.auth.verify_token(value) {
+                        match state.auth.verify_token(value) {
                             Ok(claims) => return Ok(AuthUser(claims)),
                             Err(_) => {
                                 return Err(error_with_status(
