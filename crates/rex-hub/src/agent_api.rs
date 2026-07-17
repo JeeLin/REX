@@ -11,7 +11,10 @@ use crate::AppState;
 type ApiResult<T> = Result<Json<T>, (StatusCode, Json<serde_json::Value>)>;
 
 fn err(status: StatusCode, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
-    (status, Json(serde_json::json!({ "error": { "code": "ERROR", "message": msg } })))
+    (
+        status,
+        Json(serde_json::json!({ "error": { "code": "ERROR", "message": msg } })),
+    )
 }
 
 pub fn agent_routes() -> axum::Router<AppState> {
@@ -23,8 +26,7 @@ pub fn agent_routes() -> axum::Router<AppState> {
 }
 
 pub fn env_agent_routes() -> axum::Router<AppState> {
-    axum::Router::new()
-        .route("/{env_id}/agents", axum::routing::get(list_agents))
+    axum::Router::new().route("/{env_id}/agents", axum::routing::get(list_agents))
 }
 
 // --- Handlers ---
@@ -94,8 +96,16 @@ async fn heartbeat(
     Path(id): Path<String>,
     Json(body): Json<serde_json::Value>,
 ) -> ApiResult<serde_json::Value> {
-    let version = body.get("version").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let ip = body.get("ip").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let version = body
+        .get("version")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let ip = body
+        .get("ip")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
     let db = state.db.clone();
     tokio::task::spawn_blocking(move || db.update_agent_heartbeat(&id, &version, &ip))
         .await
@@ -104,10 +114,7 @@ async fn heartbeat(
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
-async fn get_agent(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> ApiResult<Agent> {
+async fn get_agent(State(state): State<AppState>, Path(id): Path<String>) -> ApiResult<Agent> {
     let db = state.db.clone();
     let agent = tokio::task::spawn_blocking(move || db.get_agent(&id))
         .await

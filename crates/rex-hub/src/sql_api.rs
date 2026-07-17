@@ -131,11 +131,14 @@ async fn connect(
     Json(body): Json<ConnectBody>,
 ) -> axum::response::Response {
     let conn_result = match body.db_type.to_lowercase().as_str() {
-        "mysql" => rex_mysql::MySqlConnector::connect(body.req).await
+        "mysql" => rex_mysql::MySqlConnector::connect(body.req)
+            .await
             .map(|c| Box::new(c) as Box<dyn SqlConnector>),
-        "postgresql" | "postgres" => rex_postgresql::PostgresConnector::connect(body.req).await
+        "postgresql" | "postgres" => rex_postgresql::PostgresConnector::connect(body.req)
+            .await
             .map(|c| Box::new(c) as Box<dyn SqlConnector>),
-        "sqlite" => rex_sqlite::SqliteConnector::connect(body.req).await
+        "sqlite" => rex_sqlite::SqliteConnector::connect(body.req)
+            .await
             .map(|c| Box::new(c) as Box<dyn SqlConnector>),
         _ => {
             return error_response(

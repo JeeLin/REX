@@ -66,8 +66,7 @@ impl CredentialCrypto {
             .cipher
             .decrypt(nonce, ciphertext)
             .map_err(|e| RExError::Message(format!("decrypt failed: {e}")))?;
-        String::from_utf8(plaintext)
-            .map_err(|e| RExError::Message(format!("invalid utf8: {e}")))
+        String::from_utf8(plaintext).map_err(|e| RExError::Message(format!("invalid utf8: {e}")))
     }
 }
 

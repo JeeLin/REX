@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.15.0] - 2026-07-17
+
+### Added
+- i18n：所有页面文本使用 $t() 调用，中英文翻译完整覆盖
+- 主题持久化：localStorage + 后端设置 API 双重持久化
+- 响应式适配：移动端底部导航栏，各页面响应式布局
+- 凭据加密：AES-256-GCM 加密存储资源密码和私钥
+- 单元测试：crypto（4 tests）+ auth（3 tests）
+
+### Fixed
+- Auth middleware：修复 state 注入方式，从 extensions 获取改为 from_extractor_with_state
+- Auth 错误消息：中文硬编码 → 英文
+
 ## [0.14.0] - 2026-07-16
 
 ### Added

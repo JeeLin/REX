@@ -9,7 +9,10 @@ use crate::AppState;
 type ApiResult<T> = Result<Json<T>, (StatusCode, Json<serde_json::Value>)>;
 
 fn err(status: StatusCode, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
-    (status, Json(serde_json::json!({ "error": { "code": "ERROR", "message": msg } })))
+    (
+        status,
+        Json(serde_json::json!({ "error": { "code": "ERROR", "message": msg } })),
+    )
 }
 
 pub fn settings_routes() -> axum::Router<AppState> {
@@ -18,15 +21,25 @@ pub fn settings_routes() -> axum::Router<AppState> {
         .route("/", axum::routing::put(update_settings))
 }
 
-async fn get_settings(
-    State(state): State<AppState>,
-) -> ApiResult<serde_json::Value> {
+async fn get_settings(State(state): State<AppState>) -> ApiResult<serde_json::Value> {
     let db = state.db.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<serde_json::Value, String> {
-        let theme = db.get_setting("theme").map_err(|e| e.to_string())?.unwrap_or_else(|| "dark".into());
-        let language = db.get_setting("language").map_err(|e| e.to_string())?.unwrap_or_else(|| "zh".into());
-        let terminal_font = db.get_setting("terminal_font").map_err(|e| e.to_string())?.unwrap_or_else(|| "JetBrains Mono".into());
-        let terminal_font_size = db.get_setting("terminal_font_size").map_err(|e| e.to_string())?.unwrap_or_else(|| "14".into());
+        let theme = db
+            .get_setting("theme")
+            .map_err(|e| e.to_string())?
+            .unwrap_or_else(|| "dark".into());
+        let language = db
+            .get_setting("language")
+            .map_err(|e| e.to_string())?
+            .unwrap_or_else(|| "zh".into());
+        let terminal_font = db
+            .get_setting("terminal_font")
+            .map_err(|e| e.to_string())?
+            .unwrap_or_else(|| "JetBrains Mono".into());
+        let terminal_font_size = db
+            .get_setting("terminal_font_size")
+            .map_err(|e| e.to_string())?
+            .unwrap_or_else(|| "14".into());
         Ok(serde_json::json!({
             "theme": theme,
             "language": language,
@@ -54,10 +67,20 @@ async fn update_settings(
 ) -> ApiResult<serde_json::Value> {
     let db = state.db.clone();
     tokio::task::spawn_blocking(move || -> Result<(), String> {
-        if let Some(v) = &body.theme { db.set_setting("theme", v).map_err(|e| e.to_string())?; }
-        if let Some(v) = &body.language { db.set_setting("language", v).map_err(|e| e.to_string())?; }
-        if let Some(v) = &body.terminal_font { db.set_setting("terminal_font", v).map_err(|e| e.to_string())?; }
-        if let Some(v) = &body.terminal_font_size { db.set_setting("terminal_font_size", v).map_err(|e| e.to_string())?; }
+        if let Some(v) = &body.theme {
+            db.set_setting("theme", v).map_err(|e| e.to_string())?;
+        }
+        if let Some(v) = &body.language {
+            db.set_setting("language", v).map_err(|e| e.to_string())?;
+        }
+        if let Some(v) = &body.terminal_font {
+            db.set_setting("terminal_font", v)
+                .map_err(|e| e.to_string())?;
+        }
+        if let Some(v) = &body.terminal_font_size {
+            db.set_setting("terminal_font_size", v)
+                .map_err(|e| e.to_string())?;
+        }
         Ok(())
     })
     .await

@@ -9,7 +9,10 @@ use crate::AppState;
 type ApiResult<T> = Result<Json<T>, (StatusCode, Json<serde_json::Value>)>;
 
 fn err(status: StatusCode, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
-    (status, Json(serde_json::json!({ "error": { "code": "ERROR", "message": msg } })))
+    (
+        status,
+        Json(serde_json::json!({ "error": { "code": "ERROR", "message": msg } })),
+    )
 }
 
 pub fn dashboard_routes() -> axum::Router<AppState> {
@@ -18,16 +21,16 @@ pub fn dashboard_routes() -> axum::Router<AppState> {
         .route("/recent", axum::routing::get(recent))
 }
 
-async fn stats(
-    State(state): State<AppState>,
-) -> ApiResult<serde_json::Value> {
+async fn stats(State(state): State<AppState>) -> ApiResult<serde_json::Value> {
     let db = state.db.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<serde_json::Value, String> {
         let envs = db.list_environments().map_err(|e| e.to_string())?;
         let mut resource_count: i64 = 0;
         let mut online_agents: i64 = 0;
         for env in &envs {
-            let resources = db.list_resources_by_env(&env.id).map_err(|e| e.to_string())?;
+            let resources = db
+                .list_resources_by_env(&env.id)
+                .map_err(|e| e.to_string())?;
             resource_count += resources.len() as i64;
             let agents = db.list_agents_by_env(&env.id).map_err(|e| e.to_string())?;
             for agent in &agents {
@@ -48,15 +51,15 @@ async fn stats(
     Ok(Json(result))
 }
 
-async fn recent(
-    State(state): State<AppState>,
-) -> ApiResult<serde_json::Value> {
+async fn recent(State(state): State<AppState>) -> ApiResult<serde_json::Value> {
     let db = state.db.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<serde_json::Value, String> {
         let envs = db.list_environments().map_err(|e| e.to_string())?;
         let mut all_resources = Vec::new();
         for env in &envs {
-            let resources = db.list_resources_by_env(&env.id).map_err(|e| e.to_string())?;
+            let resources = db
+                .list_resources_by_env(&env.id)
+                .map_err(|e| e.to_string())?;
             all_resources.extend(resources);
         }
         all_resources.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));

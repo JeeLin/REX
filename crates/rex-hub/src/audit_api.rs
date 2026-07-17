@@ -10,12 +10,14 @@ use crate::AppState;
 type ApiResult<T> = Result<Json<T>, (StatusCode, Json<serde_json::Value>)>;
 
 fn err(status: StatusCode, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
-    (status, Json(serde_json::json!({ "error": { "code": "ERROR", "message": msg } })))
+    (
+        status,
+        Json(serde_json::json!({ "error": { "code": "ERROR", "message": msg } })),
+    )
 }
 
 pub fn audit_routes() -> axum::Router<AppState> {
-    axum::Router::new()
-        .route("/", axum::routing::get(query_audit_log))
+    axum::Router::new().route("/", axum::routing::get(query_audit_log))
 }
 
 #[derive(serde::Deserialize, Default)]
