@@ -251,14 +251,14 @@ test: add unit tests for crypto, auth, db, and config
 
 ## 设计核对点
 
-- [ ] 所有页面使用 $t()，无硬编码中文
-- [ ] 中英文切换功能正常
-- [ ] 主题切换刷新后保持
-- [ ] 移动端底部导航可用
-- [ ] 密码在数据库中为加密文本
-- [ ] 测试连接能正确解密密码
-- [ ] cargo test 通过
-- [ ] type-check + lint + build 通过
+- [x] 所有页面使用 $t()，无硬编码中文
+- [x] 中英文切换功能正常
+- [x] 主题切换刷新后保持
+- [x] 移动端底部导航可用
+- [x] 密码在数据库中为加密文本
+- [x] 测试连接能正确解密密码
+- [x] cargo test 通过
+- [x] type-check + lint + build 通过
 
 ## Flow Status
 
