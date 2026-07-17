@@ -17,6 +17,10 @@ const props = defineProps<{
   protocol?: string
 }>()
 
+const emit = defineEmits<{
+  'terminal-resize': [cols: number, rows: number]
+}>()
+
 const containerRef = ref<HTMLDivElement>()
 const { terminal, status, errorMessage, createTerminal, connect, disconnect, fit, dispose } =
   useTerminal()
@@ -67,8 +71,13 @@ onMounted(() => {
 
   const resizeObserver = new ResizeObserver(() => {
     fit()
+    // 通知父组件终端尺寸
+    emit('terminal-resize', term.cols, term.rows)
   })
   resizeObserver.observe(containerRef.value)
+
+  // 初始尺寸
+  emit('terminal-resize', term.cols, term.rows)
 
   onBeforeUnmount(() => {
     resizeObserver.disconnect()

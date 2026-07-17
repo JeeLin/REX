@@ -50,6 +50,19 @@ const timer = setInterval(() => {
 }, 1000)
 onBeforeUnmount(() => clearInterval(timer))
 
+const terminalSize = ref<{ cols: number; rows: number } | null>(null)
+
+function formatConnection(tab: Tab): string {
+  const proto = tab.protocol.toUpperCase()
+  const host = tab.host || '—'
+  const port = tab.port || (tab.protocol === 'ssh' ? 22 : tab.protocol === 'mysql' ? 3306 : tab.protocol === 'redis' ? 6379 : 5432)
+  return `${proto} ${host}:${port}`
+}
+
+function onTerminalResize(cols: number, rows: number) {
+  terminalSize.value = { cols, rows }
+}
+
 const activeTabInfo = computed(() => tabs.value.find(t => t.id === activeTab.value))
 
 // 连接树
@@ -352,6 +365,7 @@ useKeyboardShortcuts([
                 :port="activeTabInfo?.port"
                 :protocol="activeTabInfo?.protocol"
                 @update:status="onTabStatusChange(activeTab, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
+                @terminal-resize="onTerminalResize"
               />
 
               <!-- SQL (MySQL / PostgreSQL / SQLite) -->
@@ -403,14 +417,16 @@ useKeyboardShortcuts([
     <div class="ws-statusbar mono">
       <span class="ws-status-item">
         <StatusDot :status="activeTabInfo ? statusColor(activeTabInfo.status) : 'offline'" />
-        {{ activeTabInfo ? `${activeTabInfo.protocol.toUpperCase()} · ${activeTabInfo.host || 'no host'}` : 'No tab' }}
+        {{ activeTabInfo ? formatConnection(activeTabInfo) : 'No connection' }}
+      </span>
+      <span v-if="activeTabInfo?.protocol === 'ssh' && terminalSize" class="ws-status-item">
+        {{ terminalSize.cols }}×{{ terminalSize.rows }}
       </span>
       <span v-if="activeTabInfo?.protocol === 'ssh'" class="ws-status-item">UTF-8</span>
       <span class="ws-status-spacer" />
       <span class="ws-status-item ws-quick-actions">
         <button class="ws-action-btn" @click="splitHorizontal" title="Split horizontal">⊞</button>
         <button class="ws-action-btn" @click="splitVertical" title="Split vertical">⊟</button>
-        <button class="ws-action-btn" title="Find">🔍</button>
       </span>
       <span class="ws-status-item">{{ now }}</span>
     </div>
