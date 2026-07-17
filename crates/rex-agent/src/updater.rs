@@ -44,7 +44,7 @@ pub async fn run_update(
     .await;
 
     if !cmd.sha256.is_empty() {
-        let hash = sha256_hex(&bytes);
+        let hash = rex_common::update::sha256_hex(&bytes);
         if hash != cmd.sha256 {
             let err = format!("SHA256 mismatch: expected {}, got {}", cmd.sha256, hash);
             report(UpdateProgress {
@@ -171,13 +171,6 @@ async fn try_download(
     Ok(bytes)
 }
 
-fn sha256_hex(data: &[u8]) -> String {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    hex::encode(hasher.finalize())
-}
-
 #[derive(Debug)]
 pub enum UpdateError {
     Download(String),
@@ -197,11 +190,10 @@ impl std::fmt::Display for UpdateError {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn test_sha256_hex() {
-        let hash = sha256_hex(b"hello");
+        let hash = rex_common::update::sha256_hex(b"hello");
         assert_eq!(
             hash,
             "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
