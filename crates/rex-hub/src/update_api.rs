@@ -48,6 +48,8 @@ impl UpdateState {
     pub fn new() -> Self {
         let mut agent_bin_dirs = Vec::new();
         // Docker 内嵌路径
+        agent_bin_dirs.push(PathBuf::from("/app/data/agent-binaries"));
+        // 系统路径
         agent_bin_dirs.push(PathBuf::from("/usr/local/lib/rex/agents"));
         // 本地缓存路径
         if let Ok(home) = std::env::var("HOME") {

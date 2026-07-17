@@ -31,21 +31,16 @@ pub struct UpdateCheckResult {
 }
 
 /// 更新阶段
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum UpdatePhase {
+    #[default]
     Idle,
     Downloading,
     Verifying,
     Replacing,
     Restarting,
     Error,
-}
-
-impl Default for UpdatePhase {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
 
 /// Agent 更新状态（Hub 侧内存中维护）
