@@ -22,10 +22,7 @@ pub enum TlsConfig {
 
 impl TlsConfig {
     pub fn from_env() -> Self {
-        if let (Ok(cert), Ok(key)) = (
-            std::env::var("REX_TLS_CERT"),
-            std::env::var("REX_TLS_KEY"),
-        ) {
+        if let (Ok(cert), Ok(key)) = (std::env::var("REX_TLS_CERT"), std::env::var("REX_TLS_KEY")) {
             return Self::Manual {
                 cert_path: PathBuf::from(cert),
                 key_path: PathBuf::from(key),
@@ -36,7 +33,11 @@ impl TlsConfig {
             let staging = std::env::var("REX_ACME_STAGING")
                 .map(|v| v == "true")
                 .unwrap_or(false);
-            return Self::Acme { domain, email, staging };
+            return Self::Acme {
+                domain,
+                email,
+                staging,
+            };
         }
         if std::env::var("REX_TLS_SELF_SIGNED")
             .map(|v| v == "true")

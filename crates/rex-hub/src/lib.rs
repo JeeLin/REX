@@ -18,8 +18,8 @@ pub mod resource_api;
 pub mod settings_api;
 pub mod sql_api;
 pub mod terminal_ws;
-pub mod tunnel_ws;
 pub mod tls;
+pub mod tunnel_ws;
 pub mod update_api;
 
 pub use app::AppState;

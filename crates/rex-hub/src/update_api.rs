@@ -73,10 +73,7 @@ pub async fn download_agent_binary(
     if let Some(path) = state.agent_binaries.find(os, arch) {
         match tokio::fs::read(&path).await {
             Ok(bytes) => {
-                let ext = path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("");
+                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
                 let filename = if ext.is_empty() {
                     format!("rex-agent-{os}-{arch}")
                 } else {
@@ -86,7 +83,10 @@ pub async fn download_agent_binary(
                     StatusCode::OK,
                     [
                         ("Content-Type", "application/octet-stream"),
-                        ("Content-Disposition", &format!("attachment; filename=\"{filename}\"")),
+                        (
+                            "Content-Disposition",
+                            &format!("attachment; filename=\"{filename}\""),
+                        ),
                     ],
                     bytes,
                 )
