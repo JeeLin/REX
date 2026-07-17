@@ -68,7 +68,6 @@ struct ErrorPayload {
 /// URL 查询参数
 #[derive(Deserialize)]
 pub struct TerminalQuery {
-    pub token: String,
     #[serde(rename = "resourceId")]
     pub resource_id: String,
 }

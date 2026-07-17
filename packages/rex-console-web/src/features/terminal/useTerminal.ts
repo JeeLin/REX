@@ -63,8 +63,7 @@ export function useTerminal() {
     errorMessage.value = ''
 
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const token = localStorage.getItem('rex-token') || ''
-    const wsUrl = `${protocol}//${location.host}/ws/terminal?token=${encodeURIComponent(token)}&resourceId=${encodeURIComponent(opts.resourceId)}`
+    const wsUrl = `${protocol}//${location.host}/ws/terminal?resourceId=${encodeURIComponent(opts.resourceId)}`
 
     ws = new WebSocket(wsUrl)
 
