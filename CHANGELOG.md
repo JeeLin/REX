@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.18.0] - 2026-07-17
+
+### Added
+- Hub TLS 配置框架：支持自签名（REX_TLS_SELF_SIGNED）、手动证书（REX_TLS_CERT/KEY）、ACME（REX_ACME_DOMAIN/EMAIL）三种模式
+- Agent WSS 支持：自动识别 https Hub 并使用 wss 连接
+- Agent TLS insecure 模式（REX_TLS_INSECURE=true）：自签名证书开发环境跳过验证
+- Docker TLS 环境变量配置文档
+
+### Changed
+- TLS serve 实际监听待实现（hyper 1.x 集成复杂），当前所有 TLS 模式回退到 HTTP 并输出警告
+
 ## [0.17.0] - 2026-07-17
 
 ### Added
