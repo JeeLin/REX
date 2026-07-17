@@ -209,7 +209,7 @@ async fn connect_and_run(
         while let Some(evt) = evt_rx.recv().await {
             let msg = match evt {
                 AgentEvent::Text(t) => Message::Text(t),
-                AgentEvent::Binary(b) => Message::Binary(b.into()),
+                AgentEvent::Binary(b) => Message::Binary(b),
                 AgentEvent::Close => break,
             };
             if ws_sink.send(msg).await.is_err() {

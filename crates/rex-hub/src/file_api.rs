@@ -18,6 +18,12 @@ pub struct FileConnectionPool {
     connectors: HashMap<String, Box<dyn FileConnector>>,
 }
 
+impl Default for FileConnectionPool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FileConnectionPool {
     pub fn new() -> Self {
         Self {

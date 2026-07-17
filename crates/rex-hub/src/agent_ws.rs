@@ -9,7 +9,7 @@ use axum::extract::{Query, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{mpsc, oneshot, RwLock};
 
 use crate::AppState;
 
@@ -132,6 +132,7 @@ struct ConnectRequest {
 // ═══════════════════════════════════════
 
 /// Agent WebSocket 连接
+#[derive(Clone)]
 pub struct AgentConnection {
     pub agent_id: String,
     pub sender: mpsc::Sender<AgentEvent>,
@@ -144,12 +145,22 @@ pub enum AgentEvent {
     Close,
 }
 
+/// Agent connect 请求的响应
+pub struct ConnectResponse {
+    pub channel_id: Option<String>,
+    pub error: Option<String>,
+}
+
 /// 运行时 Agent 连接池和 channel 映射
 pub struct AgentTunnelState {
     /// agent_id → AgentConnection
     pub connections: RwLock<HashMap<String, AgentConnection>>,
     /// channel_id → agent_id
     pub channels: RwLock<HashMap<String, String>>,
+    /// request_id → response sender（用于 connect 请求-响应匹配）
+    pub pending_requests: RwLock<HashMap<String, oneshot::Sender<ConnectResponse>>>,
+    /// channel_id → tunnel data sender（用于二进制帧路由到正确的 tunnel）
+    pub tunnel_data: RwLock<HashMap<String, mpsc::Sender<Vec<u8>>>>,
 }
 
 impl AgentTunnelState {
@@ -163,6 +174,8 @@ impl Default for AgentTunnelState {
         Self {
             connections: RwLock::new(HashMap::new()),
             channels: RwLock::new(HashMap::new()),
+            pending_requests: RwLock::new(HashMap::new()),
+            tunnel_data: RwLock::new(HashMap::new()),
         }
     }
 }
@@ -293,10 +306,12 @@ async fn handle_agent_socket(ws: WebSocket, token: String, state: AppState) {
                 if data.len() >= 4 {
                     let ch_id = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
                     let ch_id_str = ch_id.to_string();
-                    // 转发到对应的 tunnel 连接
-                    // TODO: 通过 tunnel 连接池转发
-                    let _ = ch_id_str;
-                    let _ = &data[4..];
+                    let payload = data[4..].to_vec();
+                    // 转发到对应的 tunnel
+                    let tunnel_data = state_clone.agent_tunnel.tunnel_data.read().await;
+                    if let Some(tx) = tunnel_data.get(&ch_id_str) {
+                        let _ = tx.send(payload).await;
+                    }
                 }
             }
             Ok(Message::Close(_)) | Err(_) => break,
@@ -347,11 +362,19 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
                     channel_id,
                 },
         } => {
-            // Agent 成功建立了资源连接，注册 channel
+            // 注册 channel → agent 映射
             let mut channels = state.agent_tunnel.channels.write().await;
             channels.insert(channel_id.clone(), agent_id.to_string());
 
-            // TODO: 通知等待此 requestId 的 tunnel 连接
+            // 通知等待此 requestId 的 tunnel
+            let mut pending = state.agent_tunnel.pending_requests.write().await;
+            if let Some(tx) = pending.remove(&request_id) {
+                let _ = tx.send(ConnectResponse {
+                    channel_id: Some(channel_id.clone()),
+                    error: None,
+                });
+            }
+
             tracing::info!(
                 agent_id,
                 request_id,
@@ -366,8 +389,16 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
                     error,
                 },
         } => {
+            // 通知等待此 requestId 的 tunnel
+            let mut pending = state.agent_tunnel.pending_requests.write().await;
+            if let Some(tx) = pending.remove(&request_id) {
+                let _ = tx.send(ConnectResponse {
+                    channel_id: None,
+                    error: Some(error.clone()),
+                });
+            }
+
             tracing::warn!(agent_id, request_id, error, "agent resource connect failed");
-            // TODO: 通知等待此 requestId 的 tunnel 连接
         }
         AgentMsg::Closed {
             payload: ChannelIdPayload { channel_id },

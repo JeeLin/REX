@@ -2052,6 +2052,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "hostname"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "617aaa3557aef3810a6369d0a99fac8a080891b68bd9f9812a1eeda0c0730cbd"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "windows-link",
+]
+
+[[package]]
 name = "http"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3461,17 +3472,24 @@ dependencies = [
 
 [[package]]
 name = "rex-agent"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
+ "futures-util",
+ "hostname",
  "rex-common",
+ "serde",
+ "serde_json",
  "tokio",
+ "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
+ "url",
+ "uuid",
 ]
 
 [[package]]
 name = "rex-common"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3495,7 +3513,7 @@ dependencies = [
 
 [[package]]
 name = "rex-hub"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "aes-gcm 0.10.3",
  "argon2 0.5.3",
@@ -3532,7 +3550,7 @@ dependencies = [
 
 [[package]]
 name = "rex-mysql"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3544,7 +3562,7 @@ dependencies = [
 
 [[package]]
 name = "rex-postgresql"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3556,7 +3574,7 @@ dependencies = [
 
 [[package]]
 name = "rex-redis"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3568,7 +3586,7 @@ dependencies = [
 
 [[package]]
 name = "rex-s3"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3581,7 +3599,7 @@ dependencies = [
 
 [[package]]
 name = "rex-sqlite"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3593,7 +3611,7 @@ dependencies = [
 
 [[package]]
 name = "rex-ssh"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3612,7 +3630,7 @@ dependencies = [
 
 [[package]]
 name = "rex-transfer"
-version = "0.14.0"
+version = "0.15.0"
 
 [[package]]
 name = "rfc6979"

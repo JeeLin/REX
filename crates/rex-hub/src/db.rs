@@ -575,6 +575,7 @@ impl Database {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_agent(
         &self,
         env_id: &str,

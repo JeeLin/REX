@@ -202,9 +202,9 @@ impl FileConnector for S3Connector {
             let upload_id = multipart.upload_id().context("no upload id")?;
             let mut parts = Vec::new();
             let mut offset = 0u64;
-            let mut part_number = 1i32;
 
-            for chunk in data.chunks(part_size) {
+            for (i, chunk) in data.chunks(part_size).enumerate() {
+                let part_number = (i as i32) + 1;
                 let result = self
                     .client
                     .upload_part()
@@ -225,7 +225,6 @@ impl FileConnector for S3Connector {
                 );
 
                 offset += chunk.len() as u64;
-                part_number += 1;
                 if let Some(cb) = progress {
                     cb(offset, total);
                 }

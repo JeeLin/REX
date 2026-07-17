@@ -22,6 +22,12 @@ pub struct SqlConnectionPool {
     connectors: HashMap<String, Box<dyn SqlConnector>>,
 }
 
+impl Default for SqlConnectionPool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SqlConnectionPool {
     pub fn new() -> Self {
         Self {

@@ -86,7 +86,7 @@ impl SqlConnector for MySqlConnector {
             };
 
             let data: Vec<Vec<serde_json::Value>> =
-                rows.iter().map(|r| Self::row_to_values(r)).collect();
+                rows.iter().map(Self::row_to_values).collect();
             let elapsed = start.elapsed().as_millis() as u64;
 
             Ok(QueryResult {

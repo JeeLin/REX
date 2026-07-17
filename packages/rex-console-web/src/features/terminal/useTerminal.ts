@@ -9,6 +9,10 @@ interface TerminalOptions {
   username: string
   password?: string
   privateKey?: string
+  /** Agent 模式：通过 Agent 隧道连接 */
+  agentMode?: boolean
+  agentId?: string
+  resourceId?: string
 }
 
 type TerminalStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
@@ -69,21 +73,39 @@ export function useTerminal() {
 
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
     const token = localStorage.getItem('rex-token') || ''
-    const wsUrl = `${protocol}//${location.host}/ws/terminal?token=${encodeURIComponent(token)}`
+
+    let wsUrl: string
+    let firstMessage: string
+
+    if (opts.agentMode && opts.agentId && opts.resourceId) {
+      // Agent 模式：通过 /ws/tunnel 连接
+      wsUrl = `${protocol}//${location.host}/ws/tunnel?agent_id=${encodeURIComponent(opts.agentId)}&resource_id=${encodeURIComponent(opts.resourceId)}`
+      // 第一条消息是连接配置
+      firstMessage = JSON.stringify({
+        protocol: 'ssh',
+        host: opts.host,
+        port: opts.port || 22,
+        username: opts.username,
+        password: opts.password,
+        privateKey: opts.privateKey,
+      })
+    } else {
+      // 直连模式：通过 /ws/terminal 连接
+      wsUrl = `${protocol}//${location.host}/ws/terminal?token=${encodeURIComponent(token)}`
+      firstMessage = JSON.stringify({
+        type: 'terminal.connect',
+        host: opts.host,
+        port: opts.port || 22,
+        username: opts.username,
+        password: opts.password,
+        privateKey: opts.privateKey,
+      })
+    }
+
     ws = new WebSocket(wsUrl)
 
     ws.onopen = () => {
-      // 发送 SSH 连接请求
-      ws?.send(
-        JSON.stringify({
-          type: 'terminal.connect',
-          host: opts.host,
-          port: opts.port || 22,
-          username: opts.username,
-          password: opts.password,
-          privateKey: opts.privateKey,
-        }),
-      )
+      ws?.send(firstMessage)
     }
 
     ws.onmessage = (event) => {

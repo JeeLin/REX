@@ -29,7 +29,7 @@ impl CredentialCrypto {
                 std::fs::create_dir_all(parent)
                     .map_err(|e| RExError::Message(format!("failed to create key dir: {e}")))?;
             }
-            std::fs::write(&key_path, &key)
+            std::fs::write(&key_path, key)
                 .map_err(|e| RExError::Message(format!("failed to write master key: {e}")))?;
             key.to_vec()
         };

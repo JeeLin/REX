@@ -19,6 +19,12 @@ pub struct RedisConnectionPool {
     connectors: HashMap<String, Box<dyn RedisConnector>>,
 }
 
+impl Default for RedisConnectionPool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RedisConnectionPool {
     pub fn new() -> Self {
         Self {

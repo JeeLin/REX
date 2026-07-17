@@ -28,8 +28,8 @@ M15 实现 Agent ↔ Hub 的 WebSocket 隧道。**所有 Agent 通信走单一 W
 
 | # | 内容 | 状态 |
 |---|------|------|
-| 1 | Hub Agent WebSocket 服务器（单一连接：认证 + 心跳 + 隧道 + channel 多路复用） | ⬜ |
-| 2 | Agent WebSocket 客户端（连接 Hub + 处理 channel 请求） | ⬜ |
+| 1 | Hub Agent WebSocket 服务器（单一连接：认证 + 心跳 + 隧道 + channel 多路复用） | ✅ |
+| 2 | Agent WebSocket 客户端（连接 Hub + 处理 channel 请求） | ✅ |
 | 3 | 前端连接路由改造（Agent 模式资源通过隧道连接） | ⬜ |
 | 4 | Agent 部署指南文档 | ⬜ |
 | 5 | 端到端测试 | ⬜ |
@@ -302,7 +302,7 @@ test: add Agent WebSocket tunnel integration tests
 ## Flow Status
 
 - [x] 步骤1：编写里程碑文档
-- [ ] 步骤2：设计核对
+- [x] 步骤2：设计核对
 - [ ] 步骤3：开发
 - [ ] 步骤4：代码精简
 - [ ] 步骤5：代码审查
