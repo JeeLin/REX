@@ -489,7 +489,7 @@ feat(web): add version display and update controls to Agent and Settings pages
 ## Flow Status
 
 - [x] 步骤1：编写里程碑文档
-- [ ] 步骤2：设计核对
+- [x] 步骤2：设计核对
 - [ ] 步骤3：开发
 - [ ] 步骤4：代码精简
 - [ ] 步骤5：代码审查
