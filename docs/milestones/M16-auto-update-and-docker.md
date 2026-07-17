@@ -550,9 +550,9 @@ feat(web): add version display and update controls to Agent and Settings pages
 - [x] 步骤3：开发
 - [x] 步骤4：代码精简
 - [x] 步骤5：代码审查
-- [ ] 步骤6：测试验证
-- [ ] 步骤7：设计再确认
-- [ ] 步骤8：提交
+- [x] 步骤6：测试验证
+- [x] 步骤7：设计再确认
+- [x] 步骤8：提交
 
 ## 打回记录
 

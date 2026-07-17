@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.17.0] - 2026-07-17
+
+### Added
+- Agent 自动更新机制：supervisor/worker 进程模型，版本不一致时自动推送更新
+- Agent 更新处理器：下载 → SHA256 校验 → 写 update-state.json → exit(42) → supervisor 替换
+- Hub 版本 API（GET /api/version）：返回 Hub 版本 + 所有 Agent 版本信息
+- Agent 二进制下载端点（GET /api/agents/download?os=&arch=）
+- Docker Hub 镜像打包多架构 Agent 二进制（linux/amd64, linux/arm64）
+- 交叉编译脚本（scripts/build-agent-bins.sh）
+- 前端 Agent 管理页：版本标签（最新/可更新）、更新进度条
+- 前端设置页：Hub 版本 + Agent 版本总览
+
+### Changed
+- 版本检查通过 WebSocket 心跳完成（Agent 上报 version → Hub 对比 → 推送 update）
+- Agent 更新通过 WebSocket 指令触发，不暴露 REST API
+
 ## [0.16.0] - 2026-07-17
 
 ### Added
