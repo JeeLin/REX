@@ -34,3 +34,4 @@ pub type Result<T> = std::result::Result<T, RExError>;
 pub mod file_transfer;
 pub mod redis;
 pub mod sql;
+pub mod update;

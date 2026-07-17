@@ -509,6 +509,39 @@ impl Database {
         }
     }
 
+    pub fn list_all_agents(&self) -> Result<Vec<Agent>> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, environment_id, name, version, os, arch, hostname, ip, status, last_seen_at, created_at, updated_at
+                 FROM agents ORDER BY name",
+            )
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(Agent {
+                    id: row.get(0)?,
+                    environment_id: row.get(1)?,
+                    name: row.get(2)?,
+                    version: row.get(3)?,
+                    os: row.get(4)?,
+                    arch: row.get(5)?,
+                    hostname: row.get(6)?,
+                    ip: row.get(7)?,
+                    status: row.get(8)?,
+                    last_seen_at: row.get(9)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
+                })
+            })
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let mut agents = Vec::new();
+        for row in rows {
+            agents.push(row.map_err(|e| RExError::Message(e.to_string()))?);
+        }
+        Ok(agents)
+    }
+
     pub fn list_agents_by_env(&self, env_id: &str) -> Result<Vec<Agent>> {
         let conn = self.conn()?;
         let mut stmt = conn

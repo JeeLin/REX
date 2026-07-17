@@ -30,7 +30,7 @@ M16 实现完整的更新链路：Hub 提供版本检查 API，Agent 接收更�
 
 | # | 内容 | 状态 |
 |---|------|------|
-| 1 | Hub 版本检查 + 更新触发 API | ⬜ |
+| 1 | Hub 版本检查 + 更新触发 API | ✅ |
 | 2 | Agent 更新处理器 + WebSocket 协议扩展 | ⬜ |
 | 3 | Hub Docker 多架构打包 + Agent 二进制下载端点 | ⬜ |
 | 4 | 前端更新状态展示（Agent 管理页 + 设置页） | ⬜ |
@@ -60,7 +60,7 @@ GET  /api/version                         → VersionInfo
 GET  /api/agents/:id/update/check         → UpdateCheckResult
 POST /api/agents/:id/update/trigger       → { ok: true }
 GET  /api/agents/:id/update/status        → UpdateStatus
-GET  /api/agents/download?arch=x86_64     → Binary file (或 redirect)
+GET  /api/agents/download?target=x86_64-unknown-linux-musl → Binary file
 ```
 
 **数据模型**
@@ -146,9 +146,13 @@ GET https://api.github.com/repos/{owner}/{repo}/releases/latest
 → { tag_name, body, assets: [{ name, browser_download_url, size }] }
 ```
 
-Agent 二进制命名约定：`rex-agent-{version}-{target}.tar.gz`
-- `rex-agent-0.17.0-x86_64-unknown-linux-musl.tar.gz`
-- `rex-agent-0.17.0-aarch64-unknown-linux-musl.tar.gz`
+Agent 二进制命名约定：`rex-agent-{version}-{os}-{arch}`
+- `rex-agent-0.17.0-linux-amd64`
+- `rex-agent-0.17.0-linux-arm64`
+- `rex-agent-0.17.0-windows-amd64.exe`
+
+下载端点：`GET /api/agents/download?os=linux&arch=amd64`
+Docker 内嵌路径：`/usr/local/lib/rex/agents/{os}/{arch}/rex-agent`
 
 **测试标准**
 
@@ -168,16 +172,35 @@ feat(hub): add version check and update trigger API
 
 **功能目标**
 
-Agent 端实现更新处理器，接收 Hub 的更新指令，执行下载→校验→替换→重启流程。同时通过 WebSocket 向 Hub 报告更新进度。
+Agent 端实现 supervisor + worker 进程模型。Worker 处理业务逻辑和更新下载，Supervisor 负责进程监控和二进制替换。
+
+核心原则：**Worker 从不替换正在运行的二进制，只写 update-state.json 后退出。Supervisor（PID 1）负责实际替换。**
+
+```
+┌─ Supervisor (PID 1) ──────────────────┐
+│  1. 启动 worker                       │
+│  2. 监控 worker 退出码                 │
+│  3. 退出码=42 → 读 update-state.json   │
+│  4. rename(tmp → rex-agent)           │
+│  5. 启动新 worker                     │
+│  6. 退出码≠42 → 正常退出              │
+└───────────────────────────────────────┘
+```
+
+Docker / systemd / 手动运行都适用：
+- Docker：PID 1 = supervisor，容器不销毁
+- systemd：`Restart=always` 拉起 supervisor
+- 手动：supervisor 本身就是前台进程
 
 **文件结构**
 
 新建：
-- `crates/rex-agent/src/updater.rs` — 更新处理器（下载、校验、替换）
+- `crates/rex-agent/src/supervisor.rs` — supervisor 进程（启动 worker、监控退出、替换二进制）
+- `crates/rex-agent/src/updater.rs` — 更新处理器（下载、校验、写 update-state.json）
 
 修改：
 - `crates/rex-agent/src/agent_ws.rs` — 处理 `update` 消息，扩展 WebSocket 协议
-- `crates/rex-agent/src/rex-agent.rs` — 添加 auto_update 配置
+- `crates/rex-agent/src/rex-agent.rs` — 入口改为启动 supervisor（而非直接运行 worker）
 
 **WebSocket 协议扩展**
 
@@ -197,12 +220,32 @@ Agent 端实现更新处理器，接收 Hub 的更新指令，执行下载→校
 
 **更新流程**
 
-1. Agent 收到 `update` 消息 → 检查 auto_update 是否开启 → 关闭则忽略
-2. 报告 `phase: downloading` → 下载二进制（优先 download_url，失败用 fallback_url）
-3. 下载完成后报告 `phase: verifying` → 计算 SHA256 → 与预期对比
-4. 校验通过报告 `phase: replacing` → 备份当前二进制 → 写入新二进制 → 设置可执行权限
-5. 报告 `phase: restarting` → 优雅关闭当前连接 → 退出进程
-6. 外部进程管理器（systemd / Docker / supervisor）自动重启 Agent
+```
+Worker 运行中 ← Hub 发送 update 消息
+  ↓
+Worker: 检查 auto_update → 关闭则忽略
+  ↓
+Worker: 报告 phase: downloading → 下载二进制（优先 download_url，失败用 fallback_url）
+  ↓
+Worker: 报告 phase: verifying → 计算 SHA256 → 与预期对比
+  ↓
+Worker: 校验通过 → 写 update-state.json { version, sha256, tmp_path }
+  ↓
+Worker: report phase: restarting → exit(42)    ← 特殊退出码表示有更新
+  ↓
+Supervisor (PID 1) 检测到 worker 退出
+  ↓
+Supervisor: 退出码 == 42 → 读 update-state.json
+  ↓
+Supervisor: rename(tmp → rex-agent) → 设置权限
+  ↓
+Supervisor: 启动新 worker（新版本）
+```
+
+如果 worker 异常崩溃（退出码非 0 且非 42）：
+- Supervisor 检查 update-state.json 是否存在 → 存在则替换 → 启动新版本
+- 不存在则直接重启同一版本（最多重试 3 次，超过则退出）
+
 
 **下载实现**
 
@@ -329,9 +372,10 @@ RUN cargo build --release --bin rex-hub
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=hub-builder /src/target/release/rex-hub /usr/local/bin/
-COPY --from=agent-builder /src/target/x86_64-unknown-linux-musl/release/rex-agent /usr/local/lib/rex/agents/x86_64/
-COPY --from=agent-builder /src/target/aarch64-unknown-linux-musl/release/rex-agent /usr/local/lib/rex/agents/aarch64/
+COPY --from=agent-builder /src/target/x86_64-unknown-linux-musl/release/rex-agent /usr/local/lib/rex/agents/linux/amd64/
+COPY --from=agent-builder /src/target/aarch64-unknown-linux-musl/release/rex-agent /usr/local/lib/rex/agents/linux/arm64/
 COPY packages/rex-console-web/dist /usr/local/lib/rex/static/
+RUN mkdir -p /usr/local/lib/rex/agents/linux/amd64 /usr/local/lib/rex/agents/linux/arm64
 EXPOSE 3000
 ENV REX_PORT=3000
 CMD ["rex-hub"]
@@ -356,34 +400,47 @@ GET /api/agents/download?arch=aarch64
 3. GitHub Releases                    (外部下载)
 ```
 
-**支持的架构**
+**支持的平台**
 
-| 架构 | Rust target | 下载 arch 参数 |
-|------|------------|----------------|
-| x86_64 Linux | x86_64-unknown-linux-musl | `x86_64` |
-| aarch64 Linux | aarch64-unknown-linux-musl | `aarch64` |
-| armv7 Linux | armv7-unknown-linux-musleabihf | `armv7` |
+| 平台 | os | arch | 二进制文件名 |
+|------|-----|------|-------------|
+| Linux x86_64 | `linux` | `amd64` | `rex-agent-0.17.0-linux-amd64` |
+| Linux ARM64 | `linux` | `arm64` | `rex-agent-0.17.0-linux-arm64` |
+| Linux ARMv7 | `linux` | `armv7` | `rex-agent-0.17.0-linux-armv7` |
+| Windows x86_64 | `windows` | `amd64` | `rex-agent-0.17.0-windows-amd64.exe` |
+| macOS x86_64 | `darwin` | `amd64` | `rex-agent-0.17.0-darwin-amd64` |
+| macOS ARM64 | `darwin` | `arm64` | `rex-agent-0.17.0-darwin-arm64` |
 
-M16 先做 x86_64 + aarch64，armv7 后续添加。
+M16 先做 Linux + Windows，macOS 后续添加。格式与 Docker 一致：`{os}/{arch}`。
 
 **交叉编译脚本**
 
 ```bash
 #!/bin/bash
 # scripts/build-agent-bins.sh
-# 编译所有架构的 Agent 二进制
+# 编译所有平台的 Agent 二进制
 
-TARGETS=(
-  "x86_64-unknown-linux-musl"
-  "aarch64-unknown-linux-musl"
+# {rust_target} → {os}/{arch}
+declare -A PLATFORMS=(
+  ["x86_64-unknown-linux-musl"]="linux/amd64"
+  ["aarch64-unknown-linux-musl"]="linux/arm64"
+  ["x86_64-pc-windows-msvc"]="windows/amd64"
 )
 
-for target in "${TARGETS[@]}"; do
-  echo "Building for $target..."
-  cargo build --release --bin rex-agent --target "$target"
+OUT_DIR="target/agent-bins"
+mkdir -p "$OUT_DIR"
+
+for rust_target in "${!PLATFORMS[@]}"; do
+  os_arch="${PLATFORMS[$rust_target]}"
+  echo "Building for $rust_target → $os_arch"
+  cargo build --release --bin rex-agent --target "$rust_target"
+
+  # 复制到统一输出目录
+  mkdir -p "$OUT_DIR/$os_arch"
+  cp "target/$rust_target/release/rex-agent" "$OUT_DIR/$os_arch/"
 done
 
-echo "All agent binaries built."
+echo "All agent binaries built in $OUT_DIR/"
 ```
 
 **测试标准**
