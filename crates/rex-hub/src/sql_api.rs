@@ -192,9 +192,20 @@ async fn query(State(state): State<AppState>, Json(body): Json<QueryBody>) -> im
         }
     };
 
-    match conn.execute(&body.sql).await {
-        Ok(result) => (StatusCode::OK, Json(result)).into_response(),
-        Err(e) => error_response("QUERY_FAILED", &e.to_string()).into_response(),
+    // Apply query timeout (30 seconds)
+    let timeout = std::time::Duration::from_secs(30);
+    let execute_future = conn.execute(&body.sql);
+
+    match tokio::time::timeout(timeout, execute_future).await {
+        Ok(Ok(mut result)) => {
+            // Apply row limit (10000 rows)
+            if result.rows.len() > 10000 {
+                result.rows.truncate(10000);
+            }
+            (StatusCode::OK, Json(result)).into_response()
+        }
+        Ok(Err(e)) => error_response("QUERY_FAILED", &e.to_string()).into_response(),
+        Err(_) => error_response("QUERY_TIMEOUT", "query timed out after 30 seconds").into_response(),
     }
 }
 

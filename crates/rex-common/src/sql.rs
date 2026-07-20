@@ -81,6 +81,24 @@ pub struct ConnectRequest {
 // SqlConnector trait
 // ---------------------------------------------------------------------------
 
+/// SQL 查询配置。
+#[derive(Debug, Clone)]
+pub struct QueryConfig {
+    /// 查询超时（秒），默认 30 秒。
+    pub timeout_secs: u64,
+    /// 最大返回行数，默认 10000 行。
+    pub max_rows: usize,
+}
+
+impl Default for QueryConfig {
+    fn default() -> Self {
+        Self {
+            timeout_secs: 30,
+            max_rows: 10000,
+        }
+    }
+}
+
 /// SQL 连接器的统一接口，由各数据库 crate 分别实现。
 #[async_trait]
 pub trait SqlConnector: Send {
