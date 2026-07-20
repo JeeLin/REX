@@ -31,6 +31,7 @@ interface Tab {
   status: 'connecting' | 'connected' | 'disconnected' | 'error'
   color?: string
   renaming?: boolean
+  broadcast?: boolean
 }
 
 const tabs = ref<Tab[]>([])
@@ -183,6 +184,27 @@ function duplicateTab(id: string) {
   tabs.value.push({ ...tab, id: newId, status: 'connecting' })
   activeTab.value = newId
   tabContextMenu.value.show = false
+}
+
+// Tab broadcast mode
+function toggleBroadcast(tabId: string) {
+  const tab = tabs.value.find(t => t.id === tabId)
+  if (tab) tab.broadcast = !tab.broadcast
+  tabContextMenu.value.show = false
+}
+
+function getBroadcastTargets(): Tab[] {
+  const current = tabs.value.find(t => t.id === activeTab.value)
+  if (!current?.broadcast || current.protocol !== 'ssh') return []
+  return tabs.value.filter(t => t.id !== current.id && t.protocol === 'ssh' && t.status === 'connected')
+}
+
+function onBroadcastInput(data: string) {
+  const targets = getBroadcastTargets()
+  for (const tab of targets) {
+    const el = document.querySelector(`[data-tab-id="${tab.id}"]`)
+    if (el) el.dispatchEvent(new CustomEvent('terminal-input', { detail: data }))
+  }
 }
 
 // Tab 拖拽排序
@@ -349,6 +371,9 @@ useKeyboardShortcuts([
   { key: 'b', ctrl: true, handler: () => {
     if (activeTabInfo.value?.protocol === 'ssh') toggleSftpDrawer()
   } },
+  { key: 'B', ctrl: true, shift: true, handler: () => {
+    if (activeTab.value) toggleBroadcast(activeTab.value)
+  } },
 ])
 </script>
 
@@ -381,6 +406,7 @@ useKeyboardShortcuts([
           autofocus
         />
         <span v-else>{{ tab.label }}</span>
+        <span v-if="tab.broadcast" class="ws-tab-broadcast" title="Broadcast mode active">📡</span>
         <StatusDot :status="statusColor(tab.status)" style="margin-left: 4px" />
         <button class="ws-tab-close" @click.stop="closeTab(tab.id)">×</button>
       </div>
@@ -393,6 +419,9 @@ useKeyboardShortcuts([
       <div v-if="tabContextMenu.show" class="tab-ctx-menu" :style="{ top: tabContextMenu.y + 'px', left: tabContextMenu.x + 'px' }">
         <div class="tab-ctx-item" @click="startRename(tabContextMenu.tabId)">✏️ Rename</div>
         <div class="tab-ctx-item" @click="duplicateTab(tabContextMenu.tabId)">📋 Duplicate</div>
+        <div class="tab-ctx-item" @click="toggleBroadcast(tabContextMenu.tabId)">
+          {{ tabs.find(t => t.id === tabContextMenu.tabId)?.broadcast ? '📡 Stop Broadcast' : '📡 Broadcast Input' }}
+        </div>
         <div class="tab-ctx-separator" />
         <div class="tab-ctx-item" @click="closeTab(tabContextMenu.tabId)">Close</div>
         <div class="tab-ctx-item" @click="closeOtherTabs(tabContextMenu.tabId)">Close Others</div>
@@ -520,6 +549,7 @@ useKeyboardShortcuts([
         {{ terminalSize.cols }}×{{ terminalSize.rows }}
       </span>
       <span v-if="activeTabInfo?.protocol === 'ssh'" class="ws-status-item">UTF-8</span>
+      <span v-if="activeTabInfo?.broadcast" class="ws-status-item ws-broadcast-indicator">📡 Broadcast</span>
       <span class="ws-status-spacer" />
       <span class="ws-status-item ws-quick-actions">
         <button class="ws-action-btn" @click="splitHorizontal" title="Split horizontal">⊞</button>
@@ -629,6 +659,10 @@ useKeyboardShortcuts([
 }
 .ws-tab-add:hover {
   color: var(--accent);
+}
+.ws-tab-broadcast {
+  font-size: 10px;
+  margin-left: 2px;
 }
 
 /* Connection tree sidebar */
@@ -796,6 +830,10 @@ useKeyboardShortcuts([
 .ws-action-btn:hover {
   color: var(--text-primary);
   background: var(--bg-hover);
+}
+.ws-broadcast-indicator {
+  color: var(--accent, #E8912D);
+  font-weight: 600;
 }
 
 /* 手机端适配 */
