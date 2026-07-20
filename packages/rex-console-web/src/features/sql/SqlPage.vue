@@ -6,6 +6,7 @@ import SqlEditor from './SqlEditor.vue'
 import SqlResultGrid from './SqlResultGrid.vue'
 import TableDesigner from './TableDesigner.vue'
 import ExportWizard from './ExportWizard.vue'
+import GlobalQueryModal from './GlobalQueryModal.vue'
 import { useSqlQuery, type ExecuteMode } from './useSqlQuery'
 import { connect as sqlConnect, disconnect as sqlDisconnect, getDdl, type ConnectRequest, type QueryResult } from '@/api/sql'
 
@@ -249,6 +250,47 @@ const activeQueryTab = computed(() => {
 
 // Export wizard state
 const showExport = ref(false)
+
+// Global query modal state
+const showGlobalQuery = ref(false)
+
+function openGlobalQuery() {
+  if (databases.value.length > 0) {
+    showGlobalQuery.value = true
+  }
+}
+
+function onGlobalQueryExecute(results: { db: string; result: QueryResult | null; error: string | null }[]) {
+  // Create a new query tab with combined results
+  const combinedResult: QueryResult = {
+    columns: results[0]?.result?.columns || [],
+    rows: results.flatMap((r) => r.result?.rows || []),
+    affected_rows: 0,
+    elapsed_ms: 0,
+  }
+  createTab(`-- Global Query: ${results.map((r) => r.db).join(', ')}\n${activeQueryTab.value?.sql || ''}`)
+  const tab = tabs.value[tabs.value.length - 1]
+  if (tab && isQueryTab(tab)) {
+    tab.result = combinedResult
+  }
+}
+
+// Keyboard shortcuts
+function handleKeydown(e: KeyboardEvent) {
+  // Ctrl+Shift+Q: Global Query
+  if (e.ctrlKey && e.shiftKey && e.key === 'Q') {
+    e.preventDefault()
+    openGlobalQuery()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <template>
@@ -377,6 +419,15 @@ const showExport = ref(false)
         :result="activeQueryTab.result"
         :table-name="activeQueryTab.title"
         @close="showExport = false"
+      />
+
+      <!-- Global Query Modal -->
+      <GlobalQueryModal
+        :visible="showGlobalQuery"
+        :session-id="sessionId || ''"
+        :databases="databases.map(db => db.name)"
+        @close="showGlobalQuery = false"
+        @execute="onGlobalQueryExecute"
       />
     </div>
   </div>
