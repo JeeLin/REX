@@ -3,6 +3,7 @@ import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import * as filesApi from '@/api/files'
 import type { FileEntry } from '@/api/files'
+import FolderSyncDialog from './FolderSyncDialog.vue'
 
 const props = defineProps<{
   resourceId?: string
@@ -276,6 +277,20 @@ function onDragEnd() {
   dragData.value = null
   dropTarget.value = null
 }
+
+/* ---- folder sync dialog ---- */
+const showSyncDialog = ref(false)
+
+function openSyncDialog() {
+  showSyncDialog.value = true
+}
+
+function onSync(_options: { direction: string; compareSize: boolean; compareTime: boolean; includePattern: string; excludePattern: string; deleteOrphans: boolean }) {
+  showSyncDialog.value = false
+  // In real implementation: call backend API to perform sync
+  loadPanel('left')
+  loadPanel('right')
+}
 </script>
 
 <template>
@@ -299,6 +314,7 @@ function onDragEnd() {
           <button class="pb" @click="goUp(side)">↑</button>
           <span class="pp mono">{{ panels[side].path }}</span>
           <button class="pb" :class="{ 'pb--active': syncBrowsing }" title="Sync Browsing" @click="syncBrowsing = !syncBrowsing">🔗</button>
+          <button class="pb" title="Folder Sync" @click="openSyncDialog">🔄</button>
           <button class="pb" @click="uploadTo(side)">⬆</button>
           <button class="pb" @click="loadPanel(side)">↻</button>
         </div>
@@ -362,6 +378,15 @@ function onDragEnd() {
         </div>
       </div>
     </Teleport>
+
+    <!-- Folder Sync Dialog -->
+    <FolderSyncDialog
+      :visible="showSyncDialog"
+      :source-path="panels.left.path"
+      :target-path="panels.right.path"
+      @close="showSyncDialog = false"
+      @sync="onSync"
+    />
   </div>
 </template>
 
