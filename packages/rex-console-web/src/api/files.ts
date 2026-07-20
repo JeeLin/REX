@@ -114,3 +114,11 @@ export async function mkdir(sessionId: string, path: string): Promise<void> {
   })
   if (!res.ok) throw new Error('Mkdir failed')
 }
+
+export async function chmod(sessionId: string, path: string, mode: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/chmod`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ session_id: sessionId, path, mode }),
+  })
+  if (!res.ok) throw new Error('Chmod failed')
+}

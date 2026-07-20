@@ -132,6 +132,43 @@ function onCtx(e: MouseEvent, entry: FileEntry) { e.preventDefault(); ctx.value 
 async function ctxDelete() { if (sessionId.value) await filesApi.deleteFile(sessionId.value, ctx.value.path); ctx.value.show = false; await loadPanel('left'); await loadPanel('right') }
 function ctxCopy() { navigator.clipboard?.writeText(ctx.value.path); ctx.value.show = false }
 
+// Chmod permissions
+const showChmod = ref(false)
+const chmodPath = ref('')
+const chmodPerms = reactive({
+  owner: { read: true, write: true, exec: false },
+  group: { read: true, write: false, exec: false },
+  other: { read: false, write: false, exec: false },
+})
+
+function openChmod(path: string) {
+  chmodPath.value = path
+  showChmod.value = true
+}
+
+function calcOctal(): number {
+  let octal = 0
+  if (chmodPerms.owner.read) octal += 400
+  if (chmodPerms.owner.write) octal += 200
+  if (chmodPerms.owner.exec) octal += 100
+  if (chmodPerms.group.read) octal += 40
+  if (chmodPerms.group.write) octal += 20
+  if (chmodPerms.group.exec) octal += 10
+  if (chmodPerms.other.read) octal += 4
+  if (chmodPerms.other.write) octal += 2
+  if (chmodPerms.other.exec) octal += 1
+  return octal
+}
+
+async function applyChmod() {
+  if (!sessionId.value) return
+  const octal = calcOctal()
+  await filesApi.chmod(sessionId.value, chmodPath.value, octal.toString(8))
+  showChmod.value = false
+  await loadPanel('left')
+  await loadPanel('right')
+}
+
 // Resize
 const leftW = ref(400); const dragging = ref(false); let sx = 0, sw = 0
 function onDS(e: MouseEvent) { dragging.value = true; sx = e.clientX; sw = leftW.value; document.addEventListener('mousemove', onDM); document.addEventListener('mouseup', onDE); document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none' }
@@ -188,8 +225,49 @@ function fmtSize(b: number) { if (!b) return '-'; const u = ['B','KB','MB','GB']
 
     <div v-if="ctx.show" ref="ctxRef" class="fctx" :style="{top:ctx.y+'px',left:ctx.x+'px'}">
       <div class="ci" @click="ctxCopy">Copy Path</div>
+      <div class="ci" @click="openChmod(ctx.path)">Permissions</div>
       <div class="ci ci--d" @click="ctxDelete">Delete</div>
     </div>
+
+    <!-- Chmod Modal -->
+    <Teleport to="body">
+      <div v-if="showChmod" class="fp-overlay" @click.self="showChmod = false">
+        <div class="fp-dialog">
+          <h3>Permissions: {{ chmodPath }}</h3>
+          <div class="chmod-grid">
+            <div class="chmod-header">
+              <span></span>
+              <span>Owner</span>
+              <span>Group</span>
+              <span>Other</span>
+            </div>
+            <div class="chmod-row">
+              <span>Read</span>
+              <input type="checkbox" v-model="chmodPerms.owner.read" />
+              <input type="checkbox" v-model="chmodPerms.group.read" />
+              <input type="checkbox" v-model="chmodPerms.other.read" />
+            </div>
+            <div class="chmod-row">
+              <span>Write</span>
+              <input type="checkbox" v-model="chmodPerms.owner.write" />
+              <input type="checkbox" v-model="chmodPerms.group.write" />
+              <input type="checkbox" v-model="chmodPerms.other.write" />
+            </div>
+            <div class="chmod-row">
+              <span>Exec</span>
+              <input type="checkbox" v-model="chmodPerms.owner.exec" />
+              <input type="checkbox" v-model="chmodPerms.group.exec" />
+              <input type="checkbox" v-model="chmodPerms.other.exec" />
+            </div>
+          </div>
+          <div class="chmod-octal">Octal: {{ calcOctal().toString(8) }}</div>
+          <div style="display:flex;gap:var(--space-2);justify-content:flex-end">
+            <button class="btn" @click="showChmod = false">Cancel</button>
+            <button class="btn" style="background:var(--accent);color:#fff" @click="applyChmod">Apply</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -231,4 +309,11 @@ function fmtSize(b: number) { if (!b) return '-'; const u = ['B','KB','MB','GB']
 .ci{padding:var(--space-2) var(--space-3);font-size:var(--text-sm);cursor:pointer;color:var(--text-primary)}
 .ci:hover{background:var(--bg-hover)}
 .ci--d{color:var(--danger)}
+.chmod-grid{display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:var(--space-2);margin:var(--space-3) 0}
+.chmod-header{display:contents;font-weight:600;font-size:var(--text-xs);color:var(--text-muted);text-transform:uppercase}
+.chmod-header span{text-align:center}
+.chmod-row{display:contents}
+.chmod-row span{font-size:var(--text-sm);color:var(--text-primary)}
+.chmod-row input[type="checkbox"]{margin:0 auto;accent-color:var(--accent)}
+.chmod-octal{text-align:center;font-family:var(--font-mono);font-size:var(--text-lg);color:var(--accent);margin:var(--space-3) 0}
 </style>
