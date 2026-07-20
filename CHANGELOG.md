@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.25.1] - 2026-07-20
+
+### Fixed
+- SQL 注入修复：MySQL/PostgreSQL connector 标识符转义
+- 查询超时：30 秒超时 + 10000 行限制
+
+### Added
+- 全局搜索：Ctrl+K 打开命令面板，搜索资源/命令/设置
+
 ## [0.25.0] - 2026-07-20
 
 ### Added
