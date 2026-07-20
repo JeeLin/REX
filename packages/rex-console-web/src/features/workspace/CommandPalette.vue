@@ -123,7 +123,7 @@ onBeforeUnmount(() => {
           <template v-for="(cmds, category) in groupedCommands" :key="category">
             <div class="palette-category">{{ category }}</div>
             <div
-              v-for="(cmd, i) in cmds"
+              v-for="cmd in cmds"
               :key="cmd.id"
               class="palette-item"
               :class="{ 'palette-item--selected': filteredCommands.indexOf(cmd) === selectedIndex }"
