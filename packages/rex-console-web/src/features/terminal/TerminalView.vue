@@ -19,6 +19,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'terminal-resize': [cols: number, rows: number]
+  'toggle-sftp': []
 }>()
 
 const containerRef = ref<HTMLDivElement>()
@@ -112,6 +113,7 @@ function handleReconnect() {
         <span v-else>Disconnected</span>
       </span>
       <span v-if="status === 'connected'" class="tv-status-item muted">{{ protocol?.toUpperCase() }}</span>
+      <span v-if="status === 'connected'" class="tv-status-item tv-file-btn" @click.stop="emit('toggle-sftp')" title="Toggle file browser (Ctrl+B)">📁</span>
     </div>
 
     <!-- 终端容器 -->
@@ -154,7 +156,8 @@ function handleReconnect() {
 
 <style scoped>
 .terminal-view {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -181,6 +184,16 @@ function handleReconnect() {
 
 .tv-error {
   color: var(--danger);
+}
+
+.tv-file-btn {
+  cursor: pointer;
+  margin-left: auto;
+  opacity: 0.6;
+  transition: opacity var(--transition);
+}
+.tv-file-btn:hover {
+  opacity: 1;
 }
 
 .tv-container {

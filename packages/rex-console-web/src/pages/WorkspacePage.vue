@@ -12,6 +12,7 @@ import TerminalView from '@/features/terminal/TerminalView.vue'
 import SqlPage from '@/features/sql/SqlPage.vue'
 import RedisPage from '@/features/redis/RedisPage.vue'
 import FilesPage from '@/features/files/FilesPage.vue'
+import FilesDrawer from '@/features/files/FilesDrawer.vue'
 import { PROTOCOL_COLORS } from '@/features/resource/protocols'
 
 interface Tab {
@@ -51,6 +52,37 @@ const timer = setInterval(() => {
 onBeforeUnmount(() => clearInterval(timer))
 
 const terminalSize = ref<{ cols: number; rows: number } | null>(null)
+
+// SFTP drawer state (SSH Tab 内)
+const showSftpDrawer = ref(false)
+const sftpDrawerHeight = ref(240)
+let sftpDragStartY = 0
+let sftpDragStartH = 0
+
+function toggleSftpDrawer() {
+  showSftpDrawer.value = !showSftpDrawer.value
+}
+
+function startSftpDrag(e: MouseEvent) {
+  sftpDragStartY = e.clientY
+  sftpDragStartH = sftpDrawerHeight.value
+  document.addEventListener('mousemove', onSftpDrag)
+  document.addEventListener('mouseup', onSftpDragEnd)
+  document.body.style.cursor = 'row-resize'
+  document.body.style.userSelect = 'none'
+}
+
+function onSftpDrag(e: MouseEvent) {
+  const delta = sftpDragStartY - e.clientY
+  sftpDrawerHeight.value = Math.min(700, Math.max(120, sftpDragStartH + delta))
+}
+
+function onSftpDragEnd() {
+  document.removeEventListener('mousemove', onSftpDrag)
+  document.removeEventListener('mouseup', onSftpDragEnd)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+}
 
 function formatConnection(tab: Tab): string {
   const proto = tab.protocol.toUpperCase()
@@ -316,6 +348,9 @@ useKeyboardShortcuts([
   { key: '4', alt: true, handler: () => applyLayout('grid-four') },
   { key: '5', alt: true, handler: () => applyLayout('main-side') },
   { key: 'F1', handler: () => { showShortcuts.value = !showShortcuts.value } },
+  { key: 'b', ctrl: true, handler: () => {
+    if (activeTabInfo.value?.protocol === 'ssh') toggleSftpDrawer()
+  } },
 ])
 </script>
 
@@ -409,17 +444,29 @@ useKeyboardShortcuts([
                 </div>
               </div>
 
-              <!-- Terminal (SSH) -->
-              <TerminalView
-                v-if="activeTabInfo?.protocol === 'ssh'"
-                :tab-id="activeTab"
-                :resource-id="activeTabInfo?.resourceId || ''"
-                :host="activeTabInfo?.host"
-                :port="activeTabInfo?.port"
-                :protocol="activeTabInfo?.protocol"
-                @update:status="onTabStatusChange(activeTab, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
-                @terminal-resize="onTerminalResize"
-              />
+              <!-- Terminal (SSH) + SFTP Drawer -->
+              <div v-if="activeTabInfo?.protocol === 'ssh'" class="ws-ssh-area">
+                <TerminalView
+                  :tab-id="activeTab"
+                  :resource-id="activeTabInfo?.resourceId || ''"
+                  :host="activeTabInfo?.host"
+                  :port="activeTabInfo?.port"
+                  :protocol="activeTabInfo?.protocol"
+                  @update:status="onTabStatusChange(activeTab, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
+                  @terminal-resize="onTerminalResize"
+                  @toggle-sftp="toggleSftpDrawer"
+                />
+                <div v-if="showSftpDrawer" class="ws-sftp-drawer" :style="{ height: sftpDrawerHeight + 'px' }">
+                  <div class="ws-sftp-drag-handle" @mousedown.prevent="startSftpDrag" />
+                  <FilesDrawer
+                    :resource-id="activeTabInfo?.resourceId"
+                    :host="activeTabInfo?.host"
+                    :port="activeTabInfo?.port"
+                    :username="activeTabInfo?.username"
+                    :password="activeTabInfo?.password"
+                  />
+                </div>
+              </div>
 
               <!-- SQL (MySQL / PostgreSQL / SQLite) -->
               <SqlPage
@@ -669,6 +716,31 @@ useKeyboardShortcuts([
 }
 .ws-pane-btn:hover {
   color: var(--accent);
+}
+
+/* SSH Tab + SFTP drawer */
+.ws-ssh-area {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+.ws-sftp-drawer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ws-sftp-drag-handle {
+  height: 4px;
+  cursor: row-resize;
+  background: var(--border);
+  flex-shrink: 0;
+  transition: background var(--transition);
+}
+.ws-sftp-drag-handle:hover {
+  background: var(--accent);
 }
 
 /* Placeholder for non-SSH protocols */
