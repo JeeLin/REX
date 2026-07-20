@@ -13,6 +13,7 @@ const emit = defineEmits<{
   selectTable: [db: string, table: string]
   designTable: [db: string, table: string]
   viewDdl: [db: string, table: string]
+  importData: [db: string, table: string]
   refresh: []
   'update:searchQuery': [value: string]
 }>()
@@ -68,6 +69,8 @@ function ctxAction(action: string) {
     emit('designTable', ctxMenu.value.dbName, ctxMenu.value.tableName)
   } else if (action === 'viewDdl') {
     emit('viewDdl', ctxMenu.value.dbName, ctxMenu.value.tableName)
+  } else if (action === 'importData') {
+    emit('importData', ctxMenu.value.dbName, ctxMenu.value.tableName)
   }
   ctxMenu.value.show = false
 }
@@ -162,6 +165,7 @@ function ctxAction(action: string) {
       >
         <button class="sql-ctx-item" @click="ctxAction('designTable')">Design Table</button>
         <button class="sql-ctx-item" @click="ctxAction('viewDdl')">View DDL</button>
+        <button class="sql-ctx-item" @click="ctxAction('importData')">Import Data</button>
         <div class="sql-ctx-separator" />
         <button class="sql-ctx-item" @click="ctxAction('refresh')">Refresh</button>
         <button class="sql-ctx-item" @click="ctxAction('copyName')">Copy Name</button>

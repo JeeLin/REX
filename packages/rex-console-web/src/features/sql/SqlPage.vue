@@ -8,6 +8,7 @@ import TableDesigner from './TableDesigner.vue'
 import ExportWizard from './ExportWizard.vue'
 import GlobalQueryModal from './GlobalQueryModal.vue'
 import AiAssistantDrawer from './AiAssistantDrawer.vue'
+import ImportWizard from './ImportWizard.vue'
 import { useSqlQuery, type ExecuteMode } from './useSqlQuery'
 import { connect as sqlConnect, disconnect as sqlDisconnect, getDdl, type ConnectRequest, type QueryResult } from '@/api/sql'
 
@@ -268,6 +269,15 @@ function openAiAssistant() {
   showAiAssistant.value = true
 }
 
+// Import wizard state
+const showImport = ref(false)
+const importTarget = ref<{ db: string; table: string }>({ db: '', table: '' })
+
+function openImport(db: string, table: string) {
+  importTarget.value = { db, table }
+  showImport.value = true
+}
+
 function onGlobalQueryExecute(results: { db: string; result: QueryResult | null; error: string | null }[]) {
   // Create a new query tab with combined results
   const combinedResult: QueryResult = {
@@ -289,6 +299,11 @@ function onInsertAiSql(sql: string) {
     tab.sql = sql
     tab.dirty = true
   }
+}
+
+function onImported() {
+  // Refresh the nav tree to show updated data
+  loadDatabases()
 }
 
 // Keyboard shortcuts
@@ -325,6 +340,7 @@ onBeforeUnmount(() => {
         @select-table="onSelectTable"
         @design-table="onDesignTable"
         @view-ddl="onViewDdl"
+        @import-data="openImport"
         @refresh="loadDatabases"
         @update:search-query="(v: string) => (searchQuery = v)"
       />
@@ -460,6 +476,16 @@ onBeforeUnmount(() => {
         :query="activeQueryTab?.sql"
         @close="showAiAssistant = false"
         @insert-sql="onInsertAiSql"
+      />
+
+      <!-- Import Wizard -->
+      <ImportWizard
+        :visible="showImport"
+        :session-id="sessionId || ''"
+        :db="importTarget.db"
+        :table="importTarget.table"
+        @close="showImport = false"
+        @imported="onImported"
       />
     </div>
   </div>
