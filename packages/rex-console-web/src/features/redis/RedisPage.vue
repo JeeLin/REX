@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import * as redisApi from '@/api/redis'
 import type { DbInfo, KeyInfo, RedisValue } from '@/api/redis'
+import FormatViewer from './FormatViewer.vue'
 
 const props = defineProps<{
   resourceId?: string
@@ -659,7 +660,7 @@ function loadStreamData() {
         <div v-else-if="keyValue" class="redis-value-body">
           <div class="redis-value-type">Type: {{ keyValue.type }}</div>
           <!-- String -->
-          <pre v-if="keyValue.type === 'String'" class="redis-value-text mono">{{ keyValue.value }}</pre>
+          <FormatViewer v-if="keyValue.type === 'String'" :value="String(keyValue.value || '')" />
           <!-- Hash -->
           <table v-else-if="keyValue.type === 'Hash'" class="redis-value-table">
             <thead><tr><th>#</th><th>Field</th><th>Value</th></tr></thead>
