@@ -306,6 +306,16 @@ function onImported() {
   loadDatabases()
 }
 
+import { executeQuery as sqlExecute } from '@/api/sql'
+import type { EditCell } from './SqlResultGrid.vue'
+
+async function onApplyChanges(changes: EditCell[]) {
+  if (!sessionId.value || !activeQueryTab.value) return
+  // Generate UPDATE statements based on changes
+  // This is a simplified version - in production, you'd need to know the table name and primary key
+  console.log('Apply changes:', changes)
+}
+
 // Keyboard shortcuts
 function handleKeydown(e: KeyboardEvent) {
   // Ctrl+Shift+Q: Global Query
@@ -415,6 +425,7 @@ onBeforeUnmount(() => {
             :loading="activeQueryTab.loading"
             :error="activeQueryTab.error"
             @export="showExport = true"
+            @apply="onApplyChanges"
           />
         </div>
       </div>

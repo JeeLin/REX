@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, nextTick } from 'vue'
 import type { QueryResult } from '@/api/sql'
 
 const props = defineProps<{
@@ -10,7 +10,16 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   export: []
+  apply: [changes: EditCell[]]
+  discard: []
 }>()
+
+export interface EditCell {
+  rowIndex: number
+  colIndex: number
+  oldValue: unknown
+  newValue: unknown
+}
 
 const hasData = computed(() => props.result && props.result.rows.length > 0)
 const isEmpty = computed(() => props.result && props.result.rows.length === 0 && !props.error)
@@ -65,6 +74,104 @@ function cellClass(value: unknown): string {
   if (typeof value === 'boolean') return 'cell-bool'
   return ''
 }
+
+// Inline editing
+const editingCell = ref<{ row: number; col: number } | null>(null)
+const editValue = ref('')
+const editInput = ref<HTMLInputElement | null>(null)
+const editHistory = ref<Map<string, unknown>>(new Map())
+
+function cellKey(row: number, col: number): string {
+  return `${row}:${col}`
+}
+
+function isEditing(row: number, col: number): boolean {
+  return editingCell.value?.row === row && editingCell.value?.col === col
+}
+
+function isEdited(row: number, col: number): boolean {
+  return editHistory.value.has(cellKey(row, col))
+}
+
+function onCellDblClick(row: number, col: number, value: unknown) {
+  editingCell.value = { row, col }
+  editValue.value = value === null || value === undefined ? '' : String(value)
+  nextTick(() => {
+    editInput.value?.focus()
+    editInput.value?.select()
+  })
+}
+
+function onEditKeyDown(e: KeyboardEvent) {
+  if (e.key === 'Enter') {
+    finishEdit()
+  } else if (e.key === 'Escape') {
+    cancelEdit()
+  }
+}
+
+function finishEdit() {
+  if (!editingCell.value || !props.result) return
+  const { row, col } = editingCell.value
+  const oldValue = props.result.rows[row]?.[col]
+  const newValue = editValue.value
+
+  // Only record if value actually changed
+  if (String(oldValue) !== newValue) {
+    const key = cellKey(row, col)
+    editHistory.value.set(key, { oldValue, newValue })
+  }
+
+  editingCell.value = null
+}
+
+function cancelEdit() {
+  editingCell.value = null
+}
+
+function getEditedValue(row: number, col: number, original: unknown): unknown {
+  const key = cellKey(row, col)
+  const edit = editHistory.value.get(key)
+  if (edit && typeof edit === 'object' && 'newValue' in edit) {
+    return (edit as { newValue: unknown }).newValue
+  }
+  return original
+}
+
+function getChanges(): EditCell[] {
+  if (!props.result) return []
+  const changes: EditCell[] = []
+  editHistory.value.forEach((edit, key) => {
+    const parts = key.split(':')
+    const row = parseInt(parts[0] || '0', 10)
+    const col = parseInt(parts[1] || '0', 10)
+    if (edit && typeof edit === 'object' && 'oldValue' in edit && 'newValue' in edit) {
+      const typedEdit = edit as { oldValue: unknown; newValue: unknown }
+      changes.push({
+        rowIndex: row,
+        colIndex: col,
+        oldValue: typedEdit.oldValue,
+        newValue: typedEdit.newValue,
+      })
+    }
+  })
+  return changes
+}
+
+function applyChanges() {
+  const changes = getChanges()
+  if (changes.length > 0) {
+    emit('apply', changes)
+    editHistory.value.clear()
+  }
+}
+
+function discardChanges() {
+  editHistory.value.clear()
+  emit('discard')
+}
+
+const hasChanges = computed(() => editHistory.value.size > 0)
 </script>
 
 <template>
@@ -107,10 +214,23 @@ function cellClass(value: unknown): string {
             <td
               v-for="(cell, ci) in row"
               :key="ci"
-              :class="['data-cell', cellClass(cell)]"
+              :class="['data-cell', cellClass(cell), { 'cell-edited': isEdited(ri, ci) }]"
               :title="formatCell(cell)"
+              @dblclick="onCellDblClick(ri, ci, cell)"
             >
-              {{ formatCell(cell) }}
+              <template v-if="isEditing(ri, ci)">
+                <input
+                  ref="editInput"
+                  class="cell-edit-input"
+                  :value="editValue"
+                  @input="editValue = ($event.target as HTMLInputElement).value"
+                  @keydown="onEditKeyDown"
+                  @blur="finishEdit"
+                />
+              </template>
+              <template v-else>
+                {{ formatCell(getEditedValue(ri, ci, cell)) }}
+              </template>
             </td>
           </tr>
         </tbody>
@@ -123,6 +243,10 @@ function cellClass(value: unknown): string {
       <span v-if="result.affected_rows">· {{ result.affected_rows }} affected</span>
       <span>· {{ result.elapsed_ms }}ms</span>
       <span v-if="hasData" class="status-spacer" />
+      <template v-if="hasData && hasChanges">
+        <button class="apply-btn" @click="applyChanges">Apply</button>
+        <button class="discard-btn" @click="discardChanges">Discard</button>
+      </template>
       <button v-if="hasData" class="export-btn" @click="emit('export')">Export</button>
     </div>
   </div>
@@ -294,5 +418,64 @@ function cellClass(value: unknown): string {
 
 .muted {
   color: var(--text-muted);
+}
+
+/* ---- inline editing ---- */
+.cell-edited {
+  background: rgba(210, 153, 34, 0.15) !important;
+}
+
+.data-cell {
+  cursor: default;
+  position: relative;
+}
+
+.data-cell:hover {
+  background: var(--bg-hover);
+}
+
+.cell-edit-input {
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  outline: none;
+}
+
+.apply-btn {
+  padding: 2px var(--space-2);
+  background: var(--success);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: white;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: opacity var(--transition);
+}
+
+.apply-btn:hover {
+  opacity: 0.9;
+}
+
+.discard-btn {
+  padding: 2px var(--space-2);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.discard-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--danger);
+  color: var(--danger);
 }
 </style>
