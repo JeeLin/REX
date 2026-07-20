@@ -124,14 +124,60 @@ const selectedKey = ref<string | null>(null)
 const keyValue = ref<RedisValue | null>(null)
 const valueLoading = ref(false)
 
+// Tab management
+const openTabs = ref<string[]>([])
+const activeTab = ref<string | null>(null)
+const tabValues = ref<Map<string, RedisValue>>(new Map())
+
 async function viewKey(key: string) {
   selectedKey.value = key
+  activeTab.value = null
   if (!sessionId.value) return
   valueLoading.value = true
   try {
     keyValue.value = await redisApi.getValue(sessionId.value, key)
   } catch { keyValue.value = null }
   finally { valueLoading.value = false }
+}
+
+function openInNewTab() {
+  const key = selectedKey.value || activeTab.value
+  if (!key) return
+  if (!openTabs.value.includes(key)) {
+    openTabs.value.push(key)
+    tabValues.value.set(key, keyValue.value!)
+  }
+  activeTab.value = key
+}
+
+async function switchTab(key: string) {
+  activeTab.value = key
+  selectedKey.value = null
+  const cached = tabValues.value.get(key)
+  if (cached) {
+    keyValue.value = cached
+  } else if (sessionId.value) {
+    valueLoading.value = true
+    try {
+      keyValue.value = await redisApi.getValue(sessionId.value, key)
+      tabValues.value.set(key, keyValue.value!)
+    } catch { keyValue.value = null }
+    finally { valueLoading.value = false }
+  }
+}
+
+function closeTab(key: string) {
+  const idx = openTabs.value.indexOf(key)
+  if (idx >= 0) {
+    openTabs.value.splice(idx, 1)
+    tabValues.value.delete(key)
+  }
+  if (activeTab.value === key) {
+    activeTab.value = openTabs.value[Math.min(idx, openTabs.value.length - 1)] || null
+    if (activeTab.value) {
+      switchTab(activeTab.value)
+    }
+  }
 }
 
 async function deleteSelected() {
@@ -363,12 +409,27 @@ function ctxCopy() {
 
     <!-- Right panel: value viewer -->
     <div class="redis-content">
-      <div v-if="!selectedKey" class="redis-content-placeholder">
+      <!-- Tab bar for open tabs -->
+      <div v-if="openTabs.length > 0" class="redis-tabs">
+        <div
+          v-for="tab in openTabs"
+          :key="tab"
+          class="redis-tab"
+          :class="{ 'redis-tab--active': activeTab === tab }"
+          @click="switchTab(tab)"
+        >
+          <span class="redis-tab-name mono">{{ tab }}</span>
+          <button class="redis-tab-close" @click.stop="closeTab(tab)">×</button>
+        </div>
+      </div>
+
+      <div v-if="!selectedKey && openTabs.length === 0" class="redis-content-placeholder">
         Select a key to view its value
       </div>
       <div v-else class="redis-value-panel">
         <div class="redis-value-header">
-          <span class="redis-value-key mono">{{ selectedKey }}</span>
+          <span class="redis-value-key mono">{{ selectedKey || activeTab }}</span>
+          <button class="redis-toolbar-btn" title="Open in new tab" @click="openInNewTab">↗</button>
           <button class="redis-toolbar-btn redis-toolbar-btn--danger" @click="deleteSelected">Delete</button>
         </div>
         <div v-if="valueLoading" class="redis-value-loading">Loading...</div>
@@ -746,6 +807,55 @@ function ctxCopy() {
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- tabs ---- */
+.redis-tabs {
+  display: flex;
+  gap: 2px;
+  padding: var(--space-1);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+}
+
+.redis-tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--text-xs);
+}
+
+.redis-tab:hover {
+  background: var(--bg-hover);
+}
+
+.redis-tab--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.redis-tab-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.redis-tab-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  font-size: var(--text-sm);
 }
 
 .redis-content-placeholder {
