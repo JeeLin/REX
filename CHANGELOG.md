@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.24.0] - 2026-07-20
+
+### Added
+- Redis 批量操作：批量删除、批量 TTL、导入导出（JSON 格式）
+- Redis 值查看器：支持「在新标签打开」，Tab 栏管理多个键值
+- Redis 连接管理：编辑、删除、复制连接功能
+
 ## [0.23.0] - 2026-07-20
 
 ### Added
