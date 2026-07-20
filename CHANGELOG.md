@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.19.0] - 2026-07-20
+
+### Added
+- 工作区状态栏增强：显示协议+主机+端口、终端尺寸（cols×rows）、连接状态
+- Tab 拖拽排序（HTML5 drag-and-drop）
+- Tab 右键菜单：关闭左侧、关闭全部、复制标签
+
 ## [0.18.0] - 2026-07-17
 
 ### Added
