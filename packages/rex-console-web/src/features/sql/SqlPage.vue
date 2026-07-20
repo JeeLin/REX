@@ -5,6 +5,7 @@ import SqlNavTree from './SqlNavTree.vue'
 import SqlEditor from './SqlEditor.vue'
 import SqlResultGrid from './SqlResultGrid.vue'
 import TableDesigner from './TableDesigner.vue'
+import ExportWizard from './ExportWizard.vue'
 import { useSqlQuery, type ExecuteMode } from './useSqlQuery'
 import { connect as sqlConnect, disconnect as sqlDisconnect, type ConnectRequest } from '@/api/sql'
 import type { QueryResult } from '@/api/sql'
@@ -247,6 +248,9 @@ const activeQueryTab = computed(() => {
   const tab = activeTab.value
   return tab && isQueryTab(tab) ? tab : null
 })
+
+// Export wizard state
+const showExport = ref(false)
 </script>
 
 <template>
@@ -333,6 +337,7 @@ const activeQueryTab = computed(() => {
             :result="activeQueryTab.result"
             :loading="activeQueryTab.loading"
             :error="activeQueryTab.error"
+            @export="showExport = true"
           />
         </div>
       </div>
@@ -367,6 +372,14 @@ const activeQueryTab = computed(() => {
         </div>
         <pre class="sql-ddl-drawer-content mono">{{ ddlDrawer.ddl }}</pre>
       </div>
+
+      <!-- Export Wizard -->
+      <ExportWizard
+        v-if="showExport && activeQueryTab?.result"
+        :result="activeQueryTab.result"
+        :table-name="activeQueryTab.title"
+        @close="showExport = false"
+      />
     </div>
   </div>
 </template>

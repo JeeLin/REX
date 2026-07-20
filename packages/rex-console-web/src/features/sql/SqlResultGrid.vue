@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { QueryResult } from '@/api/sql'
 
 const props = defineProps<{
@@ -8,8 +8,50 @@ const props = defineProps<{
   error: string | null
 }>()
 
+const emit = defineEmits<{
+  export: []
+}>()
+
 const hasData = computed(() => props.result && props.result.rows.length > 0)
 const isEmpty = computed(() => props.result && props.result.rows.length === 0 && !props.error)
+
+// Sorting
+type SortDir = 'asc' | 'desc' | null
+const sortCol = ref<number | null>(null)
+const sortDir = ref<SortDir>(null)
+
+function toggleSort(colIdx: number) {
+  if (sortCol.value === colIdx) {
+    // Cycle: asc -> desc -> null
+    if (sortDir.value === 'asc') sortDir.value = 'desc'
+    else if (sortDir.value === 'desc') { sortCol.value = null; sortDir.value = null }
+    else sortDir.value = 'asc'
+  } else {
+    sortCol.value = colIdx
+    sortDir.value = 'asc'
+  }
+}
+
+const sortedRows = computed(() => {
+  if (!props.result || sortCol.value === null || !sortDir.value) {
+    return props.result?.rows ?? []
+  }
+  const col = sortCol.value
+  const dir = sortDir.value === 'asc' ? 1 : -1
+  return [...props.result.rows].sort((a, b) => {
+    const av = a[col]
+    const bv = b[col]
+    if (av === null || av === undefined) return 1
+    if (bv === null || bv === undefined) return -1
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir
+    return String(av).localeCompare(String(bv)) * dir
+  })
+})
+
+function sortIcon(colIdx: number): string {
+  if (sortCol.value !== colIdx) return ''
+  return sortDir.value === 'asc' ? ' ↑' : ' ↓'
+}
 
 function formatCell(value: unknown): string {
   if (value === null || value === undefined) return 'NULL'
@@ -48,14 +90,19 @@ function cellClass(value: unknown): string {
         <thead>
           <tr>
             <th class="row-num">#</th>
-            <th v-for="col in result!.columns" :key="col.name" class="col-header">
-              <span class="col-name">{{ col.name }}</span>
+            <th
+              v-for="(col, ci) in result!.columns"
+              :key="col.name"
+              class="col-header"
+              @click="toggleSort(ci)"
+            >
+              <span class="col-name">{{ col.name }}{{ sortIcon(ci) }}</span>
               <span class="col-type muted">{{ col.data_type }}</span>
             </th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(row, ri) in result!.rows" :key="ri" class="data-row">
+          <tr v-for="(row, ri) in sortedRows" :key="ri" class="data-row">
             <td class="row-num">{{ ri + 1 }}</td>
             <td
               v-for="(cell, ci) in row"
@@ -75,6 +122,8 @@ function cellClass(value: unknown): string {
       <span>{{ result.rows.length }} rows</span>
       <span v-if="result.affected_rows">· {{ result.affected_rows }} affected</span>
       <span>· {{ result.elapsed_ms }}ms</span>
+      <span v-if="hasData" class="status-spacer" />
+      <button v-if="hasData" class="export-btn" @click="emit('export')">Export</button>
     </div>
   </div>
 </template>
@@ -221,6 +270,26 @@ function cellClass(value: unknown): string {
   font-size: var(--text-xs);
   color: var(--text-muted);
   flex-shrink: 0;
+}
+
+.status-spacer {
+  flex: 1;
+}
+
+.export-btn {
+  padding: 2px var(--space-2);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.export-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
 }
 
 .muted {
