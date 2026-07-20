@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { Splitpanes, Pane } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import StatusDot from '@/components/ui/StatusDot.vue'
@@ -8,6 +8,7 @@ import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import ConnectionTree from '@/features/workspace/ConnectionTree.vue'
 import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
 import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
+import CommandPalette from '@/features/workspace/CommandPalette.vue'
 import TerminalView from '@/features/terminal/TerminalView.vue'
 import SqlPage from '@/features/sql/SqlPage.vue'
 import RedisPage from '@/features/redis/RedisPage.vue'
@@ -39,6 +40,25 @@ const activeTab = ref<string>('')
 const splitDirection = ref<'row' | 'column'>('row')
 const panes = ref<string[]>([])
 const splitCount = ref(1)
+
+// Command palette
+const showCommandPalette = ref(false)
+
+function handleKeydown(e: KeyboardEvent) {
+  // Ctrl+K: Command palette
+  if (e.ctrlKey && e.key === 'k') {
+    e.preventDefault()
+    showCommandPalette.value = !showCommandPalette.value
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleKeydown)
+})
 
 const now = ref(new Date().toLocaleTimeString('zh-CN', { hour12: false }))
 const timer = setInterval(() => {
@@ -575,6 +595,12 @@ useKeyboardShortcuts([
     <ResourceProperties
       v-model:show="showProps"
       :resource="propsResource"
+    />
+
+    <!-- Command palette -->
+    <CommandPalette
+      :visible="showCommandPalette"
+      @close="showCommandPalette = false"
     />
   </div>
 </template>
