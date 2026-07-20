@@ -208,8 +208,8 @@ feat(workspace): enhance Quick Connect with protocol-aware port, password, and h
 - [x] 步骤2：设计核对
 - [x] 步骤3：开发
 - [x] 步骤4：代码精简
-- [ ] 步骤5：代码审查
-- [ ] 步骤6：测试验证
+- [x] 步骤5：代码审查
+- [x] 步骤6：测试验证
 - [ ] 步骤7：设计再确认
 - [ ] 步骤8：提交
 
