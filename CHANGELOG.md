@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.23.0] - 2026-07-20
+
+### Added
+- SQL 全局查询：Ctrl+Shift+Q 打开跨库查询模态，多选库执行查询
+- SQL AI 助手：Ctrl+Shift+A 打开右侧抽屉，上下文感知的快捷操作（分析/优化/生成/关系）
+- SQL 导入向导：拖拽文件到表，支持 CSV/JSON/SQL 格式解析和导入
+- SQL 结果网格内联编辑：双击单元格编辑，变更追踪，Apply/Discard 按钮
+- SQL 表单视图：网格/表单切换，一次一条记录编辑
+
 ## [0.22.0] - 2026-07-20
 
 ### Added
