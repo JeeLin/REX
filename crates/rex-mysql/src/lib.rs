@@ -5,6 +5,11 @@ use rex_common::sql::{ColumnInfo, ConnectRequest, DdlResult, ForeignKeyInfo, Ind
 use sqlx::mysql::{MySqlPool, MySqlRow};
 use sqlx::{Column, Row, TypeInfo};
 
+/// 转义 MySQL 标识符（使用反引号包裹）
+fn escape_identifier(s: &str) -> String {
+    format!("`{}`", s.replace('`', "``"))
+}
+
 /// MySQL 连接器
 pub struct MySqlConnector {
     pool: MySqlPool,
@@ -117,10 +122,11 @@ impl SqlConnector for MySqlConnector {
     }
 
     async fn tables(&mut self, db: &str) -> Result<Vec<TableInfo>> {
+        let escaped_db = escape_identifier(db);
         let sql = format!(
             "SELECT TABLE_NAME AS name, TABLE_TYPE AS table_type \
              FROM information_schema.TABLES \
-             WHERE TABLE_SCHEMA = '{db}' \
+             WHERE TABLE_SCHEMA = {escaped_db} \
              ORDER BY TABLE_NAME"
         );
         let result_rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
@@ -134,12 +140,14 @@ impl SqlConnector for MySqlConnector {
     }
 
     async fn columns(&mut self, db: &str, table: &str) -> Result<Vec<ColumnInfo>> {
+        let escaped_db = escape_identifier(db);
+        let escaped_table = escape_identifier(table);
         let sql = format!(
             "SELECT COLUMN_NAME AS name, DATA_TYPE AS data_type, \
              IS_NULLABLE AS nullable, \
              IF(COLUMN_KEY = 'PRI', 1, 0) AS is_primary_key \
              FROM information_schema.COLUMNS \
-             WHERE TABLE_SCHEMA = '{db}' AND TABLE_NAME = '{table}' \
+             WHERE TABLE_SCHEMA = {escaped_db} AND TABLE_NAME = {escaped_table} \
              ORDER BY ORDINAL_POSITION"
         );
         let result_rows = sqlx::query(&sql).fetch_all(&self.pool).await?;

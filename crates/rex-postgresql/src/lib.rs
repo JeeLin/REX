@@ -5,6 +5,11 @@ use rex_common::sql::{ColumnInfo, ConnectRequest, DdlResult, ForeignKeyInfo, Ind
 use sqlx::postgres::{PgPool, PgRow};
 use sqlx::{Column, Row, TypeInfo};
 
+/// 转义 PostgreSQL 标识符（使用双引号包裹）
+fn escape_identifier(s: &str) -> String {
+    format!("\"{}\"", s.replace('"', "\"\""))
+}
+
 /// PostgreSQL 连接器
 pub struct PostgresConnector {
     pool: PgPool,
@@ -118,12 +123,13 @@ impl SqlConnector for PostgresConnector {
     }
 
     async fn tables(&mut self, db: &str) -> Result<Vec<TableInfo>> {
+        let escaped_db = escape_identifier(db);
         let sql = format!(
             "SELECT c.relname AS name, \
              CASE WHEN c.relkind = 'v' THEN 'VIEW' ELSE 'BASE TABLE' END AS table_type \
              FROM pg_class c \
              JOIN pg_namespace n ON n.oid = c.relnamespace \
-             WHERE n.nspname = '{db}' \
+             WHERE n.nspname = {escaped_db} \
              AND c.relkind IN ('r', 'v') \
              ORDER BY c.relname"
         );
@@ -138,6 +144,8 @@ impl SqlConnector for PostgresConnector {
     }
 
     async fn columns(&mut self, db: &str, table: &str) -> Result<Vec<ColumnInfo>> {
+        let escaped_db = escape_identifier(db);
+        let escaped_table = escape_identifier(table);
         let sql = format!(
             "SELECT c.column_name AS name, c.data_type AS data_type, \
              c.is_nullable AS nullable, \
@@ -148,12 +156,12 @@ impl SqlConnector for PostgresConnector {
                  FROM information_schema.table_constraints tc \
                  JOIN information_schema.key_column_usage ku \
                  ON tc.constraint_name = ku.constraint_name \
-                 WHERE tc.table_schema = '{db}' \
-                 AND tc.table_name = '{table}' \
+                 WHERE tc.table_schema = {escaped_db} \
+                 AND tc.table_name = {escaped_table} \
                  AND tc.constraint_type = 'PRIMARY KEY' \
              ) pk ON c.column_name = pk.column_name \
-             WHERE c.table_schema = '{db}' \
-             AND c.table_name = '{table}' \
+             WHERE c.table_schema = {escaped_db} \
+             AND c.table_name = {escaped_table} \
              ORDER BY c.ordinal_position"
         );
         let result_rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
