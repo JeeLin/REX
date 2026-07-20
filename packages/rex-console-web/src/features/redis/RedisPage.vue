@@ -191,6 +191,11 @@ async function viewKey(key: string) {
   valueLoading.value = true
   try {
     keyValue.value = await redisApi.getValue(sessionId.value, key)
+    // Load stream data if stream type
+    if (keyValue.value?.type === 'Stream') {
+      streamTab.value = 'messages'
+      loadStreamData()
+    }
   } catch { keyValue.value = null }
   finally { valueLoading.value = false }
 }
@@ -373,6 +378,99 @@ async function ctxDelete() {
 function ctxCopy() {
   navigator.clipboard?.writeText(ctxMenu.value.key)
   ctxMenu.value.show = false
+}
+
+/* ---- Stream support ---- */
+const streamTab = ref<'messages' | 'groups'>('messages')
+const streamMessages = ref<{ id: string; fields: [string, string][] }[]>([])
+const streamGroups = ref<{ name: string; consumers: number; pending: number; lastDeliveredId: string }[]>([])
+const streamMinId = ref('-')
+const streamMaxId = ref('+')
+const streamLoading = ref(false)
+
+async function loadStreamMessages() {
+  if (!sessionId.value || !selectedKey.value) return
+  streamLoading.value = true
+  try {
+    const result = await redisApi.runCommand(selectedKey.value ? sessionId.value : '', [
+      'XRANGE', selectedKey.value!, streamMinId.value, streamMaxId.value, 'COUNT', '100',
+    ])
+    // Parse XRANGE output: each entry is "id" followed by field-value pairs
+    const lines = result.split('\n').filter(l => l.trim())
+    const messages: { id: string; fields: [string, string][] }[] = []
+    let i = 0
+    while (i < lines.length) {
+      const line = lines[i]?.trim()
+      if (!line) { i++; continue }
+      // Message ID line (e.g., "1234567890-0")
+      if (/^\d+-\d+$/.test(line)) {
+        const id = line
+        const fields: [string, string][] = []
+        i++
+        while (i < lines.length && !/^\d+-\d+$/.test(lines[i]!.trim())) {
+          // Field-value pair lines come in pairs
+          const field = lines[i]?.trim().replace(/^"|"$/g, '')
+          const value = lines[i + 1]?.trim().replace(/^"|"$/g, '')
+          if (field !== undefined && value !== undefined) {
+            fields.push([field, value])
+          }
+          i += 2
+        }
+        messages.push({ id, fields })
+      } else {
+        i++
+      }
+    }
+    streamMessages.value = messages
+  } catch {
+    streamMessages.value = []
+  } finally {
+    streamLoading.value = false
+  }
+}
+
+async function loadStreamGroups() {
+  if (!sessionId.value || !selectedKey.value) return
+  streamLoading.value = true
+  try {
+    const result = await redisApi.runCommand(sessionId.value, [
+      'XINFO', 'GROUPS', selectedKey.value!,
+    ])
+    // Parse XINFO GROUPS output
+    const lines = result.split('\n').filter(l => l.trim())
+    const groups: { name: string; consumers: number; pending: number; lastDeliveredId: string }[] = []
+    let i = 0
+    while (i < lines.length) {
+      const line = lines[i]?.trim()
+      if (line === 'name') {
+        const name = lines[i + 1]?.trim().replace(/^"|"$/g, '') || ''
+        let consumers = 0, pending = 0, lastDeliveredId = '0-0'
+        i += 2
+        // Parse remaining fields for this group
+        while (i < lines.length) {
+          const key = lines[i]?.trim()
+          if (key === 'name' || key === '') break
+          if (key === 'consumers') { consumers = parseInt(lines[i + 1]?.trim() || '0', 10); i += 2 }
+          else if (key === 'pending') { pending = parseInt(lines[i + 1]?.trim() || '0', 10); i += 2 }
+          else if (key === 'last-delivered-id') { lastDeliveredId = lines[i + 1]?.trim().replace(/^"|"$/g, '') || '0-0'; i += 2 }
+          else { i += 2 }
+        }
+        groups.push({ name, consumers, pending, lastDeliveredId })
+      } else {
+        i++
+      }
+    }
+    streamGroups.value = groups
+  } catch {
+    streamGroups.value = []
+  } finally {
+    streamLoading.value = false
+  }
+}
+
+function loadStreamData() {
+  if (streamTab.value === 'messages') loadStreamMessages()
+  else loadStreamGroups()
 }
 </script>
 
@@ -594,6 +692,53 @@ function ctxCopy() {
               </tr>
             </tbody>
           </table>
+          <!-- Stream -->
+          <div v-else-if="keyValue.type === 'Stream'" class="stream-view">
+            <div class="stream-tabs">
+              <button class="stream-tab" :class="{ 'stream-tab--active': streamTab === 'messages' }" @click="streamTab = 'messages'; loadStreamData()">Messages</button>
+              <button class="stream-tab" :class="{ 'stream-tab--active': streamTab === 'groups' }" @click="streamTab = 'groups'; loadStreamData()">Consumer Groups</button>
+            </div>
+            <div v-if="streamTab === 'messages'" class="stream-filter">
+              <label class="muted">Min:</label>
+              <input v-model="streamMinId" class="mono stream-input" placeholder="-" />
+              <label class="muted">Max:</label>
+              <input v-model="streamMaxId" class="mono stream-input" placeholder="+" />
+              <button class="redis-toolbar-btn" @click="loadStreamMessages">↻</button>
+            </div>
+            <div v-if="streamLoading" class="redis-value-loading">Loading...</div>
+            <template v-else-if="streamTab === 'messages'">
+              <table v-if="streamMessages.length" class="redis-value-table">
+                <thead><tr><th>#</th><th>ID</th><th>Fields</th></tr></thead>
+                <tbody>
+                  <tr v-for="(msg, i) in streamMessages" :key="msg.id">
+                    <td class="muted">{{ i + 1 }}</td>
+                    <td class="mono">{{ msg.id }}</td>
+                    <td class="mono">
+                      <span v-for="(f, fi) in msg.fields" :key="fi">
+                        <span class="stream-field-key">{{ f[0] }}</span>: {{ f[1] }}<span v-if="fi < msg.fields.length - 1">, </span>
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div v-else class="redis-tree-empty">No messages in stream</div>
+            </template>
+            <template v-else>
+              <table v-if="streamGroups.length" class="redis-value-table">
+                <thead><tr><th>#</th><th>Group</th><th>Consumers</th><th>Pending</th><th>Last Delivered</th></tr></thead>
+                <tbody>
+                  <tr v-for="(g, i) in streamGroups" :key="g.name">
+                    <td class="muted">{{ i + 1 }}</td>
+                    <td class="mono">{{ g.name }}</td>
+                    <td>{{ g.consumers }}</td>
+                    <td>{{ g.pending }}</td>
+                    <td class="mono">{{ g.lastDeliveredId }}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div v-else class="redis-tree-empty">No consumer groups</div>
+            </template>
+          </div>
         </div>
       </div>
     </div>
@@ -935,6 +1080,7 @@ function ctxCopy() {
 .type-set { background: rgba(88,166,255,0.2); color: #58A6FF; }
 .type-zset { background: rgba(232,145,45,0.2); color: #E8912D; }
 .type-hash { background: rgba(248,81,73,0.2); color: #F85149; }
+.type-stream { background: rgba(210,153,34,0.2); color: #D29922; }
 
 .redis-key-name {
   overflow: hidden;
@@ -1101,6 +1247,66 @@ function ctxCopy() {
 }
 
 .muted { color: var(--text-muted); }
+
+/* ---- stream viewer ---- */
+.stream-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.stream-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.stream-tab {
+  padding: var(--space-1) var(--space-3);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  transition: all var(--transition);
+}
+
+.stream-tab:hover {
+  color: var(--text-primary);
+}
+
+.stream-tab--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.stream-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.stream-input {
+  width: 120px;
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  outline: none;
+}
+
+.stream-input:focus {
+  border-color: var(--accent);
+}
+
+.stream-field-key {
+  color: var(--accent);
+  font-weight: 500;
+}
 
 /* ---- context menu ---- */
 .redis-ctx-menu {

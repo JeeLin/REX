@@ -28,7 +28,7 @@ export interface RedisInfo {
 }
 
 export interface RedisValue {
-  type: 'String' | 'List' | 'Set' | 'ZSet' | 'Hash'
+  type: 'String' | 'List' | 'Set' | 'ZSet' | 'Hash' | 'Stream'
   value: unknown
 }
 
