@@ -473,6 +473,91 @@ function loadStreamData() {
   if (streamTab.value === 'messages') loadStreamMessages()
   else loadStreamGroups()
 }
+
+/* ---- Management features ---- */
+const showMemoryAnalysis = ref(false)
+const showSlowLog = ref(false)
+const showFlushDb = ref(false)
+const memoryData = ref<{ used: string; peak: string; fragmentation: string; keyTypes: { type: string; count: number }[]; totalKeys: number } | null>(null)
+const slowLogEntries = ref<{ id: number; time: string; duration: string; client: string; command: string }[]>([])
+const managementLoading = ref(false)
+
+async function openMemoryAnalysis() {
+  showMemoryAnalysis.value = true
+  managementLoading.value = true
+  try {
+    // Get INFO memory
+    const infoRaw = await redisApi.runCommand(sessionId.value!, ['INFO', 'memory'])
+    const parseInfo = (raw: string, key: string) => {
+      const m = raw.match(new RegExp(`^${key}:(.+)`, 'm'))
+      return m?.[1]?.trim() || ''
+    }
+    const used = parseInfo(infoRaw, 'used_memory_human')
+    const peak = parseInfo(infoRaw, 'used_memory_peak_human')
+    const frag = parseInfo(infoRaw, 'mem_fragmentation_ratio')
+
+    // Get key type distribution via SCAN
+    const keysRaw = await redisApi.scan(sessionId.value!, '*', 1000)
+    const typeMap = new Map<string, number>()
+    for (const k of keysRaw) {
+      typeMap.set(k.type_name, (typeMap.get(k.type_name) || 0) + 1)
+    }
+    const keyTypes = Array.from(typeMap.entries()).map(([type, count]) => ({ type, count })).sort((a, b) => b.count - a.count)
+
+    memoryData.value = { used, peak, fragmentation: frag, keyTypes, totalKeys: keysRaw.length }
+  } catch {
+    memoryData.value = null
+  } finally {
+    managementLoading.value = false
+  }
+}
+
+async function openSlowLog() {
+  showSlowLog.value = true
+  managementLoading.value = true
+  try {
+    const raw = await redisApi.runCommand(sessionId.value!, ['SLOWLOG', 'GET', '50'])
+    // Parse SLOWLOG GET output
+    const lines = raw.split('\n').filter(l => l.trim())
+    const entries: { id: number; time: string; duration: string; client: string; command: string }[] = []
+    let i = 0
+    while (i < lines.length) {
+      const line = lines[i]?.trim()
+      // Entry starts with a number (the slow log entry ID)
+      if (line && /^\d+$/.test(line)) {
+        const id = parseInt(line, 10)
+        const ts = lines[i + 1]?.trim() || ''
+        const dur = lines[i + 2]?.trim() || ''
+        const client = lines[i + 3]?.trim() || ''
+        const cmd = lines.slice(i + 4, i + 8).join(' ').trim()
+        entries.push({
+          id,
+          time: new Date(parseInt(ts, 10) * 1000).toLocaleTimeString(),
+          duration: dur,
+          client,
+          command: cmd,
+        })
+        i += 8
+      } else {
+        i++
+      }
+    }
+    slowLogEntries.value = entries
+  } catch {
+    slowLogEntries.value = []
+  } finally {
+    managementLoading.value = false
+  }
+}
+
+async function flushDb() {
+  if (!sessionId.value) return
+  try {
+    await redisApi.runCommand(sessionId.value, ['FLUSHDB'])
+    showFlushDb.value = false
+    await loadKeys()
+  } catch { /* ignore */ }
+}
 </script>
 
 <template>
@@ -603,6 +688,12 @@ function loadStreamData() {
           <button class="redis-toolbar-btn" title="Export" @click="showExport = true">📤</button>
         </template>
         <button class="redis-toolbar-btn" title="Import" @click="showImport = true">📥</button>
+        <template v-if="sessionId">
+          <div class="redis-toolbar-sep" />
+          <button class="redis-toolbar-btn" title="Memory Analysis" @click="openMemoryAnalysis">📊</button>
+          <button class="redis-toolbar-btn" title="Slow Log" @click="openSlowLog">📋</button>
+          <button class="redis-toolbar-btn redis-toolbar-btn--danger" title="Flush DB" @click="showFlushDb = true">⚠️</button>
+        </template>
       </div>
 
       <!-- Key tree -->
@@ -829,6 +920,91 @@ function loadStreamData() {
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary" @click="showImport = false">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Memory Analysis Modal -->
+    <Teleport to="body">
+      <div v-if="showMemoryAnalysis" class="modal-overlay" @click.self="showMemoryAnalysis = false">
+        <div class="modal-content modal-wide">
+          <div class="modal-header">
+            <span class="modal-title">Memory Analysis</span>
+            <button class="modal-close" @click="showMemoryAnalysis = false">×</button>
+          </div>
+          <div class="modal-body">
+            <div v-if="managementLoading" class="redis-value-loading">Loading...</div>
+            <div v-else-if="memoryData">
+              <div class="mgmt-stats">
+                <div class="mgmt-stat"><span class="mgmt-label">Used</span><span class="mgmt-value mono">{{ memoryData.used }}</span></div>
+                <div class="mgmt-stat"><span class="mgmt-label">Peak</span><span class="mgmt-value mono">{{ memoryData.peak }}</span></div>
+                <div class="mgmt-stat"><span class="mgmt-label">Fragmentation</span><span class="mgmt-value mono">{{ memoryData.fragmentation }}</span></div>
+                <div class="mgmt-stat"><span class="mgmt-label">Total Keys</span><span class="mgmt-value mono">{{ memoryData.totalKeys }}</span></div>
+              </div>
+              <div class="mgmt-section-title">Key Type Distribution</div>
+              <table class="redis-value-table">
+                <thead><tr><th>Type</th><th>Count</th><th>%</th></tr></thead>
+                <tbody>
+                  <tr v-for="kt in memoryData.keyTypes" :key="kt.type">
+                    <td><span class="redis-key-type" :class="'type-' + kt.type.toLowerCase()">{{ kt.type[0] }}</span> {{ kt.type }}</td>
+                    <td class="mono">{{ kt.count }}</td>
+                    <td>{{ memoryData.totalKeys > 0 ? ((kt.count / memoryData.totalKeys) * 100).toFixed(1) : 0 }}%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-else class="redis-tree-empty">Failed to load memory data</div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Slow Log Modal -->
+    <Teleport to="body">
+      <div v-if="showSlowLog" class="modal-overlay" @click.self="showSlowLog = false">
+        <div class="modal-content modal-wide">
+          <div class="modal-header">
+            <span class="modal-title">Slow Log</span>
+            <button class="modal-close" @click="showSlowLog = false">×</button>
+          </div>
+          <div class="modal-body">
+            <div v-if="managementLoading" class="redis-value-loading">Loading...</div>
+            <div v-else-if="slowLogEntries.length">
+              <table class="redis-value-table">
+                <thead><tr><th>#</th><th>Time</th><th>Duration</th><th>Client</th><th>Command</th></tr></thead>
+                <tbody>
+                  <tr v-for="entry in slowLogEntries" :key="entry.id">
+                    <td class="muted">{{ entry.id }}</td>
+                    <td>{{ entry.time }}</td>
+                    <td class="mono">{{ entry.duration }}</td>
+                    <td class="mono">{{ entry.client }}</td>
+                    <td class="mono">{{ entry.command }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-else class="redis-tree-empty">No slow log entries</div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Flush DB Confirmation -->
+    <Teleport to="body">
+      <div v-if="showFlushDb" class="modal-overlay" @click.self="showFlushDb = false">
+        <div class="modal-content">
+          <div class="modal-header">
+            <span class="modal-title">Flush Database</span>
+            <button class="modal-close" @click="showFlushDb = false">×</button>
+          </div>
+          <div class="modal-body">
+            <p>⚠️ This will permanently delete <strong>ALL</strong> keys in the current database (db{{ currentDb }}).</p>
+            <p>This action cannot be undone.</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showFlushDb = false">Cancel</button>
+            <button class="btn btn-danger" @click="flushDb">Flush DB</button>
           </div>
         </div>
       </div>
@@ -1429,5 +1605,53 @@ function loadStreamData() {
 
 .btn-danger:hover {
   opacity: 0.9;
+}
+
+/* ---- management modals ---- */
+.modal-wide {
+  min-width: 500px;
+  max-width: 700px;
+}
+
+.mgmt-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.mgmt-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--bg-deep);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.mgmt-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.mgmt-value {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.mgmt-section-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.redis-toolbar-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--border);
 }
 </style>
