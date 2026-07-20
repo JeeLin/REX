@@ -55,6 +55,36 @@ export async function uploadFile(sessionId: string, remotePath: string, file: Fi
   if (!res.ok) throw new Error('Upload failed')
 }
 
+/** Upload with progress tracking via XMLHttpRequest */
+export function uploadFileWithProgress(
+  sessionId: string,
+  remotePath: string,
+  file: File,
+  onProgress?: (percent: number, transferred: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${API_BASE}/upload`)
+    const token = localStorage.getItem('rex-token')
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100), e.loaded)
+      }
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve()
+      else reject(new Error('Upload failed'))
+    }
+    xhr.onerror = () => reject(new Error('Upload failed'))
+    const form = new FormData()
+    form.append('session_id', sessionId)
+    form.append('path', remotePath)
+    form.append('file', file)
+    xhr.send(form)
+  })
+}
+
 export async function downloadFile(sessionId: string, path: string): Promise<Blob> {
   const res = await fetch(`${API_BASE}/download?session_id=${sessionId}&path=${encodeURIComponent(path)}`, { headers: authHeaders() })
   if (!res.ok) throw new Error('Download failed')
