@@ -169,6 +169,23 @@ async function applyChmod() {
   await loadPanel('right')
 }
 
+// Edit file (temp download → edit → upload back)
+async function editFile(path: string) {
+  if (!sessionId.value) return
+  try {
+    // Download file to temp location
+    const blob = await filesApi.downloadFile(sessionId.value, path)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = path.split('/').pop() || 'temp'
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    console.error('Edit failed:', e)
+  }
+}
+
 // Resize
 const leftW = ref(400); const dragging = ref(false); let sx = 0, sw = 0
 function onDS(e: MouseEvent) { dragging.value = true; sx = e.clientX; sw = leftW.value; document.addEventListener('mousemove', onDM); document.addEventListener('mouseup', onDE); document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none' }
@@ -224,6 +241,7 @@ function fmtSize(b: number) { if (!b) return '-'; const u = ['B','KB','MB','GB']
     </template>
 
     <div v-if="ctx.show" ref="ctxRef" class="fctx" :style="{top:ctx.y+'px',left:ctx.x+'px'}">
+      <div class="ci" @click="editFile(ctx.path)">Edit</div>
       <div class="ci" @click="ctxCopy">Copy Path</div>
       <div class="ci" @click="openChmod(ctx.path)">Permissions</div>
       <div class="ci ci--d" @click="ctxDelete">Delete</div>
