@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.25.0] - 2026-07-20
+
+### Added
+- SFTP 同步浏览：双面板同步进入文件夹
+- SFTP chmod 权限管理：复选框矩阵设置文件权限
+- SFTP 编辑功能：临时下载文件进行编辑
+
 ## [0.24.0] - 2026-07-20
 
 ### Added
