@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.26.0] - 2026-07-20
+
+### Added
+- SQL 编辑器工具栏：格式化 (Ctrl+Shift+F)、注释切换 (Ctrl+/)、大小写切换 (Ctrl+Shift+U)、剪贴板栈 (Ctrl+Shift+V)、缩放 (Ctrl+=/-/0)
+- Redis Stream 类型支持：消息列表 + 消费者组表格，Min/Max ID 过滤
+- Redis FormatViewer：通用格式查看器，自动探测 Text/Hex/JSON/Binary
+- Redis 管理功能：内存分析（键分布）、慢日志、FlushDB（带确认）
+- SFTP 拖拽传输：面板间拖拽文件进行上传/下载
+- SFTP 文件夹同步对话框：方向选择、比较规则、掩码配置、孤儿删除、Preview 差异列表
+
+### Fixed
+- CommandPalette.vue：移除未使用变量，修复 lint error
+
 ## [0.25.1] - 2026-07-20
 
 ### Fixed

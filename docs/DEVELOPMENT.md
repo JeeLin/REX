@@ -71,7 +71,7 @@ rex-agent = 所有 crate（无前端）
 | **M23** | Redis 控制台增强（批量操作 + 值查看器增强 + 导入导出） | ARDM | ✅ |
 | **M24** | SFTP 文件管理增强（同步浏览 + chmod + 编辑功能） | Xftp | ✅ |
 | **M25** | 安全加固 + 工作区增强（SQL 注入修复 + 全局搜索） | — | ✅ |
-| **M26** | 控制台增强（SQL 编辑器工具栏 + Redis Stream/FormatViewer + SFTP 拖拽/同步） | Navicat/ARDM/Xftp | 🔄 |
+| **M26** | 控制台增强（SQL 编辑器工具栏 + Redis Stream/FormatViewer + SFTP 拖拽/同步） | Navicat/ARDM/Xftp | ✅ |
 
 ### M0：项目骨架重建
 
