@@ -143,6 +143,79 @@ async function deleteSelected() {
   await loadKeys()
 }
 
+// Batch operations
+const showBatchTtl = ref(false)
+const batchTtlValue = ref(3600)
+const showBatchDelete = ref(false)
+const showExport = ref(false)
+const showImport = ref(false)
+
+function selectAll() {
+  for (const k of keys.value) {
+    selectedKeys.value.add(k.key)
+  }
+  selectedKeys.value = new Set(selectedKeys.value)
+}
+
+function clearSelection() {
+  selectedKeys.value.clear()
+  selectedKeys.value = new Set(selectedKeys.value)
+}
+
+async function batchSetTtl() {
+  if (!sessionId.value || selectedKeys.value.size === 0) return
+  for (const key of selectedKeys.value) {
+    await redisApi.setTtl(sessionId.value, key, batchTtlValue.value)
+  }
+  showBatchTtl.value = false
+  await loadKeys()
+}
+
+async function batchDelete() {
+  if (!sessionId.value || selectedKeys.value.size === 0) return
+  await redisApi.delKeys(sessionId.value, Array.from(selectedKeys.value))
+  showBatchDelete.value = false
+  selectedKeys.value.clear()
+  selectedKey.value = null
+  keyValue.value = null
+  await loadKeys()
+}
+
+function exportKeys() {
+  const data = Array.from(selectedKeys.value).map((key) => ({ key }))
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `redis-keys-${new Date().toISOString().slice(0, 10)}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+  showExport.value = false
+}
+
+function onImportFile(e: Event) {
+  const input = e.target as HTMLInputElement
+  if (!input.files?.length) return
+  const file = input.files[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = async () => {
+    try {
+      const data = JSON.parse(reader.result as string)
+      if (Array.isArray(data)) {
+        for (const item of data) {
+          if (item.key) {
+            await redisApi.setValue(sessionId.value!, item.key, '')
+          }
+        }
+      }
+    } catch { /* ignore */ }
+    showImport.value = false
+    await loadKeys()
+  }
+  reader.readAsText(file)
+}
+
 // Panel resize
 const panelWidth = ref(280)
 const dragging = ref(false)
@@ -252,12 +325,14 @@ function ctxCopy() {
           @keyup.enter="loadKeys"
         />
         <button class="redis-toolbar-btn" title="Refresh" @click="loadKeys">↻</button>
-        <button
-          v-if="selectedKeys.size > 0"
-          class="redis-toolbar-btn redis-toolbar-btn--danger"
-          title="Delete selected"
-          @click="deleteSelected"
-        >🗑</button>
+        <button class="redis-toolbar-btn" title="Select All" @click="selectAll">☑</button>
+        <button class="redis-toolbar-btn" title="Clear Selection" @click="clearSelection">☐</button>
+        <template v-if="selectedKeys.size > 0">
+          <button class="redis-toolbar-btn" title="Batch Delete" @click="showBatchDelete = true">🗑</button>
+          <button class="redis-toolbar-btn" title="Batch TTL" @click="showBatchTtl = true">⏱</button>
+          <button class="redis-toolbar-btn" title="Export" @click="showExport = true">📤</button>
+        </template>
+        <button class="redis-toolbar-btn" title="Import" @click="showImport = true">📥</button>
       </div>
 
       <!-- Key tree -->
@@ -347,6 +422,85 @@ function ctxCopy() {
       <div class="ctx-item" @click="ctxCopy">Copy Key Name</div>
       <div class="ctx-item ctx-item--danger" @click="ctxDelete">Delete</div>
     </div>
+
+    <!-- Batch Delete Modal -->
+    <Teleport to="body">
+      <div v-if="showBatchDelete" class="modal-overlay" @click.self="showBatchDelete = false">
+        <div class="modal-content">
+          <div class="modal-header">
+            <span class="modal-title">Batch Delete</span>
+            <button class="modal-close" @click="showBatchDelete = false">×</button>
+          </div>
+          <div class="modal-body">
+            <p>Are you sure you want to delete {{ selectedKeys.size }} selected keys?</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showBatchDelete = false">Cancel</button>
+            <button class="btn btn-danger" @click="batchDelete">Delete</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Batch TTL Modal -->
+    <Teleport to="body">
+      <div v-if="showBatchTtl" class="modal-overlay" @click.self="showBatchTtl = false">
+        <div class="modal-content">
+          <div class="modal-header">
+            <span class="modal-title">Set TTL for {{ selectedKeys.size }} keys</span>
+            <button class="modal-close" @click="showBatchTtl = false">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="dialog-field">
+              <label>TTL (seconds)</label>
+              <input v-model.number="batchTtlValue" type="number" class="mono" />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showBatchTtl = false">Cancel</button>
+            <button class="btn btn-primary" @click="batchSetTtl">Apply</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Export Modal -->
+    <Teleport to="body">
+      <div v-if="showExport" class="modal-overlay" @click.self="showExport = false">
+        <div class="modal-content">
+          <div class="modal-header">
+            <span class="modal-title">Export {{ selectedKeys.size }} keys</span>
+            <button class="modal-close" @click="showExport = false">×</button>
+          </div>
+          <div class="modal-body">
+            <p>Export selected keys to JSON file</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showExport = false">Cancel</button>
+            <button class="btn btn-primary" @click="exportKeys">Export</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Import Modal -->
+    <Teleport to="body">
+      <div v-if="showImport" class="modal-overlay" @click.self="showImport = false">
+        <div class="modal-content">
+          <div class="modal-header">
+            <span class="modal-title">Import Keys</span>
+            <button class="modal-close" @click="showImport = false">×</button>
+          </div>
+          <div class="modal-body">
+            <p>Select a JSON file with keys to import</p>
+            <input type="file" accept=".json" @change="onImportFile" />
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showImport = false">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -703,5 +857,100 @@ function ctxCopy() {
 
 .ctx-item--danger {
   color: var(--danger);
+}
+
+/* ---- modals ---- */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 320px;
+  max-width: 90vw;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--text-xl);
+}
+
+.modal-close:hover {
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: var(--space-4);
+  color: var(--text-secondary);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.btn {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.btn:hover {
+  background: var(--bg-hover);
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: white;
+}
+
+.btn-danger:hover {
+  opacity: 0.9;
 }
 </style>
