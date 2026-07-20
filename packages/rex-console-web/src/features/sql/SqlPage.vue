@@ -311,7 +311,6 @@ function onImported() {
   loadDatabases()
 }
 
-import { executeQuery as sqlExecute } from '@/api/sql'
 import type { EditCell } from './SqlResultGrid.vue'
 
 async function onApplyChanges(changes: EditCell[]) {

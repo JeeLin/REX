@@ -22,7 +22,6 @@ const format = ref<ImportFormat>('csv')
 const delimiter = ref(',')
 const hasHeader = ref(true)
 const skipDuplicates = ref(true)
-const truncateBefore = ref(false)
 const previewData = ref<any[]>([])
 const previewColumns = ref<string[]>([])
 const importing = ref(false)
@@ -231,12 +230,6 @@ function close() {
   importResult.value = null
   emit('close')
 }
-
-const totalRows = computed(() => {
-  if (!file.value) return 0
-  // Estimate from preview
-  return previewData.value.length > 0 ? '~' + (previewData.value.length * 20) : 0
-})
 </script>
 
 <template>
@@ -301,10 +294,6 @@ const totalRows = computed(() => {
               <label class="option-item">
                 <input type="checkbox" v-model="skipDuplicates" />
                 <span>Skip duplicates (ON DUPLICATE KEY IGNORE)</span>
-              </label>
-              <label class="option-item">
-                <input type="checkbox" v-model="truncateBefore" />
-                <span>Truncate table before import</span>
               </label>
             </div>
           </div>
