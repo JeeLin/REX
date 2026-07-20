@@ -58,12 +58,33 @@ async function loadPanel(side: Side) {
   catch { p.entries = [] } finally { p.loading = false }
 }
 
-function activate(side: Side) { panels.left.active = side === 'left'; panels.right.active = side === 'right' }
-function other(side: Side): Side { return side === 'left' ? 'right' : 'left' }
+// Sync browsing
+const syncBrowsing = ref(false)
 
 function navigate(side: Side, entry: FileEntry) {
-  if (entry.is_dir) { panels[side].path = entry.path.endsWith('/') ? entry.path : entry.path + '/'; panels[side].selected.clear(); loadPanel(side) }
+  if (entry.is_dir) {
+    panels[side].path = entry.path.endsWith('/') ? entry.path : entry.path + '/'
+    panels[side].selected.clear()
+    loadPanel(side)
+
+    // Sync browsing: navigate other panel to relative path
+    if (syncBrowsing.value) {
+      const otherSide = other(side)
+      const currentPath = panels[side].path
+      const basePath = panels[side].path.split('/').slice(0, -2).join('/') + '/'
+      const relativePath = currentPath.replace(basePath, '')
+      if (relativePath && relativePath !== currentPath) {
+        const targetPath = panels[otherSide].path + relativePath
+        panels[otherSide].path = targetPath
+        panels[otherSide].selected.clear()
+        loadPanel(otherSide)
+      }
+    }
+  }
 }
+
+function activate(side: Side) { panels.left.active = side === 'left'; panels.right.active = side === 'right' }
+function other(side: Side): Side { return side === 'left' ? 'right' : 'left' }
 function goUp(side: Side) {
   const parts = panels[side].path.replace(/\/$/, '').split('/'); parts.pop()
   panels[side].path = parts.length ? parts.join('/') + '/' : '/'; panels[side].selected.clear(); loadPanel(side)
@@ -147,6 +168,7 @@ function fmtSize(b: number) { if (!b) return '-'; const u = ['B','KB','MB','GB']
         <div class="ptb">
           <button class="pb" @click="goUp(side)">↑</button>
           <span class="pp mono">{{ panels[side].path }}</span>
+          <button class="pb" :class="{ 'pb--active': syncBrowsing }" title="Sync Browsing" @click="syncBrowsing = !syncBrowsing">🔗</button>
           <button class="pb" @click="uploadTo(side)">⬆</button>
           <button class="pb" @click="loadPanel(side)">↻</button>
         </div>
@@ -188,6 +210,7 @@ function fmtSize(b: number) { if (!b) return '-'; const u = ['B','KB','MB','GB']
 .ptb{display:flex;align-items:center;gap:var(--space-1);padding:var(--space-1) var(--space-2);border-bottom:1px solid var(--border);background:var(--bg-surface)}
 .pb{background:none;border:none;color:var(--text-muted);cursor:pointer;padding:var(--space-1);border-radius:var(--radius-sm);font-size:var(--text-sm)}
 .pb:hover{color:var(--text-primary)}
+.pb--active{color:var(--accent);background:rgba(232,145,45,0.1)}
 .pp{flex:1;font-size:var(--text-xs);color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pf{flex:1;overflow-y:auto}
 .fr{display:flex;padding:var(--space-1) var(--space-3);font-size:var(--text-sm);cursor:pointer}
