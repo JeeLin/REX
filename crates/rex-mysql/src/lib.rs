@@ -1,7 +1,7 @@
 //! MySQL 协议实现 — 基于 sqlx 的 SqlConnector。
 
 use anyhow::{Context, Result};
-use rex_common::sql::{ColumnInfo, ConnectRequest, QueryResult, SqlConnector, TableInfo};
+use rex_common::sql::{ColumnInfo, ConnectRequest, DdlResult, ForeignKeyInfo, IndexInfo, QueryResult, SqlConnector, TableInfo};
 use sqlx::mysql::{MySqlPool, MySqlRow};
 use sqlx::{Column, Row, TypeInfo};
 
@@ -161,5 +161,79 @@ impl SqlConnector for MySqlConnector {
     async fn close(&mut self) -> Result<()> {
         self.pool.close().await;
         Ok(())
+    }
+
+    async fn indexes(&mut self, db: &str, table: &str) -> Result<Vec<IndexInfo>> {
+        let sql = format!(
+            "SELECT INDEX_NAME AS name, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) AS columns, \
+             NON_UNIQUE, INDEX_TYPE \
+             FROM information_schema.STATISTICS \
+             WHERE TABLE_SCHEMA = '{db}' AND TABLE_NAME = '{table}' \
+             GROUP BY INDEX_NAME, NON_UNIQUE, INDEX_TYPE \
+             ORDER BY INDEX_NAME"
+        );
+        let rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
+        Ok(rows
+            .iter()
+            .map(|r| {
+                let non_unique: i32 = r.try_get("non_unique").unwrap_or(0);
+                IndexInfo {
+                    name: r.try_get("name").unwrap_or_default(),
+                    columns: r
+                        .try_get::<String, _>("columns")
+                        .unwrap_or_default()
+                        .split(',')
+                        .map(String::from)
+                        .collect(),
+                    unique: non_unique == 0,
+                    index_type: r.try_get("index_type").unwrap_or_default(),
+                }
+            })
+            .collect())
+    }
+
+    async fn foreign_keys(&mut self, db: &str, table: &str) -> Result<Vec<ForeignKeyInfo>> {
+        let sql = format!(
+            "SELECT CONSTRAINT_NAME AS name, \
+             GROUP_CONCAT(COLUMN_NAME ORDER BY ORDINAL_POSITION) AS columns, \
+             REFERENCED_TABLE_NAME AS ref_table, \
+             GROUP_CONCAT(REFERENCED_COLUMN_NAME ORDER BY ORDINAL_POSITION) AS ref_columns, \
+             DELETE_RULE AS on_delete, UPDATE_RULE AS on_update \
+             FROM information_schema.KEY_COLUMN_USAGE \
+             JOIN information_schema.REFERENTIAL_CONSTRAINTS USING (CONSTRAINT_NAME, CONSTRAINT_SCHEMA) \
+             WHERE TABLE_SCHEMA = '{db}' AND TABLE_NAME = '{table}' \
+               AND REFERENCED_TABLE_NAME IS NOT NULL \
+             GROUP BY CONSTRAINT_NAME, REFERENCED_TABLE_NAME, DELETE_RULE, UPDATE_RULE"
+        );
+        let rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
+        Ok(rows
+            .iter()
+            .map(|r| ForeignKeyInfo {
+                name: r.try_get("name").unwrap_or_default(),
+                columns: r
+                    .try_get::<String, _>("columns")
+                    .unwrap_or_default()
+                    .split(',')
+                    .map(String::from)
+                    .collect(),
+                ref_table: r.try_get("ref_table").unwrap_or_default(),
+                ref_columns: r
+                    .try_get::<String, _>("ref_columns")
+                    .unwrap_or_default()
+                    .split(',')
+                    .map(String::from)
+                    .collect(),
+                on_delete: r.try_get("on_delete").unwrap_or_default(),
+                on_update: r.try_get("on_update").unwrap_or_default(),
+            })
+            .collect())
+    }
+
+    async fn ddl(&mut self, _db: &str, table: &str) -> Result<DdlResult> {
+        let rows = sqlx::query_scalar::<_, String>(&format!("SHOW CREATE TABLE `{table}`"))
+            .fetch_all(&self.pool)
+            .await?;
+        let ddl = rows.get(1).cloned().unwrap_or_default();
+        Ok(DdlResult { ddl })
     }
 }

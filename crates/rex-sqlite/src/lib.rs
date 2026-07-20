@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use rex_common::sql::{ColumnInfo, ConnectRequest, QueryResult, SqlConnector, TableInfo};
+use rex_common::sql::{ColumnInfo, ConnectRequest, DdlResult, ForeignKeyInfo, IndexInfo, QueryResult, SqlConnector, TableInfo};
 
 /// SQLite 连接器
 pub struct SqliteConnector {
@@ -165,5 +165,83 @@ impl SqlConnector for SqliteConnector {
     async fn close(&mut self) -> Result<()> {
         // rusqlite 连接在 drop 时自动关闭
         Ok(())
+    }
+
+    async fn indexes(&mut self, _db: &str, table: &str) -> Result<Vec<IndexInfo>> {
+        let sql = format!("PRAGMA index_list('{table}')");
+        let mut stmt = self.conn.prepare(&sql)?;
+        let index_rows: Vec<(String, bool)> = stmt
+            .query_map([], |row| Ok((row.get(1)?, row.get(2)?)))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        let mut indexes = Vec::new();
+        for (idx_name, unique) in index_rows {
+            let col_sql = format!("PRAGMA index_info('{idx_name}')");
+            let mut col_stmt = self.conn.prepare(&col_sql)?;
+            let columns: Vec<String> = col_stmt
+                .query_map([], |row| row.get(2))?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+
+            indexes.push(IndexInfo {
+                name: idx_name,
+                columns,
+                unique,
+                index_type: "BTREE".to_string(),
+            });
+        }
+        Ok(indexes)
+    }
+
+    async fn foreign_keys(&mut self, _db: &str, table: &str) -> Result<Vec<ForeignKeyInfo>> {
+        let sql = format!("PRAGMA foreign_key_list('{table}')");
+        let mut stmt = self.conn.prepare(&sql)?;
+        let fk_rows: Vec<(i32, String, String, String, String, String)> = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                ))
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        // Group by id (constraint id)
+        let mut fk_map: std::collections::HashMap<i32, (String, Vec<String>, String, Vec<String>, String, String)> =
+            std::collections::HashMap::new();
+        for (id, table_name, from, to, on_update, on_delete) in fk_rows {
+            let entry = fk_map.entry(id).or_insert_with(|| {
+                (
+                    format!("fk_{table}_{id}"),
+                    Vec::new(),
+                    table_name,
+                    Vec::new(),
+                    on_update,
+                    on_delete,
+                )
+            });
+            entry.1.push(from);
+            entry.3.push(to);
+        }
+
+        Ok(fk_map
+            .into_values()
+            .map(|(name, columns, ref_table, ref_columns, on_update, on_delete)| ForeignKeyInfo {
+                name,
+                columns,
+                ref_table,
+                ref_columns,
+                on_delete,
+                on_update,
+            })
+            .collect())
+    }
+
+    async fn ddl(&mut self, _db: &str, table: &str) -> Result<DdlResult> {
+        let sql = "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?";
+        let ddl: String = self.conn.query_row(sql, [table], |row| row.get(0))?;
+        Ok(DdlResult { ddl })
     }
 }

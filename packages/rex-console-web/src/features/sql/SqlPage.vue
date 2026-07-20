@@ -4,6 +4,7 @@ import { useSqlNav } from './useSqlNav'
 import SqlNavTree from './SqlNavTree.vue'
 import SqlEditor from './SqlEditor.vue'
 import SqlResultGrid from './SqlResultGrid.vue'
+import TableDesigner from './TableDesigner.vue'
 import { useSqlQuery, type ExecuteMode } from './useSqlQuery'
 import { connect as sqlConnect, disconnect as sqlDisconnect, type ConnectRequest } from '@/api/sql'
 import type { QueryResult } from '@/api/sql'
@@ -130,9 +131,27 @@ interface QueryTab {
   error: string | null
 }
 
+interface DesignerTab {
+  id: number
+  type: 'designer'
+  title: string
+  db: string
+  table: string
+}
+
+type AnyTab = QueryTab | DesignerTab
+
 let nextTabId = 1
-const tabs = ref<QueryTab[]>([])
+const tabs = ref<AnyTab[]>([])
 const activeTabId = ref<number | null>(null)
+
+function isQueryTab(tab: AnyTab): tab is QueryTab {
+  return !('type' in tab)
+}
+
+function isDesignerTab(tab: AnyTab): tab is DesignerTab {
+  return 'type' in tab && tab.type === 'designer'
+}
 
 function createTab(initialSql = ''): QueryTab {
   const tab: QueryTab = {
@@ -143,6 +162,25 @@ function createTab(initialSql = ''): QueryTab {
     result: null,
     loading: false,
     error: null,
+  }
+  tabs.value.push(tab)
+  activeTabId.value = tab.id
+  return tab
+}
+
+function createDesignerTab(db: string, table: string): DesignerTab {
+  // Check if already open
+  const existing = tabs.value.find(t => isDesignerTab(t) && t.db === db && t.table === table)
+  if (existing) {
+    activeTabId.value = existing.id
+    return existing as DesignerTab
+  }
+  const tab: DesignerTab = {
+    id: nextTabId++,
+    type: 'designer',
+    title: `${table}`,
+    db,
+    table,
   }
   tabs.value.push(tab)
   activeTabId.value = tab.id
@@ -160,7 +198,7 @@ function closeTab(id: number) {
 
 function onSelectTable(db: string, table: string) {
   const sql = `SELECT * FROM "${db}"."${table}" LIMIT 100`
-  const existing = tabs.value.find((t) => t.title === table)
+  const existing = tabs.value.find((t) => isQueryTab(t) && t.title === table)
   if (existing) {
     activeTabId.value = existing.id
     return
@@ -168,11 +206,35 @@ function onSelectTable(db: string, table: string) {
   createTab(sql)
 }
 
+function onDesignTable(db: string, table: string) {
+  createDesignerTab(db, table)
+}
+
+// DDL Drawer state
+const ddlDrawer = ref<{ open: boolean; db: string; table: string; ddl: string }>({
+  open: false, db: '', table: '', ddl: '',
+})
+
+function copyDdl() {
+  navigator.clipboard?.writeText(ddlDrawer.value.ddl)
+}
+
+async function onViewDdl(db: string, table: string) {
+  if (!sessionId.value) return
+  try {
+    const { getDdl } = await import('@/api/sql')
+    const result = await getDdl(sessionId.value, db, table)
+    ddlDrawer.value = { open: true, db, table, ddl: result.ddl }
+  } catch (e: unknown) {
+    ddlDrawer.value = { open: true, db, table, ddl: `Error: ${e instanceof Error ? e.message : String(e)}` }
+  }
+}
+
 const { mode: execMode, run: runQuery } = useSqlQuery(() => sessionId.value)
 
 async function onExecute(sql: string) {
   const tab = activeTab.value
-  if (!tab) return
+  if (!tab || !isQueryTab(tab)) return
   await runQuery(sql, tab)
 }
 
@@ -181,6 +243,10 @@ function onSave(sql: string) {
 }
 
 const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.value))
+const activeQueryTab = computed(() => {
+  const tab = activeTab.value
+  return tab && isQueryTab(tab) ? tab : null
+})
 </script>
 
 <template>
@@ -192,6 +258,8 @@ const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.val
         :loading="loading"
         :search-query="searchQuery"
         @select-table="onSelectTable"
+        @design-table="onDesignTable"
+        @view-ddl="onViewDdl"
         @refresh="loadDatabases"
         @update:search-query="(v: string) => (searchQuery = v)"
       />
@@ -216,12 +284,13 @@ const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.val
             :class="{ 'sql-tab--active': tab.id === activeTabId }"
             @click="activeTabId = tab.id"
           >
+            <span v-if="isDesignerTab(tab)" class="sql-tab-icon">⊞</span>
             <span class="sql-tab-title">{{ tab.title }}</span>
             <span class="sql-tab-close" @click.stop="closeTab(tab.id)">×</span>
           </div>
           <button class="sql-tab-add" @click="createTab()" title="New Query">+</button>
         </div>
-        <div class="sql-toolbar">
+        <div v-if="activeQueryTab" class="sql-toolbar">
           <select v-model="execMode" class="sql-toolbar-select mono" title="Execute mode">
             <option value="all">Run All</option>
             <option value="current">Run Current</option>
@@ -230,32 +299,25 @@ const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.val
           <button
             class="sql-toolbar-btn sql-run-btn"
             title="Execute (Ctrl+Enter)"
-            :disabled="!activeTab || activeTab.loading"
-            @click="activeTab && onExecute(activeTab.sql)"
+            :disabled="!activeQueryTab || activeQueryTab.loading"
+            @click="activeQueryTab && onExecute(activeQueryTab.sql)"
           >
             ▶ Run
           </button>
         </div>
       </div>
 
-      <!-- Split: editor top / result bottom -->
-      <div class="sql-right-split">
+      <!-- Split: editor top / result bottom (query tabs) -->
+      <div v-if="activeQueryTab" class="sql-right-split">
         <!-- Editor -->
         <div class="sql-split-editor" :style="{ height: editorHeight + '%' }">
           <SqlEditor
-            v-if="activeTab"
-            :key="activeTab.id"
-            :model-value="activeTab.sql"
-            @update:model-value="activeTab.sql = $event; activeTab.dirty = true"
+            :key="activeQueryTab.id"
+            :model-value="activeQueryTab.sql"
+            @update:model-value="activeQueryTab.sql = $event; activeQueryTab.dirty = true"
             @execute="onExecute"
             @save="onSave"
           />
-          <div v-else class="sql-page-placeholder">
-            <div class="placeholder-title">SQL Console</div>
-            <div class="placeholder-desc">
-              Select a table or click + to create a new query
-            </div>
-          </div>
         </div>
 
         <!-- Vertical resize handle -->
@@ -268,12 +330,42 @@ const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.val
         <!-- Result grid -->
         <div class="sql-split-result">
           <SqlResultGrid
-            v-if="activeTab"
-            :result="activeTab.result"
-            :loading="activeTab.loading"
-            :error="activeTab.error"
+            :result="activeQueryTab.result"
+            :loading="activeQueryTab.loading"
+            :error="activeQueryTab.error"
           />
         </div>
+      </div>
+
+      <!-- Table Designer (designer tabs) -->
+      <div v-else-if="activeTab && isDesignerTab(activeTab)" class="sql-designer-wrap">
+        <TableDesigner
+          :key="activeTab.id"
+          :session-id="sessionId || ''"
+          :db="activeTab.db"
+          :table="activeTab.table"
+          @close="closeTab(activeTab.id)"
+        />
+      </div>
+
+      <!-- Placeholder (no tab) -->
+      <div v-else class="sql-page-placeholder">
+        <div class="placeholder-title">SQL Console</div>
+        <div class="placeholder-desc">
+          Select a table or click + to create a new query
+        </div>
+      </div>
+
+      <!-- DDL Drawer -->
+      <div v-if="ddlDrawer.open" class="sql-ddl-drawer">
+        <div class="sql-ddl-drawer-header">
+          <span class="sql-ddl-drawer-title mono">DDL: {{ ddlDrawer.table }}</span>
+          <div class="sql-ddl-drawer-actions">
+            <button class="sql-ddl-btn" @click="copyDdl" title="Copy DDL">Copy</button>
+            <button class="sql-ddl-btn" @click="ddlDrawer.open = false" title="Close">×</button>
+          </div>
+        </div>
+        <pre class="sql-ddl-drawer-content mono">{{ ddlDrawer.ddl }}</pre>
       </div>
     </div>
   </div>
@@ -358,6 +450,12 @@ const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.val
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.sql-tab-icon {
+  font-size: var(--text-xs);
+  color: var(--accent);
+  margin-right: var(--space-1);
 }
 
 .sql-tab-close {
@@ -487,5 +585,68 @@ const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.val
   font-size: var(--text-sm);
   text-align: center;
   max-width: 300px;
+}
+
+/* ---- designer tab ---- */
+.sql-designer-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ---- DDL drawer ---- */
+.sql-ddl-drawer {
+  border-top: 1px solid var(--border);
+  background: var(--bg-deep);
+  flex-shrink: 0;
+  max-height: 200px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sql-ddl-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-3);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sql-ddl-drawer-title {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.sql-ddl-drawer-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.sql-ddl-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: color var(--transition);
+}
+
+.sql-ddl-btn:hover {
+  color: var(--text-primary);
+}
+
+.sql-ddl-drawer-content {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-2) var(--space-3);
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>

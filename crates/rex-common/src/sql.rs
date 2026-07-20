@@ -40,6 +40,33 @@ pub struct TableInfo {
     pub table_type: String,
 }
 
+/// 索引信息。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexInfo {
+    pub name: String,
+    pub columns: Vec<String>,
+    pub unique: bool,
+    /// `BTREE` / `HASH` / `FULLTEXT` / `GIN` / `GIST` 等。
+    pub index_type: String,
+}
+
+/// 外键信息。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForeignKeyInfo {
+    pub name: String,
+    pub columns: Vec<String>,
+    pub ref_table: String,
+    pub ref_columns: Vec<String>,
+    pub on_delete: String,
+    pub on_update: String,
+}
+
+/// DDL 预览结果。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DdlResult {
+    pub ddl: String,
+}
+
 /// 建立连接时的请求参数。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectRequest {
@@ -68,6 +95,24 @@ pub trait SqlConnector: Send {
 
     /// 列出指定表的列信息。
     async fn columns(&mut self, db: &str, table: &str) -> anyhow::Result<Vec<ColumnInfo>>;
+
+    /// 列出指定表的索引信息。
+    async fn indexes(&mut self, db: &str, table: &str) -> anyhow::Result<Vec<IndexInfo>> {
+        let _ = (db, table);
+        Ok(vec![])
+    }
+
+    /// 列出指定表的外键信息。
+    async fn foreign_keys(&mut self, db: &str, table: &str) -> anyhow::Result<Vec<ForeignKeyInfo>> {
+        let _ = (db, table);
+        Ok(vec![])
+    }
+
+    /// 获取指定表的 DDL（CREATE TABLE 语句）。
+    async fn ddl(&mut self, db: &str, table: &str) -> anyhow::Result<DdlResult> {
+        let _ = (db, table);
+        anyhow::bail!("DDL not supported")
+    }
 
     /// 关闭连接，释放资源。
     async fn close(&mut self) -> anyhow::Result<()>;

@@ -89,3 +89,50 @@ export async function getColumns(sessionId: string, db: string, table: string): 
   if (!res.ok) throw new Error('Failed to fetch columns')
   return await res.json()
 }
+
+export interface IndexInfo {
+  name: string
+  columns: string[]
+  unique: boolean
+  index_type: string
+}
+
+export interface ForeignKeyInfo {
+  name: string
+  columns: string[]
+  ref_table: string
+  ref_columns: string[]
+  on_delete: string
+  on_update: string
+}
+
+export interface DdlResult {
+  ddl: string
+}
+
+export async function getIndexes(sessionId: string, db: string, table: string): Promise<IndexInfo[]> {
+  const res = await fetch(
+    `${API_BASE}/indexes?session_id=${sessionId}&db=${encodeURIComponent(db)}&table=${encodeURIComponent(table)}`,
+    { headers: authHeaders() },
+  )
+  if (!res.ok) throw new Error('Failed to fetch indexes')
+  return await res.json()
+}
+
+export async function getForeignKeys(sessionId: string, db: string, table: string): Promise<ForeignKeyInfo[]> {
+  const res = await fetch(
+    `${API_BASE}/foreign_keys?session_id=${sessionId}&db=${encodeURIComponent(db)}&table=${encodeURIComponent(table)}`,
+    { headers: authHeaders() },
+  )
+  if (!res.ok) throw new Error('Failed to fetch foreign keys')
+  return await res.json()
+}
+
+export async function getDdl(sessionId: string, db: string, table: string): Promise<DdlResult> {
+  const res = await fetch(
+    `${API_BASE}/ddl?session_id=${sessionId}&db=${encodeURIComponent(db)}&table=${encodeURIComponent(table)}`,
+    { headers: authHeaders() },
+  )
+  if (!res.ok) throw new Error('Failed to fetch DDL')
+  return await res.json()
+}

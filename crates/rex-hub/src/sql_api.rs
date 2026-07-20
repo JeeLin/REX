@@ -53,6 +53,9 @@ pub fn sql_routes() -> axum::Router<AppState> {
         .route("/databases", axum::routing::get(databases))
         .route("/tables", axum::routing::get(tables))
         .route("/columns", axum::routing::get(columns))
+        .route("/indexes", axum::routing::get(indexes))
+        .route("/foreign_keys", axum::routing::get(foreign_keys))
+        .route("/ddl", axum::routing::get(ddl))
 }
 
 // ---------------------------------------------------------------------------
@@ -248,6 +251,63 @@ async fn columns(
 
     match conn.columns(&params.db, &params.table).await {
         Ok(cols) => (StatusCode::OK, Json(cols)).into_response(),
+        Err(e) => error_response("QUERY_FAILED", &e.to_string()).into_response(),
+    }
+}
+
+/// GET /api/sql/indexes?session_id=xxx&db=xxx&table=xxx
+async fn indexes(
+    State(state): State<AppState>,
+    Query(params): Query<ColumnsQuery>,
+) -> impl IntoResponse {
+    let mut pool = state.sql_pool.lock().await;
+    let conn = match pool.connectors.get_mut(&params.session_id) {
+        Some(c) => c,
+        None => {
+            return error_response("SESSION_NOT_FOUND", "session not found").into_response();
+        }
+    };
+
+    match conn.indexes(&params.db, &params.table).await {
+        Ok(idx) => (StatusCode::OK, Json(idx)).into_response(),
+        Err(e) => error_response("QUERY_FAILED", &e.to_string()).into_response(),
+    }
+}
+
+/// GET /api/sql/foreign_keys?session_id=xxx&db=xxx&table=xxx
+async fn foreign_keys(
+    State(state): State<AppState>,
+    Query(params): Query<ColumnsQuery>,
+) -> impl IntoResponse {
+    let mut pool = state.sql_pool.lock().await;
+    let conn = match pool.connectors.get_mut(&params.session_id) {
+        Some(c) => c,
+        None => {
+            return error_response("SESSION_NOT_FOUND", "session not found").into_response();
+        }
+    };
+
+    match conn.foreign_keys(&params.db, &params.table).await {
+        Ok(fks) => (StatusCode::OK, Json(fks)).into_response(),
+        Err(e) => error_response("QUERY_FAILED", &e.to_string()).into_response(),
+    }
+}
+
+/// GET /api/sql/ddl?session_id=xxx&db=xxx&table=xxx
+async fn ddl(
+    State(state): State<AppState>,
+    Query(params): Query<ColumnsQuery>,
+) -> impl IntoResponse {
+    let mut pool = state.sql_pool.lock().await;
+    let conn = match pool.connectors.get_mut(&params.session_id) {
+        Some(c) => c,
+        None => {
+            return error_response("SESSION_NOT_FOUND", "session not found").into_response();
+        }
+    };
+
+    match conn.ddl(&params.db, &params.table).await {
+        Ok(d) => (StatusCode::OK, Json(d)).into_response(),
         Err(e) => error_response("QUERY_FAILED", &e.to_string()).into_response(),
     }
 }

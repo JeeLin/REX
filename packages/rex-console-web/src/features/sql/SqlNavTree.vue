@@ -11,6 +11,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   selectTable: [db: string, table: string]
+  designTable: [db: string, table: string]
+  viewDdl: [db: string, table: string]
   refresh: []
   'update:searchQuery': [value: string]
 }>()
@@ -62,6 +64,10 @@ function ctxAction(action: string) {
     navigator.clipboard?.writeText(ctxMenu.value.tableName)
   } else if (action === 'refresh') {
     emit('refresh')
+  } else if (action === 'designTable') {
+    emit('designTable', ctxMenu.value.dbName, ctxMenu.value.tableName)
+  } else if (action === 'viewDdl') {
+    emit('viewDdl', ctxMenu.value.dbName, ctxMenu.value.tableName)
   }
   ctxMenu.value.show = false
 }
@@ -154,6 +160,9 @@ function ctxAction(action: string) {
         class="sql-ctx-menu"
         :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
       >
+        <button class="sql-ctx-item" @click="ctxAction('designTable')">Design Table</button>
+        <button class="sql-ctx-item" @click="ctxAction('viewDdl')">View DDL</button>
+        <div class="sql-ctx-separator" />
         <button class="sql-ctx-item" @click="ctxAction('refresh')">Refresh</button>
         <button class="sql-ctx-item" @click="ctxAction('copyName')">Copy Name</button>
       </div>
@@ -347,5 +356,11 @@ function ctxAction(action: string) {
 
 .sql-ctx-item:hover {
   background: var(--bg-hover);
+}
+
+.sql-ctx-separator {
+  height: 1px;
+  background: var(--border);
+  margin: var(--space-1) 0;
 }
 </style>
