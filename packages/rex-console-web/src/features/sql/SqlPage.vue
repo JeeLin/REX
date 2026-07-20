@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useSqlNav } from './useSqlNav'
 import SqlNavTree from './SqlNavTree.vue'
 import SqlEditor from './SqlEditor.vue'
@@ -235,6 +235,22 @@ async function onViewDdl(db: string, table: string) {
 
 const { mode: execMode, run: runQuery } = useSqlQuery(() => sessionId.value)
 
+/* ---- editor toolbar ---- */
+const editorRef = ref<InstanceType<typeof SqlEditor>>()
+const showClipboard = ref(false)
+
+function onFormat() { editorRef.value?.format() }
+function onToggleComment() { editorRef.value?.toggleComment() }
+function onToggleCase() { editorRef.value?.toggleCase() }
+function onZoomIn() { editorRef.value?.zoomIn() }
+function onZoomOut() { editorRef.value?.zoomOut() }
+function onZoomReset() { editorRef.value?.zoomReset() }
+function toggleClipboard() { showClipboard.value = !showClipboard.value }
+function onPasteFromHistory(item: string) {
+  editorRef.value?.pasteFromHistory(item)
+  showClipboard.value = false
+}
+
 async function onExecute(sql: string) {
   const tab = activeTab.value
   if (!tab || !isQueryTab(tab)) return
@@ -399,6 +415,32 @@ onBeforeUnmount(() => {
           >
             ▶ Run
           </button>
+          <div class="sql-toolbar-sep" />
+          <button class="sql-toolbar-btn" title="Format SQL (Ctrl+Shift+F)" @click="onFormat">✦ Format</button>
+          <button class="sql-toolbar-btn" title="Toggle Comment (Ctrl+/)" @click="onToggleComment">💬</button>
+          <button class="sql-toolbar-btn" title="Toggle Case (Ctrl+Shift+U)" @click="onToggleCase">Aa</button>
+          <div class="sql-toolbar-sep" />
+          <div class="sql-clipboard-wrap">
+            <button class="sql-toolbar-btn" title="Clipboard History (Ctrl+Shift+V)" @click="toggleClipboard">📋</button>
+            <div v-if="showClipboard" class="sql-clipboard-popup">
+              <div v-if="editorRef?.clipboardHistory?.length" class="sql-clipboard-list">
+                <div
+                  v-for="(item, i) in editorRef.clipboardHistory"
+                  :key="i"
+                  class="sql-clipboard-item"
+                  :title="item"
+                  @click="onPasteFromHistory(item)"
+                >
+                  {{ item.length > 60 ? item.slice(0, 60) + '…' : item }}
+                </div>
+              </div>
+              <div v-else class="sql-clipboard-empty">No clipboard history</div>
+            </div>
+          </div>
+          <div class="sql-toolbar-sep" />
+          <button class="sql-toolbar-btn sql-zoom-btn" title="Zoom In (Ctrl+=)" @click="onZoomIn">+</button>
+          <button class="sql-toolbar-btn sql-zoom-btn" title="Zoom Out (Ctrl+-)" @click="onZoomOut">−</button>
+          <button class="sql-toolbar-btn sql-zoom-btn" title="Reset Zoom (Ctrl+0)" @click="onZoomReset">1:1</button>
         </div>
       </div>
 
@@ -407,6 +449,7 @@ onBeforeUnmount(() => {
         <!-- Editor -->
         <div class="sql-split-editor" :style="{ height: editorHeight + '%' }">
           <SqlEditor
+            ref="editorRef"
             :key="activeQueryTab.id"
             :model-value="activeQueryTab.sql"
             @update:model-value="activeQueryTab.sql = $event; activeQueryTab.dirty = true"
@@ -696,6 +739,67 @@ onBeforeUnmount(() => {
 
 .sql-run-btn:hover:not(:disabled) {
   background: #d6820f;
+}
+
+.sql-toolbar-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 var(--space-1);
+}
+
+.sql-zoom-btn {
+  padding: var(--space-1) var(--space-2) !important;
+  font-weight: 600;
+  min-width: 24px;
+  text-align: center;
+}
+
+/* ---- clipboard history popup ---- */
+.sql-clipboard-wrap {
+  position: relative;
+}
+
+.sql-clipboard-popup {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 100;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  min-width: 300px;
+  max-width: 400px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.sql-clipboard-list {
+  padding: var(--space-1) 0;
+}
+
+.sql-clipboard-item {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background var(--transition);
+}
+
+.sql-clipboard-item:hover {
+  background: var(--bg-hover);
+}
+
+.sql-clipboard-empty {
+  padding: var(--space-3);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
 }
 
 /* ---- split ---- */

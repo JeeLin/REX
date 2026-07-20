@@ -23,12 +23,125 @@ const emit = defineEmits<{
 const editorRef = ref<HTMLDivElement>()
 const view = shallowRef<EditorView>()
 
+/* ---- zoom ---- */
+const fontSize = ref(13)
+const MIN_FONT = 9
+const MAX_FONT = 24
+
+function zoomIn() {
+  fontSize.value = Math.min(MAX_FONT, fontSize.value + 1)
+  applyFontSize()
+}
+
+function zoomOut() {
+  fontSize.value = Math.max(MIN_FONT, fontSize.value - 1)
+  applyFontSize()
+}
+
+function zoomReset() {
+  fontSize.value = 13
+  applyFontSize()
+}
+
+function applyFontSize() {
+  if (!editorRef.value) return
+  const el = editorRef.value.querySelector('.cm-editor') as HTMLElement
+  if (el) el.style.fontSize = `${fontSize.value}px`
+}
+
+/* ---- clipboard history ---- */
+const clipboardHistory = ref<string[]>([])
+const CLIPBOARD_MAX = 10
+
+function addToClipboard(text: string) {
+  if (!text || !text.trim()) return
+  // Deduplicate
+  const idx = clipboardHistory.value.indexOf(text)
+  if (idx !== -1) clipboardHistory.value.splice(idx, 1)
+  clipboardHistory.value.unshift(text)
+  if (clipboardHistory.value.length > CLIPBOARD_MAX) clipboardHistory.value.pop()
+}
+
+function onCopy(e: ClipboardEvent) {
+  const text = e.clipboardData?.getData('text/plain')
+  if (text) addToClipboard(text)
+}
+
+function pasteFromHistory(item: string) {
+  if (!view.value) return
+  const { from, to } = view.value.state.selection.main
+  view.value.dispatch({
+    changes: { from, to, insert: item },
+  })
+}
+
+function handleCopy(e: ClipboardEvent) {
+  const sel = view.value?.state.sliceDoc(
+    view.value.state.selection.main.from,
+    view.value.state.selection.main.to,
+  )
+  if (sel) addToClipboard(sel)
+}
+
+/* ---- comment toggle ---- */
+function toggleComment() {
+  if (!view.value) return
+  const { from, to } = view.value.state.selection.main
+  const doc = view.value.state.doc
+  // Find line boundaries
+  const lineFrom = doc.lineAt(from).from
+  const lineTo = doc.lineAt(to).to
+  const selectedText = doc.sliceString(lineFrom, lineTo)
+  const lines = selectedText.split('\n')
+  const allCommented = lines.every(l => l.trimStart().startsWith('--'))
+
+  const newLines = lines.map(l => {
+    if (allCommented) {
+      // Remove '-- ' prefix
+      return l.replace(/^(\s*)--\s?/, '$1')
+    } else {
+      // Add '-- ' prefix
+      return `${l.startsWith(' ') ? '' : ' '}-- ${l}`
+    }
+  })
+
+  view.value.dispatch({
+    changes: { from: lineFrom, to: lineTo, insert: newLines.join('\n') },
+  })
+}
+
+/* ---- case toggle ---- */
+function toggleCase() {
+  if (!view.value) return
+  const { from, to } = view.value.state.selection.main
+  if (from === to) return
+  const doc = view.value.state.doc
+  const selectedText = doc.sliceString(from, to)
+  const isUpper = selectedText === selectedText.toUpperCase()
+  const newText = isUpper ? selectedText.toLowerCase() : selectedText.toUpperCase()
+  view.value.dispatch({
+    changes: { from, to, insert: newText },
+  })
+}
+
+/* ---- format SQL ---- */
+function format() {
+  if (!view.value) return
+  const doc = view.value.state.doc.toString()
+  import('./sql-format').then(({ formatSql }) => {
+    const formatted = formatSql(doc)
+    view.value!.dispatch({
+      changes: { from: 0, to: view.value!.state.doc.length, insert: formatted },
+    })
+  })
+}
+
 function createTheme() {
   return EditorView.theme({
     '&': {
       backgroundColor: 'var(--bg-deep)',
       color: 'var(--text-primary)',
-      fontSize: 'var(--text-sm)',
+      fontSize: `${fontSize.value}px`,
       fontFamily: 'var(--font-mono)',
       height: '100%',
     },
@@ -122,6 +235,22 @@ function createExtensions() {
           return true
         },
       },
+      {
+        key: 'Ctrl-/',
+        run: () => { toggleComment(); return true },
+      },
+      {
+        key: 'Cmd-/',
+        run: () => { toggleComment(); return true },
+      },
+      {
+        key: 'Ctrl-Shift-u',
+        run: () => { toggleCase(); return true },
+      },
+      {
+        key: 'Ctrl-Shift-U',
+        run: () => { toggleCase(); return true },
+      },
     ]),
     sql({
       dialect: SQLite,
@@ -146,10 +275,13 @@ onMounted(() => {
     state,
     parent: editorRef.value,
   })
+  // Listen for copy events to track clipboard history
+  document.addEventListener('copy', handleCopy)
 })
 
 onBeforeUnmount(() => {
   view.value?.destroy()
+  document.removeEventListener('copy', handleCopy)
 })
 
 watch(
@@ -167,7 +299,17 @@ function focus() {
   view.value?.focus()
 }
 
-defineExpose({ focus })
+defineExpose({
+  focus,
+  format,
+  toggleComment,
+  toggleCase,
+  zoomIn,
+  zoomOut,
+  zoomReset,
+  clipboardHistory,
+  pasteFromHistory,
+})
 </script>
 
 <template>
