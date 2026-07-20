@@ -97,20 +97,17 @@ pub trait SqlConnector: Send {
     async fn columns(&mut self, db: &str, table: &str) -> anyhow::Result<Vec<ColumnInfo>>;
 
     /// 列出指定表的索引信息。
-    async fn indexes(&mut self, db: &str, table: &str) -> anyhow::Result<Vec<IndexInfo>> {
-        let _ = (db, table);
+    async fn indexes(&mut self, _db: &str, _table: &str) -> anyhow::Result<Vec<IndexInfo>> {
         Ok(vec![])
     }
 
     /// 列出指定表的外键信息。
-    async fn foreign_keys(&mut self, db: &str, table: &str) -> anyhow::Result<Vec<ForeignKeyInfo>> {
-        let _ = (db, table);
+    async fn foreign_keys(&mut self, _db: &str, _table: &str) -> anyhow::Result<Vec<ForeignKeyInfo>> {
         Ok(vec![])
     }
 
     /// 获取指定表的 DDL（CREATE TABLE 语句）。
-    async fn ddl(&mut self, db: &str, table: &str) -> anyhow::Result<DdlResult> {
-        let _ = (db, table);
+    async fn ddl(&mut self, _db: &str, _table: &str) -> anyhow::Result<DdlResult> {
         anyhow::bail!("DDL not supported")
     }
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import ColumnEditor from './ColumnEditor.vue'
 import { getColumns, getIndexes, getForeignKeys, getDdl, type ColumnInfo, type IndexInfo, type ForeignKeyInfo, type DdlResult } from '@/api/sql'
 

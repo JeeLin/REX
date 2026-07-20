@@ -7,8 +7,7 @@ import SqlResultGrid from './SqlResultGrid.vue'
 import TableDesigner from './TableDesigner.vue'
 import ExportWizard from './ExportWizard.vue'
 import { useSqlQuery, type ExecuteMode } from './useSqlQuery'
-import { connect as sqlConnect, disconnect as sqlDisconnect, type ConnectRequest } from '@/api/sql'
-import type { QueryResult } from '@/api/sql'
+import { connect as sqlConnect, disconnect as sqlDisconnect, getDdl, type ConnectRequest, type QueryResult } from '@/api/sql'
 
 const props = defineProps<{
   resourceId?: string
@@ -223,7 +222,6 @@ function copyDdl() {
 async function onViewDdl(db: string, table: string) {
   if (!sessionId.value) return
   try {
-    const { getDdl } = await import('@/api/sql')
     const result = await getDdl(sessionId.value, db, table)
     ddlDrawer.value = { open: true, db, table, ddl: result.ddl }
   } catch (e: unknown) {

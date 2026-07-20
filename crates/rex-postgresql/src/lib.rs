@@ -127,9 +127,9 @@ impl SqlConnector for PostgresConnector {
              AND c.relkind IN ('r', 'v') \
              ORDER BY c.relname"
         );
-        let mut result_rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
+        let result_rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
         Ok(result_rows
-            .iter_mut()
+            .iter()
             .map(|r| TableInfo {
                 name: r.try_get("name").unwrap_or_default(),
                 table_type: r.try_get("table_type").unwrap_or_default(),
@@ -156,9 +156,9 @@ impl SqlConnector for PostgresConnector {
              AND c.table_name = '{table}' \
              ORDER BY c.ordinal_position"
         );
-        let mut result_rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
+        let result_rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
         Ok(result_rows
-            .iter_mut()
+            .iter()
             .map(|r| {
                 let nullable: String = r.try_get("nullable").unwrap_or_default();
                 let is_pk: i32 = r.try_get("is_primary_key").unwrap_or(0);
@@ -260,7 +260,7 @@ impl SqlConnector for PostgresConnector {
             .collect())
     }
 
-    async fn ddl(&mut self, _db: &str, table: &str) -> Result<DdlResult> {
+    async fn ddl(&mut self, db: &str, table: &str) -> Result<DdlResult> {
         let sql = format!(
             "SELECT 'CREATE TABLE {table} (' || \
              string_agg(column_def, ', ' ORDER BY ordinal_position) || \
@@ -276,7 +276,7 @@ impl SqlConnector for PostgresConnector {
                  c.ordinal_position, \
                  '' AS table_options \
                FROM information_schema.columns c \
-               WHERE c.table_schema = 'public' AND c.table_name = '{table}' \
+               WHERE c.table_schema = '{db}' AND c.table_name = '{table}' \
              ) sub"
         );
         let rows = sqlx::query_scalar::<_, String>(&sql)
