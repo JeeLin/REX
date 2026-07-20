@@ -7,6 +7,7 @@ import SqlResultGrid from './SqlResultGrid.vue'
 import TableDesigner from './TableDesigner.vue'
 import ExportWizard from './ExportWizard.vue'
 import GlobalQueryModal from './GlobalQueryModal.vue'
+import AiAssistantDrawer from './AiAssistantDrawer.vue'
 import { useSqlQuery, type ExecuteMode } from './useSqlQuery'
 import { connect as sqlConnect, disconnect as sqlDisconnect, getDdl, type ConnectRequest, type QueryResult } from '@/api/sql'
 
@@ -260,6 +261,13 @@ function openGlobalQuery() {
   }
 }
 
+// AI Assistant drawer state
+const showAiAssistant = ref(false)
+
+function openAiAssistant() {
+  showAiAssistant.value = true
+}
+
 function onGlobalQueryExecute(results: { db: string; result: QueryResult | null; error: string | null }[]) {
   // Create a new query tab with combined results
   const combinedResult: QueryResult = {
@@ -275,12 +283,25 @@ function onGlobalQueryExecute(results: { db: string; result: QueryResult | null;
   }
 }
 
+function onInsertAiSql(sql: string) {
+  const tab = activeTab.value
+  if (tab && isQueryTab(tab)) {
+    tab.sql = sql
+    tab.dirty = true
+  }
+}
+
 // Keyboard shortcuts
 function handleKeydown(e: KeyboardEvent) {
   // Ctrl+Shift+Q: Global Query
   if (e.ctrlKey && e.shiftKey && e.key === 'Q') {
     e.preventDefault()
     openGlobalQuery()
+  }
+  // Ctrl+Shift+A: AI Assistant
+  if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+    e.preventDefault()
+    openAiAssistant()
   }
 }
 
@@ -428,6 +449,17 @@ onBeforeUnmount(() => {
         :databases="databases.map(db => db.name)"
         @close="showGlobalQuery = false"
         @execute="onGlobalQueryExecute"
+      />
+
+      <!-- AI Assistant Drawer -->
+      <AiAssistantDrawer
+        :visible="showAiAssistant"
+        :session-id="sessionId || ''"
+        :db="databases[0]?.name || ''"
+        :table="undefined"
+        :query="activeQueryTab?.sql"
+        @close="showAiAssistant = false"
+        @insert-sql="onInsertAiSql"
       />
     </div>
   </div>
