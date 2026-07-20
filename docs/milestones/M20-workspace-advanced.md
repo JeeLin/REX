@@ -211,7 +211,7 @@ feat(workspace): enhance Quick Connect with protocol-aware port, password, and h
 - [x] 步骤5：代码审查
 - [x] 步骤6：测试验证
 - [x] 步骤7：设计再确认
-- [ ] 步骤8：提交
+- [x] 步骤8：提交
 
 ## 打回记录
 

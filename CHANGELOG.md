@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.21.0] - 2026-07-20
+
+### Added
+- Tab 广播模式：「发送到全部」开关，输入同步到所有 SSH Tab，状态栏广播指示器，Ctrl+Shift+B 快捷键
+- 深度资源属性对话框：连接/认证/终端/外观/保活 5 个分类 Tab，per-session 配置
+- Quick Connect 增强：协议切换自动补全端口、密码字段、连接历史下拉（最近 10 条）
+
 ## [0.20.0] - 2026-07-20
 
 ### Added
