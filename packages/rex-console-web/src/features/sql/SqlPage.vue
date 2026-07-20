@@ -9,6 +9,7 @@ import ExportWizard from './ExportWizard.vue'
 import GlobalQueryModal from './GlobalQueryModal.vue'
 import AiAssistantDrawer from './AiAssistantDrawer.vue'
 import ImportWizard from './ImportWizard.vue'
+import SqlFormView from './SqlFormView.vue'
 import { useSqlQuery, type ExecuteMode } from './useSqlQuery'
 import { connect as sqlConnect, disconnect as sqlDisconnect, getDdl, type ConnectRequest, type QueryResult } from '@/api/sql'
 
@@ -278,6 +279,10 @@ function openImport(db: string, table: string) {
   showImport.value = true
 }
 
+// Form view state
+const viewMode = ref<'grid' | 'form'>('grid')
+const formRowIndex = ref(0)
+
 function onGlobalQueryExecute(results: { db: string; result: QueryResult | null; error: string | null }[]) {
   // Create a new query tab with combined results
   const combinedResult: QueryResult = {
@@ -420,12 +425,43 @@ onBeforeUnmount(() => {
 
         <!-- Result grid -->
         <div class="sql-split-result">
+          <!-- View toggle -->
+          <div v-if="activeQueryTab.result && activeQueryTab.result.rows.length > 0" class="view-toggle">
+            <button
+              class="view-btn"
+              :class="{ 'view-btn--active': viewMode === 'grid' }"
+              title="Grid View"
+              @click="viewMode = 'grid'"
+            >
+              ⊞
+            </button>
+            <button
+              class="view-btn"
+              :class="{ 'view-btn--active': viewMode === 'form' }"
+              title="Form View"
+              @click="viewMode = 'form'"
+            >
+              ☰
+            </button>
+          </div>
+
+          <!-- Grid view -->
           <SqlResultGrid
+            v-if="viewMode === 'grid'"
             :result="activeQueryTab.result"
             :loading="activeQueryTab.loading"
             :error="activeQueryTab.error"
             @export="showExport = true"
             @apply="onApplyChanges"
+          />
+
+          <!-- Form view -->
+          <SqlFormView
+            v-else-if="viewMode === 'form' && activeQueryTab.result"
+            :columns="activeQueryTab.result.columns"
+            :rows="activeQueryTab.result.rows"
+            :current-index="formRowIndex"
+            @update:current-index="formRowIndex = $event"
           />
         </div>
       </div>
@@ -779,5 +815,35 @@ onBeforeUnmount(() => {
   color: var(--text-primary);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* ---- view toggle ---- */
+.view-toggle {
+  display: flex;
+  gap: 2px;
+  padding: var(--space-1);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.view-btn {
+  padding: var(--space-1) var(--space-2);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  transition: all var(--transition);
+}
+
+.view-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.view-btn--active {
+  color: var(--accent);
+  background: rgba(232, 145, 45, 0.1);
 }
 </style>
