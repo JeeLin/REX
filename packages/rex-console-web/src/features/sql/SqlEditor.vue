@@ -7,6 +7,7 @@ import { sql, SQLite, MySQL, PostgreSQL } from '@codemirror/lang-sql'
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
 import { foldGutter, indentOnInput, bracketMatching, foldKeymap } from '@codemirror/language'
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete'
+import { formatSql } from './sql-format'
 
 const props = defineProps<{
   modelValue: string
@@ -128,11 +129,9 @@ function toggleCase() {
 function format() {
   if (!view.value) return
   const doc = view.value.state.doc.toString()
-  import('./sql-format').then(({ formatSql }) => {
-    const formatted = formatSql(doc)
-    view.value!.dispatch({
-      changes: { from: 0, to: view.value!.state.doc.length, insert: formatted },
-    })
+  const formatted = formatSql(doc)
+  view.value.dispatch({
+    changes: { from: 0, to: view.value.state.doc.length, insert: formatted },
   })
 }
 
