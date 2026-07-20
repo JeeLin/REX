@@ -22,6 +22,21 @@ const connPort = ref(props.port || 6379)
 const connPassword = ref(props.password || '')
 const showConnect = ref(!props.host)
 
+// Connection management
+interface Connection {
+  id: string
+  name: string
+  host: string
+  port: number
+  password: string
+}
+
+const connections = ref<Connection[]>([])
+const showEditConnection = ref(false)
+const editingConnection = ref<Connection | null>(null)
+const showDeleteConnection = ref(false)
+const deletingConnection = ref<Connection | null>(null)
+
 // Auto-connect on mount if props provided
 onMounted(async () => {
   if (props.host) {
@@ -41,6 +56,46 @@ async function doConnect() {
   } finally {
     connecting.value = false
   }
+}
+
+// Connection management functions
+function editConnection(conn: Connection) {
+  editingConnection.value = { ...conn }
+  showEditConnection.value = true
+}
+
+function saveConnection() {
+  if (!editingConnection.value) return
+  const idx = connections.value.findIndex((c) => c.id === editingConnection.value!.id)
+  if (idx >= 0) {
+    connections.value[idx] = editingConnection.value
+  }
+  showEditConnection.value = false
+  editingConnection.value = null
+}
+
+function deleteConnection(conn: Connection) {
+  deletingConnection.value = conn
+  showDeleteConnection.value = true
+}
+
+function confirmDeleteConnection() {
+  if (!deletingConnection.value) return
+  connections.value = connections.value.filter((c) => c.id !== deletingConnection.value!.id)
+  showDeleteConnection.value = false
+  deletingConnection.value = null
+}
+
+function copyConnection(conn: Connection) {
+  const newConn: Connection = {
+    id: Date.now().toString(),
+    name: conn.name + ' (copy)',
+    host: conn.host,
+    port: conn.port,
+    password: conn.password,
+  }
+  connections.value.push(newConn)
+  editConnection(newConn)
 }
 
 // Databases
@@ -346,8 +401,78 @@ function ctxCopy() {
       </div>
     </div>
 
+    <!-- Edit Connection Modal -->
+    <Teleport to="body">
+      <div v-if="showEditConnection && editingConnection" class="modal-overlay" @click.self="showEditConnection = false">
+        <div class="modal-content">
+          <div class="modal-header">
+            <span class="modal-title">Edit Connection</span>
+            <button class="modal-close" @click="showEditConnection = false">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="dialog-field">
+              <label>Name</label>
+              <input v-model="editingConnection.name" class="mono" />
+            </div>
+            <div class="dialog-field">
+              <label>Host</label>
+              <input v-model="editingConnection.host" class="mono" />
+            </div>
+            <div class="dialog-field">
+              <label>Port</label>
+              <input v-model.number="editingConnection.port" class="mono" type="number" />
+            </div>
+            <div class="dialog-field">
+              <label>Password</label>
+              <input v-model="editingConnection.password" class="mono" type="password" />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showEditConnection = false">Cancel</button>
+            <button class="btn btn-primary" @click="saveConnection">Save</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Delete Connection Modal -->
+    <Teleport to="body">
+      <div v-if="showDeleteConnection && deletingConnection" class="modal-overlay" @click.self="showDeleteConnection = false">
+        <div class="modal-content">
+          <div class="modal-header">
+            <span class="modal-title">Delete Connection</span>
+            <button class="modal-close" @click="showDeleteConnection = false">×</button>
+          </div>
+          <div class="modal-body">
+            <p>Are you sure you want to delete "{{ deletingConnection.name }}"?</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showDeleteConnection = false">Cancel</button>
+            <button class="btn btn-danger" @click="confirmDeleteConnection">Delete</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Left panel: DB selector + key tree -->
     <div class="redis-panel" :style="{ width: panelWidth + 'px' }">
+      <!-- Connection list -->
+      <div class="redis-connections">
+        <div
+          v-for="conn in connections"
+          :key="conn.id"
+          class="redis-conn-item"
+          :class="{ 'redis-conn-item--active': connHost === conn.host && connPort === conn.port }"
+        >
+          <span class="redis-conn-name">{{ conn.name }}</span>
+          <div class="redis-conn-actions">
+            <button class="redis-toolbar-btn" title="Edit" @click="editConnection(conn)">✏</button>
+            <button class="redis-toolbar-btn" title="Copy" @click="copyConnection(conn)">📋</button>
+            <button class="redis-toolbar-btn" title="Delete" @click="deleteConnection(conn)">🗑</button>
+          </div>
+        </div>
+      </div>
+
       <!-- DB selector -->
       <div class="redis-dbs">
         <div
@@ -654,6 +779,41 @@ function ctxCopy() {
   flex-direction: column;
   border-right: 1px solid var(--border);
   overflow: hidden;
+}
+
+/* ---- connections ---- */
+.redis-connections {
+  border-bottom: 1px solid var(--border);
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.redis-conn-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.redis-conn-item:hover {
+  background: var(--bg-hover);
+}
+
+.redis-conn-item--active {
+  background: rgba(232, 145, 45, 0.1);
+  border-left: 2px solid var(--accent);
+}
+
+.redis-conn-name {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.redis-conn-actions {
+  display: flex;
+  gap: var(--space-1);
 }
 
 .redis-dbs {
