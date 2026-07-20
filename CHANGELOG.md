@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.20.0] - 2026-07-20
+
+### Added
+- SSH Tab 集成 SFTP 文件管理抽屉（状态栏 📁 按钮 + Ctrl+B 快捷键）
+- SFTP 抽屉：单面板远程文件浏览、面包屑路径导航、拖拽调整高度
+- 传输队列：上传进度条、传输速率、取消传输、完成后自动清除
+- 右键菜单增强：重命名、新建文件夹、上传、下载、复制路径
+
+### Changed
+- SFTP 同时支持独立 Tab 和 SSH Tab 抽屉两种模式
+
 ## [0.19.0] - 2026-07-20
 
 ### Added
