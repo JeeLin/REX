@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.22.0] - 2026-07-20
+
+### Added
+- SQL 表设计器：多 Tab 界面（Columns/Indexes/Foreign Keys/DDL 预览），可视化查看表结构
+- SQL DDL 预览抽屉：右键表 → View DDL → 底部抽屉显示 CREATE TABLE 语句
+- SQL 结果网格增强：列头点击排序（asc/desc/none）、状态栏显示行数和执行时间
+- SQL 导出向导：查询结果导出为 CSV/JSON/SQL 文件（前端生成）
+- 后端 SQL API：新增 indexes/foreign_keys/ddl 三个端点，支持 MySQL/PostgreSQL/SQLite 三引擎
+
 ## [0.21.0] - 2026-07-20
 
 ### Added
