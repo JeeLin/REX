@@ -200,6 +200,82 @@ onBeforeUnmount(async () => {
 })
 
 function fmtSize(b: number) { if (!b) return '-'; const u = ['B','KB','MB','GB']; let i = 0, s = b; while (s >= 1024 && i < 3) { s /= 1024; i++ } return `${s.toFixed(i ? 1 : 0)} ${u[i]}` }
+
+/* ---- drag & drop transfer ---- */
+const dragData = ref<{ side: Side; names: string[] } | null>(null)
+const dropTarget = ref<Side | null>(null)
+
+function onDragStart(e: DragEvent, side: Side, name: string) {
+  // Include all selected items if the dragged one is selected
+  const sel = panels[side].selected
+  const names = sel.has(name) ? Array.from(sel) : [name]
+  dragData.value = { side, names }
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'copy'
+    e.dataTransfer.setData('text/plain', names.join(','))
+  }
+}
+
+function onDragOver(e: DragEvent, side: Side) {
+  e.preventDefault()
+  if (dragData.value && dragData.value.side !== side) {
+    e.dataTransfer!.dropEffect = 'copy'
+    dropTarget.value = side
+  }
+}
+
+function onDragLeave() {
+  dropTarget.value = null
+}
+
+async function onDrop(e: DragEvent, targetSide: Side) {
+  e.preventDefault()
+  dropTarget.value = null
+  if (!dragData.value || !sessionId.value) return
+  const { side: sourceSide, names } = dragData.value
+
+  for (const name of names) {
+    const srcEntry = panels[sourceSide].entries.find(en => en.name === name)
+    if (!srcEntry) continue
+
+    if (srcEntry.is_dir) {
+      // For directories, we'd need recursive transfer — skip for now
+      continue
+    }
+
+    const srcPath = srcEntry.path
+    const dstPath = panels[targetSide].path + name
+
+    try {
+      if (sourceSide === 'left' && targetSide === 'right') {
+        // Local → Remote: upload
+        const blob = await filesApi.downloadFile(sessionId.value, srcPath)
+        await filesApi.uploadFile(sessionId.value, dstPath, new File([blob], name))
+      } else if (sourceSide === 'right' && targetSide === 'left') {
+        // Remote → Local: download
+        const blob = await filesApi.downloadFile(sessionId.value, srcPath)
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url; a.download = name; a.click()
+        URL.revokeObjectURL(url)
+      } else {
+        // Same-side or local→local: download from source, upload to target
+        const blob = await filesApi.downloadFile(sessionId.value, srcPath)
+        await filesApi.uploadFile(sessionId.value, dstPath, new File([blob], name))
+      }
+    } catch (err) {
+      console.error('Transfer failed:', err)
+    }
+  }
+
+  dragData.value = null
+  loadPanel(targetSide)
+}
+
+function onDragEnd() {
+  dragData.value = null
+  dropTarget.value = null
+}
 </script>
 
 <template>
@@ -218,7 +294,7 @@ function fmtSize(b: number) { if (!b) return '-'; const u = ['B','KB','MB','GB']
     </div>
 
     <template v-for="side in (['left','right'] as const)" :key="side">
-      <div class="fp-panel" :class="{ 'fp-panel--active': panels[side].active }" :style="side==='left' ? {width:leftW+'px'} : {flex:'1',minWidth:'0'}" @click="activate(side)">
+      <div class="fp-panel" :class="{ 'fp-panel--active': panels[side].active, 'fp-panel--drop': dropTarget === side }" :style="side==='left' ? {width:leftW+'px'} : {flex:'1',minWidth:'0'}" @click="activate(side)" @dragover="onDragOver($event, side)" @dragleave="onDragLeave" @drop="onDrop($event, side)">
         <div class="ptb">
           <button class="pb" @click="goUp(side)">↑</button>
           <span class="pp mono">{{ panels[side].path }}</span>
@@ -228,7 +304,7 @@ function fmtSize(b: number) { if (!b) return '-'; const u = ['B','KB','MB','GB']
         </div>
         <div class="pf">
           <div class="fr fh"><span class="cn">Name</span><span class="cs">Size</span><span class="cm">Modified</span></div>
-          <div v-for="e in panels[side].entries" :key="e.name" class="fr" :class="{ 'fr--sel': panels[side].selected.has(e.name) }" @click="toggleSelect(side, e.name, $event)" @dblclick="navigate(side, e)" @contextmenu="onCtx($event, e)">
+          <div v-for="e in panels[side].entries" :key="e.name" class="fr" :class="{ 'fr--sel': panels[side].selected.has(e.name) }" draggable="true" @dragstart="onDragStart($event, side, e.name)" @dragend="onDragEnd" @click="toggleSelect(side, e.name, $event)" @dblclick="navigate(side, e)" @contextmenu="onCtx($event, e)">
             <span class="cn"><span class="fi">{{ e.is_dir ? '📁' : '📄' }}</span> {{ e.name }}</span>
             <span class="cs mu">{{ e.is_dir ? '-' : fmtSize(e.size) }}</span>
             <span class="cm mu">{{ e.modified || '-' }}</span>
@@ -303,6 +379,7 @@ function fmtSize(b: number) { if (!b) return '-'; const u = ['B','KB','MB','GB']
 .btn:disabled{opacity:.5}
 .fp-panel{display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden;flex-shrink:0}
 .fp-panel--active{border-left:2px solid var(--accent)}
+.fp-panel--drop{background:rgba(232,145,45,0.08);outline:2px dashed var(--accent);outline-offset:-2px}
 .ptb{display:flex;align-items:center;gap:var(--space-1);padding:var(--space-1) var(--space-2);border-bottom:1px solid var(--border);background:var(--bg-surface)}
 .pb{background:none;border:none;color:var(--text-muted);cursor:pointer;padding:var(--space-1);border-radius:var(--radius-sm);font-size:var(--text-sm)}
 .pb:hover{color:var(--text-primary)}
