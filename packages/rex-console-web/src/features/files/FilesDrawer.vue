@@ -96,7 +96,7 @@ function select(name: string, e: MouseEvent) {
     const [a, b] = si < ei ? [si, ei] : [ei, si]
     for (let i = a; i <= b; i++) selected.value.add(entries.value[i]!.name)
   } else if (e.ctrlKey || e.metaKey) {
-    selected.value.has(name) ? selected.value.delete(name) : selected.value.add(name)
+    if (selected.value.has(name)) selected.value.delete(name); else selected.value.add(name)
   } else {
     selected.value.clear(); selected.value.add(name)
   }

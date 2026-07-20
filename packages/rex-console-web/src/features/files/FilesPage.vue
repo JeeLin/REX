@@ -74,7 +74,7 @@ function toggleSelect(side: Side, name: string, e: MouseEvent) {
     const entries = panels[side].entries; const last = Array.from(sel).pop()!
     const si = entries.findIndex(x => x.name === last), ei = entries.findIndex(x => x.name === name)
     const [a, b] = si < ei ? [si, ei] : [ei, si]; for (let i = a; i <= b; i++) sel.add(entries[i]!.name)
-  } else if (e.ctrlKey || e.metaKey) { sel.has(name) ? sel.delete(name) : sel.add(name) }
+  } else if (e.ctrlKey || e.metaKey) { if (sel.has(name)) sel.delete(name); else sel.add(name) }
   else { sel.clear(); sel.add(name) }
   panels[side].selected = new Set(sel)
 }

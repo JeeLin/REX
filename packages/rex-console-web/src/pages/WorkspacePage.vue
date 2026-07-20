@@ -491,7 +491,7 @@ useKeyboardShortcuts([
               <FilesPage
                 v-else-if="['sftp', 's3'].includes(activeTabInfo?.protocol || '')"
                 :resource-id="activeTabInfo?.resourceId"
-                :protocol="activeTabInfo?.protocol as 'sftp' | 's3'"
+                :protocol="activeTabInfo?.protocol === 's3' ? 's3' : 'sftp'"
                 :host="activeTabInfo?.host"
                 :port="activeTabInfo?.port"
                 :username="activeTabInfo?.username"
