@@ -33,12 +33,6 @@ interface Tab {
   renaming?: boolean
 }
 
-interface SplitPane {
-  id: string
-  direction: 'row' | 'column'
-  children: (SplitPane | string)[]
-}
-
 const tabs = ref<Tab[]>([])
 const activeTab = ref<string>('')
 const splitDirection = ref<'row' | 'column'>('row')
@@ -49,7 +43,11 @@ const now = ref(new Date().toLocaleTimeString('zh-CN', { hour12: false }))
 const timer = setInterval(() => {
   now.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
 }, 1000)
-onBeforeUnmount(() => clearInterval(timer))
+onBeforeUnmount(() => {
+  clearInterval(timer)
+  document.removeEventListener('mousemove', onSftpDrag)
+  document.removeEventListener('mouseup', onSftpDragEnd)
+})
 
 const terminalSize = ref<{ cols: number; rows: number } | null>(null)
 
@@ -431,7 +429,6 @@ useKeyboardShortcuts([
         <Splitpanes
           :horizontal="splitDirection === 'column'"
           class="ws-split"
-          @resized="() => {}"
         >
           <Pane v-for="i in splitCount" :key="i" :size="100 / splitCount" :min-size="20">
             <div class="ws-pane">
