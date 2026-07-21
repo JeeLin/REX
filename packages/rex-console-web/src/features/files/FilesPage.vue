@@ -25,6 +25,12 @@ const connUsername = ref(props.username || '')
 const connPassword = ref(props.password || '')
 const connError = ref('')
 const connLoading = ref(false)
+// S3 fields
+const connBucket = ref('')
+const connRegion = ref('')
+const connEndpoint = ref('')
+const connAccessKey = ref('')
+const connSecretKey = ref('')
 
 // Auto-connect on mount if props provided
 onMounted(async () => {
@@ -36,10 +42,18 @@ onMounted(async () => {
 async function doConnect() {
   connLoading.value = true; connError.value = ''
   try {
-    sessionId.value = await filesApi.connect({
+    const req: Parameters<typeof filesApi.connect>[0] = {
       protocol: connProtocol.value, host: connHost.value, port: connPort.value,
       username: connUsername.value || undefined, password: connPassword.value || undefined,
-    })
+    }
+    if (connProtocol.value === 's3') {
+      req.bucket = connBucket.value || undefined
+      req.region = connRegion.value || undefined
+      req.endpoint = connEndpoint.value || undefined
+      req.access_key = connAccessKey.value || undefined
+      req.secret_key = connSecretKey.value || undefined
+    }
+    sessionId.value = await filesApi.connect(req)
     showConnect.value = false
     await loadPanel('left'); await loadPanel('right')
   } catch (e: unknown) { connError.value = e instanceof Error ? e.message : String(e) }
@@ -374,10 +388,19 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
       <div class="fp-dialog">
         <h3>Connect to Server</h3>
         <div class="f"><label>Protocol</label><select v-model="connProtocol" class="mono"><option value="sftp">SFTP</option><option value="s3">S3</option></select></div>
-        <div class="f"><label>Host</label><input v-model="connHost" class="mono" placeholder="192.168.1.1" /></div>
-        <div class="f"><label>Port</label><input v-model.number="connPort" class="mono" type="number" /></div>
-        <div v-if="connProtocol==='sftp'" class="f"><label>User</label><input v-model="connUsername" class="mono" /></div>
-        <div v-if="connProtocol==='sftp'" class="f"><label>Password</label><input v-model="connPassword" class="mono" type="password" /></div>
+        <template v-if="connProtocol==='sftp'">
+          <div class="f"><label>Host</label><input v-model="connHost" class="mono" placeholder="192.168.1.1" /></div>
+          <div class="f"><label>Port</label><input v-model.number="connPort" class="mono" type="number" /></div>
+          <div class="f"><label>User</label><input v-model="connUsername" class="mono" /></div>
+          <div class="f"><label>Password</label><input v-model="connPassword" class="mono" type="password" /></div>
+        </template>
+        <template v-if="connProtocol==='s3'">
+          <div class="f"><label>Bucket</label><input v-model="connBucket" class="mono" placeholder="my-bucket" /></div>
+          <div class="f"><label>Region</label><input v-model="connRegion" class="mono" placeholder="us-east-1 (optional)" /></div>
+          <div class="f"><label>Endpoint URL</label><input v-model="connEndpoint" class="mono" placeholder="https://s3.amazonaws.com (optional)" /></div>
+          <div class="f"><label>Access Key</label><input v-model="connAccessKey" class="mono" placeholder="optional for IAM" /></div>
+          <div class="f"><label>Secret Key</label><input v-model="connSecretKey" class="mono" type="password" placeholder="optional for IAM" /></div>
+        </template>
         <div v-if="connError" class="err">{{ connError }}</div>
         <button class="btn" :disabled="connLoading" @click="doConnect">{{ connLoading ? 'Connecting...' : 'Connect' }}</button>
       </div>
