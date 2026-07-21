@@ -77,7 +77,8 @@ rex-agent = 所有 crate（无前端）
 | **M29** | SSH 终端主题增强（背景图 + 透明度） | Xshell | ✅ |
 | **M30** | SFTP 移动端适配（浮动工具栏 + 上下分栏） | Xftp | ✅ |
 | **M31** | S3 文件管理增强（连接参数/Storage Class/Presigned URL/断点续传） | Xftp | ✅ |
-| **M32** | S3 ACL 管理（ACL 列 + 编辑对话框） | Xftp | ← |
+| **M32** | S3 ACL 管理（ACL 列 + 编辑对话框） | Xftp | ✅ |
+| **M33** | 文件传输断点续传（S3/SFTP 上传续传 + 下载续传 + 传输队列改进） | Xftp | ← |
 
 ### M0：项目骨架重建
 
