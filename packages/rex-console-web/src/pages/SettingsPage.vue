@@ -11,6 +11,9 @@ const settings = ref<Settings>({
   language: 'zh',
   terminal_font: 'JetBrains Mono',
   terminal_font_size: '14',
+  terminal_theme: 'default',
+  terminal_opacity: 100,
+  terminal_bg_image: 'none',
 })
 const loading = ref(true)
 const saving = ref(false)
@@ -35,6 +38,12 @@ async function saveSettings() {
     await settingsApi.update(settings.value)
     document.documentElement.dataset.theme = settings.value.theme === 'light' ? 'light' : undefined
     localStorage.setItem('rex-theme', settings.value.theme)
+    // Cache terminal settings for TerminalView to read on mount
+    localStorage.setItem('rex-terminal-settings', JSON.stringify({
+      theme: settings.value.terminal_theme,
+      opacity: settings.value.terminal_opacity,
+      backgroundImage: settings.value.terminal_bg_image,
+    }))
     saveMessage.value = t('settings.saved')
     setTimeout(() => saveMessage.value = '', 2000)
   } catch (e: unknown) {
@@ -76,6 +85,27 @@ async function saveSettings() {
       <div class="form-group">
         <label class="form-label">{{ t('settings.fontSize') }}</label>
         <input v-model="settings.terminal_font_size" type="number" class="form-input" min="10" max="24" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Terminal Theme</label>
+        <select v-model="settings.terminal_theme" class="form-input">
+          <option value="default">REX Default</option>
+          <option value="ubuntu">Ubuntu</option>
+          <option value="solarized-dark">Solarized Dark</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Background Opacity (%)</label>
+        <input v-model.number="settings.terminal_opacity" type="number" class="form-input" min="0" max="100" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Background Image</label>
+        <select v-model="settings.terminal_bg_image" class="form-input">
+          <option value="none">None</option>
+          <option value="grid">Grid</option>
+          <option value="dots">Dots</option>
+          <option value="gradient">Gradient</option>
+        </select>
       </div>
     </Card>
 

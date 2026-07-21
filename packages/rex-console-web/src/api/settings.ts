@@ -5,6 +5,9 @@ export interface Settings {
   language: string
   terminal_font: string
   terminal_font_size: string
+  terminal_theme: string
+  terminal_opacity: number
+  terminal_bg_image: string
 }
 
 export const settingsApi = {

@@ -54,8 +54,9 @@ const BG_PRESETS: Record<string, string> = {
 
 // Apply opacity to terminal background
 const containerStyle = computed(() => {
-  const op = props.opacity ?? 100
-  const bg = props.backgroundImage
+  const globalSettings = getGlobalTerminalSettings()
+  const op = props.opacity ?? globalSettings?.opacity ?? 100
+  const bg = props.backgroundImage || globalSettings?.backgroundImage || 'none'
   const style: Record<string, string> = {}
   if (op < 100) style.opacity = String(op / 100)
   if (bg && bg !== 'none') {
@@ -85,12 +86,25 @@ watch(status, (s) => {
   }
 })
 
+// Read global terminal settings from localStorage (cached by SettingsPage)
+function getGlobalTerminalSettings() {
+  try {
+    const raw = localStorage.getItem('rex-terminal-settings')
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
 onMounted(() => {
   if (!containerRef.value) return
 
-  // Build terminal options from ResourceProperties settings
+  const globalSettings = getGlobalTerminalSettings()
+
+  // Build terminal options: per-resource props > global settings > defaults
   const termOptions: Record<string, any> = {}
-  if (props.theme) termOptions.theme = getTerminalTheme(props.theme)
+  const theme = props.theme || globalSettings?.theme
+  if (theme) termOptions.theme = getTerminalTheme(theme)
   if (props.fontSize) termOptions.fontSize = props.fontSize
   if (props.cursorStyle) termOptions.cursorStyle = props.cursorStyle
   if (props.cursorBlink !== undefined) termOptions.cursorBlink = props.cursorBlink
