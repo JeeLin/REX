@@ -101,13 +101,39 @@ function toggleSelect(side: Side, name: string, e: MouseEvent) {
   panels[side].selected = new Set(sel)
 }
 
-async function deleteSelected(side: Side) {
-  if (!sessionId.value) return
-  for (const name of panels[side].selected) {
-    const entry = panels[side].entries.find(e => e.name === name)
-    if (entry) await filesApi.deleteFile(sessionId.value, entry.path)
+// Delete confirmation
+const showDeleteConfirm = ref(false)
+const pendingDelete = ref<{ side: Side; names: string[] } | null>(null)
+const pendingCtxDelete = ref(false)
+
+function confirmDelete(side: Side) {
+  if (!sessionId.value || panels[side].selected.size === 0) return
+  pendingDelete.value = { side, names: Array.from(panels[side].selected) }
+  showDeleteConfirm.value = true
+}
+async function executeDelete() {
+  if (!sessionId.value || !pendingDelete.value) return
+  if (pendingCtxDelete.value) {
+    // Context menu delete
+    await filesApi.deleteFile(sessionId.value, ctx.value.path)
+    pendingCtxDelete.value = false
+    await loadPanel('left'); await loadPanel('right')
+  } else {
+    // Toolbar/bulk delete
+    const { side, names } = pendingDelete.value
+    for (const name of names) {
+      const entry = panels[side].entries.find(e => e.name === name)
+      if (entry) await filesApi.deleteFile(sessionId.value, entry.path)
+    }
+    panels[side].selected.clear(); loadPanel(side)
   }
-  panels[side].selected.clear(); loadPanel(side)
+  showDeleteConfirm.value = false; pendingDelete.value = null
+}
+function cancelDelete() { showDeleteConfirm.value = false; pendingDelete.value = null }
+function confirmCtxDelete() { pendingCtxDelete.value = true; showDeleteConfirm.value = true; pendingDelete.value = { side: 'left', names: [ctx.value.name] } }
+
+async function deleteSelected(side: Side) {
+  confirmDelete(side)
 }
 async function downloadSelected(side: Side) {
   if (!sessionId.value || panels[side].selected.size !== 1) return
@@ -130,7 +156,7 @@ const ctx = ref({ show: false, x: 0, y: 0, path: '', name: '' })
 const ctxRef = ref<HTMLElement | null>(null)
 onClickOutside(ctxRef, () => { ctx.value.show = false })
 function onCtx(e: MouseEvent, entry: FileEntry) { e.preventDefault(); ctx.value = { show: true, x: e.clientX, y: e.clientY, path: entry.path, name: entry.name } }
-async function ctxDelete() { if (sessionId.value) await filesApi.deleteFile(sessionId.value, ctx.value.path); ctx.value.show = false; await loadPanel('left'); await loadPanel('right') }
+async function ctxDelete() { confirmCtxDelete(); ctx.value.show = false }
 function ctxCopy() { navigator.clipboard?.writeText(ctx.value.path); ctx.value.show = false }
 
 // Chmod permissions
@@ -207,9 +233,14 @@ const dragData = ref<{ side: Side; names: string[] } | null>(null)
 const dropTarget = ref<Side | null>(null)
 
 function onDragStart(e: DragEvent, side: Side, name: string) {
-  // Include all selected items if the dragged one is selected
+  // Include all selected items if the dragged one is selected, filter out directories
   const sel = panels[side].selected
-  const names = sel.has(name) ? Array.from(sel) : [name]
+  const allNames = sel.has(name) ? Array.from(sel) : [name]
+  const names = allNames.filter(n => {
+    const entry = panels[side].entries.find(en => en.name === n)
+    return entry && !entry.is_dir
+  })
+  if (names.length === 0) return
   dragData.value = { side, names }
   if (e.dataTransfer) {
     e.dataTransfer.effectAllowed = 'copy'
@@ -387,6 +418,22 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
       @close="showSyncDialog = false"
       @sync="onSync"
     />
+
+    <!-- Delete Confirmation -->
+    <Teleport to="body">
+      <div v-if="showDeleteConfirm" class="fp-overlay" @click.self="cancelDelete">
+        <div class="fp-dialog">
+          <h3>Confirm Delete</h3>
+          <p style="color:var(--text-secondary);margin:0">
+            Delete {{ pendingDelete?.names.length ?? 0 }} item(s)? This action cannot be undone.
+          </p>
+          <div style="display:flex;gap:var(--space-2);justify-content:flex-end">
+            <button class="btn" style="background:var(--bg-hover);color:var(--text-primary)" @click="cancelDelete">Cancel</button>
+            <button class="btn" style="background:var(--danger);color:#fff" @click="executeDelete">Delete</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
