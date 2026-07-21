@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.30.0] - 2026-07-21
+
+### Added
+- S3 连接对话框：接入 S3 专用参数（Bucket/Region/Endpoint/AccessKey/SecretKey）
+- S3 Storage Class 列：文件列表显示 Storage Class（Standard/IA/Glacier）
+- S3 Presigned URL：右键菜单生成临时访问链接并复制到剪贴板
+- S3 Multipart 断点续传：后端支持 list/resume/abort multipart uploads API
+
 ## [0.29.0] - 2026-07-21
 
 ### Added
