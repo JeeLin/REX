@@ -33,6 +33,12 @@ interface Tab {
   color?: string
   renaming?: boolean
   broadcast?: boolean
+  // Terminal settings
+  theme?: string
+  fontSize?: number
+  opacity?: number
+  cursorStyle?: string
+  cursorBlink?: boolean
 }
 
 const tabs = ref<Tab[]>([])
@@ -295,17 +301,27 @@ const propsResource = computed(() => {
     passphrase: '',
     encoding: 'UTF-8',
     scrollback: 10000,
-    cursorStyle: 'block',
-    cursorBlink: true,
-    theme: 'default',
-    fontSize: 14,
-    opacity: 100,
+    cursorStyle: tab.cursorStyle || 'block',
+    cursorBlink: tab.cursorBlink ?? true,
+    theme: tab.theme || 'default',
+    fontSize: tab.fontSize || 14,
+    opacity: tab.opacity ?? 100,
     keepalive: true,
     keepaliveInterval: 60,
     color: tab.color || '',
     notes: '',
   }
 })
+
+function onPropsSave(data: any) {
+  const tab = tabs.value.find(t => t.id === propsTabId.value)
+  if (!tab) return
+  tab.theme = data.theme
+  tab.fontSize = data.fontSize
+  tab.opacity = data.opacity
+  tab.cursorStyle = data.cursorStyle
+  tab.cursorBlink = data.cursorBlink
+}
 
 // 分栏操作
 function splitHorizontal() {
@@ -508,6 +524,11 @@ useKeyboardShortcuts([
                   :host="activeTabInfo?.host"
                   :port="activeTabInfo?.port"
                   :protocol="activeTabInfo?.protocol"
+                  :theme="activeTabInfo?.theme"
+                  :font-size="activeTabInfo?.fontSize"
+                  :opacity="activeTabInfo?.opacity"
+                  :cursor-style="activeTabInfo?.cursorStyle"
+                  :cursor-blink="activeTabInfo?.cursorBlink"
                   @update:status="onTabStatusChange(activeTab, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
                   @terminal-resize="onTerminalResize"
                   @toggle-sftp="toggleSftpDrawer"
@@ -595,6 +616,7 @@ useKeyboardShortcuts([
     <ResourceProperties
       v-model:show="showProps"
       :resource="propsResource"
+      @save="onPropsSave"
     />
 
     <!-- Command palette -->

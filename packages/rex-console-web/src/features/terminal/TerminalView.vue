@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, shallowRef, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, shallowRef, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useTerminal } from './useTerminal'
+import { getTerminalTheme } from './terminal-themes'
 import { SearchAddon } from '@xterm/addon-search'
 import TerminalSearch from './TerminalSearch.vue'
 import TerminalContextMenu from './TerminalContextMenu.vue'
@@ -15,6 +16,12 @@ const props = defineProps<{
   host?: string
   port?: number
   protocol?: string
+  /** 终端主题设置（来自 ResourceProperties） */
+  theme?: string
+  fontSize?: number
+  opacity?: number
+  cursorStyle?: string
+  cursorBlink?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -37,6 +44,14 @@ const contextMenuY = ref(0)
 
 const statusDot = ref<StatusDotStatus>('offline')
 
+// Apply opacity to terminal background
+const containerStyle = computed(() => {
+  const op = props.opacity ?? 100
+  if (op >= 100) return {}
+  // Convert opacity percentage to alpha: background becomes semi-transparent
+  return { opacity: op / 100 }
+})
+
 watch(status, (s) => {
   switch (s) {
     case 'connected':
@@ -53,7 +68,14 @@ watch(status, (s) => {
 onMounted(() => {
   if (!containerRef.value) return
 
-  const term = createTerminal(containerRef.value)
+  // Build terminal options from ResourceProperties settings
+  const termOptions: Record<string, any> = {}
+  if (props.theme) termOptions.theme = getTerminalTheme(props.theme)
+  if (props.fontSize) termOptions.fontSize = props.fontSize
+  if (props.cursorStyle) termOptions.cursorStyle = props.cursorStyle
+  if (props.cursorBlink !== undefined) termOptions.cursorBlink = props.cursorBlink
+
+  const term = createTerminal(containerRef.value, termOptions)
 
   const search = new SearchAddon()
   term.loadAddon(search)
@@ -120,6 +142,7 @@ function handleReconnect() {
     <div
       ref="containerRef"
       class="tv-container"
+      :style="containerStyle"
       @contextmenu.prevent="onContextMenu"
     >
       <TerminalSearch
