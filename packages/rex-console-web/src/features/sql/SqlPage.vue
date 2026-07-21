@@ -254,7 +254,9 @@ function onPasteFromHistory(item: string) {
 async function onExecute(sql: string) {
   const tab = activeTab.value
   if (!tab || !isQueryTab(tab)) return
-  await runQuery(sql, tab)
+  const cursorPos = editorRef.value?.getCursorPos()
+  const selectedText = editorRef.value?.getSelectedText()
+  await runQuery(sql, tab, selectedText, cursorPos)
 }
 
 function onSave(sql: string) {

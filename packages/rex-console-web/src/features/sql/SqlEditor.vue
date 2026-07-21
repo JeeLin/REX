@@ -298,6 +298,17 @@ function focus() {
   view.value?.focus()
 }
 
+function getCursorPos(): number | undefined {
+  return view.value?.state.selection.main.head
+}
+
+function getSelectedText(): string | undefined {
+  if (!view.value) return undefined
+  const { from, to } = view.value.state.selection.main
+  if (from === to) return undefined
+  return view.value.state.sliceDoc(from, to) || undefined
+}
+
 defineExpose({
   focus,
   format,
@@ -308,6 +319,8 @@ defineExpose({
   zoomReset,
   clipboardHistory,
   pasteFromHistory,
+  getCursorPos,
+  getSelectedText,
 })
 </script>
 
