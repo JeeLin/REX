@@ -1,51 +1,81 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import type { FormatInfo } from '@/api/redis'
 
 const props = defineProps<{
   value: string
+  formatInfo?: FormatInfo
 }>()
 
-type Format = 'text' | 'hex' | 'json' | 'binary'
+type Format = 'text' | 'hex' | 'json' | 'binary' | 'msgpack' | 'php_serialize' | 'java_serialize' | 'pickle' | 'compressed'
 
 const activeFormat = ref<Format>('text')
-const formatDetected = ref<Format>('text')
 
-// Detect format
+// Format metadata: label + optional color for tab badges
+const FORMAT_META: Record<Format, { label: string; color?: string }> = {
+  text: { label: 'Text' },
+  hex: { label: 'Hex' },
+  json: { label: 'JSON' },
+  binary: { label: 'Binary' },
+  msgpack: { label: 'Msgpack', color: '#58A6FF' },
+  php_serialize: { label: 'PHP', color: '#8B5CF6' },
+  java_serialize: { label: 'Java', color: '#D29922' },
+  pickle: { label: 'Pickle', color: '#3FB950' },
+  compressed: { label: 'Compressed', color: '#F85149' },
+}
+
+// Client-side format detection (fallback when no formatInfo from backend)
 function detectFormat(val: string): Format {
   if (!val) return 'text'
-  // Try JSON
-  try {
-    JSON.parse(val)
-    return 'json'
-  } catch { /* not json */ }
-  // Check for non-printable characters (binary)
-  const hasBinary = /[\x00-\x08\x0e-\x1f]/.test(val)
-  if (hasBinary) return 'binary'
+  try { JSON.parse(val); return 'json' } catch { /* not json */ }
+  if (/[\x00-\x08\x0e-\x1f]/.test(val)) return 'binary'
   return 'text'
 }
 
-watch(() => props.value, (val) => {
-  formatDetected.value = detectFormat(val)
-  activeFormat.value = formatDetected.value
-}, { immediate: true })
+// Determine active format: prefer backend formatInfo, fallback to client detection
+const detectedFormat = computed<Format>(() => {
+  if (props.formatInfo?.detected) {
+    const f = props.formatInfo.detected
+    if (f in FORMAT_META) return f as Format
+  }
+  return detectFormat(props.value)
+})
 
+watch(detectedFormat, (f) => { activeFormat.value = f }, { immediate: true })
+
+// Available tabs: always show text/hex/json/binary, add detected format if different
+const formatOptions = computed(() => {
+  const base: { value: Format; label: string; color?: string }[] = [
+    { value: 'text', label: 'Text' },
+    { value: 'hex', label: 'Hex' },
+    { value: 'json', label: 'JSON' },
+    { value: 'binary', label: 'Binary' },
+  ]
+  const detected = detectedFormat.value
+  const isAdvanced = !['text', 'hex', 'json', 'binary'].includes(detected)
+  if (isAdvanced) {
+    const meta = FORMAT_META[detected]
+    base.push({ value: detected, label: meta.label, color: meta.color })
+  }
+  return base
+})
+
+// Display value: backend decoded for advanced formats, client-side for basic
 const displayValue = computed(() => {
   const val = props.value || ''
+  // For advanced formats, use backend-provided decoded content
+  if (props.formatInfo?.decoded && activeFormat.value !== 'text' && activeFormat.value !== 'hex' && activeFormat.value !== 'json' && activeFormat.value !== 'binary') {
+    return props.formatInfo.decoded
+  }
   switch (activeFormat.value) {
     case 'json':
-      try {
-        return JSON.stringify(JSON.parse(val), null, 2)
-      } catch {
-        return val
-      }
+      try { return JSON.stringify(JSON.parse(val), null, 2) } catch { return val }
     case 'hex':
       return Array.from(new TextEncoder().encode(val))
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join(' ')
+        .map(b => b.toString(16).padStart(2, '0')).join(' ')
     case 'binary':
       return Array.from(new TextEncoder().encode(val))
-        .map(b => b.toString(2).padStart(8, '0'))
-        .join(' ')
+        .map(b => b.toString(2).padStart(8, '0')).join(' ')
     default:
       return val
   }
@@ -56,13 +86,6 @@ const byteSize = computed(() => {
   if (bytes.length < 1024) return `${bytes.length} bytes`
   return `${(bytes.length / 1024).toFixed(1)} KB`
 })
-
-const formatOptions: { value: Format; label: string }[] = [
-  { value: 'text', label: 'Text' },
-  { value: 'hex', label: 'Hex' },
-  { value: 'json', label: 'JSON' },
-  { value: 'binary', label: 'Binary' },
-]
 </script>
 
 <template>
@@ -74,8 +97,10 @@ const formatOptions: { value: Format; label: string }[] = [
           :key="opt.value"
           class="format-tab"
           :class="{ 'format-tab--active': activeFormat === opt.value }"
+          :style="opt.color ? { '--tab-color': opt.color } as any : {}"
           @click="activeFormat = opt.value"
         >
+          <span v-if="opt.color" class="format-dot" :style="{ background: opt.color }" />
           {{ opt.label }}
         </button>
       </div>
@@ -107,6 +132,9 @@ const formatOptions: { value: Format; label: string }[] = [
 }
 
 .format-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   padding: var(--space-1) var(--space-2);
   background: none;
   border: none;
@@ -125,6 +153,13 @@ const formatOptions: { value: Format; label: string }[] = [
 .format-tab--active {
   color: var(--accent);
   background: rgba(232, 145, 45, 0.1);
+}
+
+.format-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .format-size {
