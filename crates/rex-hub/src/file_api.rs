@@ -466,7 +466,7 @@ async fn resume_multipart_upload(
         None => return error_response("UNSUPPORTED_PROTOCOL", "only supported for S3").into_response(),
     };
 
-    match s3_conn.resume_multipart_upload(&remote_path, &upload_id, data, start_part, None).await {
+    match s3_conn.resume_multipart_upload(&remote_path, &upload_id, data, start_part, &[], None).await {
         Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
         Err(e) => error_response("RESUME_UPLOAD_FAILED", &e.to_string()).into_response(),
     }
