@@ -333,6 +333,10 @@ impl FileConnector for S3Connector {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 impl S3Connector {
@@ -353,5 +357,109 @@ impl S3Connector {
             .context("failed to generate presigned URL")?;
 
         Ok(presigned.uri().to_string())
+    }
+
+    /// 列出进行中的 multipart uploads
+    pub async fn list_multipart_uploads(&self, prefix: &str) -> Result<Vec<(String, String)>> {
+        let result = self
+            .client
+            .list_multipart_uploads()
+            .bucket(&self.bucket)
+            .prefix(prefix)
+            .send()
+            .await
+            .context("failed to list multipart uploads")?;
+
+        let mut uploads = Vec::new();
+        if let Some(uploads_list) = result.uploads {
+            for upload in uploads_list {
+                if let (Some(key), Some(upload_id)) = (upload.key, upload.upload_id) {
+                    uploads.push((key, upload_id));
+                }
+            }
+        }
+        Ok(uploads)
+    }
+
+    /// 恢复进行中的 multipart upload
+    pub async fn resume_multipart_upload(
+        &self,
+        key: &str,
+        upload_id: &str,
+        data: Vec<u8>,
+        start_part: i32,
+        progress: Option<&ProgressCallback>,
+    ) -> Result<()> {
+        let total = data.len() as u64;
+        let part_size = 5 * 1024 * 1024; // 5MB
+        let mut parts = Vec::new();
+        let mut offset = 0u64;
+
+        // 上传剩余分片
+        for (i, chunk) in data.chunks(part_size).enumerate() {
+            let part_number = (i as i32) + 1;
+            if part_number < start_part {
+                // 跳过已完成的分片
+                offset += chunk.len() as u64;
+                if let Some(ref cb) = progress {
+                    cb(offset, total);
+                }
+                continue;
+            }
+
+            let result = self
+                .client
+                .upload_part()
+                .bucket(&self.bucket)
+                .key(key)
+                .upload_id(upload_id)
+                .part_number(part_number)
+                .body(chunk.to_vec().into())
+                .send()
+                .await
+                .context("failed to upload part")?;
+
+            parts.push(
+                aws_sdk_s3::types::CompletedPart::builder()
+                    .part_number(part_number)
+                    .e_tag(result.e_tag().unwrap_or_default())
+                    .build(),
+            );
+
+            offset += chunk.len() as u64;
+            if let Some(ref cb) = progress {
+                cb(offset, total);
+            }
+        }
+
+        // 完成 multipart upload
+        self.client
+            .complete_multipart_upload()
+            .bucket(&self.bucket)
+            .key(key)
+            .upload_id(upload_id)
+            .multipart_upload(
+                aws_sdk_s3::types::CompletedMultipartUpload::builder()
+                    .set_parts(Some(parts))
+                    .build(),
+            )
+            .send()
+            .await
+            .context("failed to complete multipart upload")?;
+
+        Ok(())
+    }
+
+    /// 取消进行中的 multipart upload
+    pub async fn abort_multipart_upload(&self, key: &str, upload_id: &str) -> Result<()> {
+        self.client
+            .abort_multipart_upload()
+            .bucket(&self.bucket)
+            .key(key)
+            .upload_id(upload_id)
+            .send()
+            .await
+            .context("failed to abort multipart upload")?;
+        Ok(())
     }
 }

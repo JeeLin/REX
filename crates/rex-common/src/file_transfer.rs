@@ -72,4 +72,7 @@ pub trait FileConnector: Send + Sync {
 
     /// Downcast support for protocol-specific methods
     fn as_any(&self) -> &dyn std::any::Any;
+
+    /// Mutable downcast support for protocol-specific methods
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }

@@ -132,3 +132,34 @@ export async function presignedUrl(sessionId: string, path: string, expires?: nu
   if (!res.ok) throw new Error('Failed to generate presigned URL')
   return (await res.json()).url
 }
+
+export async function listMultipartUploads(sessionId: string, prefix: string): Promise<Array<{ key: string; upload_id: string }>> {
+  const res = await fetch(`${API_BASE}/s3/multipart-uploads?session_id=${sessionId}&prefix=${encodeURIComponent(prefix)}`, { headers: authHeaders() })
+  if (!res.ok) throw new Error('Failed to list multipart uploads')
+  return (await res.json()).uploads
+}
+
+export async function resumeMultipartUpload(
+  sessionId: string,
+  remotePath: string,
+  uploadId: string,
+  file: File,
+  startPart: number = 1,
+): Promise<void> {
+  const form = new FormData()
+  form.append('session_id', sessionId)
+  form.append('path', remotePath)
+  form.append('upload_id', uploadId)
+  form.append('start_part', startPart.toString())
+  form.append('file', file)
+  const res = await fetch(`${API_BASE}/s3/resume-upload`, { method: 'POST', headers: authHeaders(), body: form })
+  if (!res.ok) throw new Error('Failed to resume multipart upload')
+}
+
+export async function abortMultipartUpload(sessionId: string, path: string, uploadId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/s3/abort-upload`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ session_id: sessionId, path, upload_id: uploadId }),
+  })
+  if (!res.ok) throw new Error('Failed to abort multipart upload')
+}
