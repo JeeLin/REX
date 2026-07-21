@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.28.0] - 2026-07-21
+
+### Added
+- SSH 终端主题增强：ResourceProperties 设置（主题/光标/字体/透明度/背景图）接通 TerminalView
+- 终端背景透明度：opacity 滑块控制终端背景半透明效果
+- 终端背景图预设：Grid（网格线）、Dots（圆点矩阵）、Gradient（对角渐变）三种纯 CSS 预设
+- 全局设置页终端主题控件：Terminal Theme / Background Opacity / Background Image 下拉
+- 全局终端设置缓存：SettingsPage 保存时写入 localStorage，TerminalView 读取作为 fallback
+
 ## [0.27.0] - 2026-07-21
 
 ### Added
