@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { onClickOutside } from '@vueuse/core'
 import { useSqlNav } from './useSqlNav'
 import SqlNavTree from './SqlNavTree.vue'
 import SqlEditor from './SqlEditor.vue'
@@ -238,6 +239,9 @@ const { mode: execMode, run: runQuery } = useSqlQuery(() => sessionId.value)
 /* ---- editor toolbar ---- */
 const editorRef = ref<InstanceType<typeof SqlEditor>>()
 const showClipboard = ref(false)
+const clipboardWrapRef = ref<HTMLDivElement>()
+
+onClickOutside(clipboardWrapRef, () => { showClipboard.value = false })
 
 function onFormat() { editorRef.value?.format() }
 function onToggleComment() { editorRef.value?.toggleComment() }
@@ -260,7 +264,13 @@ async function onExecute(sql: string) {
 }
 
 function onSave(sql: string) {
-  console.log('save', sql)
+  const blob = new Blob([sql], { type: 'text/sql' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `query-${Date.now()}.sql`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.value))
@@ -422,7 +432,7 @@ onBeforeUnmount(() => {
           <button class="sql-toolbar-btn" title="Toggle Comment (Ctrl+/)" @click="onToggleComment">💬</button>
           <button class="sql-toolbar-btn" title="Toggle Case (Ctrl+Shift+U)" @click="onToggleCase">Aa</button>
           <div class="sql-toolbar-sep" />
-          <div class="sql-clipboard-wrap">
+          <div ref="clipboardWrapRef" class="sql-clipboard-wrap">
             <button class="sql-toolbar-btn" title="Clipboard History (Ctrl+Shift+V)" @click="toggleClipboard">📋</button>
             <div v-if="showClipboard" class="sql-clipboard-popup">
               <div v-if="editorRef?.clipboardHistory?.length" class="sql-clipboard-list">
