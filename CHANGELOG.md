@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.27.0] - 2026-07-21
+
+### Added
+- Redis FormatViewer 高级格式解码：支持 Msgpack / PHPSerialize / JavaSerialize / Pickle 自动探测与解码
+- Redis 压缩格式检测：zlib / gzip / zstd 压缩数据自动解压并递归检测内部格式
+- 后端 redis-codec 模块：rex-common 新增格式检测引擎，get_value 返回格式元数据
+- 前端 FormatViewer 扩展：动态格式标签（Msgpack蓝/PHP紫/Java橙/Pickle绿/Compressed红）+ 解码结果展示
+
 ## [0.26.1] - 2026-07-20
 
 ### Fixed

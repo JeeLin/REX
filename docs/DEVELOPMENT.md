@@ -73,7 +73,7 @@ rex-agent = 所有 crate（无前端）
 | **M25** | 安全加固 + 工作区增强（SQL 注入修复 + 全局搜索） | — | ✅ |
 | **M26** | 控制台增强（SQL 编辑器工具栏 + Redis Stream/FormatViewer + SFTP 拖拽/同步） | Navicat/ARDM/Xftp | ✅ |
 | **M27** | Bugfix & Polish（SQL 执行模式修复 + UX 完善） | — | ✅ |
-| **M28** | Redis FormatViewer 高级格式解码（Msgpack/Pickle/PHP/Java/压缩） | ARDM | ← |
+| **M28** | Redis FormatViewer 高级格式解码（Msgpack/Pickle/PHP/Java/压缩） | ARDM | ✅ |
 
 ### M0：项目骨架重建
 
