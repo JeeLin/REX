@@ -39,6 +39,7 @@ interface Tab {
   opacity?: number
   cursorStyle?: string
   cursorBlink?: boolean
+  backgroundImage?: string
 }
 
 const tabs = ref<Tab[]>([])
@@ -306,6 +307,7 @@ const propsResource = computed(() => {
     theme: tab.theme || 'default',
     fontSize: tab.fontSize || 14,
     opacity: tab.opacity ?? 100,
+    backgroundImage: tab.backgroundImage || 'none',
     keepalive: true,
     keepaliveInterval: 60,
     color: tab.color || '',
@@ -321,6 +323,7 @@ function onPropsSave(data: any) {
   tab.opacity = data.opacity
   tab.cursorStyle = data.cursorStyle
   tab.cursorBlink = data.cursorBlink
+  tab.backgroundImage = data.backgroundImage
 }
 
 // 分栏操作
@@ -529,6 +532,7 @@ useKeyboardShortcuts([
                   :opacity="activeTabInfo?.opacity"
                   :cursor-style="activeTabInfo?.cursorStyle"
                   :cursor-blink="activeTabInfo?.cursorBlink"
+                  :background-image="activeTabInfo?.backgroundImage"
                   @update:status="onTabStatusChange(activeTab, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
                   @terminal-resize="onTerminalResize"
                   @toggle-sftp="toggleSftpDrawer"

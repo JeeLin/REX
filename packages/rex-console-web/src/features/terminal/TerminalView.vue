@@ -22,6 +22,7 @@ const props = defineProps<{
   opacity?: number
   cursorStyle?: string
   cursorBlink?: boolean
+  backgroundImage?: string
 }>()
 
 const emit = defineEmits<{
@@ -44,12 +45,31 @@ const contextMenuY = ref(0)
 
 const statusDot = ref<StatusDotStatus>('offline')
 
+// Background image CSS presets
+const BG_PRESETS: Record<string, string> = {
+  grid: `linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)`,
+  dots: `radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px)`,
+  gradient: `linear-gradient(135deg, #0D1117 0%, #161B22 50%, #0D1117 100%)`,
+}
+
 // Apply opacity to terminal background
 const containerStyle = computed(() => {
   const op = props.opacity ?? 100
-  if (op >= 100) return {}
-  // Convert opacity percentage to alpha: background becomes semi-transparent
-  return { opacity: op / 100 }
+  const bg = props.backgroundImage
+  const style: Record<string, string> = {}
+  if (op < 100) style.opacity = String(op / 100)
+  if (bg && bg !== 'none') {
+    const preset = BG_PRESETS[bg]
+    if (preset) {
+      style.backgroundImage = preset
+      style.backgroundSize = bg === 'grid' ? '20px 20px' : bg === 'dots' ? '24px 24px' : undefined as any
+    } else if (bg.startsWith('http') || bg.startsWith('data:')) {
+      style.backgroundImage = `url(${bg})`
+      style.backgroundSize = 'cover'
+      style.backgroundPosition = 'center'
+    }
+  }
+  return style
 })
 
 watch(status, (s) => {

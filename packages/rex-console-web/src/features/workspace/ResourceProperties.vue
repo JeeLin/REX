@@ -22,6 +22,7 @@ interface ResourceProps {
   theme: string
   fontSize: number
   opacity: number
+  backgroundImage: string
   keepalive: boolean
   keepaliveInterval: number
   color: string
@@ -54,6 +55,7 @@ const form = ref<ResourceProps>({
   theme: 'default',
   fontSize: 14,
   opacity: 100,
+  backgroundImage: 'none',
   keepalive: true,
   keepaliveInterval: 60,
   color: '',
@@ -83,6 +85,13 @@ const themes = [
   { label: 'Default', value: 'default' },
   { label: 'Ubuntu', value: 'ubuntu' },
   { label: 'Solarized Dark', value: 'solarized-dark' },
+]
+
+const bgImageOptions = [
+  { label: 'None', value: 'none' },
+  { label: 'Grid', value: 'grid' },
+  { label: 'Dots', value: 'dots' },
+  { label: 'Gradient', value: 'gradient' },
 ]
 
 const authMethods = [
@@ -215,6 +224,10 @@ function onSave() {
           <div class="props-field">
             <label class="props-label">Background Opacity (%)</label>
             <Input :model-value="String(form.opacity)" @update:model-value="form.opacity = Number($event)" size="sm" placeholder="100" />
+          </div>
+          <div class="props-field">
+            <label class="props-label">Background Image</label>
+            <Select v-model="form.backgroundImage" :options="bgImageOptions" size="sm" />
           </div>
         </template>
 
