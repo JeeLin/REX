@@ -57,11 +57,12 @@ export async function getDatabases(sessionId: string): Promise<DbInfo[]> {
 }
 
 export async function selectDb(sessionId: string, db: number): Promise<void> {
-  await fetch(`${API_BASE}/select`, {
+  const res = await fetch(`${API_BASE}/select`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ session_id: sessionId, db }),
   })
+  if (!res.ok) throw new Error('Failed to switch database')
 }
 
 export async function scan(sessionId: string, pattern = '*', count = 100): Promise<KeyInfo[]> {

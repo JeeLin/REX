@@ -112,9 +112,14 @@ async function loadDatabases() {
 
 async function switchDb(db: number) {
   if (!sessionId.value) return
-  await redisApi.selectDb(sessionId.value, db)
-  currentDb.value = db
-  await loadKeys()
+  try {
+    await redisApi.selectDb(sessionId.value, db)
+    currentDb.value = db
+    await loadKeys()
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    alert(`Failed to switch database: ${msg}`)
+  }
 }
 
 // Key tree
