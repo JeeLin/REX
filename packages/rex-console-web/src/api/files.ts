@@ -12,6 +12,7 @@ export interface FileEntry {
   size: number
   modified: string | null
   permissions: string | null
+  storage_class?: string | null
 }
 
 export async function connect(req: {

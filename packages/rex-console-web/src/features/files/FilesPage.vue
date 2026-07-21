@@ -210,6 +210,7 @@ function mfbCopyPath() {
   if (entry) navigator.clipboard?.writeText(entry.path)
 }
 const mfbSelectedCount = computed(() => panels[mobileActiveSide.value].selected.size)
+const isS3 = computed(() => connProtocol.value === 's3')
 
 // Chmod permissions
 const showChmod = ref(false)
@@ -417,11 +418,12 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
           <button class="pb" @click="loadPanel(side)">↻</button>
         </div>
         <div class="pf">
-          <div class="fr fh"><span class="cn">Name</span><span class="cs">Size</span><span class="cm">Modified</span></div>
+          <div class="fr fh"><span class="cn">Name</span><span class="cs">Size</span><span class="cm">Modified</span><span v-if="isS3" class="csc">Storage Class</span></div>
           <div v-for="e in panels[side].entries" :key="e.name" class="fr" :class="{ 'fr--sel': panels[side].selected.has(e.name) }" draggable="true" @dragstart="onDragStart($event, side, e.name)" @dragend="onDragEnd" @click="toggleSelect(side, e.name, $event)" @dblclick="navigate(side, e)" @contextmenu="onCtx($event, e)">
             <span class="cn"><span class="fi">{{ e.is_dir ? '📁' : '📄' }}</span> {{ e.name }}</span>
             <span class="cs mu">{{ e.is_dir ? '-' : fmtSize(e.size) }}</span>
             <span class="cm mu">{{ e.modified || '-' }}</span>
+            <span v-if="isS3" class="csc mu">{{ e.storage_class || '-' }}</span>
           </div>
           <div v-if="!panels[side].loading && !panels[side].entries.length" class="pe">Empty</div>
         </div>
@@ -545,6 +547,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
 .cn{flex:1;display:flex;align-items:center;gap:var(--space-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cs{width:80px;text-align:right}
 .cm{width:140px;text-align:right}
+.csc{width:100px;text-align:right}
 .fi{font-size:14px}
 .mu{color:var(--text-muted)}
 .pe{padding:var(--space-4);text-align:center;color:var(--text-muted);font-size:var(--text-sm)}
@@ -571,6 +574,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
   .fp-panel--mobile-hidden{display:none !important}
   .fh2{display:none !important}
   .cm{display:none !important}
+  .csc{display:none !important}
   .fp-panel{border-right:none !important}
   .fp-dialog{min-width:auto;width:90vw;max-width:340px}
   .fp{padding-bottom:56px}

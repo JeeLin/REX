@@ -13,6 +13,9 @@ pub struct FileEntry {
     pub size: u64,
     pub modified: Option<String>,
     pub permissions: Option<String>,
+    /// S3: Storage Class (STANDARD, STANDARD_IA, GLACIER, etc.)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub storage_class: Option<String>,
 }
 
 /// 连接请求

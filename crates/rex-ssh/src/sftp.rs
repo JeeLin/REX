@@ -93,6 +93,7 @@ impl FileConnector for SftpConnector {
                 size: meta.len(),
                 modified: None,
                 permissions: None,
+                storage_class: None,
             });
         }
         entries.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then(a.name.cmp(&b.name)));
@@ -110,6 +111,7 @@ impl FileConnector for SftpConnector {
                 size: 0,
                 modified: None,
                 permissions: None,
+                storage_class: None,
             }),
             Err(_) => Ok(FileEntry {
                 name,
@@ -118,6 +120,7 @@ impl FileConnector for SftpConnector {
                 size: 0,
                 modified: None,
                 permissions: None,
+                storage_class: None,
             }),
         }
     }

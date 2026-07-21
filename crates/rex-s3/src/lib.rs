@@ -95,6 +95,7 @@ impl FileConnector for S3Connector {
                             size: 0,
                             modified: None,
                             permissions: None,
+                            storage_class: None,
                         });
                     }
                 }
@@ -117,6 +118,7 @@ impl FileConnector for S3Connector {
                                 format!("{secs}")
                             }),
                             permissions: None,
+                            storage_class: obj.storage_class.as_ref().map(|sc| sc.as_str().to_string()),
                         });
                     }
                 }
@@ -147,6 +149,7 @@ impl FileConnector for S3Connector {
                     size: obj.content_length.unwrap_or(0) as u64,
                     modified: obj.last_modified.map(|t| format!("{}", t.secs())),
                     permissions: None,
+                    storage_class: obj.storage_class.as_ref().map(|sc| sc.as_str().to_string()),
                 })
             }
             Err(_) => {
@@ -159,6 +162,7 @@ impl FileConnector for S3Connector {
                     size: 0,
                     modified: None,
                     permissions: None,
+                    storage_class: None,
                 })
             }
         }
