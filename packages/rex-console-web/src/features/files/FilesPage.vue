@@ -174,6 +174,17 @@ onClickOutside(ctxRef, () => { ctx.value.show = false })
 function onCtx(e: MouseEvent, entry: FileEntry) { e.preventDefault(); ctx.value = { show: true, x: e.clientX, y: e.clientY, path: entry.path, name: entry.name } }
 async function ctxDelete() { confirmCtxDelete(); ctx.value.show = false }
 function ctxCopy() { navigator.clipboard?.writeText(ctx.value.path); ctx.value.show = false }
+async function ctxPresignedUrl() {
+  if (!sessionId.value) return
+  try {
+    const url = await filesApi.presignedUrl(sessionId.value, ctx.value.path)
+    navigator.clipboard?.writeText(url)
+    // TODO: show toast "Presigned URL copied to clipboard"
+  } catch (e) {
+    console.error('Failed to generate presigned URL:', e)
+  }
+  ctx.value.show = false
+}
 
 // Mobile bar actions
 function mfbNewFolder() {
@@ -435,6 +446,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
     <div v-if="ctx.show" ref="ctxRef" class="fctx" :style="{top:ctx.y+'px',left:ctx.x+'px'}">
       <div class="ci" @click="editFile(ctx.path)">Edit</div>
       <div class="ci" @click="ctxCopy">Copy Path</div>
+      <div v-if="isS3" class="ci" @click="ctxPresignedUrl">Copy Presigned URL</div>
       <div class="ci" @click="openChmod(ctx.path)">Permissions</div>
       <div class="ci ci--d" @click="ctxDelete">Delete</div>
     </div>

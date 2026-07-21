@@ -329,4 +329,29 @@ impl FileConnector for S3Connector {
     async fn close(&mut self) -> Result<()> {
         Ok(())
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+impl S3Connector {
+    /// 生成 presigned URL（临时访问链接）
+    pub async fn presigned_url(&self, key: &str, expires_in_secs: u64) -> Result<String> {
+        use aws_sdk_s3::presigning::PresigningConfig;
+
+        let key = key.trim_start_matches('/');
+        let expires = std::time::Duration::from_secs(expires_in_secs);
+
+        let presigned = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .presigned(PresigningConfig::expires_in(expires)?)
+            .await
+            .context("failed to generate presigned URL")?;
+
+        Ok(presigned.uri().to_string())
+    }
 }

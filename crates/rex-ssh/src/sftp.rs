@@ -190,4 +190,8 @@ impl FileConnector for SftpConnector {
         self.session.close().await.ok();
         Ok(())
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

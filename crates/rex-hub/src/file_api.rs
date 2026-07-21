@@ -49,6 +49,7 @@ pub fn file_routes() -> axum::Router<AppState> {
         .route("/delete", axum::routing::post(delete))
         .route("/rename", axum::routing::post(rename))
         .route("/mkdir", axum::routing::post(mkdir))
+        .route("/presigned-url", axum::routing::post(presigned_url))
 }
 
 // ---------------------------------------------------------------------------
@@ -328,5 +329,44 @@ async fn mkdir(
     match conn.mkdir(&body.path).await {
         Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
         Err(e) => error_response("MKDIR_FAILED", &e.to_string()).into_response(),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct PresignedUrlBody {
+    session_id: String,
+    path: String,
+    #[serde(default = "default_expires")]
+    expires_in: u64,
+}
+
+fn default_expires() -> u64 {
+    3600
+}
+
+#[derive(Debug, Serialize)]
+struct PresignedUrlResponse {
+    url: String,
+}
+
+async fn presigned_url(
+    State(state): State<AppState>,
+    Json(body): Json<PresignedUrlBody>,
+) -> axum::response::Response {
+    let pool = state.file_pool.lock().await;
+    let conn = match pool.connectors.get(&body.session_id) {
+        Some(c) => c,
+        None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
+    };
+
+    // Downcast to S3Connector to call presigned_url
+    let s3_conn = match conn.as_any().downcast_ref::<rex_s3::S3Connector>() {
+        Some(c) => c,
+        None => return error_response("UNSUPPORTED_PROTOCOL", "presigned URL only supported for S3").into_response(),
+    };
+
+    match s3_conn.presigned_url(&body.path, body.expires_in).await {
+        Ok(url) => (StatusCode::OK, Json(PresignedUrlResponse { url })).into_response(),
+        Err(e) => error_response("PRESIGNED_URL_FAILED", &e.to_string()).into_response(),
     }
 }

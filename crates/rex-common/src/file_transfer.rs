@@ -69,4 +69,7 @@ pub trait FileConnector: Send + Sync {
 
     /// 关闭连接
     async fn close(&mut self) -> Result<()>;
+
+    /// Downcast support for protocol-specific methods
+    fn as_any(&self) -> &dyn std::any::Any;
 }

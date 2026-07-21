@@ -123,3 +123,12 @@ export async function chmod(sessionId: string, path: string, mode: string): Prom
   })
   if (!res.ok) throw new Error('Chmod failed')
 }
+
+export async function presignedUrl(sessionId: string, path: string, expires?: number): Promise<string> {
+  const res = await fetch(`${API_BASE}/presigned-url`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ session_id: sessionId, path, expires_in: expires || 3600 }),
+  })
+  if (!res.ok) throw new Error('Failed to generate presigned URL')
+  return (await res.json()).url
+}
