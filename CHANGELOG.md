@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.26.1] - 2026-07-20
+
+### Fixed
+- SQL 编辑器：修复 Run Current/Run Selected 模式未传递 cursorPos/selectedText 导致始终执行全部 SQL
+- SQL 编辑器：剪贴板弹窗添加 onClickOutside 点击外部关闭
+- SQL 编辑器：实现 onSave（Ctrl+S）下载 .sql 文件
+- Redis：selectDb 检查 res.ok，切换 DB 失败时显示错误提示
+- SFTP：删除文件前弹出确认对话框，防止误删
+- SFTP：拖拽文件夹时自动过滤（目录不参与拖拽传输）
+
 ## [0.26.0] - 2026-07-20
 
 ### Added
