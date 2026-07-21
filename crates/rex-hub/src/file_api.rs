@@ -87,12 +87,6 @@ struct DisconnectBody {
 }
 
 #[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct SessionQuery {
-    session_id: String,
-}
-
-#[derive(Debug, Deserialize)]
 struct PathQuery {
     session_id: String,
     path: String,
@@ -547,12 +541,6 @@ async fn abort_multipart_upload(
 // ACL handlers
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Deserialize)]
-struct AclQuery {
-    session_id: String,
-    path: String,
-}
-
 #[derive(Debug, Serialize)]
 struct AclResponse {
     acl: String,
@@ -560,7 +548,7 @@ struct AclResponse {
 
 async fn get_acl(
     State(state): State<AppState>,
-    Query(params): Query<AclQuery>,
+    Query(params): Query<PathQuery>,
 ) -> axum::response::Response {
     let pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get(&params.session_id) {

@@ -68,8 +68,10 @@ export function uploadFileWithProgress(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('POST', `${API_BASE}/upload`)
-    const token = localStorage.getItem('rex-token')
-    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    const headers = authHeaders()
+    for (const [key, value] of Object.entries(headers)) {
+      xhr.setRequestHeader(key, value)
+    }
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) {
         onProgress(Math.round((e.loaded / e.total) * 100), e.loaded)
