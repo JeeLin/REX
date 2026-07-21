@@ -75,6 +75,7 @@ rex-agent = 所有 crate（无前端）
 | **M27** | Bugfix & Polish（SQL 执行模式修复 + UX 完善） | — | ✅ |
 | **M28** | Redis FormatViewer 高级格式解码（Msgpack/Pickle/PHP/Java/压缩） | ARDM | ✅ |
 | **M29** | SSH 终端主题增强（背景图 + 透明度） | Xshell | ✅ |
+| **M30** | SFTP 移动端适配（浮动工具栏 + 上下分栏） | Xftp | ← |
 
 ### M0：项目骨架重建
 

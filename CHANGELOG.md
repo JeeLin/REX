@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.29.0] - 2026-07-21
+
+### Added
+- SFTP 移动端适配：单面板布局 + 面板切换（Left/Right segmented control）
+- MobileFilesBar：底部浮动工具栏（Upload/Download/New Folder/Refresh/More 菜单）
+- 响应式对话框：Chmod/删除确认/FolderSync 对话框移动端适配
+- 列隐藏：移动端文件列表隐藏 Modified 列，只显示 Name + Size
+
 ## [0.28.0] - 2026-07-21
 
 ### Added
