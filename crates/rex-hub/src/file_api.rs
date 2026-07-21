@@ -50,9 +50,18 @@ pub fn file_routes() -> axum::Router<AppState> {
         .route("/rename", axum::routing::post(rename))
         .route("/mkdir", axum::routing::post(mkdir))
         .route("/presigned-url", axum::routing::post(presigned_url))
-        .route("/s3/multipart-uploads", axum::routing::get(list_multipart_uploads))
-        .route("/s3/resume-upload", axum::routing::post(resume_multipart_upload))
-        .route("/s3/abort-upload", axum::routing::post(abort_multipart_upload))
+        .route(
+            "/s3/multipart-uploads",
+            axum::routing::get(list_multipart_uploads),
+        )
+        .route(
+            "/s3/resume-upload",
+            axum::routing::post(resume_multipart_upload),
+        )
+        .route(
+            "/s3/abort-upload",
+            axum::routing::post(abort_multipart_upload),
+        )
 }
 
 // ---------------------------------------------------------------------------
@@ -365,7 +374,13 @@ async fn presigned_url(
     // Downcast to S3Connector to call presigned_url
     let s3_conn = match conn.as_any().downcast_ref::<rex_s3::S3Connector>() {
         Some(c) => c,
-        None => return error_response("UNSUPPORTED_PROTOCOL", "presigned URL only supported for S3").into_response(),
+        None => {
+            return error_response(
+                "UNSUPPORTED_PROTOCOL",
+                "presigned URL only supported for S3",
+            )
+            .into_response()
+        }
     };
 
     match s3_conn.presigned_url(&body.path, body.expires_in).await {
@@ -403,13 +418,18 @@ async fn list_multipart_uploads(
 
     let s3_conn = match conn.as_any().downcast_ref::<rex_s3::S3Connector>() {
         Some(c) => c,
-        None => return error_response("UNSUPPORTED_PROTOCOL", "only supported for S3").into_response(),
+        None => {
+            return error_response("UNSUPPORTED_PROTOCOL", "only supported for S3").into_response()
+        }
     };
 
     match s3_conn.list_multipart_uploads(&params.prefix).await {
         Ok(uploads) => {
             let resp = ListMultipartUploadsResponse {
-                uploads: uploads.into_iter().map(|(key, upload_id)| MultipartUploadInfo { key, upload_id }).collect(),
+                uploads: uploads
+                    .into_iter()
+                    .map(|(key, upload_id)| MultipartUploadInfo { key, upload_id })
+                    .collect(),
             };
             (StatusCode::OK, Json(resp)).into_response()
         }
@@ -431,16 +451,20 @@ async fn resume_multipart_upload(
         let name = field.name().unwrap_or_default().to_string();
         match name.as_str() {
             "session_id" => {
-                session_id = String::from_utf8_lossy(&field.bytes().await.unwrap_or_default()).to_string();
+                session_id =
+                    String::from_utf8_lossy(&field.bytes().await.unwrap_or_default()).to_string();
             }
             "path" => {
-                remote_path = String::from_utf8_lossy(&field.bytes().await.unwrap_or_default()).to_string();
+                remote_path =
+                    String::from_utf8_lossy(&field.bytes().await.unwrap_or_default()).to_string();
             }
             "upload_id" => {
-                upload_id = String::from_utf8_lossy(&field.bytes().await.unwrap_or_default()).to_string();
+                upload_id =
+                    String::from_utf8_lossy(&field.bytes().await.unwrap_or_default()).to_string();
             }
             "start_part" => {
-                let s = String::from_utf8_lossy(&field.bytes().await.unwrap_or_default()).to_string();
+                let s =
+                    String::from_utf8_lossy(&field.bytes().await.unwrap_or_default()).to_string();
                 start_part = s.parse().unwrap_or(1);
             }
             "file" => {
@@ -463,10 +487,15 @@ async fn resume_multipart_upload(
 
     let s3_conn = match conn.as_any_mut().downcast_mut::<rex_s3::S3Connector>() {
         Some(c) => c,
-        None => return error_response("UNSUPPORTED_PROTOCOL", "only supported for S3").into_response(),
+        None => {
+            return error_response("UNSUPPORTED_PROTOCOL", "only supported for S3").into_response()
+        }
     };
 
-    match s3_conn.resume_multipart_upload(&remote_path, &upload_id, data, start_part, &[], None).await {
+    match s3_conn
+        .resume_multipart_upload(&remote_path, &upload_id, data, start_part, &[], None)
+        .await
+    {
         Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
         Err(e) => error_response("RESUME_UPLOAD_FAILED", &e.to_string()).into_response(),
     }
@@ -491,10 +520,15 @@ async fn abort_multipart_upload(
 
     let s3_conn = match conn.as_any_mut().downcast_mut::<rex_s3::S3Connector>() {
         Some(c) => c,
-        None => return error_response("UNSUPPORTED_PROTOCOL", "only supported for S3").into_response(),
+        None => {
+            return error_response("UNSUPPORTED_PROTOCOL", "only supported for S3").into_response()
+        }
     };
 
-    match s3_conn.abort_multipart_upload(&body.path, &body.upload_id).await {
+    match s3_conn
+        .abort_multipart_upload(&body.path, &body.upload_id)
+        .await
+    {
         Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
         Err(e) => error_response("ABORT_UPLOAD_FAILED", &e.to_string()).into_response(),
     }

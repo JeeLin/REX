@@ -118,7 +118,10 @@ impl FileConnector for S3Connector {
                                 format!("{secs}")
                             }),
                             permissions: None,
-                            storage_class: obj.storage_class.as_ref().map(|sc| sc.as_str().to_string()),
+                            storage_class: obj
+                                .storage_class
+                                .as_ref()
+                                .map(|sc| sc.as_str().to_string()),
                         });
                     }
                 }
