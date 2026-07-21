@@ -1,7 +1,10 @@
 //! PostgreSQL 协议实现 — 基于 sqlx 的 SqlConnector。
 
 use anyhow::{Context, Result};
-use rex_common::sql::{ColumnInfo, ConnectRequest, DdlResult, ForeignKeyInfo, IndexInfo, QueryResult, SqlConnector, TableInfo};
+use rex_common::sql::{
+    ColumnInfo, ConnectRequest, DdlResult, ForeignKeyInfo, IndexInfo, QueryResult, SqlConnector,
+    TableInfo,
+};
 use sqlx::postgres::{PgPool, PgRow};
 use sqlx::{Column, Row, TypeInfo};
 

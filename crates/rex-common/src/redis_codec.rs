@@ -85,7 +85,10 @@ pub fn detect_and_decode(bytes: &[u8]) -> FormatDetection {
     }
 
     // 4. 不可打印字符 → Binary
-    if bytes.iter().any(|&b| b < 0x20 && b != b'\t' && b != b'\n' && b != b'\r') {
+    if bytes
+        .iter()
+        .any(|&b| b < 0x20 && b != b'\t' && b != b'\n' && b != b'\r')
+    {
         return FormatDetection {
             format: DetectedFormat::Binary,
             decoded: None,
@@ -299,12 +302,9 @@ fn decode_pickle_simple(bytes: &[u8]) -> String {
             }
             // BINBYTES (protocol 1): 0x42 + 4 byte len + data
             0x42 if i + 4 < bytes.len() => {
-                let len = u32::from_le_bytes([
-                    bytes[i + 1],
-                    bytes[i + 2],
-                    bytes[i + 3],
-                    bytes[i + 4],
-                ]) as usize;
+                let len =
+                    u32::from_le_bytes([bytes[i + 1], bytes[i + 2], bytes[i + 3], bytes[i + 4]])
+                        as usize;
                 if i + 5 + len <= bytes.len() {
                     if let Ok(s) = std::str::from_utf8(&bytes[i + 5..i + 5 + len]) {
                         result.push_str(&format!("bytes(\"{}\") ", s));
@@ -545,7 +545,9 @@ mod tests {
     #[test]
     fn test_pickle_short_binunicode() {
         // Pickle protocol 4: 0x80 (PROTO) 0x04 (version) 0x8c (SHORT_BINUNICODE) 0x05 "hello" 0x94 (MEMOIZE) 0x2e (STOP)
-        let bytes = [0x80, 0x04, 0x8c, 0x05, b'h', b'e', b'l', b'l', b'o', 0x94, 0x2e];
+        let bytes = [
+            0x80, 0x04, 0x8c, 0x05, b'h', b'e', b'l', b'l', b'o', 0x94, 0x2e,
+        ];
         let d = detect_and_decode(&bytes);
         assert_eq!(d.format, DetectedFormat::Pickle);
         assert!(d.decoded.unwrap().contains("hello"));

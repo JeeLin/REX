@@ -3,7 +3,10 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use rex_common::sql::{ColumnInfo, ConnectRequest, DdlResult, ForeignKeyInfo, IndexInfo, QueryResult, SqlConnector, TableInfo};
+use rex_common::sql::{
+    ColumnInfo, ConnectRequest, DdlResult, ForeignKeyInfo, IndexInfo, QueryResult, SqlConnector,
+    TableInfo,
+};
 
 /// SQLite 连接器
 pub struct SqliteConnector {
@@ -209,8 +212,10 @@ impl SqlConnector for SqliteConnector {
             .collect::<std::result::Result<Vec<_>, _>>()?;
 
         // Group by id (constraint id)
-        let mut fk_map: std::collections::HashMap<i32, (String, Vec<String>, String, Vec<String>, String, String)> =
-            std::collections::HashMap::new();
+        let mut fk_map: std::collections::HashMap<
+            i32,
+            (String, Vec<String>, String, Vec<String>, String, String),
+        > = std::collections::HashMap::new();
         for (id, table_name, from, to, on_update, on_delete) in fk_rows {
             let entry = fk_map.entry(id).or_insert_with(|| {
                 (
@@ -228,14 +233,16 @@ impl SqlConnector for SqliteConnector {
 
         Ok(fk_map
             .into_values()
-            .map(|(name, columns, ref_table, ref_columns, on_update, on_delete)| ForeignKeyInfo {
-                name,
-                columns,
-                ref_table,
-                ref_columns,
-                on_delete,
-                on_update,
-            })
+            .map(
+                |(name, columns, ref_table, ref_columns, on_update, on_delete)| ForeignKeyInfo {
+                    name,
+                    columns,
+                    ref_table,
+                    ref_columns,
+                    on_delete,
+                    on_update,
+                },
+            )
             .collect())
     }
 

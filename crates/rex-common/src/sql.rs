@@ -120,7 +120,11 @@ pub trait SqlConnector: Send {
     }
 
     /// 列出指定表的外键信息。
-    async fn foreign_keys(&mut self, _db: &str, _table: &str) -> anyhow::Result<Vec<ForeignKeyInfo>> {
+    async fn foreign_keys(
+        &mut self,
+        _db: &str,
+        _table: &str,
+    ) -> anyhow::Result<Vec<ForeignKeyInfo>> {
         Ok(vec![])
     }
 

@@ -22,9 +22,9 @@ M27 完成了 bug 修复和 UX 完善。当前 Redis FormatViewer 仅支持 4 �
 
 | # | 内容 | 状态 |
 |---|------|------|
-| 1 | Rust redis-codec 解码器模块（Msgpack/Pickle/PHP/Java/压缩） | ⬜ |
-| 2 | 后端 API 扩展（get_value 返回格式元数据） | ⬜ |
-| 3 | 前端 FormatViewer 扩展（新格式标签 + 自动探测） | ⬜ |
+| 1 | Rust redis-codec 解码器模块（Msgpack/Pickle/PHP/Java/压缩） | ✅ |
+| 2 | 后端 API 扩展（get_value 返回格式元数据） | ✅ |
+| 3 | 前端 FormatViewer 扩展（新格式标签 + 自动探测） | ✅ |
 
 ## 子任务详细设计
 
@@ -252,11 +252,11 @@ const FORMAT_META: Record<string, { label: string; color: string }> = {
 
 ## Flow Status
 
-- [ ] 步骤1：编写里程碑文档
-- [ ] 步骤2：设计核对
-- [ ] 步骤3：开发
-- [ ] 步骤4：代码精简
-- [ ] 步骤5：代码审查
+- [x] 步骤1：编写里程碑文档
+- [x] 步骤2：设计核对
+- [x] 步骤3：开发
+- [x] 步骤4：代码精简
+- [x] 步骤5：代码审查
 - [ ] 步骤6：测试验证
 - [ ] 步骤7：设计再确认
 - [ ] 步骤8：提交

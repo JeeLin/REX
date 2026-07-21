@@ -205,7 +205,9 @@ async fn query(State(state): State<AppState>, Json(body): Json<QueryBody>) -> im
             (StatusCode::OK, Json(result)).into_response()
         }
         Ok(Err(e)) => error_response("QUERY_FAILED", &e.to_string()).into_response(),
-        Err(_) => error_response("QUERY_TIMEOUT", "query timed out after 30 seconds").into_response(),
+        Err(_) => {
+            error_response("QUERY_TIMEOUT", "query timed out after 30 seconds").into_response()
+        }
     }
 }
 

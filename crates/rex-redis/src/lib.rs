@@ -245,7 +245,10 @@ impl RedisConnector for RedisConnectorImpl {
                     .context("failed to execute HGETALL")?;
                 Ok(RedisValue::Hash(val))
             }
-            _ => Ok(RedisValue::String { value: format!("[{type_name}]"), format: None }),
+            _ => Ok(RedisValue::String {
+                value: format!("[{type_name}]"),
+                format: None,
+            }),
         }
     }
 
