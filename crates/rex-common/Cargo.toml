@@ -21,6 +21,9 @@ tokio-tungstenite = { workspace = true }
 tokio-rustls = { workspace = true }
 webpki-roots = { workspace = true }
 tokio = { workspace = true }
+rmpv = { workspace = true }
+flate2 = { workspace = true }
+zstd = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
