@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import * as filesApi from '@/api/files'
 import type { FileEntry } from '@/api/files'
 import FolderSyncDialog from './FolderSyncDialog.vue'
+import MobileFilesBar from './MobileFilesBar.vue'
 
 const props = defineProps<{
   resourceId?: string
@@ -159,6 +160,42 @@ onClickOutside(ctxRef, () => { ctx.value.show = false })
 function onCtx(e: MouseEvent, entry: FileEntry) { e.preventDefault(); ctx.value = { show: true, x: e.clientX, y: e.clientY, path: entry.path, name: entry.name } }
 async function ctxDelete() { confirmCtxDelete(); ctx.value.show = false }
 function ctxCopy() { navigator.clipboard?.writeText(ctx.value.path); ctx.value.show = false }
+
+// Mobile bar actions
+function mfbNewFolder() {
+  if (!sessionId.value) return
+  const name = prompt('Folder name:')
+  if (!name) return
+  const side = mobileActiveSide.value
+  filesApi.mkdir(sessionId.value, panels[side].path + name).then(() => loadPanel(side))
+}
+function mfbRename() {
+  if (!sessionId.value) return
+  const side = mobileActiveSide.value
+  const sel = Array.from(panels[side].selected)
+  if (sel.length !== 1) return
+  const entry = panels[side].entries.find(e => e.name === sel[0])
+  if (!entry) return
+  const newName = prompt('New name:', entry.name)
+  if (!newName || newName === entry.name) return
+  filesApi.renameFile(sessionId.value, entry.path, panels[side].path + newName).then(() => loadPanel(side))
+}
+function mfbDelete() { confirmDelete(mobileActiveSide.value) }
+function mfbPermissions() {
+  const side = mobileActiveSide.value
+  const sel = Array.from(panels[side].selected)
+  if (sel.length !== 1) return
+  const entry = panels[side].entries.find(e => e.name === sel[0])
+  if (entry) openChmod(entry.path)
+}
+function mfbCopyPath() {
+  const side = mobileActiveSide.value
+  const sel = Array.from(panels[side].selected)
+  if (sel.length !== 1) return
+  const entry = panels[side].entries.find(e => e.name === sel[0])
+  if (entry) navigator.clipboard?.writeText(entry.path)
+}
+const mfbSelectedCount = computed(() => panels[mobileActiveSide.value].selected.size)
 
 // Chmod permissions
 const showChmod = ref(false)
@@ -441,6 +478,18 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
         </div>
       </div>
     </Teleport>
+
+    <MobileFilesBar
+      :selected-count="mfbSelectedCount"
+      @upload="uploadTo(mobileActiveSide)"
+      @download="downloadSelected(mobileActiveSide)"
+      @new-folder="mfbNewFolder"
+      @refresh="loadPanel(mobileActiveSide)"
+      @rename="mfbRename"
+      @delete="mfbDelete"
+      @permissions="mfbPermissions"
+      @copy-path="mfbCopyPath"
+    />
   </div>
 </template>
 
@@ -501,5 +550,6 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
   .cm{display:none !important}
   .fp-panel{border-right:none !important}
   .fp-dialog{min-width:auto;width:90vw;max-width:340px}
+  .fp{padding-bottom:56px}
 }
 </style>
