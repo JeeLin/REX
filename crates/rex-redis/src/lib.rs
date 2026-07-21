@@ -3,8 +3,10 @@
 use anyhow::{Context, Result};
 use redis::cmd as redis_cmd;
 use rex_common::redis::{
-    DbInfo, KeyInfo, KeyspaceInfo, RedisConnectRequest, RedisConnector, RedisInfo, RedisValue,
+    DbInfo, FormatInfo, KeyInfo, KeyspaceInfo, RedisConnectRequest, RedisConnector, RedisInfo,
+    RedisValue,
 };
+use rex_common::redis_codec;
 
 /// Redis 连接器
 pub struct RedisConnectorImpl {
@@ -198,7 +200,13 @@ impl RedisConnector for RedisConnectorImpl {
                     .query_async(&mut self.conn)
                     .await
                     .context("failed to execute GET")?;
-                Ok(RedisValue::String(val))
+                let detection = redis_codec::detect_and_decode(val.as_bytes());
+                let format = Some(FormatInfo {
+                    detected: detection.format.name().to_string(),
+                    decoded: detection.decoded,
+                    compression: detection.compression,
+                });
+                Ok(RedisValue::String { value: val, format })
             }
             "list" => {
                 let val: Vec<String> = redis_cmd("LRANGE")
@@ -237,7 +245,7 @@ impl RedisConnector for RedisConnectorImpl {
                     .context("failed to execute HGETALL")?;
                 Ok(RedisValue::Hash(val))
             }
-            _ => Ok(RedisValue::String(format!("[{type_name}]"))),
+            _ => Ok(RedisValue::String { value: format!("[{type_name}]"), format: None }),
         }
     }
 

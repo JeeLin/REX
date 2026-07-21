@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import * as redisApi from '@/api/redis'
-import type { DbInfo, KeyInfo, RedisValue } from '@/api/redis'
+import type { DbInfo, FormatInfo, KeyInfo, RedisStringValue, RedisValue } from '@/api/redis'
 import FormatViewer from './FormatViewer.vue'
 
 const props = defineProps<{
@@ -184,6 +184,15 @@ function toggleKey(key: string) {
 const selectedKey = ref<string | null>(null)
 const keyValue = ref<RedisValue | null>(null)
 const valueLoading = ref(false)
+
+// Extract string value and format info from RedisValue
+const stringVal = computed<RedisStringValue>(() => {
+  const v = keyValue.value
+  if (v?.type === 'String' && typeof v.value === 'object' && v.value !== null && 'value' in v.value) {
+    return v.value as RedisStringValue
+  }
+  return { value: String(v?.value ?? '') }
+})
 
 // Tab management
 const openTabs = ref<string[]>([])
@@ -756,7 +765,11 @@ async function flushDb() {
         <div v-else-if="keyValue" class="redis-value-body">
           <div class="redis-value-type">Type: {{ keyValue.type }}</div>
           <!-- String -->
-          <FormatViewer v-if="keyValue.type === 'String'" :value="String(keyValue.value || '')" />
+          <FormatViewer
+            v-if="keyValue.type === 'String'"
+            :value="stringVal.value"
+            :format-info="stringVal.format"
+          />
           <!-- Hash -->
           <table v-else-if="keyValue.type === 'Hash'" class="redis-value-table">
             <thead><tr><th>#</th><th>Field</th><th>Value</th></tr></thead>

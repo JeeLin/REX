@@ -27,6 +27,17 @@ export interface RedisInfo {
   keyspace: { db: string; keys: number; expires: number }[]
 }
 
+export interface FormatInfo {
+  detected: string
+  decoded?: string
+  compression?: string
+}
+
+export interface RedisStringValue {
+  value: string
+  format?: FormatInfo
+}
+
 export interface RedisValue {
   type: 'String' | 'List' | 'Set' | 'ZSet' | 'Hash' | 'Stream'
   value: unknown

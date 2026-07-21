@@ -4,6 +4,19 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+/// 格式检测元数据
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FormatInfo {
+    /// 检测到的格式名（"text", "json", "msgpack", "php_serialize" 等）
+    pub detected: String,
+    /// 解码后的可读文本（高级格式有值）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decoded: Option<String>,
+    /// 压缩算法名（仅压缩格式有值）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compression: Option<String>,
+}
+
 /// DB 信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DbInfo {
@@ -23,7 +36,11 @@ pub struct KeyInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
 pub enum RedisValue {
-    String(String),
+    String {
+        value: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        format: Option<FormatInfo>,
+    },
     List(Vec<String>),
     Set(Vec<String>),
     ZSet(Vec<(String, f64)>),
