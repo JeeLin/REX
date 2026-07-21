@@ -16,6 +16,9 @@ pub struct FileEntry {
     /// S3: Storage Class (STANDARD, STANDARD_IA, GLACIER, etc.)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub storage_class: Option<String>,
+    /// S3: Canned ACL (private, public-read, etc.)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acl: Option<String>,
 }
 
 /// 连接请求
@@ -38,6 +41,14 @@ pub struct FileConnectRequest {
 /// 进度回调
 pub type ProgressCallback = Box<dyn Fn(u64, u64) + Send + Sync>;
 
+/// 上传结果
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct UploadResult {
+    /// S3 multipart upload_id (用于续传)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upload_id: Option<String>,
+}
+
 /// 文件连接器 trait
 #[async_trait]
 pub trait FileConnector: Send + Sync {
@@ -53,7 +64,7 @@ pub trait FileConnector: Send + Sync {
         remote_path: &str,
         data: Vec<u8>,
         progress: Option<&ProgressCallback>,
-    ) -> Result<()>;
+    ) -> Result<UploadResult>;
 
     /// 下载文件
     async fn download(&mut self, path: &str) -> Result<Vec<u8>>;

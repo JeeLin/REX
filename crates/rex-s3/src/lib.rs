@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use aws_sdk_s3::Client;
-use rex_common::file_transfer::{FileConnector, FileEntry, ProgressCallback};
+use rex_common::file_transfer::{FileConnector, FileEntry, ProgressCallback, UploadResult};
 
 /// S3 连接器
 pub struct S3Connector {
@@ -96,6 +96,7 @@ impl FileConnector for S3Connector {
                             modified: None,
                             permissions: None,
                             storage_class: None,
+                            acl: None,
                         });
                     }
                 }
@@ -122,6 +123,7 @@ impl FileConnector for S3Connector {
                                 .storage_class
                                 .as_ref()
                                 .map(|sc| sc.as_str().to_string()),
+                            acl: None,
                         });
                     }
                 }
@@ -153,6 +155,7 @@ impl FileConnector for S3Connector {
                     modified: obj.last_modified.map(|t| format!("{}", t.secs())),
                     permissions: None,
                     storage_class: obj.storage_class.as_ref().map(|sc| sc.as_str().to_string()),
+                    acl: None,
                 })
             }
             Err(_) => {
@@ -166,6 +169,7 @@ impl FileConnector for S3Connector {
                     modified: None,
                     permissions: None,
                     storage_class: None,
+                    acl: None,
                 })
             }
         }
@@ -176,7 +180,7 @@ impl FileConnector for S3Connector {
         remote_path: &str,
         data: Vec<u8>,
         progress: Option<&ProgressCallback>,
-    ) -> Result<()> {
+    ) -> Result<rex_common::file_transfer::UploadResult> {
         let key = remote_path.trim_start_matches('/');
         let total = data.len() as u64;
 
@@ -194,6 +198,7 @@ impl FileConnector for S3Connector {
             if let Some(cb) = progress {
                 cb(total, total);
             }
+            Ok(UploadResult::default())
         } else {
             // 分片上传
             let part_size = 5 * 1024 * 1024; // 5MB
@@ -250,9 +255,10 @@ impl FileConnector for S3Connector {
                 .send()
                 .await
                 .context("failed to complete multipart upload")?;
+            Ok(UploadResult {
+                upload_id: Some(upload_id.to_string()),
+            })
         }
-
-        Ok(())
     }
 
     async fn download(&mut self, path: &str) -> Result<Vec<u8>> {
@@ -473,6 +479,66 @@ impl S3Connector {
             .send()
             .await
             .context("failed to abort multipart upload")?;
+        Ok(())
+    }
+
+    /// 获取对象的 Canned ACL
+    pub async fn get_acl(&self, key: &str) -> Result<String> {
+        let key = key.trim_start_matches('/');
+        let result = self
+            .client
+            .get_object_acl()
+            .bucket(&self.bucket)
+            .key(key)
+            .send()
+            .await
+            .context("failed to get object ACL")?;
+
+        // 从 ACL grants 推断 Canned ACL
+        let grants = result.grants();
+        let has_all = grants.iter().any(|g| {
+            g.grantee()
+                .map(|a| a.uri().map(|u| u.contains("AllUsers")).unwrap_or(false))
+                .unwrap_or(false)
+                && g.permission() == Some(&aws_sdk_s3::types::Permission::Read)
+        });
+        let has_auth = grants.iter().any(|g| {
+            g.grantee()
+                .map(|a| {
+                    a.uri()
+                        .map(|u| u.contains("AuthenticatedUsers"))
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false)
+        });
+
+        if has_all {
+            Ok("public-read".to_string())
+        } else if has_auth {
+            Ok("authenticated-read".to_string())
+        } else {
+            Ok("private".to_string())
+        }
+    }
+
+    /// 设置对象的 Canned ACL
+    pub async fn put_acl(&self, key: &str, canned_acl: &str) -> Result<()> {
+        let key = key.trim_start_matches('/');
+        let acl = match canned_acl {
+            "public-read" => aws_sdk_s3::types::ObjectCannedAcl::PublicRead,
+            "public-read-write" => aws_sdk_s3::types::ObjectCannedAcl::PublicReadWrite,
+            "authenticated-read" => aws_sdk_s3::types::ObjectCannedAcl::AuthenticatedRead,
+            _ => aws_sdk_s3::types::ObjectCannedAcl::Private,
+        };
+
+        self.client
+            .put_object_acl()
+            .bucket(&self.bucket)
+            .key(key)
+            .acl(acl)
+            .send()
+            .await
+            .context("failed to set object ACL")?;
         Ok(())
     }
 }

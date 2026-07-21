@@ -13,6 +13,7 @@ export interface FileEntry {
   modified: string | null
   permissions: string | null
   storage_class?: string | null
+  acl?: string | null
 }
 
 export async function connect(req: {
@@ -47,13 +48,14 @@ export async function statFile(sessionId: string, path: string): Promise<FileEnt
   return await res.json()
 }
 
-export async function uploadFile(sessionId: string, remotePath: string, file: File): Promise<void> {
+export async function uploadFile(sessionId: string, remotePath: string, file: File): Promise<{ upload_id?: string }> {
   const form = new FormData()
   form.append('session_id', sessionId)
   form.append('path', remotePath)
   form.append('file', file)
   const res = await fetch(`${API_BASE}/upload`, { method: 'POST', headers: authHeaders(), body: form })
   if (!res.ok) throw new Error('Upload failed')
+  return await res.json()
 }
 
 /** Upload with progress tracking via XMLHttpRequest */
@@ -162,4 +164,18 @@ export async function abortMultipartUpload(sessionId: string, path: string, uplo
     body: JSON.stringify({ session_id: sessionId, path, upload_id: uploadId }),
   })
   if (!res.ok) throw new Error('Failed to abort multipart upload')
+}
+
+export async function getAcl(sessionId: string, path: string): Promise<string> {
+  const res = await fetch(`${API_BASE}/acl?session_id=${sessionId}&path=${encodeURIComponent(path)}`, { headers: authHeaders() })
+  if (!res.ok) throw new Error('Failed to get ACL')
+  return (await res.json()).acl
+}
+
+export async function putAcl(sessionId: string, path: string, acl: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/acl`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ session_id: sessionId, path, acl }),
+  })
+  if (!res.ok) throw new Error('Failed to set ACL')
 }

@@ -158,13 +158,54 @@ async function downloadSelected(side: Side) {
   const blob = await filesApi.downloadFile(sessionId.value, entry.path)
   const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = entry.name; a.click(); URL.revokeObjectURL(url)
 }
+// Upload state for resume
+interface UploadState {
+  sessionId: string
+  remotePath: string
+  uploadId?: string
+  completedParts?: Array<{ part_number: number; e_tag: string }>
+  status: 'uploading' | 'failed' | 'completed'
+  file?: File
+}
+const activeUploads = ref<Map<string, UploadState>>(new Map())
+
 async function uploadTo(side: Side) {
   if (!sessionId.value) return
   const input = document.createElement('input'); input.type = 'file'; input.multiple = true
   input.onchange = async () => {
-    for (const file of Array.from(input.files || [])) await filesApi.uploadFile(sessionId.value!, panels[side].path + file.name, file)
+    if (!sessionId.value) return
+    for (const file of Array.from(input.files || [])) {
+      const remotePath = panels[side].path + file.name
+      const uploadKey = `${sessionId.value}:${remotePath}`
+      const state: UploadState = { sessionId: sessionId.value, remotePath, status: 'uploading', file }
+      activeUploads.value.set(uploadKey, state)
+      try {
+        const result = await filesApi.uploadFile(sessionId.value, remotePath, file)
+        state.uploadId = result.upload_id
+        state.status = 'completed'
+      } catch (e) {
+        state.status = 'failed'
+        console.error('Upload failed:', e)
+      }
+    }
+    activeUploads.value = new Map(activeUploads.value)
     loadPanel(side)
   }; input.click()
+}
+
+async function retryUpload(key: string) {
+  const state = activeUploads.value.get(key)
+  if (!state || !state.file || !state.uploadId) return
+  state.status = 'uploading'
+  activeUploads.value = new Map(activeUploads.value)
+  try {
+    await filesApi.resumeMultipartUpload(state.sessionId, state.remotePath, state.uploadId, state.file, 1)
+    state.status = 'completed'
+  } catch (e) {
+    state.status = 'failed'
+    console.error('Resume upload failed:', e)
+  }
+  activeUploads.value = new Map(activeUploads.value)
 }
 
 // Context menu
@@ -222,6 +263,29 @@ function mfbCopyPath() {
 }
 const mfbSelectedCount = computed(() => panels[mobileActiveSide.value].selected.size)
 const isS3 = computed(() => connProtocol.value === 's3')
+
+// ACL dialog
+const showAclDialog = ref(false)
+const aclPath = ref('')
+const aclValue = ref('private')
+
+function openAclDialog(path: string) {
+  aclPath.value = path
+  aclValue.value = 'private'
+  showAclDialog.value = true
+  // Load current ACL
+  if (sessionId.value) {
+    filesApi.getAcl(sessionId.value, path).then(acl => { aclValue.value = acl }).catch(() => {})
+  }
+}
+
+async function applyAcl() {
+  if (!sessionId.value) return
+  await filesApi.putAcl(sessionId.value, aclPath.value, aclValue.value)
+  showAclDialog.value = false
+  await loadPanel('left')
+  await loadPanel('right')
+}
 
 // Chmod permissions
 const showChmod = ref(false)
@@ -429,12 +493,13 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
           <button class="pb" @click="loadPanel(side)">↻</button>
         </div>
         <div class="pf">
-          <div class="fr fh"><span class="cn">Name</span><span class="cs">Size</span><span class="cm">Modified</span><span v-if="isS3" class="csc">Storage Class</span></div>
+          <div class="fr fh"><span class="cn">Name</span><span class="cs">Size</span><span class="cm">Modified</span><span v-if="isS3" class="csc">Storage Class</span><span v-if="isS3" class="csc">ACL</span></div>
           <div v-for="e in panels[side].entries" :key="e.name" class="fr" :class="{ 'fr--sel': panels[side].selected.has(e.name) }" draggable="true" @dragstart="onDragStart($event, side, e.name)" @dragend="onDragEnd" @click="toggleSelect(side, e.name, $event)" @dblclick="navigate(side, e)" @contextmenu="onCtx($event, e)">
             <span class="cn"><span class="fi">{{ e.is_dir ? '📁' : '📄' }}</span> {{ e.name }}</span>
             <span class="cs mu">{{ e.is_dir ? '-' : fmtSize(e.size) }}</span>
             <span class="cm mu">{{ e.modified || '-' }}</span>
             <span v-if="isS3" class="csc mu">{{ e.storage_class || '-' }}</span>
+            <span v-if="isS3" class="csc mu">{{ e.acl || '-' }}</span>
           </div>
           <div v-if="!panels[side].loading && !panels[side].entries.length" class="pe">Empty</div>
         </div>
@@ -447,7 +512,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
       <div class="ci" @click="editFile(ctx.path)">Edit</div>
       <div class="ci" @click="ctxCopy">Copy Path</div>
       <div v-if="isS3" class="ci" @click="ctxPresignedUrl">Copy Presigned URL</div>
-      <div class="ci" @click="openChmod(ctx.path)">Permissions</div>
+      <div class="ci" @click="isS3 ? openAclDialog(ctx.path) : openChmod(ctx.path)">Permissions</div>
       <div class="ci ci--d" @click="ctxDelete">Delete</div>
     </div>
 
@@ -486,6 +551,28 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
           <div style="display:flex;gap:var(--space-2);justify-content:flex-end">
             <button class="btn" @click="showChmod = false">Cancel</button>
             <button class="btn" style="background:var(--accent);color:#fff" @click="applyChmod">Apply</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- S3 ACL Dialog -->
+    <Teleport to="body">
+      <div v-if="showAclDialog" class="fp-overlay" @click.self="showAclDialog = false">
+        <div class="fp-dialog">
+          <h3>S3 Permissions: {{ aclPath }}</h3>
+          <div style="margin:var(--space-3) 0">
+            <label style="display:block;font-size:var(--text-sm);color:var(--text-muted);margin-bottom:var(--space-1)">Canned ACL</label>
+            <select v-model="aclValue" style="width:100%;padding:var(--space-2);background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:var(--text-sm)">
+              <option value="private">private</option>
+              <option value="public-read">public-read</option>
+              <option value="public-read-write">public-read-write</option>
+              <option value="authenticated-read">authenticated-read</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:var(--space-2);justify-content:flex-end">
+            <button class="btn" @click="showAclDialog = false">Cancel</button>
+            <button class="btn" style="background:var(--accent);color:#fff" @click="applyAcl">Apply</button>
           </div>
         </div>
       </div>

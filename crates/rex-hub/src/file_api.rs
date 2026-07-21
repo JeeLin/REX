@@ -62,6 +62,8 @@ pub fn file_routes() -> axum::Router<AppState> {
             "/s3/abort-upload",
             axum::routing::post(abort_multipart_upload),
         )
+        .route("/acl", axum::routing::get(get_acl))
+        .route("/acl", axum::routing::put(put_acl))
 }
 
 // ---------------------------------------------------------------------------
@@ -265,7 +267,14 @@ async fn upload(
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
     };
     match conn.upload(&remote_path, data, None).await {
-        Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
+        Ok(result) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "ok": true,
+                "upload_id": result.upload_id
+            })),
+        )
+            .into_response(),
         Err(e) => error_response("UPLOAD_FAILED", &e.to_string()).into_response(),
     }
 }
@@ -531,5 +540,73 @@ async fn abort_multipart_upload(
     {
         Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
         Err(e) => error_response("ABORT_UPLOAD_FAILED", &e.to_string()).into_response(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ACL handlers
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+struct AclQuery {
+    session_id: String,
+    path: String,
+}
+
+#[derive(Debug, Serialize)]
+struct AclResponse {
+    acl: String,
+}
+
+async fn get_acl(
+    State(state): State<AppState>,
+    Query(params): Query<AclQuery>,
+) -> axum::response::Response {
+    let pool = state.file_pool.lock().await;
+    let conn = match pool.connectors.get(&params.session_id) {
+        Some(c) => c,
+        None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
+    };
+
+    let s3_conn = match conn.as_any().downcast_ref::<rex_s3::S3Connector>() {
+        Some(c) => c,
+        None => {
+            return error_response("UNSUPPORTED_PROTOCOL", "only supported for S3").into_response()
+        }
+    };
+
+    match s3_conn.get_acl(&params.path).await {
+        Ok(acl) => (StatusCode::OK, Json(AclResponse { acl })).into_response(),
+        Err(e) => error_response("GET_ACL_FAILED", &e.to_string()).into_response(),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct PutAclBody {
+    session_id: String,
+    path: String,
+    acl: String,
+}
+
+async fn put_acl(
+    State(state): State<AppState>,
+    Json(body): Json<PutAclBody>,
+) -> axum::response::Response {
+    let mut pool = state.file_pool.lock().await;
+    let conn = match pool.connectors.get_mut(&body.session_id) {
+        Some(c) => c,
+        None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
+    };
+
+    let s3_conn = match conn.as_any_mut().downcast_mut::<rex_s3::S3Connector>() {
+        Some(c) => c,
+        None => {
+            return error_response("UNSUPPORTED_PROTOCOL", "only supported for S3").into_response()
+        }
+    };
+
+    match s3_conn.put_acl(&body.path, &body.acl).await {
+        Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
+        Err(e) => error_response("PUT_ACL_FAILED", &e.to_string()).into_response(),
     }
 }

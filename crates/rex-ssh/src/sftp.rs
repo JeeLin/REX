@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use rex_common::file_transfer::{FileConnector, FileEntry, ProgressCallback};
+use rex_common::file_transfer::{FileConnector, FileEntry, ProgressCallback, UploadResult};
 use russh_sftp::client::SftpSession;
 use tokio::io::AsyncWriteExt;
 
@@ -94,6 +94,7 @@ impl FileConnector for SftpConnector {
                 modified: None,
                 permissions: None,
                 storage_class: None,
+                acl: None,
             });
         }
         entries.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then(a.name.cmp(&b.name)));
@@ -112,6 +113,7 @@ impl FileConnector for SftpConnector {
                 modified: None,
                 permissions: None,
                 storage_class: None,
+                acl: None,
             }),
             Err(_) => Ok(FileEntry {
                 name,
@@ -121,6 +123,7 @@ impl FileConnector for SftpConnector {
                 modified: None,
                 permissions: None,
                 storage_class: None,
+                acl: None,
             }),
         }
     }
@@ -130,7 +133,7 @@ impl FileConnector for SftpConnector {
         remote_path: &str,
         data: Vec<u8>,
         progress: Option<&ProgressCallback>,
-    ) -> Result<()> {
+    ) -> Result<UploadResult> {
         let total = data.len() as u64;
         let mut file = self
             .session
@@ -150,7 +153,7 @@ impl FileConnector for SftpConnector {
             }
         }
         file.flush().await.context("failed to flush")?;
-        Ok(())
+        Ok(UploadResult::default())
     }
 
     async fn download(&mut self, path: &str) -> Result<Vec<u8>> {
