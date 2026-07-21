@@ -139,14 +139,14 @@ function actionClass(a: string) {
           <div v-if="showPreview" class="fsd-preview">
             <div class="fsd-label">Preview ({{ previewEntries.length }} changes)</div>
             <table class="fsd-table">
-              <thead><tr><th>#</th><th>File</th><th>Action</th><th>Size</th><th>Modified</th></tr></thead>
+              <thead><tr><th>#</th><th>File</th><th>Action</th><th class="fsd-col-size">Size</th><th class="fsd-col-modified">Modified</th></tr></thead>
               <tbody>
                 <tr v-for="(entry, i) in previewEntries" :key="i">
                   <td class="muted">{{ i + 1 }}</td>
                   <td class="mono">{{ entry.name }}</td>
                   <td><span class="fsd-action" :class="actionClass(entry.action)">{{ actionLabel(entry.action) }}</span></td>
-                  <td class="muted">{{ entry.size }}</td>
-                  <td class="muted">{{ entry.modified }}</td>
+                  <td class="muted fsd-col-size">{{ entry.size }}</td>
+                  <td class="muted fsd-col-modified">{{ entry.modified }}</td>
                 </tr>
               </tbody>
             </table>
@@ -402,5 +402,25 @@ function actionClass(a: string) {
 
 .fsd-btn--primary:hover {
   opacity: 0.9;
+}
+
+@media (max-width: 768px) {
+  .fsd-dialog {
+    min-width: auto;
+    width: 95vw;
+    max-width: 520px;
+  }
+  .fsd-row {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .fsd-table .fsd-col-size,
+  .fsd-table .fsd-col-modified,
+  .fsd-table th:nth-child(4),
+  .fsd-table th:nth-child(5),
+  .fsd-table td:nth-child(4),
+  .fsd-table td:nth-child(5) {
+    display: none;
+  }
 }
 </style>

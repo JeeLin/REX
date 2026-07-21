@@ -551,5 +551,8 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
   .fp-panel{border-right:none !important}
   .fp-dialog{min-width:auto;width:90vw;max-width:340px}
   .fp{padding-bottom:56px}
+  .ptb{gap:2px;padding:var(--space-1)}
+  .pb{padding:4px;font-size:var(--text-xs)}
+  .pp{font-size:11px}
 }
 </style>
