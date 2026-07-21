@@ -73,11 +73,8 @@ pub fn detect_and_decode(bytes: &[u8]) -> FormatDetection {
 
     // 3. JSON
     if let Ok(s) = std::str::from_utf8(bytes) {
-        if serde_json::from_str::<serde_json::Value>(s).is_ok() {
-            let pretty = serde_json::to_string_pretty(
-                &serde_json::from_str::<serde_json::Value>(s).unwrap(),
-            )
-            .unwrap_or_default();
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(s) {
+            let pretty = serde_json::to_string_pretty(&val).unwrap_or_default();
             return FormatDetection {
                 format: DetectedFormat::Json,
                 decoded: Some(pretty),
@@ -475,7 +472,7 @@ fn decode_java_serialize(bytes: &[u8]) -> String {
 
     // 跳过 magic (2) + version (2) = 4 bytes
     let mut i = 4;
-    let mut class_names = Vec::new();
+    let mut found_class = false;
 
     while i + 2 < bytes.len() {
         match bytes[i] {
@@ -492,7 +489,7 @@ fn decode_java_serialize(bytes: &[u8]) -> String {
                     i += 2;
                     if i + name_len <= bytes.len() {
                         if let Ok(name) = std::str::from_utf8(&bytes[i..i + name_len]) {
-                            class_names.push(name.to_string());
+                            found_class = true;
                             result.push_str(&format!("class:{} ", name));
                         }
                         i += name_len;
@@ -509,7 +506,7 @@ fn decode_java_serialize(bytes: &[u8]) -> String {
         }
     }
 
-    if class_names.is_empty() {
+    if !found_class {
         result.push_str("(binary data)");
     }
 
