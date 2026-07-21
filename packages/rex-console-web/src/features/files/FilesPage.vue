@@ -51,6 +51,7 @@ const panels = reactive({
   right: { path: '/', entries: [] as FileEntry[], loading: false, selected: new Set<string>(), active: false },
 })
 type Side = 'left' | 'right'
+const mobileActiveSide = ref<Side>('left')
 
 async function loadPanel(side: Side) {
   const p = panels[side]; if (!sessionId.value) return
@@ -326,6 +327,12 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
 
 <template>
   <div class="fp" @mousemove.prevent>
+    <!-- Mobile panel switcher -->
+    <div class="fp-switcher">
+      <button class="fp-switcher-btn" :class="{ 'fp-switcher-btn--active': mobileActiveSide === 'left' }" @click="mobileActiveSide = 'left'">Left</button>
+      <button class="fp-switcher-btn" :class="{ 'fp-switcher-btn--active': mobileActiveSide === 'right' }" @click="mobileActiveSide = 'right'">Right</button>
+    </div>
+
     <div v-if="showConnect" class="fp-overlay">
       <div class="fp-dialog">
         <h3>Connect to Server</h3>
@@ -340,7 +347,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
     </div>
 
     <template v-for="side in (['left','right'] as const)" :key="side">
-      <div class="fp-panel" :class="{ 'fp-panel--active': panels[side].active, 'fp-panel--drop': dropTarget === side }" :style="side==='left' ? {width:leftW+'px'} : {flex:'1',minWidth:'0'}" @click="activate(side)" @dragover="onDragOver($event, side)" @dragleave="onDragLeave" @drop="onDrop($event, side)">
+      <div class="fp-panel" :class="{ 'fp-panel--active': panels[side].active, 'fp-panel--drop': dropTarget === side, 'fp-panel--mobile-hidden': mobileActiveSide !== side }" :style="side==='left' ? {width:leftW+'px'} : {flex:'1',minWidth:'0'}" @click="activate(side)" @dragover="onDragOver($event, side)" @dragleave="onDragLeave" @drop="onDrop($event, side)">
         <div class="ptb">
           <button class="pb" @click="goUp(side)">↑</button>
           <span class="pp mono">{{ panels[side].path }}</span>
@@ -483,4 +490,16 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
 .chmod-row span{font-size:var(--text-sm);color:var(--text-primary)}
 .chmod-row input[type="checkbox"]{margin:0 auto;accent-color:var(--accent)}
 .chmod-octal{text-align:center;font-family:var(--font-mono);font-size:var(--text-lg);color:var(--accent);margin:var(--space-3) 0}
+.fp-switcher{display:none}
+@media(max-width:768px){
+  .fp{flex-direction:column}
+  .fp-switcher{display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--bg-surface);flex-shrink:0}
+  .fp-switcher-btn{flex:1;padding:var(--space-2);background:none;border:none;color:var(--text-muted);font-size:var(--text-sm);cursor:pointer;border-bottom:2px solid transparent}
+  .fp-switcher-btn--active{color:var(--accent);border-bottom-color:var(--accent);background:rgba(232,145,45,0.05)}
+  .fp-panel--mobile-hidden{display:none !important}
+  .fh2{display:none !important}
+  .cm{display:none !important}
+  .fp-panel{border-right:none !important}
+  .fp-dialog{min-width:auto;width:90vw;max-width:340px}
+}
 </style>
