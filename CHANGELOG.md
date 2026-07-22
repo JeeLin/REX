@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.31.0] - 2026-07-21
+
+### Added
+- S3 ACL 管理：get_acl/put_acl API + 前端 Canned ACL 编辑对话框
+- S3 文件列表：显示 ACL 列
+- S3 上传返回 upload_id：为断点续传做准备
+
+### Changed
+- FileEntry 新增 acl 字段（前后端一致）
+- 重构：移除死代码（SessionQuery、AclQuery），统一 auth header 构造
+
 ## [0.30.0] - 2026-07-21
 
 ### Added
