@@ -163,11 +163,14 @@ interface UploadState {
   sessionId: string
   remotePath: string
   uploadId?: string
-  completedParts?: Array<{ part_number: number; e_tag: string }>
+  completedParts: Array<{ part_number: number; e_tag: string }>
   status: 'uploading' | 'failed' | 'completed'
   file?: File
+  uploadedBytes: number
 }
 const activeUploads = ref<Map<string, UploadState>>(new Map())
+
+const PART_SIZE = 5 * 1024 * 1024 // 5MB
 
 async function uploadTo(side: Side) {
   if (!sessionId.value) return
@@ -177,12 +180,24 @@ async function uploadTo(side: Side) {
     for (const file of Array.from(input.files || [])) {
       const remotePath = panels[side].path + file.name
       const uploadKey = `${sessionId.value}:${remotePath}`
-      const state: UploadState = { sessionId: sessionId.value, remotePath, status: 'uploading', file }
+      const state: UploadState = {
+        sessionId: sessionId.value, remotePath, status: 'uploading', file,
+        completedParts: [], uploadedBytes: 0
+      }
       activeUploads.value.set(uploadKey, state)
       try {
-        const result = await filesApi.uploadFile(sessionId.value, remotePath, file)
-        state.uploadId = result.upload_id
-        state.status = 'completed'
+        if (file.size > PART_SIZE) {
+          // S3 multipart upload with progress tracking
+          const result = await filesApi.uploadFileWithProgress(sessionId.value, remotePath, file, (_pct, loaded) => {
+            state.uploadedBytes = loaded
+            activeUploads.value = new Map(activeUploads.value)
+          })
+          state.uploadId = result.upload_id
+          state.status = 'completed'
+        } else {
+          await filesApi.uploadFile(sessionId.value, remotePath, file)
+          state.status = 'completed'
+        }
       } catch (e) {
         state.status = 'failed'
         console.error('Upload failed:', e)
@@ -199,7 +214,11 @@ async function retryUpload(key: string) {
   state.status = 'uploading'
   activeUploads.value = new Map(activeUploads.value)
   try {
-    await filesApi.resumeMultipartUpload(state.sessionId, state.remotePath, state.uploadId, state.file, 1)
+    // Calculate start_part from uploaded bytes (each part is 5MB)
+    const startPart = Math.floor(state.uploadedBytes / PART_SIZE) + 1
+    await filesApi.resumeMultipartUpload(
+      state.sessionId, state.remotePath, state.uploadId, state.file, startPart
+    )
     state.status = 'completed'
   } catch (e) {
     state.status = 'failed'

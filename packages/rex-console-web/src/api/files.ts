@@ -64,7 +64,7 @@ export function uploadFileWithProgress(
   remotePath: string,
   file: File,
   onProgress?: (percent: number, transferred: number) => void,
-): Promise<void> {
+): Promise<{ upload_id?: string }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('POST', `${API_BASE}/upload`)
@@ -78,8 +78,14 @@ export function uploadFileWithProgress(
       }
     }
     xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve()
-      else reject(new Error('Upload failed'))
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const result = JSON.parse(xhr.responseText)
+          resolve(result)
+        } catch {
+          resolve({})
+        }
+      } else reject(new Error('Upload failed'))
     }
     xhr.onerror = () => reject(new Error('Upload failed'))
     const form = new FormData()
