@@ -22,10 +22,10 @@ M33 完成了 S3/SFTP 上传续传功能。M34 为文件管理模块补全「编
 
 | # | 内容 | 状态 |
 |---|------|------|
-| 1 | 文件编辑器后端：read_for_edit + save_from_edit API | ⬜ |
-| 2 | 文件编辑器前端：Monaco Editor 编辑对话框 | ⬜ |
-| 3 | 连接配置导入/导出 API + 前端 | ⬜ |
-| 4 | SSH 连接保活：后端 KeepAlive + 前端设置 | ⬜ |
+| 1 | 文件编辑器后端：read_for_edit + save_from_edit API | ✅ |
+| 2 | 文件编辑器前端：CodeMirror Editor 编辑对话框 | ✅ |
+| 3 | 连接配置导入/导出 API + 前端 | ✅ |
+| 4 | SSH 连接保活：后端 KeepAlive | ✅ |
 
 ## 子任务详细设计
 
@@ -363,7 +363,7 @@ session.keepalive(true, keepalive_interval).await?;
 
 - [x] 步骤1：编写里程碑文档
 - [x] 步骤2：设计核对
-- [ ] 步骤3：开发
+- [x] 步骤3：开发
 - [ ] 步骤4：代码精简
 - [ ] 步骤5：代码审查
 - [ ] 步骤6：测试验证
