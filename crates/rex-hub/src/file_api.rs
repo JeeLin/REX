@@ -505,7 +505,7 @@ async fn resume_multipart_upload(
     };
 
     match s3_conn
-        .resume_multipart_upload(&remote_path, &upload_id, data, start_part, &[], None)
+        .resume_multipart_upload(&remote_path, &upload_id, data, start_part, None)
         .await
     {
         Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),

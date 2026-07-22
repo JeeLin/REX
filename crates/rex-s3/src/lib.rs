@@ -392,27 +392,43 @@ impl S3Connector {
     }
 
     /// 恢复进行中的 multipart upload
-    /// previous_parts: 之前已完成的 parts (part_number -> e_tag)
+    /// 续传 multipart upload
     pub async fn resume_multipart_upload(
         &self,
         key: &str,
         upload_id: &str,
         data: Vec<u8>,
         start_part: i32,
-        previous_parts: &[(i32, String)],
         progress: Option<&ProgressCallback>,
     ) -> Result<()> {
         let total = data.len() as u64;
         let part_size = 5 * 1024 * 1024; // 5MB
-        let mut parts: Vec<aws_sdk_s3::types::CompletedPart> = previous_parts
+
+        // 先获取已上传的 parts
+        let list_result = self
+            .client
+            .list_parts()
+            .bucket(&self.bucket)
+            .key(key)
+            .upload_id(upload_id)
+            .send()
+            .await
+            .context("failed to list parts")?;
+
+        let mut parts: Vec<aws_sdk_s3::types::CompletedPart> = list_result
+            .parts
+            .unwrap_or_default()
             .iter()
-            .map(|(num, etag)| {
-                aws_sdk_s3::types::CompletedPart::builder()
-                    .part_number(*num)
-                    .e_tag(etag.clone())
-                    .build()
+            .filter_map(|p| {
+                Some(
+                    aws_sdk_s3::types::CompletedPart::builder()
+                        .part_number(p.part_number()?)
+                        .e_tag(p.e_tag()?.to_string())
+                        .build(),
+                )
             })
             .collect();
+
         let mut offset = 0u64;
 
         // 上传剩余分片
