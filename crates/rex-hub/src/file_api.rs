@@ -161,6 +161,7 @@ async fn connect(
                 username: req.username.unwrap_or_default(),
                 password: req.password,
                 private_key: req.private_key,
+                keepalive_interval: req.keepalive_interval,
             })
             .await;
             match conn {

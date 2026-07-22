@@ -81,6 +81,7 @@ struct ResourceConnInfo {
     private_key: Option<String>,
     use_agent: bool,
     agent_id: Option<String>,
+    keepalive_interval: Option<u32>,
 }
 
 /// GET /ws/terminal?token=jwt&resourceId=xxx
@@ -188,6 +189,7 @@ async fn load_resource_conn(
             private_key,
             use_agent,
             agent_id,
+            keepalive_interval: None,
         })
     })
     .await
@@ -205,6 +207,7 @@ async fn handle_direct_terminal(mut ws: WebSocket, conn: &ResourceConnInfo, sess
         username: conn.username.clone(),
         password: conn.password.clone(),
         private_key: conn.private_key.clone(),
+        keepalive_interval: conn.keepalive_interval,
     };
 
     let session = match SshSession::connect(config).await {

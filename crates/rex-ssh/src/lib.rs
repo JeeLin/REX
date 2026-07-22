@@ -19,6 +19,8 @@ pub struct SshConfig {
     pub username: String,
     pub password: Option<String>,
     pub private_key: Option<String>,
+    /// KeepAlive 间隔（秒），0 表示禁用
+    pub keepalive_interval: Option<u32>,
 }
 
 /// 终端事件 — 从 SSH 会话流向 WebSocket
@@ -44,7 +46,13 @@ impl SshSession {
         let addr = format!("{}:{}", config.host, config.port);
 
         // SSH 客户端配置
-        let ssh_config = Arc::new(client::Config::default());
+        let mut ssh_config = client::Config::default();
+        if let Some(interval) = config.keepalive_interval {
+            if interval > 0 {
+                ssh_config.keepalive_interval = Some(std::time::Duration::from_secs(interval as u64));
+            }
+        }
+        let ssh_config = Arc::new(ssh_config);
 
         // 建立连接
         let handler = SshHandler;

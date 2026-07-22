@@ -30,6 +30,8 @@ pub struct FileConnectRequest {
     pub username: Option<String>,
     pub password: Option<String>,
     pub private_key: Option<String>,
+    /// SSH KeepAlive 间隔（秒），0 表示禁用
+    pub keepalive_interval: Option<u32>,
     /// S3 专用
     pub bucket: Option<String>,
     pub region: Option<String>,
