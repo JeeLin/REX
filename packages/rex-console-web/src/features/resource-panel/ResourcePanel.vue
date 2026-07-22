@@ -5,6 +5,7 @@ import type { Environment } from '@/api/environments'
 import type { Resource } from '@/api/resources'
 import { resourcesApi } from '@/api/resources'
 import { PROTOCOL_ICONS, PROTOCOL_COLORS } from '@/features/resource/protocols'
+import WizardModal from '@/features/resource/WizardModal.vue'
 
 const store = useEnvironmentsStore()
 
@@ -12,6 +13,7 @@ const searchQuery = ref('')
 const collapsedEnvs = ref(new Set<string>())
 const envResources = ref<Map<string, Resource[]>>(new Map())
 const expandedEnvIds = ref(new Set<string>())
+const wizardEnvId = ref('')
 
 onMounted(async () => {
   await store.fetchEnvironments()
@@ -52,6 +54,24 @@ function getResources(envId: string): Resource[] {
   return envResources.value.get(envId) || []
 }
 
+async function refreshEnv(envId: string) {
+  try {
+    const resources = await resourcesApi.listByEnv(envId)
+    envResources.value.set(envId, resources)
+  } catch { /* ignore */ }
+}
+
+function openWizard(envId: string, e: MouseEvent) {
+  e.stopPropagation()
+  wizardEnvId.value = envId
+}
+
+function onWizardCreated() {
+  const envId = wizardEnvId.value
+  wizardEnvId.value = ''
+  if (envId) refreshEnv(envId)
+}
+
 defineExpose({ envResources })
 </script>
 
@@ -86,6 +106,7 @@ defineExpose({ envResources })
           <span class="rp-chevron" :class="{ 'rp-collapsed': collapsedEnvs.has(env.id) }">▸</span>
           <span class="rp-group-name mono">{{ env.name }}</span>
           <span class="rp-group-count muted">{{ env.resource_count }}</span>
+          <button class="rp-add-btn" title="Add resource" @click="openWizard(env.id, $event)">+</button>
         </div>
 
         <!-- Resources under this environment -->
@@ -107,6 +128,14 @@ defineExpose({ envResources })
         </div>
       </template>
     </div>
+
+    <WizardModal
+      v-if="wizardEnvId"
+      :visible="true"
+      :environment-id="wizardEnvId"
+      @close="wizardEnvId = ''"
+      @created="onWizardCreated"
+    />
   </div>
 </template>
 
@@ -197,6 +226,23 @@ defineExpose({ envResources })
 .rp-group-count {
   margin-left: auto;
   font-size: 10px;
+}
+.rp-add-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+.rp-group:hover .rp-add-btn {
+  opacity: 1;
+}
+.rp-add-btn:hover {
+  color: var(--accent);
 }
 .rp-item {
   display: flex;
