@@ -3,6 +3,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
+import { environmentsApi } from '@/api/environments'
+import type { ExportData } from '@/api/environments'
 import Card from '@/components/ui/Card.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
@@ -96,13 +98,64 @@ function agentStatus(status: string | null): StatusDotStatus {
 function envIcon(mode: string): string {
   return mode === 'agent' ? '⬡' : '◉'
 }
+
+// Export / Import
+const importFileInput = ref<HTMLInputElement | null>(null)
+const importLoading = ref(false)
+
+async function exportConfig() {
+  try {
+    const data = await environmentsApi.export()
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `rex-config-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    console.error('Export failed:', e)
+  }
+}
+
+function triggerImport() {
+  importFileInput.value?.click()
+}
+
+async function handleImport(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  importLoading.value = true
+  try {
+    const text = await file.text()
+    const data: ExportData = JSON.parse(text)
+    if (!data.environments || !Array.isArray(data.environments)) {
+      throw new Error('Invalid config file')
+    }
+    const result = await environmentsApi.import(data)
+    await store.fetchEnvironments()
+    alert(`Imported: ${result.imported}, Skipped: ${result.skipped}`)
+  } catch (e) {
+    console.error('Import failed:', e)
+    alert(`Import failed: ${e instanceof Error ? e.message : String(e)}`)
+  } finally {
+    importLoading.value = false
+    input.value = ''
+  }
+}
 </script>
 
 <template>
   <div class="environments">
     <header class="page-header">
       <h1 class="page-title">{{ t('environments.title') }}</h1>
-      <Button variant="primary" size="sm" @click="openCreate">+ {{ t('environments.newEnvironment') }}</Button>
+      <div class="header-actions">
+        <Button variant="secondary" size="sm" @click="exportConfig">Export</Button>
+        <Button variant="secondary" size="sm" :loading="importLoading" @click="triggerImport">Import</Button>
+        <input ref="importFileInput" type="file" accept=".json" style="display:none" @change="handleImport" />
+        <Button variant="primary" size="sm" @click="openCreate">+ {{ t('environments.newEnvironment') }}</Button>
+      </div>
     </header>
 
     <EmptyState
@@ -202,6 +255,11 @@ function envIcon(mode: string): string {
   align-items: center;
   justify-content: space-between;
   margin-bottom: var(--space-6);
+}
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 .page-title {
   font-size: var(--text-xl);

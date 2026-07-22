@@ -233,6 +233,30 @@ impl Database {
         }
     }
 
+    pub fn get_environment_by_name(&self, name: &str) -> Result<Option<Environment>> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare("SELECT id, name, description, connection_mode, created_at, updated_at FROM environments WHERE name = ?1")
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let mut rows = stmt
+            .query_map(rusqlite::params![name], |row| {
+                Ok(Environment {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    connection_mode: row.get(3)?,
+                    created_at: row.get(4)?,
+                    updated_at: row.get(5)?,
+                })
+            })
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        match rows.next() {
+            Some(Ok(env)) => Ok(Some(env)),
+            Some(Err(e)) => Err(RExError::Message(e.to_string())),
+            None => Ok(None),
+        }
+    }
+
     pub fn create_environment(&self, env: &NewEnvironment) -> Result<Environment> {
         let conn = self.conn()?;
         let id = uuid::Uuid::new_v4().to_string();
