@@ -181,6 +181,14 @@ impl FileConnector for SftpConnector {
             .with_context(|| format!("failed to read {path}"))
     }
 
+    async fn download_range(&mut self, path: &str, offset: u64, limit: u64) -> Result<Vec<u8>> {
+        let all_data = self.session.read(path).await
+            .with_context(|| format!("failed to read {path}"))?;
+        let start = (offset as usize).min(all_data.len());
+        let end = ((offset + limit) as usize).min(all_data.len());
+        Ok(all_data[start..end].to_vec())
+    }
+
     async fn delete(&mut self, path: &str) -> Result<()> {
         if self.session.remove_file(path).await.is_err() {
             self.session

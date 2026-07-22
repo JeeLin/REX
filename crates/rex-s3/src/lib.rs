@@ -281,6 +281,27 @@ impl FileConnector for S3Connector {
         Ok(bytes.into_bytes().to_vec())
     }
 
+    async fn download_range(&mut self, path: &str, offset: u64, limit: u64) -> Result<Vec<u8>> {
+        let key = path.trim_start_matches('/');
+        let range = format!("bytes={}-{}", offset, offset + limit - 1);
+        let result = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .range(range)
+            .send()
+            .await
+            .with_context(|| format!("failed to download range of {key}"))?;
+
+        let bytes = result
+            .body
+            .collect()
+            .await
+            .with_context(|| format!("failed to read body of {key}"))?;
+        Ok(bytes.into_bytes().to_vec())
+    }
+
     async fn delete(&mut self, path: &str) -> Result<()> {
         let key = path.trim_start_matches('/');
         self.client

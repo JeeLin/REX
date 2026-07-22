@@ -97,9 +97,13 @@ export function uploadFileWithProgress(
   })
 }
 
-export async function downloadFile(sessionId: string, path: string): Promise<Blob> {
-  const res = await fetch(`${API_BASE}/download?session_id=${sessionId}&path=${encodeURIComponent(path)}`, { headers: authHeaders() })
-  if (!res.ok) throw new Error('Download failed')
+export async function downloadFile(sessionId: string, path: string, offset?: number): Promise<Blob> {
+  const headers: Record<string, string> = authHeaders()
+  if (offset && offset > 0) {
+    headers['Range'] = `bytes=${offset}-`
+  }
+  const res = await fetch(`${API_BASE}/download?session_id=${sessionId}&path=${encodeURIComponent(path)}`, { headers })
+  if (!res.ok && res.status !== 206) throw new Error('Download failed')
   return await res.blob()
 }
 

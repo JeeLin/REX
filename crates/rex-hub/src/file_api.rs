@@ -296,29 +296,64 @@ async fn upload(
 async fn download(
     State(state): State<AppState>,
     Query(params): Query<PathQuery>,
+    headers: axum::http::HeaderMap,
 ) -> axum::response::Response {
     let mut pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
     };
-    match conn.download(&params.path).await {
-        Ok(data) => {
-            let filename = params.path.rsplit('/').next().unwrap_or("file");
-            (
-                StatusCode::OK,
-                [
-                    ("Content-Type", "application/octet-stream"),
-                    (
-                        "Content-Disposition",
-                        &format!("attachment; filename=\"{filename}\""),
-                    ),
-                ],
-                data,
-            )
-                .into_response()
+
+    // Check for Range header
+    let range = headers.get("range").and_then(|v| v.to_str().ok());
+
+    if let Some(range_str) = range {
+        // Parse Range: bytes=offset-limit
+        if let Some(range_val) = range_str.strip_prefix("bytes=") {
+            let parts: Vec<&str> = range_val.split('-').collect();
+            if parts.len() == 2 {
+                if let Ok(offset) = parts[0].parse::<u64>() {
+                    let limit = parts[1].parse::<u64>().unwrap_or(u64::MAX - offset);
+                    match conn.download_range(&params.path, offset, limit).await {
+                        Ok(data) => {
+                            let filename = params.path.rsplit('/').next().unwrap_or("file");
+                            (
+                                StatusCode::OK,
+                                [
+                                    ("Content-Type", "application/octet-stream"),
+                                    ("Content-Disposition", &format!("attachment; filename=\"{filename}\"")),
+                                ],
+                                data,
+                            )
+                                .into_response()
+                        }
+                        Err(e) => error_response("DOWNLOAD_FAILED", &e.to_string()).into_response(),
+                    }
+                } else {
+                    error_response("INVALID_RANGE", "invalid range header").into_response()
+                }
+            } else {
+                error_response("INVALID_RANGE", "invalid range header").into_response()
+            }
+        } else {
+            error_response("INVALID_RANGE", "invalid range header").into_response()
         }
-        Err(e) => error_response("DOWNLOAD_FAILED", &e.to_string()).into_response(),
+    } else {
+        match conn.download(&params.path).await {
+            Ok(data) => {
+                let filename = params.path.rsplit('/').next().unwrap_or("file");
+                (
+                    StatusCode::OK,
+                    [
+                        ("Content-Type", "application/octet-stream"),
+                        ("Content-Disposition", &format!("attachment; filename=\"{filename}\"")),
+                    ],
+                    data,
+                )
+                    .into_response()
+            }
+            Err(e) => error_response("DOWNLOAD_FAILED", &e.to_string()).into_response(),
+        }
     }
 }
 
