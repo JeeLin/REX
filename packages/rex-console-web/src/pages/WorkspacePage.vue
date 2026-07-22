@@ -306,7 +306,7 @@ const propsResource = computed(() => {
     password: '',
     privateKey: '',
     passphrase: '',
-    encoding: 'UTF-8',
+    encoding: tab.encoding || 'UTF-8',
     scrollback: 10000,
     cursorStyle: tab.cursorStyle || 'block',
     cursorBlink: tab.cursorBlink ?? true,

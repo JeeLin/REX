@@ -1,6 +1,20 @@
 <script setup lang="ts">
-defineProps<{ show: boolean }>()
+import { watch } from 'vue'
+
+const props = defineProps<{ show: boolean }>()
 const emit = defineEmits<{ close: [] }>()
+
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') emit('close')
+}
+
+watch(() => props.show, (visible) => {
+  if (visible) {
+    document.addEventListener('keydown', handleKeydown)
+  } else {
+    document.removeEventListener('keydown', handleKeydown)
+  }
+})
 
 const groups = [
   {
@@ -70,7 +84,7 @@ const groups = [
       <div v-if="show" class="shortcut-panel">
         <header class="sp-header">
           <h3 class="sp-title mono">Keyboard Shortcuts</h3>
-          <button class="sp-close" @click="emit('close')">×</button>
+          <button class="sp-close" @click="emit('close')" aria-label="Close">×</button>
         </header>
         <div class="sp-body">
           <div v-for="group in groups" :key="group.title" class="sp-group">

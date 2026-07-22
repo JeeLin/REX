@@ -28,6 +28,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'terminal-resize': [cols: number, rows: number]
   'toggle-sftp': []
+  'encoding-change': [encoding: string]
 }>()
 
 const containerRef = ref<HTMLDivElement>()
@@ -50,6 +51,7 @@ function handleSetEncoding(encoding: string) {
   if (props.resourceId) {
     localStorage.setItem(`rex-encoding-${props.resourceId}`, encoding)
   }
+  emit('encoding-change', encoding)
 }
 // Load saved encoding on mount
 if (props.resourceId) {

@@ -49,7 +49,8 @@ impl SshSession {
         let mut ssh_config = client::Config::default();
         if let Some(interval) = config.keepalive_interval {
             if interval > 0 {
-                ssh_config.keepalive_interval = Some(std::time::Duration::from_secs(interval as u64));
+                ssh_config.keepalive_interval =
+                    Some(std::time::Duration::from_secs(interval as u64));
             }
         }
         let ssh_config = Arc::new(ssh_config);

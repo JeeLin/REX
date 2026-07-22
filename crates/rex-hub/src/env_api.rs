@@ -292,12 +292,14 @@ async fn import_environments(
                 color: imp_res.color.clone(),
                 sort_order: None,
             };
-            let _ = tokio::task::spawn_blocking(move || db.create_resource(&env_id, &new_res))
-                .await;
+            let _ =
+                tokio::task::spawn_blocking(move || db.create_resource(&env_id, &new_res)).await;
         }
 
         imported += 1;
     }
 
-    Ok(Json(serde_json::json!({ "imported": imported, "skipped": skipped })))
+    Ok(Json(
+        serde_json::json!({ "imported": imported, "skipped": skipped }),
+    ))
 }

@@ -135,9 +135,10 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
         )
         .nest(
             "/api/environments",
-            env_api::env_routes().merge(agent_api::env_agent_routes()),
+            resource_api::resource_routes()
+                .merge(agent_api::env_agent_routes())
+                .merge(env_api::env_routes()),
         )
-        .nest("/api/environments", resource_api::resource_routes())
         .nest("/api/agents", agent_api::agent_routes())
         .nest("/api/dashboard", dashboard_api::dashboard_routes())
         .nest("/api/audit-log", audit_api::audit_routes())
