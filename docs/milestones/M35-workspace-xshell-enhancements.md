@@ -2,7 +2,7 @@
 
 ## Context
 
-M34 完成了文件编辑器、连接导入导出、SSH 保活。当前工作区和 SSH 终端缺少 PRODUCT.md 3.5/3.6 描述的几项 Xshell 级交互功能：快捷键面板（F1）、终端编码子菜单、状态栏增强、Quick Connect 协议补全。本里程碑补全这些细节，提升整体操作体验。
+M34 完成了文件编辑器、连接导入导出、SSH 保活。当前工作区和 SSH 终端缺少 PRODUCT.md 3.5/3.6 描述的几项 Xshell 级交互功能：快捷键面板（F1）、终端编码子菜单、状态栏增强。本里程碑补全这些细节，同时清理死代码（未使用的 QuickConnect.vue），提升整体操作体验。
 
 版本类型：minor（新功能），版本号 0.33.0 → 0.34.0。
 
@@ -12,7 +12,7 @@ M34 完成了文件编辑器、连接导入导出、SSH 保活。当前工作区
 - 快捷键面板（F1 触发，分组展示所有快捷键）
 - 终端编码子菜单（右键菜单 → 编码 ▸ UTF-8 / GBK / ISO-8859-1）
 - 状态栏增强（编码显示+切换、广播状态指示）
-- Quick Connect 协议补全（协议自动补全默认端口、密码字段）
+- 删除死代码（未使用的 QuickConnect.vue 及相关引用）
 
 **本阶段不做：**
 - 终端内查找（Ctrl+F 非模态查找栏，需要 xterm.js addon，复杂度高，留待后续）
@@ -23,10 +23,10 @@ M34 完成了文件编辑器、连接导入导出、SSH 保活。当前工作区
 
 | # | 内容 | 状态 |
 |---|------|------|
-| 1 | 快捷键面板（F1） | ⬜ |
+| 1 | 快捷键面板（F1） | ✅ |
 | 2 | 终端编码子菜单（右键菜单 → 编码 ▸） | ⬜ |
 | 3 | 状态栏增强（编码 + 广播指示） | ⬜ |
-| 4 | Quick Connect 协议补全（默认端口 + 密码字段） | ⬜ |
+| 4 | 删除死代码 QuickConnect相关代码 | ⬜ |
 
 ## 子任务详细设计
 
@@ -178,38 +178,28 @@ xterm.js 本身使用 UTF-8。GBK/ISO-8859-1 切换在前端处理：
 
 **提交信息**: `feat(workspace): enhance status bar with encoding and broadcast indicators`
 
-### 4 Quick Connect 协议补全
+### 4 删除死代码 QuickConnect.vue
 
 **功能目标**
 
-Quick Connect 栏根据选择的协议自动补全默认端口、显示/隐藏密码字段。
+`QuickConnect.vue` 从未被任何页面导入或渲染，是死代码。删除该文件及其所有引用，保持代码库整洁。
 
 **文件结构**
 
+删除：
+- `packages/rex-console-web/src/features/workspace/QuickConnect.vue` — 未使用的组件
+
 修改：
-- `packages/rex-console-web/src/features/workspace/QuickConnect.vue` — 协议感知补全
-
-**交互设计**
-
-- 选择协议后自动填充默认端口：
-  - SSH/SFTP → 22
-  - MySQL → 3306
-  - PostgreSQL → 5432
-  - Redis → 6379
-  - SQLite → （隐藏端口字段）
-  - S3 → （显示 Endpoint URL + Access Key + Secret Key + Bucket 字段）
-- 用户手动改过端口后不再自动覆盖
-- 协议切换时重置端口（除非用户已手动编辑）
+- `packages/rex-console-web/src/features/workspace/ShortcutPanel.vue` — 移除 Ctrl+N 对 Quick Connect 的引用（已完成）
+- `packages/rex-console-web/src/pages/WorkspacePage.vue` — 移除占位文字中对 Quick Connect 的引用（已完成）
 
 **测试标准**
 
-- 选择 SSH → 端口自动填 22
-- 切换到 MySQL → 端口变为 3306
-- 手动改端口后切换协议 → 保持手动值
-- S3 显示额外字段
+- `QuickConnect.vue` 文件已删除
+- 代码中无 `QuickConnect` / `quick-connect` 引用
 - type-check + build 通过
 
-**提交信息**: `feat(workspace): add protocol-aware Quick Connect with auto port`
+**提交信息**: `chore(web): remove unused QuickConnect component and references`
 
 ## 设计核对点
 
@@ -223,7 +213,7 @@ Quick Connect 栏根据选择的协议自动补全默认端口、显示/隐藏�
 ## Flow Status
 
 - [x] 步骤1：编写里程碑文档
-- [ ] 步骤2：设计核对
+- [x] 步骤2：设计核对
 - [ ] 步骤3：开发
 - [ ] 步骤4：代码精简
 - [ ] 步骤5：代码审查

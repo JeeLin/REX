@@ -393,7 +393,7 @@ function statusColor(status: Tab['status']): StatusDotStatus {
 // 快捷键
 useKeyboardShortcuts([
   { key: 't', ctrl: true, handler: () => {
-    // Ctrl+T 打开 Quick Connect 或新 SSH tab
+    // Ctrl+T 新建 SSH tab
     const id = `tab-${Date.now()}`
     tabs.value.push({ id, label: 'New Tab', protocol: 'ssh', status: 'connecting' })
     activeTab.value = id
@@ -585,7 +585,7 @@ useKeyboardShortcuts([
               <!-- Empty state -->
               <div v-else class="ws-component-placeholder">
                 <div class="ws-placeholder-text muted">
-                  No connection open. Click a resource in the sidebar or use Quick Connect.
+                  No connection open. Click a resource in the sidebar to get started.
                 </div>
               </div>
             </div>

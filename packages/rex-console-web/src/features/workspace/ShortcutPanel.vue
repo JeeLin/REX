@@ -7,7 +7,7 @@ const groups = [
     title: 'Workspace',
     shortcuts: [
       { keys: 'Ctrl+K', desc: 'Global search / Command palette' },
-      { keys: 'Ctrl+N', desc: 'New connection (Quick Connect)' },
+      { keys: 'Ctrl+N', desc: 'New connection' },
       { keys: 'Ctrl+T', desc: 'New tab (same protocol)' },
       { keys: 'Ctrl+W', desc: 'Close current tab' },
       { keys: 'Ctrl+Tab', desc: 'Switch next tab' },
