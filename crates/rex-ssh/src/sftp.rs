@@ -212,6 +212,31 @@ impl FileConnector for SftpConnector {
         Ok(())
     }
 
+    async fn read_for_edit(&mut self, path: &str) -> Result<Vec<u8>> {
+        let data = self
+            .session
+            .read(path)
+            .await
+            .with_context(|| format!("failed to read {path}"))?;
+        if data.len() > 5 * 1024 * 1024 {
+            anyhow::bail!("File too large for editing (>5MB)");
+        }
+        Ok(data)
+    }
+
+    async fn save_from_edit(&mut self, path: &str, data: Vec<u8>) -> Result<()> {
+        let mut file = self
+            .session
+            .create(path)
+            .await
+            .with_context(|| format!("failed to create {path} for save"))?;
+        file.write_all(&data)
+            .await
+            .context("failed to write data")?;
+        file.flush().await.context("failed to flush")?;
+        Ok(())
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

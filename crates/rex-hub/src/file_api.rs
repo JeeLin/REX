@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use crate::AppState;
 use axum::extract::{Multipart, Query, State};
+use base64::Engine;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
@@ -64,6 +65,8 @@ pub fn file_routes() -> axum::Router<AppState> {
         )
         .route("/acl", axum::routing::get(get_acl))
         .route("/acl", axum::routing::put(put_acl))
+        .route("/read-for-edit", axum::routing::get(read_for_edit))
+        .route("/save-from-edit", axum::routing::post(save_from_edit))
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +112,13 @@ struct RenameBody {
 struct MkdirBody {
     session_id: String,
     path: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct SaveFromEditBody {
+    session_id: String,
+    path: String,
+    content: String, // base64 encoded
 }
 
 #[derive(Debug, Serialize)]
@@ -308,6 +318,52 @@ async fn download(
                 .into_response()
         }
         Err(e) => error_response("DOWNLOAD_FAILED", &e.to_string()).into_response(),
+    }
+}
+
+async fn read_for_edit(
+    State(state): State<AppState>,
+    Query(params): Query<PathQuery>,
+) -> axum::response::Response {
+    let mut pool = state.file_pool.lock().await;
+    let conn = match pool.connectors.get_mut(&params.session_id) {
+        Some(c) => c,
+        None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
+    };
+    match conn.read_for_edit(&params.path).await {
+        Ok(data) => {
+            let filename = params.path.rsplit('/').next().unwrap_or("file").to_string();
+            let content = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data);
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "ok": true,
+                    "content": content,
+                    "filename": filename,
+                    "size": data.len(),
+                })),
+            )
+                .into_response()
+        }
+        Err(e) => error_response("READ_FAILED", &e.to_string()).into_response(),
+    }
+}
+
+async fn save_from_edit(
+    State(state): State<AppState>,
+    Json(body): Json<SaveFromEditBody>,
+) -> axum::response::Response {
+    let mut pool = state.file_pool.lock().await;
+    let conn = match pool.connectors.get_mut(&body.session_id) {
+        Some(c) => c,
+        None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
+    };
+    match base64::engine::general_purpose::STANDARD.decode(&body.content) {
+        Ok(data) => match conn.save_from_edit(&body.path, data).await {
+            Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
+            Err(e) => error_response("SAVE_FAILED", &e.to_string()).into_response(),
+        },
+        Err(e) => error_response("INVALID_CONTENT", &format!("invalid base64: {e}")).into_response(),
     }
 }
 

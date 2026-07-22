@@ -79,6 +79,12 @@ pub trait FileConnector: Send + Sync {
     /// 创建目录
     async fn mkdir(&mut self, path: &str) -> Result<()>;
 
+    /// 读取文件内容用于编辑（限小文件，最大 5MB）
+    async fn read_for_edit(&mut self, path: &str) -> Result<Vec<u8>>;
+
+    /// 从编辑器保存文件内容（覆盖写入）
+    async fn save_from_edit(&mut self, path: &str, data: Vec<u8>) -> Result<()>;
+
     /// 关闭连接
     async fn close(&mut self) -> Result<()>;
 

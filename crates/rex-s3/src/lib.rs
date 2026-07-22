@@ -340,6 +340,42 @@ impl FileConnector for S3Connector {
         Ok(())
     }
 
+    async fn read_for_edit(&mut self, path: &str) -> Result<Vec<u8>> {
+        let key = path.trim_start_matches('/');
+        let result = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .send()
+            .await
+            .with_context(|| format!("failed to download {key}"))?;
+
+        let bytes = result
+            .body
+            .collect()
+            .await
+            .with_context(|| format!("failed to read body of {key}"))?;
+        let data = bytes.into_bytes().to_vec();
+        if data.len() > 5 * 1024 * 1024 {
+            anyhow::bail!("File too large for editing (>5MB)");
+        }
+        Ok(data)
+    }
+
+    async fn save_from_edit(&mut self, path: &str, data: Vec<u8>) -> Result<()> {
+        let key = path.trim_start_matches('/');
+        self.client
+            .put_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .body(data.into())
+            .send()
+            .await
+            .with_context(|| format!("failed to save {key}"))?;
+        Ok(())
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
