@@ -215,10 +215,9 @@ async function retryUpload(key: string) {
   activeUploads.value = new Map(activeUploads.value)
   try {
     if (state.uploadId) {
-      // S3 multipart resume
-      const startPart = Math.floor(state.uploadedBytes / PART_SIZE) + 1
+      // S3 multipart resume - backend uses list_parts to determine actual start
       await filesApi.resumeMultipartUpload(
-        state.sessionId, state.remotePath, state.uploadId, state.file, startPart
+        state.sessionId, state.remotePath, state.uploadId, state.file
       )
     } else {
       // SFTP resume: upload from offset

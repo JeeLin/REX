@@ -155,13 +155,11 @@ export async function resumeMultipartUpload(
   remotePath: string,
   uploadId: string,
   file: File,
-  startPart: number = 1,
 ): Promise<void> {
   const form = new FormData()
   form.append('session_id', sessionId)
   form.append('path', remotePath)
   form.append('upload_id', uploadId)
-  form.append('start_part', startPart.toString())
   form.append('file', file)
   const res = await fetch(`${API_BASE}/s3/resume-upload`, { method: 'POST', headers: authHeaders(), body: form })
   if (!res.ok) throw new Error('Failed to resume multipart upload')

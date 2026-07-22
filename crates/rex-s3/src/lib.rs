@@ -398,13 +398,12 @@ impl S3Connector {
         key: &str,
         upload_id: &str,
         data: Vec<u8>,
-        start_part: i32,
         progress: Option<&ProgressCallback>,
     ) -> Result<()> {
         let total = data.len() as u64;
         let part_size = 5 * 1024 * 1024; // 5MB
 
-        // 先获取已上传的 parts
+        // 先获取已上传的 parts，使用 list_parts 结果作为权威来源
         let list_result = self
             .client
             .list_parts()
@@ -415,9 +414,13 @@ impl S3Connector {
             .await
             .context("failed to list parts")?;
 
-        let mut parts: Vec<aws_sdk_s3::types::CompletedPart> = list_result
-            .parts
-            .unwrap_or_default()
+        let completed_parts = list_result.parts.unwrap_or_default();
+        let completed_part_numbers: std::collections::HashSet<i32> = completed_parts
+            .iter()
+            .filter_map(|p| p.part_number())
+            .collect();
+
+        let mut parts: Vec<aws_sdk_s3::types::CompletedPart> = completed_parts
             .iter()
             .filter_map(|p| {
                 Some(
@@ -431,10 +434,10 @@ impl S3Connector {
 
         let mut offset = 0u64;
 
-        // 上传剩余分片
+        // 上传剩余分片（跳过已完成的）
         for (i, chunk) in data.chunks(part_size).enumerate() {
             let part_number = (i as i32) + 1;
-            if part_number < start_part {
+            if completed_part_numbers.contains(&part_number) {
                 // 跳过已完成的分片
                 offset += chunk.len() as u64;
                 if let Some(ref cb) = progress {

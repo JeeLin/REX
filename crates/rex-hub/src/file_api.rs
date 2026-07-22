@@ -456,7 +456,6 @@ async fn resume_multipart_upload(
     let mut session_id = String::new();
     let mut remote_path = String::new();
     let mut upload_id = String::new();
-    let mut start_part: i32 = 1;
     let mut file_data: Option<Vec<u8>> = None;
 
     while let Some(field) = multipart.next_field().await.unwrap_or(None) {
@@ -473,11 +472,6 @@ async fn resume_multipart_upload(
             "upload_id" => {
                 upload_id =
                     String::from_utf8_lossy(&field.bytes().await.unwrap_or_default()).to_string();
-            }
-            "start_part" => {
-                let s =
-                    String::from_utf8_lossy(&field.bytes().await.unwrap_or_default()).to_string();
-                start_part = s.parse().unwrap_or(1);
             }
             "file" => {
                 file_data = Some(field.bytes().await.unwrap_or_default().to_vec());
@@ -505,7 +499,7 @@ async fn resume_multipart_upload(
     };
 
     match s3_conn
-        .resume_multipart_upload(&remote_path, &upload_id, data, start_part, None)
+        .resume_multipart_upload(&remote_path, &upload_id, data, None)
         .await
     {
         Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),

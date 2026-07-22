@@ -138,6 +138,9 @@ impl FileConnector for SftpConnector {
     ) -> Result<UploadResult> {
         let total = data.len() as u64;
 
+        // Clamp offset to data length to prevent panic
+        let offset = offset.min(total);
+
         // If offset > 0, open existing file for append; otherwise create new
         let mut file = if offset > 0 {
             self.session
