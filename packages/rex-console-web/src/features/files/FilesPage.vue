@@ -156,22 +156,60 @@ async function downloadSelected(side: Side) {
   if (!sessionId.value || panels[side].selected.size !== 1) return
   const name = Array.from(panels[side].selected)[0]; const entry = panels[side].entries.find(e => e.name === name)
   if (!entry || entry.is_dir) return
-  const blob = await filesApi.downloadFile(sessionId.value, entry.path)
-  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = entry.name; a.click(); URL.revokeObjectURL(url)
+  const key = `${sessionId.value}:dl:${entry.path}`
+  const item: TransferItem = {
+    sessionId: sessionId.value, remotePath: entry.path, fileName: entry.name,
+    type: 'download', status: 'transferring', transferredBytes: 0, totalBytes: entry.size,
+    side,
+  }
+  transferQueue.value.set(key, item)
+  transferQueue.value = new Map(transferQueue.value)
+  try {
+    const blob = await filesApi.downloadFile(sessionId.value, entry.path)
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = entry.name; a.click(); URL.revokeObjectURL(url)
+    item.status = 'completed'; item.transferredBytes = item.totalBytes || blob.size
+  } catch (e) {
+    item.status = 'failed'
+    item.errorMessage = e instanceof Error ? e.message : String(e)
+    console.error('Download failed:', e)
+  }
+  transferQueue.value = new Map(transferQueue.value)
 }
-// Upload state for resume
-interface UploadState {
+
+/* ---- Transfer queue ---- */
+interface TransferItem {
   sessionId: string
   remotePath: string
-  uploadId?: string
-  completedParts: Array<{ part_number: number; e_tag: string }>
-  status: 'uploading' | 'failed' | 'completed'
+  fileName: string
+  type: 'upload' | 'download'
+  status: 'pending' | 'transferring' | 'resuming' | 'failed' | 'completed'
+  transferredBytes: number
+  totalBytes: number
+  side?: Side
+  // Upload-specific
   file?: File
-  uploadedBytes: number
+  uploadId?: string
+  errorMessage?: string
 }
-const activeUploads = ref<Map<string, UploadState>>(new Map())
-
+const transferQueue = ref<Map<string, TransferItem>>(new Map())
+const showTransferQueue = ref(false)
 const PART_SIZE = 5 * 1024 * 1024 // 5MB
+
+function fmtPercent(transferred: number, total: number) {
+  if (!total) return '0%'
+  return `${Math.round((transferred / total) * 100)}%`
+}
+
+const completedCount = computed(() => {
+  let n = 0
+  transferQueue.value.forEach(item => { if (item.status === 'completed') n++ })
+  return n
+})
+const activeCount = computed(() => {
+  let n = 0
+  transferQueue.value.forEach(item => { if (item.status === 'transferring' || item.status === 'resuming' || item.status === 'pending') n++ })
+  return n
+})
 
 async function uploadTo(side: Side) {
   if (!sessionId.value) return
@@ -180,58 +218,69 @@ async function uploadTo(side: Side) {
     if (!sessionId.value) return
     for (const file of Array.from(input.files || [])) {
       const remotePath = panels[side].path + file.name
-      const uploadKey = `${sessionId.value}:${remotePath}`
-      const state: UploadState = {
-        sessionId: sessionId.value, remotePath, status: 'uploading', file,
-        completedParts: [], uploadedBytes: 0
+      const key = `${sessionId.value}:ul:${remotePath}`
+      const item: TransferItem = {
+        sessionId: sessionId.value, remotePath, fileName: file.name,
+        type: 'upload', status: 'transferring', transferredBytes: 0, totalBytes: file.size,
+        file, side,
       }
-      activeUploads.value.set(uploadKey, state)
+      transferQueue.value.set(key, item)
+      transferQueue.value = new Map(transferQueue.value)
       try {
         if (file.size > PART_SIZE) {
-          // S3 multipart upload with progress tracking
           const result = await filesApi.uploadFileWithProgress(sessionId.value, remotePath, file, (_pct, loaded) => {
-            state.uploadedBytes = loaded
-            activeUploads.value = new Map(activeUploads.value)
+            item.transferredBytes = loaded
+            transferQueue.value = new Map(transferQueue.value)
           })
-          state.uploadId = result.upload_id
-          state.status = 'completed'
+          item.uploadId = result.upload_id
+          item.status = 'completed'
         } else {
           await filesApi.uploadFile(sessionId.value, remotePath, file)
-          state.status = 'completed'
+          item.status = 'completed'
         }
       } catch (e) {
-        state.status = 'failed'
+        item.status = 'failed'
+        item.errorMessage = e instanceof Error ? e.message : String(e)
         console.error('Upload failed:', e)
       }
     }
-    activeUploads.value = new Map(activeUploads.value)
+    transferQueue.value = new Map(transferQueue.value)
     loadPanel(side)
   }; input.click()
 }
 
-async function retryUpload(key: string) {
-  const state = activeUploads.value.get(key)
-  if (!state || !state.file) return
-  state.status = 'uploading'
-  activeUploads.value = new Map(activeUploads.value)
+async function retryTransfer(key: string) {
+  const item = transferQueue.value.get(key)
+  if (!item) return
+  item.status = item.uploadId ? 'resuming' : 'transferring'
+  item.errorMessage = undefined
+  transferQueue.value = new Map(transferQueue.value)
   try {
-    if (state.uploadId) {
-      // S3 multipart resume - backend uses list_parts to determine actual start
-      await filesApi.resumeMultipartUpload(
-        state.sessionId, state.remotePath, state.uploadId, state.file
-      )
+    if (item.type === 'upload') {
+      if (item.uploadId && item.file) {
+        await filesApi.resumeMultipartUpload(item.sessionId, item.remotePath, item.uploadId, item.file)
+      } else if (item.file) {
+        await filesApi.uploadFile(item.sessionId, item.remotePath, item.file, item.transferredBytes)
+      }
+      item.status = 'completed'
     } else {
-      // SFTP resume: upload from offset
-      await filesApi.uploadFile(
-        state.sessionId, state.remotePath, state.file, state.uploadedBytes
-      )
+      // Download retry: use Range header for resume
+      const blob = await filesApi.downloadFile(item.sessionId, item.remotePath, item.transferredBytes > 0 ? item.transferredBytes : undefined)
+      const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = item.fileName; a.click(); URL.revokeObjectURL(url)
+      item.status = 'completed'; item.transferredBytes = item.totalBytes || blob.size
     }
-    state.status = 'completed'
   } catch (e) {
-    state.status = 'failed'
-    console.error('Resume upload failed:', e)
+    item.status = 'failed'
+    item.errorMessage = e instanceof Error ? e.message : String(e)
+    console.error('Transfer retry failed:', e)
   }
-  activeUploads.value = new Map(activeUploads.value)
+  transferQueue.value = new Map(transferQueue.value)
+}
+
+function dismissCompleted() {
+  const q = new Map(transferQueue.value)
+  q.forEach((item, key) => { if (item.status === 'completed') q.delete(key) })
+  transferQueue.value = q
 }
 
 // Context menu
@@ -646,6 +695,61 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
       @permissions="mfbPermissions"
       @copy-path="mfbCopyPath"
     />
+
+    <!-- Transfer Queue Toggle -->
+    <button v-if="transferQueue.size > 0" class="tq-toggle" @click="showTransferQueue = !showTransferQueue">
+      📥 {{ transferQueue.size }} <span v-if="activeCount">· {{ activeCount }} active</span>
+      <span class="tq-badge tq-badge--done" v-if="completedCount">{{ completedCount }} ✓</span>
+    </button>
+
+    <!-- Transfer Queue Panel -->
+    <Teleport to="body">
+      <Transition name="tq-slide">
+        <div v-if="showTransferQueue" class="tq-panel">
+          <div class="tq-header">
+            <span>Transfers ({{ transferQueue.size }})</span>
+            <div class="tq-header-actions">
+              <button class="tq-btn tq-btn--sm" @click="dismissCompleted" v-if="completedCount">Clear done</button>
+              <button class="tq-btn tq-btn--sm" @click="showTransferQueue = false">✕</button>
+            </div>
+          </div>
+          <div class="tq-list">
+            <div v-for="[key, item] in transferQueue" :key="key" class="tq-item" :class="`tq-item--${item.status}`">
+              <div class="tq-item-info">
+                <span class="tq-item-type">{{ item.type === 'upload' ? '⬆' : '⬇' }}</span>
+                <div class="tq-item-details">
+                  <span class="tq-item-name">{{ item.fileName }}</span>
+                  <span class="tq-item-path">{{ item.remotePath }}</span>
+                </div>
+              </div>
+              <div class="tq-item-status">
+                <!-- Progress bar for active transfers -->
+                <template v-if="item.status === 'transferring' || item.status === 'resuming'">
+                  <div class="tq-progress">
+                    <div class="tq-progress-bar" :style="{ width: fmtPercent(item.transferredBytes, item.totalBytes) }"></div>
+                  </div>
+                  <span class="tq-item-pct">{{ fmtPercent(item.transferredBytes, item.totalBytes) }}</span>
+                </template>
+                <!-- Failed: show error + retry -->
+                <template v-else-if="item.status === 'failed'">
+                  <span class="tq-item-error" :title="item.errorMessage">{{ item.errorMessage || 'Failed' }}</span>
+                  <button class="tq-btn tq-btn--retry" @click="retryTransfer(key)">↻ Retry</button>
+                </template>
+                <!-- Completed -->
+                <template v-else-if="item.status === 'completed'">
+                  <span class="tq-item-done">✓</span>
+                </template>
+                <!-- Pending -->
+                <template v-else-if="item.status === 'pending'">
+                  <span class="tq-item-pending">Waiting...</span>
+                </template>
+              </div>
+            </div>
+            <div v-if="!transferQueue.size" class="tq-empty">No transfers</div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -712,5 +816,52 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
   .ptb{gap:2px;padding:var(--space-1)}
   .pb{padding:4px;font-size:var(--text-xs)}
   .pp{font-size:11px}
+}
+
+/* Transfer queue toggle button */
+.tq-toggle{position:fixed;bottom:var(--space-4);right:var(--space-4);z-index:90;display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:var(--text-sm);color:var(--text-primary);box-shadow:var(--shadow);transition:border-color 0.15s}
+.tq-toggle:hover{border-color:var(--accent)}
+.tq-badge{font-size:var(--text-xs);padding:1px 6px;border-radius:var(--radius-sm)}
+.tq-badge--done{background:rgba(34,197,94,0.15);color:#22c55e}
+
+/* Transfer queue panel */
+.tq-panel{position:fixed;bottom:0;right:0;z-index:200;width:380px;max-height:50vh;background:var(--bg-elevated);border-top:1px solid var(--border);border-left:1px solid var(--border);border-radius:var(--radius) var(--radius) 0 0;display:flex;flex-direction:column;box-shadow:0 -4px 16px rgba(0,0,0,0.25)}
+.tq-header{display:flex;align-items:center;justify-content:space-between;padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--border);font-size:var(--text-sm);font-weight:600;color:var(--text-primary)}
+.tq-header-actions{display:flex;gap:var(--space-2)}
+.tq-list{flex:1;overflow-y:auto;padding:var(--space-1) 0}
+.tq-item{display:flex;align-items:flex-start;justify-content:space-between;padding:var(--space-2) var(--space-3);font-size:var(--text-sm);border-bottom:1px solid var(--border);gap:var(--space-3)}
+.tq-item:last-child{border-bottom:none}
+.tq-item--failed{background:rgba(239,68,68,0.04)}
+.tq-item--completed{opacity:0.6}
+.tq-item-info{display:flex;align-items:center;gap:var(--space-2);min-width:0;flex:1}
+.tq-item-type{font-size:14px;flex-shrink:0}
+.tq-item-details{display:flex;flex-direction:column;min-width:0}
+.tq-item-name{color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tq-item-path{font-size:var(--text-xs);color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tq-item-status{display:flex;align-items:center;gap:var(--space-2);flex-shrink:0}
+.tq-item-pct{font-size:var(--text-xs);color:var(--text-muted);min-width:36px;text-align:right}
+.tq-item-error{font-size:var(--text-xs);color:var(--danger);max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tq-item-done{color:#22c55e;font-weight:600}
+.tq-item-pending{font-size:var(--text-xs);color:var(--text-muted)}
+
+/* Progress bar */
+.tq-progress{width:60px;height:4px;background:var(--bg-deep);border-radius:2px;overflow:hidden}
+.tq-progress-bar{height:100%;background:var(--accent);border-radius:2px;transition:width 0.2s}
+
+/* Buttons */
+.tq-btn{padding:var(--space-1) var(--space-2);background:var(--bg-hover);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:var(--text-xs);color:var(--text-primary);white-space:nowrap}
+.tq-btn:hover{background:var(--bg-deep)}
+.tq-btn--retry{color:var(--accent);border-color:var(--accent)}
+.tq-btn--retry:hover{background:rgba(232,145,45,0.1)}
+.tq-btn--sm{padding:2px var(--space-2);font-size:var(--text-xs)}
+.tq-empty{padding:var(--space-4);text-align:center;color:var(--text-muted);font-size:var(--text-sm)}
+
+/* Slide transition */
+.tq-slide-enter-active,.tq-slide-leave-active{transition:transform 0.2s ease,opacity 0.2s ease}
+.tq-slide-enter-from,.tq-slide-leave-to{transform:translateY(100%);opacity:0}
+
+@media(max-width:768px){
+  .tq-panel{width:100%;max-height:60vh}
+  .tq-toggle{bottom:60px}
 }
 </style>

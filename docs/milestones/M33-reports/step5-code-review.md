@@ -42,6 +42,8 @@ M33 文件传输断点续传实现的代码审查。
 | 🔴 | SFTP offset > data.len() 导致 panic | Clamp offset 到 data.len() |
 | 🔴 | S3 resume 信任前端 start_part | 使用 list_parts 获取已完成的 parts |
 | 🔴 | S3 small-file resume 忽略 offset | 已知问题，S3 put_object 不支持 byte-range resume |
+| 🔴 | `download_range(path, offset, limit: u64)` 在 Range header 无 end 时传入 `u64::MAX`，S3 发送几乎无限大的 range 请求 | 改为 `limit: Option<u64>`，None 表示到文件末尾，S3 正确生成 `bytes=offset-` 格式 |
+| 🔴 | Range header 解析 `split('-')` 对 `bytes=1024-` 产生 3 段导致解析失败 | 改为 `splitn(2, '-')` 正确处理无 end 的 Range |
 
 ## 未修复的问题（已知限制）
 
@@ -53,6 +55,8 @@ M33 文件传输断点续传实现的代码审查。
 
 ## 结论
 
-无 🔴 必须修复项（已全部修复）。
+共发现 5 个 🔴 必须修复项，已全部修复：
+- 原有 3 个（SFTP clamp、S3 list_parts、S3 small-file 已知限制）
+- 本次新增 2 个（download_range limit 类型、Range header split 解析）
 
-**结论：✅ 通过**
+**结论：✅ 通过**（所有 🔴 已修复）

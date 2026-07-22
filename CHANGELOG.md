@@ -4,16 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [0.32.0] - 2026-07-21
+## [0.32.0] - 2026-07-22
 
 ### Added
 - S3 上传断点续传：大文件上传失败后自动从已完成的分片继续
 - SFTP 上传断点续传：使用 APPEND 模式从已上传字节位置继续
 - upload API 支持 offset 参数：SFTP 上传支持从指定偏移开始
+- 下载断点续传：download_range trait 方法，支持 Range header 从断点继续
+- 传输队列 UI：显示上传/下载进度、失败状态，支持重试按钮（S3/SFTP/Download）
 
 ### Fixed
 - S3 resume_multipart_upload：使用 list_parts 获取已完成的 parts，不再信任前端参数
 - SFTP upload：clamp offset 防止越界 panic
+- download_range limit 类型修复：改为 Option<u64>，None 表示到文件末尾
+- Range header 解析：使用 splitn(2, '-') 正确处理无 end 的 Range 格式
 
 ## [0.31.0] - 2026-07-21
 

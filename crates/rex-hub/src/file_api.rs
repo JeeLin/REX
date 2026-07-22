@@ -5,10 +5,10 @@ use std::sync::Arc;
 
 use crate::AppState;
 use axum::extract::{Multipart, Query, State};
-use base64::Engine;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
+use base64::Engine;
 use rex_common::file_transfer::{FileConnectRequest, FileConnector};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -308,12 +308,16 @@ async fn download(
     let range = headers.get("range").and_then(|v| v.to_str().ok());
 
     if let Some(range_str) = range {
-        // Parse Range: bytes=offset-limit
+        // Parse Range: bytes=offset-limit or bytes=offset-
         if let Some(range_val) = range_str.strip_prefix("bytes=") {
-            let parts: Vec<&str> = range_val.split('-').collect();
+            let parts: Vec<&str> = range_val.splitn(2, '-').collect();
             if parts.len() == 2 {
                 if let Ok(offset) = parts[0].parse::<u64>() {
-                    let limit = parts[1].parse::<u64>().unwrap_or(u64::MAX - offset);
+                    let limit = if parts[1].is_empty() {
+                        None // bytes=offset- → to end of file
+                    } else {
+                        parts[1].parse::<u64>().ok()
+                    };
                     match conn.download_range(&params.path, offset, limit).await {
                         Ok(data) => {
                             let filename = params.path.rsplit('/').next().unwrap_or("file");
@@ -321,7 +325,10 @@ async fn download(
                                 StatusCode::OK,
                                 [
                                     ("Content-Type", "application/octet-stream"),
-                                    ("Content-Disposition", &format!("attachment; filename=\"{filename}\"")),
+                                    (
+                                        "Content-Disposition",
+                                        &format!("attachment; filename=\"{filename}\""),
+                                    ),
                                 ],
                                 data,
                             )
@@ -346,7 +353,10 @@ async fn download(
                     StatusCode::OK,
                     [
                         ("Content-Type", "application/octet-stream"),
-                        ("Content-Disposition", &format!("attachment; filename=\"{filename}\"")),
+                        (
+                            "Content-Disposition",
+                            &format!("attachment; filename=\"{filename}\""),
+                        ),
                     ],
                     data,
                 )
@@ -399,7 +409,9 @@ async fn save_from_edit(
             Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
             Err(e) => error_response("SAVE_FAILED", &e.to_string()).into_response(),
         },
-        Err(e) => error_response("INVALID_CONTENT", &format!("invalid base64: {e}")).into_response(),
+        Err(e) => {
+            error_response("INVALID_CONTENT", &format!("invalid base64: {e}")).into_response()
+        }
     }
 }
 

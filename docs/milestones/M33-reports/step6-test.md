@@ -6,55 +6,22 @@
 
 | 检查项 | 结果 | 说明 |
 |--------|------|------|
-| cargo test | ✅ 通过 | 所有 workspace 测试通过 |
-| cargo fmt | ✅ 通过 | 无格式差异 |
-| cargo clippy | ✅ 通过 | 无 warning |
+| cargo fmt --check --all | ✅ 通过 | 无格式差异（已通过 cargo fmt 修复） |
+| cargo clippy --workspace --all-targets | ✅ 通过 | 无 warning |
+| cargo test --workspace | ✅ 通过 | 所有 crate 测试通过（0 tests，无单元测试覆盖） |
 
 ### 前端测试
 
 | 检查项 | 结果 | 说明 |
 |--------|------|------|
-| type-check | ✅ 通过 | vue-tsc --noEmit 无错误 |
-| lint | ✅ 通过 | 无 error（136 warnings 可忽略） |
-| build | ✅ 通过 | 构建成功 |
+| bun run type-check | ✅ 通过 | vue-tsc --noEmit 无错误 |
+| bun run lint | ✅ 通过 | 无 error（warnings 可忽略） |
+| bun run build | ✅ 通过 | 构建成功 |
 
-## 详细输出
+## 说明
 
-### cargo test
-
-```
-running 0 tests
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured
-```
-
-所有 crate 测试通过。
-
-### bun run type-check
-
-```
-$ vue-tsc --noEmit
-```
-
-无类型错误。
-
-### bun run lint
-
-```
-✖ 136 problems (0 errors, 136 warnings)
-```
-
-只有 warnings，无 error。
-
-### bun run build
-
-```
-✓ built in 5.18s
-```
-
-构建成功。
+步骤5代码审查发现并修复了 `download_range` 的 `Option<u64>` limit 问题，修复后重新运行了所有门禁检查。`cargo fmt --all` 修复了格式差异后所有检查通过。
 
 ## 结论
 
-所有测试验证通过，满足门禁条件。
-
-**结论：✅ 通过**
+**✅ 通过** — 所有门禁条件满足。

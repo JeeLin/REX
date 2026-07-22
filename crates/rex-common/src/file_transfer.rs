@@ -72,8 +72,13 @@ pub trait FileConnector: Send + Sync {
     /// 下载文件
     async fn download(&mut self, path: &str) -> Result<Vec<u8>>;
 
-    /// 下载文件（支持 Range：从 offset 开始，最多 limit 字节）
-    async fn download_range(&mut self, path: &str, offset: u64, limit: u64) -> Result<Vec<u8>>;
+    /// 下载文件（支持 Range：从 offset 开始，最多 limit 字节；limit=None 表示到文件末尾）
+    async fn download_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        limit: Option<u64>,
+    ) -> Result<Vec<u8>>;
 
     /// 删除文件/目录
     async fn delete(&mut self, path: &str) -> Result<()>;

@@ -144,10 +144,7 @@ impl FileConnector for SftpConnector {
         // If offset > 0, open existing file for append; otherwise create new
         let mut file = if offset > 0 {
             self.session
-                .open_with_flags(
-                    remote_path,
-                    OpenFlags::WRITE | OpenFlags::APPEND,
-                )
+                .open_with_flags(remote_path, OpenFlags::WRITE | OpenFlags::APPEND)
                 .await
                 .with_context(|| format!("failed to open {remote_path} for resume"))?
         } else {
@@ -181,11 +178,22 @@ impl FileConnector for SftpConnector {
             .with_context(|| format!("failed to read {path}"))
     }
 
-    async fn download_range(&mut self, path: &str, offset: u64, limit: u64) -> Result<Vec<u8>> {
-        let all_data = self.session.read(path).await
+    async fn download_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        limit: Option<u64>,
+    ) -> Result<Vec<u8>> {
+        let all_data = self
+            .session
+            .read(path)
+            .await
             .with_context(|| format!("failed to read {path}"))?;
         let start = (offset as usize).min(all_data.len());
-        let end = ((offset + limit) as usize).min(all_data.len());
+        let end = match limit {
+            Some(len) => ((offset + len) as usize).min(all_data.len()),
+            None => all_data.len(),
+        };
         Ok(all_data[start..end].to_vec())
     }
 

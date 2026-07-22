@@ -281,9 +281,17 @@ impl FileConnector for S3Connector {
         Ok(bytes.into_bytes().to_vec())
     }
 
-    async fn download_range(&mut self, path: &str, offset: u64, limit: u64) -> Result<Vec<u8>> {
+    async fn download_range(
+        &mut self,
+        path: &str,
+        offset: u64,
+        limit: Option<u64>,
+    ) -> Result<Vec<u8>> {
         let key = path.trim_start_matches('/');
-        let range = format!("bytes={}-{}", offset, offset + limit - 1);
+        let range = match limit {
+            Some(len) => format!("bytes={}-{}", offset, offset + len - 1),
+            None => format!("bytes={offset}-"),
+        };
         let result = self
             .client
             .get_object()
