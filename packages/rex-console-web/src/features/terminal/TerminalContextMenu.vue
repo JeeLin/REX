@@ -7,6 +7,7 @@ const props = defineProps<{
   x: number
   y: number
   terminal: Terminal | null
+  encoding?: string
 }>()
 
 const emit = defineEmits<{
@@ -14,9 +15,11 @@ const emit = defineEmits<{
   find: []
   reconnect: []
   disconnect: []
+  'set-encoding': [encoding: string]
 }>()
 
 const showEncoding = ref(false)
+const currentEncoding = ref(props.encoding || 'UTF-8')
 
 function copySelection() {
   if (!props.terminal) return
@@ -56,8 +59,9 @@ function openFind() {
   emit('close')
 }
 
-function setEncoding(_encoding: string) {
-  // 编码切换逻辑（后续里程碑实现转换层）
+function setEncoding(encoding: string) {
+  currentEncoding.value = encoding
+  emit('set-encoding', encoding)
   emit('close')
 }
 
@@ -138,13 +142,15 @@ onBeforeUnmount(() => {
         <div v-if="showEncoding" class="tcm-submenu">
           <div class="tcm-item" @click="setEncoding('UTF-8')">
             <span>UTF-8</span>
-            <span class="tcm-check">✓</span>
+            <span v-if="currentEncoding === 'UTF-8'" class="tcm-check">✓</span>
           </div>
           <div class="tcm-item" @click="setEncoding('GBK')">
             <span>GBK</span>
+            <span v-if="currentEncoding === 'GBK'" class="tcm-check">✓</span>
           </div>
           <div class="tcm-item" @click="setEncoding('ISO-8859-1')">
             <span>ISO-8859-1</span>
+            <span v-if="currentEncoding === 'ISO-8859-1'" class="tcm-check">✓</span>
           </div>
         </div>
       </div>

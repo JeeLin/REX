@@ -43,6 +43,20 @@ const showContextMenu = ref(false)
 const contextMenuX = ref(0)
 const contextMenuY = ref(0)
 
+// Encoding state (per resource, persisted in localStorage)
+const terminalEncoding = ref('UTF-8')
+function handleSetEncoding(encoding: string) {
+  terminalEncoding.value = encoding
+  if (props.resourceId) {
+    localStorage.setItem(`rex-encoding-${props.resourceId}`, encoding)
+  }
+}
+// Load saved encoding on mount
+if (props.resourceId) {
+  const saved = localStorage.getItem(`rex-encoding-${props.resourceId}`)
+  if (saved) terminalEncoding.value = saved
+}
+
 const statusDot = ref<StatusDotStatus>('offline')
 
 // Background image CSS presets
@@ -189,10 +203,12 @@ function handleReconnect() {
         :x="contextMenuX"
         :y="contextMenuY"
         :terminal="terminal"
+        :encoding="terminalEncoding"
         @close="showContextMenu = false"
         @find="handleFind"
         @reconnect="handleReconnect"
         @disconnect="disconnect"
+        @set-encoding="handleSetEncoding"
       />
     </div>
 
