@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use rex_common::file_transfer::{FileConnector, FileEntry, ProgressCallback, UploadResult};
 use russh_sftp::client::SftpSession;
+use russh_sftp::protocol::OpenFlags;
 use tokio::io::AsyncWriteExt;
 
 /// SFTP 连接器
@@ -132,24 +133,38 @@ impl FileConnector for SftpConnector {
         &mut self,
         remote_path: &str,
         data: Vec<u8>,
+        offset: u64,
         progress: Option<&ProgressCallback>,
     ) -> Result<UploadResult> {
         let total = data.len() as u64;
-        let mut file = self
-            .session
-            .create(remote_path)
-            .await
-            .with_context(|| format!("failed to create {remote_path}"))?;
+
+        // If offset > 0, open existing file for append; otherwise create new
+        let mut file = if offset > 0 {
+            self.session
+                .open_with_flags(
+                    remote_path,
+                    OpenFlags::WRITE | OpenFlags::APPEND,
+                )
+                .await
+                .with_context(|| format!("failed to open {remote_path} for resume"))?
+        } else {
+            self.session
+                .create(remote_path)
+                .await
+                .with_context(|| format!("failed to create {remote_path}"))?
+        };
 
         let chunk_size = 64 * 1024;
-        let mut offset = 0u64;
-        for chunk in data.chunks(chunk_size) {
+        let mut written = offset;
+        // Skip already-uploaded data
+        let start = offset as usize;
+        for chunk in data[start..].chunks(chunk_size) {
             file.write_all(chunk)
                 .await
                 .context("failed to write chunk")?;
-            offset += chunk.len() as u64;
+            written += chunk.len() as u64;
             if let Some(ref cb) = progress {
-                cb(offset, total);
+                cb(written, total);
             }
         }
         file.flush().await.context("failed to flush")?;

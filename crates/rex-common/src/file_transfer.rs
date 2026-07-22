@@ -63,6 +63,7 @@ pub trait FileConnector: Send + Sync {
         &mut self,
         remote_path: &str,
         data: Vec<u8>,
+        offset: u64,
         progress: Option<&ProgressCallback>,
     ) -> Result<UploadResult>;
 

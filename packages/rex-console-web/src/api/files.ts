@@ -48,10 +48,11 @@ export async function statFile(sessionId: string, path: string): Promise<FileEnt
   return await res.json()
 }
 
-export async function uploadFile(sessionId: string, remotePath: string, file: File): Promise<{ upload_id?: string }> {
+export async function uploadFile(sessionId: string, remotePath: string, file: File, offset: number = 0): Promise<{ upload_id?: string }> {
   const form = new FormData()
   form.append('session_id', sessionId)
   form.append('path', remotePath)
+  if (offset > 0) form.append('offset', offset.toString())
   form.append('file', file)
   const res = await fetch(`${API_BASE}/upload`, { method: 'POST', headers: authHeaders(), body: form })
   if (!res.ok) throw new Error('Upload failed')

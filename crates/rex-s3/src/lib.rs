@@ -179,6 +179,7 @@ impl FileConnector for S3Connector {
         &mut self,
         remote_path: &str,
         data: Vec<u8>,
+        _offset: u64,
         progress: Option<&ProgressCallback>,
     ) -> Result<rex_common::file_transfer::UploadResult> {
         let key = remote_path.trim_start_matches('/');

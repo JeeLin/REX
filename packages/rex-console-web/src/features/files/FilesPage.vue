@@ -210,15 +210,22 @@ async function uploadTo(side: Side) {
 
 async function retryUpload(key: string) {
   const state = activeUploads.value.get(key)
-  if (!state || !state.file || !state.uploadId) return
+  if (!state || !state.file) return
   state.status = 'uploading'
   activeUploads.value = new Map(activeUploads.value)
   try {
-    // Calculate start_part from uploaded bytes (each part is 5MB)
-    const startPart = Math.floor(state.uploadedBytes / PART_SIZE) + 1
-    await filesApi.resumeMultipartUpload(
-      state.sessionId, state.remotePath, state.uploadId, state.file, startPart
-    )
+    if (state.uploadId) {
+      // S3 multipart resume
+      const startPart = Math.floor(state.uploadedBytes / PART_SIZE) + 1
+      await filesApi.resumeMultipartUpload(
+        state.sessionId, state.remotePath, state.uploadId, state.file, startPart
+      )
+    } else {
+      // SFTP resume: upload from offset
+      await filesApi.uploadFile(
+        state.sessionId, state.remotePath, state.file, state.uploadedBytes
+      )
+    }
     state.status = 'completed'
   } catch (e) {
     state.status = 'failed'

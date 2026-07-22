@@ -231,6 +231,7 @@ async fn upload(
     let mut session_id = String::new();
     let mut remote_path = String::new();
     let mut file_data: Option<Vec<u8>> = None;
+    let mut offset: u64 = 0;
 
     while let Some(field) = multipart.next_field().await.unwrap_or(None) {
         let name = field.name().unwrap_or_default().to_string();
@@ -242,6 +243,14 @@ async fn upload(
             "path" => {
                 remote_path =
                     String::from_utf8_lossy(&field.bytes().await.unwrap_or_default()).to_string();
+            }
+            "offset" => {
+                if let Ok(v) = String::from_utf8_lossy(&field.bytes().await.unwrap_or_default())
+                    .to_string()
+                    .parse::<u64>()
+                {
+                    offset = v;
+                }
             }
             "file" => {
                 file_data = Some(field.bytes().await.unwrap_or_default().to_vec());
@@ -260,7 +269,7 @@ async fn upload(
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
     };
-    match conn.upload(&remote_path, data, None).await {
+    match conn.upload(&remote_path, data, offset, None).await {
         Ok(result) => (
             StatusCode::OK,
             Json(serde_json::json!({
