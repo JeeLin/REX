@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.33.0] - 2026-07-22
+
+### Added
+- 文件编辑器：read_for_edit / save_from_edit API（支持 SFTP 和 S3）
+- 文件编辑器前端：CodeMirror 编辑对话框，语法高亮、Ctrl+S 保存
+- 连接配置导入/导出 API（JSON 格式，环境+资源批量管理）
+- SSH 连接保活：keepalive_interval 配置防止长连接断开
+
 ## [0.32.0] - 2026-07-22
 
 ### Added
