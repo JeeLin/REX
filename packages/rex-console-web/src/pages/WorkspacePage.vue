@@ -40,6 +40,7 @@ interface Tab {
   cursorStyle?: string
   cursorBlink?: boolean
   backgroundImage?: string
+  encoding?: string
 }
 
 const tabs = ref<Tab[]>([])
@@ -119,6 +120,11 @@ function formatConnection(tab: Tab): string {
 
 function onTerminalResize(cols: number, rows: number) {
   terminalSize.value = { cols, rows }
+}
+
+function onEncodingChange(encoding: string) {
+  const tab = tabs.value.find(t => t.id === activeTab.value)
+  if (tab) tab.encoding = encoding
 }
 
 const activeTabInfo = computed(() => tabs.value.find(t => t.id === activeTab.value))
@@ -535,6 +541,7 @@ useKeyboardShortcuts([
                   :background-image="activeTabInfo?.backgroundImage"
                   @update:status="onTabStatusChange(activeTab, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
                   @terminal-resize="onTerminalResize"
+                  @encoding-change="onEncodingChange"
                   @toggle-sftp="toggleSftpDrawer"
                 />
                 <div v-if="showSftpDrawer" class="ws-sftp-drawer" :style="{ height: sftpDrawerHeight + 'px' }">
@@ -603,7 +610,7 @@ useKeyboardShortcuts([
       <span v-if="activeTabInfo?.protocol === 'ssh' && terminalSize" class="ws-status-item">
         {{ terminalSize.cols }}×{{ terminalSize.rows }}
       </span>
-      <span v-if="activeTabInfo?.protocol === 'ssh'" class="ws-status-item">UTF-8</span>
+      <span v-if="activeTabInfo?.protocol === 'ssh'" class="ws-status-item">{{ activeTabInfo.encoding || 'UTF-8' }}</span>
       <span v-if="activeTabInfo?.broadcast" class="ws-status-item ws-broadcast-indicator">📡 Broadcast</span>
       <span class="ws-status-spacer" />
       <span class="ws-status-item ws-quick-actions">
