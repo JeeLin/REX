@@ -5,6 +5,7 @@ import * as filesApi from '@/api/files'
 import type { FileEntry } from '@/api/files'
 import FolderSyncDialog from './FolderSyncDialog.vue'
 import MobileFilesBar from './MobileFilesBar.vue'
+import FileEditorDialog from './FileEditorDialog.vue'
 
 const props = defineProps<{
   resourceId?: string
@@ -349,21 +350,18 @@ async function applyChmod() {
   await loadPanel('right')
 }
 
-// Edit file (temp download → edit → upload back)
-async function editFile(path: string) {
+// Edit file
+const editorVisible = ref(false)
+const editorFilePath = ref('')
+function editFile(path: string) {
   if (!sessionId.value) return
-  try {
-    // Download file to temp location
-    const blob = await filesApi.downloadFile(sessionId.value, path)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = path.split('/').pop() || 'temp'
-    a.click()
-    URL.revokeObjectURL(url)
-  } catch (e) {
-    console.error('Edit failed:', e)
-  }
+  editorFilePath.value = path
+  editorVisible.value = true
+  ctx.value.show = false
+}
+function onEditorSaved() {
+  editorVisible.value = false
+  loadPanel('left'); loadPanel('right')
 }
 
 // Resize
@@ -610,6 +608,15 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
       :target-path="panels.right.path"
       @close="showSyncDialog = false"
       @sync="onSync"
+    />
+
+    <FileEditorDialog
+      :visible="editorVisible"
+      :session-id="sessionId || ''"
+      :file-path="editorFilePath"
+      :protocol="connProtocol"
+      @close="editorVisible = false"
+      @saved="onEditorSaved"
     />
 
     <!-- Delete Confirmation -->

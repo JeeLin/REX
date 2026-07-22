@@ -186,3 +186,19 @@ export async function putAcl(sessionId: string, path: string, acl: string): Prom
   })
   if (!res.ok) throw new Error('Failed to set ACL')
 }
+
+export async function readForEdit(sessionId: string, path: string): Promise<{
+  content: string; filename: string; size: number
+}> {
+  const res = await fetch(`${API_BASE}/read-for-edit?session_id=${sessionId}&path=${encodeURIComponent(path)}`, { headers: authHeaders() })
+  if (!res.ok) throw new Error('Failed to read file for editing')
+  return await res.json()
+}
+
+export async function saveFromEdit(sessionId: string, path: string, content: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/save-from-edit`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ session_id: sessionId, path, content }),
+  })
+  if (!res.ok) throw new Error('Failed to save file')
+}
