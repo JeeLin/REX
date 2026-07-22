@@ -26,7 +26,6 @@ M33 完成了 S3/SFTP 上传续传功能。M34 为文件管理模块补全「编
 | 2 | 文件编辑器前端：Monaco Editor 编辑对话框 | ⬜ |
 | 3 | 连接配置导入/导出 API + 前端 | ⬜ |
 | 4 | SSH 连接保活：后端 KeepAlive + 前端设置 | ⬜ |
-| 5 | 传输队列状态改进 | ⬜ |
 
 ## 子任务详细设计
 
@@ -351,34 +350,6 @@ session.keepalive(true, keepalive_interval).await?;
 
 **提交信息**: `feat(ssh): add keepalive support for SSH connections`
 
-### 5 传输队列状态改进
-
-**功能目标**
-
-传输队列 UI 改进，显示更多传输状态信息。
-
-**文件结构**
-
-修改：
-- `packages/rex-console-web/src/features/files/FilesPage.vue` — 传输队列状态显示
-
-**交互设计**
-
-传输队列改进：
-- 显示传输速率（已实现）
-- 显示剩余时间估算
-- 显示已传输/总大小
-- 传输项右键菜单：重试（失败时）/ 取消
-- 失败项显示红色背景 + 重试按钮
-
-**测试标准**
-
-- 传输队列正确显示速率和进度
-- 失败项可重试
-- type-check + build 通过
-
-**提交信息**: `feat(files): improve transfer queue status display`
-
 ## 设计核对点
 
 - ✅ 符合产品定位（单用户、自托管）
@@ -391,7 +362,7 @@ session.keepalive(true, keepalive_interval).await?;
 ## Flow Status
 
 - [x] 步骤1：编写里程碑文档
-- [ ] 步骤2：设计核对
+- [x] 步骤2：设计核对
 - [ ] 步骤3：开发
 - [ ] 步骤4：代码精简
 - [ ] 步骤5：代码审查
