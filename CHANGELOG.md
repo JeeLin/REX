@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.32.0] - 2026-07-21
+
+### Added
+- S3 上传断点续传：大文件上传失败后自动从已完成的分片继续
+- SFTP 上传断点续传：使用 APPEND 模式从已上传字节位置继续
+- upload API 支持 offset 参数：SFTP 上传支持从指定偏移开始
+
+### Fixed
+- S3 resume_multipart_upload：使用 list_parts 获取已完成的 parts，不再信任前端参数
+- SFTP upload：clamp offset 防止越界 panic
+
 ## [0.31.0] - 2026-07-21
 
 ### Added
