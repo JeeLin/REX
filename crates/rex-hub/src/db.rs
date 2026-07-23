@@ -701,3 +701,342 @@ impl Database {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    fn test_db() -> (tempfile::TempDir, Database) {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::open(&db_path).unwrap();
+        (dir, db)
+    }
+
+    // --- Settings ---
+
+    #[test]
+    fn test_get_set_setting() {
+        let (_dir, db) = test_db();
+        assert_eq!(db.get_setting("key1").unwrap(), None);
+        db.set_setting("key1", "value1").unwrap();
+        assert_eq!(db.get_setting("key1").unwrap(), Some("value1".into()));
+        db.set_setting("key1", "value2").unwrap();
+        assert_eq!(db.get_setting("key1").unwrap(), Some("value2".into()));
+    }
+
+    // --- Audit Log ---
+
+    #[test]
+    fn test_write_and_query_audit_log() {
+        let (_dir, db) = test_db();
+        db.write_audit_log(&NewAuditEntry {
+            action: "SSH_CONNECT".into(),
+            result: "success".into(),
+            ..Default::default()
+        })
+        .unwrap();
+        let entries = db.query_audit_log(&AuditFilter::default()).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].action, "SSH_CONNECT");
+    }
+
+    #[test]
+    fn test_audit_log_filter_by_action() {
+        let (_dir, db) = test_db();
+        db.write_audit_log(&NewAuditEntry {
+            action: "SSH_CONNECT".into(),
+            result: "success".into(),
+            ..Default::default()
+        })
+        .unwrap();
+        db.write_audit_log(&NewAuditEntry {
+            action: "SQL_QUERY".into(),
+            result: "success".into(),
+            ..Default::default()
+        })
+        .unwrap();
+        let filter = AuditFilter {
+            action: Some("SSH_CONNECT".into()),
+            ..Default::default()
+        };
+        let entries = db.query_audit_log(&filter).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].action, "SSH_CONNECT");
+    }
+
+    // --- Environments ---
+
+    #[test]
+    fn test_create_and_get_environment() {
+        let (_dir, db) = test_db();
+        let env = db
+            .create_environment(&NewEnvironment {
+                name: "test".into(),
+                description: Some("desc".into()),
+                connection_mode: Some("direct".into()),
+            })
+            .unwrap();
+        assert_eq!(env.name, "test");
+        assert_eq!(env.connection_mode, "direct");
+
+        let got = db.get_environment(&env.id).unwrap();
+        assert!(got.is_some());
+        assert_eq!(got.unwrap().name, "test");
+    }
+
+    #[test]
+    fn test_list_environments() {
+        let (_dir, db) = test_db();
+        db.create_environment(&NewEnvironment {
+            name: "env1".into(),
+            description: None,
+            connection_mode: None,
+        })
+        .unwrap();
+        db.create_environment(&NewEnvironment {
+            name: "env2".into(),
+            description: None,
+            connection_mode: None,
+        })
+        .unwrap();
+        let envs = db.list_environments().unwrap();
+        assert_eq!(envs.len(), 2);
+    }
+
+    #[test]
+    fn test_update_environment() {
+        let (_dir, db) = test_db();
+        let env = db
+            .create_environment(&NewEnvironment {
+                name: "old".into(),
+                description: None,
+                connection_mode: None,
+            })
+            .unwrap();
+        let updated = db
+            .update_environment(
+                &env.id,
+                &UpdateEnvironment {
+                    name: Some("new".into()),
+                    description: None,
+                    connection_mode: None,
+                },
+            )
+            .unwrap();
+        assert_eq!(updated.name, "new");
+    }
+
+    #[test]
+    fn test_delete_environment() {
+        let (_dir, db) = test_db();
+        let env = db
+            .create_environment(&NewEnvironment {
+                name: "test".into(),
+                description: None,
+                connection_mode: None,
+            })
+            .unwrap();
+        db.delete_environment(&env.id).unwrap();
+        assert!(db.get_environment(&env.id).unwrap().is_none());
+    }
+
+    // --- Resources ---
+
+    #[test]
+    fn test_create_and_list_resources() {
+        let (_dir, db) = test_db();
+        let env = db
+            .create_environment(&NewEnvironment {
+                name: "env".into(),
+                description: None,
+                connection_mode: None,
+            })
+            .unwrap();
+        db.create_resource(
+            &env.id,
+            &NewResource {
+                name: "res1".into(),
+                protocol: "ssh".into(),
+                host: "192.168.1.1".into(),
+                port: None,
+                username: None,
+                config_json: None,
+                color: None,
+                sort_order: None,
+            },
+        )
+        .unwrap();
+        let resources = db.list_resources_by_env(&env.id).unwrap();
+        assert_eq!(resources.len(), 1);
+        assert_eq!(resources[0].name, "res1");
+    }
+
+    #[test]
+    fn test_get_resource() {
+        let (_dir, db) = test_db();
+        let env = db
+            .create_environment(&NewEnvironment {
+                name: "env".into(),
+                description: None,
+                connection_mode: None,
+            })
+            .unwrap();
+        let res = db
+            .create_resource(
+                &env.id,
+                &NewResource {
+                    name: "res1".into(),
+                    protocol: "ssh".into(),
+                    host: "192.168.1.1".into(),
+                    port: None,
+                    username: None,
+                    config_json: None,
+                    color: None,
+                    sort_order: None,
+                },
+            )
+            .unwrap();
+        let got = db.get_resource(&res.id).unwrap();
+        assert!(got.is_some());
+        assert_eq!(got.unwrap().name, "res1");
+    }
+
+    #[test]
+    fn test_delete_resource() {
+        let (_dir, db) = test_db();
+        let env = db
+            .create_environment(&NewEnvironment {
+                name: "env".into(),
+                description: None,
+                connection_mode: None,
+            })
+            .unwrap();
+        let res = db
+            .create_resource(
+                &env.id,
+                &NewResource {
+                    name: "res1".into(),
+                    protocol: "ssh".into(),
+                    host: "192.168.1.1".into(),
+                    port: None,
+                    username: None,
+                    config_json: None,
+                    color: None,
+                    sort_order: None,
+                },
+            )
+            .unwrap();
+        db.delete_resource(&env.id, &res.id).unwrap();
+        assert!(db.get_resource(&res.id).unwrap().is_none());
+    }
+
+    // --- Agents ---
+
+    #[test]
+    fn test_create_and_get_agent() {
+        let (_dir, db) = test_db();
+        let env = db
+            .create_environment(&NewEnvironment {
+                name: "env".into(),
+                description: None,
+                connection_mode: None,
+            })
+            .unwrap();
+        let agent = db
+            .create_agent(
+                &env.id,
+                "agent1",
+                "token_hash",
+                "1.0.0",
+                "linux",
+                "amd64",
+                "host1",
+            )
+            .unwrap();
+        assert_eq!(agent.name, "agent1");
+        assert_eq!(agent.status, "online");
+
+        let got = db.get_agent(&agent.id).unwrap();
+        assert!(got.is_some());
+    }
+
+    #[test]
+    fn test_agent_heartbeat() {
+        let (_dir, db) = test_db();
+        let env = db
+            .create_environment(&NewEnvironment {
+                name: "env".into(),
+                description: None,
+                connection_mode: None,
+            })
+            .unwrap();
+        let agent = db
+            .create_agent(
+                &env.id,
+                "agent1",
+                "token_hash",
+                "1.0.0",
+                "linux",
+                "amd64",
+                "host1",
+            )
+            .unwrap();
+        db.update_agent_heartbeat(&agent.id, "1.1.0", "10.0.0.1")
+            .unwrap();
+        let updated = db.get_agent(&agent.id).unwrap().unwrap();
+        assert_eq!(updated.version, "1.1.0");
+        assert_eq!(updated.ip, "10.0.0.1");
+    }
+
+    #[test]
+    fn test_agent_offline() {
+        let (_dir, db) = test_db();
+        let env = db
+            .create_environment(&NewEnvironment {
+                name: "env".into(),
+                description: None,
+                connection_mode: None,
+            })
+            .unwrap();
+        let agent = db
+            .create_agent(
+                &env.id,
+                "agent1",
+                "token_hash",
+                "1.0.0",
+                "linux",
+                "amd64",
+                "host1",
+            )
+            .unwrap();
+        db.set_agent_offline(&agent.id).unwrap();
+        let updated = db.get_agent(&agent.id).unwrap().unwrap();
+        assert_eq!(updated.status, "offline");
+    }
+
+    #[test]
+    fn test_list_agents_by_env() {
+        let (_dir, db) = test_db();
+        let env = db
+            .create_environment(&NewEnvironment {
+                name: "env".into(),
+                description: None,
+                connection_mode: None,
+            })
+            .unwrap();
+        db.create_agent(
+            &env.id,
+            "agent1",
+            "token_hash",
+            "1.0.0",
+            "linux",
+            "amd64",
+            "host1",
+        )
+        .unwrap();
+        let agents = db.list_agents_by_env(&env.id).unwrap();
+        assert_eq!(agents.len(), 1);
+    }
+}
