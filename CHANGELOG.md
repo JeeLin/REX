@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.35.1] - 2026-07-23
+
+### Added
+- Rust 单元测试：auth（JWT/密码）、db（CRUD）、error 模块共 54 个测试
+- 前端单元测试：auth store、environments store 共 16 个测试
+
+### Fixed
+- 前端 lint：修复 138 个 vue/attributes-order warnings（138 → 0）
+
 ## [0.35.0] - 2026-07-23
 
 ### Added
