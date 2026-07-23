@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Splitpanes, Pane } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
@@ -20,6 +21,7 @@ const RedisPage = defineAsyncComponent(() => import('@/features/redis/RedisPage.
 const FilesPage = defineAsyncComponent(() => import('@/features/files/FilesPage.vue'))
 
 const { t } = useI18n()
+const router = useRouter()
 
 interface Tab {
   id: string
@@ -434,6 +436,13 @@ useKeyboardShortcuts([
   { key: 'B', ctrl: true, shift: true, handler: () => {
     if (activeTab.value) toggleBroadcast(activeTab.value)
   } },
+  // Ctrl+N: 新建连接
+  { key: 'n', ctrl: true, handler: () => { router.push('/resource-new') } },
+  // Alt+6-9: 跳转到第 6-9 个标签
+  { key: '6', alt: true, handler: () => { if (tabs.value[5]) activeTab.value = tabs.value[5].id } },
+  { key: '7', alt: true, handler: () => { if (tabs.value[6]) activeTab.value = tabs.value[6].id } },
+  { key: '8', alt: true, handler: () => { if (tabs.value[7]) activeTab.value = tabs.value[7].id } },
+  { key: '9', alt: true, handler: () => { if (tabs.value[8]) activeTab.value = tabs.value[8].id } },
 ])
 </script>
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ResourcePanel from '@/features/resource-panel/ResourcePanel.vue'
 import { useSessionTimeout } from '@/composables/useSessionTimeout'
@@ -35,6 +35,16 @@ const mobileMenuOpen = ref(false)
 watch(collapsed, (v) => localStorage.setItem('sidebar-collapsed', String(v)))
 
 const isWorkspace = computed(() => route.path === '/workspace')
+
+// F11 全屏切换
+function handleGlobalKeydown(e: KeyboardEvent) {
+  if (e.key === 'F11') {
+    e.preventDefault()
+    fullscreen.value = !fullscreen.value
+  }
+}
+onMounted(() => document.addEventListener('keydown', handleGlobalKeydown))
+onBeforeUnmount(() => document.removeEventListener('keydown', handleGlobalKeydown))
 
 const currentTitle = computed(() => {
   const match = [...mainNav, ...bottomNav].find((n) => route.path.startsWith(n.to))
