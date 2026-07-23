@@ -19,7 +19,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
     />
     <span class="checkbox-box">
       <svg v-if="modelValue" class="checkbox-icon" viewBox="0 0 12 12" fill="none">
-        <path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
     </span>
     <span v-if="label" class="checkbox-label">{{ label }}</span>

@@ -88,18 +88,20 @@ const selectOptions = [
     <section class="dp-section">
       <h2 class="dp-h2">Color Tokens</h2>
       <div class="swatch-grid">
-        <div v-for="c in [
-          { name: '--accent', var: 'var(--accent)' },
-          { name: '--success', var: 'var(--success)' },
-          { name: '--danger', var: 'var(--danger)' },
-          { name: '--info', var: 'var(--info)' },
-          { name: '--purple', var: 'var(--purple)' },
-          { name: '--warning', var: 'var(--warning)' },
-          { name: '--bg-deep', var: 'var(--bg-deep)' },
-          { name: '--bg-page', var: 'var(--bg-page)' },
-          { name: '--bg-surface', var: 'var(--bg-surface)' },
-          { name: '--bg-elevated', var: 'var(--bg-elevated)' },
-        ]" :key="c.name" class="swatch">
+        <div
+          v-for="c in [
+            { name: '--accent', var: 'var(--accent)' },
+            { name: '--success', var: 'var(--success)' },
+            { name: '--danger', var: 'var(--danger)' },
+            { name: '--info', var: 'var(--info)' },
+            { name: '--purple', var: 'var(--purple)' },
+            { name: '--warning', var: 'var(--warning)' },
+            { name: '--bg-deep', var: 'var(--bg-deep)' },
+            { name: '--bg-page', var: 'var(--bg-page)' },
+            { name: '--bg-surface', var: 'var(--bg-surface)' },
+            { name: '--bg-elevated', var: 'var(--bg-elevated)' },
+          ]" :key="c.name" class="swatch"
+        >
           <div class="swatch-color" :style="{ background: c.var }" />
           <span class="swatch-label mono">{{ c.name }}</span>
         </div>
@@ -241,10 +243,12 @@ const selectOptions = [
         </div>
         <div class="comp-cell">
           <span class="label mono">ToggleGroup</span>
-          <ToggleGroup v-model="toggleVal" :options="[
-            { label: 'Dark', value: 'dark', icon: '●' },
-            { label: 'Light', value: 'light', icon: '☀' },
-          ]" />
+          <ToggleGroup
+            v-model="toggleVal" :options="[
+              { label: 'Dark', value: 'dark', icon: '●' },
+              { label: 'Light', value: 'light', icon: '☀' },
+            ]"
+          />
         </div>
         <div class="comp-cell">
           <span class="label mono">Avatar</span>
@@ -323,14 +327,16 @@ const selectOptions = [
     <section class="dp-section">
       <h2 class="dp-h2">Pages</h2>
       <div class="page-links">
-        <RouterLink v-for="p in [
-          { to: '/workspace', label: 'Workspace', desc: 'Terminal, SQL, Redis console' },
-          { to: '/dashboard', label: 'Dashboard', desc: 'Stats and quick connect' },
-          { to: '/environments', label: 'Environments', desc: 'Group connections' },
-          { to: '/agents', label: 'Agents', desc: 'Manage agent nodes' },
-          { to: '/audit-log', label: 'Audit Log', desc: 'Connection history' },
-          { to: '/settings', label: 'Settings', desc: 'Appearance and terminal' },
-        ]" :key="p.to" :to="p.to" class="page-link">
+        <RouterLink
+          v-for="p in [
+            { to: '/workspace', label: 'Workspace', desc: 'Terminal, SQL, Redis console' },
+            { to: '/dashboard', label: 'Dashboard', desc: 'Stats and quick connect' },
+            { to: '/environments', label: 'Environments', desc: 'Group connections' },
+            { to: '/agents', label: 'Agents', desc: 'Manage agent nodes' },
+            { to: '/audit-log', label: 'Audit Log', desc: 'Connection history' },
+            { to: '/settings', label: 'Settings', desc: 'Appearance and terminal' },
+          ]" :key="p.to" :to="p.to" class="page-link"
+        >
           <span class="page-link-label">{{ p.label }}</span>
           <span class="page-link-desc muted">{{ p.desc }}</span>
         </RouterLink>

@@ -92,15 +92,15 @@ function escapeCsv(val: string): string {
           <label class="export-label">Format</label>
           <div class="export-radios">
             <label class="export-radio">
-              <input type="radio" v-model="format" value="csv" />
+              <input v-model="format" type="radio" value="csv" />
               <span>CSV</span>
             </label>
             <label class="export-radio">
-              <input type="radio" v-model="format" value="json" />
+              <input v-model="format" type="radio" value="json" />
               <span>JSON</span>
             </label>
             <label class="export-radio">
-              <input type="radio" v-model="format" value="sql" />
+              <input v-model="format" type="radio" value="sql" />
               <span>SQL</span>
             </label>
           </div>
@@ -109,8 +109,8 @@ function escapeCsv(val: string): string {
         <div class="export-field">
           <label class="export-label">File name</label>
           <input
-            class="export-input mono"
             v-model="fileName"
+            class="export-input mono"
             type="text"
             placeholder="export"
           />
@@ -120,15 +120,15 @@ function escapeCsv(val: string): string {
           <label class="export-label">Options</label>
           <div class="export-checkboxes">
             <label v-if="format === 'csv'" class="export-checkbox">
-              <input type="checkbox" v-model="includeHeaders" />
+              <input v-model="includeHeaders" type="checkbox" />
               <span>Include headers</span>
             </label>
             <label v-if="format === 'json'" class="export-checkbox">
-              <input type="checkbox" v-model="prettyPrint" />
+              <input v-model="prettyPrint" type="checkbox" />
               <span>Pretty print</span>
             </label>
             <label v-if="format === 'sql'" class="export-checkbox">
-              <input type="checkbox" v-model="includeTableName" />
+              <input v-model="includeTableName" type="checkbox" />
               <span>Include table name</span>
             </label>
           </div>

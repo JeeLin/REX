@@ -188,7 +188,7 @@ function handleReconnect() {
         <span v-else>{{ t('terminal.disconnected') }}</span>
       </span>
       <span v-if="status === 'connected'" class="tv-status-item muted">{{ protocol?.toUpperCase() }}</span>
-      <span v-if="status === 'connected'" class="tv-status-item tv-file-btn" @click.stop="emit('toggle-sftp')" :title="t('terminal.toggleFileBrowser')">📁</span>
+      <span v-if="status === 'connected'" class="tv-status-item tv-file-btn" :title="t('terminal.toggleFileBrowser')" @click.stop="emit('toggle-sftp')">📁</span>
     </div>
 
     <!-- 终端容器 -->

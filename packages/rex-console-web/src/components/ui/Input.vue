@@ -40,8 +40,8 @@ function onClear() {
     <button
       v-if="clearable && hasValue"
       class="input-clear"
-      @click="onClear"
       tabindex="-1"
+      @click="onClear"
     >
       ×
     </button>

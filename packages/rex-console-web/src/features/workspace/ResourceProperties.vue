@@ -129,15 +129,17 @@ function onSave() {
           </div>
           <div class="props-field">
             <label class="props-label">Protocol</label>
-            <Select v-model="form.protocol" :options="[
-              { label: 'SSH', value: 'ssh' },
-              { label: 'MySQL', value: 'mysql' },
-              { label: 'PostgreSQL', value: 'postgresql' },
-              { label: 'Redis', value: 'redis' },
-              { label: 'SFTP', value: 'sftp' },
-              { label: 'SQLite', value: 'sqlite' },
-              { label: 'S3', value: 's3' },
-            ]" size="sm" />
+            <Select
+              v-model="form.protocol" :options="[
+                { label: 'SSH', value: 'ssh' },
+                { label: 'MySQL', value: 'mysql' },
+                { label: 'PostgreSQL', value: 'postgresql' },
+                { label: 'Redis', value: 'redis' },
+                { label: 'SFTP', value: 'sftp' },
+                { label: 'SQLite', value: 'sqlite' },
+                { label: 'S3', value: 's3' },
+              ]" size="sm"
+            />
           </div>
           <div class="props-row">
             <div class="props-field props-field--grow">
@@ -146,7 +148,7 @@ function onSave() {
             </div>
             <div class="props-field" style="width: 100px">
               <label class="props-label">Port</label>
-              <Input :model-value="form.port || getDefaultPort()" @update:model-value="form.port = $event" size="sm" placeholder="22" />
+              <Input :model-value="form.port || getDefaultPort()" size="sm" placeholder="22" @update:model-value="form.port = $event" />
             </div>
           </div>
           <div class="props-field">
@@ -194,7 +196,7 @@ function onSave() {
           </div>
           <div class="props-field">
             <label class="props-label">Scrollback Lines</label>
-            <Input :model-value="String(form.scrollback)" @update:model-value="form.scrollback = Number($event)" size="sm" placeholder="10000" />
+            <Input :model-value="String(form.scrollback)" size="sm" placeholder="10000" @update:model-value="form.scrollback = Number($event)" />
           </div>
           <div class="props-row">
             <div class="props-field props-field--grow">
@@ -204,7 +206,7 @@ function onSave() {
             <div class="props-field" style="width: 120px">
               <label class="props-label">Blink</label>
               <label class="props-toggle">
-                <input type="checkbox" v-model="form.cursorBlink" />
+                <input v-model="form.cursorBlink" type="checkbox" />
                 <span class="props-toggle-slider" />
               </label>
             </div>
@@ -219,11 +221,11 @@ function onSave() {
           </div>
           <div class="props-field">
             <label class="props-label">Font Size (px)</label>
-            <Input :model-value="String(form.fontSize)" @update:model-value="form.fontSize = Number($event)" size="sm" placeholder="14" />
+            <Input :model-value="String(form.fontSize)" size="sm" placeholder="14" @update:model-value="form.fontSize = Number($event)" />
           </div>
           <div class="props-field">
             <label class="props-label">Background Opacity (%)</label>
-            <Input :model-value="String(form.opacity)" @update:model-value="form.opacity = Number($event)" size="sm" placeholder="100" />
+            <Input :model-value="String(form.opacity)" size="sm" placeholder="100" @update:model-value="form.opacity = Number($event)" />
           </div>
           <div class="props-field">
             <label class="props-label">Background Image</label>
@@ -236,13 +238,13 @@ function onSave() {
           <div class="props-field">
             <label class="props-label">Send Keepalive</label>
             <label class="props-toggle">
-              <input type="checkbox" v-model="form.keepalive" />
+              <input v-model="form.keepalive" type="checkbox" />
               <span class="props-toggle-slider" />
             </label>
           </div>
           <div v-if="form.keepalive" class="props-field">
             <label class="props-label">Interval (seconds)</label>
-            <Input :model-value="String(form.keepaliveInterval)" @update:model-value="form.keepaliveInterval = Number($event)" size="sm" placeholder="60" />
+            <Input :model-value="String(form.keepaliveInterval)" size="sm" placeholder="60" @update:model-value="form.keepaliveInterval = Number($event)" />
           </div>
         </template>
 

@@ -81,7 +81,7 @@ function removeColumn(index: number) {
     <!-- Header -->
     <div class="designer-header">
       <span class="designer-title mono">Table: {{ table }}</span>
-      <button class="designer-close" @click="emit('close')" title="Close">×</button>
+      <button class="designer-close" title="Close" @click="emit('close')">×</button>
     </div>
 
     <!-- Loading -->

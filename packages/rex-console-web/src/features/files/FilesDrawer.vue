@@ -255,9 +255,9 @@ onBeforeUnmount(async () => {
         </span>
       </div>
       <div class="fd-actions">
-        <button class="fd-btn" @click="goUp" title="Go up">↑</button>
-        <button class="fd-btn" @click="loadDir" title="Refresh">↻</button>
-        <button class="fd-btn" @click="upload" title="Upload">⬆</button>
+        <button class="fd-btn" title="Go up" @click="goUp">↑</button>
+        <button class="fd-btn" title="Refresh" @click="loadDir">↻</button>
+        <button class="fd-btn" title="Upload" @click="upload">⬆</button>
         <span class="fd-count muted">{{ entries.length }} items<template v-if="selected.size"> · {{ selected.size }} sel</template></span>
       </div>
     </div>

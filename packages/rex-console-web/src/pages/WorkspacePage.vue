@@ -453,17 +453,17 @@ useKeyboardShortcuts([
         @dragover="onTabDragOver($event, tab.id)"
         @drop="onTabDrop($event, tab.id)"
       >
-        <span class="ws-tab-color" v-if="tab.color" :style="{ background: tab.color }" />
+        <span v-if="tab.color" class="ws-tab-color" :style="{ background: tab.color }" />
         <span class="ws-tab-dot" :style="{ background: PROTOCOL_COLORS[tab.protocol] || 'var(--text-muted)' }" />
         <input
           v-if="tab.renaming"
           class="ws-tab-rename-input mono"
           :value="tab.label"
+          autofocus
           @blur="finishRename(tab.id, ($event.target as HTMLInputElement).value)"
           @keydown.enter="($event.target as HTMLInputElement).blur()"
           @keydown.escape="finishRename(tab.id, tab.label)"
           @click.stop
-          autofocus
         />
         <span v-else>{{ tab.label }}</span>
         <span v-if="tab.broadcast" class="ws-tab-broadcast" title="Broadcast mode active">📡</span>
@@ -508,7 +508,7 @@ useKeyboardShortcuts([
     <div v-show="!treeCollapsed" class="ws-tree" :style="{ width: '220px' }">
       <ConnectionTree @open-resource="openResourceFromTree" />
     </div>
-    <button class="ws-tree-toggle" @click="treeCollapsed = !treeCollapsed" :title="treeCollapsed ? 'Show tree' : 'Hide tree'">
+    <button class="ws-tree-toggle" :title="treeCollapsed ? 'Show tree' : 'Hide tree'" @click="treeCollapsed = !treeCollapsed">
       {{ treeCollapsed ? '»' : '«' }}
     </button>
 
@@ -524,9 +524,9 @@ useKeyboardShortcuts([
               <div class="ws-pane-header mono">
                 <span>{{ activeTabInfo?.label || t('workspace.noTabOpen') }}</span>
                 <div class="ws-pane-actions">
-                  <button class="ws-pane-btn" @click="splitHorizontal" :title="t('workspace.splitH')">⊞</button>
-                  <button class="ws-pane-btn" @click="splitVertical" :title="t('workspace.splitV')">⊟</button>
-                  <button v-if="splitCount > 1" class="ws-pane-btn" @click="closePane(i - 1)" :title="t('workspace.closePane')">×</button>
+                  <button class="ws-pane-btn" :title="t('workspace.splitH')" @click="splitHorizontal">⊞</button>
+                  <button class="ws-pane-btn" :title="t('workspace.splitV')" @click="splitVertical">⊟</button>
+                  <button v-if="splitCount > 1" class="ws-pane-btn" :title="t('workspace.closePane')" @click="closePane(i - 1)">×</button>
                 </div>
               </div>
 
@@ -619,8 +619,8 @@ useKeyboardShortcuts([
       <span v-if="activeTabInfo?.broadcast" class="ws-status-item ws-broadcast-indicator">📡 {{ t('workspace.broadcastIndicator') }}</span>
       <span class="ws-status-spacer" />
       <span class="ws-status-item ws-quick-actions">
-        <button class="ws-action-btn" @click="splitHorizontal" title="Split horizontal">⊞</button>
-        <button class="ws-action-btn" @click="splitVertical" title="Split vertical">⊟</button>
+        <button class="ws-action-btn" title="Split horizontal" @click="splitHorizontal">⊞</button>
+        <button class="ws-action-btn" title="Split vertical" @click="splitVertical">⊟</button>
       </span>
       <span class="ws-status-item">{{ now }}</span>
     </div>

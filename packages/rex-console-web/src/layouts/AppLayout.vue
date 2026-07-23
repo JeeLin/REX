@@ -73,7 +73,7 @@ const currentTitle = computed(() => {
           <span class="nav-icon">{{ item.icon }}</span>
           <span v-if="!collapsed" class="nav-label">{{ t(item.key) }}</span>
         </RouterLink>
-        <button class="nav-item nav-toggle" @click="collapsed = !collapsed" :title="collapsed ? 'Expand sidebar' : 'Collapse sidebar'">
+        <button class="nav-item nav-toggle" :title="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" @click="collapsed = !collapsed">
           <span class="nav-icon">{{ collapsed ? '»' : '«' }}</span>
           <span v-if="!collapsed" class="nav-label">Collapse</span>
         </button>
@@ -86,7 +86,7 @@ const currentTitle = computed(() => {
         <button class="hamburger-btn" @click="mobileMenuOpen = !mobileMenuOpen">☰</button>
         <span class="topbar-title mono">{{ currentTitle }}</span>
         <div class="topbar-actions">
-          <button v-if="isWorkspace" class="fullscreen-btn mono" @click="fullscreen = !fullscreen" :title="fullscreen ? 'Exit fullscreen' : 'Fullscreen'">
+          <button v-if="isWorkspace" class="fullscreen-btn mono" :title="fullscreen ? 'Exit fullscreen' : 'Fullscreen'" @click="fullscreen = !fullscreen">
             {{ fullscreen ? '⊟' : '⊞' }}
           </button>
         </div>
@@ -95,8 +95,8 @@ const currentTitle = computed(() => {
       <button
         v-if="fullscreen && isWorkspace"
         class="exit-fullscreen-btn mono"
-        @click="fullscreen = false"
         title="Exit fullscreen (Esc)"
+        @click="fullscreen = false"
       >
         ⊟
       </button>

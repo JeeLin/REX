@@ -103,9 +103,9 @@ function actionClass(a: string) {
           <div class="fsd-section">
             <label class="fsd-label">Direction</label>
             <div class="fsd-radio-group">
-              <label class="fsd-radio"><input type="radio" v-model="direction" value="upload" /> Upload (Source → Target)</label>
-              <label class="fsd-radio"><input type="radio" v-model="direction" value="download" /> Download (Target → Source)</label>
-              <label class="fsd-radio"><input type="radio" v-model="direction" value="bidirectional" /> Bidirectional</label>
+              <label class="fsd-radio"><input v-model="direction" type="radio" value="upload" /> Upload (Source → Target)</label>
+              <label class="fsd-radio"><input v-model="direction" type="radio" value="download" /> Download (Target → Source)</label>
+              <label class="fsd-radio"><input v-model="direction" type="radio" value="bidirectional" /> Bidirectional</label>
             </div>
           </div>
 
@@ -113,8 +113,8 @@ function actionClass(a: string) {
           <div class="fsd-section">
             <label class="fsd-label">Compare By</label>
             <div class="fsd-check-group">
-              <label class="fsd-check"><input type="checkbox" v-model="compareSize" /> Size</label>
-              <label class="fsd-check"><input type="checkbox" v-model="compareTime" /> Modified Time</label>
+              <label class="fsd-check"><input v-model="compareSize" type="checkbox" /> Size</label>
+              <label class="fsd-check"><input v-model="compareTime" type="checkbox" /> Modified Time</label>
             </div>
           </div>
 
@@ -132,7 +132,7 @@ function actionClass(a: string) {
 
           <!-- Delete Orphans -->
           <div class="fsd-section">
-            <label class="fsd-check"><input type="checkbox" v-model="deleteOrphans" /> Delete orphan files in target</label>
+            <label class="fsd-check"><input v-model="deleteOrphans" type="checkbox" /> Delete orphan files in target</label>
           </div>
 
           <!-- Preview -->

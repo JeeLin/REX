@@ -292,7 +292,7 @@ function close() {
             <div class="step-label">Step 3: Options</div>
             <div class="options-list">
               <label class="option-item">
-                <input type="checkbox" v-model="skipDuplicates" />
+                <input v-model="skipDuplicates" type="checkbox" />
                 <span>Skip duplicates (ON DUPLICATE KEY IGNORE)</span>
               </label>
             </div>

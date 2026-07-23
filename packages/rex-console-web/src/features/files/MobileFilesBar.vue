@@ -34,7 +34,7 @@ function onMore(action: string) {
     <button class="mfb-btn" :disabled="selectedCount === 0" @click="emit('download')">📥<span>Download</span></button>
     <button class="mfb-btn" @click="emit('newFolder')">📁<span>New</span></button>
     <button class="mfb-btn" @click="emit('refresh')">🔄<span>Refresh</span></button>
-    <div class="mfb-more-wrap" ref="moreRef">
+    <div ref="moreRef" class="mfb-more-wrap">
       <button class="mfb-btn mfb-more" @click="showMore = !showMore">⋯</button>
       <div v-if="showMore" class="mfb-menu">
         <div class="mfb-menu-item" :class="{ 'mfb-menu-item--disabled': selectedCount === 0 }" @click="onMore('rename')">Rename</div>

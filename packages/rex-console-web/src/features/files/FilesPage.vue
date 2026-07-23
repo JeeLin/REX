@@ -602,21 +602,21 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
             </div>
             <div class="chmod-row">
               <span>Read</span>
-              <input type="checkbox" v-model="chmodPerms.owner.read" />
-              <input type="checkbox" v-model="chmodPerms.group.read" />
-              <input type="checkbox" v-model="chmodPerms.other.read" />
+              <input v-model="chmodPerms.owner.read" type="checkbox" />
+              <input v-model="chmodPerms.group.read" type="checkbox" />
+              <input v-model="chmodPerms.other.read" type="checkbox" />
             </div>
             <div class="chmod-row">
               <span>Write</span>
-              <input type="checkbox" v-model="chmodPerms.owner.write" />
-              <input type="checkbox" v-model="chmodPerms.group.write" />
-              <input type="checkbox" v-model="chmodPerms.other.write" />
+              <input v-model="chmodPerms.owner.write" type="checkbox" />
+              <input v-model="chmodPerms.group.write" type="checkbox" />
+              <input v-model="chmodPerms.other.write" type="checkbox" />
             </div>
             <div class="chmod-row">
               <span>Exec</span>
-              <input type="checkbox" v-model="chmodPerms.owner.exec" />
-              <input type="checkbox" v-model="chmodPerms.group.exec" />
-              <input type="checkbox" v-model="chmodPerms.other.exec" />
+              <input v-model="chmodPerms.owner.exec" type="checkbox" />
+              <input v-model="chmodPerms.group.exec" type="checkbox" />
+              <input v-model="chmodPerms.other.exec" type="checkbox" />
             </div>
           </div>
           <div class="chmod-octal">Octal: {{ calcOctal().toString(8) }}</div>
@@ -699,7 +699,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
     <!-- Transfer Queue Toggle -->
     <button v-if="transferQueue.size > 0" class="tq-toggle" @click="showTransferQueue = !showTransferQueue">
       📥 {{ transferQueue.size }} <span v-if="activeCount">· {{ activeCount }} active</span>
-      <span class="tq-badge tq-badge--done" v-if="completedCount">{{ completedCount }} ✓</span>
+      <span v-if="completedCount" class="tq-badge tq-badge--done">{{ completedCount }} ✓</span>
     </button>
 
     <!-- Transfer Queue Panel -->
@@ -709,7 +709,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
           <div class="tq-header">
             <span>Transfers ({{ transferQueue.size }})</span>
             <div class="tq-header-actions">
-              <button class="tq-btn tq-btn--sm" @click="dismissCompleted" v-if="completedCount">Clear done</button>
+              <button v-if="completedCount" class="tq-btn tq-btn--sm" @click="dismissCompleted">Clear done</button>
               <button class="tq-btn tq-btn--sm" @click="showTransferQueue = false">✕</button>
             </div>
           </div>

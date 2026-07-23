@@ -57,7 +57,7 @@ const commonTypes = [
               @change="col.type = ($event.target as HTMLSelectElement).value"
             >
               <option v-for="t in commonTypes" :key="t" :value="t">{{ t }}</option>
-              <option :value="col.type" v-if="!commonTypes.includes(col.type)">{{ col.type }}</option>
+              <option v-if="!commonTypes.includes(col.type)" :value="col.type">{{ col.type }}</option>
             </select>
           </td>
           <td class="col-pk">

@@ -128,10 +128,10 @@ function formatFieldName(name: string): string {
 
     <!-- Actions -->
     <div class="form-actions">
-      <button class="btn btn-secondary" @click="goPrevious" :disabled="currentIndex === 0">
+      <button class="btn btn-secondary" :disabled="currentIndex === 0" @click="goPrevious">
         Previous
       </button>
-      <button class="btn btn-secondary" @click="goNext" :disabled="currentIndex >= totalRows - 1">
+      <button class="btn btn-secondary" :disabled="currentIndex >= totalRows - 1" @click="goNext">
         Next
       </button>
       <span class="actions-spacer" />

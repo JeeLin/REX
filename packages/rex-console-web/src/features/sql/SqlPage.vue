@@ -411,7 +411,7 @@ onBeforeUnmount(() => {
             <span class="sql-tab-title">{{ tab.title }}</span>
             <span class="sql-tab-close" @click.stop="closeTab(tab.id)">×</span>
           </div>
-          <button class="sql-tab-add" @click="createTab()" title="New Query">+</button>
+          <button class="sql-tab-add" title="New Query" @click="createTab()">+</button>
         </div>
         <div v-if="activeQueryTab" class="sql-toolbar">
           <select v-model="execMode" class="sql-toolbar-select mono" title="Execute mode">
@@ -544,8 +544,8 @@ onBeforeUnmount(() => {
         <div class="sql-ddl-drawer-header">
           <span class="sql-ddl-drawer-title mono">DDL: {{ ddlDrawer.table }}</span>
           <div class="sql-ddl-drawer-actions">
-            <button class="sql-ddl-btn" @click="copyDdl" title="Copy DDL">Copy</button>
-            <button class="sql-ddl-btn" @click="ddlDrawer.open = false" title="Close">×</button>
+            <button class="sql-ddl-btn" title="Copy DDL" @click="copyDdl">Copy</button>
+            <button class="sql-ddl-btn" title="Close" @click="ddlDrawer.open = false">×</button>
           </div>
         </div>
         <pre class="sql-ddl-drawer-content mono">{{ ddlDrawer.ddl }}</pre>

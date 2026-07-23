@@ -86,7 +86,7 @@ const groups = computed(() => [
       <div v-if="show" class="shortcut-panel">
         <header class="sp-header">
           <h3 class="sp-title mono">{{ t('shortcuts.title') }}</h3>
-          <button class="sp-close" @click="emit('close')" aria-label="Close">×</button>
+          <button class="sp-close" aria-label="Close" @click="emit('close')">×</button>
         </header>
         <div class="sp-body">
           <div v-for="group in groups" :key="group.title" class="sp-group">

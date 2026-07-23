@@ -82,33 +82,39 @@ watch(() => props.visible, (v) => {
     <div v-if="visible" class="terminal-search" @keydown="onKeydown">
       <input
         ref="searchInputRef"
-        class="ts-input mono"
         v-model="searchInput"
+        class="ts-input mono"
         placeholder="Find..."
         autofocus
       />
       <div class="ts-actions">
-        <button class="ts-btn" @click="findPrev" title="Previous (Shift+Enter)">↑</button>
-        <button class="ts-btn" @click="findNext" title="Next (Enter)">↓</button>
+        <button class="ts-btn" title="Previous (Shift+Enter)" @click="findPrev">↑</button>
+        <button class="ts-btn" title="Next (Enter)" @click="findNext">↓</button>
         <button
           class="ts-btn"
           :class="{ 'ts-btn--active': caseSensitive }"
-          @click="caseSensitive = !caseSensitive"
           title="Case Sensitive"
-        >Aa</button>
+          @click="caseSensitive = !caseSensitive"
+        >
+          Aa
+        </button>
         <button
           class="ts-btn"
           :class="{ 'ts-btn--active': wholeWord }"
-          @click="wholeWord = !wholeWord"
           title="Whole Word"
-        >W</button>
+          @click="wholeWord = !wholeWord"
+        >
+          W
+        </button>
         <button
           class="ts-btn"
           :class="{ 'ts-btn--active': regex }"
-          @click="regex = !regex"
           title="Regex"
-        >.*</button>
-        <button class="ts-btn ts-close" @click="closeSearch" title="Close (Esc)">×</button>
+          @click="regex = !regex"
+        >
+          .*
+        </button>
+        <button class="ts-btn ts-close" title="Close (Esc)" @click="closeSearch">×</button>
       </div>
     </div>
   </Transition>
