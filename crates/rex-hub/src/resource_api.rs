@@ -19,15 +19,16 @@ fn err(status: StatusCode, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
 /// 资源路由（嵌套在 /api/environments 下）
 pub fn resource_routes() -> axum::Router<AppState> {
     axum::Router::new()
+        .route("/{id}/resources", axum::routing::get(list_resources))
+        .route("/{id}/resources", axum::routing::post(create_resource))
+        .route("/{id}/resources/{rid}", axum::routing::get(get_resource))
         .route(
-            "/{id}/resources",
-            axum::routing::get(list_resources).post(create_resource),
+            "/{id}/resources/{rid}",
+            axum::routing::put(update_resource),
         )
         .route(
             "/{id}/resources/{rid}",
-            axum::routing::get(get_resource)
-                .put(update_resource)
-                .delete(delete_resource),
+            axum::routing::delete(delete_resource),
         )
 }
 
