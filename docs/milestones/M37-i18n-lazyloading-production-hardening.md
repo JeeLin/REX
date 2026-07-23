@@ -28,13 +28,13 @@ M36 完成了后端日志增强（请求日志中间件、审计日志增强）�
 
 | # | 内容 | 状态 |
 |---|------|------|
-| 1 | i18n：页面组件翻译（LoginPage、SetupPage、EnvironmentsPage、EnvironmentDetailPage） | ⬜ |
-| 2 | i18n：页面组件翻译（AgentsPage、AuditLogPage、SettingsPage） | ⬜ |
-| 3 | i18n：功能组件翻译（ShortcutPanel、ShortcutSettings、WizardModal、ResourceProperties、ResourcePanel、WorkspacePage） | ⬜ |
-| 4 | i18n：补全 zh.json 和 en.json 语言包 | ⬜ |
-| 5 | 路由级懒加载 | ⬜ |
-| 6 | WebSocket 心跳 + 断线重连 UI | ⬜ |
-| 7 | 生产加固（安全头 + 路由守卫） | ⬜ |
+| 1 | i18n：页面组件翻译（LoginPage、SetupPage、EnvironmentsPage、EnvironmentDetailPage） | ✅ |
+| 2 | i18n：页面组件翻译（AgentsPage、AuditLogPage、SettingsPage） | ✅ |
+| 3 | i18n：功能组件翻译（ShortcutPanel、ConnectionTree、ResourcePanel、WorkspacePage） | ✅ |
+| 4 | i18n：补全 zh.json 和 en.json 语言包 | ✅ |
+| 5 | 路由级懒加载 | ✅ |
+| 6 | WebSocket 心跳 + 断线重连 UI | ✅ |
+| 7 | 生产加固（安全头 + 路由守卫） | ✅ |
 
 ## 子任务详细设计
 
@@ -322,14 +322,14 @@ async fn security_headers(req: Request<Body>, next: Next) -> Response {
 
 ## Flow Status
 
-- [ ] 步骤1：编写里程碑文档
-- [ ] 步骤2：设计核对
-- [ ] 步骤3：开发
-- [ ] 步骤4：代码精简
-- [ ] 步骤5：代码审查
-- [ ] 步骤6：测试验证
-- [ ] 步骤7：设计再确认
-- [ ] 步骤8：提交
+- [x] 步骤1：编写里程碑文档
+- [x] 步骤2：设计核对
+- [x] 步骤3：开发
+- [x] 步骤4：代码精简
+- [x] 步骤5：代码审查
+- [x] 步骤6：测试验证
+- [x] 步骤7：设计再确认
+- [x] 步骤8：提交
 
 ## 打回记录
 

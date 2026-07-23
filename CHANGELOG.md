@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.35.0] - 2026-07-23
+
+### Added
+- i18n 完整翻译：所有页面和功能组件使用 $t() 调用，中英文 231 个 key 完整覆盖
+- WebSocket 心跳：终端连接每30秒发送 ping，防止代理/负载均衡器超时断开
+- 安全 HTTP 响应头：X-Content-Type-Options、X-Frame-Options、Referrer-Policy、Permissions-Policy
+- 语言切换即时预览：设置页切换语言后界面立即变化，无需刷新
+
+### Fixed
+- 语言切换不生效：设置页切换英文后界面无变化
+- 安全头 X-XSS-Protection 已弃用：替换为 Referrer-Policy 和 Permissions-Policy
+- 路由守卫：已登录用户访问 /setup 页面时正确重定向到 /workspace
+- ClientMsg Ping 变体：后端正确处理客户端心跳消息
+
+## [0.34.0] - 2026-07-23
+
+### Added
+- 后端请求日志中间件：记录 method、path、status、latency，跳过静态文件
+- 审计日志增强：SSH 连接/断开、SQL 连接/查询、文件上传/删除、认证事件
+- 快捷键面板 Escape 键关闭支持
+- 编码子菜单：每个资源独立保存编码设置
+- WorkspacePage chunk 优化：SqlPage/RedisPage/FilesPage 懒加载，689KB → 103KB
+
+### Fixed
+- Axum 路由顺序：resource_routes 注册在 env_routes 之前，防止 /{id} 拦截子路由
+- 编码硬编码：Properties 对话框使用 tab.encoding 而非固定 UTF-8
+
 ## [0.33.0] - 2026-07-22
 
 ### Added
