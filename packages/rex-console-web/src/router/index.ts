@@ -3,6 +3,8 @@ import type { RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { startSession, stopSession } from '@/composables/useSessionTimeout'
 
+const DEFAULT_SESSION_TIMEOUT = 30 // minutes
+
 const routes: RouteRecordRaw[] = [
   {
     path: '/login',
@@ -74,7 +76,7 @@ router.beforeEach(async (to) => {
 
   // 已登录 → 启动 session timeout（如果尚未启动）
   if (auth.isAuthenticated && !sessionStarted && to.name !== 'login' && to.name !== 'setup') {
-    const timeout = parseInt(localStorage.getItem('rex-session-timeout') || '30', 10)
+    const timeout = parseInt(localStorage.getItem('rex-session-timeout') || String(DEFAULT_SESSION_TIMEOUT), 10)
     startSession(timeout, () => {
       auth.logout()
       sessionStarted = false

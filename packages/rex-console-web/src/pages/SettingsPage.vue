@@ -14,7 +14,7 @@ const settings = ref<Settings>({
   terminal_theme: 'default',
   terminal_opacity: 100,
   terminal_bg_image: 'none',
-  session_timeout: parseInt(localStorage.getItem('rex-session-timeout') || '30', 10),
+  session_timeout: 30,
 })
 const loading = ref(true)
 const saving = ref(false)

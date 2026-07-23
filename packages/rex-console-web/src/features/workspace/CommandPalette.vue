@@ -24,7 +24,7 @@ interface Command {
   id: string
   label: string
   icon: string
-  category: 'command' | 'environment' | 'resource' | 'setting'
+  category: 'command' | 'environment' | 'setting'
   action?: () => void
 }
 
@@ -78,7 +78,6 @@ const groupedCommands = computed(() => {
   const categoryLabels: Record<string, string> = {
     command: t('commandPalette.commands'),
     environment: t('commandPalette.environments'),
-    resource: t('commandPalette.resources'),
     setting: t('commandPalette.settings'),
   }
   for (const cmd of filteredCommands.value) {

@@ -211,9 +211,6 @@ const currentTitle = computed(() => {
   padding-bottom: var(--space-4);
   border-top: 1px solid var(--border);
 }
-.sidebar-spacer {
-  flex: 1;
-}
 .nav-item {
   display: flex;
   align-items: center;
@@ -394,9 +391,6 @@ const currentTitle = computed(() => {
   }
   .hamburger-btn {
     display: block;
-  }
-  .resource-panel-desktop {
-    display: none;
   }
   .app-layout--collapsed .nav-item {
     justify-content: flex-start;
