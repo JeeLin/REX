@@ -74,7 +74,8 @@ function stopMonitoring() {
 /** Start session timeout monitoring. Called by the router guard after login. */
 export function startSession(minutes: number, logoutFn: () => void) {
   stopSession()
-  timeoutMs = minutes * 60 * 1_000
+  const safe = Number.isFinite(minutes) && minutes >= 1 ? minutes : 30
+  timeoutMs = safe * 60 * 1_000
   onLogoutCallback = logoutFn
   active = true
   lastActivity = Date.now()

@@ -13,7 +13,7 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const environmentsStore = useEnvironmentsStore()
 
 const query = ref('')
@@ -57,8 +57,8 @@ const commands = computed<Command[]>(() => {
   cmds.push(
     { id: 'theme-dark', label: t('commandPalette.themeDark'), icon: '🎨', category: 'setting', action: () => { localStorage.setItem('rex-theme', 'dark'); document.documentElement.dataset.theme = undefined; emit('close') } },
     { id: 'theme-light', label: t('commandPalette.themeLight'), icon: '🎨', category: 'setting', action: () => { localStorage.setItem('rex-theme', 'light'); document.documentElement.dataset.theme = 'light'; emit('close') } },
-    { id: 'language-en', label: t('commandPalette.languageEn'), icon: '🌐', category: 'setting' },
-    { id: 'language-zh', label: t('commandPalette.languageZh'), icon: '🌐', category: 'setting' },
+    { id: 'language-en', label: t('commandPalette.languageEn'), icon: '🌐', category: 'setting', action: () => { locale.value = 'en'; localStorage.setItem('rex-lang', 'en'); emit('close') } },
+    { id: 'language-zh', label: t('commandPalette.languageZh'), icon: '🌐', category: 'setting', action: () => { locale.value = 'zh'; localStorage.setItem('rex-lang', 'zh'); emit('close') } },
   )
 
   return cmds
@@ -97,6 +97,7 @@ function executeCommand(cmd: Command) {
 }
 
 function handleKeydown(e: KeyboardEvent) {
+  if (!props.visible) return
   if (e.key === 'ArrowDown') {
     e.preventDefault()
     selectedIndex.value = Math.min(selectedIndex.value + 1, filteredCommands.value.length - 1)

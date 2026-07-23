@@ -289,7 +289,7 @@
   },
   "session": {
     "warningTitle": "Session Expiring",
-    "warningMessage": "You've been idle for {seconds}s. Session expires in {countdown}s.",
+    "warningMessage": "Session expires in {countdown}s.",
     "extend": "Extend",
     "logout": "Log out"
   }

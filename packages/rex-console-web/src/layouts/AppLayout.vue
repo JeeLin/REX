@@ -4,9 +4,16 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ResourcePanel from '@/features/resource-panel/ResourcePanel.vue'
 import { useSessionTimeout } from '@/composables/useSessionTimeout'
+import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
 const { showWarning, remainingSeconds, extendSession } = useSessionTimeout()
+const authStore = useAuthStore()
+
+function sessionLogout() {
+  authStore.logout()
+  window.location.href = '/login'
+}
 const route = useRoute()
 
 const mainNav = [

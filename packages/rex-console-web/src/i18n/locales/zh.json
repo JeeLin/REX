@@ -289,7 +289,7 @@
   },
   "session": {
     "warningTitle": "会话即将过期",
-    "warningMessage": "您已闲置 {seconds} 秒，会话将在 {countdown} 秒后过期。",
+    "warningMessage": "会话将在 {countdown} 秒后过期。",
     "extend": "续期",
     "logout": "登出"
   }
