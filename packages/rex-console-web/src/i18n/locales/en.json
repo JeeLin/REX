@@ -267,5 +267,27 @@
     "sessionDisconnected": "Session disconnected",
     "reconnect": "Reconnect",
     "toggleFileBrowser": "Toggle file browser (Ctrl+B)"
+  },
+  "commandPalette": {
+    "searchPlaceholder": "Search resources, commands, settings...",
+    "noResults": "No results found",
+    "commands": "Commands",
+    "environments": "Environments",
+    "resources": "Resources",
+    "settings": "Settings",
+    "newConnection": "New Connection",
+    "newTab": "New Tab",
+    "workspace": "Workspace",
+    "openEnvironment": "Open environment",
+    "themeDark": "Theme: Dark",
+    "themeLight": "Theme: Light",
+    "languageEn": "Language: English",
+    "languageZh": "Language: 中文"
+  },
+  "session": {
+    "warningTitle": "Session Expiring",
+    "warningMessage": "You've been idle for {seconds}s. Session expires in {countdown}s.",
+    "extend": "Extend",
+    "logout": "Log out"
   }
 }

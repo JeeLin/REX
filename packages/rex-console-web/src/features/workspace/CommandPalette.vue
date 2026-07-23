@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { useEnvironmentsStore } from '@/stores/environments'
 
 const props = defineProps<{
   visible: boolean
@@ -11,6 +13,9 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+const { t } = useI18n()
+const environmentsStore = useEnvironmentsStore()
+
 const query = ref('')
 const selectedIndex = ref(0)
 const inputRef = ref<HTMLInputElement | null>(null)
@@ -19,29 +24,50 @@ interface Command {
   id: string
   label: string
   icon: string
-  category: 'resource' | 'command' | 'setting'
+  category: 'command' | 'environment' | 'resource' | 'setting'
   action?: () => void
 }
 
-// Mock data - in production this would come from stores
-const commands: Command[] = [
-  { id: 'new-connection', label: 'New Connection', icon: '📡', category: 'command', action: () => { router.push('/resource-new'); emit('close') } },
-  { id: 'new-tab', label: 'New Tab', icon: '📄', category: 'command' },
-  { id: 'settings', label: 'Settings', icon: '⚙️', category: 'command', action: () => { router.push('/settings'); emit('close') } },
-  { id: 'dashboard', label: 'Dashboard', icon: '📊', category: 'command', action: () => { router.push('/dashboard'); emit('close') } },
-  { id: 'environments', label: 'Environments', icon: '🌍', category: 'command', action: () => { router.push('/environments'); emit('close') } },
-  { id: 'agents', label: 'Agents', icon: '🤖', category: 'command', action: () => { router.push('/agents'); emit('close') } },
-  { id: 'audit-log', label: 'Audit Log', icon: '📋', category: 'command', action: () => { router.push('/audit-log'); emit('close') } },
-  { id: 'theme-dark', label: 'Theme: Dark', icon: '🎨', category: 'setting' },
-  { id: 'theme-light', label: 'Theme: Light', icon: '🎨', category: 'setting' },
-  { id: 'language-en', label: 'Language: English', icon: '🌐', category: 'setting' },
-  { id: 'language-zh', label: 'Language: 中文', icon: '🌐', category: 'setting' },
-]
+const commands = computed<Command[]>(() => {
+  const cmds: Command[] = []
+
+  // Static commands
+  cmds.push(
+    { id: 'workspace', label: t('commandPalette.workspace'), icon: '🖥️', category: 'command', action: () => { router.push('/workspace'); emit('close') } },
+    { id: 'new-connection', label: t('commandPalette.newConnection'), icon: '📡', category: 'command', action: () => { router.push('/resource-new'); emit('close') } },
+    { id: 'dashboard', label: t('nav.dashboard'), icon: '📊', category: 'command', action: () => { router.push('/dashboard'); emit('close') } },
+    { id: 'environments', label: t('nav.environments'), icon: '🌍', category: 'command', action: () => { router.push('/environments'); emit('close') } },
+    { id: 'agents', label: t('nav.agents'), icon: '🤖', category: 'command', action: () => { router.push('/agents'); emit('close') } },
+    { id: 'audit-log', label: t('nav.auditLog'), icon: '📋', category: 'command', action: () => { router.push('/audit-log'); emit('close') } },
+    { id: 'settings', label: t('nav.settings'), icon: '⚙️', category: 'command', action: () => { router.push('/settings'); emit('close') } },
+  )
+
+  // Environments from store
+  for (const env of environmentsStore.environments) {
+    cmds.push({
+      id: `env-${env.id}`,
+      label: env.name,
+      icon: '🌍',
+      category: 'environment',
+      action: () => { router.push(`/environments/${env.id}`); emit('close') }
+    })
+  }
+
+  // Settings commands
+  cmds.push(
+    { id: 'theme-dark', label: t('commandPalette.themeDark'), icon: '🎨', category: 'setting', action: () => { localStorage.setItem('rex-theme', 'dark'); document.documentElement.dataset.theme = undefined; emit('close') } },
+    { id: 'theme-light', label: t('commandPalette.themeLight'), icon: '🎨', category: 'setting', action: () => { localStorage.setItem('rex-theme', 'light'); document.documentElement.dataset.theme = 'light'; emit('close') } },
+    { id: 'language-en', label: t('commandPalette.languageEn'), icon: '🌐', category: 'setting' },
+    { id: 'language-zh', label: t('commandPalette.languageZh'), icon: '🌐', category: 'setting' },
+  )
+
+  return cmds
+})
 
 const filteredCommands = computed(() => {
-  if (!query.value) return commands
+  if (!query.value) return commands.value
   const q = query.value.toLowerCase()
-  return commands.filter(cmd =>
+  return commands.value.filter(cmd =>
     cmd.label.toLowerCase().includes(q) ||
     cmd.category.toLowerCase().includes(q)
   )
@@ -49,9 +75,14 @@ const filteredCommands = computed(() => {
 
 const groupedCommands = computed(() => {
   const groups: Record<string, Command[]> = {}
+  const categoryLabels: Record<string, string> = {
+    command: t('commandPalette.commands'),
+    environment: t('commandPalette.environments'),
+    resource: t('commandPalette.resources'),
+    setting: t('commandPalette.settings'),
+  }
   for (const cmd of filteredCommands.value) {
-    const category = cmd.category === 'resource' ? 'Resources' :
-                     cmd.category === 'command' ? 'Commands' : 'Settings'
+    const category = categoryLabels[cmd.category] || cmd.category
     if (!groups[category]) groups[category] = []
     groups[category].push(cmd)
   }
@@ -90,6 +121,10 @@ watch(() => props.visible, (v) => {
   if (v) {
     query.value = ''
     selectedIndex.value = 0
+    // Fetch environments if not already loaded
+    if (environmentsStore.environments.length === 0) {
+      environmentsStore.fetchEnvironments()
+    }
     setTimeout(() => inputRef.value?.focus(), 50)
   }
 })
@@ -113,12 +148,12 @@ onBeforeUnmount(() => {
             ref="inputRef"
             v-model="query"
             class="palette-input"
-            placeholder="Search resources, commands, settings..."
+            :placeholder="t('commandPalette.searchPlaceholder')"
           />
         </div>
         <div class="palette-body">
           <div v-if="filteredCommands.length === 0" class="palette-empty">
-            No results found
+            {{ t('commandPalette.noResults') }}
           </div>
           <template v-for="(cmds, category) in groupedCommands" :key="category">
             <div class="palette-category">{{ category }}</div>

@@ -267,5 +267,27 @@
     "sessionDisconnected": "会话已断开",
     "reconnect": "重新连接",
     "toggleFileBrowser": "切换文件浏览器 (Ctrl+B)"
+  },
+  "commandPalette": {
+    "searchPlaceholder": "搜索资源、命令、设置...",
+    "noResults": "未找到结果",
+    "commands": "命令",
+    "environments": "环境",
+    "resources": "资源",
+    "settings": "设置",
+    "newConnection": "新建连接",
+    "newTab": "新建标签",
+    "workspace": "工作区",
+    "openEnvironment": "打开环境",
+    "themeDark": "主题：深色",
+    "themeLight": "主题：浅色",
+    "languageEn": "语言：English",
+    "languageZh": "语言：中文"
+  },
+  "session": {
+    "warningTitle": "会话即将过期",
+    "warningMessage": "您已闲置 {seconds} 秒，会话将在 {countdown} 秒后过期。",
+    "extend": "续期",
+    "logout": "登出"
   }
 }
