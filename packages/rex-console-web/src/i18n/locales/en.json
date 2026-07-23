@@ -45,7 +45,14 @@
     "direct": "Direct (console connects directly)",
     "agent": "Agent (via reverse tunnel)",
     "deleteConfirm": "This will permanently delete the environment and all its resources. This action cannot be undone.",
-    "agentStatus": "Agent {status}"
+    "agentStatus": "Agent {status}",
+    "export": "Export",
+    "import": "Import",
+    "importSuccess": "Imported: {imported}, Skipped: {skipped}",
+    "importFailed": "Import failed: {error}",
+    "importInvalidFile": "Invalid config file",
+    "placeholderName": "e.g. Production",
+    "placeholderDescription": "Optional description"
   },
   "environmentDetail": {
     "agentSection": "Agent",

@@ -58,7 +58,7 @@ async function handleLogin() {
       </form>
 
       <div class="login-footer mono muted">
-        Single-user · Self-hosted
+        {{ t('login.footer') }}
       </div>
     </div>
   </div>

@@ -131,14 +131,14 @@ async function handleImport(event: Event) {
     const text = await file.text()
     const data: ExportData = JSON.parse(text)
     if (!data.environments || !Array.isArray(data.environments)) {
-      throw new Error('Invalid config file')
+      throw new Error(t('environments.importInvalidFile'))
     }
     const result = await environmentsApi.import(data)
     await store.fetchEnvironments()
-    alert(`Imported: ${result.imported}, Skipped: ${result.skipped}`)
+    alert(t('environments.importSuccess', { imported: result.imported, skipped: result.skipped }))
   } catch (e) {
     console.error('Import failed:', e)
-    alert(`Import failed: ${e instanceof Error ? e.message : String(e)}`)
+    alert(t('environments.importFailed', { error: e instanceof Error ? e.message : String(e) }))
   } finally {
     importLoading.value = false
     input.value = ''
@@ -151,8 +151,8 @@ async function handleImport(event: Event) {
     <header class="page-header">
       <h1 class="page-title">{{ t('environments.title') }}</h1>
       <div class="header-actions">
-        <Button variant="secondary" size="sm" @click="exportConfig">Export</Button>
-        <Button variant="secondary" size="sm" :loading="importLoading" @click="triggerImport">Import</Button>
+        <Button variant="secondary" size="sm" @click="exportConfig">{{ t('environments.export') }}</Button>
+        <Button variant="secondary" size="sm" :loading="importLoading" @click="triggerImport">{{ t('environments.import') }}</Button>
         <input ref="importFileInput" type="file" accept=".json" style="display:none" @change="handleImport" />
         <Button variant="primary" size="sm" @click="openCreate">+ {{ t('environments.newEnvironment') }}</Button>
       </div>
@@ -209,11 +209,11 @@ async function handleImport(event: Event) {
       <form class="env-form" @submit.prevent="submitForm">
         <label class="form-label">
           <span>{{ t('common.name') }}</span>
-          <input v-model="formName" type="text" class="form-input" placeholder="e.g. Production" autofocus />
+          <input v-model="formName" type="text" class="form-input" :placeholder="t('environments.placeholderName')" autofocus />
         </label>
         <label class="form-label">
           <span>{{ t('common.description') }}</span>
-          <input v-model="formDesc" type="text" class="form-input" placeholder="Optional description" />
+          <input v-model="formDesc" type="text" class="form-input" :placeholder="t('environments.placeholderDescription')" />
         </label>
         <label class="form-label">
           <span>{{ t('environments.connectionMode') }}</span>
