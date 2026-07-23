@@ -43,7 +43,7 @@ function envToken(agentEnvId: string): string {
   return env?.agent_token || 'YOUR_TOKEN'
 }
 
-function envNameById(envId: string): string {
+function envName(envId: string): string {
   return store.environments.find(e => e.id === envId)?.name || envId
 }
 
@@ -68,10 +68,6 @@ function agentStatus(status: string): StatusDotStatus {
   if (status === 'online') return 'online'
   if (status === 'connecting') return 'connecting'
   return 'offline'
-}
-
-function envName(envId: string): string {
-  return store.environments.find(e => e.id === envId)?.name || envId
 }
 
 async function openResetToken(agentId: string) {
@@ -289,7 +285,7 @@ const filteredLogs = computed(() => {
           <h3 class="config-section-title">{{ t('agents.configInfo') }}</h3>
           <div class="config-row">
             <span class="config-label muted">{{ t('agents.configEnvironment') }}</span>
-            <span>{{ envNameById(configAgent.environment_id) }}</span>
+            <span>{{ envName(configAgent.environment_id) }}</span>
           </div>
           <div class="config-row">
             <span class="config-label muted">Agent ID</span>
