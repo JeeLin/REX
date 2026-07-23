@@ -139,7 +139,9 @@ async fn connect(
     State(state): State<AppState>,
     Json(body): Json<ConnectBody>,
 ) -> axum::response::Response {
-    let conn_result = match body.db_type.to_lowercase().as_str() {
+    let db_type = body.db_type.clone();
+    let host = body.req.host.clone();
+    let conn_result = match db_type.to_lowercase().as_str() {
         "mysql" => rex_mysql::MySqlConnector::connect(body.req)
             .await
             .map(|c| Box::new(c) as Box<dyn SqlConnector>),
@@ -152,7 +154,7 @@ async fn connect(
         _ => {
             return error_response(
                 "INVALID_DB_TYPE",
-                &format!("unsupported database type: {}", body.db_type),
+                &format!("unsupported database type: {}", db_type),
             )
             .into_response();
         }
@@ -161,10 +163,26 @@ async fn connect(
     match conn_result {
         Ok(conn) => {
             let session_id = format!("sql_{}", &uuid::Uuid::new_v4().to_string()[..8]);
+            tracing::info!(
+                action = "SQL_CONNECT",
+                db_type = %db_type,
+                host = %host,
+                session_id = %session_id,
+                "SQL connection established"
+            );
             state.sql_pool.lock().await.insert(session_id.clone(), conn);
             (StatusCode::OK, Json(ConnectResponse { session_id })).into_response()
         }
-        Err(e) => error_response("CONNECTION_FAILED", &e.to_string()).into_response(),
+        Err(e) => {
+            tracing::warn!(
+                action = "SQL_CONNECT",
+                db_type = %db_type,
+                host = %host,
+                error = %e,
+                "SQL connection failed"
+            );
+            error_response("CONNECTION_FAILED", &e.to_string()).into_response()
+        }
     }
 }
 
@@ -195,17 +213,43 @@ async fn query(State(state): State<AppState>, Json(body): Json<QueryBody>) -> im
     // Apply query timeout (30 seconds)
     let timeout = std::time::Duration::from_secs(30);
     let execute_future = conn.execute(&body.sql);
+    let query_len = body.sql.len();
 
+    let start = std::time::Instant::now();
     match tokio::time::timeout(timeout, execute_future).await {
         Ok(Ok(mut result)) => {
+            let elapsed = start.elapsed().as_millis() as u64;
+            tracing::info!(
+                action = "SQL_QUERY",
+                session_id = %body.session_id,
+                query_length = query_len,
+                row_count = result.rows.len(),
+                duration_ms = elapsed,
+                "SQL query executed"
+            );
             // Apply row limit (10000 rows)
             if result.rows.len() > 10000 {
                 result.rows.truncate(10000);
             }
             (StatusCode::OK, Json(result)).into_response()
         }
-        Ok(Err(e)) => error_response("QUERY_FAILED", &e.to_string()).into_response(),
+        Ok(Err(e)) => {
+            tracing::warn!(
+                action = "SQL_QUERY",
+                session_id = %body.session_id,
+                query_length = query_len,
+                error = %e,
+                "SQL query failed"
+            );
+            error_response("QUERY_FAILED", &e.to_string()).into_response()
+        }
         Err(_) => {
+            tracing::warn!(
+                action = "SQL_QUERY",
+                session_id = %body.session_id,
+                query_length = query_len,
+                "SQL query timed out"
+            );
             error_response("QUERY_TIMEOUT", "query timed out after 30 seconds").into_response()
         }
     }

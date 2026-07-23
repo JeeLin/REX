@@ -101,16 +101,32 @@ async fn handle_socket(mut ws: WebSocket, state: AppState, resource_id: String) 
     let conn_info = match load_resource_conn(&state, &resource_id).await {
         Ok(info) => info,
         Err(e) => {
+            tracing::warn!(resource_id = %resource_id, error = %e, "SSH resource load failed");
             let _ = send_ws_error(&mut ws, &e).await;
             return;
         }
     };
+
+    tracing::info!(
+        action = "SSH_CONNECT",
+        resource_id = %resource_id,
+        host = %conn_info.host,
+        port = conn_info.port,
+        use_agent = conn_info.use_agent,
+        "SSH connection initiated"
+    );
 
     if conn_info.use_agent {
         handle_agent_terminal(ws, &state, &conn_info, &resource_id, &session_id).await;
     } else {
         handle_direct_terminal(ws, &conn_info, &session_id).await;
     }
+
+    tracing::info!(
+        action = "SSH_DISCONNECT",
+        resource_id = %resource_id,
+        "SSH session ended"
+    );
 }
 
 /// 从 DB 读取资源连接信息（解密 config_json）

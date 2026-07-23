@@ -281,14 +281,23 @@ async fn upload(
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
     };
     match conn.upload(&remote_path, data, offset, None).await {
-        Ok(result) => (
-            StatusCode::OK,
-            Json(serde_json::json!({
-                "ok": true,
-                "upload_id": result.upload_id
-            })),
-        )
-            .into_response(),
+        Ok(result) => {
+            tracing::info!(
+                action = "FILE_OP",
+                op = "upload",
+                path = %remote_path,
+                session_id = %session_id,
+                "file uploaded"
+            );
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "ok": true,
+                    "upload_id": result.upload_id
+                })),
+            )
+                .into_response()
+        }
         Err(e) => error_response("UPLOAD_FAILED", &e.to_string()).into_response(),
     }
 }
@@ -425,7 +434,16 @@ async fn delete(
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
     };
     match conn.delete(&body.path).await {
-        Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
+        Ok(()) => {
+            tracing::info!(
+                action = "FILE_OP",
+                op = "delete",
+                path = %body.path,
+                session_id = %body.session_id,
+                "file deleted"
+            );
+            (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response()
+        }
         Err(e) => error_response("DELETE_FAILED", &e.to_string()).into_response(),
     }
 }

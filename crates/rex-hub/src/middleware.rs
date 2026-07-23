@@ -3,7 +3,11 @@
 use async_trait::async_trait;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
+use axum::http::Request;
 use axum::http::StatusCode;
+use axum::middleware::Next;
+use axum::response::Response;
+use std::time::Instant;
 
 use crate::auth::Claims;
 use crate::error::{error_with_status, ErrorBody};
@@ -68,4 +72,30 @@ impl FromRequestParts<AppState> for AuthUser {
             "missing authentication token",
         ))
     }
+}
+
+/// 请求日志中间件 — 记录 method、path、status、latency。
+pub async fn request_logger(req: Request<axum::body::Body>, next: Next) -> Response {
+    let method = req.method().clone();
+    let uri = req.uri().clone();
+    let path = uri.path().to_owned();
+    // 跳过静态文件请求
+    let is_static = path.starts_with("/assets/")
+        || path.ends_with(".js")
+        || path.ends_with(".css")
+        || path.ends_with(".png")
+        || path.ends_with(".ico");
+    let start = Instant::now();
+    let response = next.run(req).await;
+    let latency = start.elapsed();
+    if !is_static {
+        tracing::info!(
+            method = %method,
+            path = %path,
+            status = response.status().as_u16(),
+            latency_ms = latency.as_millis() as u64,
+            "request"
+        );
+    }
+    response
 }

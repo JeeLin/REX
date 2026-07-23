@@ -135,6 +135,7 @@ pub async fn login(
 ) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<crate::error::ErrorBody>)> {
     match state.auth.login(&body.password) {
         Ok(token) => {
+            tracing::info!(action = "AUTH_LOGIN", result = "success", "user logged in");
             state
                 .db
                 .write_audit_log(&crate::models::NewAuditEntry {
@@ -153,6 +154,7 @@ pub async fn login(
             ))
         }
         Err(e) => {
+            tracing::warn!(action = "AUTH_LOGIN", result = "failure", error = %e, "login failed");
             state
                 .db
                 .write_audit_log(&crate::models::NewAuditEntry {

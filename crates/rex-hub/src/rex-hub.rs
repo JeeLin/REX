@@ -12,7 +12,7 @@ use rex_hub::dashboard_api;
 use rex_hub::db::Database;
 use rex_hub::env_api;
 use rex_hub::file_api::{self, FileState};
-use rex_hub::middleware::AuthUser;
+use rex_hub::middleware::{self, AuthUser};
 use rex_hub::redis_api::{self, RedisState};
 use rex_hub::resource_api;
 use rex_hub::settings_api;
@@ -155,7 +155,8 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
         .layer(axum::middleware::from_extractor_with_state::<
             AuthUser,
             AppState,
-        >(state.clone()));
+        >(state.clone()))
+        .layer(axum::middleware::from_fn(middleware::request_logger));
 
     // Agent WebSocket — 使用 Agent 自己的 token 认证，不走 JWT 中间件
     let agent_ws_route = Router::new().route("/ws/agent", axum::routing::get(agent_ws::ws_handler));
