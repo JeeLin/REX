@@ -31,6 +31,30 @@ impl From<std::io::Error> for RExError {
 
 pub type Result<T> = std::result::Result<T, RExError>;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rex_error_display() {
+        let err = RExError::Message("test error".into());
+        assert_eq!(err.to_string(), "test error");
+    }
+
+    #[test]
+    fn test_rex_error_io_conversion() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "not found");
+        let rex_err: RExError = io_err.into();
+        assert!(rex_err.to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_rex_error_is_error() {
+        let err = RExError::Message("test".into());
+        let _: &dyn std::error::Error = &err;
+    }
+}
+
 pub mod file_transfer;
 pub mod redis;
 pub mod redis_codec;
