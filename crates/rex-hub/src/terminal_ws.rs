@@ -28,6 +28,9 @@ enum ClientMsg {
     Resize { cols: u32, rows: u32 },
     #[serde(rename = "terminal.disconnect")]
     Disconnect,
+    /// 客户端心跳（每30秒发送），后端忽略即可维持连接活跃
+    #[serde(rename = "ping")]
+    Ping,
 }
 
 /// 后端 → 前端的消息
@@ -289,6 +292,9 @@ async fn handle_direct_terminal(mut ws: WebSocket, conn: &ResourceConnInfo, sess
                             let _ = session.disconnect().await;
                             break;
                         }
+                        Some(ClientMsg::Ping) => {
+                            // 心跳收到，无需响应（前端只是发 ping 维持连接活跃）
+                        }
                     }
                 }
                 event = session.recv() => {
@@ -479,6 +485,9 @@ async fn handle_agent_terminal(
                                     .await;
                             }
                             ClientMsg::Disconnect => break,
+                            ClientMsg::Ping => {
+                                // 心跳收到，无需响应
+                            }
                         }
                     }
                 }

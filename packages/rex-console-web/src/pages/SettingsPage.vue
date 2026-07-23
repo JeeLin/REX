@@ -36,6 +36,11 @@ onMounted(async () => {
   }
 })
 
+function onLanguageChange() {
+  locale.value = settings.value.language as 'zh' | 'en'
+  localStorage.setItem('rex-lang', settings.value.language)
+}
+
 async function saveSettings() {
   saving.value = true
   saveMessage.value = ''
@@ -76,7 +81,7 @@ async function saveSettings() {
       </div>
       <div class="form-group">
         <label class="form-label">{{ t('settings.language') }}</label>
-        <select v-model="settings.language" class="form-input" @change="locale = settings.language as 'zh' | 'en'">
+        <select v-model="settings.language" class="form-input" @change="onLanguageChange">
           <option value="zh">中文</option>
           <option value="en">English</option>
         </select>
