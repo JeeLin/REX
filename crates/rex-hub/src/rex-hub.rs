@@ -166,6 +166,7 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
         .merge(protected_routes)
         .merge(agent_ws_route)
         .with_state(state)
+        .layer(axum::middleware::from_fn(middleware::security_headers))
         .fallback(get_service(serve_dir).handle_error(|err| async move {
             tracing::error!(error = %err, "static file serve error");
             (

@@ -99,3 +99,13 @@ pub async fn request_logger(req: Request<axum::body::Body>, next: Next) -> Respo
     }
     response
 }
+
+/// 安全 HTTP 响应头中间件。
+pub async fn security_headers(req: Request<axum::body::Body>, next: Next) -> Response {
+    let mut response = next.run(req).await;
+    let headers = response.headers_mut();
+    headers.insert("X-Content-Type-Options", "nosniff".parse().unwrap());
+    headers.insert("X-Frame-Options", "DENY".parse().unwrap());
+    headers.insert("X-XSS-Protection", "1; mode=block".parse().unwrap());
+    response
+}

@@ -60,8 +60,8 @@ router.beforeEach(async (to) => {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
 
-  // 已登录访问登录页 → 工作区
-  if (auth.isAuthenticated && to.name === 'login') {
+  // 已登录访问登录页或设置页 → 工作区
+  if (auth.isAuthenticated && (to.name === 'login' || to.name === 'setup')) {
     return { name: 'workspace' }
   }
 })
