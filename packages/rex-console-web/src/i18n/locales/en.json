@@ -63,24 +63,6 @@
     "addResourceDesc": "Add a resource to start managing remote connections.",
     "created": "Created {date}"
   },
-  "agents": {
-    "title": "Agents",
-    "noAgents": "No agents registered",
-    "noAgentsDesc": "Deploy an agent to proxy connections for internal network resources.",
-    "version": "Version",
-    "os": "OS",
-    "lastSeen": "Last seen",
-    "resetToken": "Reset Token",
-    "resetTitle": "Reset Agent Token",
-    "resetDesc": "Generate a new registration token for this agent.",
-    "generate": "Generate",
-    "newToken": "New token (copy and update your agent config):",
-    "done": "Done",
-    "logs": "Logs",
-    "logTitle": "Agent Logs",
-    "logFilter": "Filter by action type...",
-    "noLogs": "No log entries"
-  },
   "auditLog": {
     "title": "Audit Log",
     "all": "All",
