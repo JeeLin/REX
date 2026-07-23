@@ -82,7 +82,8 @@ async function openLogs(agent: Agent) {
 
 const filteredLogs = computed(() => {
   if (!logFilter.value) return logEntries.value
-  return logEntries.value.filter(e => e.action.includes(logFilter.value))
+  const q = logFilter.value.toLowerCase()
+  return logEntries.value.filter(e => e.action.toLowerCase().includes(q))
 })
 </script>
 

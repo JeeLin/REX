@@ -179,13 +179,13 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
     let auth_msg = match recv_agent_msg(&mut ws_stream).await {
         Some(AgentMsg::Auth { payload }) => payload,
         _ => {
-            let fail = serde_json::to_string(&HubMsg::AuthFail {
+            if let Ok(fail) = serde_json::to_string(&HubMsg::AuthFail {
                 payload: AuthFailPayload {
                     reason: "expected auth message".into(),
                 },
-            })
-            .unwrap();
-            let _ = ws_sink.send(Message::Text(fail)).await;
+            }) {
+                let _ = ws_sink.send(Message::Text(fail)).await;
+            }
             return;
         }
     };
@@ -198,13 +198,13 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
     let verified_id = match verified {
         Ok(Ok(Some(id))) => id,
         _ => {
-            let fail = serde_json::to_string(&HubMsg::AuthFail {
+            if let Ok(fail) = serde_json::to_string(&HubMsg::AuthFail {
                 payload: AuthFailPayload {
                     reason: "invalid token or agent not found".into(),
                 },
-            })
-            .unwrap();
-            let _ = ws_sink.send(Message::Text(fail)).await;
+            }) {
+                let _ = ws_sink.send(Message::Text(fail)).await;
+            }
             return;
         }
     };
@@ -214,12 +214,17 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
     let aid = verified_id.clone();
     let _ = tokio::task::spawn_blocking(move || db.update_agent_heartbeat(&aid, "", "")).await;
 
-    let ok_msg = serde_json::to_string(&HubMsg::AuthOk {
+    let ok_msg = match serde_json::to_string(&HubMsg::AuthOk {
         payload: AuthOkPayload {
             agent_id: verified_id.clone(),
         },
-    })
-    .unwrap();
+    }) {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::error!(agent_id = %verified_id, error = %e, "failed to serialize auth_ok");
+            return;
+        }
+    };
     if ws_sink.send(Message::Text(ok_msg)).await.is_err() {
         return;
     }
@@ -345,8 +350,9 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
 
             // 回复 ack
             if let Some(conn) = state.agent_tunnel.connections.read().await.get(agent_id) {
-                let ack = serde_json::to_string(&HubMsg::HeartbeatAck).unwrap();
-                let _ = conn.sender.send(AgentEvent::Text(ack)).await;
+                if let Ok(ack) = serde_json::to_string(&HubMsg::HeartbeatAck) {
+                    let _ = conn.sender.send(AgentEvent::Text(ack)).await;
+                }
 
                 // 版本对比 — Hub 版本 ≠ Agent 版本时推送更新
                 let hub_version = env!("CARGO_PKG_VERSION");
@@ -358,19 +364,20 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
                         "version mismatch detected, pushing update"
                     );
                     // 构造 Agent 下载 URL（Hub 提供二进制）
-                    let download_url = format!(
-                        "/api/agents/download?os={}&arch={}",
-                        if payload.os.is_empty() {
-                            "linux"
-                        } else {
-                            &payload.os
-                        },
-                        if payload.arch.is_empty() {
-                            "amd64"
-                        } else {
-                            &payload.arch
-                        },
-                    );
+                    // 验证 os/arch 值，防止恶意数据
+                    let valid_os = ["linux", "windows", "macos"];
+                    let valid_arch = ["amd64", "arm64"];
+                    let os = if valid_os.contains(&payload.os.as_str()) {
+                        payload.os.clone()
+                    } else {
+                        "linux".into()
+                    };
+                    let arch = if valid_arch.contains(&payload.arch.as_str()) {
+                        payload.arch.clone()
+                    } else {
+                        "amd64".into()
+                    };
+                    let download_url = format!("/api/agents/download?os={os}&arch={arch}");
 
                     let update_cmd = rex_common::update::UpdateCommand {
                         version: hub_version.to_string(),

@@ -25,6 +25,7 @@ pub struct AuditQuery {
     pub time_from: Option<String>,
     pub time_to: Option<String>,
     pub action: Option<String>,
+    pub environment_id: Option<String>,
     pub agent_id: Option<String>,
     pub result: Option<String>,
     pub limit: Option<u64>,
