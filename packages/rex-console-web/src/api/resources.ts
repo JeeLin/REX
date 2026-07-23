@@ -42,15 +42,15 @@ export interface TestConnectionResult {
 
 export const resourcesApi = {
   listByEnv: (envId: string) =>
-    api.get<Resource[]>(`/resources/${envId}`),
+    api.get<Resource[]>(`/environments/${envId}/resources`),
   get: (envId: string, id: string) =>
-    api.get<Resource>(`/resources/${envId}/${id}`),
+    api.get<Resource>(`/environments/${envId}/resources/${id}`),
   create: (envId: string, data: NewResource) =>
-    api.post<Resource>(`/resources/${envId}`, data),
+    api.post<Resource>(`/environments/${envId}/resources`, data),
   update: (envId: string, id: string, data: NewResource) =>
-    api.put<Resource>(`/resources/${envId}/${id}`, data),
+    api.put<Resource>(`/environments/${envId}/resources/${id}`, data),
   delete: (envId: string, id: string) =>
-    api.del<{ ok: boolean }>(`/resources/${envId}/${id}`),
+    api.del<{ ok: boolean }>(`/environments/${envId}/resources/${id}`),
   testConnection: (data: TestConnectionRequest) =>
     api.post<TestConnectionResult>('/resources/test-connection', data),
 }

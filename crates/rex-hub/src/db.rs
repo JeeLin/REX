@@ -190,7 +190,12 @@ impl Database {
 
     pub fn query_audit_stats(&self, filter: &AuditFilter) -> Result<AuditStats> {
         let conn = self.conn()?;
-        let mut sql = String::from("SELECT COUNT(*) AS total FROM audit_log WHERE 1=1");
+        let mut sql = String::from(
+            "SELECT COUNT(*) AS total,
+                    SUM(CASE WHEN result = 'success' THEN 1 ELSE 0 END) AS success_count,
+                    SUM(CASE WHEN result = 'failure' THEN 1 ELSE 0 END) AS failure_count
+             FROM audit_log WHERE 1=1",
+        );
         let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
         let mut idx = 1;
 
@@ -217,28 +222,17 @@ impl Database {
         let param_refs: Vec<&dyn rusqlite::types::ToSql> =
             params.iter().map(|p| p.as_ref()).collect();
 
-        let total: i64 = conn
-            .query_row(&sql, param_refs.as_slice(), |row| row.get(0))
+        let stats = conn
+            .query_row(&sql, param_refs.as_slice(), |row| {
+                Ok(AuditStats {
+                    total: row.get(0)?,
+                    success_count: row.get(1)?,
+                    failure_count: row.get(2)?,
+                })
+            })
             .map_err(|e| RExError::Message(e.to_string()))?;
 
-        // Reuse same WHERE for success/failure counts
-        let mut sql_success = sql.replace("COUNT(*) AS total", "COUNT(*) AS sc");
-        let mut sql_failure = sql.replace("COUNT(*) AS total", "COUNT(*) AS fc");
-        sql_success.push_str(" AND result = 'success'");
-        sql_failure.push_str(" AND result = 'failure'");
-
-        let success_count: i64 = conn
-            .query_row(&sql_success, param_refs.as_slice(), |row| row.get(0))
-            .map_err(|e| RExError::Message(e.to_string()))?;
-        let failure_count: i64 = conn
-            .query_row(&sql_failure, param_refs.as_slice(), |row| row.get(0))
-            .map_err(|e| RExError::Message(e.to_string()))?;
-
-        Ok(AuditStats {
-            total,
-            success_count,
-            failure_count,
-        })
+        Ok(stats)
     }
 
     // --- Environments ---

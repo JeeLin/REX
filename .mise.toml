@@ -7,6 +7,7 @@ node = "latest"
 CARGO_TERM_COLOR = "always"
 RUST_BACKTRACE = "1"
 REX_STATIC_DIR = "packages/rex-console-web/dist"
+REX_DATA_DIR = "data/"
 
 [tasks.install-frontend]
 description = "Install frontend dependencies via Bun"
