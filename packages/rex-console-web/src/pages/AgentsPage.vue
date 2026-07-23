@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { agentsApi, type Agent } from '@/api/agents'
+import { agentsApi, type Agent, type AuditEntry } from '@/api/agents'
 import { useEnvironmentsStore } from '@/stores/environments'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
@@ -17,6 +17,11 @@ const loading = ref(true)
 const resetModal = ref(false)
 const resetAgentId = ref('')
 const resetToken = ref('')
+const logModal = ref(false)
+const logAgentName = ref('')
+const logEntries = ref<AuditEntry[]>([])
+const logLoading = ref(false)
+const logFilter = ref('')
 
 onMounted(async () => {
   await store.fetchEnvironments()
@@ -59,6 +64,26 @@ async function doResetToken() {
     // ignore
   }
 }
+
+async function openLogs(agent: Agent) {
+  logAgentName.value = agent.name
+  logFilter.value = ''
+  logEntries.value = []
+  logModal.value = true
+  logLoading.value = true
+  try {
+    logEntries.value = await agentsApi.getLogs(agent.id)
+  } catch {
+    // ignore
+  } finally {
+    logLoading.value = false
+  }
+}
+
+const filteredLogs = computed(() => {
+  if (!logFilter.value) return logEntries.value
+  return logEntries.value.filter(e => e.action.includes(logFilter.value))
+})
 </script>
 
 <template>
@@ -102,6 +127,7 @@ async function doResetToken() {
           </div>
         </div>
         <div class="agent-footer">
+          <Button variant="secondary" size="sm" @click="openLogs(agent)">{{ t('agents.logs') }}</Button>
           <Button variant="secondary" size="sm" @click="openResetToken(agent.id)">{{ t('agents.resetToken') }}</Button>
         </div>
       </Card>
@@ -122,6 +148,26 @@ async function doResetToken() {
         <code class="token-display mono">{{ resetToken }}</code>
         <div class="form-actions">
           <Button variant="primary" @click="resetModal = false">{{ t('agents.done') }}</Button>
+        </div>
+      </div>
+    </Modal>
+
+    <!-- Log Viewer Modal -->
+    <Modal v-model="logModal">
+      <template #title>{{ t('agents.logTitle') }} — {{ logAgentName }}</template>
+      <div class="log-content">
+        <div class="log-filter">
+          <input v-model="logFilter" class="form-input" :placeholder="t('agents.logFilter')" />
+        </div>
+        <div v-if="logLoading" class="log-loading">{{ t('common.loading') }}</div>
+        <div v-else-if="filteredLogs.length === 0" class="log-empty">{{ t('agents.noLogs') }}</div>
+        <div v-else class="log-list">
+          <div v-for="entry in filteredLogs" :key="entry.id" class="log-entry">
+            <span class="log-time mono">{{ new Date(entry.time).toLocaleString() }}</span>
+            <span class="log-action" :class="`log-action--${entry.action.toLowerCase()}`">{{ entry.action }}</span>
+            <span class="log-result" :class="entry.result === 'success' ? 'log-result--ok' : 'log-result--fail'">{{ entry.result }}</span>
+            <span v-if="entry.detail" class="log-detail muted">{{ entry.detail }}</span>
+          </div>
         </div>
       </div>
     </Modal>
@@ -217,5 +263,80 @@ async function doResetToken() {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);
+}
+.log-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: 400px;
+}
+.log-filter .form-input {
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+.log-loading, .log-empty {
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.log-list {
+  overflow-y: auto;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.log-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 6px var(--space-3);
+  border-radius: 4px;
+  font-size: var(--text-sm);
+  background: var(--bg-deep);
+}
+.log-entry:hover {
+  background: var(--bg-hover);
+}
+.log-time {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.log-action {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+.log-action--agent_online {
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--success);
+}
+.log-action--agent_offline {
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--danger);
+}
+.log-result {
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+}
+.log-result--ok { color: var(--success); }
+.log-result--fail { color: var(--danger); }
+.log-detail {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
 }
 </style>

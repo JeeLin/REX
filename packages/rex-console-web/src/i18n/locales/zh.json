@@ -75,7 +75,11 @@
     "resetDesc": "为此 Agent 生成新的注册令牌。",
     "generate": "生成",
     "newToken": "新令牌（请复制并更新 Agent 配置）：",
-    "done": "完成"
+    "done": "完成",
+    "logs": "日志",
+    "logTitle": "Agent 日志",
+    "logFilter": "按操作类型筛选...",
+    "noLogs": "暂无日志记录"
   },
   "auditLog": {
     "title": "审计日志",

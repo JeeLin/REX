@@ -15,6 +15,18 @@ export interface Agent {
   updated_at: string
 }
 
+export interface AuditEntry {
+  id: string
+  time: string
+  action: string
+  target: string | null
+  environment_id: string | null
+  resource_id: string | null
+  agent_id: string | null
+  result: string
+  detail: string | null
+}
+
 export const agentsApi = {
   listByEnv: (envId: string) =>
     api.get<Agent[]>(`/environments/${envId}/agents`),
@@ -22,4 +34,6 @@ export const agentsApi = {
     api.get<Agent>(`/agents/${id}`),
   resetToken: (id: string) =>
     api.post<{ token: string }>(`/agents/${id}/reset-token`),
+  getLogs: (agentId: string, action?: string) =>
+    api.get<AuditEntry[]>(`/audit-log?agent_id=${agentId}${action ? `&action=${action}` : ''}&limit=100`),
 }
