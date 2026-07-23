@@ -23,6 +23,30 @@ const logEntries = ref<AuditEntry[]>([])
 const logLoading = ref(false)
 const logFilter = ref('')
 
+// Deploy guide modal
+const deployModal = ref(false)
+const deployAgent = ref<Agent | null>(null)
+const deployTab = ref<'binary' | 'docker' | 'compose' | 'config'>('binary')
+const copySuccess = ref('')
+
+// Config modal
+const configModal = ref(false)
+const configAgent = ref<Agent | null>(null)
+const configAutoUpdate = ref(true)
+
+function hubHost(): string {
+  return window.location.origin
+}
+
+function envToken(agentEnvId: string): string {
+  const env = store.environments.find(e => e.id === agentEnvId)
+  return env?.agent_token || 'YOUR_TOKEN'
+}
+
+function envNameById(envId: string): string {
+  return store.environments.find(e => e.id === envId)?.name || envId
+}
+
 onMounted(async () => {
   await store.fetchEnvironments()
   const allAgents: Agent[] = []
@@ -80,6 +104,68 @@ async function openLogs(agent: Agent) {
   }
 }
 
+function openDeploy(agent: Agent) {
+  deployAgent.value = agent
+  deployTab.value = 'binary'
+  copySuccess.value = ''
+  deployModal.value = true
+}
+
+function openConfig(agent: Agent) {
+  configAgent.value = agent
+  configAutoUpdate.value = true
+  configModal.value = true
+}
+
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    copySuccess.value = 'copied'
+    setTimeout(() => { copySuccess.value = '' }, 2000)
+  } catch {
+    copySuccess.value = 'failed'
+    setTimeout(() => { copySuccess.value = '' }, 2000)
+  }
+}
+
+const deployCode = computed(() => {
+  if (!deployAgent.value) return ''
+  const host = hubHost()
+  const token = envToken(deployAgent.value.environment_id)
+  const os = deployAgent.value.os || 'linux'
+  const arch = deployAgent.value.arch || 'amd64'
+  if (deployTab.value === 'binary') {
+    return `# Download for ${os}/${arch}
+curl -LO ${host}/api/agents/download?os=${os}&arch=${arch}
+chmod +x rex-agent
+
+# Register with your environment
+./rex-agent register --server ${host} --token ${token}`
+  }
+  if (deployTab.value === 'docker') {
+    return `docker run -d \\
+  --name rex-agent \\
+  -e REX_SERVER=${host} \\
+  -e REX_TOKEN=${token} \\
+  rex/rex-agent:latest`
+  }
+  if (deployTab.value === 'compose') {
+    return `services:
+  rex-agent:
+    image: rex/rex-agent:latest
+    environment:
+      REX_SERVER: ${host}
+      REX_TOKEN: ${token}
+    restart: unless-stopped`
+  }
+  // config file
+  return `# ~/.rex/config.toml
+[agent]
+server = "${host}"
+token = "${token}"
+auto_update = true`
+})
+
 const filteredLogs = computed(() => {
   if (!logFilter.value) return logEntries.value
   const q = logFilter.value.toLowerCase()
@@ -128,6 +214,8 @@ const filteredLogs = computed(() => {
           </div>
         </div>
         <div class="agent-footer">
+          <Button variant="secondary" size="sm" @click="openDeploy(agent)">{{ t('agents.deploy') }}</Button>
+          <Button variant="secondary" size="sm" @click="openConfig(agent)">{{ t('agents.config') }}</Button>
           <Button variant="secondary" size="sm" @click="openLogs(agent)">{{ t('agents.logs') }}</Button>
           <Button variant="secondary" size="sm" @click="openResetToken(agent.id)">{{ t('agents.resetToken') }}</Button>
         </div>
@@ -168,6 +256,70 @@ const filteredLogs = computed(() => {
             <span class="log-action" :class="`log-action--${entry.action.toLowerCase()}`">{{ entry.action }}</span>
             <span class="log-result" :class="entry.result === 'success' ? 'log-result--ok' : 'log-result--fail'">{{ entry.result }}</span>
             <span v-if="entry.detail" class="log-detail muted">{{ entry.detail }}</span>
+          </div>
+        </div>
+      </div>
+    </Modal>
+
+    <!-- Deploy Guide Modal -->
+    <Modal v-model="deployModal">
+      <template #title>{{ t('agents.deployTitle') }} — {{ deployAgent?.name }}</template>
+      <div v-if="deployAgent" class="deploy-content">
+        <div class="deploy-tabs">
+          <button class="deploy-tab" :class="{ active: deployTab === 'binary' }" @click="deployTab = 'binary'">{{ t('agents.deployBinary') }}</button>
+          <button class="deploy-tab" :class="{ active: deployTab === 'docker' }" @click="deployTab = 'docker'">{{ t('agents.deployDocker') }}</button>
+          <button class="deploy-tab" :class="{ active: deployTab === 'compose' }" @click="deployTab = 'compose'">{{ t('agents.deployCompose') }}</button>
+          <button class="deploy-tab" :class="{ active: deployTab === 'config' }" @click="deployTab = 'config'">{{ t('agents.deployConfig') }}</button>
+        </div>
+        <div class="deploy-code">
+          <div class="deploy-code-header">
+            <span class="muted">{{ t('agents.deployCopyHint') }}</span>
+            <Button variant="secondary" size="sm" @click="copyText(deployCode)">{{ copySuccess ? t('agents.deployCopied') : t('agents.deployCopy') }}</Button>
+          </div>
+          <pre class="mono"><code>{{ deployCode }}</code></pre>
+        </div>
+      </div>
+    </Modal>
+
+    <!-- Config Modal -->
+    <Modal v-model="configModal">
+      <template #title>{{ t('agents.configTitle') }} — {{ configAgent?.name }}</template>
+      <div v-if="configAgent" class="config-content">
+        <div class="config-section">
+          <h3 class="config-section-title">{{ t('agents.configInfo') }}</h3>
+          <div class="config-row">
+            <span class="config-label muted">{{ t('agents.configEnvironment') }}</span>
+            <span>{{ envNameById(configAgent.environment_id) }}</span>
+          </div>
+          <div class="config-row">
+            <span class="config-label muted">Agent ID</span>
+            <span class="mono">{{ configAgent.id }}</span>
+          </div>
+          <div class="config-row">
+            <span class="config-label muted">{{ t('agents.version') }}</span>
+            <span class="mono">{{ configAgent.version || '—' }}</span>
+          </div>
+          <div class="config-row">
+            <span class="config-label muted">{{ t('agents.os') }}</span>
+            <span>{{ configAgent.os || '—' }}/{{ configAgent.arch }}</span>
+          </div>
+          <div class="config-row">
+            <span class="config-label muted">{{ t('agents.hostname') }}</span>
+            <span>{{ configAgent.hostname || '—' }}</span>
+          </div>
+        </div>
+        <div class="config-section">
+          <h3 class="config-section-title">{{ t('agents.configSettings') }}</h3>
+          <div class="config-row">
+            <span class="config-label muted">{{ t('agents.configServer') }}</span>
+            <span class="mono">{{ hubHost() }}</span>
+          </div>
+          <div class="config-row">
+            <span class="config-label muted">{{ t('agents.configAutoUpdate') }}</span>
+            <label class="toggle">
+              <input type="checkbox" v-model="configAutoUpdate" />
+              <span class="toggle-slider"></span>
+            </label>
           </div>
         </div>
       </div>
@@ -339,5 +491,120 @@ const filteredLogs = computed(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--text-xs);
+}
+/* Deploy guide modal */
+.deploy-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.deploy-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-deep);
+  border-radius: 6px;
+  padding: 2px;
+}
+.deploy-tab {
+  flex: 1;
+  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.deploy-tab:hover { color: var(--text-primary); }
+.deploy-tab.active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.deploy-code {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.deploy-code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-xs);
+}
+.deploy-code pre {
+  margin: 0;
+  padding: 12px;
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-primary);
+}
+/* Config modal */
+.config-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.config-section-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+.config-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.config-row:last-child { border-bottom: none; }
+.config-label {
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  min-width: 100px;
+}
+/* Toggle switch */
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  cursor: pointer;
+}
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-hover);
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 2px;
+  top: 2px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: transform 0.2s, background 0.2s;
+}
+.toggle input:checked + .toggle-slider {
+  background: var(--accent);
+}
+.toggle input:checked + .toggle-slider::before {
+  transform: translateX(16px);
+  background: #fff;
 }
 </style>
