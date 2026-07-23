@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.36.0] - 2026-07-23
+
+### Added
+- CommandPalette：从 environments store 读取真实数据，支持搜索环境/命令/设置
+- 会话超时：idle 检测（5 秒轮询）+ 60 秒警告对话框 + 自动登出
+- 会话超时配置：设置页支持 15/30/60/120 分钟超时时间选择
+- 警告对话框：显示倒计时，支持「续期」和「登出」操作
+
+### Changed
+- CommandPalette：所有标签使用 i18n 翻译，支持中英文切换
+- 设置页：主题/语言设置双写 localStorage + 后端 settings API
+
+### Fixed
+- 会话超时登出按钮：清除 auth token 后重定向到登录页
+- NaN timeout 防护：localStorage 损坏时降级到默认值 30 分钟
+- CommandPalette 全局 keydown 泄漏：面板隐藏时不监听键盘事件
+- session_timeout 加载：从后端读取设置时不覆盖 localStorage 值
+
 ## [0.35.1] - 2026-07-23
 
 ### Added
