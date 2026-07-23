@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue'
 import { Splitpanes, Pane } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import StatusDot from '@/components/ui/StatusDot.vue'
@@ -10,11 +10,13 @@ import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
 import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
 import CommandPalette from '@/features/workspace/CommandPalette.vue'
 import TerminalView from '@/features/terminal/TerminalView.vue'
-import SqlPage from '@/features/sql/SqlPage.vue'
-import RedisPage from '@/features/redis/RedisPage.vue'
-import FilesPage from '@/features/files/FilesPage.vue'
 import FilesDrawer from '@/features/files/FilesDrawer.vue'
 import { PROTOCOL_COLORS } from '@/features/resource/protocols'
+
+// 懒加载重型组件，拆分 chunk
+const SqlPage = defineAsyncComponent(() => import('@/features/sql/SqlPage.vue'))
+const RedisPage = defineAsyncComponent(() => import('@/features/redis/RedisPage.vue'))
+const FilesPage = defineAsyncComponent(() => import('@/features/files/FilesPage.vue'))
 
 interface Tab {
   id: string
