@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.37.0] - 2026-07-23
+
+### Added
+- 工作区快捷键补全：Ctrl+N 新建连接、F11 全屏切换、Alt+6-9 标签跳转
+- Agent 审计日志：WebSocket 连接/断开时写入 AGENT_ONLINE/AGENT_OFFLINE 事件
+- Agent 日志查看：Agent 管理页新增日志弹窗，按 agent_id 筛选审计日志
+
+### Fixed
+- 路由参数名冲突：resource_api 中 {env_id} 与 env_api 中 {id} 导致 Axum 合并失败，统一参数命名
+- unwrap() 安全：agent_ws.rs 中 4 处 serde_json::to_string().unwrap() 改为错误处理
+- os/arch 输入验证：Agent 心跳上报的 os/arch 值增加白名单校验
+- AuditQuery 补全 environment_id 参数传递
+- 日志搜索：Agents 页面日志过滤改为大小写不敏感
+
 ## [0.36.0] - 2026-07-23
 
 ### Added
