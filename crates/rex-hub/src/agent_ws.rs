@@ -226,6 +226,22 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
 
     tracing::info!(agent_id = %verified_id, "agent WebSocket connected");
 
+    // 审计日志：Agent 上线
+    {
+        let audit_db = state.db.clone();
+        let aid = verified_id.clone();
+        let _ = tokio::task::spawn_blocking(move || {
+            audit_db.write_audit_log(&crate::models::NewAuditEntry {
+                action: "AGENT_ONLINE".into(),
+                target: Some(aid.clone()),
+                agent_id: Some(aid),
+                result: "success".into(),
+                ..Default::default()
+            })
+        })
+        .await;
+    }
+
     // 4. 创建事件通道
     let (evt_tx, mut evt_rx) = mpsc::channel::<AgentEvent>(256);
 
@@ -285,6 +301,22 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
 
     // 7. 清理
     tracing::info!(agent_id = %agent_id, "agent WebSocket disconnected");
+
+    // 审计日志：Agent 离线
+    {
+        let audit_db = state.db.clone();
+        let aid = agent_id.clone();
+        let _ = tokio::task::spawn_blocking(move || {
+            audit_db.write_audit_log(&crate::models::NewAuditEntry {
+                action: "AGENT_OFFLINE".into(),
+                target: Some(aid.clone()),
+                agent_id: Some(aid),
+                result: "success".into(),
+                ..Default::default()
+            })
+        })
+        .await;
+    }
 
     // 标记 offline
     let db = state.db.clone();
