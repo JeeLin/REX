@@ -19,15 +19,15 @@ fn err(status: StatusCode, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
 /// 资源路由（嵌套在 /api/environments 下）
 pub fn resource_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/{env_id}/resources", axum::routing::get(list_resources))
-        .route("/{env_id}/resources", axum::routing::post(create_resource))
-        .route("/{env_id}/resources/{id}", axum::routing::get(get_resource))
+        .route("/{id}/resources", axum::routing::get(list_resources))
+        .route("/{id}/resources", axum::routing::post(create_resource))
+        .route("/{id}/resources/{rid}", axum::routing::get(get_resource))
         .route(
-            "/{env_id}/resources/{id}",
+            "/{id}/resources/{rid}",
             axum::routing::put(update_resource),
         )
         .route(
-            "/{env_id}/resources/{id}",
+            "/{id}/resources/{rid}",
             axum::routing::delete(delete_resource),
         )
 }
@@ -36,10 +36,10 @@ pub fn resource_routes() -> axum::Router<AppState> {
 
 async fn list_resources(
     State(state): State<AppState>,
-    Path(env_id): Path<String>,
+    Path(id): Path<String>,
 ) -> ApiResult<Vec<Resource>> {
     let db = state.db.clone();
-    let mut resources = tokio::task::spawn_blocking(move || db.list_resources_by_env(&env_id))
+    let mut resources = tokio::task::spawn_blocking(move || db.list_resources_by_env(&id))
         .await
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
@@ -56,10 +56,10 @@ async fn list_resources(
 
 async fn get_resource(
     State(state): State<AppState>,
-    Path((_env_id, id)): Path<(String, String)>,
+    Path((_id, rid)): Path<(String, String)>,
 ) -> ApiResult<Resource> {
     let db = state.db.clone();
-    let mut resource = tokio::task::spawn_blocking(move || db.get_resource(&id))
+    let mut resource = tokio::task::spawn_blocking(move || db.get_resource(&rid))
         .await
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
@@ -75,7 +75,7 @@ async fn get_resource(
 
 async fn create_resource(
     State(state): State<AppState>,
-    Path(env_id): Path<String>,
+    Path(id): Path<String>,
     Json(mut body): Json<NewResource>,
 ) -> ApiResult<Resource> {
     if body.name.trim().is_empty() {
@@ -93,7 +93,7 @@ async fn create_resource(
     }
     // 验证环境存在
     let db = state.db.clone();
-    let env_id_check = env_id.clone();
+    let env_id_check = id.clone();
     let env_exists = tokio::task::spawn_blocking(move || db.get_environment(&env_id_check))
         .await
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
@@ -103,7 +103,7 @@ async fn create_resource(
         return Err(err(StatusCode::NOT_FOUND, "environment not found"));
     }
     let db = state.db.clone();
-    let resource = tokio::task::spawn_blocking(move || db.create_resource(&env_id, &body))
+    let resource = tokio::task::spawn_blocking(move || db.create_resource(&id, &body))
         .await
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
@@ -126,7 +126,7 @@ async fn create_resource(
 
 async fn update_resource(
     State(state): State<AppState>,
-    Path((env_id, id)): Path<(String, String)>,
+    Path((id, rid)): Path<(String, String)>,
     Json(mut body): Json<NewResource>,
 ) -> ApiResult<Resource> {
     // 加密 config_json 中的凭据
@@ -137,7 +137,7 @@ async fn update_resource(
         }
     }
     let db = state.db.clone();
-    let resource = tokio::task::spawn_blocking(move || db.update_resource(&env_id, &id, &body))
+    let resource = tokio::task::spawn_blocking(move || db.update_resource(&id, &rid, &body))
         .await
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
         .map_err(|e| {
@@ -153,10 +153,10 @@ async fn update_resource(
 
 async fn delete_resource(
     State(state): State<AppState>,
-    Path((env_id, id)): Path<(String, String)>,
+    Path((env_id, rid)): Path<(String, String)>,
 ) -> ApiResult<serde_json::Value> {
     let db = state.db.clone();
-    let check_id = id.clone();
+    let check_id = rid.clone();
     let resource = tokio::task::spawn_blocking(move || db.get_resource(&check_id))
         .await
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
@@ -168,7 +168,7 @@ async fn delete_resource(
 
     let db = state.db.clone();
     let del_env_id = env_id.clone();
-    let del_id = id.clone();
+    let del_id = rid.clone();
     tokio::task::spawn_blocking(move || db.delete_resource(&del_env_id, &del_id))
         .await
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
@@ -180,7 +180,6 @@ async fn delete_resource(
         audit_db.write_audit_log(&crate::models::NewAuditEntry {
             action: "RESOURCE_DELETE".into(),
             target: Some(res_name),
-            environment_id: Some(env_id),
             result: "success".into(),
             ..Default::default()
         })
