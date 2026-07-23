@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const props = defineProps<{ show: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
@@ -16,63 +18,63 @@ watch(() => props.show, (visible) => {
   }
 })
 
-const groups = [
+const groups = computed(() => [
   {
-    title: 'Workspace',
+    title: t('shortcuts.groupWorkspace'),
     shortcuts: [
-      { keys: 'Ctrl+K', desc: 'Global search / Command palette' },
-      { keys: 'Ctrl+N', desc: 'New connection' },
-      { keys: 'Ctrl+T', desc: 'New tab (same protocol)' },
-      { keys: 'Ctrl+W', desc: 'Close current tab' },
-      { keys: 'Ctrl+Tab', desc: 'Switch next tab' },
-      { keys: 'Ctrl+Shift+Tab', desc: 'Switch previous tab' },
-      { keys: 'Alt+1~9', desc: 'Jump to tab N' },
-      { keys: 'Ctrl+\\', desc: 'Split horizontal' },
-      { keys: 'Ctrl+Shift+\\', desc: 'Split vertical' },
-      { keys: 'Alt+1', desc: 'Layout: single pane' },
-      { keys: 'Alt+2', desc: 'Layout: left-right split' },
-      { keys: 'Alt+3', desc: 'Layout: top-bottom split' },
-      { keys: 'Alt+4', desc: 'Layout: four grid' },
-      { keys: 'Alt+5', desc: 'Layout: main + side' },
-      { keys: 'F11', desc: 'Toggle fullscreen' },
-      { keys: 'F1', desc: 'Toggle shortcuts panel' },
+      { keys: 'Ctrl+K', desc: t('shortcuts.globalSearch') },
+      { keys: 'Ctrl+N', desc: t('shortcuts.newConnection') },
+      { keys: 'Ctrl+T', desc: t('shortcuts.newTab') },
+      { keys: 'Ctrl+W', desc: t('shortcuts.closeTab') },
+      { keys: 'Ctrl+Tab', desc: t('shortcuts.nextTab') },
+      { keys: 'Ctrl+Shift+Tab', desc: t('shortcuts.prevTab') },
+      { keys: 'Alt+1~9', desc: t('shortcuts.jumpTab') },
+      { keys: 'Ctrl+\\', desc: t('shortcuts.splitH') },
+      { keys: 'Ctrl+Shift+\\', desc: t('shortcuts.splitV') },
+      { keys: 'Alt+1', desc: t('shortcuts.layoutSingle') },
+      { keys: 'Alt+2', desc: t('shortcuts.layoutLR') },
+      { keys: 'Alt+3', desc: t('shortcuts.layoutTB') },
+      { keys: 'Alt+4', desc: t('shortcuts.layoutGrid') },
+      { keys: 'Alt+5', desc: t('shortcuts.layoutMain') },
+      { keys: 'F11', desc: t('shortcuts.fullscreen') },
+      { keys: 'F1', desc: t('shortcuts.toggleShortcuts') },
     ],
   },
   {
-    title: 'SSH Terminal',
+    title: t('shortcuts.groupSSH'),
     shortcuts: [
-      { keys: 'Ctrl+Shift+C', desc: 'Copy selection' },
-      { keys: 'Ctrl+Shift+V', desc: 'Paste (bracketed)' },
-      { keys: 'Ctrl+F', desc: 'Find in terminal' },
-      { keys: 'Ctrl+L', desc: 'Clear screen' },
+      { keys: 'Ctrl+Shift+C', desc: t('shortcuts.copy') },
+      { keys: 'Ctrl+Shift+V', desc: t('shortcuts.paste') },
+      { keys: 'Ctrl+F', desc: t('shortcuts.findTerminal') },
+      { keys: 'Ctrl+L', desc: t('shortcuts.clearScreen') },
     ],
   },
   {
-    title: 'SQL Console',
+    title: t('shortcuts.groupSQL'),
     shortcuts: [
-      { keys: 'Ctrl+Enter', desc: 'Execute (Run)' },
-      { keys: 'Ctrl+Shift+F', desc: 'Format SQL' },
-      { keys: 'Ctrl+S', desc: 'Save query' },
-      { keys: 'Ctrl+F', desc: 'Find' },
-      { keys: 'Ctrl+Shift+R', desc: 'Find & Replace' },
-      { keys: 'Ctrl+Shift+Q', desc: 'Global query' },
-      { keys: 'Ctrl+Shift+A', desc: 'AI assistant' },
+      { keys: 'Ctrl+Enter', desc: t('shortcuts.execute') },
+      { keys: 'Ctrl+Shift+F', desc: t('shortcuts.formatSQL') },
+      { keys: 'Ctrl+S', desc: t('shortcuts.saveQuery') },
+      { keys: 'Ctrl+F', desc: t('shortcuts.find') },
+      { keys: 'Ctrl+Shift+R', desc: t('shortcuts.findReplace') },
+      { keys: 'Ctrl+Shift+Q', desc: t('shortcuts.globalQuery') },
+      { keys: 'Ctrl+Shift+A', desc: t('shortcuts.aiAssistant') },
     ],
   },
   {
-    title: 'File Manager',
+    title: t('shortcuts.groupFile'),
     shortcuts: [
-      { keys: 'F2', desc: 'Rename' },
-      { keys: 'F4', desc: 'Edit (temporary download)' },
-      { keys: 'F5', desc: 'Download (active → opposite)' },
-      { keys: 'F6', desc: 'Upload (active → opposite)' },
-      { keys: 'F7', desc: 'New folder' },
-      { keys: 'F8 / Delete', desc: 'Delete' },
-      { keys: 'Ctrl+R', desc: 'Refresh' },
-      { keys: 'Tab', desc: 'Switch active panel' },
+      { keys: 'F2', desc: t('shortcuts.renameFile') },
+      { keys: 'F4', desc: t('shortcuts.editFile') },
+      { keys: 'F5', desc: t('shortcuts.download') },
+      { keys: 'F6', desc: t('shortcuts.upload') },
+      { keys: 'F7', desc: t('shortcuts.newFolder') },
+      { keys: 'F8 / Delete', desc: t('shortcuts.deleteFile') },
+      { keys: 'Ctrl+R', desc: t('shortcuts.refreshFiles') },
+      { keys: 'Tab', desc: t('shortcuts.switchPanel') },
     ],
   },
-]
+])
 </script>
 
 <template>
@@ -83,7 +85,7 @@ const groups = [
     <Transition name="panel">
       <div v-if="show" class="shortcut-panel">
         <header class="sp-header">
-          <h3 class="sp-title mono">Keyboard Shortcuts</h3>
+          <h3 class="sp-title mono">{{ t('shortcuts.title') }}</h3>
           <button class="sp-close" @click="emit('close')" aria-label="Close">×</button>
         </header>
         <div class="sp-body">

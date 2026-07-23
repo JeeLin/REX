@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Splitpanes, Pane } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import StatusDot from '@/components/ui/StatusDot.vue'
@@ -17,6 +18,8 @@ import { PROTOCOL_COLORS } from '@/features/resource/protocols'
 const SqlPage = defineAsyncComponent(() => import('@/features/sql/SqlPage.vue'))
 const RedisPage = defineAsyncComponent(() => import('@/features/redis/RedisPage.vue'))
 const FilesPage = defineAsyncComponent(() => import('@/features/files/FilesPage.vue'))
+
+const { t } = useI18n()
 
 interface Tab {
   id: string
@@ -474,21 +477,21 @@ useKeyboardShortcuts([
     <Teleport to="body">
       <div v-if="tabContextMenu.show" class="tab-ctx-overlay" @click="tabContextMenu.show = false" @contextmenu.prevent="tabContextMenu.show = false" />
       <div v-if="tabContextMenu.show" class="tab-ctx-menu" :style="{ top: tabContextMenu.y + 'px', left: tabContextMenu.x + 'px' }">
-        <div class="tab-ctx-item" @click="startRename(tabContextMenu.tabId)">✏️ Rename</div>
-        <div class="tab-ctx-item" @click="duplicateTab(tabContextMenu.tabId)">📋 Duplicate</div>
+        <div class="tab-ctx-item" @click="startRename(tabContextMenu.tabId)">✏️ {{ t('workspace.rename') }}</div>
+        <div class="tab-ctx-item" @click="duplicateTab(tabContextMenu.tabId)">📋 {{ t('workspace.duplicate') }}</div>
         <div class="tab-ctx-item" @click="toggleBroadcast(tabContextMenu.tabId)">
-          {{ tabs.find(t => t.id === tabContextMenu.tabId)?.broadcast ? '📡 Stop Broadcast' : '📡 Broadcast Input' }}
+          {{ tabs.find(tab => tab.id === tabContextMenu.tabId)?.broadcast ? '📡 ' + t('workspace.stopBroadcast') : '📡 ' + t('workspace.broadcastInput') }}
         </div>
         <div class="tab-ctx-separator" />
-        <div class="tab-ctx-item" @click="closeTab(tabContextMenu.tabId)">Close</div>
-        <div class="tab-ctx-item" @click="closeOtherTabs(tabContextMenu.tabId)">Close Others</div>
-        <div class="tab-ctx-item" @click="closeTabsLeft(tabContextMenu.tabId)">Close Left</div>
-        <div class="tab-ctx-item" @click="closeTabsRight(tabContextMenu.tabId)">Close Right</div>
-        <div class="tab-ctx-item" @click="closeAllTabs()">Close All</div>
+        <div class="tab-ctx-item" @click="closeTab(tabContextMenu.tabId)">{{ t('workspace.close') }}</div>
+        <div class="tab-ctx-item" @click="closeOtherTabs(tabContextMenu.tabId)">{{ t('workspace.closeOthers') }}</div>
+        <div class="tab-ctx-item" @click="closeTabsLeft(tabContextMenu.tabId)">{{ t('workspace.closeLeft') }}</div>
+        <div class="tab-ctx-item" @click="closeTabsRight(tabContextMenu.tabId)">{{ t('workspace.closeRight') }}</div>
+        <div class="tab-ctx-item" @click="closeAllTabs()">{{ t('workspace.closeAll') }}</div>
         <div class="tab-ctx-separator" />
-        <div class="tab-ctx-item" @click="openProperties(tabContextMenu.tabId)">⚙ Properties</div>
+        <div class="tab-ctx-item" @click="openProperties(tabContextMenu.tabId)">⚙ {{ t('workspace.properties') }}</div>
         <div class="tab-ctx-separator" />
-        <div class="tab-ctx-label muted">Color</div>
+        <div class="tab-ctx-label muted">{{ t('workspace.color') }}</div>
         <div class="tab-ctx-colors">
           <button
             v-for="c in tabColors"
@@ -519,11 +522,11 @@ useKeyboardShortcuts([
           <Pane v-for="i in splitCount" :key="i" :size="100 / splitCount" :min-size="20">
             <div class="ws-pane">
               <div class="ws-pane-header mono">
-                <span>{{ activeTabInfo?.label || 'No tab open' }}</span>
+                <span>{{ activeTabInfo?.label || t('workspace.noTabOpen') }}</span>
                 <div class="ws-pane-actions">
-                  <button class="ws-pane-btn" @click="splitHorizontal" title="Split horizontal (Ctrl+\)">⊞</button>
-                  <button class="ws-pane-btn" @click="splitVertical" title="Split vertical (Ctrl+Shift+\)">⊟</button>
-                  <button v-if="splitCount > 1" class="ws-pane-btn" @click="closePane(i - 1)" title="Close pane">×</button>
+                  <button class="ws-pane-btn" @click="splitHorizontal" :title="t('workspace.splitH')">⊞</button>
+                  <button class="ws-pane-btn" @click="splitVertical" :title="t('workspace.splitV')">⊟</button>
+                  <button v-if="splitCount > 1" class="ws-pane-btn" @click="closePane(i - 1)" :title="t('workspace.closePane')">×</button>
                 </div>
               </div>
 
@@ -594,7 +597,7 @@ useKeyboardShortcuts([
               <!-- Empty state -->
               <div v-else class="ws-component-placeholder">
                 <div class="ws-placeholder-text muted">
-                  No connection open. Click a resource in the sidebar to get started.
+                  {{ t('workspace.noConnectionDesc') }}
                 </div>
               </div>
             </div>
@@ -607,13 +610,13 @@ useKeyboardShortcuts([
     <div class="ws-statusbar mono">
       <span class="ws-status-item">
         <StatusDot :status="activeTabInfo ? statusColor(activeTabInfo.status) : 'offline'" />
-        {{ activeTabInfo ? formatConnection(activeTabInfo) : 'No connection' }}
+        {{ activeTabInfo ? formatConnection(activeTabInfo) : t('workspace.noConnection') }}
       </span>
       <span v-if="activeTabInfo?.protocol === 'ssh' && terminalSize" class="ws-status-item">
         {{ terminalSize.cols }}×{{ terminalSize.rows }}
       </span>
       <span v-if="activeTabInfo?.protocol === 'ssh'" class="ws-status-item">{{ activeTabInfo.encoding || 'UTF-8' }}</span>
-      <span v-if="activeTabInfo?.broadcast" class="ws-status-item ws-broadcast-indicator">📡 Broadcast</span>
+      <span v-if="activeTabInfo?.broadcast" class="ws-status-item ws-broadcast-indicator">📡 {{ t('workspace.broadcastIndicator') }}</span>
       <span class="ws-status-spacer" />
       <span class="ws-status-item ws-quick-actions">
         <button class="ws-action-btn" @click="splitHorizontal" title="Split horizontal">⊞</button>

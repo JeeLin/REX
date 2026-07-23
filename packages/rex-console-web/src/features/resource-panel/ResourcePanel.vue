@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
 import type { Environment } from '@/api/environments'
 import type { Resource } from '@/api/resources'
@@ -7,6 +8,7 @@ import { resourcesApi } from '@/api/resources'
 import { PROTOCOL_ICONS, PROTOCOL_COLORS } from '@/features/resource/protocols'
 import WizardModal from '@/features/resource/WizardModal.vue'
 
+const { t } = useI18n()
 const store = useEnvironmentsStore()
 
 const searchQuery = ref('')
@@ -80,7 +82,7 @@ defineExpose({ envResources })
     <!-- Header -->
     <div class="rp-header">
       <div class="rp-tabs">
-        <button class="rp-tab mono rp-tab--active">Connections</button>
+        <button class="rp-tab mono rp-tab--active">{{ t('resourcePanel.connections') }}</button>
       </div>
     </div>
 
@@ -90,14 +92,14 @@ defineExpose({ envResources })
         v-model="searchQuery"
         type="text"
         class="rp-search-input mono"
-        placeholder="Search..."
+        :placeholder="t('resourcePanel.searchPlaceholder')"
       />
     </div>
 
     <!-- Content -->
     <div class="rp-content">
       <div v-if="filteredEnvs.length === 0 && !store.loading" class="rp-empty muted">
-        No environments yet
+        {{ t('resourcePanel.noEnvironments') }}
       </div>
 
       <template v-for="env in filteredEnvs" :key="env.id">
@@ -106,7 +108,7 @@ defineExpose({ envResources })
           <span class="rp-chevron" :class="{ 'rp-collapsed': collapsedEnvs.has(env.id) }">▸</span>
           <span class="rp-group-name mono">{{ env.name }}</span>
           <span class="rp-group-count muted">{{ env.resource_count }}</span>
-          <button class="rp-add-btn" title="Add resource" @click="openWizard(env.id, $event)">+</button>
+          <button class="rp-add-btn" :title="t('resourcePanel.addResource')" @click="openWizard(env.id, $event)">+</button>
         </div>
 
         <!-- Resources under this environment -->
@@ -123,7 +125,7 @@ defineExpose({ envResources })
             <span class="rp-item-host mono muted">{{ res.host }}</span>
           </div>
           <div v-if="getResources(env.id).length === 0" class="rp-item rp-empty-item muted">
-            No resources
+            {{ t('resourcePanel.noResources') }}
           </div>
         </div>
       </template>

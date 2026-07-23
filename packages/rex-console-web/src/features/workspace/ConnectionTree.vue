@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import { useEnvironmentsStore } from '@/stores/environments'
 import { resourcesApi, type Resource } from '@/api/resources'
 import { PROTOCOL_ICONS, PROTOCOL_COLORS } from '@/features/resource/protocols'
+
+const { t } = useI18n()
 
 interface TreeNode {
   id: string
@@ -88,12 +91,12 @@ function toggleGroup(id: string) {
         v-model="searchQuery"
         type="text"
         class="ct-search-input mono"
-        placeholder="Search..."
+        :placeholder="t('resourcePanel.searchPlaceholder')"
       />
     </div>
     <div class="ct-content">
       <div v-if="filteredTree.length === 0 && !store.loading" class="ct-empty muted">
-        No environments
+        {{ t('resourcePanel.noEnvironments') }}
       </div>
       <template v-for="group in filteredTree" :key="group.id">
         <div class="ct-group" @click="toggleGroup(group.id)">
