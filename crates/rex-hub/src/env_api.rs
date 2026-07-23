@@ -12,13 +12,18 @@ type ApiResult<T> = Result<Json<T>, (StatusCode, Json<serde_json::Value>)>;
 
 pub fn env_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/", axum::routing::get(list_environments))
-        .route("/", axum::routing::post(create_environment))
+        .route(
+            "/",
+            axum::routing::get(list_environments).post(create_environment),
+        )
         .route("/export", axum::routing::get(export_environments))
         .route("/import", axum::routing::post(import_environments))
-        .route("/{id}", axum::routing::get(get_environment))
-        .route("/{id}", axum::routing::put(update_environment))
-        .route("/{id}", axum::routing::delete(delete_environment))
+        .route(
+            "/{id}",
+            axum::routing::get(get_environment)
+                .put(update_environment)
+                .delete(delete_environment),
+        )
 }
 
 fn err(status: StatusCode, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
