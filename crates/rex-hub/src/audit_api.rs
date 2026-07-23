@@ -4,7 +4,7 @@ use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::Json;
 
-use crate::models::{AuditEntry, AuditFilter};
+use crate::models::{AuditEntry, AuditFilter, AuditStats};
 use crate::AppState;
 
 type ApiResult<T> = Result<Json<T>, (StatusCode, Json<serde_json::Value>)>;
@@ -17,7 +17,9 @@ fn err(status: StatusCode, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
 }
 
 pub fn audit_routes() -> axum::Router<AppState> {
-    axum::Router::new().route("/", axum::routing::get(query_audit_log))
+    axum::Router::new()
+        .route("/", axum::routing::get(query_audit_log))
+        .route("/stats", axum::routing::get(query_audit_stats))
 }
 
 #[derive(serde::Deserialize, Default)]
@@ -40,7 +42,7 @@ async fn query_audit_log(
         time_from: q.time_from,
         time_to: q.time_to,
         action: q.action,
-        environment_id: None,
+        environment_id: q.environment_id,
         agent_id: q.agent_id,
         result: q.result,
         limit: q.limit.or(Some(100)),
@@ -52,4 +54,34 @@ async fn query_audit_log(
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
     Ok(Json(entries))
+}
+
+#[derive(serde::Deserialize, Default)]
+pub struct AuditStatsQuery {
+    pub action: Option<String>,
+    pub environment_id: Option<String>,
+    pub time_from: Option<String>,
+    pub time_to: Option<String>,
+}
+
+async fn query_audit_stats(
+    State(state): State<AppState>,
+    Query(q): Query<AuditStatsQuery>,
+) -> ApiResult<AuditStats> {
+    let filter = AuditFilter {
+        time_from: q.time_from,
+        time_to: q.time_to,
+        action: q.action,
+        environment_id: q.environment_id,
+        agent_id: None,
+        result: None,
+        limit: None,
+        offset: None,
+    };
+    let db = state.db.clone();
+    let stats = tokio::task::spawn_blocking(move || db.query_audit_stats(&filter))
+        .await
+        .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
+        .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
+    Ok(Json(stats))
 }

@@ -119,3 +119,10 @@ pub struct AuditFilter {
     pub limit: Option<u64>,
     pub offset: Option<u64>,
 }
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AuditStats {
+    pub total: i64,
+    pub success_count: i64,
+    pub failure_count: i64,
+}

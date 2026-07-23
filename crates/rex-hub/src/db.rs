@@ -188,6 +188,59 @@ impl Database {
         Ok(entries)
     }
 
+    pub fn query_audit_stats(&self, filter: &AuditFilter) -> Result<AuditStats> {
+        let conn = self.conn()?;
+        let mut sql = String::from("SELECT COUNT(*) AS total FROM audit_log WHERE 1=1");
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+        let mut idx = 1;
+
+        if let Some(ref t) = filter.time_from {
+            sql.push_str(&format!(" AND time >= ?{idx}"));
+            params.push(Box::new(t.clone()));
+            idx += 1;
+        }
+        if let Some(ref t) = filter.time_to {
+            sql.push_str(&format!(" AND time <= ?{idx}"));
+            params.push(Box::new(t.clone()));
+            idx += 1;
+        }
+        if let Some(ref a) = filter.action {
+            sql.push_str(&format!(" AND action = ?{idx}"));
+            params.push(Box::new(a.clone()));
+            idx += 1;
+        }
+        if let Some(ref env) = filter.environment_id {
+            sql.push_str(&format!(" AND environment_id = ?{idx}"));
+            params.push(Box::new(env.clone()));
+        }
+
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params.iter().map(|p| p.as_ref()).collect();
+
+        let total: i64 = conn
+            .query_row(&sql, param_refs.as_slice(), |row| row.get(0))
+            .map_err(|e| RExError::Message(e.to_string()))?;
+
+        // Reuse same WHERE for success/failure counts
+        let mut sql_success = sql.replace("COUNT(*) AS total", "COUNT(*) AS sc");
+        let mut sql_failure = sql.replace("COUNT(*) AS total", "COUNT(*) AS fc");
+        sql_success.push_str(" AND result = 'success'");
+        sql_failure.push_str(" AND result = 'failure'");
+
+        let success_count: i64 = conn
+            .query_row(&sql_success, param_refs.as_slice(), |row| row.get(0))
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let failure_count: i64 = conn
+            .query_row(&sql_failure, param_refs.as_slice(), |row| row.get(0))
+            .map_err(|e| RExError::Message(e.to_string()))?;
+
+        Ok(AuditStats {
+            total,
+            success_count,
+            failure_count,
+        })
+    }
+
     // --- Environments ---
 
     pub fn list_environments(&self) -> Result<Vec<Environment>> {
