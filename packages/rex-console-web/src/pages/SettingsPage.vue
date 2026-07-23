@@ -22,7 +22,12 @@ const saveMessage = ref('')
 
 onMounted(async () => {
   try {
-    settings.value = await settingsApi.get()
+    const remote = await settingsApi.get()
+    // Merge remote settings, preserving frontend-only fields
+    settings.value = {
+      ...remote,
+      session_timeout: parseInt(localStorage.getItem('rex-session-timeout') || '30', 10),
+    }
     document.documentElement.dataset.theme = settings.value.theme === 'light' ? 'light' : undefined
     localStorage.setItem('rex-theme', settings.value.theme)
     // Sync i18n locale from saved settings
