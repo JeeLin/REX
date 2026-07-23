@@ -116,7 +116,10 @@
     "bgImageNone": "无",
     "bgImageGrid": "网格",
     "bgImageDots": "圆点",
-    "bgImageGradient": "渐变"
+    "bgImageGradient": "渐变",
+    "security": "安全",
+    "sessionTimeout": "会话超时",
+    "minutes": "分钟"
   },
   "login": {
     "subtitle": "远程资源管理",

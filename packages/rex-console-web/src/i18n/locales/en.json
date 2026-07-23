@@ -116,7 +116,10 @@
     "bgImageNone": "None",
     "bgImageGrid": "Grid",
     "bgImageDots": "Dots",
-    "bgImageGradient": "Gradient"
+    "bgImageGradient": "Gradient",
+    "security": "Security",
+    "sessionTimeout": "Session Timeout",
+    "minutes": "minutes"
   },
   "login": {
     "subtitle": "Remote Resource Management",

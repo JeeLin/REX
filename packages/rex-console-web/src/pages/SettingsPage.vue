@@ -14,6 +14,7 @@ const settings = ref<Settings>({
   terminal_theme: 'default',
   terminal_opacity: 100,
   terminal_bg_image: 'none',
+  session_timeout: parseInt(localStorage.getItem('rex-session-timeout') || '30', 10),
 })
 const loading = ref(true)
 const saving = ref(false)
@@ -56,6 +57,8 @@ async function saveSettings() {
       opacity: settings.value.terminal_opacity,
       backgroundImage: settings.value.terminal_bg_image,
     }))
+    // Session timeout (localStorage only, frontend concern)
+    localStorage.setItem('rex-session-timeout', String(settings.value.session_timeout))
     saveMessage.value = t('settings.saved')
     setTimeout(() => saveMessage.value = '', 2000)
   } catch (e: unknown) {
@@ -117,6 +120,19 @@ async function saveSettings() {
           <option value="grid">{{ t('settings.bgImageGrid') }}</option>
           <option value="dots">{{ t('settings.bgImageDots') }}</option>
           <option value="gradient">{{ t('settings.bgImageGradient') }}</option>
+        </select>
+      </div>
+    </Card>
+
+    <Card class="settings-section">
+      <h2 class="section-title">{{ t('settings.security') }}</h2>
+      <div class="form-group">
+        <label class="form-label">{{ t('settings.sessionTimeout') }}</label>
+        <select v-model.number="settings.session_timeout" class="form-input">
+          <option :value="15">15 {{ t('settings.minutes') }}</option>
+          <option :value="30">30 {{ t('settings.minutes') }}</option>
+          <option :value="60">60 {{ t('settings.minutes') }}</option>
+          <option :value="120">120 {{ t('settings.minutes') }}</option>
         </select>
       </div>
     </Card>

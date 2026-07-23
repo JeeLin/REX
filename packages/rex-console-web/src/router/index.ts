@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { startSession, stopSession } from '@/composables/useSessionTimeout'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -42,6 +43,8 @@ const router = createRouter({
   routes,
 })
 
+let sessionStarted = false
+
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
@@ -55,14 +58,29 @@ router.beforeEach(async (to) => {
     return { name: 'setup' }
   }
 
-  // 未登录 → 登录页
+  // 未登录 → 登录页，停止 session timeout
   if (!auth.isAuthenticated && to.name !== 'login' && to.name !== 'setup') {
+    if (sessionStarted) {
+      stopSession()
+      sessionStarted = false
+    }
     return { name: 'login', query: { redirect: to.fullPath } }
   }
 
   // 已登录访问登录页或设置页 → 工作区
   if (auth.isAuthenticated && (to.name === 'login' || to.name === 'setup')) {
     return { name: 'workspace' }
+  }
+
+  // 已登录 → 启动 session timeout（如果尚未启动）
+  if (auth.isAuthenticated && !sessionStarted && to.name !== 'login' && to.name !== 'setup') {
+    const timeout = parseInt(localStorage.getItem('rex-session-timeout') || '30', 10)
+    startSession(timeout, () => {
+      auth.logout()
+      sessionStarted = false
+      router.push('/login')
+    })
+    sessionStarted = true
   }
 })
 

@@ -3,8 +3,10 @@ import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ResourcePanel from '@/features/resource-panel/ResourcePanel.vue'
+import { useSessionTimeout } from '@/composables/useSessionTimeout'
 
 const { t } = useI18n()
+const { showWarning, remainingSeconds, extendSession } = useSessionTimeout()
 const route = useRoute()
 
 const mainNav = [
@@ -134,6 +136,27 @@ const currentTitle = computed(() => {
         <span class="bottom-nav-label">{{ t('nav.settings') }}</span>
       </RouterLink>
     </nav>
+
+    <!-- Session timeout warning dialog -->
+    <Teleport to="body">
+      <div v-if="showWarning" class="session-warning-overlay">
+        <div class="session-warning-dialog">
+          <div class="session-warning-icon">⏱️</div>
+          <h3 class="session-warning-title">{{ t('session.warningTitle') }}</h3>
+          <p class="session-warning-message">
+            {{ t('session.warningMessage', { countdown: remainingSeconds }) }}
+          </p>
+          <div class="session-warning-actions">
+            <button class="session-warning-btn session-warning-btn--extend" @click="extendSession">
+              {{ t('session.extend') }}
+            </button>
+            <button class="session-warning-btn session-warning-btn--logout" @click="$router.push('/login')">
+              {{ t('session.logout') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -433,5 +456,73 @@ const currentTitle = computed(() => {
 .bottom-nav-label {
   font-size: 10px;
   line-height: 1;
+}
+
+/* Session timeout warning */
+.session-warning-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+}
+.session-warning-dialog {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  width: 380px;
+  max-width: 90vw;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.session-warning-icon {
+  font-size: 36px;
+  margin-bottom: var(--space-3);
+}
+.session-warning-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.session-warning-message {
+  margin: 0 0 var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.session-warning-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+}
+.session-warning-btn {
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  transition: background var(--transition), color var(--transition);
+}
+.session-warning-btn--extend {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+}
+.session-warning-btn--extend:hover {
+  opacity: 0.9;
+}
+.session-warning-btn--logout {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+.session-warning-btn--logout:hover {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
 }
 </style>

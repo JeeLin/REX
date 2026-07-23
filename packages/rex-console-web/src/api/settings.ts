@@ -8,6 +8,7 @@ export interface Settings {
   terminal_theme: string
   terminal_opacity: number
   terminal_bg_image: string
+  session_timeout: number
 }
 
 export const settingsApi = {
