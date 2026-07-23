@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { auditApi, type AuditEntry } from '@/api/audit'
 import Card from '@/components/ui/Card.vue'
@@ -13,15 +13,15 @@ const loading = ref(true)
 const actionFilter = ref('')
 const resultFilter = ref('')
 
-const actionOptions = [
-  { label: 'All', value: '' },
+const actionOptions = computed(() => [
+  { label: t('auditLog.all'), value: '' },
   { label: 'ENV_CREATE', value: 'ENV_CREATE' },
   { label: 'ENV_UPDATE', value: 'ENV_UPDATE' },
   { label: 'ENV_DELETE', value: 'ENV_DELETE' },
   { label: 'RESOURCE_CREATE', value: 'RESOURCE_CREATE' },
   { label: 'RESOURCE_DELETE', value: 'RESOURCE_DELETE' },
   { label: 'AGENT_REGISTER', value: 'AGENT_REGISTER' },
-]
+])
 
 async function fetchEntries() {
   loading.value = true

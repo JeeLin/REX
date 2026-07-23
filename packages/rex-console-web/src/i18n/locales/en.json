@@ -106,7 +106,17 @@
     "fontSize": "Font Size",
     "saveSettings": "Save Settings",
     "saved": "Settings saved",
-    "saveFailed": "Save failed"
+    "saveFailed": "Save failed",
+    "terminalTheme": "Terminal Theme",
+    "terminalThemeDefault": "REX Default",
+    "terminalThemeUbuntu": "Ubuntu",
+    "terminalThemeSolarized": "Solarized Dark",
+    "bgOpacity": "Background Opacity (%)",
+    "bgImage": "Background Image",
+    "bgImageNone": "None",
+    "bgImageGrid": "Grid",
+    "bgImageDots": "Dots",
+    "bgImageGradient": "Gradient"
   },
   "login": {
     "subtitle": "Remote Resource Management",

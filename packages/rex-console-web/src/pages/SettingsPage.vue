@@ -5,7 +5,7 @@ import { settingsApi, type Settings } from '@/api/settings'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const settings = ref<Settings>({
   theme: 'dark',
   language: 'zh',
@@ -24,6 +24,11 @@ onMounted(async () => {
     settings.value = await settingsApi.get()
     document.documentElement.dataset.theme = settings.value.theme === 'light' ? 'light' : undefined
     localStorage.setItem('rex-theme', settings.value.theme)
+    // Sync i18n locale from saved settings
+    if (settings.value.language) {
+      locale.value = settings.value.language as 'zh' | 'en'
+      localStorage.setItem('rex-lang', settings.value.language)
+    }
   } catch {
     // ignore
   } finally {
@@ -38,6 +43,8 @@ async function saveSettings() {
     await settingsApi.update(settings.value)
     document.documentElement.dataset.theme = settings.value.theme === 'light' ? 'light' : undefined
     localStorage.setItem('rex-theme', settings.value.theme)
+    // Persist language setting
+    localStorage.setItem('rex-lang', settings.value.language)
     // Cache terminal settings for TerminalView to read on mount
     localStorage.setItem('rex-terminal-settings', JSON.stringify({
       theme: settings.value.terminal_theme,
@@ -69,7 +76,7 @@ async function saveSettings() {
       </div>
       <div class="form-group">
         <label class="form-label">{{ t('settings.language') }}</label>
-        <select v-model="settings.language" class="form-input">
+        <select v-model="settings.language" class="form-input" @change="locale = settings.language as 'zh' | 'en'">
           <option value="zh">中文</option>
           <option value="en">English</option>
         </select>
@@ -87,24 +94,24 @@ async function saveSettings() {
         <input v-model="settings.terminal_font_size" type="number" class="form-input" min="10" max="24" />
       </div>
       <div class="form-group">
-        <label class="form-label">Terminal Theme</label>
+        <label class="form-label">{{ t('settings.terminalTheme') }}</label>
         <select v-model="settings.terminal_theme" class="form-input">
-          <option value="default">REX Default</option>
-          <option value="ubuntu">Ubuntu</option>
-          <option value="solarized-dark">Solarized Dark</option>
+          <option value="default">{{ t('settings.terminalThemeDefault') }}</option>
+          <option value="ubuntu">{{ t('settings.terminalThemeUbuntu') }}</option>
+          <option value="solarized-dark">{{ t('settings.terminalThemeSolarized') }}</option>
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Background Opacity (%)</label>
+        <label class="form-label">{{ t('settings.bgOpacity') }}</label>
         <input v-model.number="settings.terminal_opacity" type="number" class="form-input" min="0" max="100" />
       </div>
       <div class="form-group">
-        <label class="form-label">Background Image</label>
+        <label class="form-label">{{ t('settings.bgImage') }}</label>
         <select v-model="settings.terminal_bg_image" class="form-input">
-          <option value="none">None</option>
-          <option value="grid">Grid</option>
-          <option value="dots">Dots</option>
-          <option value="gradient">Gradient</option>
+          <option value="none">{{ t('settings.bgImageNone') }}</option>
+          <option value="grid">{{ t('settings.bgImageGrid') }}</option>
+          <option value="dots">{{ t('settings.bgImageDots') }}</option>
+          <option value="gradient">{{ t('settings.bgImageGradient') }}</option>
         </select>
       </div>
     </Card>

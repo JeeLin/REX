@@ -106,7 +106,17 @@
     "fontSize": "字号",
     "saveSettings": "保存设置",
     "saved": "设置已保存",
-    "saveFailed": "保存失败"
+    "saveFailed": "保存失败",
+    "terminalTheme": "终端主题",
+    "terminalThemeDefault": "REX 默认",
+    "terminalThemeUbuntu": "Ubuntu",
+    "terminalThemeSolarized": "Solarized Dark",
+    "bgOpacity": "背景透明度 (%)",
+    "bgImage": "背景图片",
+    "bgImageNone": "无",
+    "bgImageGrid": "网格",
+    "bgImageDots": "圆点",
+    "bgImageGradient": "渐变"
   },
   "login": {
     "subtitle": "远程资源管理",
