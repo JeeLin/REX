@@ -259,5 +259,13 @@
     "noEnvironments": "暂无环境",
     "addResource": "添加资源",
     "noResources": "暂无资源"
+  },
+  "terminal": {
+    "connecting": "连接中...",
+    "disconnected": "已断开",
+    "connectionError": "连接错误",
+    "sessionDisconnected": "会话已断开",
+    "reconnect": "重新连接",
+    "toggleFileBrowser": "切换文件浏览器 (Ctrl+B)"
   }
 }

@@ -21,6 +21,7 @@ export function useTerminal() {
   let disposed = false
   let dataSub: IDisposable | null = null
   let resizeSub: IDisposable | null = null
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
   /** 创建终端实例并挂载到 DOM */
   function createTerminal(container: HTMLElement, options?: Partial<Terminal['options']>) {
@@ -47,6 +48,24 @@ export function useTerminal() {
     return term
   }
 
+  /** 启动心跳（每30秒发送 ping） */
+  function startHeartbeat() {
+    stopHeartbeat()
+    heartbeatTimer = setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'ping' }))
+      }
+    }, 30000)
+  }
+
+  /** 停止心跳 */
+  function stopHeartbeat() {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer)
+      heartbeatTimer = null
+    }
+  }
+
   /** 连接到后端 WebSocket → SSH（Hub 自动判断直连/Agent） */
   function connect(opts: TerminalOptions) {
     if (ws) {
@@ -58,6 +77,7 @@ export function useTerminal() {
     resizeSub?.dispose()
     dataSub = null
     resizeSub = null
+    stopHeartbeat()
 
     status.value = 'connecting'
     errorMessage.value = ''
@@ -74,6 +94,7 @@ export function useTerminal() {
           case 'terminal.connected':
             sessionId.value = msg.payload.sessionId
             status.value = 'connected'
+            startHeartbeat()
             break
           case 'terminal.data': {
             const data = atob(msg.payload.data)
@@ -96,12 +117,14 @@ export function useTerminal() {
     }
 
     ws.onclose = () => {
+      stopHeartbeat()
       if (status.value !== 'error') {
         status.value = 'disconnected'
       }
     }
 
     ws.onerror = () => {
+      stopHeartbeat()
       status.value = 'error'
       errorMessage.value = 'WebSocket connection failed'
     }
@@ -136,6 +159,7 @@ export function useTerminal() {
 
   /** 断开连接 */
   function disconnect() {
+    stopHeartbeat()
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'terminal.disconnect' }))
     }
@@ -160,6 +184,7 @@ export function useTerminal() {
   /** 销毁终端 */
   function dispose() {
     disposed = true
+    stopHeartbeat()
     disconnect()
     dataSub?.dispose()
     resizeSub?.dispose()

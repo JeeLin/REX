@@ -259,5 +259,13 @@
     "noEnvironments": "No environments yet",
     "addResource": "Add resource",
     "noResources": "No resources"
+  },
+  "terminal": {
+    "connecting": "Connecting...",
+    "disconnected": "Disconnected",
+    "connectionError": "Connection error",
+    "sessionDisconnected": "Session disconnected",
+    "reconnect": "Reconnect",
+    "toggleFileBrowser": "Toggle file browser (Ctrl+B)"
   }
 }

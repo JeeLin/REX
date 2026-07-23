@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, shallowRef, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useTerminal } from './useTerminal'
 import { getTerminalTheme } from './terminal-themes'
 import { SearchAddon } from '@xterm/addon-search'
@@ -8,6 +9,8 @@ import TerminalContextMenu from './TerminalContextMenu.vue'
 import MobileTerminalBar from './MobileTerminalBar.vue'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   tabId: string
@@ -180,12 +183,12 @@ function handleReconnect() {
       <span class="tv-status-item">
         <StatusDot :status="statusDot" />
         <span v-if="status === 'connected'">{{ host }}:{{ port || 22 }}</span>
-        <span v-else-if="status === 'connecting'">Connecting...</span>
+        <span v-else-if="status === 'connecting'">{{ t('terminal.connecting') }}</span>
         <span v-else-if="status === 'error'" class="tv-error">{{ errorMessage }}</span>
-        <span v-else>Disconnected</span>
+        <span v-else>{{ t('terminal.disconnected') }}</span>
       </span>
       <span v-if="status === 'connected'" class="tv-status-item muted">{{ protocol?.toUpperCase() }}</span>
-      <span v-if="status === 'connected'" class="tv-status-item tv-file-btn" @click.stop="emit('toggle-sftp')" title="Toggle file browser (Ctrl+B)">📁</span>
+      <span v-if="status === 'connected'" class="tv-status-item tv-file-btn" @click.stop="emit('toggle-sftp')" :title="t('terminal.toggleFileBrowser')">📁</span>
     </div>
 
     <!-- 终端容器 -->
@@ -218,9 +221,9 @@ function handleReconnect() {
     <div v-if="status === 'disconnected' || status === 'error'" class="tv-overlay">
       <div class="tv-overlay-content">
         <p class="tv-overlay-text mono">
-          {{ status === 'error' ? errorMessage || 'Connection error' : 'Session disconnected' }}
+          {{ status === 'error' ? errorMessage || t('terminal.connectionError') : t('terminal.sessionDisconnected') }}
         </p>
-        <button class="tv-reconnect-btn" @click="handleReconnect">Reconnect</button>
+        <button class="tv-reconnect-btn" @click="handleReconnect">{{ t('terminal.reconnect') }}</button>
       </div>
     </div>
 
