@@ -198,6 +198,7 @@ pub async fn set_password(
             &e.to_string(),
         )
     })?;
+    tracing::info!(action = "AUTH_PASSWORD_SET", "password set successfully");
     let token = state.auth.generate_token().map_err(|e| {
         error_with_status(
             StatusCode::INTERNAL_SERVER_ERROR,

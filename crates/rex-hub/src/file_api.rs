@@ -189,6 +189,7 @@ async fn connect(
         .await
         .insert(session_id.clone(), conn);
     tracing::info!(
+        action = "FILE_CONNECT",
         session_id = %session_id,
         protocol = %req.protocol,
         "file session connected"
@@ -240,7 +241,7 @@ async fn list(
     State(state): State<AppState>,
     Query(params): Query<PathQuery>,
 ) -> axum::response::Response {
-    tracing::debug!(session_id = %params.session_id, path = %params.path, "file list");
+    tracing::debug!(action = "FILE_LIST", session_id = %params.session_id, path = %params.path, "file list");
     let mut pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
@@ -256,7 +257,7 @@ async fn stat(
     State(state): State<AppState>,
     Query(params): Query<PathQuery>,
 ) -> axum::response::Response {
-    tracing::debug!(session_id = %params.session_id, path = %params.path, "file stat");
+    tracing::debug!(action = "FILE_STAT", session_id = %params.session_id, path = %params.path, "file stat");
     let mut pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
@@ -371,7 +372,7 @@ async fn download(
                                 "file downloaded"
                             );
                             let audit_db = state.db.clone();
-                            let download_session_id = params.session_id.clone();
+                            
                             let download_path = params.path.clone();
                             let _ = tokio::task::spawn_blocking(move || {
                                 audit_db.write_audit_log(&crate::models::NewAuditEntry {
@@ -419,7 +420,7 @@ async fn download(
                     "file downloaded"
                 );
                 let audit_db = state.db.clone();
-                let download_session_id = params.session_id.clone();
+                
                 let download_path = params.path.clone();
                 let _ = tokio::task::spawn_blocking(move || {
                     audit_db.write_audit_log(&crate::models::NewAuditEntry {
@@ -453,7 +454,7 @@ async fn read_for_edit(
     State(state): State<AppState>,
     Query(params): Query<PathQuery>,
 ) -> axum::response::Response {
-    tracing::debug!(session_id = %params.session_id, path = %params.path, "file read_for_edit");
+    tracing::debug!(action = "FILE_READ_FOR_EDIT", session_id = %params.session_id, path = %params.path, "file read_for_edit");
     let mut pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
@@ -498,7 +499,7 @@ async fn save_from_edit(
                     "file saved from edit"
                 );
                 let audit_db = state.db.clone();
-                let save_session_id = body.session_id.clone();
+                
                 let save_path = body.path.clone();
                 let _ = tokio::task::spawn_blocking(move || {
                     audit_db.write_audit_log(&crate::models::NewAuditEntry {
@@ -563,7 +564,7 @@ async fn rename(
                 "file renamed"
             );
             let audit_db = state.db.clone();
-            let rename_session_id = body.session_id.clone();
+            
             let rename_from = body.from.clone();
             let _ = tokio::task::spawn_blocking(move || {
                 audit_db.write_audit_log(&crate::models::NewAuditEntry {
@@ -598,7 +599,7 @@ async fn mkdir(
                 "directory created"
             );
             let audit_db = state.db.clone();
-            let mkdir_session_id = body.session_id.clone();
+            
             let mkdir_path = body.path.clone();
             let _ = tokio::task::spawn_blocking(move || {
                 audit_db.write_audit_log(&crate::models::NewAuditEntry {
@@ -636,7 +637,7 @@ async fn presigned_url(
     State(state): State<AppState>,
     Json(body): Json<PresignedUrlBody>,
 ) -> axum::response::Response {
-    tracing::debug!(session_id = %body.session_id, path = %body.path, expires = %body.expires_in, "file presigned_url");
+    tracing::debug!(action = "FILE_PRESIGNED_URL", session_id = %body.session_id, path = %body.path, expires = %body.expires_in, "file presigned_url");
     let pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get(&body.session_id) {
         Some(c) => c,
@@ -682,7 +683,7 @@ async fn list_multipart_uploads(
     State(state): State<AppState>,
     Query(params): Query<ListMultipartUploadsQuery>,
 ) -> axum::response::Response {
-    tracing::debug!(session_id = %params.session_id, "file list_multipart_uploads");
+    tracing::debug!(action = "FILE_LIST_MULTIPART", session_id = %params.session_id, "file list_multipart_uploads");
     let pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get(&params.session_id) {
         Some(c) => c,
@@ -746,7 +747,7 @@ async fn resume_multipart_upload(
         None => return error_response("MISSING_FILE", "no file uploaded").into_response(),
     };
 
-    tracing::info!(session_id = %session_id, "file resume_multipart_upload");
+    tracing::info!(action = "FILE_RESUME_MULTIPART", session_id = %session_id, "file resume_multipart_upload");
     let mut pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get_mut(&session_id) {
         Some(c) => c,
@@ -780,7 +781,7 @@ async fn abort_multipart_upload(
     State(state): State<AppState>,
     Json(body): Json<AbortMultipartUploadBody>,
 ) -> axum::response::Response {
-    tracing::info!(session_id = %body.session_id, "file abort_multipart_upload");
+    tracing::info!(action = "FILE_ABORT_MULTIPART", session_id = %body.session_id, "file abort_multipart_upload");
     let mut pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,
@@ -838,7 +839,7 @@ async fn get_acl(
                 "ACL retrieved"
             );
             let audit_db = state.db.clone();
-            let acl_session_id = params.session_id.clone();
+            
             let acl_path = params.path.clone();
             let _ = tokio::task::spawn_blocking(move || {
                 audit_db.write_audit_log(&crate::models::NewAuditEntry {
@@ -889,7 +890,7 @@ async fn put_acl(
                 "ACL applied"
             );
             let audit_db = state.db.clone();
-            let acl_session_id = body.session_id.clone();
+            
             let acl_path = body.path.clone();
             let _ = tokio::task::spawn_blocking(move || {
                 audit_db.write_audit_log(&crate::models::NewAuditEntry {

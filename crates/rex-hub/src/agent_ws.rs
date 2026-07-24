@@ -229,7 +229,7 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
         return;
     }
 
-    tracing::info!(agent_id = %verified_id, "agent WebSocket connected");
+    tracing::info!(action = "AGENT_ONLINE", agent_id = %verified_id, "agent WebSocket connected");
 
     // 审计日志：Agent 上线
     {
@@ -308,7 +308,7 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
     }
 
     // 7. 清理
-    tracing::info!(agent_id = %agent_id, bytes_forwarded = total_bytes_forwarded, "agent WebSocket disconnected");
+    tracing::info!(action = "AGENT_OFFLINE", agent_id = %agent_id, bytes_forwarded = total_bytes_forwarded, "agent WebSocket disconnected");
 
     // 审计日志：Agent 离线
     {
@@ -361,6 +361,7 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
                 let hub_version = env!("CARGO_PKG_VERSION");
                 if !payload.version.is_empty() && payload.version != hub_version {
                     tracing::info!(
+                        action = "AGENT_VERSION_MISMATCH",
                         agent_id = %agent_id,
                         agent_version = %payload.version,
                         hub_version = hub_version,
@@ -417,7 +418,7 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
                 });
             }
 
-            tracing::info!(agent_id, request_id, channel_id, "agent resource connected");
+            tracing::info!(action = "AGENT_RESOURCE_CONNECTED", agent_id, request_id, channel_id, "agent resource connected");
         }
         AgentMsg::ConnectError {
             payload: ConnectErrorPayload { request_id, error },
@@ -431,14 +432,14 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
                 });
             }
 
-            tracing::warn!(agent_id, request_id, error, "agent resource connect failed");
+            tracing::warn!(action = "AGENT_RESOURCE_CONNECT_FAILED", agent_id, request_id, error, "agent resource connect failed");
         }
         AgentMsg::Closed {
             payload: ChannelIdPayload { channel_id },
         } => {
             let mut channels = state.agent_tunnel.channels.write().await;
             channels.remove(&channel_id);
-            tracing::info!(agent_id, channel_id, "agent channel closed");
+            tracing::info!(action = "AGENT_CHANNEL_CLOSED", agent_id, channel_id, "agent channel closed");
         }
         AgentMsg::Auth { .. } => {
             // 已在握手阶段处理，忽略后续 auth 消息

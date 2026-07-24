@@ -194,6 +194,7 @@ async fn disconnect(
     let mut pool = state.sql_pool.lock().await;
     if let Some(mut conn) = pool.remove(&body.session_id) {
         let _ = conn.close().await;
+        tracing::info!(action = "SQL_DISCONNECT", session_id = %body.session_id, "SQL session disconnected");
         (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response()
     } else {
         error_response("SESSION_NOT_FOUND", "session not found").into_response()

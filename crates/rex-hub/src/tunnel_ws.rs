@@ -76,6 +76,7 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
     };
 
     tracing::info!(
+        action = "TUNNEL_CONNECT",
         agent_id = %params.agent_id,
         protocol = %connect_req.protocol,
         host = %connect_req.host,
@@ -161,7 +162,7 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
         }
     };
 
-    tracing::info!(channel_id = %channel_id, "tunnel established");
+    tracing::info!(action = "TUNNEL_ESTABLISHED", channel_id = %channel_id, "tunnel established");
 
     // 5. 通知前端连接成功
     let _ = ws
@@ -264,6 +265,7 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
             + total_bytes_agent_to_frontend.load(Ordering::Relaxed);
     let errors = error_count.load(Ordering::Relaxed);
     tracing::info!(
+        action = "TUNNEL_CLOSE",
         channel_id = %channel_id,
         duration_ms,
         bytes_forwarded,

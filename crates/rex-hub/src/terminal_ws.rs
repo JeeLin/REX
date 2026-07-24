@@ -104,7 +104,7 @@ async fn handle_socket(mut ws: WebSocket, state: AppState, resource_id: String) 
     let conn_info = match load_resource_conn(&state, &resource_id).await {
         Ok(info) => info,
         Err(e) => {
-            tracing::warn!(resource_id = %resource_id, error = %e, "SSH resource load failed");
+            tracing::warn!(action = "SSH_RESOURCE_LOAD", resource_id = %resource_id, error = %e, "SSH resource load failed");
             let _ = send_ws_error(&mut ws, &e).await;
             return;
         }
@@ -145,19 +145,20 @@ async fn load_resource_conn(
 
     tokio::task::spawn_blocking(move || {
         // 获取资源
-        tracing::debug!(resource_id = %rid, "loading resource connection info");
+        tracing::debug!(action = "SSH_RESOURCE_LOAD", resource_id = %rid, "loading resource connection info");
         let resource = db
             .get_resource(&rid)
             .map_err(|e| {
-                tracing::error!(resource_id = %rid, error = %e, "database query failed");
+                tracing::error!(action = "SSH_RESOURCE_LOAD", resource_id = %rid, error = %e, "database query failed");
                 format!("db error: {e}")
             })?
             .ok_or_else(|| {
-                tracing::warn!(resource_id = %rid, "resource not found in database");
+                tracing::warn!(action = "SSH_RESOURCE_LOAD", resource_id = %rid, "resource not found in database");
                 "resource not found".to_string()
             })?;
 
         tracing::debug!(
+            action = "SSH_RESOURCE_LOAD",
             resource_id = %rid,
             name = %resource.name,
             protocol = %resource.protocol,
@@ -184,12 +185,12 @@ async fn load_resource_conn(
             let config_str = crypto
                 .decrypt(&resource.config_json)
                 .map_err(|e| {
-                    tracing::error!(resource_id = %rid, error = %e, "config_json decryption failed");
+                    tracing::error!(action = "SSH_CONFIG_DECRYPT", resource_id = %rid, error = %e, "config_json decryption failed");
                     format!("decrypt failed: {e}")
                 })?;
 
             let config: serde_json::Value = serde_json::from_str(&config_str).map_err(|e| {
-                tracing::error!(resource_id = %rid, error = %e, "config_json parse failed");
+                tracing::error!(action = "SSH_CONFIG_PARSE", resource_id = %rid, error = %e, "config_json parse failed");
                 format!("invalid config json: {e}")
             })?;
 
@@ -203,6 +204,7 @@ async fn load_resource_conn(
                 .map(String::from);
 
             tracing::debug!(
+                action = "SSH_CONFIG_LOADED",
                 resource_id = %rid,
                 has_password = pw.is_some(),
                 has_private_key = pk.is_some(),
@@ -211,7 +213,7 @@ async fn load_resource_conn(
 
             (pw, pk)
         } else {
-            tracing::debug!(resource_id = %rid, "no config_json — using defaults");
+            tracing::debug!(action = "SSH_CONFIG_PARSE", resource_id = %rid, "no config_json — using defaults");
             (None, None)
         };
 
@@ -223,6 +225,7 @@ async fn load_resource_conn(
             "none"
         };
         tracing::info!(
+            action = "SSH_CONFIG_LOADED",
             resource_id = %rid,
             host = %host,
             port = port,
@@ -235,16 +238,17 @@ async fn load_resource_conn(
         let env = db
             .get_environment(&resource.environment_id)
             .map_err(|e| {
-                tracing::error!(resource_id = %rid, env_id = %resource.environment_id, error = %e, "failed to load environment");
+                tracing::error!(action = "SSH_ENV_LOAD", resource_id = %rid, env_id = %resource.environment_id, error = %e, "failed to load environment");
                 format!("db error: {e}")
             })?
             .ok_or_else(|| {
-                tracing::warn!(resource_id = %rid, env_id = %resource.environment_id, "environment not found");
+                tracing::warn!(action = "SSH_ENV_NOT_FOUND", resource_id = %rid, env_id = %resource.environment_id, "environment not found");
                 "environment not found".to_string()
             })?;
 
         let use_agent = env.connection_mode == "agent";
         tracing::debug!(
+            action = "SSH_ENV_LOADED",
             resource_id = %rid,
             env_id = %resource.environment_id,
             connection_mode = %env.connection_mode,
@@ -258,6 +262,7 @@ async fn load_resource_conn(
                 .unwrap_or_default();
             let online = agents.iter().find(|a| a.status == "online");
             tracing::debug!(
+                action = "SSH_AGENT_LOOKUP",
                 resource_id = %rid,
                 total_agents = agents.len(),
                 online_agent = online.map(|a| a.id.as_str()).unwrap_or("none"),
@@ -270,6 +275,7 @@ async fn load_resource_conn(
 
         if use_agent && agent_id.is_none() {
             tracing::warn!(
+                action = "SSH_NO_AGENT",
                 resource_id = %rid,
                 env_id = %resource.environment_id,
                 "no online agent available — agent connection will fail"
@@ -297,6 +303,7 @@ async fn load_resource_conn(
 
 async fn handle_direct_terminal(mut ws: WebSocket, conn: &ResourceConnInfo, session_id: &str) {
     tracing::info!(
+        action = "SSH_DIRECT_CONNECT",
         session_id = %session_id,
         host = %conn.host,
         port = conn.port,
@@ -317,11 +324,12 @@ async fn handle_direct_terminal(mut ws: WebSocket, conn: &ResourceConnInfo, sess
 
     let session = match SshSession::connect(config).await {
         Ok(s) => {
-            tracing::info!(session_id = %session_id, host = %conn.host, "SSH direct connection established");
+            tracing::info!(action = "SSH_DIRECT_CONNECTED", session_id = %session_id, host = %conn.host, "SSH direct connection established");
             s
         }
         Err(e) => {
             tracing::error!(
+                action = "SSH_DIRECT_FAILED",
                 session_id = %session_id,
                 host = %conn.host,
                 port = conn.port,
@@ -442,7 +450,7 @@ async fn handle_direct_terminal(mut ws: WebSocket, conn: &ResourceConnInfo, sess
         _ = ws_write_task => {},
     }
 
-    tracing::debug!(session_id, "terminal session ended");
+    tracing::debug!(action = "SSH_SESSION_END", session_id, "terminal session ended");
 }
 
 // ═══════════════════════════════════════
@@ -457,6 +465,7 @@ async fn handle_agent_terminal(
     session_id: &str,
 ) {
     tracing::info!(
+        action = "SSH_AGENT_CONNECT",
         session_id = %session_id,
         resource_id = %resource_id,
         host = %conn.host,
@@ -469,6 +478,7 @@ async fn handle_agent_terminal(
         Some(id) => id.clone(),
         None => {
             tracing::error!(
+                action = "SSH_AGENT_NO_ONLINE",
                 session_id = %session_id,
                 resource_id = %resource_id,
                 "no online agent available for this environment"
@@ -478,7 +488,7 @@ async fn handle_agent_terminal(
         }
     };
 
-    tracing::debug!(session_id = %session_id, agent_id = %agent_id, "agent selected");
+    tracing::debug!(action = "SSH_AGENT_SELECTED", session_id = %session_id, agent_id = %agent_id, "agent selected");
 
     let agent_conn = {
         let conns = state.agent_tunnel.connections.read().await;
@@ -489,6 +499,7 @@ async fn handle_agent_terminal(
         Some(c) => c,
         None => {
             tracing::error!(
+                action = "SSH_AGENT_NOT_FOUND",
                 session_id = %session_id,
                 agent_id = %agent_id,
                 "agent WebSocket connection not found — agent may have disconnected"
@@ -524,6 +535,7 @@ async fn handle_agent_terminal(
     });
 
     tracing::debug!(
+        action = "SSH_AGENT_SEND_FAILED",
         session_id = %session_id,
         agent_id = %agent_id,
         request_id = %request_id,
@@ -539,6 +551,7 @@ async fn handle_agent_terminal(
         .is_err()
     {
         tracing::error!(
+            action = "SSH_AGENT_SEND_FAILED",
             session_id = %session_id,
             agent_id = %agent_id,
             request_id = %request_id,
@@ -555,6 +568,7 @@ async fn handle_agent_terminal(
             ..
         })) => {
             tracing::info!(
+                action = "SSH_AGENT_CONNECTED",
                 session_id = %session_id,
                 agent_id = %agent_id,
                 channel_id = %id,
@@ -564,6 +578,7 @@ async fn handle_agent_terminal(
         }
         Ok(Ok(ConnectResponse { error: Some(e), .. })) => {
             tracing::error!(
+                action = "SSH_AGENT_ERROR",
                 session_id = %session_id,
                 agent_id = %agent_id,
                 request_id = %request_id,
@@ -575,6 +590,7 @@ async fn handle_agent_terminal(
         }
         Ok(Ok(_)) => {
             tracing::error!(
+                action = "SSH_AGENT_ERROR",
                 session_id = %session_id,
                 agent_id = %agent_id,
                 request_id = %request_id,
@@ -585,6 +601,7 @@ async fn handle_agent_terminal(
         }
         Ok(Err(_)) => {
             tracing::error!(
+                action = "SSH_AGENT_ERROR",
                 session_id = %session_id,
                 agent_id = %agent_id,
                 request_id = %request_id,
@@ -595,6 +612,7 @@ async fn handle_agent_terminal(
         }
         Err(_) => {
             tracing::error!(
+                action = "SSH_AGENT_TIMEOUT",
                 session_id = %session_id,
                 agent_id = %agent_id,
                 request_id = %request_id,
@@ -605,7 +623,7 @@ async fn handle_agent_terminal(
         }
     };
 
-    tracing::info!(channel_id = %channel_id, session_id = %session_id, "agent terminal connected");
+    tracing::info!(action = "SSH_AGENT_CONNECTED", channel_id = %channel_id, session_id = %session_id, "agent terminal connected");
 
     // 通知前端连接成功
     let _ = ws
@@ -704,7 +722,7 @@ async fn handle_agent_terminal(
         channels.remove(&channel_id);
     }
 
-    tracing::debug!(session_id, "agent terminal session ended");
+    tracing::debug!(action = "SSH_SESSION_END", session_id, "agent terminal session ended");
 }
 
 async fn send_ws_error(ws: &mut WebSocket, msg: &str) -> Result<(), axum::Error> {
