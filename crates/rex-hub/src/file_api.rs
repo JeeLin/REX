@@ -63,10 +63,7 @@ pub fn file_routes() -> axum::Router<AppState> {
             "/s3/abort-upload",
             axum::routing::post(abort_multipart_upload),
         )
-        .route(
-            "/acl",
-            axum::routing::get(get_acl).put(put_acl),
-        )
+        .route("/acl", axum::routing::get(get_acl).put(put_acl))
         .route("/read-for-edit", axum::routing::get(read_for_edit))
         .route("/save-from-edit", axum::routing::post(save_from_edit))
 }
