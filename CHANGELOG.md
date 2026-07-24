@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.38.2] - 2026-07-24
+
+### Fixed
+- WebSocket 鉴权：terminal WebSocket 连接携带 JWT token，后端 AuthUser 中间件支持 `?token=` 提取
+- 侧栏资源点击：点击资源项在工作区打开对应 Tab（新增 workspace store）
+- 实时资源更新：新增/删除资源后侧栏立即反映变更（envResources 响应式 Map）
+- 全屏布局修复：内容区域撑满视口，移除右侧空白
+- Agent 部署指南：恢复部署指南入口，支持 binary/docker/compose/config 四种方式
+
+### Removed
+- 移除工作区冗余 ConnectionTree 组件（由侧栏 ResourcePanel 替代）
+- 移除侧栏收起功能（收起后资源连接信息混乱）
+- 删除死代码 ConnectionTree.vue
+
+### Changed
+- 终端 SSH 连接：host/port/username 改为从 Resource 顶层字段读取（而非 config_json）
+- SSH 连接日志增强：每个步骤添加详细 tracing（资源加载、认证方式、连接尝试、Agent 隧道）
+
 ## [0.38.1] - 2026-07-24
 
 ### Changed
