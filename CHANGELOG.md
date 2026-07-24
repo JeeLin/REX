@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.38.1] - 2026-07-24
+
+### Changed
+- 升级 axum 从 0.7 到 0.8，tower 从 0.4 到 0.5，tower-http 从 0.5 到 0.6
+- middleware: 移除 `#[async_trait]`，使用原生 `async fn` 语法
+- WebSocket: 适配 `Message::Text(Utf8Bytes)` 和 `Message::Binary(Bytes)` 类型变更
+
+### Fixed
+- 移除 rex-hub 中未使用的 `async-trait` 依赖
+
 ## [0.38.0] - 2026-07-24
 
 ### Added
