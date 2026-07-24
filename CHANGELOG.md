@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.38.0] - 2026-07-24
+
+### Added
+- Agent 部署指南弹窗：支持二进制下载、Docker、Docker Compose、配置文件 4 种部署方式，按 OS/架构推荐
+- Agent 配置弹窗：展示元信息、服务器地址、auto_update 开关
+- 审计日志统计卡片：总数/成功/失败实时统计
+- 审计日志时间范围筛选：今天/7天/30天/全部预设
+- 审计日志 CSV 导出：导出当前筛选条件下的所有记录
+- 审计日志行展开详情：结构化展示 target、detail、agent_id
+- 后端审计统计 API：GET /api/audit-log/stats
+
 ## [0.37.0] - 2026-07-23
 
 ### Added
