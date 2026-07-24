@@ -273,9 +273,8 @@ const currentTitle = computed(() => {
 /* Main */
 .main {
   flex: 1;
-  display: flex;
-  flex-direction: column;
   min-width: 0;
+  overflow: hidden;
 }
 .topbar {
   height: var(--topbar-height);
@@ -333,9 +332,8 @@ const currentTitle = computed(() => {
   color: var(--accent);
 }
 .content {
-  flex: 1;
-  overflow: auto;
-  padding: var(--space-5);
+  width: 100%;
+  height: 100%;
 }
 
 /* 移动端适配 */

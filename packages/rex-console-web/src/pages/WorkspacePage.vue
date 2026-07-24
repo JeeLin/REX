@@ -654,7 +654,6 @@ useKeyboardShortcuts([
   height: 100%;
   display: flex;
   flex-direction: column;
-  margin: calc(-1 * var(--space-5));
   background: var(--bg-deep);
 }
 
