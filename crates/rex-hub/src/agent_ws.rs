@@ -279,6 +279,7 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
     // 6. 读取循环
     let agent_id = verified_id;
     let state_clone = state.clone();
+    let mut total_bytes_forwarded: u64 = 0;
     while let Some(msg) = ws_stream.next().await {
         match msg {
             Ok(Message::Text(text)) => {
@@ -295,7 +296,9 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
                     // 转发到对应的 tunnel
                     let tunnel_data = state_clone.agent_tunnel.tunnel_data.read().await;
                     if let Some(tx) = tunnel_data.get(&ch_id_str) {
+                        let payload_len = payload.len() as u64;
                         let _ = tx.send(payload).await;
+                        total_bytes_forwarded += payload_len;
                     }
                 }
             }
@@ -305,7 +308,7 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
     }
 
     // 7. 清理
-    tracing::info!(agent_id = %agent_id, "agent WebSocket disconnected");
+    tracing::info!(agent_id = %agent_id, bytes_forwarded = total_bytes_forwarded, "agent WebSocket disconnected");
 
     // 审计日志：Agent 离线
     {

@@ -9,6 +9,8 @@ use axum::response::IntoResponse;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::Arc;
 
 use crate::agent_ws::{AgentEvent, ConnectResponse};
 use crate::AppState;
@@ -60,6 +62,10 @@ pub struct TunnelQuery {
 }
 
 async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) {
+    let start = std::time::Instant::now();
+    let total_bytes_frontend_to_agent = Arc::new(AtomicU64::new(0));
+    let total_bytes_agent_to_frontend = Arc::new(AtomicU64::new(0));
+    let error_count = Arc::new(AtomicUsize::new(0));
     // 1. 等待前端发送连接请求（第一条消息）
     let connect_req = match recv_connect_msg(&mut ws).await {
         Some(req) => req,
@@ -175,6 +181,8 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
     let (mut ws_sink, mut ws_stream) = ws.split();
 
     // 8. 前端 → Agent（文本帧转二进制帧）
+    let f2a_bytes = Arc::clone(&total_bytes_frontend_to_agent);
+    let f2a_errors = Arc::clone(&error_count);
     let agent_conn_for_send = agent_conn.clone();
     let ch_id = channel_id.clone();
     let frontend_to_agent = tokio::spawn(async move {
@@ -193,8 +201,10 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
                         .await
                         .is_err()
                     {
+                        f2a_errors.fetch_add(1, Ordering::Relaxed);
                         break;
                     }
+                    f2a_bytes.fetch_add(data.len() as u64, Ordering::Relaxed);
                 }
                 Ok(Message::Binary(data)) => {
                     let ch_id_bytes = ch_id.parse::<u32>().unwrap_or(0).to_be_bytes();
@@ -207,8 +217,10 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
                         .await
                         .is_err()
                     {
+                        f2a_errors.fetch_add(1, Ordering::Relaxed);
                         break;
                     }
+                    f2a_bytes.fetch_add(data.len() as u64, Ordering::Relaxed);
                 }
                 Ok(Message::Close(_)) | Err(_) => break,
                 _ => {}
@@ -217,12 +229,16 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
     });
 
     // 9. Agent → 前端（二进制数据转文本帧）
+    let a2f_bytes = Arc::clone(&total_bytes_agent_to_frontend);
+    let a2f_errors = Arc::clone(&error_count);
     let agent_to_frontend = tokio::spawn(async move {
         while let Some(data) = data_rx.recv().await {
             let msg = Message::Text(String::from_utf8_lossy(&data).to_string().into());
             if ws_sink.send(msg).await.is_err() {
+                a2f_errors.fetch_add(1, Ordering::Relaxed);
                 break;
             }
+            a2f_bytes.fetch_add(data.len() as u64, Ordering::Relaxed);
         }
     });
 
@@ -242,7 +258,18 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
         channels.remove(&channel_id);
     }
 
-    tracing::info!(channel_id = %channel_id, "tunnel closed");
+    let duration_ms = start.elapsed().as_millis() as u64;
+    let bytes_forwarded =
+        total_bytes_frontend_to_agent.load(Ordering::Relaxed)
+            + total_bytes_agent_to_frontend.load(Ordering::Relaxed);
+    let errors = error_count.load(Ordering::Relaxed);
+    tracing::info!(
+        channel_id = %channel_id,
+        duration_ms,
+        bytes_forwarded,
+        error_count = errors,
+        "tunnel closed"
+    );
 }
 
 /// 从 WebSocket 读取连接请求
