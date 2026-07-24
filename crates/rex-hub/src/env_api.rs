@@ -57,6 +57,13 @@ async fn create_environment(
     State(state): State<AppState>,
     Json(body): Json<NewEnvironment>,
 ) -> ApiResult<crate::models::Environment> {
+    tracing::info!(
+        action = "ENV_CREATE",
+        name = %body.name,
+        connection_mode = body.connection_mode.as_deref().unwrap_or("none"),
+        "creating environment"
+    );
+
     if body.name.trim().is_empty() {
         return Err(err(StatusCode::BAD_REQUEST, "name is required"));
     }
@@ -92,6 +99,12 @@ async fn update_environment(
     Path(id): Path<String>,
     Json(body): Json<UpdateEnvironment>,
 ) -> ApiResult<crate::models::Environment> {
+    tracing::info!(
+        action = "ENV_UPDATE",
+        env_id = %id,
+        "updating environment"
+    );
+
     let db = state.db.clone();
     let env_id = id.clone();
     let env = tokio::task::spawn_blocking(move || db.update_environment(&env_id, &body))
@@ -126,6 +139,12 @@ async fn delete_environment(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> ApiResult<serde_json::Value> {
+    tracing::info!(
+        action = "ENV_DELETE",
+        env_id = %id,
+        "deleting environment"
+    );
+
     // 先获取环境名用于审计日志
     let db = state.db.clone();
     let env_id = id.clone();
@@ -303,6 +322,27 @@ async fn import_environments(
 
         imported += 1;
     }
+
+    tracing::info!(
+        action = "ENV_IMPORT",
+        total = body.environments.len(),
+        imported = imported,
+        skipped = skipped,
+        "environments imported"
+    );
+
+    // 审计日志
+    let audit_db = state.db.clone();
+    let count = imported;
+    let _ = tokio::task::spawn_blocking(move || {
+        audit_db.write_audit_log(&crate::models::NewAuditEntry {
+            action: "ENV_IMPORT".into(),
+            detail: Some(format!("imported={}, skipped={}", count, skipped)),
+            result: "success".into(),
+            ..Default::default()
+        })
+    })
+    .await;
 
     Ok(Json(
         serde_json::json!({ "imported": imported, "skipped": skipped }),

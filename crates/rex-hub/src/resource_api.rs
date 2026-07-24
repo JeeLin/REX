@@ -77,6 +77,15 @@ async fn create_resource(
     Path(env_id): Path<String>,
     Json(mut body): Json<NewResource>,
 ) -> ApiResult<Resource> {
+    tracing::info!(
+        action = "RESOURCE_CREATE",
+        env_id = %env_id,
+        protocol = %body.protocol,
+        name = %body.name,
+        host = %body.host,
+        "creating resource"
+    );
+
     if body.name.trim().is_empty() {
         return Err(err(StatusCode::BAD_REQUEST, "name is required"));
     }
@@ -128,6 +137,15 @@ async fn update_resource(
     Path((env_id, resource_id)): Path<(String, String)>,
     Json(mut body): Json<NewResource>,
 ) -> ApiResult<Resource> {
+    tracing::info!(
+        action = "RESOURCE_UPDATE",
+        env_id = %env_id,
+        resource_id = %resource_id,
+        protocol = %body.protocol,
+        name = %body.name,
+        "updating resource"
+    );
+
     // 加密 config_json 中的凭据
     if let Some(ref cfg) = body.config_json {
         match state.crypto.encrypt(cfg) {
@@ -148,6 +166,22 @@ async fn update_resource(
                     err(StatusCode::INTERNAL_SERVER_ERROR, &msg)
                 }
             })?;
+
+    // 审计日志
+    let audit_db = state.db.clone();
+    let res_name = resource.name.clone();
+    let res_env_id = resource.environment_id.clone();
+    let _ = tokio::task::spawn_blocking(move || {
+        audit_db.write_audit_log(&crate::models::NewAuditEntry {
+            action: "RESOURCE_UPDATE".into(),
+            target: Some(res_name),
+            environment_id: Some(res_env_id),
+            result: "success".into(),
+            ..Default::default()
+        })
+    })
+    .await;
+
     Ok(Json(resource))
 }
 
@@ -167,6 +201,13 @@ async fn delete_resource(
     let res_name = resource.map(|r| r.name).unwrap_or_default();
 
     let db = state.db.clone();
+    tracing::info!(
+        action = "RESOURCE_DELETE",
+        env_id = %env_id,
+        resource_id = %resource_id,
+        "deleting resource"
+    );
+
     let del_env_id = env_id.clone();
     let del_id = resource_id.clone();
     tokio::task::spawn_blocking(move || db.delete_resource(&del_env_id, &del_id))
@@ -211,6 +252,14 @@ pub struct TestConnectionResult {
 pub async fn test_connection(
     Json(body): Json<TestConnectionRequest>,
 ) -> ApiResult<TestConnectionResult> {
+    tracing::info!(
+        action = "TEST_CONNECTION",
+        protocol = %body.protocol,
+        host = %body.host,
+        port = body.port.unwrap_or(0),
+        "testing connection"
+    );
+
     let start = std::time::Instant::now();
     let result = match body.protocol.as_str() {
         "ssh" | "sftp" => {
@@ -327,6 +376,22 @@ pub async fn test_connection(
         _ => Err(format!("unsupported protocol: {}", body.protocol)),
     };
     let latency = start.elapsed().as_millis() as u64;
+    let ok = result.is_ok();
+    let err_msg = match &result {
+        Ok(()) => None,
+        Err(e) => Some(e.clone()),
+    };
+
+    tracing::info!(
+        action = "TEST_CONNECTION",
+        protocol = %body.protocol,
+        host = %body.host,
+        ok = ok,
+        latency_ms = latency,
+        error = err_msg.as_deref().unwrap_or(""),
+        "connection test completed"
+    );
+
     match result {
         Ok(()) => Ok(Json(TestConnectionResult {
             ok: true,
