@@ -27,7 +27,8 @@ const wsStore = useWorkspaceStore()
 watch(() => wsStore.pendingResource, (resource) => {
   if (!resource) return
   openResourceFromTree(resource)
-})
+  wsStore.consumePending()
+}, { immediate: true })
 
 interface Tab {
   id: string

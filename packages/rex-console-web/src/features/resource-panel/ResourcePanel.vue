@@ -69,24 +69,15 @@ function getResources(envId: string): Resource[] {
   return store.envResources.get(envId) || []
 }
 
-async function refreshEnv(envId: string) {
-  try {
-    await store.fetchResources(envId)
-  } catch { /* ignore */ }
-}
-
 function openWizard(envId: string, e: MouseEvent) {
   e.stopPropagation()
   wizardEnvId.value = envId
 }
 
 function onWizardCreated() {
-  const envId = wizardEnvId.value
   wizardEnvId.value = ''
-  if (envId) refreshEnv(envId)
 }
 
-defineExpose({ envResources: store.envResources })
 </script>
 
 <template>
