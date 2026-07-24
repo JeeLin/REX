@@ -7,7 +7,6 @@ import 'splitpanes/dist/splitpanes.css'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
-import ConnectionTree from '@/features/workspace/ConnectionTree.vue'
 import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
 import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
 import CommandPalette from '@/features/workspace/CommandPalette.vue'
@@ -143,8 +142,6 @@ function onEncodingChange(encoding: string) {
 
 const activeTabInfo = computed(() => tabs.value.find(t => t.id === activeTab.value))
 
-// 连接树
-const treeCollapsed = ref(false)
 
 function openResourceFromTree(node: {
   id: string
@@ -520,13 +517,6 @@ useKeyboardShortcuts([
       </div>
     </Teleport>
 
-    <!-- Connection tree sidebar -->
-    <div v-show="!treeCollapsed" class="ws-tree" :style="{ width: '220px' }">
-      <ConnectionTree @open-resource="openResourceFromTree" />
-    </div>
-    <button class="ws-tree-toggle" :title="treeCollapsed ? 'Show tree' : 'Hide tree'" @click="treeCollapsed = !treeCollapsed">
-      {{ treeCollapsed ? '»' : '«' }}
-    </button>
 
     <div class="ws-main-area">
       <!-- Split panes -->
@@ -755,27 +745,6 @@ useKeyboardShortcuts([
   margin-left: 2px;
 }
 
-/* Connection tree sidebar */
-.ws-tree {
-  flex-shrink: 0;
-  background: var(--bg-surface);
-  border-right: 1px solid var(--border);
-  overflow: hidden;
-}
-.ws-tree-toggle {
-  width: 16px;
-  flex-shrink: 0;
-  background: var(--bg-surface);
-  border: none;
-  border-right: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 10px;
-  cursor: pointer;
-  transition: color var(--transition);
-}
-.ws-tree-toggle:hover {
-  color: var(--accent);
-}
 
 /* Main area */
 .ws-main-area {
