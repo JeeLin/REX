@@ -171,10 +171,13 @@ async fn load_resource_conn(
         // 从 Resource 顶层字段获取连接信息
         let host = resource.host.clone();
         if host.is_empty() {
-            tracing::warn!(resource_id = %rid, "resource host is empty — connection will fail");
+            return Err(format!("resource {rid}: host is empty, please fill in host in resource settings"));
         }
         let port = resource.port.unwrap_or(22);
         let username = resource.username.clone();
+        if username.is_empty() {
+            return Err(format!("resource {rid}: username is empty, please fill in username in resource settings"));
+        }
 
         // 从 config_json 解密敏感字段（password、privateKey）
         let (password, private_key) = if !resource.config_json.is_empty() && resource.config_json != "{}" {
