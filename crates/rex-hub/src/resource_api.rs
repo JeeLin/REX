@@ -136,17 +136,18 @@ async fn update_resource(
         }
     }
     let db = state.db.clone();
-    let resource = tokio::task::spawn_blocking(move || db.update_resource(&env_id, &resource_id, &body))
-        .await
-        .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
-        .map_err(|e| {
-            let msg = e.to_string();
-            if msg.contains("not found") {
-                err(StatusCode::NOT_FOUND, &msg)
-            } else {
-                err(StatusCode::INTERNAL_SERVER_ERROR, &msg)
-            }
-        })?;
+    let resource =
+        tokio::task::spawn_blocking(move || db.update_resource(&env_id, &resource_id, &body))
+            .await
+            .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("not found") {
+                    err(StatusCode::NOT_FOUND, &msg)
+                } else {
+                    err(StatusCode::INTERNAL_SERVER_ERROR, &msg)
+                }
+            })?;
     Ok(Json(resource))
 }
 
