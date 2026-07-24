@@ -188,6 +188,22 @@ async fn connect(
         .lock()
         .await
         .insert(session_id.clone(), conn);
+    tracing::info!(
+        session_id = %session_id,
+        protocol = %req.protocol,
+        "file session connected"
+    );
+    let audit_db = state.db.clone();
+    let audit_session_id = session_id.clone();
+    let _ = tokio::task::spawn_blocking(move || {
+        audit_db.write_audit_log(&crate::models::NewAuditEntry {
+            action: "FILE_CONNECT".into(),
+            target: Some(audit_session_id),
+            result: "success".into(),
+            ..Default::default()
+        })
+    })
+    .await;
     (StatusCode::OK, Json(ConnectResponse { session_id })).into_response()
 }
 
@@ -198,6 +214,22 @@ async fn disconnect(
     let mut pool = state.file_pool.lock().await;
     if let Some(mut conn) = pool.remove(&body.session_id) {
         let _ = conn.close().await;
+        tracing::info!(
+            action = "FILE_DISCONNECT",
+            session_id = %body.session_id,
+            "file session disconnected"
+        );
+        let audit_db = state.db.clone();
+        let session_id = body.session_id.clone();
+        let _ = tokio::task::spawn_blocking(move || {
+            audit_db.write_audit_log(&crate::models::NewAuditEntry {
+                action: "FILE_DISCONNECT".into(),
+                target: Some(session_id),
+                result: "success".into(),
+                ..Default::default()
+            })
+        })
+        .await;
         (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response()
     } else {
         error_response("SESSION_NOT_FOUND", "session not found").into_response()
@@ -208,6 +240,7 @@ async fn list(
     State(state): State<AppState>,
     Query(params): Query<PathQuery>,
 ) -> axum::response::Response {
+    tracing::debug!(session_id = %params.session_id, path = %params.path, "file list");
     let mut pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
@@ -223,6 +256,7 @@ async fn stat(
     State(state): State<AppState>,
     Query(params): Query<PathQuery>,
 ) -> axum::response::Response {
+    tracing::debug!(session_id = %params.session_id, path = %params.path, "file stat");
     let mut pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
@@ -329,6 +363,26 @@ async fn download(
                     match conn.download_range(&params.path, offset, limit).await {
                         Ok(data) => {
                             let filename = params.path.rsplit('/').next().unwrap_or("file");
+                            tracing::info!(
+                                action = "FILE_OP",
+                                op = "download",
+                                session_id = %params.session_id,
+                                path = %params.path,
+                                "file downloaded"
+                            );
+                            let audit_db = state.db.clone();
+                            let download_session_id = params.session_id.clone();
+                            let download_path = params.path.clone();
+                            let _ = tokio::task::spawn_blocking(move || {
+                                audit_db.write_audit_log(&crate::models::NewAuditEntry {
+                                    action: "FILE_OP".into(),
+                                    target: Some(download_path),
+                                    detail: Some("op=download".into()),
+                                    result: "success".into(),
+                                    ..Default::default()
+                                })
+                            })
+                            .await;
                             (
                                 StatusCode::OK,
                                 [
@@ -357,6 +411,26 @@ async fn download(
         match conn.download(&params.path).await {
             Ok(data) => {
                 let filename = params.path.rsplit('/').next().unwrap_or("file");
+                tracing::info!(
+                    action = "FILE_OP",
+                    op = "download",
+                    session_id = %params.session_id,
+                    path = %params.path,
+                    "file downloaded"
+                );
+                let audit_db = state.db.clone();
+                let download_session_id = params.session_id.clone();
+                let download_path = params.path.clone();
+                let _ = tokio::task::spawn_blocking(move || {
+                    audit_db.write_audit_log(&crate::models::NewAuditEntry {
+                        action: "FILE_OP".into(),
+                        target: Some(download_path),
+                        detail: Some("op=download".into()),
+                        result: "success".into(),
+                        ..Default::default()
+                    })
+                })
+                .await;
                 (
                     StatusCode::OK,
                     [
@@ -379,6 +453,7 @@ async fn read_for_edit(
     State(state): State<AppState>,
     Query(params): Query<PathQuery>,
 ) -> axum::response::Response {
+    tracing::debug!(session_id = %params.session_id, path = %params.path, "file read_for_edit");
     let mut pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
@@ -414,7 +489,29 @@ async fn save_from_edit(
     };
     match base64::engine::general_purpose::STANDARD.decode(&body.content) {
         Ok(data) => match conn.save_from_edit(&body.path, data).await {
-            Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
+            Ok(()) => {
+                tracing::info!(
+                    action = "FILE_OP",
+                    op = "save_edit",
+                    session_id = %body.session_id,
+                    path = %body.path,
+                    "file saved from edit"
+                );
+                let audit_db = state.db.clone();
+                let save_session_id = body.session_id.clone();
+                let save_path = body.path.clone();
+                let _ = tokio::task::spawn_blocking(move || {
+                    audit_db.write_audit_log(&crate::models::NewAuditEntry {
+                        action: "FILE_OP".into(),
+                        target: Some(save_path),
+                        detail: Some("op=save_edit".into()),
+                        result: "success".into(),
+                        ..Default::default()
+                    })
+                })
+                .await;
+                (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response()
+            }
             Err(e) => error_response("SAVE_FAILED", &e.to_string()).into_response(),
         },
         Err(e) => {
@@ -457,7 +554,28 @@ async fn rename(
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
     };
     match conn.rename(&body.from, &body.to).await {
-        Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
+        Ok(()) => {
+            tracing::info!(
+                action = "FILE_RENAME",
+                session_id = %body.session_id,
+                from = %body.from,
+                to = %body.to,
+                "file renamed"
+            );
+            let audit_db = state.db.clone();
+            let rename_session_id = body.session_id.clone();
+            let rename_from = body.from.clone();
+            let _ = tokio::task::spawn_blocking(move || {
+                audit_db.write_audit_log(&crate::models::NewAuditEntry {
+                    action: "FILE_RENAME".into(),
+                    target: Some(rename_from),
+                    result: "success".into(),
+                    ..Default::default()
+                })
+            })
+            .await;
+            (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response()
+        }
         Err(e) => error_response("RENAME_FAILED", &e.to_string()).into_response(),
     }
 }
@@ -472,7 +590,27 @@ async fn mkdir(
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
     };
     match conn.mkdir(&body.path).await {
-        Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
+        Ok(()) => {
+            tracing::info!(
+                action = "FILE_MKDIR",
+                session_id = %body.session_id,
+                path = %body.path,
+                "directory created"
+            );
+            let audit_db = state.db.clone();
+            let mkdir_session_id = body.session_id.clone();
+            let mkdir_path = body.path.clone();
+            let _ = tokio::task::spawn_blocking(move || {
+                audit_db.write_audit_log(&crate::models::NewAuditEntry {
+                    action: "FILE_MKDIR".into(),
+                    target: Some(mkdir_path),
+                    result: "success".into(),
+                    ..Default::default()
+                })
+            })
+            .await;
+            (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response()
+        }
         Err(e) => error_response("MKDIR_FAILED", &e.to_string()).into_response(),
     }
 }
@@ -498,6 +636,7 @@ async fn presigned_url(
     State(state): State<AppState>,
     Json(body): Json<PresignedUrlBody>,
 ) -> axum::response::Response {
+    tracing::debug!(session_id = %body.session_id, path = %body.path, expires = %body.expires_in, "file presigned_url");
     let pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get(&body.session_id) {
         Some(c) => c,
@@ -543,6 +682,7 @@ async fn list_multipart_uploads(
     State(state): State<AppState>,
     Query(params): Query<ListMultipartUploadsQuery>,
 ) -> axum::response::Response {
+    tracing::debug!(session_id = %params.session_id, "file list_multipart_uploads");
     let pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get(&params.session_id) {
         Some(c) => c,
@@ -606,6 +746,7 @@ async fn resume_multipart_upload(
         None => return error_response("MISSING_FILE", "no file uploaded").into_response(),
     };
 
+    tracing::info!(session_id = %session_id, "file resume_multipart_upload");
     let mut pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get_mut(&session_id) {
         Some(c) => c,
@@ -639,6 +780,7 @@ async fn abort_multipart_upload(
     State(state): State<AppState>,
     Json(body): Json<AbortMultipartUploadBody>,
 ) -> axum::response::Response {
+    tracing::info!(session_id = %body.session_id, "file abort_multipart_upload");
     let mut pool = state.file_pool.lock().await;
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,
@@ -688,7 +830,28 @@ async fn get_acl(
     };
 
     match s3_conn.get_acl(&params.path).await {
-        Ok(acl) => (StatusCode::OK, Json(AclResponse { acl })).into_response(),
+        Ok(acl) => {
+            tracing::info!(
+                action = "FILE_ACL",
+                session_id = %params.session_id,
+                path = %params.path,
+                "ACL retrieved"
+            );
+            let audit_db = state.db.clone();
+            let acl_session_id = params.session_id.clone();
+            let acl_path = params.path.clone();
+            let _ = tokio::task::spawn_blocking(move || {
+                audit_db.write_audit_log(&crate::models::NewAuditEntry {
+                    action: "FILE_ACL".into(),
+                    target: Some(acl_path),
+                    detail: Some("op=get_acl".into()),
+                    result: "success".into(),
+                    ..Default::default()
+                })
+            })
+            .await;
+            (StatusCode::OK, Json(AclResponse { acl })).into_response()
+        }
         Err(e) => error_response("GET_ACL_FAILED", &e.to_string()).into_response(),
     }
 }
@@ -718,7 +881,28 @@ async fn put_acl(
     };
 
     match s3_conn.put_acl(&body.path, &body.acl).await {
-        Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
+        Ok(()) => {
+            tracing::info!(
+                action = "FILE_ACL",
+                session_id = %body.session_id,
+                path = %body.path,
+                "ACL applied"
+            );
+            let audit_db = state.db.clone();
+            let acl_session_id = body.session_id.clone();
+            let acl_path = body.path.clone();
+            let _ = tokio::task::spawn_blocking(move || {
+                audit_db.write_audit_log(&crate::models::NewAuditEntry {
+                    action: "FILE_ACL".into(),
+                    target: Some(acl_path),
+                    detail: Some("op=put_acl".into()),
+                    result: "success".into(),
+                    ..Default::default()
+                })
+            })
+            .await;
+            (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response()
+        }
         Err(e) => error_response("PUT_ACL_FAILED", &e.to_string()).into_response(),
     }
 }
