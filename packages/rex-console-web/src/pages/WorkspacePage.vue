@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, defineAsyncComponent, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Splitpanes, Pane } from 'splitpanes'
@@ -14,6 +14,7 @@ import CommandPalette from '@/features/workspace/CommandPalette.vue'
 import TerminalView from '@/features/terminal/TerminalView.vue'
 import FilesDrawer from '@/features/files/FilesDrawer.vue'
 import { PROTOCOL_COLORS } from '@/features/resource/protocols'
+import { useWorkspaceStore } from '@/stores/workspace'
 
 // 懒加载重型组件，拆分 chunk
 const SqlPage = defineAsyncComponent(() => import('@/features/sql/SqlPage.vue'))
@@ -22,6 +23,12 @@ const FilesPage = defineAsyncComponent(() => import('@/features/files/FilesPage.
 
 const { t } = useI18n()
 const router = useRouter()
+const wsStore = useWorkspaceStore()
+
+watch(() => wsStore.pendingResource, (resource) => {
+  if (!resource) return
+  openResourceFromTree(resource)
+})
 
 interface Tab {
   id: string

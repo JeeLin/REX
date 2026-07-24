@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
 import type { Environment } from '@/api/environments'
@@ -7,9 +8,27 @@ import type { Resource } from '@/api/resources'
 import { resourcesApi } from '@/api/resources'
 import { PROTOCOL_ICONS, PROTOCOL_COLORS } from '@/features/resource/protocols'
 import WizardModal from '@/features/resource/WizardModal.vue'
-
+import { useWorkspaceStore } from '@/stores/workspace'
 const { t } = useI18n()
 const store = useEnvironmentsStore()
+const router = useRouter()
+const wsStore = useWorkspaceStore()
+const emit = defineEmits<{ openResource: [resource: Resource] }>()
+
+function handleResourceClick(res: Resource) {
+  wsStore.openResource({
+    id: res.id,
+    name: res.name,
+    protocol: res.protocol,
+    host: res.host,
+    port: res.port,
+    username: res.username,
+    environmentId: res.environmentId,
+    color: res.color,
+  })
+  router.push({ name: 'workspace' })
+}
+
 
 const searchQuery = ref('')
 const collapsedEnvs = ref(new Set<string>())
@@ -117,6 +136,7 @@ defineExpose({ envResources })
             v-for="res in getResources(env.id)"
             :key="res.id"
             class="rp-item"
+            @click="handleResourceClick(res)"
           >
             <span class="rp-item-icon" :style="{ color: res.color || PROTOCOL_COLORS[res.protocol] || 'var(--text-secondary)' }">
               {{ PROTOCOL_ICONS[res.protocol] || '?' }}
