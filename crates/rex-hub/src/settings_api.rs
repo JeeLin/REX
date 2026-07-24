@@ -63,6 +63,19 @@ async fn update_settings(
     State(state): State<AppState>,
     Json(body): Json<SettingsUpdate>,
 ) -> ApiResult<serde_json::Value> {
+    // 收集变更的 key
+    let mut changed_keys = Vec::new();
+    if body.theme.is_some() { changed_keys.push("theme"); }
+    if body.language.is_some() { changed_keys.push("language"); }
+    if body.terminal_font.is_some() { changed_keys.push("terminal_font"); }
+    if body.terminal_font_size.is_some() { changed_keys.push("terminal_font_size"); }
+
+    tracing::info!(
+        action = "SETTINGS_UPDATE",
+        keys = ?changed_keys,
+        "settings updated"
+    );
+
     let db = state.db.clone();
     tokio::task::spawn_blocking(move || -> Result<(), String> {
         if let Some(v) = &body.theme {
@@ -84,5 +97,19 @@ async fn update_settings(
     .await
     .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
     .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e))?;
+
+    // 审计日志
+    let audit_db = state.db.clone();
+    let detail = changed_keys.join(", ");
+    let _ = tokio::task::spawn_blocking(move || {
+        audit_db.write_audit_log(&crate::models::NewAuditEntry {
+            action: "SETTINGS_UPDATE".into(),
+            detail: Some(detail),
+            result: "success".into(),
+            ..Default::default()
+        })
+    })
+    .await;
+
     Ok(Json(serde_json::json!({ "ok": true })))
 }

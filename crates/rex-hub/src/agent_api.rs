@@ -58,12 +58,32 @@ async fn reset_token(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> ApiResult<serde_json::Value> {
+    tracing::info!(
+        action = "AGENT_TOKEN_RESET",
+        agent_id = %id,
+        "resetting agent token"
+    );
+
     let new_token = uuid::Uuid::new_v4().to_string();
     let token_for_db = new_token.clone();
     let db = state.db.clone();
-    tokio::task::spawn_blocking(move || db.reset_agent_token(&id, &token_for_db))
+    let agent_id = id.clone();
+    tokio::task::spawn_blocking(move || db.reset_agent_token(&agent_id, &token_for_db))
         .await
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
+
+    // 审计日志
+    let audit_db = state.db.clone();
+    let _ = tokio::task::spawn_blocking(move || {
+        audit_db.write_audit_log(&crate::models::NewAuditEntry {
+            action: "AGENT_TOKEN_RESET".into(),
+            target: Some(id),
+            result: "success".into(),
+            ..Default::default()
+        })
+    })
+    .await;
+
     Ok(Json(serde_json::json!({ "token": new_token })))
 }
