@@ -3,7 +3,6 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
-import type { Environment } from '@/api/environments'
 import type { Resource } from '@/api/resources'
 import { PROTOCOL_ICONS, PROTOCOL_COLORS } from '@/features/resource/protocols'
 import WizardModal from '@/features/resource/WizardModal.vue'
@@ -12,7 +11,7 @@ const { t } = useI18n()
 const store = useEnvironmentsStore()
 const router = useRouter()
 const wsStore = useWorkspaceStore()
-const emit = defineEmits<{ openResource: [resource: Resource] }>()
+
 
 function handleResourceClick(res: Resource) {
   wsStore.openResource({
@@ -20,10 +19,10 @@ function handleResourceClick(res: Resource) {
     name: res.name,
     protocol: res.protocol,
     host: res.host,
-    port: res.port,
+    port: res.port ?? undefined,
     username: res.username,
-    environmentId: res.environmentId,
-    color: res.color,
+    environmentId: res.environment_id,
+    color: res.color ?? undefined,
   })
   router.push({ name: 'workspace' })
 }
@@ -31,7 +30,6 @@ function handleResourceClick(res: Resource) {
 
 const searchQuery = ref('')
 const collapsedEnvs = ref(new Set<string>())
-const expandedEnvIds = ref(new Set<string>())
 const wizardEnvId = ref('')
 
 onMounted(async () => {
@@ -51,7 +49,7 @@ const filteredEnvs = computed(() => {
     const q = searchQuery.value.toLowerCase()
     envs = envs.filter(e =>
       e.name.toLowerCase().includes(q) ||
-      (store.envResources.value.get(e.id) || []).some(r =>
+      (store.envResources.get(e.id) || []).some(r =>
         r.name.toLowerCase().includes(q) || r.host.toLowerCase().includes(q)
       )
     )
@@ -68,7 +66,7 @@ function toggleEnv(envId: string) {
 }
 
 function getResources(envId: string): Resource[] {
-  return store.envResources.value.get(envId) || []
+  return store.envResources.get(envId) || []
 }
 
 async function refreshEnv(envId: string) {
