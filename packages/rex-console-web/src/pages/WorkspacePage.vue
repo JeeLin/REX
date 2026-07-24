@@ -24,12 +24,6 @@ const { t } = useI18n()
 const router = useRouter()
 const wsStore = useWorkspaceStore()
 
-watch(() => wsStore.pendingResource, (resource) => {
-  if (!resource) return
-  openResourceFromTree(resource)
-  wsStore.consumePending()
-}, { immediate: true })
-
 interface Tab {
   id: string
   label: string
@@ -62,6 +56,12 @@ const activeTab = ref<string>('')
 const splitDirection = ref<'row' | 'column'>('row')
 const panes = ref<string[]>([])
 const splitCount = ref(1)
+
+watch(() => wsStore.pendingResource, (resource) => {
+  if (!resource) return
+  openResourceFromTree(resource)
+  wsStore.consumePending()
+}, { immediate: true })
 
 // Command palette
 const showCommandPalette = ref(false)
@@ -188,11 +188,14 @@ function onTabContextMenu(e: MouseEvent, tabId: string) {
 
 function closeTab(id: string) {
   const idx = tabs.value.findIndex(t => t.id === id)
-  if (idx >= 0 && tabs.value.length > 1) {
-    tabs.value.splice(idx, 1)
-    if (activeTab.value === id) {
-      activeTab.value = tabs.value[Math.max(0, idx - 1)]!.id
-    }
+  if (idx < 0) return
+  tabs.value.splice(idx, 1)
+  if (tabs.value.length === 0) {
+    activeTab.value = ''
+    return
+  }
+  if (activeTab.value === id) {
+    activeTab.value = tabs.value[Math.min(idx, tabs.value.length - 1)]!.id
   }
 }
 
