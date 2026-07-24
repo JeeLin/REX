@@ -28,11 +28,9 @@ const bottomNav = [
   { to: '/settings', key: 'nav.settings', icon: '⚙' },
 ]
 
-const collapsed = ref(localStorage.getItem('sidebar-collapsed') === 'true')
 const fullscreen = ref(false)
 const mobileMenuOpen = ref(false)
 
-watch(collapsed, (v) => localStorage.setItem('sidebar-collapsed', String(v)))
 
 const isWorkspace = computed(() => route.path === '/workspace')
 
@@ -53,15 +51,14 @@ const currentTitle = computed(() => {
 </script>
 
 <template>
-  <div class="app-layout" :class="{ 'app-layout--collapsed': collapsed, 'app-layout--fullscreen': fullscreen && isWorkspace }">
+  <div class="app-layout" :class="{ 'app-layout--fullscreen': fullscreen && isWorkspace }">
     <!-- 移动端菜单遮罩 -->
     <div v-if="mobileMenuOpen" class="mobile-overlay" @click="mobileMenuOpen = false" />
 
     <!-- 侧栏：工作区全屏时隐藏，移动端为抽屉 -->
     <aside v-if="!(fullscreen && isWorkspace)" class="sidebar" :class="{ 'sidebar--mobile-open': mobileMenuOpen }">
       <div class="sidebar-brand mono">
-        <span v-if="!collapsed">REX<span class="accent">Hub</span></span>
-        <span v-else class="brand-mini">R</span>
+        REX<span class="accent">Hub</span>
       </div>
       <nav class="sidebar-nav">
         <RouterLink
@@ -69,11 +66,10 @@ const currentTitle = computed(() => {
           :key="item.to"
           :to="item.to"
           class="nav-item"
-          :title="collapsed ? t(item.key) : undefined"
           @click="mobileMenuOpen = false"
         >
           <span class="nav-icon">{{ item.icon }}</span>
-          <span v-if="!collapsed" class="nav-label">{{ t(item.key) }}</span>
+          <span class="nav-label">{{ t(item.key) }}</span>
         </RouterLink>
       </nav>
 
@@ -86,16 +82,11 @@ const currentTitle = computed(() => {
           :key="item.to"
           :to="item.to"
           class="nav-item"
-          :title="collapsed ? t(item.key) : undefined"
           @click="mobileMenuOpen = false"
         >
           <span class="nav-icon">{{ item.icon }}</span>
-          <span v-if="!collapsed" class="nav-label">{{ t(item.key) }}</span>
+          <span class="nav-label">{{ t(item.key) }}</span>
         </RouterLink>
-        <button class="nav-item nav-toggle" :title="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" @click="collapsed = !collapsed">
-          <span class="nav-icon">{{ collapsed ? '»' : '«' }}</span>
-          <span v-if="!collapsed" class="nav-label">Collapse</span>
-        </button>
       </nav>
     </aside>
 
@@ -194,10 +185,6 @@ const currentTitle = computed(() => {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  transition: width var(--transition);
-}
-.app-layout--collapsed .sidebar {
-  width: 56px;
 }
 .sidebar-brand {
   height: var(--topbar-height);
@@ -243,10 +230,6 @@ const currentTitle = computed(() => {
   cursor: pointer;
   transition: background var(--transition), color var(--transition);
 }
-.app-layout--collapsed .nav-item {
-  justify-content: center;
-  padding: var(--space-2);
-}
 .nav-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
@@ -261,13 +244,6 @@ const currentTitle = computed(() => {
   width: 18px;
   text-align: center;
   flex-shrink: 0;
-}
-.nav-toggle {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-}
-.nav-toggle:hover {
-  color: var(--text-primary);
 }
 
 /* Main */
@@ -401,15 +377,8 @@ const currentTitle = computed(() => {
   .sidebar--mobile-open {
     transform: translateX(0);
   }
-  .app-layout--collapsed .sidebar {
-    width: var(--sidebar-width);
-  }
   .hamburger-btn {
     display: block;
-  }
-  .app-layout--collapsed .nav-item {
-    justify-content: flex-start;
-    padding: var(--space-2) var(--space-3);
   }
   .content {
     padding: var(--space-3);
