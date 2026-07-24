@@ -5,7 +5,6 @@ import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
 import type { Environment } from '@/api/environments'
 import type { Resource } from '@/api/resources'
-import { resourcesApi } from '@/api/resources'
 import { PROTOCOL_ICONS, PROTOCOL_COLORS } from '@/features/resource/protocols'
 import WizardModal from '@/features/resource/WizardModal.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -32,17 +31,14 @@ function handleResourceClick(res: Resource) {
 
 const searchQuery = ref('')
 const collapsedEnvs = ref(new Set<string>())
-const envResources = ref<Map<string, Resource[]>>(new Map())
 const expandedEnvIds = ref(new Set<string>())
 const wizardEnvId = ref('')
 
 onMounted(async () => {
   await store.fetchEnvironments()
-  // 预加载每个环境的资源
   for (const env of store.environments) {
     try {
-      const resources = await resourcesApi.listByEnv(env.id)
-      envResources.value.set(env.id, resources)
+      await store.fetchResources(env.id)
     } catch {
       // ignore
     }
@@ -55,7 +51,7 @@ const filteredEnvs = computed(() => {
     const q = searchQuery.value.toLowerCase()
     envs = envs.filter(e =>
       e.name.toLowerCase().includes(q) ||
-      (envResources.value.get(e.id) || []).some(r =>
+      (store.envResources.value.get(e.id) || []).some(r =>
         r.name.toLowerCase().includes(q) || r.host.toLowerCase().includes(q)
       )
     )
@@ -72,13 +68,12 @@ function toggleEnv(envId: string) {
 }
 
 function getResources(envId: string): Resource[] {
-  return envResources.value.get(envId) || []
+  return store.envResources.value.get(envId) || []
 }
 
 async function refreshEnv(envId: string) {
   try {
-    const resources = await resourcesApi.listByEnv(envId)
-    envResources.value.set(envId, resources)
+    await store.fetchResources(envId)
   } catch { /* ignore */ }
 }
 
@@ -93,7 +88,7 @@ function onWizardCreated() {
   if (envId) refreshEnv(envId)
 }
 
-defineExpose({ envResources })
+defineExpose({ envResources: store.envResources })
 </script>
 
 <template>

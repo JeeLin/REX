@@ -7,6 +7,7 @@ export const useEnvironmentsStore = defineStore('environments', () => {
   const environments = ref<Environment[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const envResources = ref<Map<string, Resource[]>>(new Map())
 
   // --- Environments ---
 
@@ -45,21 +46,27 @@ export const useEnvironmentsStore = defineStore('environments', () => {
   // --- Resources ---
 
   async function fetchResources(envId: string): Promise<Resource[]> {
-    return resourcesApi.listByEnv(envId)
+    const resources = await resourcesApi.listByEnv(envId)
+    envResources.value.set(envId, resources)
+    return resources
   }
 
   async function createResource(envId: string, data: NewResource): Promise<Resource> {
     const resource = await resourcesApi.create(envId, data)
-    // 更新环境的 resource_count
+    const list = envResources.value.get(envId) || []
+    list.push(resource)
+    envResources.value.set(envId, [...list])
     const env = environments.value.find(e => e.id === envId)
-    if (env) {
-      env.resource_count++
-    }
+    if (env) env.resource_count++
     return resource
   }
 
   async function deleteResource(envId: string, id: string) {
     await resourcesApi.delete(envId, id)
+    const list = envResources.value.get(envId)
+    if (list) {
+      envResources.value.set(envId, list.filter(r => r.id !== id))
+    }
     const env = environments.value.find(e => e.id === envId)
     if (env && env.resource_count > 0) {
       env.resource_count--
@@ -71,7 +78,7 @@ export const useEnvironmentsStore = defineStore('environments', () => {
   }
 
   return {
-    environments, loading, error,
+    environments, loading, error, envResources,
     fetchEnvironments, createEnvironment, updateEnvironment, deleteEnvironment,
     fetchResources, createResource, deleteResource, testConnection,
   }
