@@ -4,7 +4,7 @@
 
 M43 完成前端交互修复和 WebSocket 鉴权。M36 建立了基础日志框架（请求中间件 + SSH/SQL/File/Auth 审计日志），M43 增强了 SSH 终端日志。但 Redis API、环境/资源 CRUD、文件传输大部分操作、Settings、Agent 管理等模块仍无任何结构化日志，排障和审计盲区较多。本里程碑将后端日志覆盖补齐到所有关键操作。
 
-版本类型：patch（无新功能，纯可观测性改善），版本号 0.38.2 → 0.39.0。
+版本类型：minor（新增审计日志条目和 tracing 覆盖），版本号 0.38.2 → 0.39.0。
 
 ## 产品边界
 
@@ -21,6 +21,7 @@ M43 完成前端交互修复和 WebSocket 鉴权。M36 建立了基础日志框�
 - 实时日志流 UI
 - 日志级别运行时动态调整
 - 前端日志查看器增强
+- 自动更新模块（update_api.rs）日志
 
 ## 子任务清单
 
@@ -58,6 +59,7 @@ Redis 控制台的所有操作都有结构化日志，与 SQL/SSH 日志格式�
 | Key 删除 | `REDIS_DEL` | session_id, keys (count) | info |
 | TTL 设置 | — | session_id, key, ttl | info |
 | 命令执行 | `REDIS_COMMAND` | session_id, command (不含密码) | info |
+> **说明**：本子任务为 Redis 操作补充 tracing 日志。对于关键操作（connect/disconnect/select_db/command），同时补充 write_audit_log 以在前端审计日志页面展示。
 
 **敏感信息处理**
 - 连接密码不写入日志（仅 `has_password: bool`）
@@ -105,16 +107,21 @@ async fn connect(State(state): State<AppState>, Json(body): Json<ConnectBody>) -
 
 **审计点**
 
-| 操作 | action | 关键字段 |
-|------|--------|----------|
-| 创建环境 | `ENV_CREATE` | env_id, name, connection_mode |
-| 更新环境 | `ENV_UPDATE` | env_id, name, changed_fields |
-| 删除环境 | `ENV_DELETE` | env_id, name, resource_count |
-| 导入环境 | `ENV_IMPORT` | count, imported_count |
-| 创建资源 | `RESOURCE_CREATE` | resource_id, env_id, protocol, name |
-| 更新资源 | `RESOURCE_UPDATE` | resource_id, env_id, protocol, name |
-| 删除资源 | `RESOURCE_DELETE` | resource_id, env_id, protocol, name |
-| 测试连接 | `TEST_CONNECTION` | protocol, host, result |
+| 操作 | action | 关键字段 | 现有日志 | 新增日志 |
+|------|--------|----------|----------|----------|
+| 创建环境 | `ENV_CREATE` | env_id, name, connection_mode | write_audit_log | tracing |
+| 更新环境 | `ENV_UPDATE` | env_id, name, changed_fields | write_audit_log | tracing |
+| 删除环境 | `ENV_DELETE` | env_id, name, resource_count | write_audit_log | tracing |
+| 导入环境 | `ENV_IMPORT` | count, imported_count | 无 | tracing + write_audit_log |
+| 创建资源 | `RESOURCE_CREATE` | resource_id, env_id, protocol, name | write_audit_log | tracing |
+| 更新资源 | `RESOURCE_UPDATE` | resource_id, env_id, protocol, name | 无 | tracing + write_audit_log |
+| 删除资源 | `RESOURCE_DELETE` | resource_id, env_id, protocol, name | write_audit_log | tracing |
+| 测试连接 | `TEST_CONNECTION` | protocol, host, result | 无 | tracing |
+
+> **说明**：M36 建立了双层日志架构：
+> - `tracing::info!()` → 结构化日志（stdout/journald/日志文件）
+> - `write_audit_log()` → 审计日志表（前端审计日志页面展示）
+> 本子任务为以上所有操作补充 tracing 日志，且对缺失的操作补充 write_audit_log。
 
 **实现要点**
 
@@ -157,6 +164,7 @@ tracing::info!(
 | Presigned URL | — | session_id, path, expires | debug |
 
 **已有的保持不变**（upload / delete 已有日志）。
+> **说明**：本子任务为所有文件操作补充 tracing 日志。对于关键操作（connect/disconnect/rename/mkdir/download/save_edit/ACL），同时补充 write_audit_log 以在前端审计日志页面展示。
 
 **提交信息**: `feat(hub): complete logging for file transfer operations`
 
@@ -177,6 +185,7 @@ tracing::info!(
 |------|--------|----------|
 | 设置更新 | `SETTINGS_UPDATE` | changed_keys (如 "theme", "language") |
 | Agent token 重置 | `AGENT_TOKEN_RESET` | agent_id |
+> **说明**：本子任务为设置变更和 Agent token 重置操作同时补充 tracing 日志和 write_audit_log，以支持审计日志页面展示。
 
 **实现要点**
 
@@ -210,6 +219,7 @@ tracing::info!(
 | tunnel_ws 连接关闭 | total_bytes_forwarded, duration_ms, error_count | info |
 | tunnel_ws 转发错误 | channel_id, error, direction (hub→agent / agent→hub) | warn |
 | agent_ws 数据转发 | channel_id, bytes_forwarded, direction | debug |
+> **说明**：本子任务为隧道统计补充 tracing 日志。隧道统计不写入审计日志表（write_audit_log），仅通过 tracing 输出到日志文件，用于运维监控和故障排查。
 
 **实现要点**
 
@@ -266,7 +276,7 @@ tracing::info!(
 
 ## Flow Status
 
-- [ ] 步骤1：编写里程碑文档
+- [x] 步骤1：编写里程碑文档
 - [ ] 步骤2：设计核对
 - [ ] 步骤3：开发
 - [ ] 步骤4：代码精简
