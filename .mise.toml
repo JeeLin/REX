@@ -76,3 +76,7 @@ run = "rm -rf target && cargo clean && echo Cleaned."
 [tasks.claude]
 description = "Launch Claude Code with REX project connection, skip permissions"
 run = "claude --dangerously-skip-permissions -r REX"
+
+[tasks.omp]
+description = "Launch Claude Code with REX project connection, skip permissions"
+run = "omp --auto-approve -c"

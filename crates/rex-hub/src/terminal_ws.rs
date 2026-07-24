@@ -244,7 +244,8 @@ async fn handle_direct_terminal(mut ws: WebSocket, conn: &ResourceConnInfo, sess
                     session_id: session_id.to_string(),
                 },
             })
-            .unwrap(),
+            .unwrap()
+            .into(),
         ))
         .await;
 
@@ -325,12 +326,12 @@ async fn handle_direct_terminal(mut ws: WebSocket, conn: &ResourceConnInfo, sess
     let ws_write_task = tokio::spawn(async move {
         while let Some(data) = data_rx.recv().await {
             let msg = if data.starts_with('{') {
-                Message::Text(data)
+                Message::Text(data.into())
             } else {
                 let wrapped = ServerMsg::Data {
                     payload: DataPayload { data },
                 };
-                Message::Text(serde_json::to_string(&wrapped).unwrap())
+                Message::Text(serde_json::to_string(&wrapped).unwrap().into())
             };
             if ws_sink.send(msg).await.is_err() {
                 break;
@@ -440,7 +441,8 @@ async fn handle_agent_terminal(
                     session_id: session_id.to_string(),
                 },
             })
-            .unwrap(),
+            .unwrap()
+            .into(),
         ))
         .await;
 
@@ -504,7 +506,7 @@ async fn handle_agent_terminal(
                 payload: DataPayload { data: encoded },
             };
             if ws_sink
-                .send(Message::Text(serde_json::to_string(&msg).unwrap()))
+                .send(Message::Text(serde_json::to_string(&msg).unwrap().into()))
                 .await
                 .is_err()
             {
@@ -538,7 +540,8 @@ async fn send_ws_error(ws: &mut WebSocket, msg: &str) -> Result<(), axum::Error>
                 message: msg.into(),
             },
         })
-        .unwrap(),
+        .unwrap()
+        .into(),
     ))
     .await
 }

@@ -160,7 +160,7 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
     // 5. 通知前端连接成功
     let _ = ws
         .send(Message::Text(
-            serde_json::to_string(&TunnelMsg::Connected).unwrap(),
+            serde_json::to_string(&TunnelMsg::Connected).unwrap().into(),
         ))
         .await;
 
@@ -182,7 +182,7 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
             match msg {
                 Ok(Message::Text(text)) => {
                     // 前端发来的文本数据（terminal.data 等），转为二进制帧
-                    let data = text.into_bytes();
+                    let data = text.as_bytes().to_vec();
                     let ch_id_bytes = ch_id.parse::<u32>().unwrap_or(0).to_be_bytes();
                     let mut frame = Vec::with_capacity(4 + data.len());
                     frame.extend_from_slice(&ch_id_bytes);
@@ -219,7 +219,7 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
     // 9. Agent → 前端（二进制数据转文本帧）
     let agent_to_frontend = tokio::spawn(async move {
         while let Some(data) = data_rx.recv().await {
-            let msg = Message::Text(String::from_utf8_lossy(&data).to_string());
+            let msg = Message::Text(String::from_utf8_lossy(&data).to_string().into());
             if ws_sink.send(msg).await.is_err() {
                 break;
             }
@@ -263,5 +263,5 @@ async fn send_error(ws: &mut WebSocket, msg: &str) -> Result<(), axum::Error> {
         message: msg.into(),
     })
     .unwrap();
-    ws.send(Message::Text(err)).await
+    ws.send(Message::Text(err.into())).await
 }

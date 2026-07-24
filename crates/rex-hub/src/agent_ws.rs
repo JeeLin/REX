@@ -184,7 +184,7 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
                     reason: "expected auth message".into(),
                 },
             }) {
-                let _ = ws_sink.send(Message::Text(fail)).await;
+                let _ = ws_sink.send(Message::Text(fail.into())).await;
             }
             return;
         }
@@ -203,7 +203,7 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
                     reason: "invalid token or agent not found".into(),
                 },
             }) {
-                let _ = ws_sink.send(Message::Text(fail)).await;
+                let _ = ws_sink.send(Message::Text(fail.into())).await;
             }
             return;
         }
@@ -225,7 +225,7 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
             return;
         }
     };
-    if ws_sink.send(Message::Text(ok_msg)).await.is_err() {
+    if ws_sink.send(Message::Text(ok_msg.into())).await.is_err() {
         return;
     }
 
@@ -266,8 +266,8 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
     let ws_write_task = tokio::spawn(async move {
         while let Some(evt) = evt_rx.recv().await {
             let msg = match evt {
-                AgentEvent::Text(t) => Message::Text(t),
-                AgentEvent::Bytes(b) => Message::Binary(b),
+                AgentEvent::Text(t) => Message::Text(t.into()),
+                AgentEvent::Bytes(b) => Message::Binary(b.into()),
                 AgentEvent::Close => break,
             };
             if ws_sink.send(msg).await.is_err() {

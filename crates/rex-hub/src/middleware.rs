@@ -1,6 +1,5 @@
 //! axum auth middleware — 从 Authorization header 或 query param 提取 JWT token。
 
-use async_trait::async_trait;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::http::Request;
@@ -20,7 +19,6 @@ use crate::AppState;
 /// 2. `?token=<token>` query parameter（WebSocket）
 pub struct AuthUser(pub Claims);
 
-#[async_trait]
 impl FromRequestParts<AppState> for AuthUser {
     type Rejection = (StatusCode, axum::Json<ErrorBody>);
 
