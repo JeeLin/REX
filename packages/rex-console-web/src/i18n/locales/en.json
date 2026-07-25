@@ -165,6 +165,8 @@
     "testing": "Testing...",
     "testSuccess": "Connection successful",
     "testFailed": "Connection failed",
+    "hostRequired": "Host address is required",
+    "nameRequired": "Resource name is required",
     "testLatency": "Latency {ms}ms",
     "back": "Back",
     "next": "Next",

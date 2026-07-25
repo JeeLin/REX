@@ -265,9 +265,14 @@ pub async fn test_connection(
         "ssh" | "sftp" => {
             let host = body.host.clone();
             let port = body.port.unwrap_or(22);
+            let addr = if host.contains(':') {
+                format!("[{host}]:{port}")
+            } else {
+                format!("{host}:{port}")
+            };
             match tokio::time::timeout(
                 std::time::Duration::from_secs(5),
-                tokio::net::TcpStream::connect(format!("{host}:{port}")),
+                tokio::net::TcpStream::connect(&addr),
             )
             .await
             {
@@ -277,7 +282,12 @@ pub async fn test_connection(
             }
         }
         "redis" => {
-            let addr = format!("redis://{}:{}/", body.host, body.port.unwrap_or(6379));
+            let redis_host = if body.host.contains(':') {
+                format!("[{}]", body.host)
+            } else {
+                body.host.clone()
+            };
+            let addr = format!("redis://{}:{}/", redis_host, body.port.unwrap_or(6379));
             match tokio::time::timeout(std::time::Duration::from_secs(5), async {
                 let client =
                     redis::Client::open(addr.as_str()).map_err(|e| format!("redis error: {e}"))?;
@@ -321,9 +331,14 @@ pub async fn test_connection(
             let port = body
                 .port
                 .unwrap_or(if body.protocol == "mysql" { 3306 } else { 5432 });
+            let addr = if host.contains(':') {
+                format!("[{host}]:{port}")
+            } else {
+                format!("{host}:{port}")
+            };
             match tokio::time::timeout(
                 std::time::Duration::from_secs(5),
-                tokio::net::TcpStream::connect(format!("{host}:{port}")),
+                tokio::net::TcpStream::connect(&addr),
             )
             .await
             {

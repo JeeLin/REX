@@ -165,6 +165,8 @@
     "testing": "测试中...",
     "testSuccess": "连接成功",
     "testFailed": "连接失败",
+    "hostRequired": "请输入主机地址",
+    "nameRequired": "请输入资源名称",
     "testLatency": "延迟 {ms}ms",
     "back": "上一步",
     "next": "下一步",

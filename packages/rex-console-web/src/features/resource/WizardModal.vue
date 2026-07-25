@@ -92,11 +92,32 @@ function selectProtocol(id: string) {
   }
 }
 
+const stepError = ref('')
+
+function validateStep(): boolean {
+  stepError.value = ''
+  if (step.value === 2 && selectedProtocol.value !== 'sqlite') {
+    if (!host.value.trim()) {
+      stepError.value = t('wizard.hostRequired')
+      return false
+    }
+  }
+  if (step.value === 3) {
+    if (!resName.value.trim()) {
+      stepError.value = t('wizard.nameRequired')
+      return false
+    }
+  }
+  return true
+}
+
 function nextStep() {
+  if (!validateStep()) return
   if (step.value < 4) step.value++
 }
 
 function prevStep() {
+  stepError.value = ''
   if (step.value > 1) step.value--
 }
 
@@ -379,6 +400,8 @@ const colorOptions = [
       </div>
       <div v-if="error" class="form-error">{{ error }}</div>
     </div>
+
+    <div v-if="stepError" class="form-error" style="margin-bottom: var(--space-3)">{{ stepError }}</div>
 
     <!-- Actions -->
     <div class="form-actions">
