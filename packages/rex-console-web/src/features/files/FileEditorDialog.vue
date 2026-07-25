@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onBeforeUnmount, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightSpecialChars } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
@@ -20,6 +21,8 @@ import { cpp } from '@codemirror/lang-cpp'
 import { java } from '@codemirror/lang-java'
 import { yaml } from '@codemirror/lang-yaml'
 import * as filesApi from '@/api/files'
+const { t } = useI18n()
+
 
 const props = defineProps<{
   visible: boolean
@@ -169,9 +172,9 @@ onBeforeUnmount(() => {
           </div>
           <div class="editor-actions">
             <button class="btn btn-primary btn-sm" :disabled="saving || loading" @click="save">
-              {{ saving ? 'Saving...' : 'Save (Ctrl+S)' }}
+              {{ saving ? t('files.saving') : t('files.save') + ' (Ctrl+S)' }}
             </button>
-            <button class="btn btn-ghost btn-sm" @click="emit('close')">Close</button>
+            <button class="btn btn-ghost btn-sm" @click="emit('close')">{{ t('files.close') }}</button>
           </div>
         </div>
 
@@ -179,7 +182,7 @@ onBeforeUnmount(() => {
         <div v-if="error" class="editor-error">{{ error }}</div>
 
         <!-- Loading -->
-        <div v-if="loading" class="editor-loading">Loading file...</div>
+        <div v-if="loading" class="editor-loading">{{ t('files.loadingFile') }}</div>
 
         <!-- Editor -->
         <div ref="editorContainer" class="editor-content" />

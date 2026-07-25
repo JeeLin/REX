@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   visible: boolean
@@ -64,10 +67,10 @@ function onSync() {
 }
 
 function actionLabel(a: string) {
-  if (a === 'copy') return 'Copy'
-  if (a === 'update') return 'Update'
-  if (a === 'delete') return 'Delete'
-  return 'Skip'
+  if (a === 'copy') return t('files.copy')
+  if (a === 'update') return t('files.update')
+  if (a === 'delete') return t('files.delete')
+  return t('files.skip')
 }
 
 function actionClass(a: string) {
@@ -82,7 +85,7 @@ function actionClass(a: string) {
     <div v-if="visible" class="fsd-overlay" @click.self="emit('close')">
       <div class="fsd-dialog">
         <div class="fsd-header">
-          <span class="fsd-title">Folder Sync</span>
+          <span class="fsd-title">{{ t('files.folderSync') }}</span>
           <button class="fsd-close" @click="emit('close')">×</button>
         </div>
 
@@ -90,56 +93,56 @@ function actionClass(a: string) {
           <!-- Source / Target -->
           <div class="fsd-paths">
             <div class="fsd-path">
-              <span class="fsd-path-label">Source:</span>
+              <span class="fsd-path-label">{{ t('files.source') }}:</span>
               <span class="fsd-path-value mono">{{ sourcePath }}</span>
             </div>
             <div class="fsd-path">
-              <span class="fsd-path-label">Target:</span>
+              <span class="fsd-path-label">{{ t('files.target') }}:</span>
               <span class="fsd-path-value mono">{{ targetPath }}</span>
             </div>
           </div>
 
           <!-- Direction -->
           <div class="fsd-section">
-            <label class="fsd-label">Direction</label>
+            <label class="fsd-label">{{ t('files.direction') }}</label>
             <div class="fsd-radio-group">
-              <label class="fsd-radio"><input v-model="direction" type="radio" value="upload" /> Upload (Source → Target)</label>
-              <label class="fsd-radio"><input v-model="direction" type="radio" value="download" /> Download (Target → Source)</label>
-              <label class="fsd-radio"><input v-model="direction" type="radio" value="bidirectional" /> Bidirectional</label>
+              <label class="fsd-radio"><input v-model="direction" type="radio" value="upload" /> {{ t('files.uploadToRemote') }}</label>
+              <label class="fsd-radio"><input v-model="direction" type="radio" value="download" /> {{ t('files.downloadToLocal') }}</label>
+              <label class="fsd-radio"><input v-model="direction" type="radio" value="bidirectional" /> {{ t('files.bidirectional') }}</label>
             </div>
           </div>
 
           <!-- Compare By -->
           <div class="fsd-section">
-            <label class="fsd-label">Compare By</label>
+            <label class="fsd-label">{{ t('files.compareBy') }}</label>
             <div class="fsd-check-group">
-              <label class="fsd-check"><input v-model="compareSize" type="checkbox" /> Size</label>
-              <label class="fsd-check"><input v-model="compareTime" type="checkbox" /> Modified Time</label>
+              <label class="fsd-check"><input v-model="compareSize" type="checkbox" /> {{ t('files.size') }}</label>
+              <label class="fsd-check"><input v-model="compareTime" type="checkbox" /> {{ t('files.modifiedTime') }}</label>
             </div>
           </div>
 
           <!-- Include / Exclude -->
           <div class="fsd-section fsd-row">
             <div class="fsd-field">
-              <label class="fsd-label">Include</label>
+              <label class="fsd-label">{{ t('files.include') }}</label>
               <input v-model="includePattern" class="fsd-input mono" placeholder="*.html,*.css,*.js" />
             </div>
             <div class="fsd-field">
-              <label class="fsd-label">Exclude</label>
+              <label class="fsd-label">{{ t('files.exclude') }}</label>
               <input v-model="excludePattern" class="fsd-input mono" placeholder="node_modules/**" />
             </div>
           </div>
 
           <!-- Delete Orphans -->
           <div class="fsd-section">
-            <label class="fsd-check"><input v-model="deleteOrphans" type="checkbox" /> Delete orphan files in target</label>
+            <label class="fsd-check"><input v-model="deleteOrphans" type="checkbox" /> {{ t('files.deleteOrphans') }}</label>
           </div>
 
           <!-- Preview -->
           <div v-if="showPreview" class="fsd-preview">
-            <div class="fsd-label">Preview ({{ previewEntries.length }} changes)</div>
+            <div class="fsd-label">{{ t('files.syncPreview') }} ({{ previewEntries.length }} {{ t('files.previewChanges') }})</div>
             <table class="fsd-table">
-              <thead><tr><th>#</th><th>File</th><th>Action</th><th class="fsd-col-size">Size</th><th class="fsd-col-modified">Modified</th></tr></thead>
+              <thead><tr><th>#</th><th>{{ t('files.file') }}</th><th>{{ t('files.action') }}</th><th class="fsd-col-size">{{ t('files.size') }}</th><th class="fsd-col-modified">{{ t('files.modified') }}</th></tr></thead>
               <tbody>
                 <tr v-for="(entry, i) in previewEntries" :key="i">
                   <td class="muted">{{ i + 1 }}</td>
@@ -154,9 +157,9 @@ function actionClass(a: string) {
         </div>
 
         <div class="fsd-footer">
-          <button class="fsd-btn" @click="emit('close')">Cancel</button>
-          <button class="fsd-btn" @click="generatePreview">Preview</button>
-          <button class="fsd-btn fsd-btn--primary" @click="onSync">Sync Now</button>
+          <button class="fsd-btn" @click="emit('close')">{{ t('files.cancel') }}</button>
+          <button class="fsd-btn" @click="generatePreview">{{ t('files.syncPreview') }}</button>
+          <button class="fsd-btn fsd-btn--primary" @click="onSync">{{ t('files.startSync') }}</button>
         </div>
       </div>
     </div>

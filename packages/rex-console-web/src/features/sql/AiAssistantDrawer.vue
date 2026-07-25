@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   visible: boolean
@@ -21,12 +24,12 @@ interface AiAction {
   description: string
 }
 
-const actions: AiAction[] = [
-  { id: 'analyze', label: 'Analyze Slow Query', icon: '🔍', description: 'Analyze query performance and suggest optimizations' },
-  { id: 'optimize', label: 'Optimize SQL', icon: '⚡', description: 'Optimize the current query for better performance' },
-  { id: 'generate', label: 'Generate SQL', icon: '📝', description: 'Generate SQL based on natural language description' },
-  { id: 'relations', label: 'Table Relationships', icon: '🔗', description: 'Show foreign key relationships and joins' },
-]
+const actions = computed<AiAction[]>(() => [
+  { id: 'analyze', label: t('sql.analyzeSlowQuery'), icon: '🔍', description: t('sql.analyzeSlowQueryDesc') },
+  { id: 'optimize', label: t('sql.optimizeSql'), icon: '⚡', description: t('sql.optimizeSqlDesc') },
+  { id: 'generate', label: t('sql.generateSql'), icon: '📝', description: t('sql.generateSqlDesc') },
+  { id: 'relations', label: t('sql.tableRelationships'), icon: '🔗', description: t('sql.tableRelationshipsDesc') },
+])
 
 const selectedAction = ref<string | null>(null)
 const input = ref('')
@@ -150,20 +153,20 @@ function close() {
       <div v-if="visible" class="drawer-overlay" @click.self="close">
         <div class="drawer-content">
           <div class="drawer-header">
-            <span class="drawer-title">AI Assistant</span>
+            <span class="drawer-title">{{ t('sql.aiAssistant') }}</span>
             <button class="drawer-close" @click="close">×</button>
           </div>
 
           <div class="drawer-body">
             <!-- Context -->
             <div class="context">
-              <span class="context-label">Context:</span>
+              <span class="context-label">{{ t('sql.context') }}:</span>
               <span class="context-value mono">{{ db }}{{ table ? `.${table}` : '' }}</span>
             </div>
 
             <!-- Quick Actions -->
             <div class="section">
-              <div class="section-label">Quick Actions:</div>
+              <div class="section-label">{{ t('sql.quickActions') }}:</div>
               <div class="actions-grid">
                 <button
                   v-for="action in actions"
@@ -183,7 +186,7 @@ function close() {
               <div class="response-area">
                 <div v-if="loading" class="loading">
                   <div class="spinner" />
-                  <span>Analyzing...</span>
+                  <span>{{ t('sql.analyzing') }}</span>
                 </div>
                 <div v-else-if="response" class="response-content">
                   <pre class="response-text">{{ response }}</pre>
@@ -192,11 +195,11 @@ function close() {
                     class="insert-btn"
                     @click="insertToEditor"
                   >
-                    Insert to Editor
+                    {{ t('sql.insertToEditor') }}
                   </button>
                 </div>
                 <div v-else class="response-placeholder">
-                  Select an action to get started
+                  {{ t('sql.selectActionHint') }}
                 </div>
               </div>
             </div>
@@ -207,7 +210,7 @@ function close() {
                 v-model="input"
                 class="input-field"
                 type="text"
-                placeholder="Ask a question or describe what you need..."
+                :placeholder="t('sql.askQuestion')"
                 @keyup.enter="executeAction"
               />
               <button

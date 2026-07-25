@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { onClickOutside } from '@vueuse/core'
 import * as filesApi from '@/api/files'
 import type { FileEntry } from '@/api/files'
 import FolderSyncDialog from './FolderSyncDialog.vue'
 import MobileFilesBar from './MobileFilesBar.vue'
 import FileEditorDialog from './FileEditorDialog.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   resourceId?: string
@@ -305,7 +308,7 @@ async function ctxPresignedUrl() {
 // Mobile bar actions
 function mfbNewFolder() {
   if (!sessionId.value) return
-  const name = prompt('Folder name:')
+  const name = prompt(t('files.folderNamePrompt'))
   if (!name) return
   const side = mobileActiveSide.value
   filesApi.mkdir(sessionId.value, panels[side].path + name).then(() => loadPanel(side))
@@ -317,7 +320,7 @@ function mfbRename() {
   if (sel.length !== 1) return
   const entry = panels[side].entries.find(e => e.name === sel[0])
   if (!entry) return
-  const newName = prompt('New name:', entry.name)
+  const newName = prompt(t('files.newNamePrompt'), entry.name)
   if (!newName || newName === entry.name) return
   filesApi.renameFile(sessionId.value, entry.path, panels[side].path + newName).then(() => loadPanel(side))
 }
@@ -528,29 +531,29 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
   <div class="fp" @mousemove.prevent>
     <!-- Mobile panel switcher -->
     <div class="fp-switcher">
-      <button class="fp-switcher-btn" :class="{ 'fp-switcher-btn--active': mobileActiveSide === 'left' }" @click="mobileActiveSide = 'left'">Left</button>
-      <button class="fp-switcher-btn" :class="{ 'fp-switcher-btn--active': mobileActiveSide === 'right' }" @click="mobileActiveSide = 'right'">Right</button>
+      <button class="fp-switcher-btn" :class="{ 'fp-switcher-btn--active': mobileActiveSide === 'left' }" @click="mobileActiveSide = 'left'">{{ t('files.left') }}</button>
+      <button class="fp-switcher-btn" :class="{ 'fp-switcher-btn--active': mobileActiveSide === 'right' }" @click="mobileActiveSide = 'right'">{{ t('files.right') }}</button>
     </div>
 
     <div v-if="showConnect" class="fp-overlay">
       <div class="fp-dialog">
-        <h3>Connect to Server</h3>
-        <div class="f"><label>Protocol</label><select v-model="connProtocol" class="mono"><option value="sftp">SFTP</option><option value="s3">S3</option></select></div>
+        <h3>{{ t('files.connectToServer') }}</h3>
+        <div class="f"><label>{{ t('files.protocol') }}</label><select v-model="connProtocol" class="mono"><option value="sftp">SFTP</option><option value="s3">S3</option></select></div>
         <template v-if="connProtocol==='sftp'">
-          <div class="f"><label>Host</label><input v-model="connHost" class="mono" placeholder="192.168.1.1" /></div>
-          <div class="f"><label>Port</label><input v-model.number="connPort" class="mono" type="number" /></div>
-          <div class="f"><label>User</label><input v-model="connUsername" class="mono" /></div>
-          <div class="f"><label>Password</label><input v-model="connPassword" class="mono" type="password" /></div>
+          <div class="f"><label>{{ t('files.host') }}</label><input v-model="connHost" class="mono" placeholder="192.168.1.1" /></div>
+          <div class="f"><label>{{ t('files.port') }}</label><input v-model.number="connPort" class="mono" type="number" /></div>
+          <div class="f"><label>{{ t('files.user') }}</label><input v-model="connUsername" class="mono" /></div>
+          <div class="f"><label>{{ t('files.password') }}</label><input v-model="connPassword" class="mono" type="password" /></div>
         </template>
         <template v-if="connProtocol==='s3'">
-          <div class="f"><label>Bucket</label><input v-model="connBucket" class="mono" placeholder="my-bucket" /></div>
-          <div class="f"><label>Region</label><input v-model="connRegion" class="mono" placeholder="us-east-1 (optional)" /></div>
-          <div class="f"><label>Endpoint URL</label><input v-model="connEndpoint" class="mono" placeholder="https://s3.amazonaws.com (optional)" /></div>
-          <div class="f"><label>Access Key</label><input v-model="connAccessKey" class="mono" placeholder="optional for IAM" /></div>
-          <div class="f"><label>Secret Key</label><input v-model="connSecretKey" class="mono" type="password" placeholder="optional for IAM" /></div>
+          <div class="f"><label>{{ t('files.bucket') }}</label><input v-model="connBucket" class="mono" placeholder="my-bucket" /></div>
+          <div class="f"><label>{{ t('files.region') }}</label><input v-model="connRegion" class="mono" placeholder="us-east-1 (optional)" /></div>
+          <div class="f"><label>{{ t('files.endpointUrl') }}</label><input v-model="connEndpoint" class="mono" placeholder="https://s3.amazonaws.com (optional)" /></div>
+          <div class="f"><label>{{ t('files.accessKey') }}</label><input v-model="connAccessKey" class="mono" placeholder="optional for IAM" /></div>
+          <div class="f"><label>{{ t('files.secretKey') }}</label><input v-model="connSecretKey" class="mono" type="password" placeholder="optional for IAM" /></div>
         </template>
         <div v-if="connError" class="err">{{ connError }}</div>
-        <button class="btn" :disabled="connLoading" @click="doConnect">{{ connLoading ? 'Connecting...' : 'Connect' }}</button>
+        <button class="btn" :disabled="connLoading" @click="doConnect">{{ connLoading ? t('files.connecting') : t('files.connect') }}</button>
       </div>
     </div>
 
@@ -559,13 +562,13 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
         <div class="ptb">
           <button class="pb" @click="goUp(side)">↑</button>
           <span class="pp mono">{{ panels[side].path }}</span>
-          <button class="pb" :class="{ 'pb--active': syncBrowsing }" title="Sync Browsing" @click="syncBrowsing = !syncBrowsing">🔗</button>
-          <button class="pb" title="Folder Sync" @click="openSyncDialog">🔄</button>
+          <button class="pb" :class="{ 'pb--active': syncBrowsing }" :title="t('files.syncBrowsing')" @click="syncBrowsing = !syncBrowsing">🔗</button>
+          <button class="pb" :title="t('files.folderSync')" @click="openSyncDialog">🔄</button>
           <button class="pb" @click="uploadTo(side)">⬆</button>
           <button class="pb" @click="loadPanel(side)">↻</button>
         </div>
         <div class="pf">
-          <div class="fr fh"><span class="cn">Name</span><span class="cs">Size</span><span class="cm">Modified</span><span v-if="isS3" class="csc">Storage Class</span><span v-if="isS3" class="csc">ACL</span></div>
+          <div class="fr fh"><span class="cn">{{ t('files.name') }}</span><span class="cs">{{ t('files.size') }}</span><span class="cm">{{ t('files.modified') }}</span><span v-if="isS3" class="csc">{{ t('files.storageClass') }}</span><span v-if="isS3" class="csc">{{ t('files.acl') }}</span></div>
           <div v-for="e in panels[side].entries" :key="e.name" class="fr" :class="{ 'fr--sel': panels[side].selected.has(e.name) }" draggable="true" @dragstart="onDragStart($event, side, e.name)" @dragend="onDragEnd" @click="toggleSelect(side, e.name, $event)" @dblclick="navigate(side, e)" @contextmenu="onCtx($event, e)">
             <span class="cn"><span class="fi">{{ e.is_dir ? '📁' : '📄' }}</span> {{ e.name }}</span>
             <span class="cs mu">{{ e.is_dir ? '-' : fmtSize(e.size) }}</span>
@@ -573,56 +576,56 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
             <span v-if="isS3" class="csc mu">{{ e.storage_class || '-' }}</span>
             <span v-if="isS3" class="csc mu">{{ e.acl || '-' }}</span>
           </div>
-          <div v-if="!panels[side].loading && !panels[side].entries.length" class="pe">Empty</div>
+          <div v-if="!panels[side].loading && !panels[side].entries.length" class="pe">{{ t('files.empty') }}</div>
         </div>
-        <div class="ps">{{ panels[side].entries.length }} items<template v-if="panels[side].selected.size"> · {{ panels[side].selected.size }} sel</template></div>
+        <div class="ps">{{ panels[side].entries.length }} {{ t('files.items') }}<template v-if="panels[side].selected.size"> · {{ panels[side].selected.size }} {{ t('files.selected') }}</template></div>
       </div>
       <div v-if="side==='left'" class="fh2" :class="{ 'fh2--a': dragging }" @mousedown.prevent="onDS" />
     </template>
 
     <div v-if="ctx.show" ref="ctxRef" class="fctx" :style="{top:ctx.y+'px',left:ctx.x+'px'}">
-      <div class="ci" @click="editFile(ctx.path)">Edit</div>
-      <div class="ci" @click="ctxCopy">Copy Path</div>
-      <div v-if="isS3" class="ci" @click="ctxPresignedUrl">Copy Presigned URL</div>
-      <div class="ci" @click="isS3 ? openAclDialog(ctx.path) : openChmod(ctx.path)">Permissions</div>
-      <div class="ci ci--d" @click="ctxDelete">Delete</div>
+      <div class="ci" @click="editFile(ctx.path)">{{ t('files.edit') }}</div>
+      <div class="ci" @click="ctxCopy">{{ t('files.copyPath') }}</div>
+      <div v-if="isS3" class="ci" @click="ctxPresignedUrl">{{ t('files.copyPresignedUrl') }}</div>
+      <div class="ci" @click="isS3 ? openAclDialog(ctx.path) : openChmod(ctx.path)">{{ t('files.permissions') }}</div>
+      <div class="ci ci--d" @click="ctxDelete">{{ t('files.delete') }}</div>
     </div>
 
     <!-- Chmod Modal -->
     <Teleport to="body">
       <div v-if="showChmod" class="fp-overlay" @click.self="showChmod = false">
         <div class="fp-dialog">
-          <h3>Permissions: {{ chmodPath }}</h3>
+          <h3>{{ t('files.permissions') }}: {{ chmodPath }}</h3>
           <div class="chmod-grid">
             <div class="chmod-header">
               <span></span>
-              <span>Owner</span>
-              <span>Group</span>
-              <span>Other</span>
+              <span>{{ t('files.owner') }}</span>
+              <span>{{ t('files.group') }}</span>
+              <span>{{ t('files.others') }}</span>
             </div>
             <div class="chmod-row">
-              <span>Read</span>
+              <span>{{ t('files.read') }}</span>
               <input v-model="chmodPerms.owner.read" type="checkbox" />
               <input v-model="chmodPerms.group.read" type="checkbox" />
               <input v-model="chmodPerms.other.read" type="checkbox" />
             </div>
             <div class="chmod-row">
-              <span>Write</span>
+              <span>{{ t('files.write') }}</span>
               <input v-model="chmodPerms.owner.write" type="checkbox" />
               <input v-model="chmodPerms.group.write" type="checkbox" />
               <input v-model="chmodPerms.other.write" type="checkbox" />
             </div>
             <div class="chmod-row">
-              <span>Exec</span>
+              <span>{{ t('files.execute') }}</span>
               <input v-model="chmodPerms.owner.exec" type="checkbox" />
               <input v-model="chmodPerms.group.exec" type="checkbox" />
               <input v-model="chmodPerms.other.exec" type="checkbox" />
             </div>
           </div>
-          <div class="chmod-octal">Octal: {{ calcOctal().toString(8) }}</div>
+          <div class="chmod-octal">{{ t('files.octal') }}: {{ calcOctal().toString(8) }}</div>
           <div style="display:flex;gap:var(--space-2);justify-content:flex-end">
-            <button class="btn" @click="showChmod = false">Cancel</button>
-            <button class="btn" style="background:var(--accent);color:#fff" @click="applyChmod">Apply</button>
+            <button class="btn" @click="showChmod = false">{{ t('files.cancel') }}</button>
+            <button class="btn" style="background:var(--accent);color:#fff" @click="applyChmod">{{ t('files.apply') }}</button>
           </div>
         </div>
       </div>
@@ -632,9 +635,9 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
     <Teleport to="body">
       <div v-if="showAclDialog" class="fp-overlay" @click.self="showAclDialog = false">
         <div class="fp-dialog">
-          <h3>S3 Permissions: {{ aclPath }}</h3>
+          <h3>{{ t('files.acl') }}: {{ aclPath }}</h3>
           <div style="margin:var(--space-3) 0">
-            <label style="display:block;font-size:var(--text-sm);color:var(--text-muted);margin-bottom:var(--space-1)">Canned ACL</label>
+            <label style="display:block;font-size:var(--text-sm);color:var(--text-muted);margin-bottom:var(--space-1)">{{ t('files.cannedAcl') }}</label>
             <select v-model="aclValue" style="width:100%;padding:var(--space-2);background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:var(--text-sm)">
               <option value="private">private</option>
               <option value="public-read">public-read</option>
@@ -643,8 +646,8 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
             </select>
           </div>
           <div style="display:flex;gap:var(--space-2);justify-content:flex-end">
-            <button class="btn" @click="showAclDialog = false">Cancel</button>
-            <button class="btn" style="background:var(--accent);color:#fff" @click="applyAcl">Apply</button>
+            <button class="btn" @click="showAclDialog = false">{{ t('files.cancel') }}</button>
+            <button class="btn" style="background:var(--accent);color:#fff" @click="applyAcl">{{ t('files.apply') }}</button>
           </div>
         </div>
       </div>
@@ -672,13 +675,13 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
     <Teleport to="body">
       <div v-if="showDeleteConfirm" class="fp-overlay" @click.self="cancelDelete">
         <div class="fp-dialog">
-          <h3>Confirm Delete</h3>
+          <h3>{{ t('files.confirmDelete') }}</h3>
           <p style="color:var(--text-secondary);margin:0">
-            Delete {{ pendingDelete?.names.length ?? 0 }} item(s)? This action cannot be undone.
+            {{ t('files.deleteConfirm') }}
           </p>
           <div style="display:flex;gap:var(--space-2);justify-content:flex-end">
-            <button class="btn" style="background:var(--bg-hover);color:var(--text-primary)" @click="cancelDelete">Cancel</button>
-            <button class="btn" style="background:var(--danger);color:#fff" @click="executeDelete">Delete</button>
+            <button class="btn" style="background:var(--bg-hover);color:var(--text-primary)" @click="cancelDelete">{{ t('files.cancel') }}</button>
+            <button class="btn" style="background:var(--danger);color:#fff" @click="executeDelete">{{ t('files.delete') }}</button>
           </div>
         </div>
       </div>
@@ -698,7 +701,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
 
     <!-- Transfer Queue Toggle -->
     <button v-if="transferQueue.size > 0" class="tq-toggle" @click="showTransferQueue = !showTransferQueue">
-      📥 {{ transferQueue.size }} <span v-if="activeCount">· {{ activeCount }} active</span>
+      📥 {{ transferQueue.size }} <span v-if="activeCount">· {{ activeCount }} {{ t('files.active') }}</span>
       <span v-if="completedCount" class="tq-badge tq-badge--done">{{ completedCount }} ✓</span>
     </button>
 
@@ -707,9 +710,9 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
       <Transition name="tq-slide">
         <div v-if="showTransferQueue" class="tq-panel">
           <div class="tq-header">
-            <span>Transfers ({{ transferQueue.size }})</span>
+            <span>{{ t('files.transferQueue') }} ({{ transferQueue.size }})</span>
             <div class="tq-header-actions">
-              <button v-if="completedCount" class="tq-btn tq-btn--sm" @click="dismissCompleted">Clear done</button>
+              <button v-if="completedCount" class="tq-btn tq-btn--sm" @click="dismissCompleted">{{ t('files.clearDone') }}</button>
               <button class="tq-btn tq-btn--sm" @click="showTransferQueue = false">✕</button>
             </div>
           </div>
@@ -732,8 +735,8 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
                 </template>
                 <!-- Failed: show error + retry -->
                 <template v-else-if="item.status === 'failed'">
-                  <span class="tq-item-error" :title="item.errorMessage">{{ item.errorMessage || 'Failed' }}</span>
-                  <button class="tq-btn tq-btn--retry" @click="retryTransfer(key)">↻ Retry</button>
+                  <span class="tq-item-error" :title="item.errorMessage">{{ item.errorMessage || t('files.failed') }}</span>
+                  <button class="tq-btn tq-btn--retry" @click="retryTransfer(key)">↻ {{ t('files.retry') }}</button>
                 </template>
                 <!-- Completed -->
                 <template v-else-if="item.status === 'completed'">
@@ -741,11 +744,11 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
                 </template>
                 <!-- Pending -->
                 <template v-else-if="item.status === 'pending'">
-                  <span class="tq-item-pending">Waiting...</span>
+                  <span class="tq-item-pending">{{ t('files.waiting') }}</span>
                 </template>
               </div>
             </div>
-            <div v-if="!transferQueue.size" class="tq-empty">No transfers</div>
+            <div v-if="!transferQueue.size" class="tq-empty">{{ t('files.noTransfers') }}</div>
           </div>
         </div>
       </Transition>

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 interface Column {
   name: string
@@ -31,10 +34,10 @@ const commonTypes = [
       <thead>
         <tr>
           <th class="col-num">#</th>
-          <th>Name</th>
-          <th>Type</th>
-          <th class="col-pk">PK</th>
-          <th class="col-nn">NN</th>
+          <th>{{ t('sql.columnName') }}</th>
+          <th>{{ t('sql.columnType') }}</th>
+          <th class="col-pk">{{ t('sql.pk') }}</th>
+          <th class="col-nn">{{ t('sql.nn') }}</th>
           <th class="col-action"></th>
         </tr>
       </thead>
@@ -46,7 +49,7 @@ const commonTypes = [
               class="cell-input mono"
               type="text"
               :value="col.name"
-              placeholder="column_name"
+              :placeholder="t('sql.columnPlaceholder')"
               @input="col.name = ($event.target as HTMLInputElement).value"
             />
           </td>
@@ -56,7 +59,7 @@ const commonTypes = [
               :value="col.type"
               @change="col.type = ($event.target as HTMLSelectElement).value"
             >
-              <option v-for="t in commonTypes" :key="t" :value="t">{{ t }}</option>
+              <option v-for="ct in commonTypes" :key="ct" :value="ct">{{ ct }}</option>
               <option v-if="!commonTypes.includes(col.type)" :value="col.type">{{ col.type }}</option>
             </select>
           </td>
@@ -75,7 +78,7 @@ const commonTypes = [
             />
           </td>
           <td class="col-action">
-            <button class="remove-btn" title="Remove column" @click="emit('remove', index)">×</button>
+            <button class="remove-btn" :title="t('sql.removeColumn')" @click="emit('remove', index)">×</button>
           </td>
         </tr>
       </tbody>

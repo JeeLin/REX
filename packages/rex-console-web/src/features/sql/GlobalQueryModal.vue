@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { executeQuery, type QueryResult } from '@/api/sql'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   visible: boolean
@@ -79,7 +82,7 @@ function close() {
     <div v-if="visible" class="modal-overlay" @click.self="close">
       <div class="modal-content">
         <div class="modal-header">
-          <span class="modal-title">Global Query</span>
+          <span class="modal-title">{{ t('sql.globalQuery') }}</span>
           <button class="modal-close" @click="close">×</button>
         </div>
 
@@ -87,10 +90,10 @@ function close() {
           <!-- Database selection -->
           <div class="section">
             <div class="section-header">
-              <span class="section-label">Select databases:</span>
+              <span class="section-label">{{ t('sql.selectDatabases') }}:</span>
               <div class="section-actions">
-                <button class="text-btn" @click="selectAll">Select All</button>
-                <button class="text-btn" @click="clearAll">Clear</button>
+                <button class="text-btn" @click="selectAll">{{ t('sql.selectAll') }}</button>
+                <button class="text-btn" @click="clearAll">{{ t('sql.clear') }}</button>
               </div>
             </div>
             <div class="db-list">
@@ -112,23 +115,23 @@ function close() {
 
           <!-- Warning -->
           <div class="warning">
-            ⚠️ Only supports same dialect databases
+            ⚠️ {{ t('sql.sameDialectOnly') }}
           </div>
 
           <!-- Query editor -->
           <div class="section">
-            <div class="section-label">Query:</div>
+            <div class="section-label">{{ t('sql.query') }}:</div>
             <textarea
               v-model="query"
               class="query-input mono"
               rows="6"
-              placeholder="SELECT * FROM table_name WHERE condition"
+              :placeholder="t('sql.queryPlaceholder')"
             />
           </div>
 
           <!-- Results preview -->
           <div v-if="results.length > 0" class="section">
-            <div class="section-label">Results:</div>
+            <div class="section-label">{{ t('sql.results') }}:</div>
             <div class="results-list">
               <div
                 v-for="r in results"
@@ -139,7 +142,7 @@ function close() {
                 <span class="result-db mono">{{ r.db }}</span>
                 <span v-if="r.error" class="result-error">{{ r.error }}</span>
                 <span v-else class="result-success">
-                  {{ r.result?.rows?.length || 0 }} rows
+                  {{ r.result?.rows?.length || 0 }} {{ t('sql.rows') }}
                 </span>
               </div>
             </div>
@@ -147,13 +150,13 @@ function close() {
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="close">Cancel</button>
+          <button class="btn btn-secondary" @click="close">{{ t('common.cancel') }}</button>
           <button
             class="btn btn-primary"
             :disabled="loading || !query.trim() || selectedDbs.length === 0"
             @click="execute"
           >
-            {{ loading ? 'Executing...' : 'Execute' }}
+            {{ loading ? t('sql.executing') : t('sql.execute') }}
           </button>
         </div>
       </div>

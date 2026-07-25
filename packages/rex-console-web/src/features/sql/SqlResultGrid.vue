@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { QueryResult } from '@/api/sql'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   result: QueryResult | null
@@ -179,7 +182,7 @@ const hasChanges = computed(() => editHistory.value.size > 0)
     <!-- Loading -->
     <div v-if="loading" class="result-grid-loading">
       <div class="spinner" />
-      <span>Executing...</span>
+      <span>{{ t('sql.executing') }}</span>
     </div>
 
     <!-- Error -->
@@ -189,7 +192,7 @@ const hasChanges = computed(() => editHistory.value.size > 0)
     </div>
 
     <!-- Empty -->
-    <div v-else-if="isEmpty" class="result-grid-empty">No results</div>
+    <div v-else-if="isEmpty" class="result-grid-empty">{{ t('sql.noResults') }}</div>
 
     <!-- Data table -->
     <div v-else-if="hasData" class="result-grid-table-wrap">
@@ -239,15 +242,15 @@ const hasChanges = computed(() => editHistory.value.size > 0)
 
     <!-- Status bar -->
     <div v-if="result" class="result-grid-status">
-      <span>{{ result.rows.length }} rows</span>
-      <span v-if="result.affected_rows">· {{ result.affected_rows }} affected</span>
+      <span>{{ result.rows.length }} {{ t('sql.rows') }}</span>
+      <span v-if="result.affected_rows">· {{ result.affected_rows }} {{ t('sql.affected') }}</span>
       <span>· {{ result.elapsed_ms }}ms</span>
       <span v-if="hasData" class="status-spacer" />
       <template v-if="hasData && hasChanges">
-        <button class="apply-btn" @click="applyChanges">Apply</button>
-        <button class="discard-btn" @click="discardChanges">Discard</button>
+        <button class="apply-btn" @click="applyChanges">{{ t('sql.apply') }}</button>
+        <button class="discard-btn" @click="discardChanges">{{ t('sql.discard') }}</button>
       </template>
-      <button v-if="hasData" class="export-btn" @click="emit('export')">Export</button>
+      <button v-if="hasData" class="export-btn" @click="emit('export')">{{ t('sql.export') }}</button>
     </div>
   </div>
 </template>

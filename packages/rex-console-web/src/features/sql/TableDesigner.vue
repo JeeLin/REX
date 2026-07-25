@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import ColumnEditor from './ColumnEditor.vue'
 import { getColumns, getIndexes, getForeignKeys, getDdl, type ColumnInfo, type IndexInfo, type ForeignKeyInfo, type DdlResult } from '@/api/sql'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   sessionId: string
@@ -80,14 +83,14 @@ function removeColumn(index: number) {
   <div class="designer">
     <!-- Header -->
     <div class="designer-header">
-      <span class="designer-title mono">Table: {{ table }}</span>
-      <button class="designer-close" title="Close" @click="emit('close')">×</button>
+      <span class="designer-title mono">{{ t('sql.table') }}: {{ table }}</span>
+      <button class="designer-close" :title="t('sql.close')" @click="emit('close')">×</button>
     </div>
 
     <!-- Loading -->
     <div v-if="loading" class="designer-loading">
       <div class="spinner" />
-      <span>Loading table structure...</span>
+      <span>{{ t('sql.loadingTableStructure') }}</span>
     </div>
 
     <!-- Error -->
@@ -104,21 +107,21 @@ function removeColumn(index: number) {
           :class="{ 'designer-tab--active': activeTab === 'columns' }"
           @click="activeTab = 'columns'"
         >
-          Columns
+          {{ t('sql.columns') }}
         </button>
         <button
           class="designer-tab"
           :class="{ 'designer-tab--active': activeTab === 'indexes' }"
           @click="activeTab = 'indexes'"
         >
-          Indexes ({{ indexes.length }})
+          {{ t('sql.indexes') }} ({{ indexes.length }})
         </button>
         <button
           class="designer-tab"
           :class="{ 'designer-tab--active': activeTab === 'fk' }"
           @click="activeTab = 'fk'"
         >
-          Foreign Keys ({{ foreignKeys.length }})
+          {{ t('sql.foreignKeys') }} ({{ foreignKeys.length }})
         </button>
         <button
           class="designer-tab"
@@ -132,7 +135,7 @@ function removeColumn(index: number) {
       <!-- Columns Tab -->
       <div v-if="activeTab === 'columns'" class="designer-content">
         <div class="designer-toolbar">
-          <button class="designer-btn" @click="addColumn">+ Add Column</button>
+          <button class="designer-btn" @click="addColumn">+ {{ t('sql.addColumn') }}</button>
         </div>
         <ColumnEditor
           v-model="designerColumns"
@@ -142,14 +145,14 @@ function removeColumn(index: number) {
 
       <!-- Indexes Tab -->
       <div v-if="activeTab === 'indexes'" class="designer-content">
-        <div v-if="!indexes.length" class="designer-empty">No indexes</div>
+        <div v-if="!indexes.length" class="designer-empty">{{ t('sql.noIndexes') }}</div>
         <table v-else class="designer-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Columns</th>
-              <th>Unique</th>
-              <th>Type</th>
+              <th>{{ t('sql.columnName') }}</th>
+              <th>{{ t('sql.columns') }}</th>
+              <th>{{ t('sql.unique') }}</th>
+              <th>{{ t('sql.columnType') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -165,15 +168,15 @@ function removeColumn(index: number) {
 
       <!-- Foreign Keys Tab -->
       <div v-if="activeTab === 'fk'" class="designer-content">
-        <div v-if="!foreignKeys.length" class="designer-empty">No foreign keys</div>
+        <div v-if="!foreignKeys.length" class="designer-empty">{{ t('sql.noForeignKeys') }}</div>
         <table v-else class="designer-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Columns</th>
-              <th>References</th>
-              <th>On Delete</th>
-              <th>On Update</th>
+              <th>{{ t('sql.columnName') }}</th>
+              <th>{{ t('sql.columns') }}</th>
+              <th>{{ t('sql.references') }}</th>
+              <th>{{ t('sql.onDelete') }}</th>
+              <th>{{ t('sql.onUpdate') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -191,7 +194,7 @@ function removeColumn(index: number) {
       <!-- DDL Tab -->
       <div v-if="activeTab === 'ddl'" class="designer-content">
         <pre v-if="ddlResult" class="designer-ddl mono">{{ ddlResult.ddl }}</pre>
-        <div v-else class="designer-empty">No DDL available</div>
+        <div v-else class="designer-empty">{{ t('sql.noDdl') }}</div>
       </div>
     </template>
   </div>

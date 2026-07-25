@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+
+## [0.40.0] - 2026-07-25
+
+### Changed
+- i18n 全面补全：13 个组件的硬编码英文字符串替换为 i18n key，locale 文件从 382 增至 576 个 key（files 66、sql 93、redis 58）
+- 文件管理模块：FilesPage、FileEditorDialog、FolderSyncDialog、MobileFilesBar 全部接入 i18n
+- SQL 控制台模块：SqlPage、ExportWizard、TableDesigner、GlobalQueryModal、AiAssistantDrawer、SqlResultGrid、ColumnEditor 全部接入 i18n
+- Redis 模块：RedisStatus 接入 i18n
+- AiAssistantDrawer：actions 数组从静态硬编码改为 computed 动态生成
+
 ## [0.39.2] - 2026-07-25
 
 ### Added

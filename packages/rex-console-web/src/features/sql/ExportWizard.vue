@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { QueryResult } from '@/api/sql'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   result: QueryResult
@@ -83,13 +86,13 @@ function escapeCsv(val: string): string {
   <div class="export-overlay" @click.self="emit('close')">
     <div class="export-modal">
       <div class="export-header">
-        <span class="export-title">Export Results</span>
+        <span class="export-title">{{ t('sql.exportResults') }}</span>
         <button class="export-close" @click="emit('close')">×</button>
       </div>
 
       <div class="export-body">
         <div class="export-field">
-          <label class="export-label">Format</label>
+          <label class="export-label">{{ t('sql.format') }}</label>
           <div class="export-radios">
             <label class="export-radio">
               <input v-model="format" type="radio" value="csv" />
@@ -107,7 +110,7 @@ function escapeCsv(val: string): string {
         </div>
 
         <div class="export-field">
-          <label class="export-label">File name</label>
+          <label class="export-label">{{ t('sql.fileName') }}</label>
           <input
             v-model="fileName"
             class="export-input mono"
@@ -117,19 +120,19 @@ function escapeCsv(val: string): string {
         </div>
 
         <div class="export-field">
-          <label class="export-label">Options</label>
+          <label class="export-label">{{ t('sql.options') }}</label>
           <div class="export-checkboxes">
             <label v-if="format === 'csv'" class="export-checkbox">
               <input v-model="includeHeaders" type="checkbox" />
-              <span>Include headers</span>
+              <span>{{ t('sql.includeHeaders') }}</span>
             </label>
             <label v-if="format === 'json'" class="export-checkbox">
               <input v-model="prettyPrint" type="checkbox" />
-              <span>Pretty print</span>
+              <span>{{ t('sql.prettyPrint') }}</span>
             </label>
             <label v-if="format === 'sql'" class="export-checkbox">
               <input v-model="includeTableName" type="checkbox" />
-              <span>Include table name</span>
+              <span>{{ t('sql.includeTableName') }}</span>
             </label>
           </div>
         </div>
@@ -140,8 +143,8 @@ function escapeCsv(val: string): string {
       </div>
 
       <div class="export-footer">
-        <button class="export-btn-secondary" @click="emit('close')">Cancel</button>
-        <button class="export-btn-primary" @click="doExport">Export</button>
+        <button class="export-btn-secondary" @click="emit('close')">{{ t('common.cancel') }}</button>
+        <button class="export-btn-primary" @click="doExport">{{ t('sql.export') }}</button>
       </div>
     </div>
   </div>

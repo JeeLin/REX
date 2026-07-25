@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { onClickOutside } from '@vueuse/core'
+
+const { t } = useI18n()
 
 defineProps<{
   selectedCount: number
@@ -30,17 +33,17 @@ function onMore(action: string) {
 
 <template>
   <div class="mobile-files-bar">
-    <button class="mfb-btn" @click="emit('upload')">📤<span>Upload</span></button>
-    <button class="mfb-btn" :disabled="selectedCount === 0" @click="emit('download')">📥<span>Download</span></button>
-    <button class="mfb-btn" @click="emit('newFolder')">📁<span>New</span></button>
-    <button class="mfb-btn" @click="emit('refresh')">🔄<span>Refresh</span></button>
+    <button class="mfb-btn" @click="emit('upload')">📤<span>{{ t('files.upload') }}</span></button>
+    <button class="mfb-btn" :disabled="selectedCount === 0" @click="emit('download')">📥<span>{{ t('files.download') }}</span></button>
+    <button class="mfb-btn" @click="emit('newFolder')">📁<span>{{ t('files.new') }}</span></button>
+    <button class="mfb-btn" @click="emit('refresh')">🔄<span>{{ t('files.refresh') }}</span></button>
     <div ref="moreRef" class="mfb-more-wrap">
       <button class="mfb-btn mfb-more" @click="showMore = !showMore">⋯</button>
       <div v-if="showMore" class="mfb-menu">
-        <div class="mfb-menu-item" :class="{ 'mfb-menu-item--disabled': selectedCount === 0 }" @click="onMore('rename')">Rename</div>
-        <div class="mfb-menu-item mfb-menu-item--danger" :class="{ 'mfb-menu-item--disabled': selectedCount === 0 }" @click="onMore('delete')">Delete</div>
-        <div class="mfb-menu-item" :class="{ 'mfb-menu-item--disabled': selectedCount !== 1 }" @click="onMore('permissions')">Permissions</div>
-        <div class="mfb-menu-item" :class="{ 'mfb-menu-item--disabled': selectedCount !== 1 }" @click="onMore('copyPath')">Copy Path</div>
+        <div class="mfb-menu-item" :class="{ 'mfb-menu-item--disabled': selectedCount === 0 }" @click="onMore('rename')">{{ t('files.rename') }}</div>
+        <div class="mfb-menu-item mfb-menu-item--danger" :class="{ 'mfb-menu-item--disabled': selectedCount === 0 }" @click="onMore('delete')">{{ t('files.delete') }}</div>
+        <div class="mfb-menu-item" :class="{ 'mfb-menu-item--disabled': selectedCount !== 1 }" @click="onMore('permissions')">{{ t('files.permissions') }}</div>
+        <div class="mfb-menu-item" :class="{ 'mfb-menu-item--disabled': selectedCount !== 1 }" @click="onMore('copyPath')">{{ t('files.copyPath') }}</div>
       </div>
     </div>
   </div>

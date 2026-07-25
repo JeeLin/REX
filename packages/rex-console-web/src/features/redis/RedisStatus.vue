@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getInfo, type RedisInfo } from '@/api/redis'
+
+const { t } = useI18n()
 
 const props = defineProps<{ sessionId: string }>()
 
@@ -29,30 +32,30 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="redis-status">
-    <div v-if="!info" class="status-loading">{{ loading ? 'Loading...' : 'No data' }}</div>
+    <div v-if="!info" class="status-loading">{{ loading ? t('redis.loading') : t('redis.noData') }}</div>
     <template v-else>
       <div class="status-cards">
         <div class="status-card">
-          <div class="card-title">Server</div>
-          <div class="card-row"><span class="muted">Version</span><span>{{ info.redis_version }}</span></div>
-          <div class="card-row"><span class="muted">OS</span><span>{{ info.os }}</span></div>
-          <div class="card-row"><span class="muted">PID</span><span>{{ info.process_id }}</span></div>
+          <div class="card-title">{{ t('redis.server') }}</div>
+          <div class="card-row"><span class="muted">{{ t('redis.version') }}</span><span>{{ info.redis_version }}</span></div>
+          <div class="card-row"><span class="muted">{{ t('redis.os') }}</span><span>{{ info.os }}</span></div>
+          <div class="card-row"><span class="muted">{{ t('redis.pid') }}</span><span>{{ info.process_id }}</span></div>
         </div>
         <div class="status-card">
-          <div class="card-title">Memory</div>
-          <div class="card-row"><span class="muted">Used</span><span>{{ info.used_memory }}</span></div>
-          <div class="card-row"><span class="muted">Peak</span><span>{{ info.used_memory_peak }}</span></div>
+          <div class="card-title">{{ t('redis.memory') }}</div>
+          <div class="card-row"><span class="muted">{{ t('redis.used') }}</span><span>{{ info.used_memory }}</span></div>
+          <div class="card-row"><span class="muted">{{ t('redis.peak') }}</span><span>{{ info.used_memory_peak }}</span></div>
         </div>
         <div class="status-card">
-          <div class="card-title">Stats</div>
-          <div class="card-row"><span class="muted">Clients</span><span>{{ info.connected_clients }}</span></div>
-          <div class="card-row"><span class="muted">Commands</span><span>{{ info.total_commands_processed }}</span></div>
+          <div class="card-title">{{ t('redis.stats') }}</div>
+          <div class="card-row"><span class="muted">{{ t('redis.clients') }}</span><span>{{ info.connected_clients }}</span></div>
+          <div class="card-row"><span class="muted">{{ t('redis.commands') }}</span><span>{{ info.total_commands_processed }}</span></div>
         </div>
       </div>
       <div v-if="info.keyspace.length" class="status-keyspace">
-        <div class="ks-title">Keyspace</div>
+        <div class="ks-title">{{ t('redis.keyspace') }}</div>
         <table class="ks-table">
-          <thead><tr><th>DB</th><th>Keys</th><th>Expires</th></tr></thead>
+          <thead><tr><th>{{ t('redis.db') }}</th><th>{{ t('redis.keys') }}</th><th>{{ t('redis.expires') }}</th></tr></thead>
           <tbody>
             <tr v-for="ks in info.keyspace" :key="ks.db">
               <td>{{ ks.db }}</td>

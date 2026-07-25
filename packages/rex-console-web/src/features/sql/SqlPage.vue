@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { onClickOutside } from '@vueuse/core'
 import { useSqlNav } from './useSqlNav'
 import SqlNavTree from './SqlNavTree.vue'
@@ -14,6 +15,7 @@ import SqlFormView from './SqlFormView.vue'
 import { useSqlQuery, type ExecuteMode } from './useSqlQuery'
 import { connect as sqlConnect, disconnect as sqlDisconnect, getDdl, type ConnectRequest, type QueryResult } from '@/api/sql'
 
+const { t } = useI18n()
 const props = defineProps<{
   resourceId?: string
   host?: string
@@ -161,7 +163,7 @@ function isDesignerTab(tab: AnyTab): tab is DesignerTab {
 function createTab(initialSql = ''): QueryTab {
   const tab: QueryTab = {
     id: nextTabId++,
-    title: `Query ${tabs.value.length + 1}`,
+    title: `${t('sql.query')} ${tabs.value.length + 1}`,
     sql: initialSql,
     dirty: false,
     result: null,
@@ -411,29 +413,29 @@ onBeforeUnmount(() => {
             <span class="sql-tab-title">{{ tab.title }}</span>
             <span class="sql-tab-close" @click.stop="closeTab(tab.id)">×</span>
           </div>
-          <button class="sql-tab-add" title="New Query" @click="createTab()">+</button>
+          <button class="sql-tab-add" :title="t('sql.newQuery')" @click="createTab()">+</button>
         </div>
         <div v-if="activeQueryTab" class="sql-toolbar">
-          <select v-model="execMode" class="sql-toolbar-select mono" title="Execute mode">
-            <option value="all">Run All</option>
-            <option value="current">Run Current</option>
-            <option value="selected">Run Selected</option>
+          <select v-model="execMode" class="sql-toolbar-select mono" :title="t('sql.executeMode')">
+            <option value="all">{{ t('sql.runAll') }}</option>
+            <option value="current">{{ t('sql.runCurrent') }}</option>
+            <option value="selected">{{ t('sql.runSelected') }}</option>
           </select>
           <button
             class="sql-toolbar-btn sql-run-btn"
-            title="Execute (Ctrl+Enter)"
+            :title="t('sql.execute')"
             :disabled="!activeQueryTab || activeQueryTab.loading"
             @click="activeQueryTab && onExecute(activeQueryTab.sql)"
           >
-            ▶ Run
+            ▶ {{ t('sql.run') }}
           </button>
           <div class="sql-toolbar-sep" />
-          <button class="sql-toolbar-btn" title="Format SQL (Ctrl+Shift+F)" @click="onFormat">✦ Format</button>
-          <button class="sql-toolbar-btn" title="Toggle Comment (Ctrl+/)" @click="onToggleComment">💬</button>
-          <button class="sql-toolbar-btn" title="Toggle Case (Ctrl+Shift+U)" @click="onToggleCase">Aa</button>
+          <button class="sql-toolbar-btn" :title="t('sql.format') + ' (Ctrl+Shift+F)'" @click="onFormat">✦ {{ t('sql.format') }}</button>
+          <button class="sql-toolbar-btn" :title="t('sql.toggleComment') + ' (Ctrl+/)'" @click="onToggleComment">💬</button>
+          <button class="sql-toolbar-btn" :title="t('sql.toggleCase') + ' (Ctrl+Shift+U)'" @click="onToggleCase">Aa</button>
           <div class="sql-toolbar-sep" />
           <div ref="clipboardWrapRef" class="sql-clipboard-wrap">
-            <button class="sql-toolbar-btn" title="Clipboard History (Ctrl+Shift+V)" @click="toggleClipboard">📋</button>
+            <button class="sql-toolbar-btn" :title="t('sql.clipboardHistory') + ' (Ctrl+Shift+V)'" @click="toggleClipboard">📋</button>
             <div v-if="showClipboard" class="sql-clipboard-popup">
               <div v-if="editorRef?.clipboardHistory?.length" class="sql-clipboard-list">
                 <div
@@ -446,13 +448,13 @@ onBeforeUnmount(() => {
                   {{ item.length > 60 ? item.slice(0, 60) + '…' : item }}
                 </div>
               </div>
-              <div v-else class="sql-clipboard-empty">No clipboard history</div>
+              <div v-else class="sql-clipboard-empty">{{ t('sql.noClipboardHistory') }}</div>
             </div>
           </div>
           <div class="sql-toolbar-sep" />
-          <button class="sql-toolbar-btn sql-zoom-btn" title="Zoom In (Ctrl+=)" @click="onZoomIn">+</button>
-          <button class="sql-toolbar-btn sql-zoom-btn" title="Zoom Out (Ctrl+-)" @click="onZoomOut">−</button>
-          <button class="sql-toolbar-btn sql-zoom-btn" title="Reset Zoom (Ctrl+0)" @click="onZoomReset">1:1</button>
+          <button class="sql-toolbar-btn sql-zoom-btn" :title="t('sql.zoomIn') + ' (Ctrl+=)'" @click="onZoomIn">+</button>
+          <button class="sql-toolbar-btn sql-zoom-btn" :title="t('sql.zoomOut') + ' (Ctrl+-)'" @click="onZoomOut">−</button>
+          <button class="sql-toolbar-btn sql-zoom-btn" :title="t('sql.resetZoom') + ' (Ctrl+0)'" @click="onZoomReset">1:1</button>
         </div>
       </div>
 
@@ -484,7 +486,7 @@ onBeforeUnmount(() => {
             <button
               class="view-btn"
               :class="{ 'view-btn--active': viewMode === 'grid' }"
-              title="Grid View"
+              :title="t('sql.gridView')"
               @click="viewMode = 'grid'"
             >
               ⊞
@@ -492,7 +494,7 @@ onBeforeUnmount(() => {
             <button
               class="view-btn"
               :class="{ 'view-btn--active': viewMode === 'form' }"
-              title="Form View"
+              :title="t('sql.formView')"
               @click="viewMode = 'form'"
             >
               ☰
@@ -533,9 +535,9 @@ onBeforeUnmount(() => {
 
       <!-- Placeholder (no tab) -->
       <div v-else class="sql-page-placeholder">
-        <div class="placeholder-title">SQL Console</div>
+        <div class="placeholder-title">{{ t('sql.sqlConsole') }}</div>
         <div class="placeholder-desc">
-          Select a table or click + to create a new query
+          {{ t('sql.selectTableHint') }}
         </div>
       </div>
 
@@ -544,8 +546,8 @@ onBeforeUnmount(() => {
         <div class="sql-ddl-drawer-header">
           <span class="sql-ddl-drawer-title mono">DDL: {{ ddlDrawer.table }}</span>
           <div class="sql-ddl-drawer-actions">
-            <button class="sql-ddl-btn" title="Copy DDL" @click="copyDdl">Copy</button>
-            <button class="sql-ddl-btn" title="Close" @click="ddlDrawer.open = false">×</button>
+            <button class="sql-ddl-btn" :title="t('sql.copyDDL')" @click="copyDdl">{{ t('sql.copy') }}</button>
+            <button class="sql-ddl-btn" :title="t('sql.close')" @click="ddlDrawer.open = false">×</button>
           </div>
         </div>
         <pre class="sql-ddl-drawer-content mono">{{ ddlDrawer.ddl }}</pre>
