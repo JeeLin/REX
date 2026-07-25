@@ -1,12 +1,15 @@
-<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { onClickOutside } from '@vueuse/core'
 import { useEnvironmentsStore } from '@/stores/environments'
 import type { Resource } from '@/api/resources'
 import { PROTOCOL_ICONS, PROTOCOL_COLORS } from '@/features/resource/protocols'
 import WizardModal from '@/features/resource/WizardModal.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
+const emit = defineEmits<{
+  resourceProperties: [resource: Resource]
+}>()
 const { t } = useI18n()
 const store = useEnvironmentsStore()
 const router = useRouter()
@@ -77,6 +80,40 @@ function openWizard(envId: string, e: MouseEvent) {
 function onWizardCreated() {
   wizardEnvId.value = ''
 }
+/* ---- context menu ---- */
+const ctxMenu = ref<{ show: boolean; x: number; y: number; resource: Resource | null }>({
+  show: false, x: 0, y: 0, resource: null,
+})
+const ctxMenuRef = ref<HTMLElement | null>(null)
+onClickOutside(ctxMenuRef, () => { ctxMenu.value.show = false })
+
+function onContextMenu(e: MouseEvent, res: Resource) {
+  e.preventDefault()
+  e.stopPropagation()
+  ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, resource: res }
+}
+
+function ctxOpen() {
+  const res = ctxMenu.value.resource
+  if (!res) return
+  handleResourceClick(res)
+  ctxMenu.value.show = false
+}
+
+function ctxProperties() {
+  const res = ctxMenu.value.resource
+  if (!res) return
+  ctxMenu.value.show = false
+  emit('resourceProperties', res)
+}
+
+function ctxDelete() {
+  const res = ctxMenu.value.resource
+  if (!res) return
+  if (!confirm(t('common.confirm') + '?')) return
+  ctxMenu.value.show = false
+  store.deleteResource(res.environment_id, res.id)
+}
 
 </script>
 
@@ -121,6 +158,7 @@ function onWizardCreated() {
             :key="res.id"
             class="rp-item"
             @click="handleResourceClick(res)"
+            @contextmenu.prevent="onContextMenu($event, res)"
           >
             <span class="rp-item-icon" :style="{ color: res.color || PROTOCOL_COLORS[res.protocol] || 'var(--text-secondary)' }">
               {{ PROTOCOL_ICONS[res.protocol] || '?' }}
@@ -142,6 +180,15 @@ function onWizardCreated() {
       @close="wizardEnvId = ''"
       @created="onWizardCreated"
     />
+    <!-- Resource context menu -->
+    <Teleport to="body">
+      <div v-if="ctxMenu.show" class="rp-ctx-overlay" @click="ctxMenu.show = false" @contextmenu.prevent="ctxMenu.show = false" />
+      <div v-if="ctxMenu.show" ref="ctxMenuRef" class="rp-ctx-menu" :style="{ top: ctxMenu.y + 'px', left: ctxMenu.x + 'px' }">
+        <div class="rp-ctx-item" @click="ctxOpen">🚀 {{ t('sidebar.openResource') }}</div>
+        <div class="rp-ctx-item" @click="ctxProperties">✏️ {{ t('sidebar.properties') }}</div>
+        <div class="rp-ctx-item rp-ctx-item--danger" @click="ctxDelete">🗑 {{ t('sidebar.delete') }}</div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -287,5 +334,39 @@ function onWizardCreated() {
 }
 .mono {
   font-family: var(--font-mono);
+}
+.rp-ctx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+}
+.rp-ctx-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 160px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-1) 0;
+}
+.rp-ctx-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.rp-ctx-item:hover {
+  background: var(--bg-hover);
+}
+.rp-ctx-item--danger {
+  color: var(--danger);
+}
+.rp-ctx-item--danger:hover {
+  background: var(--bg-hover);
 }
 </style>

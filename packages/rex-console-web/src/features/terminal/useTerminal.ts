@@ -95,6 +95,14 @@ export function useTerminal() {
             sessionId.value = msg.payload.sessionId
             status.value = 'connected'
             startHeartbeat()
+            // SSH starts at 80x24 — send actual size immediately
+            if (terminal.value && ws?.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: 'terminal.resize',
+                cols: terminal.value.cols,
+                rows: terminal.value.rows,
+              }))
+            }
             break
           case 'terminal.data': {
             const data = atob(msg.payload.data)

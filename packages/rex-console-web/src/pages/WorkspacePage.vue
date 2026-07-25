@@ -201,6 +201,8 @@ function openResourceFromTree(node: {
 // Tab 右键菜单
 const tabContextMenu = ref<{ show: boolean; x: number; y: number; tabId: string }>({ show: false, x: 0, y: 0, tabId: '' })
 const tabColors = ['#f85149', '#3fb950', '#58a6ff', '#d29922', '#8b5cf6', '#e8912d', '#f0883e', '#a371f7']
+const showQuickConnect = ref(false)
+const showMovePane = ref(false)
 
 function onTabContextMenu(e: MouseEvent, tabId: string) {
   e.preventDefault()
@@ -327,6 +329,20 @@ const propsTabId = ref('')
 function openProperties(tabId: string) {
   propsTabId.value = tabId
   showProps.value = true
+  tabContextMenu.value.show = false
+}
+
+function disconnectTab(tabId: string) {
+  tabContextMenu.value.show = false
+  closeTab(tabId)
+}
+
+function moveToPane(paneIndex: number) {
+  const tabId = tabContextMenu.value.tabId
+  if (!tabId) return
+  paneTabs.value[paneIndex] = tabId
+  currentPane.value = paneIndex
+  showMovePane.value = false
   tabContextMenu.value.show = false
 }
 
@@ -518,6 +534,8 @@ useKeyboardShortcuts([
     <Teleport to="body">
       <div v-if="tabContextMenu.show" class="tab-ctx-overlay" @click="tabContextMenu.show = false" @contextmenu.prevent="tabContextMenu.show = false" />
       <div v-if="tabContextMenu.show" class="tab-ctx-menu" :style="{ top: tabContextMenu.y + 'px', left: tabContextMenu.x + 'px' }">
+        <div class="tab-ctx-item" @click="showQuickConnect = true; tabContextMenu.show = false">➕ {{ t('workspace.newConnection') }}</div>
+        <div class="tab-ctx-separator" />
         <div class="tab-ctx-item" @click="startRename(tabContextMenu.tabId)">✏️ {{ t('workspace.rename') }}</div>
         <div class="tab-ctx-item" @click="duplicateTab(tabContextMenu.tabId)">📋 {{ t('workspace.duplicate') }}</div>
         <div class="tab-ctx-item" @click="toggleBroadcast(tabContextMenu.tabId)">
@@ -530,7 +548,27 @@ useKeyboardShortcuts([
         <div class="tab-ctx-item" @click="closeTabsRight(tabContextMenu.tabId)">{{ t('workspace.closeRight') }}</div>
         <div class="tab-ctx-item" @click="closeAllTabs()">{{ t('workspace.closeAll') }}</div>
         <div class="tab-ctx-separator" />
+        <div v-if="splitCount > 1" class="tab-ctx-item tab-ctx-item--has-sub"
+          @mouseenter="showMovePane = true"
+          @mouseleave="showMovePane = false"
+        >
+          <span>↗ {{ t('workspace.moveToPane') }}</span>
+          <span class="tab-ctx-arrow">▸</span>
+          <div v-if="showMovePane" class="tab-ctx-submenu">
+            <div
+              v-for="p in splitCount"
+              :key="p"
+              class="tab-ctx-item"
+              @click.stop="moveToPane(p - 1)"
+            >
+              <span>{{ t('workspace.pane') }} {{ p }}</span>
+              <span v-if="currentPane === p - 1" class="tab-ctx-check">✓</span>
+            </div>
+          </div>
+        </div>
+        <div v-if="splitCount > 1" class="tab-ctx-separator" />
         <div class="tab-ctx-item" @click="openProperties(tabContextMenu.tabId)">⚙ {{ t('workspace.properties') }}</div>
+        <div class="tab-ctx-item tab-ctx-item--danger" @click="disconnectTab(tabContextMenu.tabId)">🔌 {{ t('workspace.disconnect') }}</div>
         <div class="tab-ctx-separator" />
         <div class="tab-ctx-label muted">{{ t('workspace.color') }}</div>
         <div class="tab-ctx-colors">
@@ -962,6 +1000,39 @@ useKeyboardShortcuts([
 }
 .tab-ctx-item:hover {
   background: var(--bg-hover);
+}
+.tab-ctx-item--has-sub {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.tab-ctx-arrow {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-left: var(--space-2);
+}
+.tab-ctx-item--danger {
+  color: var(--danger);
+}
+.tab-ctx-item--danger:hover {
+  background: rgba(248, 81, 73, 0.15);
+}
+.tab-ctx-submenu {
+  position: absolute;
+  left: 100%;
+  top: -4px;
+  min-width: 140px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: var(--space-1) 0;
+  z-index: 220;
+}
+.tab-ctx-check {
+  margin-left: var(--space-2);
+  color: var(--accent);
 }
 .tab-ctx-separator {
   height: 1px;

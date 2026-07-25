@@ -5,10 +5,17 @@ import { useI18n } from 'vue-i18n'
 import ResourcePanel from '@/features/resource-panel/ResourcePanel.vue'
 import { useSessionTimeout } from '@/composables/useSessionTimeout'
 import { useAuthStore } from '@/stores/auth'
+import type { Resource } from '@/api/resources'
+import { useRouter } from 'vue-router'
 
 const { t } = useI18n()
 const { showWarning, remainingSeconds, extendSession } = useSessionTimeout()
 const authStore = useAuthStore()
+const router = useRouter()
+
+function onResourceProperties(res: Resource) {
+  router.push({ name: 'environment-detail', params: { id: res.environment_id } })
+}
 
 function sessionLogout() {
   authStore.logout()
@@ -74,7 +81,7 @@ const currentTitle = computed(() => {
       </nav>
 
       <!-- 资源栏：嵌入侧栏，agents 和 audit-log 之间 -->
-      <ResourcePanel v-if="!(fullscreen && isWorkspace)" class="sidebar-resource" />
+      <ResourcePanel v-if="!(fullscreen && isWorkspace)" class="sidebar-resource" @resource-properties="onResourceProperties" />
 
       <nav class="sidebar-nav sidebar-bottom">
         <RouterLink

@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { onClickOutside } from '@vueuse/core'
 import type { DatabaseNode } from './useSqlNav'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   databases: DatabaseNode[]
@@ -13,6 +16,9 @@ const emit = defineEmits<{
   selectTable: [db: string, table: string]
   designTable: [db: string, table: string]
   viewDdl: [db: string, table: string]
+  copyDdl: [db: string, table: string]
+  newQuery: [db: string, table: string]
+  properties: [db: string, table: string]
   importData: [db: string, table: string]
   refresh: []
   'update:searchQuery': [value: string]
@@ -61,16 +67,18 @@ function onContextMenu(e: MouseEvent, dbName: string, tableName: string) {
 }
 
 function ctxAction(action: string) {
-  if (action === 'copyName') {
+  if (action === 'copyTableName') {
     navigator.clipboard?.writeText(ctxMenu.value.tableName)
+  } else if (action === 'copyDdl') {
+    emit('copyDdl', ctxMenu.value.dbName, ctxMenu.value.tableName)
+  } else if (action === 'newQuery') {
+    emit('newQuery', ctxMenu.value.dbName, ctxMenu.value.tableName)
   } else if (action === 'refresh') {
     emit('refresh')
-  } else if (action === 'designTable') {
-    emit('designTable', ctxMenu.value.dbName, ctxMenu.value.tableName)
   } else if (action === 'viewDdl') {
     emit('viewDdl', ctxMenu.value.dbName, ctxMenu.value.tableName)
-  } else if (action === 'importData') {
-    emit('importData', ctxMenu.value.dbName, ctxMenu.value.tableName)
+  } else if (action === 'properties') {
+    emit('properties', ctxMenu.value.dbName, ctxMenu.value.tableName)
   }
   ctxMenu.value.show = false
 }
@@ -92,7 +100,7 @@ function ctxAction(action: string) {
 
     <!-- Tree -->
     <div class="sql-nav-tree">
-      <div v-if="loading" class="sql-nav-loading">Loading...</div>
+      <div v-if="loading" class="sql-nav-loading">{{ t('sql.loading') }}</div>
 
       <div v-for="db in filteredDatabases" :key="db.name" class="sql-nav-db">
         <!-- Database header -->
@@ -108,7 +116,7 @@ function ctxAction(action: string) {
           <!-- Tables group -->
           <div v-if="baseTables(db).length" class="sql-nav-group">
             <div class="sql-nav-item sql-nav-group-header">
-              <span class="sql-nav-label muted">Tables</span>
+              <span class="sql-nav-label muted">{{ t('sql.tables') }}</span>
               <span class="sql-nav-badge">{{ baseTables(db).length }}</span>
             </div>
             <div
@@ -126,7 +134,7 @@ function ctxAction(action: string) {
           <!-- Views group -->
           <div v-if="views(db).length" class="sql-nav-group">
             <div class="sql-nav-item sql-nav-group-header">
-              <span class="sql-nav-label muted">Views</span>
+              <span class="sql-nav-label muted">{{ t('sql.views') }}</span>
               <span class="sql-nav-badge">{{ views(db).length }}</span>
             </div>
             <div
@@ -163,12 +171,25 @@ function ctxAction(action: string) {
         class="sql-ctx-menu"
         :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
       >
-        <button class="sql-ctx-item" @click="ctxAction('designTable')">Design Table</button>
-        <button class="sql-ctx-item" @click="ctxAction('viewDdl')">View DDL</button>
-        <button class="sql-ctx-item" @click="ctxAction('importData')">Import Data</button>
+        <button class="sql-ctx-item" @click="ctxAction('copyTableName')">
+          <span class="sql-ctx-icon">📋</span>{{ t('sql.copyTableName') }}
+        </button>
+        <button class="sql-ctx-item" @click="ctxAction('copyDdl')">
+          <span class="sql-ctx-icon">📋</span>{{ t('sql.copyDDL') }}
+        </button>
+        <button class="sql-ctx-item" @click="ctxAction('newQuery')">
+          <span class="sql-ctx-icon">🔍</span>{{ t('sql.newQuery') }}
+        </button>
+        <button class="sql-ctx-item" @click="ctxAction('refresh')">
+          <span class="sql-ctx-icon">🔄</span>{{ t('sql.refresh') }}
+        </button>
         <div class="sql-ctx-separator" />
-        <button class="sql-ctx-item" @click="ctxAction('refresh')">Refresh</button>
-        <button class="sql-ctx-item" @click="ctxAction('copyName')">Copy Name</button>
+        <button class="sql-ctx-item" @click="ctxAction('viewDdl')">
+          <span class="sql-ctx-icon">📄</span>{{ t('sql.viewDDL') }}
+        </button>
+        <button class="sql-ctx-item" @click="ctxAction('properties')">
+          <span class="sql-ctx-icon">⚙</span>{{ t('sql.properties') }}
+        </button>
       </div>
     </Teleport>
   </div>
@@ -345,7 +366,9 @@ function ctxAction(action: string) {
 }
 
 .sql-ctx-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   width: 100%;
   padding: var(--space-1) var(--space-3);
   background: none;
@@ -356,6 +379,12 @@ function ctxAction(action: string) {
   text-align: left;
   cursor: pointer;
   transition: background var(--transition);
+}
+
+.sql-ctx-icon {
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
 }
 
 .sql-ctx-item:hover {

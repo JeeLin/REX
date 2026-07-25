@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
+import { useWorkspaceStore } from '@/stores/workspace'
 import { environmentsApi, type Environment } from '@/api/environments'
 import { resourcesApi, type Resource } from '@/api/resources'
 import Card from '@/components/ui/Card.vue'
@@ -19,6 +20,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useEnvironmentsStore()
+const wsStore = useWorkspaceStore()
 
 const envId = route.params.id as string
 const env = ref<Environment | null>(null)
@@ -32,6 +34,19 @@ const editDesc = ref('')
 const editMode = ref('direct')
 const editError = ref('')
 const editLoading = ref(false)
+
+// Context menu state
+const ctxMenu = ref<{ show: boolean; x: number; y: number; resource: Resource | null }>({ show: false, x: 0, y: 0, resource: null })
+const resourceDeleteId = ref<string | null>(null)
+
+// Resource edit modal state
+const resEditModal = ref(false)
+const resEditName = ref('')
+const resEditHost = ref('')
+const resEditPort = ref<string>('')
+const resEditUsername = ref('')
+const resEditError = ref('')
+const resEditLoading = ref(false)
 
 onMounted(async () => {
   try {
@@ -95,6 +110,74 @@ async function refreshResources() {
 function agentStatus(status: string | null): StatusDotStatus {
   if (status === 'online') return 'online'
   return 'offline'
+}
+// Context menu
+function onContextMenu(e: MouseEvent, resource: Resource) {
+  e.preventDefault()
+  ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, resource }
+}
+
+function closeCtxMenu() {
+  ctxMenu.value.show = false
+}
+
+function openInWorkspace() {
+  const res = ctxMenu.value.resource
+  if (!res) return
+  wsStore.openResource({
+    id: res.id,
+    name: res.name,
+    protocol: res.protocol,
+    host: res.host,
+    port: res.port ?? undefined,
+    username: res.username || undefined,
+    environmentId: res.environment_id,
+  })
+  router.push('/')
+  closeCtxMenu()
+}
+
+function openResEdit() {
+  const res = ctxMenu.value.resource
+  if (!res) return
+  resEditName.value = res.name
+  resEditHost.value = res.host
+  resEditPort.value = res.port != null ? String(res.port) : ''
+  resEditUsername.value = res.username || ''
+  resEditError.value = ''
+  resEditModal.value = true
+  closeCtxMenu()
+}
+
+async function submitResEdit() {
+  const res = ctxMenu.value.resource
+  if (!res || !resEditName.value.trim()) {
+    resEditError.value = t('common.nameRequired')
+    return
+  }
+  resEditLoading.value = true
+  try {
+    const updated = await resourcesApi.update(envId, res.id, {
+      name: resEditName.value.trim(),
+      protocol: res.protocol,
+      host: resEditHost.value.trim(),
+      port: resEditPort.value ? Number(resEditPort.value) : null,
+      username: resEditUsername.value.trim() || undefined,
+    })
+    const idx = resources.value.findIndex(r => r.id === res.id)
+    if (idx >= 0) resources.value[idx] = updated
+    resEditModal.value = false
+  } catch (e: unknown) {
+    resEditError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    resEditLoading.value = false
+  }
+}
+
+function confirmDeleteResource() {
+  if (!resourceDeleteId.value) return
+  deleteResource(resourceDeleteId.value)
+  resourceDeleteId.value = null
 }
 </script>
 
@@ -172,7 +255,7 @@ function agentStatus(status: string | null): StatusDotStatus {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="res in resources" :key="res.id">
+            <tr v-for="res in resources" :key="res.id" @contextmenu.prevent="onContextMenu($event, res)">
               <td>
                 <span class="res-name">
                   <span class="res-icon" :style="{ color: PROTOCOL_COLORS[res.protocol] || 'var(--text-secondary)' }">
@@ -232,6 +315,54 @@ function agentStatus(status: string | null): StatusDotStatus {
         </div>
       </form>
     </Modal>
+    <!-- Resource Context Menu -->
+    <div v-if="ctxMenu.show" class="ctx-overlay" @click="closeCtxMenu" @contextmenu.prevent="closeCtxMenu" />
+    <div v-if="ctxMenu.show" class="res-ctx-menu" :style="{ top: ctxMenu.y + 'px', left: ctxMenu.x + 'px' }">
+      <div class="ctx-item" @click="openInWorkspace()">🚀 {{ t('resources.open') }}</div>
+      <div class="ctx-item" @click="openResEdit()">✏ {{ t('resources.edit') }}</div>
+      <div class="ctx-item ctx-item--danger" @click="resourceDeleteId = ctxMenu.resource?.id ?? null; closeCtxMenu()">🗑 {{ t('resources.delete') }}</div>
+    </div>
+
+    <!-- Resource Delete Confirmation -->
+    <Modal :model-value="!!resourceDeleteId" @update:model-value="resourceDeleteId = null">
+      <template #title>{{ t('resources.delete') }}</template>
+      <p style="color: var(--text-secondary); margin-bottom: 16px">
+        {{ t('environments.deleteConfirm') }}
+      </p>
+      <div class="form-actions">
+        <Button variant="secondary" @click="resourceDeleteId = null">{{ t('common.cancel') }}</Button>
+        <Button variant="danger" @click="confirmDeleteResource">{{ t('common.delete') }}</Button>
+      </div>
+    </Modal>
+
+    <!-- Resource Edit Modal -->
+    <Modal v-model="resEditModal">
+      <template #title>{{ t('resources.edit') }}</template>
+      <form class="env-form" @submit.prevent="submitResEdit">
+        <label class="form-label">
+          <span>{{ t('common.name') }}</span>
+          <input v-model="resEditName" type="text" class="form-input" />
+        </label>
+        <label class="form-label">
+          <span>{{ t('wizard.host') }}</span>
+          <input v-model="resEditHost" type="text" class="form-input" />
+        </label>
+        <label class="form-label">
+          <span>{{ t('wizard.port') }}</span>
+          <input v-model="resEditPort" type="number" class="form-input" />
+        </label>
+        <label class="form-label">
+          <span>{{ t('wizard.username') }}</span>
+          <input v-model="resEditUsername" type="text" class="form-input" />
+        </label>
+        <div v-if="resEditError" class="form-error">{{ resEditError }}</div>
+        <div class="form-actions">
+          <Button type="button" variant="secondary" @click="resEditModal = false">{{ t('common.cancel') }}</Button>
+          <Button type="submit" variant="primary" :loading="resEditLoading">{{ t('common.save') }}</Button>
+        </div>
+      </form>
+    </Modal>
+
   </div>
 </template>
 
@@ -407,4 +538,33 @@ function agentStatus(status: string | null): StatusDotStatus {
   gap: var(--space-2);
   margin-top: var(--space-4);
 }
+/* ---- context menu ---- */
+.ctx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+}
+.res-ctx-menu {
+  position: fixed;
+  z-index: 210;
+  min-width: 160px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: var(--space-1) 0;
+}
+.ctx-item {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  color: var(--text-primary);
+}
+.ctx-item:hover {
+  background: var(--bg-hover);
+}
+.ctx-item--danger {
+  color: var(--danger);
+}
+
 </style>

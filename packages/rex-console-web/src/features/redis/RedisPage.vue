@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { onClickOutside } from '@vueuse/core'
 import * as redisApi from '@/api/redis'
 import type { DbInfo, FormatInfo, KeyInfo, RedisStringValue, RedisValue } from '@/api/redis'
 import FormatViewer from './FormatViewer.vue'
+import Toast from '@/components/ui/Toast.vue'
 
 const props = defineProps<{
   resourceId?: string
@@ -16,6 +18,8 @@ const props = defineProps<{
 const sessionId = ref<string | null>(null)
 const connecting = ref(false)
 const connectError = ref('')
+const { t } = useI18n()
+const toast = ref<InstanceType<typeof Toast> | null>(null)
 
 // Connection form
 const connHost = ref(props.host || '127.0.0.1')
@@ -127,6 +131,7 @@ const keys = ref<KeyInfo[]>([])
 const keyLoading = ref(false)
 const searchPattern = ref('*')
 const selectedKeys = ref<Set<string>>(new Set())
+const expandedFolders = ref<Set<string>>(new Set())
 
 // Namespace tree
 interface NamespaceNode {
@@ -161,6 +166,59 @@ const namespaceTree = computed(() => {
   }
   return root
 })
+// Flat tree view
+type FlatItem = {
+  type: 'folder'
+  prefix: string
+  name: string
+  depth: number
+  childCount: number
+} | {
+  type: 'key'
+  key: KeyInfo
+  depth: number
+}
+
+function countKeys(node: NamespaceNode): number {
+  let count = node.keys.length
+  for (const child of node.children.values()) {
+    count += countKeys(child)
+  }
+  return count
+}
+
+const flatItems = computed<FlatItem[]>(() => {
+  const items: FlatItem[] = []
+  const expanded = expandedFolders.value
+
+  function walk(nodeMap: Map<string, NamespaceNode>, depth: number) {
+    for (const [name, node] of nodeMap) {
+      if (node.children.size > 0) {
+        items.push({ type: 'folder', prefix: node.fullName, name, depth, childCount: countKeys(node) })
+        if (expanded.has(node.fullName)) {
+          for (const k of node.keys) {
+            items.push({ type: 'key', key: k, depth: depth + 1 })
+          }
+          walk(node.children, depth + 1)
+        }
+      } else {
+        for (const k of node.keys) {
+          items.push({ type: 'key', key: k, depth })
+        }
+      }
+    }
+  }
+
+  walk(namespaceTree.value, 0)
+  return items
+})
+
+function toggleFolder(prefix: string) {
+  const s = new Set(expandedFolders.value)
+  if (s.has(prefix)) s.delete(prefix)
+  else s.add(prefix)
+  expandedFolders.value = s
+}
 
 async function loadKeys() {
   if (!sessionId.value) return
@@ -394,6 +452,58 @@ function ctxCopy() {
   navigator.clipboard?.writeText(ctxMenu.value.key)
   ctxMenu.value.show = false
 }
+// Folder context menu
+const folderCtx = ref({ show: false, x: 0, y: 0, prefix: '' })
+const folderCtxRef = ref<HTMLElement | null>(null)
+onClickOutside(folderCtxRef, () => { folderCtx.value.show = false })
+
+function onFolderContextMenu(e: MouseEvent, prefix: string) {
+  e.preventDefault()
+  folderCtx.value = { show: true, x: e.clientX, y: e.clientY, prefix }
+}
+
+function folderCtxLoad() {
+  searchPattern.value = folderCtx.value.prefix + ':*'
+  folderCtx.value.show = false
+  loadKeys()
+}
+
+function folderCtxCopy() {
+  navigator.clipboard?.writeText(folderCtx.value.prefix)
+  folderCtx.value.show = false
+}
+
+const showDeletePrefixConfirm = ref(false)
+const deletePrefixTarget = ref({ prefix: '', count: 0 })
+const deletePrefixLoading = ref(false)
+
+async function folderCtxDelete() {
+  if (!sessionId.value) return
+  const prefix = folderCtx.value.prefix
+  folderCtx.value.show = false
+  const matched = await redisApi.scan(sessionId.value, prefix + ':*', 10000)
+  deletePrefixTarget.value = { prefix, count: matched.length }
+  showDeletePrefixConfirm.value = true
+}
+
+async function confirmDeletePrefix() {
+  if (!sessionId.value) return
+  deletePrefixLoading.value = true
+  try {
+    const prefix = deletePrefixTarget.value.prefix
+    const matched = await redisApi.scan(sessionId.value, prefix + ':*', 10000)
+    let deleted = 0
+    for (const k of matched) {
+      await redisApi.delKeys(sessionId.value, [k.key])
+      deleted++
+      toast.value?.push(`${t('redis.deletePrefix')}: ${deleted}/${matched.length}`, 'info', 1500)
+    }
+    showDeletePrefixConfirm.value = false
+    await loadKeys()
+  } finally {
+    deletePrefixLoading.value = false
+  }
+}
 
 /* ---- Stream support ---- */
 const streamTab = ref<'messages' | 'groups'>('messages')
@@ -579,18 +689,18 @@ async function flushDb() {
     <!-- Connect dialog -->
     <div v-if="showConnect" class="redis-connect-overlay">
       <div class="redis-connect-dialog">
-        <h3 class="dialog-title">Connect to Redis</h3>
+        <h3 class="dialog-title">{{ t('redis.connect') }}</h3>
         <div class="dialog-field">
-          <label>Host</label>
+          <label>{{ t('redis.host') }}</label>
           <input v-model="connHost" class="mono" placeholder="127.0.0.1" />
         </div>
         <div class="dialog-field">
-          <label>Port</label>
+          <label>{{ t('redis.port') }}</label>
           <input v-model.number="connPort" class="mono" type="number" placeholder="6379" />
         </div>
         <div class="dialog-field">
-          <label>Password</label>
-          <input v-model="connPassword" class="mono" type="password" placeholder="(optional)" />
+          <label>{{ t('redis.password') }}</label>
+          <input v-model="connPassword" class="mono" type="password" :placeholder="t('redis.optional')" />
         </div>
         <div v-if="connectError" class="dialog-error">{{ connectError }}</div>
         <button class="btn-primary" :disabled="connecting" @click="doConnect">
@@ -604,30 +714,30 @@ async function flushDb() {
       <div v-if="showEditConnection && editingConnection" class="modal-overlay" @click.self="showEditConnection = false">
         <div class="modal-content">
           <div class="modal-header">
-            <span class="modal-title">Edit Connection</span>
+            <span class="modal-title">{{ t('redis.editConnection') }}</span>
             <button class="modal-close" @click="showEditConnection = false">×</button>
           </div>
           <div class="modal-body">
             <div class="dialog-field">
-              <label>Name</label>
+              <label>{{ t('common.name') }}</label>
               <input v-model="editingConnection.name" class="mono" />
             </div>
             <div class="dialog-field">
-              <label>Host</label>
+              <label>{{ t('redis.host') }}</label>
               <input v-model="editingConnection.host" class="mono" />
             </div>
             <div class="dialog-field">
-              <label>Port</label>
+              <label>{{ t('redis.port') }}</label>
               <input v-model.number="editingConnection.port" class="mono" type="number" />
             </div>
             <div class="dialog-field">
-              <label>Password</label>
+              <label>{{ t('redis.password') }}</label>
               <input v-model="editingConnection.password" class="mono" type="password" />
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn btn-secondary" @click="showEditConnection = false">Cancel</button>
-            <button class="btn btn-primary" @click="saveConnection">Save</button>
+            <button class="btn btn-secondary" @click="showEditConnection = false">{{ t('common.cancel') }}</button>
+            <button class="btn btn-primary" @click="saveConnection">{{ t('common.save') }}</button>
           </div>
         </div>
       </div>
@@ -638,15 +748,15 @@ async function flushDb() {
       <div v-if="showDeleteConnection && deletingConnection" class="modal-overlay" @click.self="showDeleteConnection = false">
         <div class="modal-content">
           <div class="modal-header">
-            <span class="modal-title">Delete Connection</span>
+            <span class="modal-title">{{ t('redis.deleteConnection') }}</span>
             <button class="modal-close" @click="showDeleteConnection = false">×</button>
           </div>
           <div class="modal-body">
             <p>Are you sure you want to delete "{{ deletingConnection.name }}"?</p>
           </div>
           <div class="modal-footer">
-            <button class="btn btn-secondary" @click="showDeleteConnection = false">Cancel</button>
-            <button class="btn btn-danger" @click="confirmDeleteConnection">Delete</button>
+            <button class="btn btn-secondary" @click="showDeleteConnection = false">{{ t('common.cancel') }}</button>
+            <button class="btn btn-danger" @click="confirmDeleteConnection">{{ t('common.delete') }}</button>
           </div>
         </div>
       </div>
@@ -712,17 +822,30 @@ async function flushDb() {
 
       <!-- Key tree -->
       <div class="redis-tree" :class="{ 'redis-tree--loading': keyLoading }">
-        <div
-          v-for="k in keys"
-          :key="k.key"
-          class="redis-key-item"
-          :class="{ 'redis-key-item--selected': selectedKey === k.key }"
-          @click="viewKey(k.key)"
-          @contextmenu="onContextMenu($event, k.key)"
-        >
-          <span class="redis-key-type" :class="'type-' + k.type_name">{{ k.type_name[0] }}</span>
-          <span class="redis-key-name mono">{{ k.key }}</span>
-        </div>
+        <template v-for="item in flatItems" :key="item.type === 'folder' ? 'f:' + item.prefix : 'k:' + item.key.key">
+          <div
+            v-if="item.type === 'folder'"
+            class="redis-folder-item"
+            :style="{ paddingLeft: (item.depth * 16 + 8) + 'px' }"
+            @click.stop="toggleFolder(item.prefix)"
+            @contextmenu.prevent="onFolderContextMenu($event, item.prefix)"
+          >
+            <span class="redis-folder-icon">{{ expandedFolders.has(item.prefix) ? '▼' : '▶' }}</span>
+            <span class="redis-folder-name mono">{{ item.name }}</span>
+            <span class="redis-folder-count">{{ item.childCount }}</span>
+          </div>
+          <div
+            v-else
+            class="redis-key-item"
+            :class="{ 'redis-key-item--selected': selectedKey === item.key.key }"
+            :style="{ paddingLeft: (item.depth * 16 + 8) + 'px' }"
+            @click="viewKey(item.key.key)"
+            @contextmenu="onContextMenu($event, item.key.key)"
+          >
+            <span class="redis-key-type" :class="'type-' + item.key.type_name">{{ item.key.type_name[0] }}</span>
+            <span class="redis-key-name mono">{{ item.key.key }}</span>
+          </div>
+        </template>
         <div v-if="!keyLoading && keys.length === 0" class="redis-tree-empty">
           No keys found
         </div>
@@ -759,11 +882,11 @@ async function flushDb() {
         <div class="redis-value-header">
           <span class="redis-value-key mono">{{ selectedKey || activeTab }}</span>
           <button class="redis-toolbar-btn" title="Open in new tab" @click="openInNewTab">↗</button>
-          <button class="redis-toolbar-btn redis-toolbar-btn--danger" @click="deleteSelected">Delete</button>
+          <button class="redis-toolbar-btn redis-toolbar-btn--danger" @click="deleteSelected">{{ t('common.delete') }}</button>
         </div>
-        <div v-if="valueLoading" class="redis-value-loading">Loading...</div>
+        <div v-if="valueLoading" class="redis-value-loading">{{ t('redis.loading') }}</div>
         <div v-else-if="keyValue" class="redis-value-body">
-          <div class="redis-value-type">Type: {{ keyValue.type }}</div>
+          <div class="redis-value-type">{{ t('redis.type') }}: {{ keyValue.type }}</div>
           <!-- String -->
           <FormatViewer
             v-if="keyValue.type === 'String'"
@@ -772,7 +895,7 @@ async function flushDb() {
           />
           <!-- Hash -->
           <table v-else-if="keyValue.type === 'Hash'" class="redis-value-table">
-            <thead><tr><th>#</th><th>Field</th><th>Value</th></tr></thead>
+            <thead><tr><th>#</th><th>{{ t('redis.field') }}</th><th>{{ t('redis.value') }}</th></tr></thead>
             <tbody>
               <tr v-for="(entry, i) in (keyValue.value as [string, string][])" :key="i">
                 <td class="muted">{{ i + 1 }}</td>
@@ -783,7 +906,7 @@ async function flushDb() {
           </table>
           <!-- List / Set -->
           <table v-else-if="keyValue.type === 'List' || keyValue.type === 'Set'" class="redis-value-table">
-            <thead><tr><th>#</th><th>Value</th></tr></thead>
+            <thead><tr><th>#</th><th>{{ t('redis.value') }}</th></tr></thead>
             <tbody>
               <tr v-for="(val, i) in (keyValue.value as string[])" :key="i">
                 <td class="muted">{{ i + 1 }}</td>
@@ -793,7 +916,7 @@ async function flushDb() {
           </table>
           <!-- ZSet -->
           <table v-else-if="keyValue.type === 'ZSet'" class="redis-value-table">
-            <thead><tr><th>#</th><th>Score</th><th>Member</th></tr></thead>
+            <thead><tr><th>#</th><th>{{ t('redis.score') }}</th><th>{{ t('redis.member') }}</th></tr></thead>
             <tbody>
               <tr v-for="(entry, i) in (keyValue.value as [string, number][])" :key="i">
                 <td class="muted">{{ i + 1 }}</td>
@@ -805,8 +928,8 @@ async function flushDb() {
           <!-- Stream -->
           <div v-else-if="keyValue.type === 'Stream'" class="stream-view">
             <div class="stream-tabs">
-              <button class="stream-tab" :class="{ 'stream-tab--active': streamTab === 'messages' }" @click="streamTab = 'messages'; loadStreamData()">Messages</button>
-              <button class="stream-tab" :class="{ 'stream-tab--active': streamTab === 'groups' }" @click="streamTab = 'groups'; loadStreamData()">Consumer Groups</button>
+              <button class="stream-tab" :class="{ 'stream-tab--active': streamTab === 'messages' }" @click="streamTab = 'messages'; loadStreamData()">{{ t('redis.messages') }}</button>
+              <button class="stream-tab" :class="{ 'stream-tab--active': streamTab === 'groups' }" @click="streamTab = 'groups'; loadStreamData()">{{ t('redis.consumerGroups') }}</button>
             </div>
             <div v-if="streamTab === 'messages'" class="stream-filter">
               <label class="muted">Min:</label>
@@ -815,7 +938,7 @@ async function flushDb() {
               <input v-model="streamMaxId" class="mono stream-input" placeholder="+" />
               <button class="redis-toolbar-btn" @click="loadStreamMessages">↻</button>
             </div>
-            <div v-if="streamLoading" class="redis-value-loading">Loading...</div>
+            <div v-if="streamLoading" class="redis-value-loading">{{ t('redis.loading') }}</div>
             <template v-else-if="streamTab === 'messages'">
               <table v-if="streamMessages.length" class="redis-value-table">
                 <thead><tr><th>#</th><th>ID</th><th>Fields</th></tr></thead>
@@ -860,8 +983,20 @@ async function flushDb() {
       class="redis-ctx-menu"
       :style="{ top: ctxMenu.y + 'px', left: ctxMenu.x + 'px' }"
     >
-      <div class="ctx-item" @click="ctxCopy">Copy Key Name</div>
-      <div class="ctx-item ctx-item--danger" @click="ctxDelete">Delete</div>
+      <div class="ctx-item" @click="ctxCopy">{{ t('redis.copyKeyName') }}</div>
+      <div class="ctx-item ctx-item--danger" @click="ctxDelete">{{ t('common.delete') }}</div>
+    </div>
+
+    <!-- Folder context menu -->
+    <div
+      v-if="folderCtx.show"
+      ref="folderCtxRef"
+      class="redis-ctx-menu"
+      :style="{ top: folderCtx.y + 'px', left: folderCtx.x + 'px' }"
+    >
+      <div class="ctx-item" @click="folderCtxLoad">📂 {{ t('redis.loadPrefix') }}</div>
+      <div class="ctx-item" @click="folderCtxCopy">📋 {{ t('redis.copyPrefix') }}</div>
+      <div class="ctx-item ctx-item--danger" @click="folderCtxDelete">🗑 {{ t('redis.deletePrefix') }}</div>
     </div>
 
     <!-- Batch Delete Modal -->
@@ -869,15 +1004,15 @@ async function flushDb() {
       <div v-if="showBatchDelete" class="modal-overlay" @click.self="showBatchDelete = false">
         <div class="modal-content">
           <div class="modal-header">
-            <span class="modal-title">Batch Delete</span>
+            <span class="modal-title">{{ t('redis.batchDelete') }}</span>
             <button class="modal-close" @click="showBatchDelete = false">×</button>
           </div>
           <div class="modal-body">
             <p>Are you sure you want to delete {{ selectedKeys.size }} selected keys?</p>
           </div>
           <div class="modal-footer">
-            <button class="btn btn-secondary" @click="showBatchDelete = false">Cancel</button>
-            <button class="btn btn-danger" @click="batchDelete">Delete</button>
+            <button class="btn btn-secondary" @click="showBatchDelete = false">{{ t('common.cancel') }}</button>
+            <button class="btn btn-danger" @click="batchDelete">{{ t('common.delete') }}</button>
           </div>
         </div>
       </div>
@@ -898,7 +1033,7 @@ async function flushDb() {
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn btn-secondary" @click="showBatchTtl = false">Cancel</button>
+            <button class="btn btn-secondary" @click="showBatchTtl = false">{{ t('common.cancel') }}</button>
             <button class="btn btn-primary" @click="batchSetTtl">Apply</button>
           </div>
         </div>
@@ -910,14 +1045,14 @@ async function flushDb() {
       <div v-if="showExport" class="modal-overlay" @click.self="showExport = false">
         <div class="modal-content">
           <div class="modal-header">
-            <span class="modal-title">Export {{ selectedKeys.size }} keys</span>
+            <span class="modal-title">{{ t('redis.exportKeys') }} {{ selectedKeys.size }}</span>
             <button class="modal-close" @click="showExport = false">×</button>
           </div>
           <div class="modal-body">
-            <p>Export selected keys to JSON file</p>
+            <p>{{ t('redis.exportToJSON') }}</p>
           </div>
           <div class="modal-footer">
-            <button class="btn btn-secondary" @click="showExport = false">Cancel</button>
+            <button class="btn btn-secondary" @click="showExport = false">{{ t('common.cancel') }}</button>
             <button class="btn btn-primary" @click="exportKeys">Export</button>
           </div>
         </div>
@@ -929,15 +1064,15 @@ async function flushDb() {
       <div v-if="showImport" class="modal-overlay" @click.self="showImport = false">
         <div class="modal-content">
           <div class="modal-header">
-            <span class="modal-title">Import Keys</span>
+            <span class="modal-title">{{ t('redis.importKeys') }}</span>
             <button class="modal-close" @click="showImport = false">×</button>
           </div>
           <div class="modal-body">
-            <p>Select a JSON file with keys to import</p>
+            <p>{{ t('redis.importFromJSON') }}</p>
             <input type="file" accept=".json" @change="onImportFile" />
           </div>
           <div class="modal-footer">
-            <button class="btn btn-secondary" @click="showImport = false">Cancel</button>
+            <button class="btn btn-secondary" @click="showImport = false">{{ t('common.cancel') }}</button>
           </div>
         </div>
       </div>
@@ -948,21 +1083,21 @@ async function flushDb() {
       <div v-if="showMemoryAnalysis" class="modal-overlay" @click.self="showMemoryAnalysis = false">
         <div class="modal-content modal-wide">
           <div class="modal-header">
-            <span class="modal-title">Memory Analysis</span>
+            <span class="modal-title">{{ t('redis.memoryAnalysis') }}</span>
             <button class="modal-close" @click="showMemoryAnalysis = false">×</button>
           </div>
           <div class="modal-body">
-            <div v-if="managementLoading" class="redis-value-loading">Loading...</div>
+            <div v-if="managementLoading" class="redis-value-loading">{{ t('redis.loading') }}</div>
             <div v-else-if="memoryData">
               <div class="mgmt-stats">
-                <div class="mgmt-stat"><span class="mgmt-label">Used</span><span class="mgmt-value mono">{{ memoryData.used }}</span></div>
-                <div class="mgmt-stat"><span class="mgmt-label">Peak</span><span class="mgmt-value mono">{{ memoryData.peak }}</span></div>
-                <div class="mgmt-stat"><span class="mgmt-label">Fragmentation</span><span class="mgmt-value mono">{{ memoryData.fragmentation }}</span></div>
-                <div class="mgmt-stat"><span class="mgmt-label">Total Keys</span><span class="mgmt-value mono">{{ memoryData.totalKeys }}</span></div>
+                <div class="mgmt-stat"><span class="mgmt-label">{{ t('redis.used') }}</span><span class="mgmt-value mono">{{ memoryData.used }}</span></div>
+                <div class="mgmt-stat"><span class="mgmt-label">{{ t('redis.peak') }}</span><span class="mgmt-value mono">{{ memoryData.peak }}</span></div>
+                <div class="mgmt-stat"><span class="mgmt-label">{{ t('redis.fragmentation') }}</span><span class="mgmt-value mono">{{ memoryData.fragmentation }}</span></div>
+                <div class="mgmt-stat"><span class="mgmt-label">{{ t('redis.totalKeys') }}</span><span class="mgmt-value mono">{{ memoryData.totalKeys }}</span></div>
               </div>
-              <div class="mgmt-section-title">Key Type Distribution</div>
+              <div class="mgmt-section-title">{{ t('redis.keyTypeDistribution') }}</div>
               <table class="redis-value-table">
-                <thead><tr><th>Type</th><th>Count</th><th>%</th></tr></thead>
+                <thead><tr><th>{{ t('redis.type') }}</th><th>{{ t('redis.count') }}</th><th>%</th></tr></thead>
                 <tbody>
                   <tr v-for="kt in memoryData.keyTypes" :key="kt.type">
                     <td><span class="redis-key-type" :class="'type-' + kt.type.toLowerCase()">{{ kt.type[0] }}</span> {{ kt.type }}</td>
@@ -972,7 +1107,7 @@ async function flushDb() {
                 </tbody>
               </table>
             </div>
-            <div v-else class="redis-tree-empty">Failed to load memory data</div>
+            <div v-else class="redis-tree-empty">{{ t('redis.failedToLoadMemory') }}</div>
           </div>
         </div>
       </div>
@@ -983,14 +1118,14 @@ async function flushDb() {
       <div v-if="showSlowLog" class="modal-overlay" @click.self="showSlowLog = false">
         <div class="modal-content modal-wide">
           <div class="modal-header">
-            <span class="modal-title">Slow Log</span>
+            <span class="modal-title">{{ t('redis.slowLog') }}</span>
             <button class="modal-close" @click="showSlowLog = false">×</button>
           </div>
           <div class="modal-body">
-            <div v-if="managementLoading" class="redis-value-loading">Loading...</div>
+            <div v-if="managementLoading" class="redis-value-loading">{{ t('redis.loading') }}</div>
             <div v-else-if="slowLogEntries.length">
               <table class="redis-value-table">
-                <thead><tr><th>#</th><th>Time</th><th>Duration</th><th>Client</th><th>Command</th></tr></thead>
+                <thead><tr><th>#</th><th>Time</th><th>{{ t('redis.duration') }}</th><th>{{ t('redis.client') }}</th><th>{{ t('redis.command') }}</th></tr></thead>
                 <tbody>
                   <tr v-for="entry in slowLogEntries" :key="entry.id">
                     <td class="muted">{{ entry.id }}</td>
@@ -1013,20 +1148,43 @@ async function flushDb() {
       <div v-if="showFlushDb" class="modal-overlay" @click.self="showFlushDb = false">
         <div class="modal-content">
           <div class="modal-header">
-            <span class="modal-title">Flush Database</span>
+            <span class="modal-title">{{ t('redis.flushDb') }}</span>
             <button class="modal-close" @click="showFlushDb = false">×</button>
           </div>
           <div class="modal-body">
-            <p>⚠️ This will permanently delete <strong>ALL</strong> keys in the current database (db{{ currentDb }}).</p>
-            <p>This action cannot be undone.</p>
+            <p>{{ t('redis.flushConfirm', { n: currentDb }) }}</p>
+            <p>{{ t('redis.flushWarning') }}</p>
           </div>
           <div class="modal-footer">
-            <button class="btn btn-secondary" @click="showFlushDb = false">Cancel</button>
-            <button class="btn btn-danger" @click="flushDb">Flush DB</button>
+            <button class="btn btn-secondary" @click="showFlushDb = false">{{ t('common.cancel') }}</button>
+            <button class="btn btn-danger" @click="flushDb">{{ t('redis.flushDb') }}</button>
           </div>
         </div>
       </div>
     </Teleport>
+
+    <!-- Delete Prefix Confirmation -->
+    <Teleport to="body">
+      <div v-if="showDeletePrefixConfirm" class="modal-overlay" @click.self="showDeletePrefixConfirm = false">
+        <div class="modal-content">
+          <div class="modal-header">
+            <span class="modal-title">{{ t('redis.deletePrefix') }}</span>
+            <button class="modal-close" @click="showDeletePrefixConfirm = false">×</button>
+          </div>
+          <div class="modal-body">
+            <p>{{ t('redis.deletePrefix') }}: <strong>{{ deletePrefixTarget.prefix }}:*</strong> ({{ deletePrefixTarget.count }} keys)</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showDeletePrefixConfirm = false">{{ t('common.cancel') }}</button>
+            <button class="btn btn-danger" :disabled="deletePrefixLoading" @click="confirmDeletePrefix">
+              {{ deletePrefixLoading ? t('common.loading') : t('common.confirm') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <Toast ref="toast" />
   </div>
 </template>
 
@@ -1501,6 +1659,46 @@ async function flushDb() {
 .stream-field-key {
   color: var(--accent);
   font-weight: 500;
+}
+
+/* ---- folder items ---- */
+.redis-folder-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.redis-folder-item:hover {
+  background: var(--bg-hover);
+}
+
+.redis-folder-icon {
+  font-size: 10px;
+  width: 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.redis-folder-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent);
+}
+
+.redis-folder-count {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  background: var(--bg-deep);
+  padding: 1px 6px;
+  border-radius: 8px;
+  flex-shrink: 0;
 }
 
 /* ---- context menu ---- */

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onBeforeUnmount, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { Terminal } from '@xterm/xterm'
 
 const props = defineProps<{
@@ -16,7 +17,11 @@ const emit = defineEmits<{
   reconnect: []
   disconnect: []
   'set-encoding': [encoding: string]
+  copyAddress: []
+  openSftp: []
 }>()
+
+const { t } = useI18n()
 
 const showEncoding = ref(false)
 const currentEncoding = ref(props.encoding || 'UTF-8')
@@ -75,6 +80,16 @@ function handleDisconnect() {
   emit('close')
 }
 
+function handleCopyAddress() {
+  emit('copyAddress')
+  emit('close')
+}
+
+function handleOpenSftp() {
+  emit('openSftp')
+  emit('close')
+}
+
 function onClickOutside(e: MouseEvent) {
   const target = e.target as HTMLElement
   if (!target.closest('.tcm-menu')) {
@@ -110,24 +125,26 @@ onBeforeUnmount(() => {
     >
       <div class="tcm-item" @click="copySelection">
         <span class="tcm-icon">📋</span>
-        <span>Copy</span>
+        <span>{{ t('terminal.copy') }}</span>
         <span class="tcm-shortcut muted">Ctrl+Shift+C</span>
       </div>
       <div class="tcm-item" @click="pasteClipboard">
         <span class="tcm-icon">📄</span>
-        <span>Paste</span>
+        <span>{{ t('terminal.paste') }}</span>
         <span class="tcm-shortcut muted">Ctrl+Shift+V</span>
       </div>
       <div class="tcm-item" @click="selectAll">
-        <span class="tcm-icon">Select All</span>
+        <span class="tcm-icon">☑</span>
+        <span>{{ t('terminal.selectAll') }}</span>
       </div>
       <div class="tcm-item" @click="clearScreen">
-        <span class="tcm-icon">Clear</span>
+        <span class="tcm-icon">🧹</span>
+        <span>{{ t('terminal.clear') }}</span>
         <span class="tcm-shortcut muted">Ctrl+L</span>
       </div>
       <div class="tcm-item" @click="openFind">
         <span class="tcm-icon">🔍</span>
-        <span>Find</span>
+        <span>{{ t('terminal.find') }}</span>
         <span class="tcm-shortcut muted">Ctrl+F</span>
       </div>
       <div class="tcm-separator" />
@@ -136,7 +153,8 @@ onBeforeUnmount(() => {
         @mouseenter="showEncoding = true"
         @mouseleave="showEncoding = false"
       >
-        <span class="tcm-icon">Encoding</span>
+        <span class="tcm-icon">🔤</span>
+        <span>{{ t('terminal.encoding') }}</span>
         <span class="tcm-arrow">▸</span>
         <!-- 编码子菜单 -->
         <div v-if="showEncoding" class="tcm-submenu">
@@ -154,13 +172,22 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
+      <div class="tcm-item" @click="handleCopyAddress">
+        <span class="tcm-icon">📍</span>
+        <span>{{ t('terminal.copyAddress') }}</span>
+      </div>
+      <div class="tcm-item" @click="handleOpenSftp">
+        <span class="tcm-icon">📁</span>
+        <span>{{ t('terminal.openSftp') }}</span>
+      </div>
       <div class="tcm-separator" />
       <div class="tcm-item" @click="handleReconnect">
         <span class="tcm-icon">🔄</span>
-        <span>Reconnect</span>
+        <span>{{ t('terminal.reconnect') }}</span>
       </div>
       <div class="tcm-item tcm-item--danger" @click="handleDisconnect">
-        <span class="tcm-icon">Disconnect</span>
+        <span class="tcm-icon">🔌</span>
+        <span>{{ t('terminal.disconnect') }}</span>
       </div>
     </div>
   </Teleport>

@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.39.2] - 2026-07-25
+
+### Added
+- Tab 标签右键菜单：新建连接、移动到面板（子菜单）、断开连接
+- 终端右键菜单：复制地址、打开 SFTP
+- SQL 导航树右键菜单：复制表名、复制 DDL、新建查询、刷新、查看 DDL、属性
+- Redis 文件夹右键菜单：按前缀加载、复制前缀、删除前缀下所有键（SCAN+DEL）
+- 审计日志行右键菜单：查看详情、复制记录、按类型/环境筛选、刷新、导出 CSV、清除筛选
+- 环境卡片右键菜单：编辑、新建资源、删除
+- 资源表格行右键菜单：在工作区打开、编辑、删除
+- 侧栏资源右键菜单：在工作区打开、属性、删除
+
+### Fixed
+- SSH 终端 resize：连接建立后立即发送实际终端尺寸，修复 SSH 默认80x24 导致 vim 卡死和显示不完整
+
 ## [0.39.1] - 2026-07-25
 
 ### Fixed

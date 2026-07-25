@@ -25,6 +25,16 @@ const formMode = ref('direct')
 const formError = ref('')
 const formLoading = ref(false)
 const deleteConfirmId = ref<string | null>(null)
+const ctxMenu = ref<{ show: boolean; x: number; y: number; env: any }>({ show: false, x: 0, y: 0, env: null })
+
+function onContextMenu(e: MouseEvent, env: any) {
+  e.preventDefault()
+  ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, env }
+}
+
+function closeCtxMenu() {
+  ctxMenu.value.show = false
+}
 
 onMounted(() => {
   store.fetchEnvironments()
@@ -173,6 +183,7 @@ async function handleImport(event: Event) {
         :key="env.id"
         class="env-card"
         @click="router.push(`/environments/${env.id}`)"
+        @contextmenu.prevent="onContextMenu($event, env)"
       >
         <div class="env-card-header">
           <span class="env-icon" :class="env.connection_mode">{{ envIcon(env.connection_mode) }}</span>
@@ -243,6 +254,13 @@ async function handleImport(event: Event) {
         <Button variant="danger" @click="confirmDelete">{{ t('common.delete') }}</Button>
       </div>
     </Modal>
+    <!-- Context Menu -->
+    <div v-if="ctxMenu.show" class="ctx-overlay" @click="closeCtxMenu" @contextmenu.prevent="closeCtxMenu" />
+    <div v-if="ctxMenu.show" class="env-ctx-menu" :style="{ top: ctxMenu.y + 'px', left: ctxMenu.x + 'px' }">
+      <div class="ctx-item" @click="router.push(`/environments/${ctxMenu.env.id}`); closeCtxMenu()">✏ {{ t('environments.edit') }}</div>
+      <div class="ctx-item" @click="router.push(`/environments/${ctxMenu.env.id}?action=newResource`); closeCtxMenu()">➕ {{ t('environments.newResource') }}</div>
+      <div class="ctx-item ctx-item--danger" @click="deleteConfirmId = ctxMenu.env.id; closeCtxMenu()">🗑 {{ t('environments.delete') }}</div>
+    </div>
   </div>
 </template>
 
@@ -405,4 +423,33 @@ async function handleImport(event: Event) {
   gap: var(--space-2);
   margin-top: var(--space-4);
 }
+/* ---- context menu ---- */
+.ctx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+}
+.env-ctx-menu {
+  position: fixed;
+  z-index: 210;
+  min-width: 160px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: var(--space-1) 0;
+}
+.ctx-item {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  color: var(--text-primary);
+}
+.ctx-item:hover {
+  background: var(--bg-hover);
+}
+.ctx-item--danger {
+  color: var(--danger);
+}
+
 </style>

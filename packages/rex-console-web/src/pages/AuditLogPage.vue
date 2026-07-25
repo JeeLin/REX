@@ -17,6 +17,58 @@ const stats = ref<AuditStats>({ total: 0, success_count: 0, failure_count: 0 })
 const statsLoading = ref(false)
 const expandedId = ref<string | null>(null)
 
+// Context menu
+const ctxMenu = ref({ show: false, x: 0, y: 0, entry: null as AuditEntry | null })
+
+function onContextMenu(e: MouseEvent, entry: AuditEntry) {
+  e.preventDefault()
+  ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, entry }
+}
+
+function closeCtxMenu() {
+  ctxMenu.value.show = false
+}
+
+function ctxViewDetail() {
+  if (ctxMenu.value.entry) toggleExpand(ctxMenu.value.entry.id)
+  closeCtxMenu()
+}
+
+async function ctxCopyRecord() {
+  if (ctxMenu.value.entry) {
+    await navigator.clipboard.writeText(JSON.stringify(ctxMenu.value.entry, null, 2))
+  }
+  closeCtxMenu()
+}
+
+function ctxFilterByType() {
+  if (ctxMenu.value.entry) actionFilter.value = ctxMenu.value.entry.action
+  closeCtxMenu()
+}
+
+function ctxFilterByEnv() {
+  if (ctxMenu.value.entry) environmentFilter.value = ctxMenu.value.entry.environment_id || ''
+  closeCtxMenu()
+}
+
+function ctxRefresh() {
+  refreshAll()
+  closeCtxMenu()
+}
+
+function ctxExportCsv() {
+  exportCsv()
+  closeCtxMenu()
+}
+
+function ctxClearFilters() {
+  actionFilter.value = ''
+  resultFilter.value = ''
+  environmentFilter.value = ''
+  timeRange.value = 'all'
+  closeCtxMenu()
+}
+
 // Filters
 const actionFilter = ref('')
 const resultFilter = ref('')
@@ -243,7 +295,7 @@ onMounted(async () => {
         </thead>
         <tbody>
           <template v-for="entry in entries" :key="entry.id">
-            <tr class="log-row" @click="toggleExpand(entry.id)">
+            <tr class="log-row" @click="toggleExpand(entry.id)" @contextmenu.prevent="onContextMenu($event, entry)">
               <td class="expand-icon">{{ expandedId === entry.id ? '▾' : '▸' }}</td>
               <td class="mono">{{ timeAgo(entry.time) }}</td>
               <td>
@@ -278,6 +330,23 @@ onMounted(async () => {
         </tbody>
       </table>
     </Card>
+
+    <!-- Context menu -->
+    <Teleport to="body">
+      <div v-if="ctxMenu.show" class="audit-ctx-overlay" @click="closeCtxMenu" @contextmenu.prevent="closeCtxMenu">
+        <div class="audit-ctx-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }" @click.stop>
+          <button class="ctx-item" @click="ctxViewDetail">📋 {{ t('auditLog.viewDetail') }}</button>
+          <button class="ctx-item" @click="ctxCopyRecord">📋 {{ t('auditLog.copy') }}</button>
+          <div class="ctx-divider"></div>
+          <button class="ctx-item" @click="ctxFilterByType">🏷 {{ t('auditLog.filterByType') }}</button>
+          <button class="ctx-item" @click="ctxFilterByEnv">🌍 {{ t('auditLog.filterByEnv') }}</button>
+          <div class="ctx-divider"></div>
+          <button class="ctx-item" @click="ctxRefresh">🔄 {{ t('auditLog.refresh') }}</button>
+          <button class="ctx-item" @click="ctxExportCsv">📥 {{ t('auditLog.export') }}</button>
+          <button class="ctx-item" @click="ctxClearFilters">🧹 {{ t('auditLog.clearFilters') }}</button>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -313,4 +382,27 @@ onMounted(async () => {
 .detail-code { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px; padding: var(--space-2); font-size: var(--text-xs); margin: 0; overflow-x: auto; white-space: pre-wrap; }
 .muted { color: var(--text-muted); }
 .mono { font-family: var(--font-mono); }
+
+/* Context menu */
+.audit-ctx-overlay {
+  position: fixed; inset: 0; z-index: 200;
+}
+.audit-ctx-menu {
+  position: fixed; z-index: 201;
+  background: var(--bg-elevated, var(--bg-surface));
+  border: 1px solid var(--border); border-radius: var(--radius, 8px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  min-width: 180px; padding: var(--space-1, 4px) 0;
+}
+.ctx-item {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: var(--space-2, 8px) var(--space-3, 12px);
+  background: none; border: none; color: var(--text-primary); font-size: var(--text-sm, 13px);
+  cursor: pointer; text-align: left;
+}
+.ctx-item:hover { background: var(--bg-hover); }
+.ctx-divider {
+  height: 1px; background: var(--border);
+  margin: var(--space-1, 4px) 0;
+}
 </style>

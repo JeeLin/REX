@@ -9,8 +9,10 @@ import TerminalContextMenu from './TerminalContextMenu.vue'
 import MobileTerminalBar from './MobileTerminalBar.vue'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
+import Toast from '@/components/ui/Toast.vue'
 
 const { t } = useI18n()
+const toast = ref<InstanceType<typeof Toast>>()
 
 const props = defineProps<{
   tabId: string
@@ -174,6 +176,19 @@ function handleFind() {
 function handleReconnect() {
   connect({ resourceId: props.resourceId })
 }
+
+function handleCopyAddress() {
+  const address = props.host ? `${props.host}:${props.port || 22}` : ''
+  if (address) {
+    navigator.clipboard.writeText(address)
+    toast.value?.push(t('terminal.copyAddress'), 'success')
+  }
+}
+
+function handleOpenSftp() {
+  emit('toggle-sftp')
+}
+
 </script>
 
 <template>
@@ -214,6 +229,8 @@ function handleReconnect() {
         @reconnect="handleReconnect"
         @disconnect="disconnect"
         @set-encoding="handleSetEncoding"
+        @copyAddress="handleCopyAddress"
+        @openSftp="handleOpenSftp"
       />
     </div>
 
@@ -229,6 +246,7 @@ function handleReconnect() {
 
     <!-- 移动端浮动工具栏 -->
     <MobileTerminalBar :terminal="terminal" />
+    <Toast ref="toast" />
   </div>
 </template>
 
