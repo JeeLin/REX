@@ -93,6 +93,7 @@ rex-agent = 所有 crate（无前端）
 | **M45** | 工作区 Bug 修复 | — | ✅ |
 | **M46** | 右键上下文菜单补全 | — | ✅ |
 | **M47** | i18n 全面补全 | — | ✅ |
+| **M48** | 侧栏增强 + 工作空间 Tab 交互 | Xshell | ⬜ |
 
 ### M0：项目骨架重建
 
@@ -261,6 +262,20 @@ rex-agent = 所有 crate（无前端）
 依赖：M46
 版本类型：minor
 版本号：0.40.0
+### M48：侧栏增强 + 工作空间 Tab 交互
+
+**核心功能**：侧栏增加收藏/最近使用 tab + 全局搜索；工作空间支持双击 Tab 分屏和拖 Tab 到目标 Pane。
+
+子任务：
+1. 侧栏收藏/最近使用 tab：Pinia store 持久化到 localStorage，资源右键菜单收藏/取消收藏
+2. 侧栏全局搜索：实时搜索资源名/描述，按环境分组，高亮匹配
+3. 双击 Tab 进入左右分屏：Tab 添加 dblclick 事件，自动创建分屏布局
+4. 拖 Tab 到目标 Pane：Tab draggable + Pane dragover/drop，移动 Tab 归属
+5. i18n + type-check/lint 验证
+
+依赖：M47
+版本类型：minor
+版本号：0.41.0
 ---
 
 ## 4. 架构文档
@@ -330,5 +345,6 @@ docs/milestones/
 ├── 0.7.0-hub-acme-auto-cert.md
 ├── 0.16.0-sql-ai-assistant.md
 ├── M47-i18n-completion.md
+├── M48-sidebar-workspace.md
 └── 0.7.0-reports/
 ```
