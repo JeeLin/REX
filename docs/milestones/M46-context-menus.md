@@ -26,15 +26,15 @@ M45 完成工作区 bug 修复（v0.39.1）。PRODUCT.md 规定了各区域的�
 
 ## 子任务清单
 
-| # | 内容 | 预计文件 | 依赖 |
+| # | 内容 | 预计文件 | 状态 |
 |---|------|----------|------|
-| 1 | Tab 标签右键菜单补全 | `WorkspacePage.vue` | — |
-| 2 | 终端右键菜单补全 | `TerminalContextMenu.vue`, `TerminalView.vue` | — |
-| 3 | SQL 导航树右键菜单补全 | `SqlNavTree.vue` | — |
-| 4 | Redis 文件夹右键菜单 | `RedisPage.vue` | — |
-| 5 | 审计日志右键菜单 | `AuditLogPage.vue` | — |
-| 6 | 环境/资源右键菜单 | `EnvironmentsPage.vue`, `EnvironmentDetailPage.vue` | — |
-| 7 | 侧栏资源右键菜单 | `AppLayout.vue` (ResourcePanel) | — |
+| 1 | Tab 标签右键菜单补全 | `WorkspacePage.vue` | ⬜ |
+| 2 | 终端右键菜单补全 | `TerminalContextMenu.vue`, `TerminalView.vue` | ⬜ |
+| 3 | SQL 导航树右键菜单补全 | `SqlNavTree.vue` | ⬜ |
+| 4 | Redis 文件夹右键菜单 | `RedisPage.vue` | ⬜ |
+| 5 | 审计日志右键菜单 | `AuditLogPage.vue` | ⬜ |
+| 6 | 环境/资源右键菜单 | `EnvironmentsPage.vue`, `EnvironmentDetailPage.vue` | ⬜ |
+| 7 | 侧栏资源右键菜单 | `AppLayout.vue` (ResourcePanel) | ⬜ |
 
 ## 子任务详细设计
 
@@ -405,7 +405,7 @@ PRODUCT.md 规定：右键（查看详情/复制/按类型或环境筛选/刷新
 
 ## Flow Status
 
-- [ ] 步骤1：编写里程碑文档
+- [x] 步骤1：编写里程碑文档
 - [ ] 步骤2：设计核对
 - [ ] 步骤3：开发
 - [ ] 步骤4：代码精简
@@ -413,7 +413,6 @@ PRODUCT.md 规定：右键（查看详情/复制/按类型或环境筛选/刷新
 - [ ] 步骤6：测试验证
 - [ ] 步骤7：设计再确认
 - [ ] 步骤8：提交
-
 ## 打回记录
 
 （打回时追加一条，创建里程碑时留空）
