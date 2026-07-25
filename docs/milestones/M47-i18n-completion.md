@@ -31,11 +31,11 @@ PRODUCT.md §3.14 要求「中/英双语，新增功能必须同步补翻译」�
 
 | # | 内容 | 状态 |
 |---|------|------|
-| 1 | 文件管理 i18n（FilesPage / FileEditorDialog / FolderSyncDialog / MobileFilesBar） | ⬜ |
-| 2 | SQL 控制台 i18n（SqlPage / ExportWizard / TableDesigner / GlobalQueryModal / AiAssistantDrawer / SqlResultGrid / ColumnEditor） | ⬜ |
-| 3 | Redis Status i18n（RedisStatus.vue） | ⬜ |
-| 4 | 设置页 i18n（SettingsPage.vue 语言选择器） | ⬜ |
-| 5 | locale 文件同步 + 验证（zh.json / en.json 对称、type-check、lint） | ⬜ |
+| 1 | 文件管理 i18n（FilesPage / FileEditorDialog / FolderSyncDialog / MobileFilesBar） | ✅ |
+| 2 | SQL 控制台 i18n（SqlPage / ExportWizard / TableDesigner / GlobalQueryModal / AiAssistantDrawer / SqlResultGrid / ColumnEditor） | ✅ |
+| 3 | Redis Status i18n（RedisStatus.vue） | ✅ |
+| 4 | 设置页 i18n（SettingsPage.vue 语言选择器） | ✅ |
+| 5 | locale 文件同步 + 验证（zh.json / en.json 对称、type-check、lint） | ✅ |
 
 ## 依赖
 
@@ -61,12 +61,12 @@ minor
 
 - [x] 步骤1：编写里程碑文档
 - [x] 步骤2：设计核对
-  - [x] 步骤3：开发
-  - [x] 步骤4：代码精简
-  - [x] 步骤5：代码审查
-  - [x] 步骤6：测试验证
-  - [x] 步骤7：设计再确认
-  - [x] 步骤8：提交
+- [x] 步骤3：开发
+- [x] 步骤4：代码精简
+- [x] 步骤5：代码审查
+- [x] 步骤6：测试验证
+- [x] 步骤7：设计再确认
+- [x] 步骤8：提交
 
 ## 打回记录
 
