@@ -184,9 +184,7 @@ const filteredLogs = computed(() => {
       icon="⬡"
       :title="t('agents.noAgents')"
       :description="allDirectMode ? t('agents.directModeNote') : t('agents.noAgentsDesc')"
-    >
-      <Button v-if="!allDirectMode" @click="deployAgent = null; deployModal = true">{{ t('agents.quickStart') }}</Button>
-    </EmptyState>
+    />
 
     <div v-else class="agent-grid">
       <Card v-for="agent in agents" :key="agent.id" class="agent-card">

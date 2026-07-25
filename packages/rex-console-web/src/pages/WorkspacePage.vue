@@ -177,6 +177,7 @@ function openResourceFromTree(node: {
   const existing = tabs.value.find(t => t.resourceId === resourceId)
   if (existing) {
     activeTab.value = existing.id
+    paneTabs.value[currentPane.value] = existing.id
     return
   }
 
@@ -194,6 +195,7 @@ function openResourceFromTree(node: {
     status: 'connecting',
   })
   activeTab.value = id
+  paneTabs.value[currentPane.value] = id
 }
 
 // Tab 右键菜单
@@ -469,10 +471,10 @@ useKeyboardShortcuts([
   // Ctrl+N: 新建连接
   { key: 'n', ctrl: true, handler: () => { router.push('/resource-new') } },
   // Alt+6-9: 跳转到第 6-9 个标签
-  { key: '6', alt: true, handler: () => { if (tabs.value[5]) activeTab.value = tabs.value[5].id } },
-  { key: '7', alt: true, handler: () => { if (tabs.value[6]) activeTab.value = tabs.value[6].id } },
-  { key: '8', alt: true, handler: () => { if (tabs.value[7]) activeTab.value = tabs.value[7].id } },
-  { key: '9', alt: true, handler: () => { if (tabs.value[8]) activeTab.value = tabs.value[8].id } },
+  { key: '6', alt: true, handler: () => { if (tabs.value[5]) { activeTab.value = tabs.value[5].id; paneTabs.value[currentPane.value] = tabs.value[5].id } } },
+  { key: '7', alt: true, handler: () => { if (tabs.value[6]) { activeTab.value = tabs.value[6].id; paneTabs.value[currentPane.value] = tabs.value[6].id } } },
+  { key: '8', alt: true, handler: () => { if (tabs.value[7]) { activeTab.value = tabs.value[7].id; paneTabs.value[currentPane.value] = tabs.value[7].id } } },
+  { key: '9', alt: true, handler: () => { if (tabs.value[8]) { activeTab.value = tabs.value[8].id; paneTabs.value[currentPane.value] = tabs.value[8].id } } },
 ])
 </script>
 
@@ -565,6 +567,7 @@ useKeyboardShortcuts([
               <!-- Terminal (SSH) + SFTP Drawer -->
               <div v-if="currentPaneTabInfo(i - 1)?.protocol === 'ssh'" class="ws-ssh-area">
                 <TerminalView
+                  :key="paneTabs[i - 1]"
                   :tab-id="paneTabs[i - 1]!"
                   :resource-id="currentPaneTabInfo(i - 1)?.resourceId || ''"
                   :host="currentPaneTabInfo(i - 1)?.host"
@@ -595,6 +598,7 @@ useKeyboardShortcuts([
 
               <!-- SQL (MySQL / PostgreSQL / SQLite) -->
               <SqlPage
+                :key="paneTabs[i - 1]"
                 v-else-if="['mysql', 'postgresql', 'sqlite'].includes(currentPaneTabInfo(i - 1)?.protocol || '')"
                 :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
                 :host="currentPaneTabInfo(i - 1)?.host"
@@ -608,6 +612,7 @@ useKeyboardShortcuts([
 
               <!-- Redis -->
               <RedisPage
+                :key="paneTabs[i - 1]"
                 v-else-if="currentPaneTabInfo(i - 1)?.protocol === 'redis'"
                 :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
                 :host="currentPaneTabInfo(i - 1)?.host"
@@ -617,6 +622,7 @@ useKeyboardShortcuts([
 
               <!-- Files (SFTP / S3) -->
               <FilesPage
+                :key="paneTabs[i - 1]"
                 v-else-if="['sftp', 's3'].includes(currentPaneTabInfo(i - 1)?.protocol || '')"
                 :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
                 :protocol="currentPaneTabInfo(i - 1)?.protocol === 's3' ? 's3' : 'sftp'"
