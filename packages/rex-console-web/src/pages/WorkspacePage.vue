@@ -54,8 +54,9 @@ interface Tab {
 const tabs = ref<Tab[]>([])
 const activeTab = ref<string>('')
 const splitDirection = ref<'row' | 'column'>('row')
-const panes = ref<string[]>([])
+const paneTabs = ref<string[]>([])
 const splitCount = ref(1)
+const currentPane = ref(0)
 
 watch(() => wsStore.pendingResource, (resource) => {
   if (!resource) return
@@ -141,7 +142,25 @@ function onEncodingChange(encoding: string) {
   if (tab) tab.encoding = encoding
 }
 
+function currentPaneTabInfo(paneIndex: number) {
+  const tabId = paneTabs.value[paneIndex]
+  return tabs.value.find(t => t.id === tabId) ?? tabs.value.find(t => t.id === activeTab.value)
+}
 const activeTabInfo = computed(() => tabs.value.find(t => t.id === activeTab.value))
+// Per-pane tab sync: keep paneTabs array aligned with splitCount
+function syncPanes() {
+  while (paneTabs.value.length < splitCount.value) {
+    paneTabs.value.push(activeTab.value)
+  }
+  if (paneTabs.value.length > splitCount.value) {
+    paneTabs.value.length = splitCount.value
+  }
+  if (currentPane.value >= splitCount.value) {
+    currentPane.value = Math.max(0, splitCount.value - 1)
+  }
+}
+watch(activeTab, syncPanes)
+watch(splitCount, syncPanes)
 
 
 function openResourceFromTree(node: {
@@ -359,6 +378,9 @@ function splitVertical() {
 function closePane(idx: number) {
   if (splitCount.value > 1) {
     splitCount.value--
+    if (currentPane.value >= splitCount.value) {
+      currentPane.value = splitCount.value - 1
+    }
   }
 }
 
@@ -464,7 +486,7 @@ useKeyboardShortcuts([
         class="ws-tab mono"
         :class="{ 'ws-tab--active': activeTab === tab.id }"
         draggable="true"
-        @click="activeTab = tab.id"
+        @click="activeTab = tab.id; paneTabs[currentPane] = tab.id"
         @contextmenu="onTabContextMenu($event, tab.id)"
         @dragstart="onTabDragStart($event, tab.id)"
         @dragover="onTabDragOver($event, tab.id)"
@@ -529,10 +551,10 @@ useKeyboardShortcuts([
           :horizontal="splitDirection === 'column'"
           class="ws-split"
         >
-          <Pane v-for="i in splitCount" :key="i" :size="100 / splitCount" :min-size="20">
-            <div class="ws-pane">
+          <Pane v-for="i in splitCount" :key="i" :size="100 / splitCount" :min-size="20" @click="currentPane = i - 1">
+            <div class="ws-pane" :class="{ 'ws-pane--active': currentPane === i - 1 }">
               <div class="ws-pane-header mono">
-                <span>{{ activeTabInfo?.label || t('workspace.noTabOpen') }}</span>
+                <span>{{ currentPaneTabInfo(i - 1)?.label || t('workspace.noTabOpen') }}</span>
                 <div class="ws-pane-actions">
                   <button class="ws-pane-btn" :title="t('workspace.splitH')" @click="splitHorizontal">⊞</button>
                   <button class="ws-pane-btn" :title="t('workspace.splitV')" @click="splitVertical">⊟</button>
@@ -541,20 +563,20 @@ useKeyboardShortcuts([
               </div>
 
               <!-- Terminal (SSH) + SFTP Drawer -->
-              <div v-if="activeTabInfo?.protocol === 'ssh'" class="ws-ssh-area">
+              <div v-if="currentPaneTabInfo(i - 1)?.protocol === 'ssh'" class="ws-ssh-area">
                 <TerminalView
-                  :tab-id="activeTab"
-                  :resource-id="activeTabInfo?.resourceId || ''"
-                  :host="activeTabInfo?.host"
-                  :port="activeTabInfo?.port"
-                  :protocol="activeTabInfo?.protocol"
-                  :theme="activeTabInfo?.theme"
-                  :font-size="activeTabInfo?.fontSize"
-                  :opacity="activeTabInfo?.opacity"
-                  :cursor-style="activeTabInfo?.cursorStyle"
-                  :cursor-blink="activeTabInfo?.cursorBlink"
-                  :background-image="activeTabInfo?.backgroundImage"
-                  @update:status="onTabStatusChange(activeTab, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
+                  :tab-id="paneTabs[i - 1]!"
+                  :resource-id="currentPaneTabInfo(i - 1)?.resourceId || ''"
+                  :host="currentPaneTabInfo(i - 1)?.host"
+                  :port="currentPaneTabInfo(i - 1)?.port"
+                  :protocol="currentPaneTabInfo(i - 1)?.protocol"
+                  :theme="currentPaneTabInfo(i - 1)?.theme"
+                  :font-size="currentPaneTabInfo(i - 1)?.fontSize"
+                  :opacity="currentPaneTabInfo(i - 1)?.opacity"
+                  :cursor-style="currentPaneTabInfo(i - 1)?.cursorStyle"
+                  :cursor-blink="currentPaneTabInfo(i - 1)?.cursorBlink"
+                  :background-image="currentPaneTabInfo(i - 1)?.backgroundImage"
+                  @update:status="onTabStatusChange(paneTabs[i - 1]!, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
                   @terminal-resize="onTerminalResize"
                   @encoding-change="onEncodingChange"
                   @toggle-sftp="toggleSftpDrawer"
@@ -562,46 +584,46 @@ useKeyboardShortcuts([
                 <div v-if="showSftpDrawer" class="ws-sftp-drawer" :style="{ height: sftpDrawerHeight + 'px' }">
                   <div class="ws-sftp-drag-handle" @mousedown.prevent="startSftpDrag" />
                   <FilesDrawer
-                    :resource-id="activeTabInfo?.resourceId"
-                    :host="activeTabInfo?.host"
-                    :port="activeTabInfo?.port"
-                    :username="activeTabInfo?.username"
-                    :password="activeTabInfo?.password"
+                    :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
+                    :host="currentPaneTabInfo(i - 1)?.host"
+                    :port="currentPaneTabInfo(i - 1)?.port"
+                    :username="currentPaneTabInfo(i - 1)?.username"
+                    :password="currentPaneTabInfo(i - 1)?.password"
                   />
                 </div>
               </div>
 
               <!-- SQL (MySQL / PostgreSQL / SQLite) -->
               <SqlPage
-                v-else-if="['mysql', 'postgresql', 'sqlite'].includes(activeTabInfo?.protocol || '')"
-                :resource-id="activeTabInfo?.resourceId"
-                :host="activeTabInfo?.host"
-                :port="activeTabInfo?.port"
-                :username="activeTabInfo?.username"
-                :password="activeTabInfo?.password"
-                :database="activeTabInfo?.database"
-                :db-type="activeTabInfo?.protocol"
-                :protocol="activeTabInfo?.protocol"
+                v-else-if="['mysql', 'postgresql', 'sqlite'].includes(currentPaneTabInfo(i - 1)?.protocol || '')"
+                :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
+                :host="currentPaneTabInfo(i - 1)?.host"
+                :port="currentPaneTabInfo(i - 1)?.port"
+                :username="currentPaneTabInfo(i - 1)?.username"
+                :password="currentPaneTabInfo(i - 1)?.password"
+                :database="currentPaneTabInfo(i - 1)?.database"
+                :db-type="currentPaneTabInfo(i - 1)?.protocol"
+                :protocol="currentPaneTabInfo(i - 1)?.protocol"
               />
 
               <!-- Redis -->
               <RedisPage
-                v-else-if="activeTabInfo?.protocol === 'redis'"
-                :resource-id="activeTabInfo?.resourceId"
-                :host="activeTabInfo?.host"
-                :port="activeTabInfo?.port"
-                :password="activeTabInfo?.password"
+                v-else-if="currentPaneTabInfo(i - 1)?.protocol === 'redis'"
+                :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
+                :host="currentPaneTabInfo(i - 1)?.host"
+                :port="currentPaneTabInfo(i - 1)?.port"
+                :password="currentPaneTabInfo(i - 1)?.password"
               />
 
               <!-- Files (SFTP / S3) -->
               <FilesPage
-                v-else-if="['sftp', 's3'].includes(activeTabInfo?.protocol || '')"
-                :resource-id="activeTabInfo?.resourceId"
-                :protocol="activeTabInfo?.protocol === 's3' ? 's3' : 'sftp'"
-                :host="activeTabInfo?.host"
-                :port="activeTabInfo?.port"
-                :username="activeTabInfo?.username"
-                :password="activeTabInfo?.password"
+                v-else-if="['sftp', 's3'].includes(currentPaneTabInfo(i - 1)?.protocol || '')"
+                :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
+                :protocol="currentPaneTabInfo(i - 1)?.protocol === 's3' ? 's3' : 'sftp'"
+                :host="currentPaneTabInfo(i - 1)?.host"
+                :port="currentPaneTabInfo(i - 1)?.port"
+                :username="currentPaneTabInfo(i - 1)?.username"
+                :password="currentPaneTabInfo(i - 1)?.password"
               />
 
               <!-- Empty state -->
@@ -781,6 +803,10 @@ useKeyboardShortcuts([
   display: flex;
   flex-direction: column;
   background: var(--bg-deep);
+}
+.ws-pane--active {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 .ws-pane-header {
   height: 28px;
