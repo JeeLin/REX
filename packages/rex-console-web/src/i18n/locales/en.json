@@ -292,8 +292,8 @@
   "agents": {
     "title": "Agents",
     "noAgents": "No Agents Found",
-    "noAgentsDesc": "No agents have been registered yet. Deploy an agent to start managing internal network resources.",
-    "optionalHint": "Agents are optional when using direct connection mode. You can skip this and connect directly.",
+    "noAgentsDesc": "No agents have been registered. Agents are only used in Agent (Tunnel) mode — not needed for direct connections.",
+    "directModeNote": "All environments are currently in direct mode. Agents have no effect in this mode. Switch an environment to Agent (Tunnel) mode to use agents.",
     "quickStart": "Quick Start",
     "version": "Version",
     "os": "OS",

@@ -292,8 +292,8 @@
   "agents": {
     "title": "Agent 管理",
     "noAgents": "暂无 Agent",
-    "noAgentsDesc": "还没有注册任何 Agent。部署一个 Agent 即可管理内网资源。",
-    "optionalHint": "直连模式下 Agent 是可选的，你可以跳过此步骤直接连接。",
+    "noAgentsDesc": "还没有注册任何 Agent。Agent 仅用于「Agent（隧道）」连接模式，直连模式下无需 Agent。",
+    "directModeNote": "当前所有环境均为直连模式，Agent 在此模式下无作用。如需使用 Agent，可在环境设置中切换为「Agent（隧道）」模式。",
     "quickStart": "快速开始",
     "version": "版本",
     "os": "系统",

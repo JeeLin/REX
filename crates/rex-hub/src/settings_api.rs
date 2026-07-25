@@ -51,46 +51,54 @@ async fn get_settings(State(state): State<AppState>) -> ApiResult<serde_json::Va
     Ok(Json(result))
 }
 
-#[derive(serde::Deserialize)]
-struct SettingsUpdate {
-    theme: Option<String>,
-    language: Option<String>,
-    terminal_font: Option<String>,
-    terminal_font_size: Option<String>,
-}
-
 async fn update_settings(
     State(state): State<AppState>,
-    Json(body): Json<SettingsUpdate>,
+    Json(body): Json<std::collections::HashMap<String, String>>,
 ) -> ApiResult<serde_json::Value> {
-    // 收集变更的 key
-    let mut changed_keys = Vec::new();
-    if body.theme.is_some() { changed_keys.push("theme"); }
-    if body.language.is_some() { changed_keys.push("language"); }
-    if body.terminal_font.is_some() { changed_keys.push("terminal_font"); }
-    if body.terminal_font_size.is_some() { changed_keys.push("terminal_font_size"); }
+    if body.is_empty() {
+        return Ok(Json(serde_json::json!({ "ok": true })));
+    }
+
+    // 读取当前设置值用于对比
+    let keys_to_check: Vec<String> = body.keys().cloned().collect();
+    let db_snap = state.db.clone();
+    let current = tokio::task::spawn_blocking(move || {
+        let mut m = std::collections::HashMap::new();
+        for key in &keys_to_check {
+            if let Ok(Some(v)) = db_snap.get_setting(key) {
+                m.insert(key.clone(), v);
+            }
+        }
+        m
+    })
+    .await
+    .unwrap_or_default();
+
+    // 只收集实际变更的 key
+    let changed: std::collections::HashMap<&str, &str> = body
+        .iter()
+        .filter(|(k, v)| current.get(k.as_str()).map(|s| s.as_str()) != Some(v.as_str()))
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+
+    if changed.is_empty() {
+        return Ok(Json(serde_json::json!({ "ok": true })));
+    }
 
     tracing::info!(
         action = "SETTINGS_UPDATE",
-        keys = ?changed_keys,
+        keys = ?changed.keys().collect::<Vec<_>>(),
         "settings updated"
     );
 
     let db = state.db.clone();
+    let entries: Vec<(String, String)> = changed
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
     tokio::task::spawn_blocking(move || -> Result<(), String> {
-        if let Some(v) = &body.theme {
-            db.set_setting("theme", v).map_err(|e| e.to_string())?;
-        }
-        if let Some(v) = &body.language {
-            db.set_setting("language", v).map_err(|e| e.to_string())?;
-        }
-        if let Some(v) = &body.terminal_font {
-            db.set_setting("terminal_font", v)
-                .map_err(|e| e.to_string())?;
-        }
-        if let Some(v) = &body.terminal_font_size {
-            db.set_setting("terminal_font_size", v)
-                .map_err(|e| e.to_string())?;
+        for (k, v) in &entries {
+            db.set_setting(k, v).map_err(|e| e.to_string())?;
         }
         Ok(())
     })
@@ -100,7 +108,8 @@ async fn update_settings(
 
     // 审计日志
     let audit_db = state.db.clone();
-    let detail = changed_keys.join(", ");
+    let detail: Vec<&str> = changed.keys().copied().collect();
+    let detail = detail.join(", ");
     let _ = tokio::task::spawn_blocking(move || {
         audit_db.write_audit_log(&crate::models::NewAuditEntry {
             action: "SETTINGS_UPDATE".into(),

@@ -161,6 +161,10 @@ server = "${host}"
 token = "${token}"
 auto_update = true`
 })
+const allDirectMode = computed(() => {
+  return store.environments.length > 0 && store.environments.every(e => e.connection_mode === 'direct')
+})
+
 
 const filteredLogs = computed(() => {
   if (!logFilter.value) return logEntries.value
@@ -179,10 +183,9 @@ const filteredLogs = computed(() => {
       v-if="!loading && !hasAgents"
       icon="⬡"
       :title="t('agents.noAgents')"
-      :description="t('agents.noAgentsDesc')"
+      :description="allDirectMode ? t('agents.directModeNote') : t('agents.noAgentsDesc')"
     >
-      <p class="empty-hint">{{ t('agents.optionalHint') }}</p>
-      <Button @click="deployAgent = null; deployModal = true">{{ t('agents.quickStart') }}</Button>
+      <Button v-if="!allDirectMode" @click="deployAgent = null; deployModal = true">{{ t('agents.quickStart') }}</Button>
     </EmptyState>
 
     <div v-else class="agent-grid">
