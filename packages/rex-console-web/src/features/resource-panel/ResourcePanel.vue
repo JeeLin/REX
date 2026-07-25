@@ -1,4 +1,5 @@
-import { ref, computed, onMounted } from 'vue'
+<script setup lang="ts">
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { onClickOutside } from '@vueuse/core'
@@ -7,6 +8,8 @@ import type { Resource } from '@/api/resources'
 import { PROTOCOL_ICONS, PROTOCOL_COLORS } from '@/features/resource/protocols'
 import WizardModal from '@/features/resource/WizardModal.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useFavoritesStore } from '@/stores/favorites'
+
 const emit = defineEmits<{
   resourceProperties: [resource: Resource]
 }>()
@@ -14,8 +17,88 @@ const { t } = useI18n()
 const store = useEnvironmentsStore()
 const router = useRouter()
 const wsStore = useWorkspaceStore()
+const favStore = useFavoritesStore()
 
+/* ---- types ---- */
+type TabKey = 'connections' | 'favorites' | 'recent'
 
+/* ---- tabs ---- */
+const activeTab = ref<TabKey>('connections')
+
+/* ---- global search ---- */
+const globalSearch = ref('')
+const globalSearchInput = ref<HTMLInputElement | null>(null)
+const showGlobalResults = ref(false)
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(globalSearch, (val) => {
+  if (debounceTimer) clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => {
+    showGlobalResults.value = val.trim().length > 0
+  }, 200)
+})
+
+function clearGlobalSearch() {
+  globalSearch.value = ''
+  showGlobalResults.value = false
+}
+
+function onGlobalSearchKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    clearGlobalSearch()
+    globalSearchInput.value?.blur()
+  } else if (e.key === 'Enter') {
+    const first = globalSearchResults.value[0]?.resource
+    if (first) handleResourceClick(first)
+  }
+}
+
+const globalSearchResults = computed(() => {
+  const q = globalSearch.value.trim().toLowerCase()
+  if (!q) return []
+  const results: Array<{ envName: string; resource: Resource; nameHtml: string; descHtml: string }> = []
+  for (const env of store.environments) {
+    const resources = store.envResources.get(env.id) || []
+    for (const r of resources) {
+      const nameMatch = r.name.toLowerCase().includes(q)
+      if (nameMatch) {
+        results.push({
+          envName: env.name,
+          resource: r,
+          nameHtml: highlightMatch(r.name, q),
+          descHtml: '',
+        })
+      }
+    }
+  }
+  return results
+})
+
+const globalSearchResultsByEnv = computed(() => {
+  const grouped = new Map<string, Array<{ resource: Resource; nameHtml: string }>>()
+  for (const item of globalSearchResults.value) {
+    const existing = grouped.get(item.envName) || []
+    existing.push({ resource: item.resource, nameHtml: item.nameHtml })
+    grouped.set(item.envName, existing)
+  }
+  return grouped
+})
+
+function highlightMatch(text: string, query: string): string {
+  if (!query) return escapeHtml(text)
+  const idx = text.toLowerCase().indexOf(query)
+  if (idx < 0) return escapeHtml(text)
+  const before = text.slice(0, idx)
+  const match = text.slice(idx, idx + query.length)
+  const after = text.slice(idx + query.length)
+  return `${escapeHtml(before)}<mark>${escapeHtml(match)}</mark>${escapeHtml(after)}`
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/* ---- resource click (shared) ---- */
 function handleResourceClick(res: Resource) {
   wsStore.openResource({
     id: res.id,
@@ -27,10 +110,23 @@ function handleResourceClick(res: Resource) {
     environmentId: res.environment_id,
     color: res.color ?? undefined,
   })
+  favStore.addRecent({ id: res.id, name: res.name, protocol: res.protocol })
   router.push({ name: 'workspace' })
 }
 
+function openRecentItem(item: { id: string; name: string; protocol: string }) {
+  /* Find the full resource from store by id */
+  for (const env of store.environments) {
+    const resources = store.envResources.get(env.id) || []
+    const match = resources.find(r => r.id === item.id)
+    if (match) {
+      handleResourceClick(match)
+      return
+    }
+  }
+}
 
+/* ---- connections tab (existing logic) ---- */
 const searchQuery = ref('')
 const collapsedEnvs = ref(new Set<string>())
 const wizardEnvId = ref('')
@@ -80,6 +176,36 @@ function openWizard(envId: string, e: MouseEvent) {
 function onWizardCreated() {
   wizardEnvId.value = ''
 }
+
+/* ---- favorites tab ---- */
+const favoriteResources = computed(() => {
+  const allResources: Resource[] = []
+  for (const env of store.environments) {
+    const resources = store.envResources.get(env.id) || []
+    for (const r of resources) {
+      if (favStore.isFavorite(r.id)) {
+        allResources.push(r)
+      }
+    }
+  }
+  return allResources
+})
+
+function relativeTime(ts: number): string {
+  const diff = Date.now() - ts
+  const sec = Math.floor(diff / 1000)
+  if (sec < 60) return `${sec}s`
+  const min = Math.floor(sec / 60)
+  if (min < 60) return `${min}m`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h`
+  const d = Math.floor(hr / 24)
+  return `${d}d`
+}
+
+/* ---- recent tab ---- */
+const recentItems = computed(() => favStore.recent)
+
 /* ---- context menu ---- */
 const ctxMenu = ref<{ show: boolean; x: number; y: number; resource: Resource | null }>({
   show: false, x: 0, y: 0, resource: null,
@@ -114,36 +240,87 @@ function ctxDelete() {
   ctxMenu.value.show = false
   store.deleteResource(res.environment_id, res.id)
 }
-
 </script>
 
 <template>
   <div class="resource-panel">
-    <!-- Header -->
-    <div class="rp-header">
-      <div class="rp-tabs">
-        <button class="rp-tab mono rp-tab--active">{{ t('resourcePanel.connections') }}</button>
+    <!-- Global Search -->
+    <div class="rp-search">
+      <div class="rp-search-wrap">
+        <span class="rp-search-icon">🔍</span>
+        <input
+          ref="globalSearchInput"
+          v-model="globalSearch"
+          type="text"
+          class="rp-search-input mono"
+          :placeholder="t('sidebar.search')"
+          @keydown="onGlobalSearchKeydown"
+        />
       </div>
     </div>
 
-    <!-- Search -->
-    <div class="rp-search">
-      <input
-        v-model="searchQuery"
-        type="text"
-        class="rp-search-input mono"
-        :placeholder="t('resourcePanel.searchPlaceholder')"
-      />
+    <!-- Tabs (hidden when search active) -->
+    <div v-if="!showGlobalResults" class="rp-header">
+      <div class="rp-tabs">
+        <button
+          class="rp-tab mono"
+          :class="{ 'rp-tab--active': activeTab === 'connections' }"
+          @click="activeTab = 'connections'"
+        >🔗 {{ t('sidebar.connections') }}</button>
+        <button
+          class="rp-tab mono"
+          :class="{ 'rp-tab--active': activeTab === 'favorites' }"
+          @click="activeTab = 'favorites'"
+        >⭐ {{ t('sidebar.favorites') }}</button>
+        <button
+          class="rp-tab mono"
+          :class="{ 'rp-tab--active': activeTab === 'recent' }"
+          @click="activeTab = 'recent'"
+        >🕐 {{ t('sidebar.recent') }}</button>
+      </div>
     </div>
 
-    <!-- Content -->
-    <div class="rp-content">
+    <!-- Global Search Results -->
+    <div v-if="showGlobalResults" class="rp-content">
+      <div v-if="globalSearchResults.length === 0" class="rp-empty muted">
+        {{ t('sidebar.noMatch') }}
+      </div>
+      <template v-for="[envName, items] in globalSearchResultsByEnv" :key="envName">
+        <div class="rp-group rp-group--static">
+          <span class="rp-group-name mono">{{ envName }}</span>
+        </div>
+        <div
+          v-for="item in items"
+          :key="item.resource.id"
+          class="rp-item"
+          @click="handleResourceClick(item.resource)"
+        >
+          <span class="rp-item-icon" :style="{ color: item.resource.color || PROTOCOL_COLORS[item.resource.protocol] || 'var(--text-secondary)' }">
+            {{ PROTOCOL_ICONS[item.resource.protocol] || '?' }}
+          </span>
+          <span class="rp-item-name" v-html="item.nameHtml"></span>
+          <span class="rp-item-protocol mono muted">{{ item.resource.protocol }}</span>
+        </div>
+      </template>
+    </div>
+
+    <!-- Connections Tab -->
+    <div v-else-if="activeTab === 'connections'" class="rp-content">
+      <!-- Local search within connections -->
+      <div class="rp-inner-search">
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="rp-search-input mono"
+          :placeholder="t('resourcePanel.searchPlaceholder')"
+        />
+      </div>
+
       <div v-if="filteredEnvs.length === 0 && !store.loading" class="rp-empty muted">
         {{ t('resourcePanel.noEnvironments') }}
       </div>
 
       <template v-for="env in filteredEnvs" :key="env.id">
-        <!-- Environment group -->
         <div class="rp-group" @click="toggleEnv(env.id)">
           <span class="rp-chevron" :class="{ 'rp-collapsed': collapsedEnvs.has(env.id) }">▸</span>
           <span class="rp-group-name mono">{{ env.name }}</span>
@@ -151,7 +328,6 @@ function ctxDelete() {
           <button class="rp-add-btn" :title="t('resourcePanel.addResource')" @click="openWizard(env.id, $event)">+</button>
         </div>
 
-        <!-- Resources under this environment -->
         <div v-if="!collapsedEnvs.has(env.id)">
           <div
             v-for="res in getResources(env.id)"
@@ -165,12 +341,63 @@ function ctxDelete() {
             </span>
             <span class="rp-item-name">{{ res.name }}</span>
             <span class="rp-item-host mono muted">{{ res.host }}</span>
+            <button
+              class="rp-star-btn"
+              :class="{ 'rp-star--active': favStore.isFavorite(res.id) }"
+              :title="favStore.isFavorite(res.id) ? t('sidebar.favorites') : t('sidebar.favorites')"
+              @click.stop="favStore.toggleFavorite(res.id)"
+            >{{ favStore.isFavorite(res.id) ? '★' : '☆' }}</button>
           </div>
           <div v-if="getResources(env.id).length === 0" class="rp-item rp-empty-item muted">
             {{ t('resourcePanel.noResources') }}
           </div>
         </div>
       </template>
+    </div>
+
+    <!-- Favorites Tab -->
+    <div v-else-if="activeTab === 'favorites'" class="rp-content">
+      <div v-if="favoriteResources.length === 0" class="rp-empty muted">
+        {{ t('sidebar.noFavorites') }}
+      </div>
+      <div
+        v-for="res in favoriteResources"
+        :key="res.id"
+        class="rp-item"
+        @click="handleResourceClick(res)"
+        @contextmenu.prevent="onContextMenu($event, res)"
+      >
+        <span class="rp-item-icon" :style="{ color: res.color || PROTOCOL_COLORS[res.protocol] || 'var(--text-secondary)' }">
+          {{ PROTOCOL_ICONS[res.protocol] || '?' }}
+        </span>
+        <span class="rp-item-name">{{ res.name }}</span>
+        <span class="rp-item-protocol mono muted">{{ res.protocol }}</span>
+        <button
+          class="rp-star-btn rp-star--active"
+          :title="t('sidebar.favorites')"
+          @click.stop="favStore.toggleFavorite(res.id)"
+        >★</button>
+      </div>
+    </div>
+
+    <!-- Recent Tab -->
+    <div v-else-if="activeTab === 'recent'" class="rp-content">
+      <div v-if="recentItems.length === 0" class="rp-empty muted">
+        {{ t('sidebar.noRecent') }}
+      </div>
+      <div
+        v-for="item in recentItems"
+        :key="item.id"
+        class="rp-item"
+        @click="openRecentItem(item)"
+      >
+        <span class="rp-item-icon" :style="{ color: PROTOCOL_COLORS[item.protocol] || 'var(--text-secondary)' }">
+          {{ PROTOCOL_ICONS[item.protocol] || '?' }}
+        </span>
+        <span class="rp-item-name">{{ item.name }}</span>
+        <span class="rp-item-time mono muted">{{ relativeTime(item.time) }}</span>
+        <span class="rp-item-protocol mono muted">{{ item.protocol }}</span>
+      </div>
     </div>
 
     <WizardModal
@@ -180,6 +407,7 @@ function ctxDelete() {
       @close="wizardEnvId = ''"
       @created="onWizardCreated"
     />
+
     <!-- Resource context menu -->
     <Teleport to="body">
       <div v-if="ctxMenu.show" class="rp-ctx-overlay" @click="ctxMenu.show = false" @contextmenu.prevent="ctxMenu.show = false" />
@@ -207,6 +435,7 @@ function ctxDelete() {
 }
 .rp-tabs {
   display: flex;
+  flex: 1;
 }
 .rp-tab {
   padding: var(--space-2) var(--space-3);
@@ -216,6 +445,10 @@ function ctxDelete() {
   border: none;
   border-bottom: 2px solid transparent;
   cursor: pointer;
+  white-space: nowrap;
+}
+.rp-tab:hover {
+  color: var(--text-secondary);
 }
 .rp-tab--active {
   color: var(--accent);
@@ -224,6 +457,15 @@ function ctxDelete() {
 .rp-search {
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border);
+}
+.rp-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.rp-search-icon {
+  font-size: 12px;
+  flex-shrink: 0;
 }
 .rp-search-input {
   width: 100%;
@@ -241,6 +483,10 @@ function ctxDelete() {
 }
 .rp-search-input:focus {
   border-color: var(--accent);
+}
+.rp-inner-search {
+  padding: var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--border);
 }
 .rp-content {
   flex: 1;
@@ -263,6 +509,9 @@ function ctxDelete() {
 }
 .rp-group:hover {
   color: var(--text-secondary);
+}
+.rp-group--static {
+  cursor: default;
 }
 .rp-chevron {
   font-size: 10px;
@@ -319,10 +568,46 @@ function ctxDelete() {
 }
 .rp-item-name {
   color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rp-item-name :deep(mark) {
+  background: var(--accent-subtle, rgba(88, 166, 255, 0.25));
+  color: inherit;
+  padding: 0 1px;
+  border-radius: 2px;
 }
 .rp-item-host {
   font-size: var(--text-xs);
   margin-left: auto;
+}
+.rp-item-protocol {
+  font-size: var(--text-xs);
+}
+.rp-item-time {
+  font-size: var(--text-xs);
+}
+.rp-star-btn {
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity var(--transition), color var(--transition);
+  flex-shrink: 0;
+}
+.rp-item:hover .rp-star-btn,
+.rp-star--active {
+  opacity: 1;
+}
+.rp-star--active {
+  color: #f5a623;
 }
 .rp-empty-item {
   cursor: default;
