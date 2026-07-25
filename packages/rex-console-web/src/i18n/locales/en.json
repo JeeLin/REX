@@ -356,6 +356,8 @@
     "bgImageGradient": "Gradient",
     "bgImageGrid": "Grid",
     "bgImageNone": "None",
+    "langEn": "English",
+    "langZh": "中文",
     "bgOpacity": "Background Opacity (%)",
     "dark": "Dark",
     "fontFamily": "Font Family",
@@ -432,9 +434,16 @@
     "upload": "Upload (active → opposite)"
   },
   "sidebar": {
+    "connections": "Connections",
     "delete": "Delete",
+    "favorites": "Favorites",
+    "noFavorites": "No favorites yet",
+    "noMatch": "No matching resources",
+    "noRecent": "No recent items",
     "openResource": "Open in Workspace",
-    "properties": "Properties"
+    "properties": "Properties",
+    "recent": "Recent",
+    "search": "Search resources..."
   },
   "sql": {
     "addColumn": "Add Column",
@@ -620,7 +629,9 @@
     "reconnect": "Reconnect",
     "rename": "Rename",
     "splitH": "Split horizontal",
+    "splitHint": "Double-click tab to split",
     "splitV": "Split vertical",
-    "stopBroadcast": "Stop Broadcast"
+    "stopBroadcast": "Stop Broadcast",
+    "dragHint": "Drag tab to another pane"
   }
 }

@@ -90,8 +90,8 @@ async function saveSettings() {
       <div class="form-group">
         <label class="form-label">{{ t('settings.language') }}</label>
         <select v-model="settings.language" class="form-input" @change="onLanguageChange">
-          <option value="zh">中文</option>
-          <option value="en">English</option>
+          <option value="zh">{{ t('settings.langZh') }}</option>
+          <option value="en">{{ t('settings.langEn') }}</option>
         </select>
       </div>
     </Card>
