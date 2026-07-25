@@ -180,7 +180,10 @@ const filteredLogs = computed(() => {
       icon="⬡"
       :title="t('agents.noAgents')"
       :description="t('agents.noAgentsDesc')"
-    />
+    >
+      <p class="empty-hint">{{ t('agents.optionalHint') }}</p>
+      <Button @click="deployAgent = null; deployModal = true">{{ t('agents.quickStart') }}</Button>
+    </EmptyState>
 
     <div v-else class="agent-grid">
       <Card v-for="agent in agents" :key="agent.id" class="agent-card">
@@ -389,6 +392,11 @@ const filteredLogs = computed(() => {
 }
 .muted {
   color: var(--text-muted);
+}
+.empty-hint {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-bottom: var(--space-3);
 }
 .mono {
   font-family: var(--font-mono);

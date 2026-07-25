@@ -293,6 +293,8 @@
     "title": "Agents",
     "noAgents": "No Agents Found",
     "noAgentsDesc": "No agents have been registered yet. Deploy an agent to start managing internal network resources.",
+    "optionalHint": "Agents are optional when using direct connection mode. You can skip this and connect directly.",
+    "quickStart": "Quick Start",
     "version": "Version",
     "os": "OS",
     "lastSeen": "Last Seen",

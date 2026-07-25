@@ -99,6 +99,7 @@ const currentTitle = computed(() => {
           <button v-if="isWorkspace" class="fullscreen-btn mono" :title="fullscreen ? 'Exit fullscreen' : 'Fullscreen'" @click="fullscreen = !fullscreen">
             {{ fullscreen ? '⊟' : '⊞' }}
           </button>
+          <button class="logout-btn" title="退出登录" @click="sessionLogout">⏻</button>
         </div>
       </header>
       <!-- 全屏时工作区的退出按钮 -->
@@ -286,6 +287,20 @@ const currentTitle = computed(() => {
 }
 .fullscreen-btn:hover {
   color: var(--accent);
+}
+.logout-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--text-base);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius);
+  transition: color var(--transition), background var(--transition);
+}
+.logout-btn:hover {
+  color: var(--danger);
+  background: var(--bg-hover);
 }
 .exit-fullscreen-btn {
   position: absolute;

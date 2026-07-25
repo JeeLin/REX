@@ -293,6 +293,8 @@
     "title": "Agent 管理",
     "noAgents": "暂无 Agent",
     "noAgentsDesc": "还没有注册任何 Agent。部署一个 Agent 即可管理内网资源。",
+    "optionalHint": "直连模式下 Agent 是可选的，你可以跳过此步骤直接连接。",
+    "quickStart": "快速开始",
     "version": "版本",
     "os": "系统",
     "lastSeen": "最后在线",
