@@ -76,7 +76,7 @@ function agentStatus(status: string | null): StatusDotStatus {
 </template>
 
 <style scoped>
-.dashboard { max-width: 900px; }
+.dashboard { }
 .page-title { font-size: var(--text-xl); font-weight: 600; color: var(--text-primary); margin-bottom: var(--space-6); }
 .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); margin-bottom: var(--space-6); }
 .stat-card { text-align: center; padding: var(--space-4); }

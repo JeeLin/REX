@@ -248,7 +248,6 @@ async function handleImport(event: Event) {
 
 <style scoped>
 .environments {
-  max-width: 900px;
 }
 .page-header {
   display: flex;

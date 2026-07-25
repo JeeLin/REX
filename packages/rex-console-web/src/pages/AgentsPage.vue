@@ -9,14 +9,17 @@ import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import Modal from '@/components/ui/Modal.vue'
+import Toast from '@/components/ui/Toast.vue'
 
 const { t } = useI18n()
 const store = useEnvironmentsStore()
+const toast = ref<InstanceType<typeof Toast> | null>(null)
 const agents = ref<Agent[]>([])
 const loading = ref(true)
 const resetModal = ref(false)
 const resetAgentId = ref('')
 const resetToken = ref('')
+const resetLoading = ref(false)
 const logModal = ref(false)
 const logAgentName = ref('')
 const logEntries = ref<AuditEntry[]>([])
@@ -47,20 +50,23 @@ function envName(envId: string): string {
   return store.environments.find(e => e.id === envId)?.name || envId
 }
 
-onMounted(async () => {
+async function fetchAgents() {
+  loading.value = true
   await store.fetchEnvironments()
-  const allAgents: Agent[] = []
-  for (const env of store.environments) {
-    try {
-      const envAgents = await agentsApi.listByEnv(env.id)
-      allAgents.push(...envAgents)
-    } catch {
-      // ignore
-    }
+  const results = await Promise.allSettled(
+    store.environments.map(env => agentsApi.listByEnv(env.id))
+  )
+  agents.value = results
+    .filter((r): r is PromiseFulfilledResult<Agent[]> => r.status === 'fulfilled')
+    .flatMap(r => r.value)
+  const failed = results.filter(r => r.status === 'rejected')
+  if (failed.length > 0) {
+    toast.value?.push(t('agents.fetchError', { count: failed.length }), 'error')
   }
-  agents.value = allAgents
   loading.value = false
-})
+}
+
+onMounted(fetchAgents)
 
 const hasAgents = computed(() => agents.value.length > 0)
 
@@ -77,11 +83,14 @@ async function openResetToken(agentId: string) {
 }
 
 async function doResetToken() {
+  resetLoading.value = true
   try {
     const result = await agentsApi.resetToken(resetAgentId.value)
     resetToken.value = result.token
   } catch {
-    // ignore
+    toast.value?.push(t('agents.resetFailed'), 'error')
+  } finally {
+    resetLoading.value = false
   }
 }
 
@@ -94,7 +103,7 @@ async function openLogs(agent: Agent) {
   try {
     logEntries.value = await agentsApi.getLogs(agent.id)
   } catch {
-    // ignore
+    toast.value?.push(t('agents.logFetchFailed'), 'error')
   } finally {
     logLoading.value = false
   }
@@ -329,7 +338,6 @@ const filteredLogs = computed(() => {
 
 <style scoped>
 .agents-page {
-  max-width: 900px;
 }
 .page-header {
   display: flex;

@@ -237,7 +237,6 @@ function agentStatus(status: string | null): StatusDotStatus {
 
 <style scoped>
 .env-detail {
-  max-width: 900px;
 }
 .breadcrumb {
   display: flex;
