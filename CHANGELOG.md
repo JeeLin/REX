@@ -8,9 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 - 工作区分栏：所有面板渲染同一连接的 bug，实现 per-pane 标签绑定
+- 工作区标签切换：终端组件添加 :key 绑定，切换 Tab 时 Vue 正确重建组件
+- 工作区侧栏打开资源：openResourceFromTree 同步更新 paneTabs，Alt+6-9 快捷键同步更新
 - 退出登录按钮：topbar 添加退出按钮
 - 页面标题间距：内容区域添加 padding
+- 页面布局：移除多个页面的 max-width 约束，内容撑满可用宽度
 - Agent 页面：直连模式下显示引导说明（Agent 仅用于隧道模式）
+- Agent 页面：并行加载各环境 Agent，Token 重置/日志查看添加错误反馈
 - Settings 日志：使用 HashMap 替代固定 struct，只记录实际变更的 key
 - IPv6 支持：SSH/SFTP/Redis/MySQL/PostgreSQL 连接测试支持 IPv6 地址格式
 - 资源创建校验：向导步骤添加必填字段验证，防止空值提交

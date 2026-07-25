@@ -418,7 +418,13 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
                 });
             }
 
-            tracing::info!(action = "AGENT_RESOURCE_CONNECTED", agent_id, request_id, channel_id, "agent resource connected");
+            tracing::info!(
+                action = "AGENT_RESOURCE_CONNECTED",
+                agent_id,
+                request_id,
+                channel_id,
+                "agent resource connected"
+            );
         }
         AgentMsg::ConnectError {
             payload: ConnectErrorPayload { request_id, error },
@@ -432,14 +438,25 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
                 });
             }
 
-            tracing::warn!(action = "AGENT_RESOURCE_CONNECT_FAILED", agent_id, request_id, error, "agent resource connect failed");
+            tracing::warn!(
+                action = "AGENT_RESOURCE_CONNECT_FAILED",
+                agent_id,
+                request_id,
+                error,
+                "agent resource connect failed"
+            );
         }
         AgentMsg::Closed {
             payload: ChannelIdPayload { channel_id },
         } => {
             let mut channels = state.agent_tunnel.channels.write().await;
             channels.remove(&channel_id);
-            tracing::info!(action = "AGENT_CHANNEL_CLOSED", agent_id, channel_id, "agent channel closed");
+            tracing::info!(
+                action = "AGENT_CHANNEL_CLOSED",
+                agent_id,
+                channel_id,
+                "agent channel closed"
+            );
         }
         AgentMsg::Auth { .. } => {
             // 已在握手阶段处理，忽略后续 auth 消息

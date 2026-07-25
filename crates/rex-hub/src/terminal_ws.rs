@@ -450,7 +450,11 @@ async fn handle_direct_terminal(mut ws: WebSocket, conn: &ResourceConnInfo, sess
         _ = ws_write_task => {},
     }
 
-    tracing::debug!(action = "SSH_SESSION_END", session_id, "terminal session ended");
+    tracing::debug!(
+        action = "SSH_SESSION_END",
+        session_id,
+        "terminal session ended"
+    );
 }
 
 // ═══════════════════════════════════════
@@ -722,7 +726,11 @@ async fn handle_agent_terminal(
         channels.remove(&channel_id);
     }
 
-    tracing::debug!(action = "SSH_SESSION_END", session_id, "agent terminal session ended");
+    tracing::debug!(
+        action = "SSH_SESSION_END",
+        session_id,
+        "agent terminal session ended"
+    );
 }
 
 async fn send_ws_error(ws: &mut WebSocket, msg: &str) -> Result<(), axum::Error> {

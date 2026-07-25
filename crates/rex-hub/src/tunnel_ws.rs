@@ -8,9 +8,9 @@ use axum::extract::{State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
+use tokio::sync::mpsc;
 
 use crate::agent_ws::{AgentEvent, ConnectResponse};
 use crate::AppState;
@@ -260,9 +260,8 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
     }
 
     let duration_ms = start.elapsed().as_millis() as u64;
-    let bytes_forwarded =
-        total_bytes_frontend_to_agent.load(Ordering::Relaxed)
-            + total_bytes_agent_to_frontend.load(Ordering::Relaxed);
+    let bytes_forwarded = total_bytes_frontend_to_agent.load(Ordering::Relaxed)
+        + total_bytes_agent_to_frontend.load(Ordering::Relaxed);
     let errors = error_count.load(Ordering::Relaxed);
     tracing::info!(
         action = "TUNNEL_CLOSE",

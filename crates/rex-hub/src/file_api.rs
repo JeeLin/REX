@@ -372,7 +372,7 @@ async fn download(
                                 "file downloaded"
                             );
                             let audit_db = state.db.clone();
-                            
+
                             let download_path = params.path.clone();
                             let _ = tokio::task::spawn_blocking(move || {
                                 audit_db.write_audit_log(&crate::models::NewAuditEntry {
@@ -420,7 +420,7 @@ async fn download(
                     "file downloaded"
                 );
                 let audit_db = state.db.clone();
-                
+
                 let download_path = params.path.clone();
                 let _ = tokio::task::spawn_blocking(move || {
                     audit_db.write_audit_log(&crate::models::NewAuditEntry {
@@ -499,7 +499,7 @@ async fn save_from_edit(
                     "file saved from edit"
                 );
                 let audit_db = state.db.clone();
-                
+
                 let save_path = body.path.clone();
                 let _ = tokio::task::spawn_blocking(move || {
                     audit_db.write_audit_log(&crate::models::NewAuditEntry {
@@ -564,7 +564,7 @@ async fn rename(
                 "file renamed"
             );
             let audit_db = state.db.clone();
-            
+
             let rename_from = body.from.clone();
             let _ = tokio::task::spawn_blocking(move || {
                 audit_db.write_audit_log(&crate::models::NewAuditEntry {
@@ -599,7 +599,7 @@ async fn mkdir(
                 "directory created"
             );
             let audit_db = state.db.clone();
-            
+
             let mkdir_path = body.path.clone();
             let _ = tokio::task::spawn_blocking(move || {
                 audit_db.write_audit_log(&crate::models::NewAuditEntry {
@@ -839,7 +839,7 @@ async fn get_acl(
                 "ACL retrieved"
             );
             let audit_db = state.db.clone();
-            
+
             let acl_path = params.path.clone();
             let _ = tokio::task::spawn_blocking(move || {
                 audit_db.write_audit_log(&crate::models::NewAuditEntry {
@@ -890,7 +890,7 @@ async fn put_acl(
                 "ACL applied"
             );
             let audit_db = state.db.clone();
-            
+
             let acl_path = body.path.clone();
             let _ = tokio::task::spawn_blocking(move || {
                 audit_db.write_audit_log(&crate::models::NewAuditEntry {

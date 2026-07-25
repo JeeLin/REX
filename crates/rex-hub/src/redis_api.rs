@@ -531,7 +531,11 @@ async fn run_command(
     Json(body): Json<CommandBody>,
 ) -> axum::response::Response {
     // 脱敏处理：仅记录命令名称，AUTH 等敏感命令不记录参数
-    let cmd_name = body.args.first().map(|s| s.to_uppercase()).unwrap_or_default();
+    let cmd_name = body
+        .args
+        .first()
+        .map(|s| s.to_uppercase())
+        .unwrap_or_default();
     let is_sensitive = matches!(cmd_name.as_str(), "AUTH" | "CONFIG" | "DEBUG");
 
     tracing::info!(
