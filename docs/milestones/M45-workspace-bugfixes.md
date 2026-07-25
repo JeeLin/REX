@@ -16,7 +16,7 @@ M44 完成后端日志补全（v0.39.0）。用户测试中发现多个工作区
 - 审计日志 target 显示资源名称（而非 resource_id）
 - Settings 日志只打印变更的 key（而非全量）
 - IPv6 连接支持
-- localhost 空文件排查
+- localhost 空文件排查（待调查，需深入 SFTP 连接逻辑）
 
 **本阶段不做：**
 - 右键上下文菜单（M46）
@@ -27,10 +27,10 @@ M44 完成后端日志补全（v0.39.0）。用户测试中发现多个工作区
 
 | # | 内容 | 预计文件 | 状态 |
 |---|------|----------|------|
-| 1 | 工作区分栏 per-pane 标签绑定 | `WorkspacePage.vue` | ⬜ |
-| 2 | UI 全局修复（退出按钮 + 页面间距 + Agent 引导） | `AppLayout.vue`, `global.css`, `AgentsPage.vue` | ⬜ |
-| 3 | 审计日志 target 名称 + Settings 日志优化 | `AuditLogPage.vue`, `settings_api.rs` | ⬜ |
-| 4 | IPv6 支持 + localhost 空文件排查 | `resource_api.rs`, 前端验证 | ⬜ |
+| 1 | 工作区分栏 per-pane 标签绑定 | `WorkspacePage.vue` | ✅ f9b4df4 |
+| 2 | UI 全局修复（退出按钮 + 页面间距 + Agent 引导） | `AppLayout.vue`, `global.css`, `AgentsPage.vue` | ✅ 7cdadae |
+| 3 | Settings 日志优化 + Agent 直连模式说明 | `settings_api.rs`, `AgentsPage.vue` | ✅ df086b8 |
+| 4 | IPv6 支持 + 资源创建表单校验 | `resource_api.rs`, `WizardModal.vue` | ✅ fd23794 |
 
 ## 子任务详细设计
 
@@ -210,14 +210,14 @@ if body.theme.is_some() && body.theme.as_deref() != current_theme.as_deref() {
 
 ## Flow Status
 
-- [ ] 步骤1：编写里程碑文档
-- [ ] 步骤2：设计核对
-- [ ] 步骤3：开发
-- [ ] 步骤4：代码精简
-- [ ] 步骤5：代码审查
-- [ ] 步骤6：测试验证
-- [ ] 步骤7：设计再确认
-- [ ] 步骤8：提交
+- [x] 步骤1：编写里程碑文档
+- [x] 步骤2：设计核对
+- [x] 步骤3：开发
+- [x] 步骤4：代码精简
+- [x] 步骤5：代码审查
+- [x] 步骤6：测试验证
+- [x] 步骤7：设计再确认
+- [x] 步骤8：提交
 
 ## 打回记录
 

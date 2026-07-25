@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.39.1] - 2026-07-25
+
+### Fixed
+- 工作区分栏：所有面板渲染同一连接的 bug，实现 per-pane 标签绑定
+- 退出登录按钮：topbar 添加退出按钮
+- 页面标题间距：内容区域添加 padding
+- Agent 页面：直连模式下显示引导说明（Agent 仅用于隧道模式）
+- Settings 日志：使用 HashMap 替代固定 struct，只记录实际变更的 key
+- IPv6 支持：SSH/SFTP/Redis/MySQL/PostgreSQL 连接测试支持 IPv6 地址格式
+- 资源创建校验：向导步骤添加必填字段验证，防止空值提交
+- 审计日志：展开详情中资源 ID 替换为资源名称
+
+### Changed
+- Settings API：`SettingsUpdate` struct 替换为 `HashMap<String, String>`，支持任意 key
+- Agent 页面：直连模式下隐藏快速开始按钮，显示隧道模式说明
+
 ## [0.39.0] - 2026-07-25
 
 ### Added
