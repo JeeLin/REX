@@ -27,12 +27,12 @@ M43 完成前端交互修复和 WebSocket 鉴权。M36 建立了基础日志框�
 
 | # | 内容 | 预计文件 | 状态 |
 |---|------|----------|------|
-| 1 | Redis 操作日志 | `redis_api.rs` | ⬜ |
-| 2 | 环境/资源 CRUD 审计日志 | `env_api.rs`, `resource_api.rs` | ⬜ |
-| 3 | 文件传输操作日志补全 | `file_api.rs` | ⬜ |
-| 4 | Settings 变更 + Agent token 日志 | `settings_api.rs`, `agent_api.rs` | ⬜ |
-| 5 | Agent 隧道统计日志 | `tunnel_ws.rs`, `agent_ws.rs` | ⬜ |
-| 6 | 日志级别规范化 + 敏感信息审查 | 全局 | ⬜ |
+| 1 | Redis 操作日志 | `redis_api.rs` | ✅ |
+| 2 | 环境/资源 CRUD 审计日志 | `env_api.rs`, `resource_api.rs` | ✅ |
+| 3 | 文件传输操作日志补全 | `file_api.rs` | ✅ |
+| 4 | Settings 变更 + Agent token 日志 | `settings_api.rs`, `agent_api.rs` | ✅ |
+| 5 | Agent 隧道统计日志 | `tunnel_ws.rs`, `agent_ws.rs` | ✅ |
+| 6 | 日志级别规范化 + 敏感信息审查 | 全局 | ✅ |
 
 ## 子任务详细设计
 
@@ -278,12 +278,12 @@ tracing::info!(
 
 - [x] 步骤1：编写里程碑文档
 - [x] 步骤2：设计核对
-- [ ] 步骤3：开发
-- [ ] 步骤4：代码精简
-- [ ] 步骤5：代码审查
-- [ ] 步骤6：测试验证
-- [ ] 步骤7：设计再确认
-- [ ] 步骤8：提交
+- [x] 步骤3：开发
+- [x] 步骤4：代码精简
+- [x] 步骤5：代码审查
+- [x] 步骤6：测试验证
+- [x] 步骤7：设计再确认
+- [x] 步骤8：提交
 
 ## 打回记录
 

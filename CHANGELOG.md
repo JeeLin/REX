@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.39.0] - 2026-07-25
+
+### Added
+- Redis 操作日志：连接/断开/DB切换/Key操作/命令执行 全部添加结构化 tracing 和审计日志
+- 环境/资源 CRUD 审计日志：创建/更新/删除/导入 操作写入审计日志表
+- 文件传输操作日志：连接/断开/列表/重命名/创建文件夹/下载/编辑保存/ACL 操作补全日志
+- Settings 变更日志 + Agent token 重置日志
+- Agent 隧道统计日志：记录隧道持续时间、数据转发量、错误计数
+- 日志级别规范化：统一 action 字段命名（`PREFIX_ACTION`），全局审查敏感信息不入日志
+
+### Changed
+- 日志格式统一：所有 tracing 调用添加 `action` 字段，错误日志包含 resource_id/session_id 上下文
+- terminal_ws.rs：~25 个 tracing 调用添加 SSH_* action 字段
+- agent_ws.rs：6 个 tracing 调用添加 AGENT_* action 字段
+- file_api.rs：8 个 tracing 调用添加 FILE_* action 字段
+- tunnel_ws.rs：3 个 tracing 调用添加 TUNNEL_* action 字段
+
+
 ## [0.38.2] - 2026-07-24
 
 ### Fixed
