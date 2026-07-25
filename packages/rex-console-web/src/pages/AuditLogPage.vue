@@ -128,6 +128,14 @@ function envName(id: string | null): string {
   if (!id) return '—'
   return store.environments.find(e => e.id === id)?.name || id
 }
+function resourceName(resId: string): string {
+  for (const resources of store.envResources.values()) {
+    const r = resources.find(r => r.id === resId)
+    if (r) return r.name
+  }
+  return resId.slice(0, 8) + '…'
+}
+
 
 function timeAgo(time: string): string {
   const diff = Date.now() - new Date(time).getTime()
@@ -162,6 +170,8 @@ watch([actionFilter, resultFilter, environmentFilter, timeRange], refreshAll)
 
 onMounted(async () => {
   await store.fetchEnvironments()
+  // Load resources for all environments to enable name resolution
+  await Promise.all(store.environments.map(e => store.fetchResources(e.id)))
   refreshAll()
 })
 </script>
@@ -253,8 +263,8 @@ onMounted(async () => {
                     <span class="mono">{{ entry.agent_id }}</span>
                   </div>
                   <div v-if="entry.resource_id" class="detail-field">
-                    <span class="detail-label muted">Resource ID:</span>
-                    <span class="mono">{{ entry.resource_id }}</span>
+                    <span class="detail-label muted">{{ t('auditLog.resource') }}:</span>
+                    <span>{{ resourceName(entry.resource_id) }}</span>
                   </div>
                   <div v-if="entry.detail" class="detail-field">
                     <span class="detail-label muted">Detail:</span>
