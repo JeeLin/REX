@@ -92,6 +92,7 @@ rex-agent = 所有 crate（无前端）
 | **M44** | 后端操作日志补全 | — | ✅ |
 | **M45** | 工作区 Bug 修复 | — | ✅ |
 | **M46** | 右键上下文菜单补全 | — | ✅ |
+| **M47** | i18n 全面补全 | — | |
 
 ### M0：项目骨架重建
 
@@ -245,6 +246,21 @@ rex-agent = 所有 crate（无前端）
 版本类型：minor
 版本号：0.21.0
 
+
+### M47：i18n 全面补全
+
+**核心功能**：审计并补全所有仍有硬编码英文的组件（文件管理、SQL 控制台、Redis Status、设置），确保切换语言时全站无遗漏。
+
+子任务：
+1. 文件管理 i18n：FilesPage / FileEditorDialog / FolderSyncDialog / MobileFilesBar
+2. SQL 控制台 i18n：SqlPage / ExportWizard / TableDesigner / GlobalQueryModal / AiAssistantDrawer / SqlResultGrid / ColumnEditor
+3. Redis Status i18n：RedisStatus 组件
+4. 设置页 i18n：语言选择器选项文本
+5. locale 文件同步 + type-check/lint 验证
+
+依赖：M46
+版本类型：minor
+版本号：0.40.0
 ---
 
 ## 4. 架构文档
@@ -313,5 +329,6 @@ docs/milestones/
 ├── 0.6.0-hub-https-and-agent-download.md
 ├── 0.7.0-hub-acme-auto-cert.md
 ├── 0.16.0-sql-ai-assistant.md
+├── M47-i18n-completion.md
 └── 0.7.0-reports/
 ```
