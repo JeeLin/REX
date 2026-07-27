@@ -67,7 +67,24 @@ watch(() => props.resource, (r) => {
 }, { immediate: true })
 
 const activeTab = ref('connection')
-const propTabs = ['connection', 'auth', 'terminal', 'appearance', 'keepalive']
+
+// Terminal/Appearance/Keepalive only for SSH/SFTP
+const isTerminalProtocol = computed(() => ['ssh', 'sftp'].includes(form.value.protocol))
+
+const propTabs = computed(() => {
+  const base = ['connection', 'auth']
+  if (isTerminalProtocol.value) {
+    base.push('terminal', 'appearance', 'keepalive')
+  }
+  return base
+})
+
+// Reset active tab when protocol changes
+watch(() => form.value.protocol, () => {
+  if (!propTabs.value.includes(activeTab.value)) {
+    activeTab.value = 'connection'
+  }
+})
 
 const encodings = [
   { label: 'UTF-8', value: 'UTF-8' },
@@ -141,16 +158,55 @@ function onSave() {
               ]" size="sm"
             />
           </div>
-          <div class="props-row">
-            <div class="props-field props-field--grow">
-              <label class="props-label">Host</label>
-              <Input v-model="form.host" size="sm" placeholder="10.0.1.5" />
+          <!-- SSH/SFTP: Host + Port -->
+          <template v-if="['ssh', 'sftp', 'mysql', 'postgresql', 'redis'].includes(form.protocol)">
+            <div class="props-row">
+              <div class="props-field props-field--grow">
+                <label class="props-label">Host</label>
+                <Input v-model="form.host" size="sm" placeholder="10.0.1.5" />
+              </div>
+              <div class="props-field" style="width: 100px">
+                <label class="props-label">Port</label>
+                <Input :model-value="form.port || getDefaultPort()" size="sm" placeholder="22" @update:model-value="form.port = $event" />
+              </div>
             </div>
-            <div class="props-field" style="width: 100px">
-              <label class="props-label">Port</label>
-              <Input :model-value="form.port || getDefaultPort()" size="sm" placeholder="22" @update:model-value="form.port = $event" />
+          </template>
+
+          <!-- SQLite: File path -->
+          <template v-if="form.protocol === 'sqlite'">
+            <div class="props-field">
+              <label class="props-label">File Path</label>
+              <Input v-model="form.host" size="sm" placeholder="/path/to/database.db" />
             </div>
-          </div>
+          </template>
+
+          <!-- S3: Endpoint + Bucket -->
+          <template v-if="form.protocol === 's3'">
+            <div class="props-field">
+              <label class="props-label">Endpoint</label>
+              <Input v-model="form.host" size="sm" placeholder="s3.amazonaws.com" />
+            </div>
+            <div class="props-field">
+              <label class="props-label">Bucket</label>
+              <Input v-model="form.port" size="sm" placeholder="my-bucket" />
+            </div>
+          </template>
+
+          <!-- MySQL/PostgreSQL: Database -->
+          <template v-if="['mysql', 'postgresql'].includes(form.protocol)">
+            <div class="props-field">
+              <label class="props-label">Database</label>
+              <Input v-model="form.passphrase" size="sm" placeholder="default" />
+            </div>
+          </template>
+
+          <!-- Redis: Database number -->
+          <template v-if="form.protocol === 'redis'">
+            <div class="props-field">
+              <label class="props-label">Database</label>
+              <Input :model-value="String(form.scrollback)" size="sm" placeholder="0" @update:model-value="form.scrollback = Number($event)" />
+            </div>
+          </template>
           <div class="props-field">
             <label class="props-label">Color Tag</label>
             <div class="props-color-row">
@@ -162,28 +218,62 @@ function onSave() {
 
         <!-- Auth -->
         <template v-if="activeTab === 'auth'">
-          <div class="props-field">
-            <label class="props-label">Auth Method</label>
-            <Select v-model="authMethod" :options="authMethods" size="sm" />
-          </div>
-          <div class="props-field">
-            <label class="props-label">Username</label>
-            <Input v-model="form.user" size="sm" placeholder="root" />
-          </div>
-          <template v-if="authMethod === 'password'">
+          <!-- SSH/SFTP: Full auth options -->
+          <template v-if="['ssh', 'sftp'].includes(form.protocol)">
+            <div class="props-field">
+              <label class="props-label">Auth Method</label>
+              <Select v-model="authMethod" :options="authMethods" size="sm" />
+            </div>
+            <div class="props-field">
+              <label class="props-label">Username</label>
+              <Input v-model="form.user" size="sm" placeholder="root" />
+            </div>
+            <template v-if="authMethod === 'password'">
+              <div class="props-field">
+                <label class="props-label">Password</label>
+                <Input v-model="form.password" size="sm" placeholder="••••••" />
+              </div>
+            </template>
+            <template v-else>
+              <div class="props-field">
+                <label class="props-label">Private Key Path</label>
+                <Input v-model="form.privateKey" size="sm" placeholder="/home/user/.ssh/id_rsa" />
+              </div>
+              <div class="props-field">
+                <label class="props-label">Passphrase</label>
+                <Input v-model="form.passphrase" size="sm" placeholder="••••••" />
+              </div>
+            </template>
+          </template>
+
+          <!-- MySQL/PostgreSQL/Redis: Username + Password -->
+          <template v-if="['mysql', 'postgresql', 'redis'].includes(form.protocol)">
+            <div class="props-field">
+              <label class="props-label">Username</label>
+              <Input v-model="form.user" size="sm" placeholder="root" />
+            </div>
             <div class="props-field">
               <label class="props-label">Password</label>
               <Input v-model="form.password" size="sm" placeholder="••••••" />
             </div>
           </template>
-          <template v-else>
+
+          <!-- S3: Access Key + Secret Key -->
+          <template v-if="form.protocol === 's3'">
             <div class="props-field">
-              <label class="props-label">Private Key Path</label>
-              <Input v-model="form.privateKey" size="sm" placeholder="/home/user/.ssh/id_rsa" />
+              <label class="props-label">Access Key</label>
+              <Input v-model="form.user" size="sm" placeholder="AKIA..." />
             </div>
             <div class="props-field">
-              <label class="props-label">Passphrase</label>
-              <Input v-model="form.passphrase" size="sm" placeholder="••••••" />
+              <label class="props-label">Secret Key</label>
+              <Input v-model="form.password" size="sm" placeholder="••••••" />
+            </div>
+          </template>
+
+          <!-- SQLite: No auth needed -->
+          <template v-if="form.protocol === 'sqlite'">
+            <div class="props-field">
+              <p class="props-hint">SQLite databases are file-based and do not require authentication.</p>
             </div>
           </template>
         </template>
@@ -354,5 +444,10 @@ function onSave() {
 }
 .props-toggle input:checked + .props-toggle-slider::after {
   transform: translateX(16px);
+}
+.props-hint {
+  color: var(--text-secondary, #8b949e);
+  font-size: var(--text-xs, 12px);
+  margin: 0;
 }
 </style>
