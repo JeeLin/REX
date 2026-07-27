@@ -31,8 +31,10 @@ export function useTerminal() {
       fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
       theme: getTerminalTheme('default'),
       allowProposedApi: true,
+      allowAlternate: true,
       ...options,
     })
+
 
     const fit = new FitAddon()
     term.loadAddon(fit)
