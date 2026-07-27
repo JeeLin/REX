@@ -15,6 +15,7 @@ pub mod middleware;
 pub mod models;
 pub mod redis_api;
 pub mod resource_api;
+pub mod resource_conn;
 pub mod settings_api;
 pub mod sql_api;
 pub mod terminal_ws;
