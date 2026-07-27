@@ -42,6 +42,7 @@ onMounted(async () => {
         username: props.username || 'root',
         password: props.password,
         database: props.database,
+        resource_id: props.resourceId,
       }
       sessionId.value = await sqlConnect(req)
     } catch (e: unknown) {

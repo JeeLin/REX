@@ -68,6 +68,9 @@ struct ConnectBody {
     db_type: String,
     #[serde(flatten)]
     req: ConnectRequest,
+    /// 资源 ID — SQLite 连接时用于从 DB 查找 config_json.file_path
+    #[serde(default)]
+    resource_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -148,9 +151,26 @@ async fn connect(
         "postgresql" | "postgres" => rex_postgresql::PostgresConnector::connect(body.req)
             .await
             .map(|c| Box::new(c) as Box<dyn SqlConnector>),
-        "sqlite" => rex_sqlite::SqliteConnector::connect(body.req)
-            .await
-            .map(|c| Box::new(c) as Box<dyn SqlConnector>),
+        "sqlite" => {
+            // 如果提供了 resource_id，从 DB 查找 config_json.file_path 作为数据库路径
+            let mut req = body.req;
+            if let Some(ref rid) = body.resource_id {
+                if let Ok(Some(resource)) = state.db.get_resource(rid) {
+                    if !resource.config_json.is_empty() {
+                        if let Ok(val) =
+                            serde_json::from_str::<serde_json::Value>(&resource.config_json)
+                        {
+                            if let Some(fp) = val.get("file_path").and_then(|v| v.as_str()) {
+                                req.host = fp.to_string();
+                            }
+                        }
+                    }
+                }
+            }
+            rex_sqlite::SqliteConnector::connect(req)
+                .await
+                .map(|c| Box::new(c) as Box<dyn SqlConnector>)
+        }
         _ => {
             return error_response(
                 "INVALID_DB_TYPE",

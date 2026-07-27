@@ -14,6 +14,7 @@ export interface ConnectRequest {
   username: string
   password?: string
   database?: string
+  resource_id?: string
 }
 
 export interface TableInfo {
