@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::AppState;
+use crate::resource_conn::load_resource_config;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -64,12 +65,7 @@ pub fn redis_routes() -> axum::Router<AppState> {
 
 #[derive(Debug, Deserialize)]
 struct ConnectBody {
-    host: String,
-    port: u16,
-    #[serde(default)]
-    password: Option<String>,
-    #[serde(default)]
-    db: Option<i32>,
+    resource_id: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -179,21 +175,26 @@ async fn connect(
     State(state): State<AppState>,
     Json(body): Json<ConnectBody>,
 ) -> axum::response::Response {
-    tracing::info!(
-        action = "REDIS_CONNECT",
-        host = %body.host,
-        port = body.port,
-        db = body.db,
-        has_password = body.password.is_some(),
-        "Redis connecting"
-    );
+    // 从 DB 加载资源连接信息
+    let res = match load_resource_config(&state, &body.resource_id) {
+        Ok(r) => r,
+        Err(e) => return error_response("INVALID_RESOURCE", &e).into_response(),
+    };
 
     let req = RedisConnectRequest {
-        host: body.host.clone(),
-        port: body.port,
-        password: body.password,
-        db: body.db,
+        host: res.host.clone(),
+        port: res.port.unwrap_or(6379),
+        password: res.config.get("password").and_then(|v| v.as_str()).map(String::from),
+        db: res.config.get("db").and_then(|v| v.as_i64()).map(|v| v as i32),
     };
+
+    tracing::info!(
+        action = "REDIS_CONNECT",
+        resource_id = %body.resource_id,
+        host = %res.host,
+        port = res.port.unwrap_or(6379),
+        "Redis connecting"
+    );
 
     match rex_redis::RedisConnectorImpl::connect(req).await {
         Ok(conn) => {
@@ -207,17 +208,17 @@ async fn connect(
             tracing::info!(
                 action = "REDIS_CONNECT",
                 session_id = %session_id,
-                host = %body.host,
+                resource_id = %body.resource_id,
                 "Redis connected"
             );
 
             // 审计日志写入
             let audit_db = state.db.clone();
-            let host = body.host.clone();
+            let target = res.host.clone();
             let _ = tokio::task::spawn_blocking(move || {
                 audit_db.write_audit_log(&crate::models::NewAuditEntry {
                     action: "REDIS_CONNECT".into(),
-                    target: Some(host),
+                    target: Some(target),
                     result: "success".into(),
                     ..Default::default()
                 })
@@ -229,7 +230,7 @@ async fn connect(
         Err(e) => {
             tracing::warn!(
                 action = "REDIS_CONNECT",
-                host = %body.host,
+                resource_id = %body.resource_id,
                 error = %e,
                 "Redis connect failed"
             );
