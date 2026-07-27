@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::AppState;
+use crate::resource_conn::load_resource_config;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -66,11 +67,7 @@ pub fn sql_routes() -> axum::Router<AppState> {
 struct ConnectBody {
     #[serde(rename = "type")]
     db_type: String,
-    #[serde(flatten)]
-    req: ConnectRequest,
-    /// 资源 ID — SQLite 连接时用于从 DB 查找 config_json.file_path
-    #[serde(default)]
-    resource_id: Option<String>,
+    resource_id: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -142,34 +139,30 @@ async fn connect(
     State(state): State<AppState>,
     Json(body): Json<ConnectBody>,
 ) -> axum::response::Response {
+    // 从 DB 加载资源连接信息
+    let res = match load_resource_config(&state, &body.resource_id) {
+        Ok(r) => r,
+        Err(e) => return error_response("INVALID_RESOURCE", &e).into_response(),
+    };
+
     let db_type = body.db_type.clone();
-    let host = body.req.host.clone();
-    let conn_result = match db_type.to_lowercase().as_str() {
-        "mysql" => rex_mysql::MySqlConnector::connect(body.req)
-            .await
-            .map(|c| Box::new(c) as Box<dyn SqlConnector>),
-        "postgresql" | "postgres" => rex_postgresql::PostgresConnector::connect(body.req)
-            .await
-            .map(|c| Box::new(c) as Box<dyn SqlConnector>),
+    let req = match db_type.to_lowercase().as_str() {
+        "mysql" | "postgresql" | "postgres" => ConnectRequest {
+            host: res.host,
+            port: res.port.unwrap_or(0),
+            username: res.username,
+            password: res.config.get("password").and_then(|v| v.as_str()).map(String::from),
+            database: res.config.get("database_name").and_then(|v| v.as_str()).map(String::from),
+        },
         "sqlite" => {
-            // 如果提供了 resource_id，从 DB 查找 config_json.file_path 作为数据库路径
-            let mut req = body.req;
-            if let Some(ref rid) = body.resource_id {
-                if let Ok(Some(resource)) = state.db.get_resource(rid) {
-                    if !resource.config_json.is_empty() {
-                        if let Ok(val) =
-                            serde_json::from_str::<serde_json::Value>(&resource.config_json)
-                        {
-                            if let Some(fp) = val.get("file_path").and_then(|v| v.as_str()) {
-                                req.host = fp.to_string();
-                            }
-                        }
-                    }
-                }
+            let file_path = res.config.get("file_path").and_then(|v| v.as_str()).unwrap_or("");
+            ConnectRequest {
+                host: file_path.to_string(),
+                port: 0,
+                username: String::new(),
+                password: None,
+                database: None,
             }
-            rex_sqlite::SqliteConnector::connect(req)
-                .await
-                .map(|c| Box::new(c) as Box<dyn SqlConnector>)
         }
         _ => {
             return error_response(
@@ -180,13 +173,26 @@ async fn connect(
         }
     };
 
+    let conn_result = match db_type.to_lowercase().as_str() {
+        "mysql" => rex_mysql::MySqlConnector::connect(req)
+            .await
+            .map(|c| Box::new(c) as Box<dyn SqlConnector>),
+        "postgresql" | "postgres" => rex_postgresql::PostgresConnector::connect(req)
+            .await
+            .map(|c| Box::new(c) as Box<dyn SqlConnector>),
+        "sqlite" => rex_sqlite::SqliteConnector::connect(req)
+            .await
+            .map(|c| Box::new(c) as Box<dyn SqlConnector>),
+        _ => unreachable!(),
+    };
+
     match conn_result {
         Ok(conn) => {
             let session_id = format!("sql_{}", &uuid::Uuid::new_v4().to_string()[..8]);
             tracing::info!(
                 action = "SQL_CONNECT",
                 db_type = %db_type,
-                host = %host,
+                resource_id = %body.resource_id,
                 session_id = %session_id,
                 "SQL connection established"
             );
@@ -197,7 +203,7 @@ async fn connect(
             tracing::warn!(
                 action = "SQL_CONNECT",
                 db_type = %db_type,
-                host = %host,
+                resource_id = %body.resource_id,
                 error = %e,
                 "SQL connection failed"
             );

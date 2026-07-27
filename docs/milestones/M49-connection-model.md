@@ -30,8 +30,8 @@ SSH 终端是唯一正常工作的协议 — 它通过 `load_resource_conn` 从 
 | # | 内容 | 状态 |
 |---|------|------|
 | 1 | 后端：提取公共 load_resource_config 函数 | ✅ |
-| 1a | 前端：修复 WizardModal S3 验证 bug（validateStep 跳过 S3 host 检查） | ⬜ |
-| 2 | 后端：重构 sql_api.rs connect handler | ⬜ |
+| 1a | 前端：修复 WizardModal S3 验证 bug（validateStep 跳过 S3 host 检查） | ✅ |
+| 2 | 后端：重构 sql_api.rs connect handler | ✅ |
 | 3 | 后端：重构 redis_api.rs connect handler | ⬜ |
 | 4 | 后端：重构 file_api.rs connect handler | ⬜ |
 | 5 | 前端：简化 SQL API 和 SqlPage | ⬜ |
