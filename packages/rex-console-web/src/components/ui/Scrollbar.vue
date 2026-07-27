@@ -2,7 +2,7 @@
 withDefaults(defineProps<{
   height?: string
   horizontal?: boolean
-}>(), { horizontal: false })
+}>(), { height: '', horizontal: false })
 </script>
 
 <template>

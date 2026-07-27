@@ -437,6 +437,7 @@
     "connections": "Connections",
     "delete": "Delete",
     "favorites": "Favorites",
+    "unfavorite": "Unfavorite",
     "noFavorites": "No favorites yet",
     "noMatch": "No matching resources",
     "noRecent": "No recent items",

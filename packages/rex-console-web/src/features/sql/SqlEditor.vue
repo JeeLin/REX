@@ -3,7 +3,7 @@ import { ref, watch, onMounted, onBeforeUnmount, shallowRef } from 'vue'
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightSpecialChars } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
 import { defaultKeymap, indentWithTab, history, historyKeymap } from '@codemirror/commands'
-import { sql, SQLite, MySQL, PostgreSQL } from '@codemirror/lang-sql'
+import { sql, SQLite } from '@codemirror/lang-sql'
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
 import { foldGutter, indentOnInput, bracketMatching, foldKeymap } from '@codemirror/language'
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete'
@@ -63,11 +63,6 @@ function addToClipboard(text: string) {
   if (clipboardHistory.value.length > CLIPBOARD_MAX) clipboardHistory.value.pop()
 }
 
-function onCopy(e: ClipboardEvent) {
-  const text = e.clipboardData?.getData('text/plain')
-  if (text) addToClipboard(text)
-}
-
 function pasteFromHistory(item: string) {
   if (!view.value) return
   const { from, to } = view.value.state.selection.main
@@ -76,7 +71,7 @@ function pasteFromHistory(item: string) {
   })
 }
 
-function handleCopy(e: ClipboardEvent) {
+function handleCopy(_e: ClipboardEvent) {
   const sel = view.value?.state.sliceDoc(
     view.value.state.selection.main.from,
     view.value.state.selection.main.to,

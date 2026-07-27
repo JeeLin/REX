@@ -84,7 +84,7 @@ const containerStyle = computed(() => {
     const preset = BG_PRESETS[bg]
     if (preset) {
       style.backgroundImage = preset
-      style.backgroundSize = bg === 'grid' ? '20px 20px' : bg === 'dots' ? '24px 24px' : undefined as any
+      style.backgroundSize = bg === 'grid' ? '20px 20px' : '24px 24px'
     } else if (bg.startsWith('http') || bg.startsWith('data:')) {
       style.backgroundImage = `url(${bg})`
       style.backgroundSize = 'cover'
@@ -123,7 +123,7 @@ onMounted(() => {
   const globalSettings = getGlobalTerminalSettings()
 
   // Build terminal options: per-resource props > global settings > defaults
-  const termOptions: Record<string, any> = {}
+  const termOptions: Record<string, unknown> = {}
   const theme = props.theme || globalSettings?.theme
   if (theme) termOptions.theme = getTerminalTheme(theme)
   if (props.fontSize) termOptions.fontSize = props.fontSize
@@ -229,8 +229,8 @@ function handleOpenSftp() {
         @reconnect="handleReconnect"
         @disconnect="disconnect"
         @set-encoding="handleSetEncoding"
-        @copyAddress="handleCopyAddress"
-        @openSftp="handleOpenSftp"
+        @copy-address="handleCopyAddress"
+        @open-sftp="handleOpenSftp"
       />
     </div>
 

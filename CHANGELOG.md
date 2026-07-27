@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.41.0] - 2026-07-27
+
+### Added
+- 侧栏收藏/最近使用 Tab：资源可标记收藏，自动记录最近打开的资源（localStorage 持久化）
+- 侧栏全局搜索：侧栏顶部搜索框，跨环境/资源名实时搜索，debounce 200ms
+- 双击 Tab 分屏：双击 Tab 标签自动创建左右分屏布局
+- 拖 Tab 到目标 Pane：HTML5 拖拽 API 实现 Tab 在 Pane 间移动
+- i18n：新增 sidebar.search/favorites/recent/unfavorite/noFavorites/noRecent 等 key
+
+### Fixed
+- 代码质量：修复 52 个 ESLint warnings（unused vars、any 类型、default props、template shadow）
+- 代码审查：修复 onPaneDrop 拖拽 Tab 时未清除源 Pane 的 critical bug
+- 收藏按钮 title 属性：区分收藏/取消收藏提示文案
+
 ## [0.40.0] - 2026-07-25
 
 ### Changed

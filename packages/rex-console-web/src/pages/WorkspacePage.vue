@@ -57,6 +57,7 @@ const splitDirection = ref<'row' | 'column'>('row')
 const paneTabs = ref<string[]>([])
 const splitCount = ref(1)
 const currentPane = ref(0)
+const dragOverPane = ref<number | null>(null)
 
 watch(() => wsStore.pendingResource, (resource) => {
   if (!resource) return
@@ -144,6 +145,7 @@ function onEncodingChange(encoding: string) {
 
 function currentPaneTabInfo(paneIndex: number) {
   const tabId = paneTabs.value[paneIndex]
+  if (tabId === '') return null
   return tabs.value.find(t => t.id === tabId) ?? tabs.value.find(t => t.id === activeTab.value)
 }
 const activeTabInfo = computed(() => tabs.value.find(t => t.id === activeTab.value))
@@ -264,29 +266,18 @@ function toggleBroadcast(tabId: string) {
   tabContextMenu.value.show = false
 }
 
-function getBroadcastTargets(): Tab[] {
-  const current = tabs.value.find(t => t.id === activeTab.value)
-  if (!current?.broadcast || current.protocol !== 'ssh') return []
-  return tabs.value.filter(t => t.id !== current.id && t.protocol === 'ssh' && t.status === 'connected')
-}
-
-function onBroadcastInput(data: string) {
-  const targets = getBroadcastTargets()
-  for (const tab of targets) {
-    const el = document.querySelector(`[data-tab-id="${tab.id}"]`)
-    if (el) el.dispatchEvent(new CustomEvent('terminal-input', { detail: data }))
-  }
-}
-
 // Tab 拖拽排序
 const dragTabId = ref('')
 
 function onTabDragStart(e: DragEvent, tabId: string) {
   dragTabId.value = tabId
   e.dataTransfer!.effectAllowed = 'move'
+  e.dataTransfer!.setData('text/tab-id', tabId)
+  const sourcePane = paneTabs.value.indexOf(tabId)
+  e.dataTransfer!.setData('text/source-pane', sourcePane >= 0 ? String(sourcePane) : '')
 }
 
-function onTabDragOver(e: DragEvent, targetId: string) {
+function onTabDragOver(e: DragEvent, _targetId: string) {
   e.preventDefault()
   e.dataTransfer!.dropEffect = 'move'
 }
@@ -300,6 +291,11 @@ function onTabDrop(e: DragEvent, targetId: string) {
   const moved = tabs.value.splice(fromIdx, 1)[0]
   if (moved) tabs.value.splice(toIdx, 0, moved)
   dragTabId.value = ''
+}
+
+function onTabDragEnd() {
+  dragTabId.value = ''
+  dragOverPane.value = null
 }
 
 function setTabColor(color: string) {
@@ -346,6 +342,48 @@ function moveToPane(paneIndex: number) {
   tabContextMenu.value.show = false
 }
 
+// Double-click tab to split pane
+function onTabDoubleClick(tabId: string) {
+  if (splitCount.value !== 1) return
+  currentLayout.value = 'left-right'
+  splitCount.value = 2
+  splitDirection.value = 'row'
+  paneTabs.value = [tabId, '']
+  currentPane.value = 0
+}
+
+// Pane drag & drop handlers
+function onPaneDragOver(e: DragEvent) {
+  e.preventDefault()
+  e.dataTransfer!.dropEffect = 'move'
+}
+
+function onPaneDragEnter(e: DragEvent, paneIndex: number) {
+  e.preventDefault()
+  dragOverPane.value = paneIndex
+}
+
+function onPaneDragLeave(paneIndex: number) {
+  if (dragOverPane.value === paneIndex) {
+    dragOverPane.value = null
+  }
+}
+
+function onPaneDrop(e: DragEvent, targetPaneIndex: number) {
+  e.preventDefault()
+  dragOverPane.value = null
+  const tabId = e.dataTransfer!.getData('text/tab-id')
+  if (!tabId) return
+  // 清除源 pane 中的 tab（避免重复渲染）
+  for (let i = 0; i < paneTabs.value.length; i++) {
+    if (paneTabs.value[i] === tabId && i !== targetPaneIndex) {
+      paneTabs.value[i] = ''
+    }
+  }
+  paneTabs.value[targetPaneIndex] = tabId
+  currentPane.value = targetPaneIndex
+}
+
 const propsResource = computed(() => {
   const tab = tabs.value.find(t => t.id === propsTabId.value)
   if (!tab) return undefined
@@ -373,7 +411,7 @@ const propsResource = computed(() => {
   }
 })
 
-function onPropsSave(data: any) {
+function onPropsSave(data: Pick<Tab, 'theme' | 'fontSize' | 'opacity' | 'cursorStyle' | 'cursorBlink' | 'backgroundImage'>) {
   const tab = tabs.value.find(t => t.id === propsTabId.value)
   if (!tab) return
   tab.theme = data.theme
@@ -393,7 +431,7 @@ function splitVertical() {
   splitCount.value++
   splitDirection.value = 'column'
 }
-function closePane(idx: number) {
+function closePane(_idx: number) {
   if (splitCount.value > 1) {
     splitCount.value--
     if (currentPane.value >= splitCount.value) {
@@ -502,13 +540,16 @@ useKeyboardShortcuts([
         v-for="tab in tabs"
         :key="tab.id"
         class="ws-tab mono"
-        :class="{ 'ws-tab--active': activeTab === tab.id }"
+        :class="{ 'ws-tab--active': activeTab === tab.id, 'ws-tab--dragging': dragTabId === tab.id }"
         draggable="true"
+        :title="t('workspace.splitHint')"
         @click="activeTab = tab.id; paneTabs[currentPane] = tab.id"
+        @dblclick="onTabDoubleClick(tab.id)"
         @contextmenu="onTabContextMenu($event, tab.id)"
         @dragstart="onTabDragStart($event, tab.id)"
         @dragover="onTabDragOver($event, tab.id)"
         @drop="onTabDrop($event, tab.id)"
+        @dragend="onTabDragEnd"
       >
         <span v-if="tab.color" class="ws-tab-color" :style="{ background: tab.color }" />
         <span class="ws-tab-dot" :style="{ background: PROTOCOL_COLORS[tab.protocol] || 'var(--text-muted)' }" />
@@ -548,7 +589,8 @@ useKeyboardShortcuts([
         <div class="tab-ctx-item" @click="closeTabsRight(tabContextMenu.tabId)">{{ t('workspace.closeRight') }}</div>
         <div class="tab-ctx-item" @click="closeAllTabs()">{{ t('workspace.closeAll') }}</div>
         <div class="tab-ctx-separator" />
-        <div v-if="splitCount > 1" class="tab-ctx-item tab-ctx-item--has-sub"
+        <div
+          v-if="splitCount > 1" class="tab-ctx-item tab-ctx-item--has-sub"
           @mouseenter="showMovePane = true"
           @mouseleave="showMovePane = false"
         >
@@ -592,7 +634,15 @@ useKeyboardShortcuts([
           class="ws-split"
         >
           <Pane v-for="i in splitCount" :key="i" :size="100 / splitCount" :min-size="20" @click="currentPane = i - 1">
-            <div class="ws-pane" :class="{ 'ws-pane--active': currentPane === i - 1 }">
+            <div
+              class="ws-pane"
+              :class="{ 'ws-pane--active': currentPane === i - 1, 'ws-pane--drag-over': dragOverPane === i - 1 }"
+              :title="t('workspace.dragHint')"
+              @dragover.prevent="onPaneDragOver($event)"
+              @dragenter.prevent="onPaneDragEnter($event, i - 1)"
+              @dragleave="onPaneDragLeave(i - 1)"
+              @drop="onPaneDrop($event, i - 1)"
+            >
               <div class="ws-pane-header mono">
                 <span>{{ currentPaneTabInfo(i - 1)?.label || t('workspace.noTabOpen') }}</span>
                 <div class="ws-pane-actions">
@@ -636,8 +686,8 @@ useKeyboardShortcuts([
 
               <!-- SQL (MySQL / PostgreSQL / SQLite) -->
               <SqlPage
-                :key="paneTabs[i - 1]"
                 v-else-if="['mysql', 'postgresql', 'sqlite'].includes(currentPaneTabInfo(i - 1)?.protocol || '')"
+                :key="paneTabs[i - 1]"
                 :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
                 :host="currentPaneTabInfo(i - 1)?.host"
                 :port="currentPaneTabInfo(i - 1)?.port"
@@ -650,8 +700,8 @@ useKeyboardShortcuts([
 
               <!-- Redis -->
               <RedisPage
-                :key="paneTabs[i - 1]"
                 v-else-if="currentPaneTabInfo(i - 1)?.protocol === 'redis'"
+                :key="paneTabs[i - 1]"
                 :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
                 :host="currentPaneTabInfo(i - 1)?.host"
                 :port="currentPaneTabInfo(i - 1)?.port"
@@ -660,8 +710,8 @@ useKeyboardShortcuts([
 
               <!-- Files (SFTP / S3) -->
               <FilesPage
-                :key="paneTabs[i - 1]"
                 v-else-if="['sftp', 's3'].includes(currentPaneTabInfo(i - 1)?.protocol || '')"
+                :key="paneTabs[i - 1]"
                 :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
                 :protocol="currentPaneTabInfo(i - 1)?.protocol === 's3' ? 's3' : 'sftp'"
                 :host="currentPaneTabInfo(i - 1)?.host"
@@ -1059,4 +1109,15 @@ useKeyboardShortcuts([
 .tab-ctx-color:hover {
   border-color: var(--text-primary);
 }
+/* Tab dragging feedback */
+.ws-tab--dragging {
+  opacity: 0.5;
+}
+
+/* Pane drag-over highlight */
+.ws-pane--drag-over {
+  outline: 2px solid #E8912D;
+  outline-offset: -2px;
+}
+
 </style>

@@ -159,15 +159,6 @@ function cancelTransfer(item: TransferItem) {
   transfers.value = transfers.value.filter(t => t.id !== item.id)
 }
 
-// Delete
-async function deleteSelected() {
-  if (!sessionId.value) return
-  for (const name of selected.value) {
-    const entry = entries.value.find(e => e.name === name)
-    if (entry) await filesApi.deleteFile(sessionId.value, entry.path)
-  }
-  selected.value.clear(); loadDir()
-}
 
 // Rename
 function startRename(entry: FileEntry) {

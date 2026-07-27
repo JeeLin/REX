@@ -13,7 +13,7 @@ const props = withDefaults(defineProps<{
   placeholder?: string
   disabled?: boolean
   size?: 'sm' | 'md' | 'lg'
-}>(), { modelValue: '', size: 'md', disabled: false })
+}>(), { modelValue: '', placeholder: '', size: 'md', disabled: false })
 
 const emit = defineEmits<{ 'update:modelValue': [value: string | number] }>()
 

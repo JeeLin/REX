@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onClickOutside } from '@vueuse/core'
 import { useSqlNav } from './useSqlNav'
@@ -12,7 +12,7 @@ import GlobalQueryModal from './GlobalQueryModal.vue'
 import AiAssistantDrawer from './AiAssistantDrawer.vue'
 import ImportWizard from './ImportWizard.vue'
 import SqlFormView from './SqlFormView.vue'
-import { useSqlQuery, type ExecuteMode } from './useSqlQuery'
+import { useSqlQuery } from './useSqlQuery'
 import { connect as sqlConnect, disconnect as sqlDisconnect, getDdl, type ConnectRequest, type QueryResult } from '@/api/sql'
 
 const { t } = useI18n()
@@ -98,13 +98,9 @@ onBeforeUnmount(() => {
 /* ---- vertical split (editor / result) ---- */
 const editorHeight = ref(50) // percent
 const vDragging = ref(false)
-let vStartY = 0
-let vStartH = 0
 
-function onVDragStart(e: MouseEvent) {
+function onVDragStart(_e: MouseEvent) {
   vDragging.value = true
-  vStartY = e.clientY
-  vStartH = editorHeight.value
   document.addEventListener('mousemove', onVDragMove)
   document.addEventListener('mouseup', onVDragEnd)
   document.body.style.cursor = 'row-resize'

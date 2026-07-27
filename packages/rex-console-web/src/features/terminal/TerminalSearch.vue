@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount } from 'vue'
-import type { Terminal } from '@xterm/xterm'
+import { ref, watch } from 'vue'
 import { SearchAddon } from '@xterm/addon-search'
 
 const props = defineProps<{

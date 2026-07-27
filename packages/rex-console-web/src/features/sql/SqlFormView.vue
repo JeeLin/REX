@@ -4,17 +4,17 @@ import type { ColumnInfo } from '@/api/sql'
 
 const props = defineProps<{
   columns: ColumnInfo[]
-  rows: any[][]
+  rows: unknown[][]
   currentIndex: number
 }>()
 
 const emit = defineEmits<{
   'update:currentIndex': [index: number]
-  save: [row: any[]]
+  save: [row: unknown[]]
   discard: []
 }>()
 
-const editValues = ref<Record<string, any>>({})
+const editValues = ref<Record<string, unknown>>({})
 const isEditing = ref(false)
 
 // Reset edit values when row changes
@@ -27,7 +27,7 @@ const currentRow = computed(() => props.rows[props.currentIndex] || [])
 const totalRows = computed(() => props.rows.length)
 const hasChanges = computed(() => Object.keys(editValues.value).length > 0)
 
-function getValue(colIndex: number): any {
+function getValue(colIndex: number): unknown {
   const key = `col_${colIndex}`
   if (key in editValues.value) {
     return editValues.value[key]
@@ -35,7 +35,7 @@ function getValue(colIndex: number): any {
   return currentRow.value[colIndex]
 }
 
-function setValue(colIndex: number, value: any) {
+function setValue(colIndex: number, value: unknown) {
   const key = `col_${colIndex}`
   const original = currentRow.value[colIndex]
   if (value === original || (value === '' && original === null)) {
@@ -46,7 +46,7 @@ function setValue(colIndex: number, value: any) {
   isEditing.value = true
 }
 
-function formatValue(value: any): string {
+function formatValue(value: unknown): string {
   if (value === null || value === undefined) return 'NULL'
   if (typeof value === 'object') return JSON.stringify(value)
   return String(value)

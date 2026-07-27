@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onClickOutside } from '@vueuse/core'
 import * as redisApi from '@/api/redis'
-import type { DbInfo, FormatInfo, KeyInfo, RedisStringValue, RedisValue } from '@/api/redis'
+import type { DbInfo, KeyInfo, RedisStringValue, RedisValue } from '@/api/redis'
 import FormatViewer from './FormatViewer.vue'
 import Toast from '@/components/ui/Toast.vue'
 
@@ -229,14 +229,6 @@ async function loadKeys() {
   finally { keyLoading.value = false }
 }
 
-function toggleKey(key: string) {
-  if (selectedKeys.value.has(key)) {
-    selectedKeys.value.delete(key)
-  } else {
-    selectedKeys.value.add(key)
-  }
-  selectedKeys.value = new Set(selectedKeys.value)
-}
 
 // Value viewer
 const selectedKey = ref<string | null>(null)
@@ -784,14 +776,14 @@ async function flushDb() {
       <!-- DB selector -->
       <div class="redis-dbs">
         <div
-          v-for="db in databases"
-          :key="db.index"
+          v-for="dbItem in databases"
+          :key="dbItem.index"
           class="redis-db-item"
-          :class="{ 'redis-db-item--active': db.index === currentDb }"
-          @click="switchDb(db.index)"
+          :class="{ 'redis-db-item--active': dbItem.index === currentDb }"
+          @click="switchDb(dbItem.index)"
         >
-          <span class="redis-db-name">db{{ db.index }}</span>
-          <span class="redis-db-count">{{ db.keys }}</span>
+          <span class="redis-db-name">db{{ dbItem.index }}</span>
+          <span class="redis-db-count">{{ dbItem.keys }}</span>
         </div>
       </div>
 

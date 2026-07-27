@@ -5,7 +5,7 @@ withDefaults(defineProps<{
   src?: string
   size?: 'sm' | 'md' | 'lg'
   fallback?: string
-}>(), { size: 'md', fallback: '?' })
+}>(), { src: '', size: 'md', fallback: '?' })
 
 const imgError = ref(false)
 </script>

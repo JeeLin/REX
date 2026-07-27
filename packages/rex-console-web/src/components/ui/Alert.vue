@@ -5,7 +5,7 @@ withDefaults(defineProps<{
   type?: 'info' | 'success' | 'warning' | 'error'
   title?: string
   closable?: boolean
-}>(), { type: 'info', closable: false })
+}>(), { type: 'info', title: '', closable: false })
 
 const visible = ref(true)
 </script>

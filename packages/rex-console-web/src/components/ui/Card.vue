@@ -1,5 +1,5 @@
 <script setup lang="ts">
-withDefaults(defineProps<{ title?: string; padded?: boolean; hoverable?: boolean }>(), { padded: true, hoverable: false })
+withDefaults(defineProps<{ title?: string; padded?: boolean; hoverable?: boolean }>(), { title: '', padded: true, hoverable: false })
 </script>
 
 <template>

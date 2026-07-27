@@ -266,17 +266,23 @@ function ctxDelete() {
           class="rp-tab mono"
           :class="{ 'rp-tab--active': activeTab === 'connections' }"
           @click="activeTab = 'connections'"
-        >🔗 {{ t('sidebar.connections') }}</button>
+        >
+          🔗 {{ t('sidebar.connections') }}
+        </button>
         <button
           class="rp-tab mono"
           :class="{ 'rp-tab--active': activeTab === 'favorites' }"
           @click="activeTab = 'favorites'"
-        >⭐ {{ t('sidebar.favorites') }}</button>
+        >
+          ⭐ {{ t('sidebar.favorites') }}
+        </button>
         <button
           class="rp-tab mono"
           :class="{ 'rp-tab--active': activeTab === 'recent' }"
           @click="activeTab = 'recent'"
-        >🕐 {{ t('sidebar.recent') }}</button>
+        >
+          🕐 {{ t('sidebar.recent') }}
+        </button>
       </div>
     </div>
 
@@ -344,9 +350,11 @@ function ctxDelete() {
             <button
               class="rp-star-btn"
               :class="{ 'rp-star--active': favStore.isFavorite(res.id) }"
-              :title="favStore.isFavorite(res.id) ? t('sidebar.favorites') : t('sidebar.favorites')"
+              :title="favStore.isFavorite(res.id) ? t('sidebar.unfavorite') : t('sidebar.favorites')"
               @click.stop="favStore.toggleFavorite(res.id)"
-            >{{ favStore.isFavorite(res.id) ? '★' : '☆' }}</button>
+            >
+              {{ favStore.isFavorite(res.id) ? '★' : '☆' }}
+            </button>
           </div>
           <div v-if="getResources(env.id).length === 0" class="rp-item rp-empty-item muted">
             {{ t('resourcePanel.noResources') }}
@@ -376,7 +384,9 @@ function ctxDelete() {
           class="rp-star-btn rp-star--active"
           :title="t('sidebar.favorites')"
           @click.stop="favStore.toggleFavorite(res.id)"
-        >★</button>
+        >
+          ★
+        </button>
       </div>
     </div>
 

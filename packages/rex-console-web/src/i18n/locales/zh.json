@@ -437,6 +437,7 @@
     "connections": "连接",
     "delete": "删除",
     "favorites": "收藏",
+    "unfavorite": "取消收藏",
     "noFavorites": "暂无收藏",
     "noMatch": "无匹配资源",
     "noRecent": "暂无最近使用",

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { executeQuery } from '@/api/sql'
 
 const props = defineProps<{
@@ -22,7 +22,7 @@ const format = ref<ImportFormat>('csv')
 const delimiter = ref(',')
 const hasHeader = ref(true)
 const skipDuplicates = ref(true)
-const previewData = ref<any[]>([])
+const previewData = ref<Record<string, string>[]>([])
 const previewColumns = ref<string[]>([])
 const importing = ref(false)
 const importResult = ref<{ success: number; failed: number; errors: string[] } | null>(null)
@@ -77,7 +77,7 @@ function parsePreview(content: string) {
       previewColumns.value = firstLine.split(delimiter.value).map((c) => c.trim())
       previewData.value = lines.slice(1, 6).map((line) => {
         const values = line.split(delimiter.value)
-        const row: any = {}
+        const row: Record<string, string> = {}
         previewColumns.value.forEach((col, i) => {
           row[col] = values[i]?.trim() || ''
         })
@@ -88,7 +88,7 @@ function parsePreview(content: string) {
       previewColumns.value = firstLineParts.map((_, i) => `Column ${i + 1}`)
       previewData.value = lines.slice(0, 5).map((line) => {
         const values = line.split(delimiter.value)
-        const row: any = {}
+        const row: Record<string, string> = {}
         previewColumns.value.forEach((col, i) => {
           row[col] = values[i]?.trim() || ''
         })

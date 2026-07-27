@@ -16,12 +16,6 @@ const KEYWORDS = [
   'ASC', 'DESC', 'TOP', 'INTO',
 ]
 
-const INDENT_KEYWORDS = [
-  'SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'ON', 'JOIN', 'LEFT', 'RIGHT',
-  'INNER', 'OUTER', 'CROSS', 'FULL', 'GROUP BY', 'ORDER BY', 'HAVING',
-  'LIMIT', 'OFFSET', 'VALUES', 'SET', 'INTO',
-]
-
 export function formatSql(sql: string): string {
   if (!sql || !sql.trim()) return sql
 

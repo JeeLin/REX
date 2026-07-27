@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
 import { environmentsApi } from '@/api/environments'
-import type { ExportData } from '@/api/environments'
+import type { ExportData, Environment } from '@/api/environments'
 import Card from '@/components/ui/Card.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
@@ -25,9 +25,9 @@ const formMode = ref('direct')
 const formError = ref('')
 const formLoading = ref(false)
 const deleteConfirmId = ref<string | null>(null)
-const ctxMenu = ref<{ show: boolean; x: number; y: number; env: any }>({ show: false, x: 0, y: 0, env: null })
+const ctxMenu = ref<{ show: boolean; x: number; y: number; env: Environment | null }>({ show: false, x: 0, y: 0, env: null })
 
-function onContextMenu(e: MouseEvent, env: any) {
+function onContextMenu(e: MouseEvent, env: Environment) {
   e.preventDefault()
   ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, env }
 }
@@ -257,9 +257,9 @@ async function handleImport(event: Event) {
     <!-- Context Menu -->
     <div v-if="ctxMenu.show" class="ctx-overlay" @click="closeCtxMenu" @contextmenu.prevent="closeCtxMenu" />
     <div v-if="ctxMenu.show" class="env-ctx-menu" :style="{ top: ctxMenu.y + 'px', left: ctxMenu.x + 'px' }">
-      <div class="ctx-item" @click="router.push(`/environments/${ctxMenu.env.id}`); closeCtxMenu()">✏ {{ t('environments.edit') }}</div>
-      <div class="ctx-item" @click="router.push(`/environments/${ctxMenu.env.id}?action=newResource`); closeCtxMenu()">➕ {{ t('environments.newResource') }}</div>
-      <div class="ctx-item ctx-item--danger" @click="deleteConfirmId = ctxMenu.env.id; closeCtxMenu()">🗑 {{ t('environments.delete') }}</div>
+      <div class="ctx-item" @click="router.push(`/environments/${ctxMenu.env!.id}`); closeCtxMenu()">✏ {{ t('environments.edit') }}</div>
+      <div class="ctx-item" @click="router.push(`/environments/${ctxMenu.env!.id}?action=newResource`); closeCtxMenu()">➕ {{ t('environments.newResource') }}</div>
+      <div class="ctx-item ctx-item--danger" @click="deleteConfirmId = ctxMenu.env!.id; closeCtxMenu()">🗑 {{ t('environments.delete') }}</div>
     </div>
   </div>
 </template>

@@ -152,9 +152,6 @@ async function executeDelete() {
 function cancelDelete() { showDeleteConfirm.value = false; pendingDelete.value = null }
 function confirmCtxDelete() { pendingCtxDelete.value = true; showDeleteConfirm.value = true; pendingDelete.value = { side: 'left', names: [ctx.value.name] } }
 
-async function deleteSelected(side: Side) {
-  confirmDelete(side)
-}
 async function downloadSelected(side: Side) {
   if (!sessionId.value || panels[side].selected.size !== 1) return
   const name = Array.from(panels[side].selected)[0]; const entry = panels[side].entries.find(e => e.name === name)

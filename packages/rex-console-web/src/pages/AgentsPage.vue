@@ -326,7 +326,7 @@ const filteredLogs = computed(() => {
           <div class="config-row">
             <span class="config-label muted">{{ t('agents.configAutoUpdate') }}</span>
             <label class="toggle">
-              <input type="checkbox" v-model="configAutoUpdate" />
+              <input v-model="configAutoUpdate" type="checkbox" />
               <span class="toggle-slider"></span>
             </label>
           </div>

@@ -27,7 +27,6 @@ const env = ref<Environment | null>(null)
 const resources = ref<Resource[]>([])
 const loading = ref(true)
 const showWizard = ref(false)
-const deleteConfirmId = ref<string | null>(null)
 const editModal = ref(false)
 const editName = ref('')
 const editDesc = ref('')
@@ -362,7 +361,6 @@ function confirmDeleteResource() {
         </div>
       </form>
     </Modal>
-
   </div>
 </template>
 

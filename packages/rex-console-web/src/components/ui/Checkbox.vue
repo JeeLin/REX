@@ -3,7 +3,7 @@ withDefaults(defineProps<{
   modelValue?: boolean
   label?: string
   disabled?: boolean
-}>(), { modelValue: false, disabled: false })
+}>(), { modelValue: false, label: '', disabled: false })
 
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 </script>

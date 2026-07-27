@@ -10,7 +10,7 @@ const props = withDefaults(
     error?: string
     size?: 'sm' | 'md' | 'lg'
   }>(),
-  { modelValue: '', size: 'md', disabled: false, clearable: false },
+  { modelValue: '', placeholder: '', size: 'md', disabled: false, clearable: false, error: '' },
 )
 
 const emit = defineEmits<{
