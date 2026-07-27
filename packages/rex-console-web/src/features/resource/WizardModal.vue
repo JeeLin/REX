@@ -96,7 +96,7 @@ const stepError = ref('')
 
 function validateStep(): boolean {
   stepError.value = ''
-  if (step.value === 2 && selectedProtocol.value !== 'sqlite') {
+  if (step.value === 2 && !['sqlite', 's3'].includes(selectedProtocol.value)) {
     if (!host.value.trim()) {
       stepError.value = t('wizard.hostRequired')
       return false
