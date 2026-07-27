@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::AppState;
+use crate::resource_conn::load_resource_config;
 use axum::extract::{Multipart, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -74,8 +75,7 @@ pub fn file_routes() -> axum::Router<AppState> {
 
 #[derive(Debug, Deserialize)]
 struct ConnectBody {
-    #[serde(flatten)]
-    req: FileConnectRequest,
+    resource_id: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -151,16 +151,21 @@ async fn connect(
     State(state): State<AppState>,
     Json(body): Json<ConnectBody>,
 ) -> axum::response::Response {
-    let req = body.req;
-    let conn: Box<dyn FileConnector> = match req.protocol.as_str() {
+    // 从 DB 加载资源连接信息
+    let res = match load_resource_config(&state, &body.resource_id) {
+        Ok(r) => r,
+        Err(e) => return error_response("INVALID_RESOURCE", &e).into_response(),
+    };
+
+    let conn: Box<dyn FileConnector> = match res.protocol.as_str() {
         "sftp" => {
             let conn = rex_ssh::sftp::SftpConnector::connect_with_config(rex_ssh::SshConfig {
-                host: req.host,
-                port: req.port,
-                username: req.username.unwrap_or_default(),
-                password: req.password,
-                private_key: req.private_key,
-                keepalive_interval: req.keepalive_interval,
+                host: res.host.clone(),
+                port: res.port.unwrap_or(22),
+                username: res.username.clone(),
+                password: res.config.get("password").and_then(|v| v.as_str()).map(String::from),
+                private_key: res.config.get("private_key").and_then(|v| v.as_str()).map(String::from),
+                keepalive_interval: res.config.get("keepalive_interval").and_then(|v| v.as_u64()).map(|v| v as u32),
             })
             .await;
             match conn {
@@ -171,6 +176,20 @@ async fn connect(
             }
         }
         "s3" => {
+            let req = FileConnectRequest {
+                protocol: "s3".to_string(),
+                host: res.host.clone(),
+                port: res.port.unwrap_or(443),
+                username: None,
+                password: None,
+                private_key: None,
+                keepalive_interval: None,
+                bucket: res.config.get("bucket").and_then(|v| v.as_str()).map(String::from),
+                region: res.config.get("region").and_then(|v| v.as_str()).map(String::from),
+                endpoint: res.config.get("endpoint").and_then(|v| v.as_str()).map(String::from),
+                access_key: res.config.get("access_key").and_then(|v| v.as_str()).map(String::from),
+                secret_key: res.config.get("secret_key").and_then(|v| v.as_str()).map(String::from),
+            };
             let conn = rex_s3::S3Connector::connect_from_request(&req).await;
             match conn {
                 Ok(c) => Box::new(c),
@@ -191,15 +210,16 @@ async fn connect(
     tracing::info!(
         action = "FILE_CONNECT",
         session_id = %session_id,
-        protocol = %req.protocol,
+        resource_id = %body.resource_id,
+        protocol = %res.protocol,
         "file session connected"
     );
     let audit_db = state.db.clone();
-    let audit_session_id = session_id.clone();
+    let audit_target = body.resource_id.clone();
     let _ = tokio::task::spawn_blocking(move || {
         audit_db.write_audit_log(&crate::models::NewAuditEntry {
             action: "FILE_CONNECT".into(),
-            target: Some(audit_session_id),
+            target: Some(audit_target),
             result: "success".into(),
             ..Default::default()
         })
