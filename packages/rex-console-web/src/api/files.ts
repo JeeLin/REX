@@ -16,14 +16,10 @@ export interface FileEntry {
   acl?: string | null
 }
 
-export async function connect(req: {
-  protocol: string; host: string; port: number; username?: string;
-  password?: string; private_key?: string; bucket?: string; region?: string;
-  endpoint?: string; access_key?: string; secret_key?: string;
-}): Promise<string> {
+export async function connect(resourceId: string): Promise<string> {
   const res = await fetch(`${API_BASE}/connect`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify(req),
+    body: JSON.stringify({ resource_id: resourceId }),
   })
   if (!res.ok) throw new Error((await res.json()).error?.message || 'Connection failed')
   return (await res.json()).session_id

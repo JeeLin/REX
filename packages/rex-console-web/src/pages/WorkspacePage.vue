@@ -568,7 +568,7 @@ useKeyboardShortcuts([
         <StatusDot :status="statusColor(tab.status)" style="margin-left: 4px" />
         <button class="ws-tab-close" @click.stop="closeTab(tab.id)">×</button>
       </div>
-      <button class="ws-tab-add" title="New connection (Ctrl+T)">+</button>
+      <button class="ws-tab-add" title="New connection (Ctrl+T)" @click="showQuickConnect = true">+</button>
     </div>
 
     <!-- Tab context menu -->
@@ -676,12 +676,7 @@ useKeyboardShortcuts([
                   <div class="ws-sftp-drag-handle" @mousedown.prevent="startSftpDrag" />
                   <FilesDrawer
                     :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
-                    :host="currentPaneTabInfo(i - 1)?.host"
-                    :port="currentPaneTabInfo(i - 1)?.port"
-                    :username="currentPaneTabInfo(i - 1)?.username"
-                    :password="currentPaneTabInfo(i - 1)?.password"
                   />
-                </div>
               </div>
 
               <!-- SQL (MySQL / PostgreSQL / SQLite) -->
@@ -689,13 +684,8 @@ useKeyboardShortcuts([
                 v-else-if="['mysql', 'postgresql', 'sqlite'].includes(currentPaneTabInfo(i - 1)?.protocol || '')"
                 :key="paneTabs[i - 1]"
                 :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
-                :host="currentPaneTabInfo(i - 1)?.host"
-                :port="currentPaneTabInfo(i - 1)?.port"
-                :username="currentPaneTabInfo(i - 1)?.username"
-                :password="currentPaneTabInfo(i - 1)?.password"
-                :database="currentPaneTabInfo(i - 1)?.database"
                 :db-type="currentPaneTabInfo(i - 1)?.protocol"
-                :protocol="currentPaneTabInfo(i - 1)?.protocol"
+                @update:status="onTabStatusChange(paneTabs[i - 1]!, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
               />
 
               <!-- Redis -->

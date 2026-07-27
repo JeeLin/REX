@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onClickOutside } from '@vueuse/core'
 import { useSqlNav } from './useSqlNav'
@@ -16,36 +16,62 @@ import { useSqlQuery } from './useSqlQuery'
 import { connect as sqlConnect, disconnect as sqlDisconnect, getDdl, type ConnectRequest, type QueryResult } from '@/api/sql'
 
 const { t } = useI18n()
+const emit = defineEmits<{
+  'update:status': [status: string]
+}>()
+
 const props = defineProps<{
   resourceId?: string
-  host?: string
-  port?: number
-  username?: string
-  password?: string
-  database?: string
   dbType?: string
-  protocol?: string
 }>()
 
 const sessionId = ref<string | null>(null)
 const connectError = ref<string | null>(null)
+const connectionStatus = ref<'idle' | 'connecting' | 'connected' | 'error'>('idle')
+
+watch(connectionStatus, (s) => {
+  const dotStatus = s === 'connected' ? 'online' : s === 'connecting' ? 'connecting' : s === 'error' ? 'error' : 'offline'
+  emit('update:status', dotStatus)
+})
+
 const { databases, loading, searchQuery, loadDatabases } = useSqlNav(sessionId)
 
 // Auto-connect on mount if props provided
 onMounted(async () => {
-  if (props.host) {
+  if (props.resourceId) {
+    connectionStatus.value = 'connecting'
     try {
       const req: ConnectRequest = {
-        type: props.dbType || props.protocol || 'mysql',
-        host: props.host,
-        port: props.port || 3306,
-        username: props.username || 'root',
-        password: props.password,
-        database: props.database,
-        resource_id: props.resourceId,
+        type: props.dbType || 'mysql',
+        resource_id: props.resourceId
       }
       sessionId.value = await sqlConnect(req)
+      connectionStatus.value = 'connected'
+      await loadDatabases()
     } catch (e: unknown) {
+      connectionStatus.value = 'error'
+      connectError.value = e instanceof Error ? e.message : String(e)
+    }
+  }
+})
+
+watch(() => props.resourceId, async () => {
+  if (props.resourceId) {
+    sessionId.value = null
+    connectError.value = null
+    connectionStatus.value = 'idle'
+    databases.value = []
+    connectionStatus.value = 'connecting'
+    try {
+      const req: ConnectRequest = {
+        type: props.dbType || 'mysql',
+        resource_id: props.resourceId
+      }
+      sessionId.value = await sqlConnect(req)
+      connectionStatus.value = 'connected'
+      await loadDatabases()
+    } catch (e: unknown) {
+      connectionStatus.value = 'error'
       connectError.value = e instanceof Error ? e.message : String(e)
     }
   }

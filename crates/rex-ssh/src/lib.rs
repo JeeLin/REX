@@ -47,11 +47,11 @@ impl SshSession {
 
         // SSH 客户端配置
         let mut ssh_config = client::Config::default();
-        if let Some(interval) = config.keepalive_interval {
-            if interval > 0 {
-                ssh_config.keepalive_interval =
-                    Some(std::time::Duration::from_secs(interval as u64));
-            }
+        // Default keepalive: 60s if not specified
+        let keepalive = config.keepalive_interval.unwrap_or(60);
+        if keepalive > 0 {
+            ssh_config.keepalive_interval =
+                Some(std::time::Duration::from_secs(keepalive as u64));
         }
         let ssh_config = Arc::new(ssh_config);
 

@@ -34,7 +34,14 @@ const emit = defineEmits<{
   'terminal-resize': [cols: number, rows: number]
   'toggle-sftp': []
   'encoding-change': [encoding: string]
+  'update:status': [status: string]
 }>()
+
+// Sync terminal status to parent (WorkspacePage tab status)
+watch(status, (s) => {
+  const dotStatus = s === 'connected' ? 'online' : s === 'connecting' ? 'connecting' : s === 'error' ? 'error' : 'offline'
+  emit('update:status', dotStatus)
+})
 
 const containerRef = ref<HTMLDivElement>()
 const { terminal, status, errorMessage, createTerminal, connect, disconnect, fit, dispose } =
@@ -301,7 +308,7 @@ function handleOpenSftp() {
 }
 
 .tv-container :deep(.xterm) {
-  padding: 4px 0;
+  padding: 0;
 }
 
 .tv-overlay {

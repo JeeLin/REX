@@ -6,10 +6,6 @@ import type { FileEntry } from '@/api/files'
 
 const props = defineProps<{
   resourceId?: string
-  host?: string
-  port?: number
-  username?: string
-  password?: string
 }>()
 
 // Connection
@@ -49,18 +45,18 @@ onMounted(async () => {
   if (props.host) await doConnect()
 })
 
-watch(() => props.host, async () => {
-  if (props.host && !connected.value) await doConnect()
+onMounted(async () => {
+  if (props.resourceId) await doConnect()
 })
 
+watch(() => props.resourceId, async () => {
+  if (props.resourceId && !connected.value) await doConnect()
+})
 async function doConnect() {
-  if (!props.host) return
+  if (!props.resourceId) return
   loading.value = true; error.value = ''
   try {
-    sessionId.value = await filesApi.connect({
-      protocol: 'sftp', host: props.host, port: props.port || 22,
-      username: props.username, password: props.password,
-    })
+    sessionId.value = await filesApi.connect(props.resourceId)
     connected.value = true
     await loadDir()
   } catch (e: unknown) {
