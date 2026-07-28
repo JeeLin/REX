@@ -240,6 +240,13 @@ function ctxDelete() {
   ctxMenu.value.show = false
   store.deleteResource(res.environment_id, res.id)
 }
+
+function ctxToggleFavorite() {
+  const res = ctxMenu.value.resource
+  if (!res) return
+  favStore.toggleFavorite(res.id)
+  ctxMenu.value.show = false
+}
 </script>
 
 <template>
@@ -423,6 +430,10 @@ function ctxDelete() {
       <div v-if="ctxMenu.show" class="rp-ctx-overlay" @click="ctxMenu.show = false" @contextmenu.prevent="ctxMenu.show = false" />
       <div v-if="ctxMenu.show" ref="ctxMenuRef" class="rp-ctx-menu" :style="{ top: ctxMenu.y + 'px', left: ctxMenu.x + 'px' }">
         <div class="rp-ctx-item" @click="ctxOpen">🚀 {{ t('sidebar.openResource') }}</div>
+        <div class="rp-ctx-item" @click="ctxToggleFavorite">
+          {{ ctxMenu.resource && favStore.isFavorite(ctxMenu.resource.id) ? '★' : '☆' }}
+          {{ ctxMenu.resource && favStore.isFavorite(ctxMenu.resource.id) ? t('sidebar.unfavorite') : t('sidebar.favorites') }}
+        </div>
         <div class="rp-ctx-item" @click="ctxProperties">✏️ {{ t('sidebar.properties') }}</div>
         <div class="rp-ctx-item rp-ctx-item--danger" @click="ctxDelete">🗑 {{ t('sidebar.delete') }}</div>
       </div>
