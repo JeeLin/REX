@@ -6,7 +6,8 @@ use rex_common::redis::{
     DbInfo, FormatInfo, KeyInfo, KeyspaceInfo, RedisConnectRequest, RedisConnector, RedisInfo,
     RedisValue,
 };
-use rex_common::redis_codec;
+
+pub mod redis_codec;
 
 /// Redis 连接器
 pub struct RedisConnectorImpl {
