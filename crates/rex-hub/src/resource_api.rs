@@ -252,10 +252,19 @@ pub struct TestConnectionResult {
 pub async fn test_connection(
     Json(body): Json<TestConnectionRequest>,
 ) -> ApiResult<TestConnectionResult> {
+    // For S3, log endpoint from config_json instead of empty host
+    let log_host = if body.protocol == "s3" {
+        body.config_json.as_ref()
+            .and_then(|c| serde_json::from_str::<serde_json::Value>(c).ok())
+            .and_then(|v| v.get("endpoint")?.as_str().map(String::from))
+            .unwrap_or_default()
+    } else {
+        body.host.clone()
+    };
     tracing::info!(
         action = "TEST_CONNECTION",
         protocol = %body.protocol,
-        host = %body.host,
+        host = %log_host,
         port = body.port.unwrap_or(0),
         "testing connection"
     );
