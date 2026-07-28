@@ -121,10 +121,6 @@ watch(() => props.visible, (v) => {
 
 <style scoped>
 .terminal-search {
-  position: absolute;
-  top: 0;
-  right: var(--space-3);
-  z-index: 20;
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -134,6 +130,7 @@ watch(() => props.visible, (v) => {
   border-top: none;
   border-radius: 0 0 var(--radius) var(--radius);
   box-shadow: var(--shadow);
+  margin: 0 var(--space-3);
 }
 
 .ts-input {
