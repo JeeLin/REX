@@ -57,6 +57,14 @@ onMounted(async () => {
 
 watch(() => props.resourceId, async () => {
   if (props.resourceId) {
+    // Disconnect old session if exists
+    if (sessionId.value) {
+      try {
+        await sqlDisconnect(sessionId.value)
+      } catch {
+        // ignore disconnect errors
+      }
+    }
     sessionId.value = null
     connectError.value = null
     connectionStatus.value = 'idle'

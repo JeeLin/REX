@@ -9,12 +9,7 @@ function authHeaders(): Record<string, string> {
 
 export interface ConnectRequest {
   type: string
-  host: string
-  port: number
-  username: string
-  password?: string
-  database?: string
-  resource_id?: string
+  resource_id: string
 }
 
 export interface TableInfo {

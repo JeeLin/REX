@@ -41,9 +41,6 @@ const renaming = ref<{ name: string; value: string } | null>(null)
 const newFolderName = ref('')
 const showNewFolder = ref(false)
 
-onMounted(async () => {
-  if (props.host) await doConnect()
-})
 
 onMounted(async () => {
   if (props.resourceId) await doConnect()
@@ -66,9 +63,10 @@ async function doConnect() {
 
 async function loadDir() {
   if (!sessionId.value) return
-  loading.value = true
+  error.value = ''; loading.value = true
   try { entries.value = await filesApi.listFiles(sessionId.value, currentPath.value) }
-  catch { entries.value = [] } finally { loading.value = false }
+  catch (e: unknown) { entries.value = []; error.value = e instanceof Error ? e.message : String(e) }
+  finally { loading.value = false }
 }
 
 function navigate(entry: FileEntry) {
@@ -328,7 +326,7 @@ onBeforeUnmount(async () => {
 </template>
 
 <style scoped>
-.fd { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.fd { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 
 .fd-toolbar {
   display: flex; align-items: center; justify-content: space-between;

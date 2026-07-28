@@ -32,11 +32,6 @@ interface Tab {
   environmentId?: string
   connectionMode?: string
   agentId?: string
-  host?: string
-  port?: number
-  username?: string
-  password?: string
-  database?: string
   status: 'connecting' | 'connected' | 'disconnected' | 'error'
   color?: string
   renaming?: boolean
@@ -129,9 +124,7 @@ function onSftpDragEnd() {
 
 function formatConnection(tab: Tab): string {
   const proto = tab.protocol.toUpperCase()
-  const host = tab.host || '—'
-  const port = tab.port || (tab.protocol === 'ssh' ? 22 : tab.protocol === 'mysql' ? 3306 : tab.protocol === 'redis' ? 6379 : 5432)
-  return `${proto} ${host}:${port}`
+  return proto
 }
 
 function onTerminalResize(cols: number, rows: number) {
@@ -164,19 +157,16 @@ function syncPanes() {
 watch(activeTab, syncPanes)
 watch(splitCount, syncPanes)
 
-
 function openResourceFromTree(node: {
   id: string
   name: string
   protocol?: string
-  host?: string
-  port?: number
-  username?: string
   environmentId?: string
 }) {
-  // 去重：相同 resourceId 不重复打开
+  // 去重：相同 resourceId + protocol 不重复打开
   const resourceId = node.id
-  const existing = tabs.value.find(t => t.resourceId === resourceId)
+  const protocol = (node.protocol || 'ssh') as Tab['protocol']
+  const existing = tabs.value.find(t => t.resourceId === resourceId && t.protocol === protocol)
   if (existing) {
     activeTab.value = existing.id
     paneTabs.value[currentPane.value] = existing.id
@@ -184,16 +174,12 @@ function openResourceFromTree(node: {
   }
 
   const id = `tab-${Date.now()}`
-  const protocol = (node.protocol || 'ssh') as Tab['protocol']
   tabs.value.push({
     id,
     label: node.name,
     protocol,
     resourceId,
     environmentId: node.environmentId,
-    host: node.host,
-    port: node.port,
-    username: node.username,
     status: 'connecting',
   })
   activeTab.value = id
@@ -390,9 +376,9 @@ const propsResource = computed(() => {
   return {
     name: tab.label,
     protocol: tab.protocol,
-    host: tab.host || '',
-    port: tab.port?.toString() || '',
-    user: tab.username || '',
+    host: '',
+    port: '',
+    user: '',
     password: '',
     privateKey: '',
     passphrase: '',
@@ -658,8 +644,6 @@ useKeyboardShortcuts([
                   :key="paneTabs[i - 1]"
                   :tab-id="paneTabs[i - 1]!"
                   :resource-id="currentPaneTabInfo(i - 1)?.resourceId || ''"
-                  :host="currentPaneTabInfo(i - 1)?.host"
-                  :port="currentPaneTabInfo(i - 1)?.port"
                   :protocol="currentPaneTabInfo(i - 1)?.protocol"
                   :theme="currentPaneTabInfo(i - 1)?.theme"
                   :font-size="currentPaneTabInfo(i - 1)?.fontSize"
@@ -678,6 +662,7 @@ useKeyboardShortcuts([
                     :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
                   />
               </div>
+              </div>
 
               <!-- SQL (MySQL / PostgreSQL / SQLite) -->
               <SqlPage
@@ -693,9 +678,7 @@ useKeyboardShortcuts([
                 v-else-if="currentPaneTabInfo(i - 1)?.protocol === 'redis'"
                 :key="paneTabs[i - 1]"
                 :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
-                :host="currentPaneTabInfo(i - 1)?.host"
-                :port="currentPaneTabInfo(i - 1)?.port"
-                :password="currentPaneTabInfo(i - 1)?.password"
+                @update:status="onTabStatusChange(paneTabs[i - 1]!, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
               />
 
               <!-- Files (SFTP / S3) -->
@@ -704,10 +687,7 @@ useKeyboardShortcuts([
                 :key="paneTabs[i - 1]"
                 :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
                 :protocol="currentPaneTabInfo(i - 1)?.protocol === 's3' ? 's3' : 'sftp'"
-                :host="currentPaneTabInfo(i - 1)?.host"
-                :port="currentPaneTabInfo(i - 1)?.port"
-                :username="currentPaneTabInfo(i - 1)?.username"
-                :password="currentPaneTabInfo(i - 1)?.password"
+                @update:status="onTabStatusChange(paneTabs[i - 1]!, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
               />
 
               <!-- Empty state -->
@@ -858,6 +838,7 @@ useKeyboardShortcuts([
 /* Main area */
 .ws-main-area {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -921,11 +902,11 @@ useKeyboardShortcuts([
   color: var(--accent);
 }
 
-/* SSH Tab + SFTP drawer */
 .ws-ssh-area {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  height: 100%;
   overflow: hidden;
 }
 .ws-sftp-drawer {

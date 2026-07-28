@@ -9,23 +9,21 @@ import Toast from '@/components/ui/Toast.vue'
 
 const props = defineProps<{
   resourceId?: string
-  host?: string
-  port?: number
-  password?: string
-  db?: number
+}>()
+
+const emit = defineEmits<{
+  'update:status': [status: string]
 }>()
 
 const sessionId = ref<string | null>(null)
 const connecting = ref(false)
 const connectError = ref('')
+const connectionStatus = ref<'idle' | 'connecting' | 'connected' | 'error' | 'disconnected'>('idle')
 const { t } = useI18n()
 const toast = ref<InstanceType<typeof Toast> | null>(null)
 
 // Connection form
-const connHost = ref(props.host || '127.0.0.1')
-const connPort = ref(props.port || 6379)
-const connPassword = ref(props.password || '')
-const showConnect = ref(!props.host)
+const showConnect = ref(!props.resourceId)
 
 // Connection management
 interface Connection {
@@ -44,22 +42,31 @@ const deletingConnection = ref<Connection | null>(null)
 
 // Auto-connect on mount if props provided
 onMounted(async () => {
-  if (props.host) {
+  if (props.resourceId) {
     await doConnect()
   }
 })
 
 async function doConnect() {
+  if (!props.resourceId) return
   connecting.value = true
   connectError.value = ''
   try {
-    sessionId.value = await redisApi.connect(connHost.value, connPort.value, connPassword.value || undefined)
+    sessionId.value = await redisApi.connect(props.resourceId)
     showConnect.value = false
     await loadDatabases()
+    connectionStatus.value = 'connected'
+    emit('update:status', 'online')
   } catch (e: unknown) {
     connectError.value = e instanceof Error ? e.message : String(e)
+    connectionStatus.value = 'error'
+    emit('update:status', 'error')
   } finally {
     connecting.value = false
+    if (!sessionId.value) {
+      connectionStatus.value = 'disconnected'
+      emit('update:status', 'offline')
+    }
   }
 }
 
@@ -682,22 +689,9 @@ async function flushDb() {
     <div v-if="showConnect" class="redis-connect-overlay">
       <div class="redis-connect-dialog">
         <h3 class="dialog-title">{{ t('redis.connect') }}</h3>
-        <div class="dialog-field">
-          <label>{{ t('redis.host') }}</label>
-          <input v-model="connHost" class="mono" placeholder="127.0.0.1" />
-        </div>
-        <div class="dialog-field">
-          <label>{{ t('redis.port') }}</label>
-          <input v-model.number="connPort" class="mono" type="number" placeholder="6379" />
-        </div>
-        <div class="dialog-field">
-          <label>{{ t('redis.password') }}</label>
-          <input v-model="connPassword" class="mono" type="password" :placeholder="t('redis.optional')" />
-        </div>
-        <div v-if="connectError" class="dialog-error">{{ connectError }}</div>
-        <button class="btn-primary" :disabled="connecting" @click="doConnect">
-          {{ connecting ? 'Connecting...' : 'Connect' }}
-        </button>
+        <p style="color: var(--text-secondary); margin-bottom: 12px;">
+          {{ t('redis.connect_via_workspace') }}
+        </p>
       </div>
     </div>
 
@@ -762,7 +756,7 @@ async function flushDb() {
           v-for="conn in connections"
           :key="conn.id"
           class="redis-conn-item"
-          :class="{ 'redis-conn-item--active': connHost === conn.host && connPort === conn.port }"
+          :class="{ 'redis-conn-item--active': false }"
         >
           <span class="redis-conn-name">{{ conn.name }}</span>
           <div class="redis-conn-actions">

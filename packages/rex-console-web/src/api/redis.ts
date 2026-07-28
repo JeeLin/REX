@@ -43,11 +43,11 @@ export interface RedisValue {
   value: unknown
 }
 
-export async function connect(host: string, port: number, password?: string, db?: number): Promise<string> {
+export async function connect(resourceId: string): Promise<string> {
   const res = await fetch(`${API_BASE}/connect`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ host, port, password, db }),
+    body: JSON.stringify({ resource_id: resourceId }),
   })
   if (!res.ok) throw new Error((await res.json()).error?.message || 'Connection failed')
   return (await res.json()).session_id

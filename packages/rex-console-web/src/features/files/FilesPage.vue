@@ -13,54 +13,39 @@ const { t } = useI18n()
 const props = defineProps<{
   resourceId?: string
   protocol?: 'sftp' | 's3'
-  host?: string
-  port?: number
-  username?: string
-  password?: string
 }>()
+const emit = defineEmits<{
+  'update:status': [status: string]
+}>()
+
 
 // Connection
 const sessionId = ref<string | null>(null)
-const showConnect = ref(!props.host)
+const showConnect = ref(!props.resourceId)
 const connProtocol = ref(props.protocol || 'sftp')
-const connHost = ref(props.host || '')
-const connPort = ref(props.port || 22)
-const connUsername = ref(props.username || '')
-const connPassword = ref(props.password || '')
 const connError = ref('')
 const connLoading = ref(false)
-// S3 fields
-const connBucket = ref('')
-const connRegion = ref('')
-const connEndpoint = ref('')
-const connAccessKey = ref('')
-const connSecretKey = ref('')
 
 // Auto-connect on mount if props provided
 onMounted(async () => {
-  if (props.host) {
+  if (props.resourceId) {
     await doConnect()
   }
 })
 
 async function doConnect() {
+  if (!props.resourceId) return
   connLoading.value = true; connError.value = ''
+  emit('update:status', 'connecting')
   try {
-    const req: Parameters<typeof filesApi.connect>[0] = {
-      protocol: connProtocol.value, host: connHost.value, port: connPort.value,
-      username: connUsername.value || undefined, password: connPassword.value || undefined,
-    }
-    if (connProtocol.value === 's3') {
-      req.bucket = connBucket.value || undefined
-      req.region = connRegion.value || undefined
-      req.endpoint = connEndpoint.value || undefined
-      req.access_key = connAccessKey.value || undefined
-      req.secret_key = connSecretKey.value || undefined
-    }
-    sessionId.value = await filesApi.connect(req)
+    sessionId.value = await filesApi.connect(props.resourceId)
     showConnect.value = false
+    emit('update:status', 'online')
     await loadPanel('left'); await loadPanel('right')
-  } catch (e: unknown) { connError.value = e instanceof Error ? e.message : String(e) }
+  } catch (e: unknown) {
+    connError.value = e instanceof Error ? e.message : String(e)
+    emit('update:status', 'error')
+  }
   finally { connLoading.value = false }
 }
 
@@ -535,22 +520,9 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
     <div v-if="showConnect" class="fp-overlay">
       <div class="fp-dialog">
         <h3>{{ t('files.connectToServer') }}</h3>
-        <div class="f"><label>{{ t('files.protocol') }}</label><select v-model="connProtocol" class="mono"><option value="sftp">SFTP</option><option value="s3">S3</option></select></div>
-        <template v-if="connProtocol==='sftp'">
-          <div class="f"><label>{{ t('files.host') }}</label><input v-model="connHost" class="mono" placeholder="192.168.1.1" /></div>
-          <div class="f"><label>{{ t('files.port') }}</label><input v-model.number="connPort" class="mono" type="number" /></div>
-          <div class="f"><label>{{ t('files.user') }}</label><input v-model="connUsername" class="mono" /></div>
-          <div class="f"><label>{{ t('files.password') }}</label><input v-model="connPassword" class="mono" type="password" /></div>
-        </template>
-        <template v-if="connProtocol==='s3'">
-          <div class="f"><label>{{ t('files.bucket') }}</label><input v-model="connBucket" class="mono" placeholder="my-bucket" /></div>
-          <div class="f"><label>{{ t('files.region') }}</label><input v-model="connRegion" class="mono" placeholder="us-east-1 (optional)" /></div>
-          <div class="f"><label>{{ t('files.endpointUrl') }}</label><input v-model="connEndpoint" class="mono" placeholder="https://s3.amazonaws.com (optional)" /></div>
-          <div class="f"><label>{{ t('files.accessKey') }}</label><input v-model="connAccessKey" class="mono" placeholder="optional for IAM" /></div>
-          <div class="f"><label>{{ t('files.secretKey') }}</label><input v-model="connSecretKey" class="mono" type="password" placeholder="optional for IAM" /></div>
-        </template>
-        <div v-if="connError" class="err">{{ connError }}</div>
-        <button class="btn" :disabled="connLoading" @click="doConnect">{{ connLoading ? t('files.connecting') : t('files.connect') }}</button>
+        <p style="color: var(--text-secondary); margin-bottom: 12px;">
+          {{ t('files.connect_via_workspace') }}
+        </p>
       </div>
     </div>
 
