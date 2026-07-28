@@ -156,7 +156,7 @@ async function submitResEdit() {
   }
   resEditLoading.value = true
   try {
-    const updated = await resourcesApi.update(envId, res.id, {
+    const updated = await store.updateResource(envId, res.id, {
       name: resEditName.value.trim(),
       protocol: res.protocol,
       host: resEditHost.value.trim(),

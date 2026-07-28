@@ -73,6 +73,19 @@ export const useEnvironmentsStore = defineStore('environments', () => {
     }
   }
 
+  async function updateResource(envId: string, id: string, data: Partial<NewResource>): Promise<Resource> {
+    const updated = await resourcesApi.update(envId, id, data)
+    const list = envResources.value.get(envId)
+    if (list) {
+      const idx = list.findIndex(r => r.id === id)
+      if (idx >= 0) {
+        list[idx] = updated
+        envResources.value.set(envId, [...list])
+      }
+    }
+    return updated
+  }
+
   async function testConnection(data: TestConnectionRequest): Promise<TestConnectionResult> {
     return resourcesApi.testConnection(data)
   }
@@ -80,6 +93,6 @@ export const useEnvironmentsStore = defineStore('environments', () => {
   return {
     environments, loading, error, envResources,
     fetchEnvironments, createEnvironment, updateEnvironment, deleteEnvironment,
-    fetchResources, createResource, deleteResource, testConnection,
+    fetchResources, createResource, updateResource, deleteResource, testConnection,
   }
 })
