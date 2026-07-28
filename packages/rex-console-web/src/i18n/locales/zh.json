@@ -143,6 +143,7 @@
   "environments": {
     "agent": "Agent（通过反向隧道）",
     "agentStatus": "Agent {status}",
+    "agentToken": "注册令牌",
     "connectionMode": "连接模式",
     "createEnvironment": "创建环境",
     "delete": "删除",

@@ -178,6 +178,22 @@ function confirmDeleteResource() {
   deleteResource(resourceDeleteId.value)
   resourceDeleteId.value = null
 }
+
+async function copyToken() {
+  if (env.value?.agent_token) {
+    try {
+      await navigator.clipboard.writeText(env.value.agent_token)
+    } catch {
+      // fallback
+      const el = document.createElement('textarea')
+      el.value = env.value.agent_token!
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+    }
+  }
+}
 </script>
 
 <template>
@@ -214,7 +230,7 @@ function confirmDeleteResource() {
         </span>
       </div>
 
-      <!-- Agent Panel (placeholder for M12) -->
+      <!-- Agent Panel -->
       <Card class="section-card">
         <h2 class="section-title">{{ t('environmentDetail.agentSection') }}</h2>
         <div v-if="env.agent_status" class="agent-info">
@@ -223,6 +239,16 @@ function confirmDeleteResource() {
         </div>
         <div v-else class="agent-empty muted">
           {{ t('environmentDetail.noAgent') }}
+        </div>
+        <!-- Agent Token -->
+        <div class="agent-token-section">
+          <label class="form-label" style="margin-bottom: var(--space-2)">
+            <span>{{ t('environments.agentToken') }}</span>
+          </label>
+          <div class="agent-token-row">
+            <code class="agent-token-value mono">{{ env.agent_token || '—' }}</code>
+            <Button variant="secondary" size="sm" @click="copyToken">{{ t('common.copy') }}</Button>
+          </div>
         </div>
       </Card>
 
@@ -440,6 +466,26 @@ function confirmDeleteResource() {
 .agent-empty {
   font-size: var(--text-sm);
   padding: var(--space-4) 0;
+}
+.agent-token-section {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+.agent-token-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.agent-token-value {
+  flex: 1;
+  font-size: var(--text-xs);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-2);
+  word-break: break-all;
+  color: var(--text-secondary);
 }
 .resource-table {
   width: 100%;

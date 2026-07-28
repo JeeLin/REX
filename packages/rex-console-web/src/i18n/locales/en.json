@@ -143,6 +143,7 @@
   "environments": {
     "agent": "Agent (via reverse tunnel)",
     "agentStatus": "Agent {status}",
+    "agentToken": "Registration Token",
     "connectionMode": "Connection Mode",
     "createEnvironment": "Create Environment",
     "delete": "Delete",
