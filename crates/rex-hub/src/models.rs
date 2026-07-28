@@ -32,6 +32,7 @@ pub struct EnvironmentDetail {
     pub environment: Environment,
     pub resource_count: i64,
     pub agent_status: Option<String>,
+    pub agent_token: Option<String>,
 }
 
 // --- Resource ---

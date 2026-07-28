@@ -370,7 +370,8 @@ impl Database {
             .prepare(
                 "SELECT e.id, e.name, e.description, e.connection_mode, e.created_at, e.updated_at,
                         COALESCE(r.res_count, 0) AS resource_count,
-                        (SELECT a.status FROM agents a WHERE a.environment_id = e.id LIMIT 1) AS agent_status
+                        (SELECT a.status FROM agents a WHERE a.environment_id = e.id LIMIT 1) AS agent_status,
+                        (SELECT a.token_hash FROM agents a WHERE a.environment_id = e.id LIMIT 1) AS agent_token
                  FROM environments e
                  LEFT JOIN (SELECT environment_id, COUNT(*) AS res_count FROM resources GROUP BY environment_id) r ON r.environment_id = e.id
                  ORDER BY e.name",
@@ -389,6 +390,7 @@ impl Database {
                     },
                     resource_count: row.get(6)?,
                     agent_status: row.get(7)?,
+                    agent_token: row.get(8)?,
                 })
             })
             .map_err(|e| RExError::Message(e.to_string()))?;
@@ -405,7 +407,8 @@ impl Database {
             .prepare(
                 "SELECT e.id, e.name, e.description, e.connection_mode, e.created_at, e.updated_at,
                         COALESCE(r.res_count, 0) AS resource_count,
-                        (SELECT a.status FROM agents a WHERE a.environment_id = e.id LIMIT 1) AS agent_status
+                        (SELECT a.status FROM agents a WHERE a.environment_id = e.id LIMIT 1) AS agent_status,
+                        (SELECT a.token_hash FROM agents a WHERE a.environment_id = e.id LIMIT 1) AS agent_token
                  FROM environments e
                  LEFT JOIN (SELECT environment_id, COUNT(*) AS res_count FROM resources GROUP BY environment_id) r ON r.environment_id = e.id
                  WHERE e.id = ?1",
@@ -424,6 +427,7 @@ impl Database {
                     },
                     resource_count: row.get(6)?,
                     agent_status: row.get(7)?,
+                    agent_token: row.get(8)?,
                 })
             })
             .map_err(|e| RExError::Message(e.to_string()))?;
