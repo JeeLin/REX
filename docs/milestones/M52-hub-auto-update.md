@@ -35,7 +35,7 @@ M51 完成登录安全增强 + 设置页完善（v0.44.0）后，产品核心功
 
 ### 1 后端：Supervisor 进程管理 + 更新引擎
 
-- **功能目标**：将 Hub 从简单的 `if/else` 改造为真正的 supervisor + worker 模式，supervisor 监控 worker 进程，处理 exit(42) 更新信号，执行二进制替换、健康检查和回滚
+- **功能目标**：将 Hub 从简单的 `if/else` 改造为真正的 supervisor + worker 模式，supervisor 监控 worker 进程，处理 exit(10) 更新信号，执行二进制替换、健康检查和回滚
 - **文件结构**：
   - 新建：`crates/rex-common/src/supervisor.rs`（进程监控、重启、退出码处理）
   - 新建：`crates/rex-hub/src/update_checker.rs`（GitHub Release 检查、下载、校验）
@@ -53,8 +53,9 @@ M51 完成登录安全增强 + 设置页完善（v0.44.0）后，产品核心功
 
   pub fn run_supervisor(config: SupervisorConfig) -> Result<()>;
   // 内部：循环 spawn worker，监控退出码
-  // exit(0) → 正常退出，不重启
-  // exit(42) → 读取 update-state.json，执行替换，重启
+  // exit(0) → 检查 update-state.json，决定是否替换二进制后重启
+  // exit(10) → 读取 update-state.json，执行替换，重启
+  // exit(11) / exit(12) → attempt+1，连续 3 次回滚
   // 其他退出码 → 重启 worker（attempt < max_restart_attempts）
 
   // update_checker.rs
@@ -90,12 +91,11 @@ M51 完成登录安全增强 + 设置页完善（v0.44.0）后，产品核心功
   2. Supervisor spawn worker 子进程，设置 `REX_WORKER=1`
   3. Supervisor 后台线程每 6 小时检查 GitHub Release
   4. 发现新版本 → 下载二进制 + SHA256SUMS → 校验 → 写入 staging 路径
-  5. 写 update-state.json（phase=requested）→ 发送 SIGUSR1 给 worker 或等待 worker 自然退出
-  6. Worker 检测到更新信号 → 优雅退出（exit(42)）
-  7. Supervisor 检测到 exit(42) → 读取 update-state.json → 原子替换二进制 → 重启 worker
+  5. 写 update-state.json（phase=requested）→ Worker 检测到更新信号 → 优雅退出（exit(10)）
+  6. Supervisor 检测到 exit(10) → 读取 update-state.json → 原子替换二进制 → 重启 worker
   8. 新 worker 启动 → 检测到 REX_UPDATE_PENDING=1 → 只做健康检查
   9. 健康通过 → 写 phase=committed；健康失败 → exit(1) → supervisor attempt+1 → 回滚
-- **测试标准**：supervisor 正确 spawn/monitor worker；exit(42) 触发更新流程；SHA256 校验正确；回滚逻辑正确
+- **测试标准**：supervisor 正确 spawn/monitor worker；exit(10) 触发更新流程；SHA256 校验正确；回滚逻辑正确
 - **提交信息**：`feat(update): implement Hub supervisor process management and update engine`
 
 ### 2 后端：更新状态 REST API
@@ -157,7 +157,7 @@ M51 完成登录安全增强 + 设置页完善（v0.44.0）后，产品核心功
 
 ## 设计核对点
 
-1. **进程安全**：supervisor 正确处理 worker 异常退出（非 exit(42)），避免重启死循环
+1. **进程安全**：supervisor 正确处理 worker 异常退出（非 exit(10)），避免重启死循环
 2. **原子替换**：二进制替换使用 rename 原子操作，避免替换中断导致二进制损坏
 3. **回滚可靠**：健康检查失败时正确恢复旧版二进制，attempt 达到上限后停止重试
 4. **版本检查**：GitHub Release 检查有超时和错误处理，不影响正常服务
@@ -167,7 +167,7 @@ M51 完成登录安全增强 + 设置页完善（v0.44.0）后，产品核心功
 ## Flow Status
 
 - [x] 步骤1：编写里程碑文档
-- [ ] 步骤2：设计核对
+- [x] 步骤2：设计核对
 - [ ] 步骤3：开发
 - [ ] 步骤4：代码精简
 - [ ] 步骤5：代码审查
