@@ -554,7 +554,6 @@ useKeyboardShortcuts([
         <StatusDot :status="statusColor(tab.status)" style="margin-left: 4px" />
         <button class="ws-tab-close" @click.stop="closeTab(tab.id)">×</button>
       </div>
-      <button class="ws-tab-add" title="New connection (Ctrl+T)" @click="showQuickConnect = true">+</button>
     </div>
 
     <!-- Tab context menu -->
