@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, defineAsyncComponent, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, defineAsyncComponent, watch, KeepAlive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Splitpanes, Pane } from 'splitpanes'
@@ -639,22 +639,24 @@ useKeyboardShortcuts([
 
               <!-- Terminal (SSH) + SFTP Drawer -->
               <div v-if="currentPaneTabInfo(i - 1)?.protocol === 'ssh'" class="ws-ssh-area">
-                <TerminalView
-                  :key="paneTabs[i - 1]"
-                  :tab-id="paneTabs[i - 1]!"
-                  :resource-id="currentPaneTabInfo(i - 1)?.resourceId || ''"
-                  :protocol="currentPaneTabInfo(i - 1)?.protocol"
-                  :theme="currentPaneTabInfo(i - 1)?.theme"
-                  :font-size="currentPaneTabInfo(i - 1)?.fontSize"
-                  :opacity="currentPaneTabInfo(i - 1)?.opacity"
-                  :cursor-style="currentPaneTabInfo(i - 1)?.cursorStyle"
-                  :cursor-blink="currentPaneTabInfo(i - 1)?.cursorBlink"
-                  :background-image="currentPaneTabInfo(i - 1)?.backgroundImage"
-                  @update:status="onTabStatusChange(paneTabs[i - 1]!, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
-                  @terminal-resize="onTerminalResize"
-                  @encoding-change="onEncodingChange"
-                  @toggle-sftp="toggleSftpDrawer"
-                />
+                <KeepAlive>
+                  <TerminalView
+                    :key="paneTabs[i - 1]"
+                    :tab-id="paneTabs[i - 1]!"
+                    :resource-id="currentPaneTabInfo(i - 1)?.resourceId || ''"
+                    :protocol="currentPaneTabInfo(i - 1)?.protocol"
+                    :theme="currentPaneTabInfo(i - 1)?.theme"
+                    :font-size="currentPaneTabInfo(i - 1)?.fontSize"
+                    :opacity="currentPaneTabInfo(i - 1)?.opacity"
+                    :cursor-style="currentPaneTabInfo(i - 1)?.cursorStyle"
+                    :cursor-blink="currentPaneTabInfo(i - 1)?.cursorBlink"
+                    :background-image="currentPaneTabInfo(i - 1)?.backgroundImage"
+                    @update:status="onTabStatusChange(paneTabs[i - 1]!, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
+                    @terminal-resize="onTerminalResize"
+                    @encoding-change="onEncodingChange"
+                    @toggle-sftp="toggleSftpDrawer"
+                  />
+                </KeepAlive>
                 <div v-if="showSftpDrawer" class="ws-sftp-drawer" :style="{ height: sftpDrawerHeight + 'px' }">
                   <div class="ws-sftp-drag-handle" @mousedown.prevent="startSftpDrag" />
                   <FilesDrawer
