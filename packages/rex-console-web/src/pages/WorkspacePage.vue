@@ -816,18 +816,6 @@ useKeyboardShortcuts([
   color: var(--danger);
   background: rgba(248, 81, 73, 0.15);
 }
-.ws-tab-add {
-  padding: 0 var(--space-3);
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: var(--text-lg);
-  cursor: pointer;
-  transition: color var(--transition);
-}
-.ws-tab-add:hover {
-  color: var(--accent);
-}
 .ws-tab-broadcast {
   font-size: 10px;
   margin-left: 2px;
