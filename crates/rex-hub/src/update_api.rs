@@ -117,7 +117,8 @@ pub async fn download_agent_binary(
 /// GET /api/update/check — 检查是否有新版本
 pub async fn check_update(
     State(state): State<AppState>,
-) -> Result<(StatusCode, axum::Json<serde_json::Value>), (StatusCode, axum::Json<serde_json::Value>)> {
+) -> Result<(StatusCode, axum::Json<serde_json::Value>), (StatusCode, axum::Json<serde_json::Value>)>
+{
     let checker = crate::update_checker::UpdateChecker::from_env(state.data_dir.clone());
 
     match checker.check_for_update().await {
@@ -151,7 +152,8 @@ pub async fn check_update(
 /// POST /api/update/trigger — 触发后台下载+更新
 pub async fn trigger_update(
     State(state): State<AppState>,
-) -> Result<(StatusCode, axum::Json<serde_json::Value>), (StatusCode, axum::Json<serde_json::Value>)> {
+) -> Result<(StatusCode, axum::Json<serde_json::Value>), (StatusCode, axum::Json<serde_json::Value>)>
+{
     let checker = crate::update_checker::UpdateChecker::from_env(state.data_dir.clone());
 
     // 先检查是否有新版本
@@ -202,9 +204,7 @@ pub async fn trigger_update(
 }
 
 /// GET /api/update/status — 获取当前更新状态
-pub async fn update_status(
-    State(state): State<AppState>,
-) -> axum::Json<serde_json::Value> {
+pub async fn update_status(State(state): State<AppState>) -> axum::Json<serde_json::Value> {
     let path = state.data_dir.join("update-state.json");
     let state_file: Option<UpdateStateFile> = std::fs::read_to_string(&path)
         .ok()
@@ -229,7 +229,8 @@ pub async fn update_status(
 /// POST /api/update/rollback — 回滚到旧版本
 pub async fn rollback_update(
     State(state): State<AppState>,
-) -> Result<(StatusCode, axum::Json<serde_json::Value>), (StatusCode, axum::Json<serde_json::Value>)> {
+) -> Result<(StatusCode, axum::Json<serde_json::Value>), (StatusCode, axum::Json<serde_json::Value>)>
+{
     let path = state.data_dir.join("update-state.json");
     let state_file: Option<UpdateStateFile> = std::fs::read_to_string(&path)
         .ok()
@@ -284,7 +285,10 @@ pub async fn rollback_update(
         )
     })?;
 
-    tracing::info!(action = "UPDATE_ROLLBACK_TRIGGERED", "rollback requested, supervisor will restart with old version");
+    tracing::info!(
+        action = "UPDATE_ROLLBACK_TRIGGERED",
+        "rollback requested, supervisor will restart with old version"
+    );
 
     Ok((
         StatusCode::OK,

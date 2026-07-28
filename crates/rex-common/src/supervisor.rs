@@ -98,7 +98,10 @@ pub fn run_supervisor(config: SupervisorConfig, worker_args: &[String]) -> ! {
                         continue; // 启动新版
                     }
                     // 替换失败，回滚
-                    tracing::error!(action = "SUPERVISOR_UPDATE_FAILED", "binary replacement failed");
+                    tracing::error!(
+                        action = "SUPERVISOR_UPDATE_FAILED",
+                        "binary replacement failed"
+                    );
                 }
                 attempt += 1;
             }
@@ -251,7 +254,10 @@ fn rollback(state: &UpdateStateFile, state_path: &Path) {
         let _ = std::fs::set_permissions(&current_exe, std::fs::Permissions::from_mode(0o755));
     }
 
-    tracing::info!(action = "SUPERVISOR_ROLLBACK", "rolled back to previous version");
+    tracing::info!(
+        action = "SUPERVISOR_ROLLBACK",
+        "rolled back to previous version"
+    );
     write_update_phase(state_path, UpdatePhase::RolledBack, 0);
 }
 

@@ -259,7 +259,10 @@ pub async fn background_update_task(data_dir: PathBuf) {
         // 检查是否处于更新验证阶段
         if std::env::var("REX_UPDATE_PENDING").is_ok() {
             // 新版 worker 启动后，只执行健康检查，不检查更新
-            tracing::info!(action = "UPDATE_SKIP", "update pending, skipping update check");
+            tracing::info!(
+                action = "UPDATE_SKIP",
+                "update pending, skipping update check"
+            );
             return;
         }
 
@@ -281,7 +284,10 @@ pub async fn background_update_task(data_dir: PathBuf) {
                 }
 
                 // 更新已暂存，退出 worker 让 supervisor 替换
-                tracing::info!(action = "UPDATE_EXIT", "exiting worker to trigger supervisor update");
+                tracing::info!(
+                    action = "UPDATE_EXIT",
+                    "exiting worker to trigger supervisor update"
+                );
                 std::process::exit(10);
             }
             Ok(None) => {
