@@ -113,9 +113,8 @@ impl AuthConfig {
     }
 
     pub fn change_password(&self, current: &str, new_password: &str) -> AuthResult<()> {
-        self.verify_password(current).map_err(|_| {
-            RExError::Message("current password is incorrect".into())
-        })?;
+        self.verify_password(current)
+            .map_err(|_| RExError::Message("current password is incorrect".into()))?;
         self.set_password(new_password)
     }
 }
@@ -239,16 +238,22 @@ pub async fn change_password(
     State(state): State<crate::AppState>,
     Json(body): Json<ChangePasswordRequest>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<crate::error::ErrorBody>)> {
-    state.auth.change_password(&body.current_password, &body.new_password).map_err(|e| {
-        let msg = e.to_string();
-        let code = if msg.contains("incorrect") {
-            StatusCode::UNAUTHORIZED
-        } else {
-            StatusCode::INTERNAL_SERVER_ERROR
-        };
-        error_with_status(code, "PASSWORD_CHANGE_FAILED", &msg)
-    })?;
-    tracing::info!(action = "AUTH_PASSWORD_CHANGED", "password changed successfully");
+    state
+        .auth
+        .change_password(&body.current_password, &body.new_password)
+        .map_err(|e| {
+            let msg = e.to_string();
+            let code = if msg.contains("incorrect") {
+                StatusCode::UNAUTHORIZED
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            error_with_status(code, "PASSWORD_CHANGE_FAILED", &msg)
+        })?;
+    tracing::info!(
+        action = "AUTH_PASSWORD_CHANGED",
+        "password changed successfully"
+    );
     state
         .db
         .write_audit_log(&crate::models::NewAuditEntry {
@@ -257,10 +262,7 @@ pub async fn change_password(
             ..Default::default()
         })
         .ok();
-    Ok((
-        StatusCode::OK,
-        Json(serde_json::json!({ "ok": true })),
-    ))
+    Ok((StatusCode::OK, Json(serde_json::json!({ "ok": true }))))
 }
 
 #[cfg(test)]
