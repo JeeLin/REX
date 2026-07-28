@@ -194,5 +194,5 @@ M51 完成登录安全增强 + 设置页完善（v0.44.0）后，产品核心功
 | [x] | 🔴 | write_update_state 缺少 fsync | 步骤5代码审查 | supervisor.rs:162-169 只做 write+rename，缺少 File::sync_all()，崩溃时可能读到半写入 JSON |
 | [x] | 🔴 | Supervisor 未实现健康检查 | 步骤5代码审查 | health_url 配置存在但从未使用，替换二进制后不执行健康检查 |
 | [x] | 🔴 | 回滚流程断裂 | 步骤5代码审查 | rollback_update API 写入 RollingBack 但 supervisor 从不检查此 phase |
-| ⬜ | 🔴 | exit(10) 在 tokio::spawn 中强制终止 | 步骤5代码审查 | 会中断异步清理（DB连接池、日志刷盘），应改为退出标志+优雅退出 |
-| ⬜ | 🔴 | background_update_task 中 exit(10) | 步骤5代码审查 | 同上问题，应改为退出标志+优雅退出 |
+| [x] | 🔴 | exit(10) 在 tokio::spawn 中强制终止 | 步骤5代码审查 | 会中断异步清理（DB连接池、日志刷盘），应改为退出标志+优雅退出 |
+| [x] | 🔴 | background_update_task 中 exit(10) | 步骤5代码审查 | 同上问题，应改为退出标志+优雅退出 |
