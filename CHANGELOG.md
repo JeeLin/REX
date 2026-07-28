@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.42.0] - 2026-07-28
+
+### Changed
+- 连接模型重构：所有协议（SQL/Redis/Files）connect 端点统一为 resource_id-based 连接，前端不再传递敏感连接参数
+- 新增 `resource_conn.rs` 公共模块，从 DB 读取资源记录并解密 config_json
+- ResourceProperties 组件按协议类型显示 Connection/Auth 字段
+- SSH 终端：alt-screen resize guard、debounced fit()、移动端箭头键修复
+
+### Fixed
+- FilesDrawer SFTP 布局：修复空栏问题 + 错误传播
+- AuditLog 页面：修复无法滚动的问题
+- Settings API：修复 session_timeout number→string 类型转换
+- StatusDot：修复 Redis/Files 连接中状态闪烁问题
+- SSH 终端底部截断：CSS flex 修复
+- SSH vim 卡死：alt-screen resize guard + setTimeout/setInterval Bun 兼容类型
+- MobileTerminalBar 箭头键：修复缺失的 template 标签
+- SQLite 重连：修改配置后正确断开旧 session 再重连
+- 工作区 + 按钮：移除无用的 tab bar 新建连接按钮
+
+### Added
+- Agent 部署操作指南：可折叠指南组件 + i18n 支持
+
 ## [0.41.0] - 2026-07-27
 
 ### Added
