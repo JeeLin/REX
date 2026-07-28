@@ -351,7 +351,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.audit-page { }
+.audit-page { height: 100%; overflow-y: auto; }
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-4); flex-wrap: wrap; gap: var(--space-3); }
 .page-title { font-size: var(--text-xl); font-weight: 600; color: var(--text-primary); }
 .header-actions { display: flex; gap: var(--space-2); }
