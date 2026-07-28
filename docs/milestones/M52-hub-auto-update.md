@@ -185,3 +185,9 @@ M51 完成登录安全增强 + 设置页完善（v0.44.0）后，产品核心功
 
 | 状态 | 优先级 | 标题 | 来源 | 描述 |
 |------|--------|------|------|------|
+| ⬜ | 🟡 | 资源编辑字段不匹配协议类型 | 用户反馈 | 新建资源时可以选择协议类型，不同类型填入的数据不同，但编辑时只有固定的几个字段，导致无法完整编辑资源 |
+| ⬜ | 🟡 | xterm-char-measure-element 显示乱码 | 用户反馈 | xterm-char-measure-element 有时显示 "dddddddddddddddddddddddddddddddd" 或 "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" |
+| ⬜ | 🟡 | SSH 终端最后两行看不到 | 用户反馈 | SSH 终端底部内容被截断，最后两行无法显示 |
+| ⬜ | 🟡 | 切换标签 SSH 终端会重连 | 用户反馈 | 从 SSH 标签切换到其他标签再切回时，SSH 连接会重新建立 |
+| ⬜ | 🟡 | agent-token-row 显示空的 | 用户反馈 | Agent token 行显示为空，按键显示 common.copy |
+| ⬜ | 🟡 | redis_codec.rs 放置位置不合理 | 架构审查 | redis_codec.rs 只被 rex-redis 使用，应移至 rex-redis 而非 rex-common |
