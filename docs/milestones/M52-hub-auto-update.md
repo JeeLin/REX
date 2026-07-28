@@ -171,7 +171,7 @@ M51 完成登录安全增强 + 设置页完善（v0.44.0）后，产品核心功
 - [x] 步骤3：开发
 - [x] 步骤4：代码精简
 - [x] 步骤5：代码审查
-- [ ] 步骤6：测试验证
+- [x] 步骤6：测试验证
 - [ ] 步骤7：设计再确认
 - [ ] 步骤8：提交
 
@@ -191,3 +191,8 @@ M51 完成登录安全增强 + 设置页完善（v0.44.0）后，产品核心功
 | [x] | 🟡 | 切换标签 SSH 终端会重连 | 用户反馈 | 从 SSH 标签切换到其他标签再切回时，SSH 连接会重新建立 |
 | [x] | 🟡 | agent-token-row 显示空的 | 用户反馈 | Agent token 行显示为空，按键显示 common.copy |
 | [x] | 🟡 | redis_codec.rs 放置位置不合理 | 架构审查 | redis_codec.rs 只被 rex-redis 使用，应移至 rex-redis 而非 rex-common |
+| ⬜ | 🔴 | write_update_state 缺少 fsync | 步骤5代码审查 | supervisor.rs:162-169 只做 write+rename，缺少 File::sync_all()，崩溃时可能读到半写入 JSON |
+| ⬜ | 🔴 | Supervisor 未实现健康检查 | 步骤5代码审查 | health_url 配置存在但从未使用，替换二进制后不执行健康检查 |
+| ⬜ | 🔴 | 回滚流程断裂 | 步骤5代码审查 | rollback_update API 写入 RollingBack 但 supervisor 从不检查此 phase |
+| ⬜ | 🔴 | exit(10) 在 tokio::spawn 中强制终止 | 步骤5代码审查 | 会中断异步清理（DB连接池、日志刷盘），应改为退出标志+优雅退出 |
+| ⬜ | 🔴 | background_update_task 中 exit(10) | 步骤5代码审查 | 同上问题，应改为退出标志+优雅退出 |
