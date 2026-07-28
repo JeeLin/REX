@@ -11,6 +11,20 @@ export interface Settings {
   session_timeout: number
 }
 
+export interface UpdateInfo {
+  has_update: boolean
+  current_version: string
+  latest_version: string
+  download_url: string
+}
+
+export interface UpdateStatus {
+  phase: string
+  target_version: string
+  old_version: string
+  attempt: number
+}
+
 export const settingsApi = {
   get: () => api.get<Settings>('/settings'),
   update: (data: Partial<Settings>) => {
@@ -26,4 +40,11 @@ export const settingsApi = {
       current_password: currentPassword,
       new_password: newPassword,
     }),
+}
+
+export const updateApi = {
+  check: () => api.get<UpdateInfo>('/update/check'),
+  trigger: () => api.post<{ ok: boolean }>('/update/trigger'),
+  status: () => api.get<UpdateStatus>('/update/status'),
+  rollback: () => api.post<{ ok: boolean }>('/update/rollback'),
 }

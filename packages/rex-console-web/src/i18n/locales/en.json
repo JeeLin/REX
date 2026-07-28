@@ -399,7 +399,18 @@
     "terminalThemeUbuntu": "Ubuntu",
     "theme": "Theme",
     "title": "Settings",
-    "updatePassword": "Update Password"
+    "update": "Update",
+    "updateCheckFailed": "Failed to check for updates",
+    "updateNow": "Update Now",
+    "updateStatusFailed": "Failed to get update status",
+    "updateTriggerFailed": "Failed to trigger update",
+    "updatePassword": "Update Password",
+    "rollback": "Rollback",
+    "rollbackStatusFailed": "Failed to get rollback status",
+    "rollbackTriggerFailed": "Failed to trigger rollback",
+    "currentVersion": "Current Version",
+    "latestVersion": "Latest Version",
+    "upToDate": "Up to date"
   },
   "setup": {
     "confirmPassword": "Confirm Password",
