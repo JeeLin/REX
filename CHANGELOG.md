@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.43.0] - 2026-07-28
+
+### Fixed
+- SSH 终端：修复底部行裁剪（等待字体加载后再 fit）和顶部 ^^^^ 字符问题
+- 资源管理：修复修改资源后侧栏不刷新（新增 updateResource store 方法）
+- Logout 按钮：替换 Unicode 字符为 SVG 图标
+- S3 连接测试：修复日志中 host 为空的问题，改为显示 endpoint
+
+### Added
+- 收藏功能：右键菜单添加收藏/取消收藏入口
+- 环境详情页：展示 Agent 注册令牌并支持复制
+
 ## [0.42.0] - 2026-07-28
 
 ### Changed
