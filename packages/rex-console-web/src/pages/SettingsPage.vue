@@ -86,11 +86,14 @@ async function saveSettings() {
     // Persist language setting
     localStorage.setItem('rex-lang', settings.value.language)
     // Cache terminal settings for TerminalView to read on mount
-    localStorage.setItem('rex-terminal-settings', JSON.stringify({
+    const terminalSettings = {
       theme: settings.value.terminal_theme,
       opacity: settings.value.terminal_opacity,
       backgroundImage: settings.value.terminal_bg_image,
-    }))
+    }
+    localStorage.setItem('rex-terminal-settings', JSON.stringify(terminalSettings))
+    // Notify open terminals to apply changes immediately
+    window.dispatchEvent(new CustomEvent('terminal-settings-changed', { detail: terminalSettings }))
     // Session timeout (localStorage only, frontend concern)
     localStorage.setItem('rex-session-timeout', String(settings.value.session_timeout))
     saveMessage.value = t('settings.saved')

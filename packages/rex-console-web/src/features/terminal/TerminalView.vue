@@ -82,6 +82,8 @@ const BG_PRESETS: Record<string, string> = {
 
 // Apply opacity to terminal background
 const containerStyle = computed(() => {
+  // Depend on globalSettingsVersion to re-evaluate when settings change
+  void globalSettingsVersion.value
   const globalSettings = getGlobalTerminalSettings()
   const op = props.opacity ?? globalSettings?.opacity ?? 100
   const bg = props.backgroundImage || globalSettings?.backgroundImage || 'none'
@@ -118,6 +120,7 @@ watch(status, (s) => {
 })
 
 // Read global terminal settings from localStorage (cached by SettingsPage)
+const globalSettingsVersion = ref(0)
 function getGlobalTerminalSettings() {
   try {
     const raw = localStorage.getItem('rex-terminal-settings')
@@ -126,6 +129,27 @@ function getGlobalTerminalSettings() {
     return null
   }
 }
+
+// Listen for settings changes from SettingsPage
+function onTerminalSettingsChanged(e: Event) {
+  const detail = (e as CustomEvent).detail
+  if (detail) {
+    // Force containerStyle to re-evaluate
+    globalSettingsVersion.value++
+    // Apply theme change immediately
+    if (terminal.value && detail.theme) {
+      terminal.value.options.theme = getTerminalTheme(detail.theme)
+    }
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('terminal-settings-changed', onTerminalSettingsChanged)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('terminal-settings-changed', onTerminalSettingsChanged)
+})
 
 onMounted(() => {
   if (!containerRef.value) return
