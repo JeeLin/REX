@@ -162,6 +162,7 @@ async function submitResEdit() {
       host: resEditHost.value.trim(),
       port: resEditPort.value ? Number(resEditPort.value) : null,
       username: resEditUsername.value.trim() || undefined,
+      config_json: res.config_json || undefined,
     })
     const idx = resources.value.findIndex(r => r.id === res.id)
     if (idx >= 0) resources.value[idx] = updated

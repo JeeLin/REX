@@ -73,7 +73,7 @@ export const useEnvironmentsStore = defineStore('environments', () => {
     }
   }
 
-  async function updateResource(envId: string, id: string, data: Partial<NewResource>): Promise<Resource> {
+  async function updateResource(envId: string, id: string, data: NewResource): Promise<Resource> {
     const updated = await resourcesApi.update(envId, id, data)
     const list = envResources.value.get(envId)
     if (list) {
