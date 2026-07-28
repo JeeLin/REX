@@ -34,6 +34,18 @@ const editMode = ref('direct')
 const editError = ref('')
 const editLoading = ref(false)
 
+// 编辑资源时的协议特定字段
+const editPassword = ref('')
+const editDatabaseName = ref('')
+const editFilePath = ref('')
+const editPrivateKey = ref('')
+const editRedisDb = ref(0)
+const editS3Endpoint = ref('')
+const editS3AccessKey = ref('')
+const editS3SecretKey = ref('')
+const editS3Bucket = ref('')
+const editS3Region = ref('')
+
 // Context menu state
 const ctxMenu = ref<{ show: boolean; x: number; y: number; resource: Resource | null }>({ show: false, x: 0, y: 0, resource: null })
 const resourceDeleteId = ref<string | null>(null)
@@ -144,6 +156,24 @@ function openResEdit() {
   resEditPort.value = res.port != null ? String(res.port) : ''
   resEditUsername.value = res.username || ''
   resEditError.value = ''
+
+  // 解析 config_json，填充协议特定字段
+  let cfg: Record<string, unknown> = {}
+  try {
+    cfg = res.config_json ? JSON.parse(res.config_json) : {}
+  } catch { /* ignore */ }
+
+  editPassword.value = (cfg.password as string) || ''
+  editDatabaseName.value = (cfg.database_name as string) || ''
+  editFilePath.value = (cfg.file_path as string) || ''
+  editPrivateKey.value = (cfg.private_key as string) || ''
+  editRedisDb.value = (cfg.db as number) || 0
+  editS3Endpoint.value = (cfg.endpoint as string) || ''
+  editS3AccessKey.value = (cfg.access_key as string) || ''
+  editS3SecretKey.value = (cfg.secret_key as string) || ''
+  editS3Bucket.value = (cfg.bucket as string) || ''
+  editS3Region.value = (cfg.region as string) || ''
+
   resEditModal.value = true
   closeCtxMenu()
 }
@@ -156,13 +186,34 @@ async function submitResEdit() {
   }
   resEditLoading.value = true
   try {
+    // 根据协议类型构建 config_json
+    const cfg: Record<string, unknown> = {}
+    if (['ssh', 'sftp'].includes(res.protocol)) {
+      if (editPassword.value) cfg.password = editPassword.value
+      if (editPrivateKey.value) cfg.private_key = editPrivateKey.value
+    } else if (['mysql', 'postgresql'].includes(res.protocol)) {
+      if (editPassword.value) cfg.password = editPassword.value
+      if (editDatabaseName.value) cfg.database_name = editDatabaseName.value
+    } else if (res.protocol === 'redis') {
+      if (editPassword.value) cfg.password = editPassword.value
+      cfg.db = editRedisDb.value
+    } else if (res.protocol === 'sqlite') {
+      cfg.file_path = editFilePath.value
+    } else if (res.protocol === 's3') {
+      cfg.endpoint = editS3Endpoint.value
+      cfg.access_key = editS3AccessKey.value
+      cfg.secret_key = editS3SecretKey.value
+      cfg.bucket = editS3Bucket.value
+      cfg.region = editS3Region.value || 'us-east-1'
+    }
+
     const updated = await store.updateResource(envId, res.id, {
       name: resEditName.value.trim(),
       protocol: res.protocol,
       host: resEditHost.value.trim(),
       port: resEditPort.value ? Number(resEditPort.value) : null,
       username: resEditUsername.value.trim() || undefined,
-      config_json: res.config_json || undefined,
+      config_json: JSON.stringify(cfg),
     })
     const idx = resources.value.findIndex(r => r.id === res.id)
     if (idx >= 0) resources.value[idx] = updated
