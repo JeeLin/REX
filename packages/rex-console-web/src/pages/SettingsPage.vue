@@ -20,6 +20,37 @@ const loading = ref(true)
 const saving = ref(false)
 const saveMessage = ref('')
 
+// Password change
+const currentPassword = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
+const changingPassword = ref(false)
+const passwordError = ref('')
+const passwordSuccess = ref('')
+
+async function changePassword() {
+  if (!currentPassword.value || !newPassword.value) return
+  if (newPassword.value !== confirmPassword.value) {
+    passwordError.value = t('settings.passwordMismatch')
+    return
+  }
+  passwordError.value = ''
+  passwordSuccess.value = ''
+  changingPassword.value = true
+  try {
+    await settingsApi.changePassword(currentPassword.value, newPassword.value)
+    passwordSuccess.value = t('settings.passwordChanged')
+    currentPassword.value = ''
+    newPassword.value = ''
+    confirmPassword.value = ''
+    setTimeout(() => passwordSuccess.value = '', 3000)
+  } catch (e: unknown) {
+    passwordError.value = e instanceof Error ? e.message : t('settings.passwordChangeFailed')
+  } finally {
+    changingPassword.value = false
+  }
+}
+
 onMounted(async () => {
   try {
     const remote = await settingsApi.get()
@@ -138,6 +169,33 @@ async function saveSettings() {
           <option :value="120">120 {{ t('settings.minutes') }}</option>
         </select>
       </div>
+      <!-- Password Change -->
+      <div class="password-section">
+        <h3 class="subsection-title">{{ t('settings.changePassword') }}</h3>
+        <div class="form-group">
+          <label class="form-label">{{ t('settings.currentPassword') }}</label>
+          <input v-model="currentPassword" type="password" class="form-input" autocomplete="current-password" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ t('settings.newPassword') }}</label>
+          <input v-model="newPassword" type="password" class="form-input" autocomplete="new-password" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ t('settings.confirmPassword') }}</label>
+          <input v-model="confirmPassword" type="password" class="form-input" autocomplete="new-password" />
+        </div>
+        <div v-if="passwordError" class="save-message error">{{ passwordError }}</div>
+        <div v-if="passwordSuccess" class="save-message">{{ passwordSuccess }}</div>
+        <Button
+          variant="secondary"
+          size="sm"
+          :loading="changingPassword"
+          :disabled="!currentPassword || !newPassword || newPassword !== confirmPassword"
+          @click="changePassword"
+        >
+          {{ t('settings.updatePassword') }}
+        </Button>
+      </div>
     </Card>
 
     <div class="save-bar">
@@ -162,4 +220,6 @@ async function saveSettings() {
 .save-bar { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-4); }
 .save-message { font-size: var(--text-sm); color: var(--success); }
 .save-message.error { color: var(--danger); }
+.password-section { margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--border); }
+.subsection-title { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); margin-bottom: var(--space-3); }
 </style>

@@ -106,6 +106,22 @@ impl AuthConfig {
             .map_err(|_| RExError::Message("invalid password".into()))?;
         self.generate_token()
     }
+
+    pub fn change_password(&self, current: &str, new_password: &str) -> AuthResult<()> {
+        // 验证当前密码
+        let hash_str = self
+            .db
+            .get_setting("password_hash")?
+            .ok_or_else(|| RExError::Message("no password set".into()))?;
+        let hash =
+            argon2::PasswordHash::new(&hash_str).map_err(|e| RExError::Message(e.to_string()))?;
+        use argon2::password_hash::PasswordVerifier;
+        argon2::Argon2::default()
+            .verify_password(current.as_bytes(), &hash)
+            .map_err(|_| RExError::Message("current password is incorrect".into()))?;
+        // 设置新密码
+        self.set_password(new_password)
+    }
 }
 
 // --- Request / Response types ---
@@ -118,6 +134,12 @@ pub struct LoginRequest {
 #[derive(Deserialize)]
 pub struct PasswordRequest {
     pub password: String,
+}
+
+#[derive(Deserialize)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
 }
 
 // --- Handlers ---
@@ -213,6 +235,35 @@ pub async fn set_password(
             "token": token,
             "expiresAt": expires.to_rfc3339()
         })),
+    ))
+}
+
+/// POST /api/auth/change-password
+pub async fn change_password(
+    State(state): State<crate::AppState>,
+    Json(body): Json<ChangePasswordRequest>,
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<crate::error::ErrorBody>)> {
+    state.auth.change_password(&body.current_password, &body.new_password).map_err(|e| {
+        let msg = e.to_string();
+        let code = if msg.contains("incorrect") {
+            StatusCode::UNAUTHORIZED
+        } else {
+            StatusCode::INTERNAL_SERVER_ERROR
+        };
+        error_with_status(code, "PASSWORD_CHANGE_FAILED", &msg)
+    })?;
+    tracing::info!(action = "AUTH_PASSWORD_CHANGED", "password changed successfully");
+    state
+        .db
+        .write_audit_log(&crate::models::NewAuditEntry {
+            action: "AUTH_PASSWORD_CHANGED".into(),
+            result: "success".into(),
+            ..Default::default()
+        })
+        .ok();
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({ "ok": true })),
     ))
 }
 

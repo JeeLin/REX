@@ -133,6 +133,10 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
             "/api/agents/download",
             axum::routing::get(update_api::download_agent_binary),
         )
+        .route(
+            "/api/auth/change-password",
+            axum::routing::post(auth::change_password),
+        )
         .nest(
             "/api/environments",
             resource_api::resource_routes()

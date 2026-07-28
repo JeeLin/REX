@@ -21,4 +21,9 @@ export const settingsApi = {
     }
     return api.put<{ ok: boolean }>('/settings', apiData)
   },
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.post<{ ok: boolean }>('/auth/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
 }

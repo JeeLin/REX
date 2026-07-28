@@ -24,7 +24,7 @@ class ApiClient {
     if (!isFormData) {
       headers['Content-Type'] = 'application/json'
     }
-    const token = localStorage.getItem('rex-token')
+    const token = localStorage.getItem('rex-token') || sessionStorage.getItem('rex-token')
     if (token) {
       headers['Authorization'] = `Bearer ${token}`
     }
@@ -42,6 +42,7 @@ class ApiClient {
 
     if (res.status === 401) {
       localStorage.removeItem('rex-token')
+      sessionStorage.removeItem('rex-token')
       throw new AuthError('认证已过期')
     }
 
