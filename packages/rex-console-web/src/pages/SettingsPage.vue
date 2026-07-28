@@ -49,10 +49,8 @@ function onLanguageChange() {
 
 async function saveSettings() {
   saving.value = true
-  saveMessage.value = ''
   try {
-    await settingsApi.update(settings.value)
-    document.documentElement.dataset.theme = settings.value.theme === 'light' ? 'light' : undefined
+    await settingsApi.update({ ...settings.value })
     localStorage.setItem('rex-theme', settings.value.theme)
     // Persist language setting
     localStorage.setItem('rex-lang', settings.value.language)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import Modal from '@/components/ui/Modal.vue'
 import Tabs from '@/components/ui/Tabs.vue'
 import Input from '@/components/ui/Input.vue'
@@ -9,12 +9,13 @@ import Button from '@/components/ui/Button.vue'
 interface ResourceProps {
   name: string
   protocol: string
-  host: string
-  port: string
-  user: string
-  password: string
-  privateKey: string
-  passphrase: string
+  host?: string
+  port?: string
+  user?: string
+  password?: string
+  privateKey?: string
+  passphrase?: string
+  region?: string
   encoding: string
   scrollback: number
   cursorStyle: string
@@ -48,6 +49,7 @@ const form = ref<ResourceProps>({
   password: '',
   privateKey: '',
   passphrase: '',
+  region: '',
   encoding: 'UTF-8',
   scrollback: 10000,
   cursorStyle: 'block',
@@ -180,7 +182,7 @@ function onSave() {
             </div>
           </template>
 
-          <!-- S3: Endpoint + Bucket -->
+          <!-- S3: Endpoint + Bucket + Region -->
           <template v-if="form.protocol === 's3'">
             <div class="props-field">
               <label class="props-label">Endpoint</label>
@@ -189,6 +191,10 @@ function onSave() {
             <div class="props-field">
               <label class="props-label">Bucket</label>
               <Input v-model="form.port" size="sm" placeholder="my-bucket" />
+            </div>
+            <div class="props-field">
+              <label class="props-label">Region</label>
+              <Input v-model="form.region" size="sm" placeholder="us-east-1" />
             </div>
           </template>
 
@@ -218,8 +224,8 @@ function onSave() {
 
         <!-- Auth -->
         <template v-if="activeTab === 'auth'">
-          <!-- SSH/SFTP: Full auth options -->
-          <template v-if="['ssh', 'sftp'].includes(form.protocol)">
+          <!-- SSH: Full auth options (password + key file) -->
+          <template v-if="form.protocol === 'ssh'">
             <div class="props-field">
               <label class="props-label">Auth Method</label>
               <Select v-model="authMethod" :options="authMethods" size="sm" />
@@ -246,8 +252,8 @@ function onSave() {
             </template>
           </template>
 
-          <!-- MySQL/PostgreSQL/Redis: Username + Password -->
-          <template v-if="['mysql', 'postgresql', 'redis'].includes(form.protocol)">
+          <!-- MySQL/PostgreSQL/Redis/SFTP: Username + Password -->
+          <template v-if="['mysql', 'postgresql', 'redis', 'sftp'].includes(form.protocol)">
             <div class="props-field">
               <label class="props-label">Username</label>
               <Input v-model="form.user" size="sm" placeholder="root" />
@@ -258,22 +264,10 @@ function onSave() {
             </div>
           </template>
 
-          <!-- S3: Access Key + Secret Key -->
-          <template v-if="form.protocol === 's3'">
+          <!-- S3/SQLite: No auth needed -->
+          <template v-if="['s3', 'sqlite'].includes(form.protocol)">
             <div class="props-field">
-              <label class="props-label">Access Key</label>
-              <Input v-model="form.user" size="sm" placeholder="AKIA..." />
-            </div>
-            <div class="props-field">
-              <label class="props-label">Secret Key</label>
-              <Input v-model="form.password" size="sm" placeholder="••••••" />
-            </div>
-          </template>
-
-          <!-- SQLite: No auth needed -->
-          <template v-if="form.protocol === 'sqlite'">
-            <div class="props-field">
-              <p class="props-hint">SQLite databases are file-based and do not require authentication.</p>
+              <p class="props-hint">{{ form.protocol === 's3' ? 'S3 authentication is configured via access keys on the server.' : 'SQLite databases are file-based and do not require authentication.' }}</p>
             </div>
           </template>
         </template>
