@@ -78,6 +78,15 @@ pub fn run_supervisor(config: SupervisorConfig, worker_args: &[String]) -> ! {
                             write_update_phase(&state_path, UpdatePhase::StartingNew, 0);
                             continue; // 启动新版
                         }
+                    } else if s.phase == UpdatePhase::RollingBack {
+                        // API 触发的回滚
+                        tracing::info!(
+                            action = "SUPERVISOR_ROLLBACK_API",
+                            "worker exited with rolling_back phase, executing rollback"
+                        );
+                        rollback(s, &state_path);
+                        attempt = 0;
+                        continue;
                     }
                 }
                 // 无待处理更新，短暂等待后重启
@@ -100,8 +109,9 @@ pub fn run_supervisor(config: SupervisorConfig, worker_args: &[String]) -> ! {
                     // 替换失败，回滚
                     tracing::error!(
                         action = "SUPERVISOR_UPDATE_FAILED",
-                        "binary replacement failed"
+                        "binary replacement failed, rolling back"
                     );
+                    rollback(s, &state_path);
                 }
                 attempt += 1;
             }
@@ -123,12 +133,25 @@ pub fn run_supervisor(config: SupervisorConfig, worker_args: &[String]) -> ! {
                         rollback(s, &state_path);
                     }
                     attempt = 0;
+                } else {
+                    std::thread::sleep(Duration::from_secs(1));
                 }
             }
             _ => {
                 // 未知退出码，短暂等待后重启
                 attempt += 1;
-                std::thread::sleep(Duration::from_secs(1));
+                if attempt >= config.max_restart_attempts {
+                    tracing::error!(
+                        action = "SUPERVISOR_ROLLBACK",
+                        "max restart attempts reached, rolling back"
+                    );
+                    if let Some(ref s) = state {
+                        rollback(s, &state_path);
+                    }
+                    attempt = 0;
+                } else {
+                    std::thread::sleep(Duration::from_secs(1));
+                }
             }
         }
     }
@@ -228,13 +251,14 @@ fn replace_binary(state: &UpdateStateFile) -> bool {
     true
 }
 
-/// 回滚到旧版本二进制。
+/// 回滚到旧版本二进制（使用 rename 原子操作）。
 fn rollback(state: &UpdateStateFile, state_path: &Path) {
     let rollback = PathBuf::from(&state.rollback_path);
     let current_exe = match std::env::current_exe() {
         Ok(p) => p,
         Err(e) => {
             tracing::error!(error = %e, "failed to get current exe for rollback");
+            write_update_phase(state_path, UpdatePhase::Failed, state.attempt);
             return;
         }
     };
@@ -245,10 +269,15 @@ fn rollback(state: &UpdateStateFile, state_path: &Path) {
         return;
     }
 
-    if let Err(e) = std::fs::copy(&rollback, &current_exe) {
-        tracing::error!(error = %e, "failed to restore rollback binary");
-        write_update_phase(state_path, UpdatePhase::Failed, state.attempt);
-        return;
+    // 原子回滚：rename（比 copy 更安全）
+    if let Err(e) = std::fs::rename(&rollback, &current_exe) {
+        tracing::error!(error = %e, "failed to rename rollback binary");
+        // 回退到 copy 方式
+        if let Err(e2) = std::fs::copy(&rollback, &current_exe) {
+            tracing::error!(error = %e2, "failed to restore rollback binary");
+            write_update_phase(state_path, UpdatePhase::Failed, state.attempt);
+            return;
+        }
     }
 
     #[cfg(unix)]
