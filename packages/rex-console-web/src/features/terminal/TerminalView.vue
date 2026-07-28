@@ -144,14 +144,6 @@ function onTerminalSettingsChanged(e: Event) {
 }
 
 onMounted(() => {
-  window.addEventListener('terminal-settings-changed', onTerminalSettingsChanged)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('terminal-settings-changed', onTerminalSettingsChanged)
-})
-
-onMounted(() => {
   if (!containerRef.value) return
 
   const globalSettings = getGlobalTerminalSettings()
@@ -195,6 +187,14 @@ onMounted(() => {
     resizeObserver.disconnect()
     dispose()
   })
+})
+
+onMounted(() => {
+  window.addEventListener('terminal-settings-changed', onTerminalSettingsChanged)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('terminal-settings-changed', onTerminalSettingsChanged)
 })
 
 function onContextMenu(e: MouseEvent) {

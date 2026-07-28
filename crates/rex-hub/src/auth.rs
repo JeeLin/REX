@@ -93,7 +93,8 @@ impl AuthConfig {
         Ok(())
     }
 
-    pub fn login(&self, password: &str) -> AuthResult<String> {
+    /// 验证密码是否正确（内部复用）
+    fn verify_password(&self, password: &str) -> AuthResult<()> {
         let hash_str = self
             .db
             .get_setting("password_hash")?
@@ -103,23 +104,18 @@ impl AuthConfig {
         use argon2::password_hash::PasswordVerifier;
         argon2::Argon2::default()
             .verify_password(password.as_bytes(), &hash)
-            .map_err(|_| RExError::Message("invalid password".into()))?;
+            .map_err(|_| RExError::Message("invalid password".into()))
+    }
+
+    pub fn login(&self, password: &str) -> AuthResult<String> {
+        self.verify_password(password)?;
         self.generate_token()
     }
 
     pub fn change_password(&self, current: &str, new_password: &str) -> AuthResult<()> {
-        // 验证当前密码
-        let hash_str = self
-            .db
-            .get_setting("password_hash")?
-            .ok_or_else(|| RExError::Message("no password set".into()))?;
-        let hash =
-            argon2::PasswordHash::new(&hash_str).map_err(|e| RExError::Message(e.to_string()))?;
-        use argon2::password_hash::PasswordVerifier;
-        argon2::Argon2::default()
-            .verify_password(current.as_bytes(), &hash)
-            .map_err(|_| RExError::Message("current password is incorrect".into()))?;
-        // 设置新密码
+        self.verify_password(current).map_err(|_| {
+            RExError::Message("current password is incorrect".into())
+        })?;
         self.set_password(new_password)
     }
 }
