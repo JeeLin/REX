@@ -284,10 +284,7 @@ pub async fn background_update_task(data_dir: PathBuf) {
                 }
 
                 // 更新已暂存，设置环境变量让 main loop 检测后优雅退出
-                tracing::info!(
-                    action = "UPDATE_EXIT",
-                    "update staged, setting exit flag"
-                );
+                tracing::info!(action = "UPDATE_EXIT", "update staged, setting exit flag");
                 // 设置退出标志，由 main loop 检测后调用 std::process::exit(10)
                 std::env::set_var("REX_UPDATE_READY", "1");
                 return;
