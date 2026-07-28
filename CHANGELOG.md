@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.45.0] - 2026-07-28
+
+### Added
+- Hub 自动更新机制（阶段2）：supervisor + worker 进程模型，GitHub Release 检查、下载、SHA256 校验、原子替换、健康检查、回滚
+- 更新状态 REST API（check/trigger/status/rollback）
+- 设置页更新 UI（版本显示、检查更新、进度、回滚）
+
+### Changed
+- 重构 redis_codec 模块从 rex-common 移至 rex-redis
+
+### Fixed
+- agent_token 字段在环境详情 API 中正确返回
+- 资源编辑模态框支持协议特定字段
+- SSH 终端切换标签不再重连
+- SSH 终端底部行裁剪问题
+
 ## [0.44.0] - 2026-07-28
 
 ### Added
