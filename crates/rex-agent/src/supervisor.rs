@@ -137,7 +137,8 @@ fn apply_update(current_exe: &Path) -> Result<String, String> {
     }
 
     // rename staged → current（原子操作）
-    std::fs::rename(&staged_path, current_exe).map_err(|e| format!("rename staged to current: {e}"))?;
+    std::fs::rename(&staged_path, current_exe)
+        .map_err(|e| format!("rename staged to current: {e}"))?;
 
     // 清理 update-state.json
     let _ = std::fs::remove_file(&state_path);

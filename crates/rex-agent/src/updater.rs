@@ -94,7 +94,10 @@ pub async fn run_update(
         target_version: cmd.version.clone(),
         old_version: rex_common::APP_VERSION.to_string(),
         staged_path: tmp_path.to_string_lossy().into_owned(),
-        rollback_path: current_exe.with_extension("bak").to_string_lossy().into_owned(),
+        rollback_path: current_exe
+            .with_extension("bak")
+            .to_string_lossy()
+            .into_owned(),
         sha256: cmd.sha256.clone(),
         attempt: 0,
     };

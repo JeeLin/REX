@@ -4,7 +4,6 @@
 /// SSH 的 `load_resource_conn` (terminal_ws.rs) 是最早实现的版本，
 /// 包含 SSH 特有字段（use_agent, agent_id, keepalive_interval）。
 /// 本模块提供更通用的版本，适用于 MySQL/PostgreSQL/Redis/SFTP/SQLite/S3。
-
 use serde_json::Value as JsonValue;
 
 use crate::app::AppState;
@@ -35,7 +34,10 @@ pub struct ResourceConnInfo {
 ///
 /// 所有协议共用此函数，确保连接参数从 DB 而非前端获取。
 /// 前端仅传递 resource_id，后端负责读取和解密。
-pub fn load_resource_config(state: &AppState, resource_id: &str) -> Result<ResourceConnInfo, String> {
+pub fn load_resource_config(
+    state: &AppState,
+    resource_id: &str,
+) -> Result<ResourceConnInfo, String> {
     let resource = state
         .db
         .get_resource(resource_id)

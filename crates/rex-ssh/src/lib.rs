@@ -50,8 +50,7 @@ impl SshSession {
         // Default keepalive: 60s if not specified
         let keepalive = config.keepalive_interval.unwrap_or(60);
         if keepalive > 0 {
-            ssh_config.keepalive_interval =
-                Some(std::time::Duration::from_secs(keepalive as u64));
+            ssh_config.keepalive_interval = Some(std::time::Duration::from_secs(keepalive as u64));
         }
         let ssh_config = Arc::new(ssh_config);
 

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS agents (
   environment_id  TEXT NOT NULL REFERENCES environments(id) ON DELETE CASCADE,
   name            TEXT NOT NULL,
   token_hash      TEXT NOT NULL,
+  agent_token     TEXT DEFAULT '',
   version         TEXT DEFAULT '',
   os              TEXT DEFAULT '',
   arch            TEXT DEFAULT '',

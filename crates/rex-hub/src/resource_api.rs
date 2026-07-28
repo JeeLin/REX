@@ -254,7 +254,8 @@ pub async fn test_connection(
 ) -> ApiResult<TestConnectionResult> {
     // For S3, log endpoint from config_json instead of empty host
     let log_host = if body.protocol == "s3" {
-        body.config_json.as_ref()
+        body.config_json
+            .as_ref()
             .and_then(|c| serde_json::from_str::<serde_json::Value>(c).ok())
             .and_then(|v| v.get("endpoint")?.as_str().map(String::from))
             .unwrap_or_default()

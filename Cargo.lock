@@ -3586,10 +3586,16 @@ version = "0.44.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64",
+ "flate2",
+ "hex",
  "redis",
  "rex-common",
+ "rmpv",
  "serde_json",
+ "sha2 0.10.9",
  "tokio",
+ "zstd",
 ]
 
 [[package]]

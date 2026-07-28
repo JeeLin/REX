@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::AppState;
 use crate::resource_conn::load_resource_config;
+use crate::AppState;
 use axum::extract::{Multipart, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -163,9 +163,21 @@ async fn connect(
                 host: res.host.clone(),
                 port: res.port.unwrap_or(22),
                 username: res.username.clone(),
-                password: res.config.get("password").and_then(|v| v.as_str()).map(String::from),
-                private_key: res.config.get("private_key").and_then(|v| v.as_str()).map(String::from),
-                keepalive_interval: res.config.get("keepalive_interval").and_then(|v| v.as_u64()).map(|v| v as u32),
+                password: res
+                    .config
+                    .get("password")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                private_key: res
+                    .config
+                    .get("private_key")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                keepalive_interval: res
+                    .config
+                    .get("keepalive_interval")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32),
             })
             .await;
             match conn {
@@ -184,11 +196,31 @@ async fn connect(
                 password: None,
                 private_key: None,
                 keepalive_interval: None,
-                bucket: res.config.get("bucket").and_then(|v| v.as_str()).map(String::from),
-                region: res.config.get("region").and_then(|v| v.as_str()).map(String::from),
-                endpoint: res.config.get("endpoint").and_then(|v| v.as_str()).map(String::from),
-                access_key: res.config.get("access_key").and_then(|v| v.as_str()).map(String::from),
-                secret_key: res.config.get("secret_key").and_then(|v| v.as_str()).map(String::from),
+                bucket: res
+                    .config
+                    .get("bucket")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                region: res
+                    .config
+                    .get("region")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                endpoint: res
+                    .config
+                    .get("endpoint")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                access_key: res
+                    .config
+                    .get("access_key")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                secret_key: res
+                    .config
+                    .get("secret_key")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
             };
             let conn = rex_s3::S3Connector::connect_from_request(&req).await;
             match conn {

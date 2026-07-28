@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::AppState;
 use crate::resource_conn::load_resource_config;
+use crate::AppState;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -184,8 +184,16 @@ async fn connect(
     let req = RedisConnectRequest {
         host: res.host.clone(),
         port: res.port.unwrap_or(6379),
-        password: res.config.get("password").and_then(|v| v.as_str()).map(String::from),
-        db: res.config.get("db").and_then(|v| v.as_i64()).map(|v| v as i32),
+        password: res
+            .config
+            .get("password")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        db: res
+            .config
+            .get("db")
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32),
     };
 
     tracing::info!(

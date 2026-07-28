@@ -5,8 +5,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::AppState;
 use crate::resource_conn::load_resource_config;
+use crate::AppState;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -151,11 +151,23 @@ async fn connect(
             host: res.host,
             port: res.port.unwrap_or(0),
             username: res.username,
-            password: res.config.get("password").and_then(|v| v.as_str()).map(String::from),
-            database: res.config.get("database_name").and_then(|v| v.as_str()).map(String::from),
+            password: res
+                .config
+                .get("password")
+                .and_then(|v| v.as_str())
+                .map(String::from),
+            database: res
+                .config
+                .get("database_name")
+                .and_then(|v| v.as_str())
+                .map(String::from),
         },
         "sqlite" => {
-            let file_path = res.config.get("file_path").and_then(|v| v.as_str()).unwrap_or("");
+            let file_path = res
+                .config
+                .get("file_path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             ConnectRequest {
                 host: file_path.to_string(),
                 port: 0,
