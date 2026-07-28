@@ -158,12 +158,15 @@ fn read_update_state(path: &Path) -> Option<UpdateStateFile> {
     serde_json::from_str(&data).ok()
 }
 
-/// 原子写入 update-state.json。
+/// 原子写入 update-state.json（tmp → fsync → rename）。
 fn write_update_state(path: &Path, state: &UpdateStateFile) {
     let tmp_path = path.with_extension("json.tmp");
     if let Ok(json) = serde_json::to_string_pretty(state) {
-        if std::fs::write(&tmp_path, json).is_ok() {
-            let _ = std::fs::rename(&tmp_path, path);
+        if let Ok(mut file) = std::fs::File::create(&tmp_path) {
+            use std::io::Write;
+            if file.write_all(json.as_bytes()).is_ok() && file.sync_all().is_ok() {
+                let _ = std::fs::rename(&tmp_path, path);
+            }
         }
     }
 }
