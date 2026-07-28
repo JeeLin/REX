@@ -266,7 +266,7 @@ pub async fn background_update_task(data_dir: PathBuf) {
             return;
         }
 
-        // 等待 6 小时（首次启动延迟 5 分钟，给服务启动时间）
+        // 等待 5 分钟（给服务启动时间）
         tokio::time::sleep(std::time::Duration::from_secs(5 * 60)).await;
 
         match checker.check_for_update().await {
@@ -283,12 +283,14 @@ pub async fn background_update_task(data_dir: PathBuf) {
                     continue;
                 }
 
-                // 更新已暂存，退出 worker 让 supervisor 替换
+                // 更新已暂存，设置环境变量让 main loop 检测后优雅退出
                 tracing::info!(
                     action = "UPDATE_EXIT",
-                    "exiting worker to trigger supervisor update"
+                    "update staged, setting exit flag"
                 );
-                std::process::exit(10);
+                // 设置退出标志，由 main loop 检测后调用 std::process::exit(10)
+                std::env::set_var("REX_UPDATE_READY", "1");
+                return;
             }
             Ok(None) => {
                 tracing::debug!(action = "UPDATE_CHECK", "already on latest version");

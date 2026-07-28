@@ -185,8 +185,9 @@ pub async fn trigger_update(
         let checker = crate::update_checker::UpdateChecker::from_env(data_dir);
         match checker.download_and_stage(&info).await {
             Ok(()) => {
-                tracing::info!(action = "UPDATE_TRIGGERED", version = %info.version, "update staged, exiting worker");
-                std::process::exit(10);
+                tracing::info!(action = "UPDATE_TRIGGERED", version = %info.version, "update staged, setting exit flag");
+                // 设置退出标志，由 main loop 检测后调用 std::process::exit(10)
+                std::env::set_var("REX_UPDATE_READY", "1");
             }
             Err(e) => {
                 tracing::error!(action = "UPDATE_TRIGGER_FAILED", error = %e, "failed to stage update");
