@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.44.0] - 2026-07-28
+
+### Added
+- 登录页「记住我」功能：勾选后 token 持久化到 localStorage，未勾选则仅存 sessionStorage
+- 设置页密码修改：安全区块新增密码修改表单（当前密码 + 新密码 + 确认密码），后端 `/api/auth/change-password` 端点 + 审计日志
+- 终端配置即时生效：设置页保存终端主题/透明度/背景图后，已打开终端通过 CustomEvent 即时更新
+
+### Fixed
+- 终端生命周期：合并重复 onMounted，修复 settings listener 潜在内存泄漏
+
 ## [0.43.0] - 2026-07-28
 
 ### Fixed
