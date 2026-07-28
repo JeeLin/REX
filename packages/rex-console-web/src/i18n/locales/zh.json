@@ -264,6 +264,7 @@
     "footer": "单用户 · 自托管",
     "loginFailed": "登录失败",
     "password": "密码",
+    "rememberMe": "记住我",
     "signIn": "登录",
     "signingIn": "登录中...",
     "subtitle": "远程资源管理"

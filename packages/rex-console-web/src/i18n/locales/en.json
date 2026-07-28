@@ -264,6 +264,7 @@
     "footer": "Single-user · Self-hosted",
     "loginFailed": "Login failed",
     "password": "Password",
+    "rememberMe": "Remember me",
     "signIn": "Sign in",
     "signingIn": "Signing in...",
     "subtitle": "Remote Resource Management"

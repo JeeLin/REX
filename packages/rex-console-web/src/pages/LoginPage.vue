@@ -11,13 +11,14 @@ const router = useRouter()
 const route = useRoute()
 
 const password = ref('')
+const remember = ref(true)
 const errorMsg = ref('')
 
 async function handleLogin() {
   if (!password.value) return
   errorMsg.value = ''
   try {
-    await auth.login(password.value)
+    await auth.login(password.value, remember.value)
     const redirect = (route.query.redirect as string) || '/workspace'
     router.push(redirect)
   } catch (e: unknown) {
@@ -45,6 +46,12 @@ async function handleLogin() {
             autocomplete="current-password"
             autofocus
           />
+        </div>
+        <div class="remember-row">
+          <label class="remember-label">
+            <input v-model="remember" type="checkbox" class="remember-checkbox" />
+            <span>{{ t('login.rememberMe') }}</span>
+          </label>
         </div>
         <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
         <Button
@@ -131,6 +138,21 @@ async function handleLogin() {
   color: var(--danger);
   font-size: var(--text-sm);
   text-align: center;
+}
+.remember-row {
+  display: flex;
+  align-items: center;
+}
+.remember-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.remember-checkbox {
+  accent-color: var(--accent);
 }
 .login-footer {
   text-align: center;
