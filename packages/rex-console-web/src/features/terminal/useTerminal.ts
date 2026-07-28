@@ -41,9 +41,19 @@ export function useTerminal() {
     term.loadAddon(fit)
     term.open(container)
 
-    requestAnimationFrame(() => {
-      fit.fit()
-    })
+    // Wait for fonts to load before initial fit to avoid wrong cell metrics
+    const doFit = () => {
+      try { fit.fit() } catch { /* ignore fit errors during init */ }
+    }
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(() => {
+        requestAnimationFrame(doFit)
+        // Secondary fit after a short delay to catch late-loading fonts
+        setTimeout(doFit, 200)
+      })
+    } else {
+      requestAnimationFrame(doFit)
+    }
 
     terminal.value = term
     fitAddon.value = fit
