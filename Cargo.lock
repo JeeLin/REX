@@ -3469,7 +3469,7 @@ dependencies = [
 
 [[package]]
 name = "rex-agent"
-version = "0.41.0"
+version = "0.44.0"
 dependencies = [
  "futures-util",
  "hex",
@@ -3491,7 +3491,7 @@ dependencies = [
 
 [[package]]
 name = "rex-common"
-version = "0.41.0"
+version = "0.44.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3519,7 +3519,7 @@ dependencies = [
 
 [[package]]
 name = "rex-hub"
-version = "0.41.0"
+version = "0.44.0"
 dependencies = [
  "aes-gcm 0.10.3",
  "argon2 0.5.3",
@@ -3530,10 +3530,12 @@ dependencies = [
  "bytes",
  "chrono",
  "futures-util",
+ "hex",
  "jsonwebtoken",
  "r2d2",
  "rand_core 0.6.4",
  "redis",
+ "reqwest",
  "rex-common",
  "rex-mysql",
  "rex-postgresql",
@@ -3544,6 +3546,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "tokio",
  "tokio-util",
@@ -3555,7 +3558,7 @@ dependencies = [
 
 [[package]]
 name = "rex-mysql"
-version = "0.41.0"
+version = "0.44.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3567,7 +3570,7 @@ dependencies = [
 
 [[package]]
 name = "rex-postgresql"
-version = "0.41.0"
+version = "0.44.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3579,7 +3582,7 @@ dependencies = [
 
 [[package]]
 name = "rex-redis"
-version = "0.41.0"
+version = "0.44.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3591,7 +3594,7 @@ dependencies = [
 
 [[package]]
 name = "rex-s3"
-version = "0.41.0"
+version = "0.44.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3604,7 +3607,7 @@ dependencies = [
 
 [[package]]
 name = "rex-sqlite"
-version = "0.41.0"
+version = "0.44.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3616,7 +3619,7 @@ dependencies = [
 
 [[package]]
 name = "rex-ssh"
-version = "0.41.0"
+version = "0.44.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3635,7 +3638,7 @@ dependencies = [
 
 [[package]]
 name = "rex-transfer"
-version = "0.41.0"
+version = "0.44.0"
 
 [[package]]
 name = "rfc6979"

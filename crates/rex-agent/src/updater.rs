@@ -90,9 +90,13 @@ pub async fn run_update(
     // 4. 写 update-state.json
     let state_file = current_exe.with_extension("update-state.json");
     let state = rex_common::update::UpdateStateFile {
+        phase: UpdatePhase::Requested,
         target_version: cmd.version.clone(),
-        tmp_path: tmp_path.to_string_lossy().to_string(),
+        old_version: rex_common::APP_VERSION.to_string(),
+        staged_path: tmp_path.to_string_lossy().into_owned(),
+        rollback_path: current_exe.with_extension("bak").to_string_lossy().into_owned(),
         sha256: cmd.sha256.clone(),
+        attempt: 0,
     };
     let state_json =
         serde_json::to_string_pretty(&state).map_err(|e| UpdateError::Io(e.to_string()))?;

@@ -1,5 +1,6 @@
 //! 共享应用状态 — 持有数据库、认证配置和各协议连接池。
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::agent_ws::AgentTunnelState;
@@ -21,4 +22,5 @@ pub struct AppState {
     pub file_pool: FileState,
     pub agent_tunnel: Arc<AgentTunnelState>,
     pub agent_binaries: Arc<AgentBinaries>,
+    pub data_dir: PathBuf,
 }

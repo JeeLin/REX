@@ -59,4 +59,5 @@ pub mod file_transfer;
 pub mod redis;
 pub mod redis_codec;
 pub mod sql;
+pub mod supervisor;
 pub mod update;

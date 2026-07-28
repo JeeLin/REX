@@ -106,14 +106,14 @@ fn apply_update(current_exe: &Path) -> Result<String, String> {
     let state: rex_common::update::UpdateStateFile =
         serde_json::from_str(&state_json).map_err(|e| format!("parse update-state.json: {e}"))?;
 
-    let tmp_path = PathBuf::from(&state.tmp_path);
-    if !tmp_path.exists() {
-        return Err(format!("tmp file not found: {}", state.tmp_path));
+    let staged_path = PathBuf::from(&state.staged_path);
+    if !staged_path.exists() {
+        return Err(format!("staged file not found: {}", state.staged_path));
     }
 
     // 校验 SHA256（如果提供了）
     if !state.sha256.is_empty() {
-        let data = std::fs::read(&tmp_path).map_err(|e| format!("read tmp file: {e}"))?;
+        let data = std::fs::read(&staged_path).map_err(|e| format!("read staged file: {e}"))?;
         let hash = sha256_hex(&data);
         if hash != state.sha256 {
             return Err(format!(
@@ -124,13 +124,20 @@ fn apply_update(current_exe: &Path) -> Result<String, String> {
     }
 
     // 备份当前二进制
-    let backup = current_exe.with_extension("bak");
+    let backup = if state.rollback_path.is_empty() {
+        current_exe.with_extension("bak")
+    } else {
+        PathBuf::from(&state.rollback_path)
+    };
+    if let Some(parent) = backup.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
     if let Err(e) = std::fs::copy(current_exe, &backup) {
         tracing::warn!(error = %e, "failed to backup current binary");
     }
 
-    // rename tmp → current（原子操作）
-    std::fs::rename(&tmp_path, current_exe).map_err(|e| format!("rename tmp to current: {e}"))?;
+    // rename staged → current（原子操作）
+    std::fs::rename(&staged_path, current_exe).map_err(|e| format!("rename staged to current: {e}"))?;
 
     // 清理 update-state.json
     let _ = std::fs::remove_file(&state_path);

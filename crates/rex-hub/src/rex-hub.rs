@@ -20,6 +20,7 @@ use rex_hub::sql_api::{self, SqlState};
 use rex_hub::terminal_ws;
 use rex_hub::tunnel_ws;
 use rex_hub::update_api;
+use rex_hub::update_checker;
 use rex_hub::AppState;
 
 use axum::routing::get_service;
@@ -28,23 +29,53 @@ use tower_http::services::{ServeDir, ServeFile};
 use tracing_subscriber::EnvFilter;
 
 fn main() {
-    if std::env::var("REX_WORKER").is_err() {
-        std::env::set_var("REX_WORKER", "1");
-        worker_main();
-    } else {
-        worker_main();
-    }
-}
-
-fn worker_main() {
+    // 初始化日志（supervisor 和 worker 都需要）
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env().add_directive("info".parse().unwrap()))
         .init();
 
+    if std::env::var("REX_WORKER").is_err() {
+        // Supervisor 模式：监控 worker 子进程
+        supervisor_main();
+    } else {
+        // Worker 模式：运行业务逻辑
+        worker_main();
+    }
+}
+
+fn supervisor_main() {
     tracing::info!(
         name = "REX Hub",
         version = env!("CARGO_PKG_VERSION"),
-        status = "starting"
+        status = "supervisor starting"
+    );
+
+    let data_dir = std::env::var("REX_DATA_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| default_data_dir());
+    let _ = std::fs::create_dir_all(&data_dir);
+
+    let port: u16 = std::env::var("REX_PORT")
+        .unwrap_or_else(|_| "3000".into())
+        .parse()
+        .unwrap_or(3000);
+
+    let config = rex_common::supervisor::SupervisorConfig {
+        data_dir,
+        health_url: format!("http://127.0.0.1:{port}/api/health"),
+        max_restart_attempts: 3,
+    };
+
+    // 传递除程序名外的所有参数给 worker
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    rex_common::supervisor::run_supervisor(config, &args);
+}
+
+fn worker_main() {
+    tracing::info!(
+        name = "REX Hub",
+        version = env!("CARGO_PKG_VERSION"),
+        status = "worker starting"
     );
 
     let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
@@ -87,6 +118,7 @@ fn worker_main() {
             file_pool,
             agent_tunnel,
             agent_binaries,
+            data_dir: data_dir.clone(),
         };
 
         tracing::info!("serving frontend from: {}", static_dir.display());
@@ -104,6 +136,12 @@ fn worker_main() {
             tracing::info!("listening on HTTP 0.0.0.0:{port}");
         }
 
+        // 启动后台更新检查任务（每 6 小时检查 GitHub Release）
+        let update_data_dir = data_dir.clone();
+        tokio::spawn(async move {
+            update_checker::background_update_task(update_data_dir).await;
+        });
+
         rex_hub::tls::serve(app, listener, tls_config)
             .await
             .expect("server error");
@@ -116,11 +154,17 @@ fn default_data_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(".rex"))
 }
 
+/// GET /api/health — 健康检查端点（供 supervisor 验证 worker 存活）
+async fn health_check() -> axum::Json<serde_json::Value> {
+    axum::Json(serde_json::json!({ "status": "ok" }))
+}
+
 fn build_router(state: AppState, static_dir: PathBuf) -> Router {
     let index_path = static_dir.join("index.html");
     let serve_dir = ServeDir::new(&static_dir).not_found_service(ServeFile::new(index_path));
 
     let public_routes = Router::new()
+        .route("/api/health", axum::routing::get(health_check))
         .route("/api/auth/check", axum::routing::get(auth::check_auth))
         .route("/api/auth/login", axum::routing::post(auth::login))
         .route(
@@ -136,6 +180,22 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
         .route(
             "/api/auth/change-password",
             axum::routing::post(auth::change_password),
+        )
+        .route(
+            "/api/update/check",
+            axum::routing::get(update_api::check_update),
+        )
+        .route(
+            "/api/update/trigger",
+            axum::routing::post(update_api::trigger_update),
+        )
+        .route(
+            "/api/update/status",
+            axum::routing::get(update_api::update_status),
+        )
+        .route(
+            "/api/update/rollback",
+            axum::routing::post(update_api::rollback_update),
         )
         .nest(
             "/api/environments",

@@ -22,5 +22,6 @@ pub mod terminal_ws;
 pub mod tls;
 pub mod tunnel_ws;
 pub mod update_api;
+pub mod update_checker;
 
 pub use app::AppState;

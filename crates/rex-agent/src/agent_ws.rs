@@ -338,10 +338,10 @@ async fn connect_and_run(
                 if let Ok(hub_msg) = serde_json::from_str::<HubMsg>(&text) {
                     match hub_msg {
                         HubMsg::Connect { payload } => {
-                            let evt_tx = evt_tx.clone();
+                            let evt_tx2 = evt_tx.clone();
                             let channels = channels.clone();
                             tokio::spawn(async move {
-                                handle_connect(payload, evt_tx, channels).await;
+                                handle_connect(payload, evt_tx2, channels).await;
                             });
                         }
                         HubMsg::Close { payload } => {
@@ -358,10 +358,10 @@ async fn connect_and_run(
                                 tracing::info!("auto_update disabled, ignoring update command");
                                 continue;
                             }
-                            let evt_tx = evt_tx.clone();
                             let version = payload.version.clone();
+                            let evt_tx_clone = evt_tx.clone();
                             tokio::spawn(async move {
-                                handle_update(payload, evt_tx).await;
+                                handle_update(payload, evt_tx_clone).await;
                             });
                             tracing::info!(version = %version, "update started");
                         }
@@ -558,7 +558,7 @@ async fn handle_update(cmd: rex_common::update::UpdateCommand, evt_tx: mpsc::Sen
     };
 
     let report: crate::updater::ProgressReporter = Box::new(move |progress| {
-        let evt_tx = evt_tx.clone();
+        let _evt_tx = evt_tx.clone();
         Box::pin(async move {
             let phase_str = match progress.phase {
                 rex_common::update::UpdatePhase::Idle => "idle",
@@ -567,6 +567,7 @@ async fn handle_update(cmd: rex_common::update::UpdateCommand, evt_tx: mpsc::Sen
                 rex_common::update::UpdatePhase::Replacing => "replacing",
                 rex_common::update::UpdatePhase::Restarting => "restarting",
                 rex_common::update::UpdatePhase::Error => "error",
+                _ => "unknown",
             };
             let msg = serde_json::to_string(&AgentMsg::UpdateProgress {
                 payload: UpdateProgressPayload {
@@ -580,7 +581,7 @@ async fn handle_update(cmd: rex_common::update::UpdateCommand, evt_tx: mpsc::Sen
                 },
             })
             .unwrap();
-            let _ = evt_tx.send(AgentEvent::Text(msg)).await;
+            let _ = _evt_tx.send(AgentEvent::Text(msg)).await;
         })
     });
 
