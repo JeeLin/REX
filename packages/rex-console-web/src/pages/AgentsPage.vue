@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { agentsApi, type Agent, type AuditEntry } from '@/api/agents'
 import { useEnvironmentsStore } from '@/stores/environments'
@@ -174,6 +174,58 @@ const allDirectMode = computed(() => {
   return store.environments.length > 0 && store.environments.every(e => e.connection_mode === 'direct')
 })
 
+// Deployment guide
+const guideExpanded = ref(true)
+const guideTab = ref<'binary' | 'docker' | 'compose' | 'config'>('binary')
+const guideCopySuccess = ref('')
+
+watch(hasAgents, (val) => {
+  if (val) guideExpanded.value = false
+}, { immediate: true })
+
+const guideCode = computed(() => {
+  const host = hubHost()
+  if (guideTab.value === 'binary') {
+    return `# 1. Download the agent
+curl -LO ${host}/api/agents/download?os=linux&arch=amd64
+chmod +x rex-agent
+
+# 2. Register with your environment
+./rex-agent register --server ${host} --token YOUR_TOKEN`
+  }
+  if (guideTab.value === 'docker') {
+    return `docker run -d \\
+  --name rex-agent \\
+  -e REX_SERVER=${host} \\
+  -e REX_TOKEN=YOUR_TOKEN \\
+  rex/rex-agent:latest`
+  }
+  if (guideTab.value === 'compose') {
+    return `services:
+  rex-agent:
+    image: rex/rex-agent:latest
+    environment:
+      REX_SERVER: ${host}
+      REX_TOKEN: YOUR_TOKEN
+    restart: unless-stopped`
+  }
+  return `# ~/.rex/config.toml
+[agent]
+server = "${host}"
+token = "YOUR_TOKEN"
+auto_update = true`
+})
+
+function copyGuideCode() {
+  navigator.clipboard.writeText(guideCode.value).then(() => {
+    guideCopySuccess.value = 'copied'
+    setTimeout(() => { guideCopySuccess.value = '' }, 2000)
+  }).catch(() => {
+    guideCopySuccess.value = 'failed'
+    setTimeout(() => { guideCopySuccess.value = '' }, 2000)
+  })
+}
+
 
 const filteredLogs = computed(() => {
   if (!logFilter.value) return logEntries.value
@@ -194,8 +246,46 @@ const filteredLogs = computed(() => {
       :title="t('agents.noAgents')"
       :description="allDirectMode ? t('agents.directModeNote') : t('agents.noAgentsDesc')"
     />
+    <!-- Deployment Guide -->
+    <div class="guide-section">
+      <button class="guide-toggle" @click="guideExpanded = !guideExpanded">
+        <span class="guide-toggle-icon">{{ guideExpanded ? '▾' : '▸' }}</span>
+        <span class="guide-toggle-title">{{ t('agents.guideTitle') }}</span>
+        <span class="guide-toggle-desc muted">{{ t('agents.guideDesc') }}</span>
+      </button>
+      <div v-show="guideExpanded" class="guide-body">
+        <div class="guide-steps">
+          <div class="guide-step">
+            <div class="guide-step-title">{{ t('agents.guideStep1') }}</div>
+            <p class="guide-step-hint muted">{{ t('agents.guideDownloadHint') }}</p>
+          </div>
+          <div class="guide-step">
+            <div class="guide-step-title">{{ t('agents.guideStep2') }}</div>
+            <p class="guide-step-hint muted">{{ t('agents.guideTokenHint') }}</p>
+          </div>
+          <div class="guide-step">
+            <div class="guide-step-title">{{ t('agents.guideStep3') }}</div>
+            <p class="guide-step-hint muted">{{ t('agents.guideStartHint') }}</p>
+          </div>
+        </div>
+        <div class="guide-tabs">
+          <button class="guide-tab" :class="{ active: guideTab === 'binary' }" @click="guideTab = 'binary'">{{ t('agents.guideBinaryTab') }}</button>
+          <button class="guide-tab" :class="{ active: guideTab === 'docker' }" @click="guideTab = 'docker'">{{ t('agents.guideDockerTab') }}</button>
+          <button class="guide-tab" :class="{ active: guideTab === 'compose' }" @click="guideTab = 'compose'">{{ t('agents.guideComposeTab') }}</button>
+          <button class="guide-tab" :class="{ active: guideTab === 'config' }" @click="guideTab = 'config'">{{ t('agents.guideConfigTab') }}</button>
+        </div>
+        <div class="guide-code">
+          <div class="guide-code-header">
+            <span class="muted">{{ t('agents.deployCopyHint') }}</span>
+            <Button variant="secondary" size="sm" @click="copyGuideCode">{{ guideCopySuccess ? t('agents.deployCopied') : t('agents.deployCopy') }}</Button>
+          </div>
+          <pre class="mono"><code>{{ guideCode }}</code></pre>
+        </div>
+      </div>
+    </div>
 
-    <div v-else class="agent-grid">
+
+    <div v-if="hasAgents" class="agent-grid">
       <Card v-for="agent in agents" :key="agent.id" class="agent-card">
         <div class="agent-card-header">
           <div class="agent-info">
@@ -550,6 +640,120 @@ const filteredLogs = computed(() => {
   font-size: var(--text-xs);
 }
 .deploy-code pre {
+  margin: 0;
+  padding: 12px;
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-primary);
+}
+/* Deployment guide */
+.guide-section {
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.guide-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-deep);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-primary);
+}
+.guide-toggle:hover {
+  background: var(--bg-hover);
+}
+.guide-toggle-icon {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.guide-toggle-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.guide-toggle-desc {
+  font-size: var(--text-xs);
+  margin-left: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.guide-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+.guide-steps {
+  display: flex;
+  gap: var(--space-4);
+}
+.guide-step {
+  flex: 1;
+  padding: var(--space-3);
+  background: var(--bg-deep);
+  border-radius: 6px;
+}
+.guide-step-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-1);
+}
+.guide-step-hint {
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+.guide-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-deep);
+  border-radius: 6px;
+  padding: 2px;
+}
+.guide-tab {
+  flex: 1;
+  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.guide-tab:hover { color: var(--text-primary); }
+.guide-tab.active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.guide-code {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.guide-code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-xs);
+}
+.guide-code pre {
   margin: 0;
   padding: 12px;
   font-size: var(--text-xs);

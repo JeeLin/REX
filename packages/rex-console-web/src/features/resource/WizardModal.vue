@@ -169,7 +169,7 @@ async function submit() {
     await store.createResource(props.environmentId, {
       name: resName.value.trim(),
       protocol: selectedProtocol.value,
-      host: selectedProtocol.value === 'sqlite' ? 'localhost' : host.value,
+      host: selectedProtocol.value === 'sqlite' ? 'localhost' : (selectedProtocol.value === 's3' ? s3Endpoint.value : host.value),
       port: port.value,
       username: username.value || undefined,
       config_json: JSON.stringify(buildConfig()),

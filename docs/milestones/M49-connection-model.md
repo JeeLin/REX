@@ -31,14 +31,27 @@ SSH 终端是唯一正常工作的协议 — 它通过 `load_resource_conn` 从 
 |---|------|------|
 | 1 | 后端：提取公共 load_resource_config 函数 | ✅ |
 | 1a | 前端：修复 WizardModal S3 验证 bug（validateStep 跳过 S3 host 检查） | ✅ |
+| 1b | 前端：修复 S3 提交时 host 字段为空（应使用 endpoint） | ✅ |
 | 2 | 后端：重构 sql_api.rs connect handler | ✅ |
 | 3 | 后端：重构 redis_api.rs connect handler | ✅ |
 | 4 | 后端：重构 file_api.rs connect handler | ✅ |
-| 5 | 前端：简化 SQL API 和 SqlPage | ⬜ |
-| 6 | 前端：简化 Redis API 和 RedisPage | ⬜ |
-| 7 | 前端：简化 Files API 和 FilesPage | ⬜ |
-| 8 | 前端：简化 WorkspacePage Tab 创建 | ⬜ |
-| 9 | 质量验证 | ⬜ |
+| 5 | 前端：简化 SQL API 和 SqlPage | ✅ |
+| 6 | 前端：简化 Redis API 和 RedisPage | ✅ |
+| 7 | 前端：简化 Files API 和 FilesPage | ✅ |
+| 8 | 前端：简化 WorkspacePage Tab 创建 | ✅ |
+| 9 | 前端：ResourceProperties 按协议类型显示编辑字段 | ✅ |
+| 10 | 前端：修复 /api/settings PUT 422 session_timeout 类型错误 | ✅ |
+| 11 | 前端：修复 StatusDot 连接中状态一直闪烁黄灯 | ✅ |
+| 12 | 前端：修复 SSH 终端底部 2 行被截断 | ✅ |
+| 13 | 前端：修复 SSH vim 操作后终端卡死 | ✅ |
+| 14 | 后端：修复 SSH 空闲连接断开过快（keepalive） | ✅ |
+| 15 | 前端：修复审计日志页面无法下翻滚动 | ✅ |
+| 16 | 前端：修复收藏夹无收藏资源按钮 | ✅ |
+| 17 | 前端：修复 SSH SFTP 按钮点击后底部空栏 | ✅ |
+| 18 | 前端：修复 MobileTerminalBar 上下键显示 ~A ~B | ✅ |
+| 19 | 前端：修复 SQLite 修改配置后无法读取内容 | ✅ |
+| 20 | 前端：添加 Agent 连接操作指南页面 | ✅ |
+| 21 | 质量验证 | ✅ |
 
 ## 子任务详细设计
 
@@ -325,7 +338,112 @@ SSH 终端是唯一正常工作的协议 — 它通过 `load_resource_conn` 从 
 - **测试标准**：`bun run type-check` 通过，`bun run lint` 通过
 - **提交信息**：`refactor(workspace): simplify Tab creation to resource_id only`
 
-### 9 质量验证
+### 9 前端：ResourceProperties 按协议类型显示编辑字段
+
+- **功能目标**：修复 ResourceProperties 弹窗按协议类型显示对应字段，而非固定显示 SSH 字段
+- **问题根因**：`ResourceProperties.vue` 的 Connection tab 硬编码了 Name/Protocol/Host/Port/Color，Auth tab 硬编码了 SSH 认证方式；不支持 MySQL/PostgreSQL 的 database_name、Redis 的 db、SQLite 的 file_path、S3 的 endpoint/access_key/secret_key/bucket 等协议特有字段
+- **文件结构**：
+  - 修改：`packages/rex-console-web/src/features/workspace/ResourceProperties.vue`
+  - 修改：`packages/rex-console-web/src/pages/WorkspacePage.vue`（Tab interface 增加 config_json 字段）
+- **接口设计**：
+  - Tab interface 新增 `configJson?: Record<string, unknown>` 字段
+  - ResourceProperties props 新增 `configJson?: Record<string, unknown>`
+  - Connection tab 根据 `form.protocol` 条件渲染不同字段：
+    - SSH/SFTP/MySQL/PostgreSQL/Redis：Host + Port
+    - SQLite：File Path（替代 Host/Port）
+    - S3：Endpoint + Bucket + Region
+  - Auth tab 仅 SSH 显示 Password/Key File；其他协议显示 Password（MySQL/PG/Redis/SFTP）或不显示
+  - 非 SSH 协议隐藏 Terminal/Appearance/Keepalive tabs
+- **测试标准**：`bun run type-check` 通过
+- **提交信息**：`fix(ui): ResourceProperties shows protocol-specific fields`
+
+### 10 前端：修复 /api/settings PUT 422 session_timeout 类型错误
+
+- **功能目标**：修复 SettingsPage 保存时 session_timeout 类型不匹配导致 422 错误
+- **问题根因**：后端 `update_settings` 期望 `HashMap<String, String>`，前端发送数字 `30` 而非字符串 `"30"`
+- **修复方案**：在 `saveSettings()` 中将 `session_timeout` 转为字符串后再发送
+- **文件结构**：修改 `packages/rex-console-web/src/pages/SettingsPage.vue`
+- **提交信息**：`fix(settings): send session_timeout as string to match backend API`
+
+### 11 前端：修复 StatusDot 连接中状态一直闪烁黄灯
+
+- **功能目标**：修复所有连接标签右侧 StatusDot 始终显示黄色脉冲（connecting 状态）
+- **问题根因**：Tab 的 `status` 字段初始值为 `'connecting'`，连接成功后未更新为 `'connected'`
+- **修复方案**：检查各协议页面的连接状态回调，确保连接成功后更新 Tab status 为 `'connected'`
+- **文件结构**：修改 `WorkspacePage.vue`、各协议页面的连接回调
+- **提交信息**：`fix(ui): update tab status to connected after successful connection`
+
+### 12 前端：修复 SSH 终端底部 2 行被截断
+
+- **功能目标**：修复 SSH 终端底部约 2 行内容被容器裁剪
+- **问题根因**：`.ws-ssh-area` 或 `TerminalView` 容器的 CSS 高度/溢出设置不当
+- **修复方案**：检查终端容器 CSS，确保 `overflow: hidden` 不裁剪内容，调整 `height: 100%` 配合 flexbox
+- **文件结构**：修改 `WorkspacePage.vue`（`.ws-ssh-area` 样式）、`TerminalView.vue`（终端容器样式）
+- **提交信息**：`fix(terminal): prevent bottom rows from being clipped by container`
+
+### 13 前端：修复 SSH vim 操作后终端卡死
+
+- **功能目标**：修复 SSH 终端中使用 vim 编辑文件后终端无法响应
+- **问题根因**：vim 使用alternate screen buffer，xterm.js 可能未正确处理 CSI 序列或 resize 事件
+- **修复方案**：检查 `useTerminal.ts` 中的 terminal 配置，确保 `altScreen` 相关设置正确；检查 resize 事件处理
+- **文件结构**：修改 `packages/rex-console-web/src/features/terminal/useTerminal.ts`
+- **提交信息**：`fix(terminal): handle vim alt-screen buffer correctly`
+
+### 14 后端：修复 SSH 空闲连接断开过快（keepalive）
+
+- **功能目标**：修复 SSH 连接空闲一段时间后自动断开
+- **问题根因**：`keepalive_interval` 配置未设置或默认值过低，导致服务端或 NAT 超时断开
+- **修复方案**：在 SSH 连接初始化时设置默认 keepalive 间隔（如 60 秒），并在资源配置中允许用户自定义
+- **文件结构**：修改 `crates/rex-ssh/src/lib.rs`（keepalive 默认值）
+- **提交信息**：`fix(ssh): set default keepalive interval to prevent idle disconnect`
+
+### 15 前端：修复审计日志页面无法下翻滚动
+
+- **功能目标**：修复审计日志页面内容超出视口时无法滚动查看
+- **问题根因**：AuditLogPage 容器缺少 `overflow-y: auto` 或高度未约束
+- **修复方案**：为审计日志容器添加滚动样式
+- **文件结构**：修改 `packages/rex-console-web/src/pages/AuditLogPage.vue`
+- **提交信息**：`fix(audit): enable scrolling for audit log page`
+
+### 16 前端：修复收藏夹无收藏资源按钮
+
+- **功能目标**：在收藏夹面板中添加收藏资源的操作入口
+- **问题根因**：收藏夹功能只有列表展示，缺少"收藏"操作按钮
+- **修复方案**：在资源列表或资源详情中添加"收藏"按钮，调用 favorites store
+- **文件结构**：修改 `packages/rex-console-web/src/stores/favorites.ts`、相关页面组件
+- **提交信息**：`fix(favorites): add resource favorite button to UI`
+
+### 17 前端：修复 SSH SFTP 按钮点击后底部空栏
+
+- **功能目标**：修复 SSH 终端中点击 SFTP 按钮后底部出现空面板
+- **问题根因**：SFTP Drawer 组件内容未正确加载或布局异常
+- **修复方案**：检查 FilesDrawer 组件的加载逻辑和 CSS 布局
+- **文件结构**：修改 `packages/rex-console-web/src/features/files/FilesDrawer.vue`
+- **提交信息**：`fix(sftp): show file browser content in SFTP drawer`
+
+### 18 前端：修复 MobileTerminalBar 上下键显示 ~A ~B
+
+- **功能目标**：修复移动端终端栏上下键发送错误的转义序列
+- **问题根因**：MobileTerminalBar 将上下键作为字符输入而非终端转义序列
+- **修复方案**：将上下键映射为正确的 ANSI 转义序列（`\x1b[A` / `\x1b[B`）
+- **文件结构**：修改 `packages/rex-console-web/src/features/terminal/MobileTerminalBar.vue`
+- **提交信息**：`fix(terminal): send correct escape sequences for arrow keys on mobile`
+
+### 19 前端：修复 SQLite 修改配置后无法读取内容
+
+- **功能目标**：修复 SQLite 资源修改配置（如更换数据库文件路径）后打开仍无法读取
+- **问题根因**：修改配置后未重新建立连接，或缓存的 session_id 过期
+- **修复方案**：在资源配置变更时清除旧的 session，重新连接
+- **文件结构**：修改 SQL 连接逻辑
+- **提交信息**：`fix(sqlite): reconnect after config change`
+
+### 20 前端：添加 Agent 连接操作指南
+
+- **功能目标**：在 Agents 页面添加 Agent 连接操作指南，指导用户如何部署和连接 Agent
+- **文件结构**：修改 `packages/rex-console-web/src/pages/AgentsPage.vue`
+- **交互设计**：在 Agent 列表为空时显示引导卡片，包含部署步骤和配置说明
+- **提交信息**：`feat(agents): add agent deployment guide to agents page`
+### 21 质量验证
 
 - **功能目标**：确保所有改动通过质量门禁
 - **文件结构**：无新文件
@@ -352,7 +470,7 @@ SSH 终端是唯一正常工作的协议 — 它通过 `load_resource_conn` 从 
 
   - [x] 步骤1：编写里程碑文档
   - [x] 步骤2：设计核对
-- [ ] 步骤3：开发
+- [x] 步骤3：开发
 - [ ] 步骤4：代码精简
 - [ ] 步骤5：代码审查
 - [ ] 步骤6：测试验证
