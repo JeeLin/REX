@@ -21,7 +21,8 @@ export function useTerminal() {
   let disposed = false
   let dataSub: IDisposable | null = null
   let resizeSub: IDisposable | null = null
-  let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+  let heartbeatTimer: number | null = null
+  let fitTimer: number | null = null
 
   /** 创建终端实例并挂载到 DOM */
   function createTerminal(container: HTMLElement, options?: Partial<Terminal['options']>) {
@@ -31,7 +32,7 @@ export function useTerminal() {
       fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
       theme: getTerminalTheme('default'),
       allowProposedApi: true,
-      allowAlternate: true,
+      scrollback: 5000,
       ...options,
     })
 
@@ -57,7 +58,7 @@ export function useTerminal() {
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'ping' }))
       }
-    }, 30000)
+    }, 30000) as unknown as number
   }
 
   /** 停止心跳 */
@@ -154,6 +155,9 @@ export function useTerminal() {
       })
 
       resizeSub = term.onResize(({ cols, rows }) => {
+        // Skip resize-to-server while in alternate screen buffer (vim, less, top…)
+        // to prevent SSH server from re-rendering alt-screen with new dimensions
+        if (term.buffer.active !== term.buffer.normal) return
         if (ws?.readyState === WebSocket.OPEN) {
           ws.send(
             JSON.stringify({
@@ -177,10 +181,13 @@ export function useTerminal() {
     ws = null
     status.value = 'disconnected'
   }
-
-  /** 调整终端大小 */
+  /** 调整终端大小（防抖，避免 alt-screen 期间 resize 风暴） */
   function fit() {
-    fitAddon.value?.fit()
+    if (fitTimer !== null) clearTimeout(fitTimer)
+    fitTimer = window.setTimeout(() => {
+      fitTimer = null
+      fitAddon.value?.fit()
+    }, 150) as unknown as number
   }
 
   /** 切换终端主题 */
@@ -195,6 +202,10 @@ export function useTerminal() {
   function dispose() {
     disposed = true
     stopHeartbeat()
+    if (fitTimer !== null) {
+      clearTimeout(fitTimer)
+      fitTimer = null
+    }
     disconnect()
     dataSub?.dispose()
     resizeSub?.dispose()

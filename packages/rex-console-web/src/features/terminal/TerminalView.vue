@@ -37,15 +37,15 @@ const emit = defineEmits<{
   'update:status': [status: string]
 }>()
 
+const containerRef = ref<HTMLDivElement>()
+const { terminal, status, errorMessage, createTerminal, connect, disconnect, fit, dispose } =
+  useTerminal()
+
 // Sync terminal status to parent (WorkspacePage tab status)
 watch(status, (s) => {
   const dotStatus = s === 'connected' ? 'online' : s === 'connecting' ? 'connecting' : s === 'error' ? 'error' : 'offline'
   emit('update:status', dotStatus)
 })
-
-const containerRef = ref<HTMLDivElement>()
-const { terminal, status, errorMessage, createTerminal, connect, disconnect, fit, dispose } =
-  useTerminal()
 
 // Search
 const searchAddon = shallowRef<SearchAddon | null>(null)
@@ -108,6 +108,9 @@ watch(status, (s) => {
       break
     case 'connecting':
       statusDot.value = 'connecting'
+      break
+    case 'error':
+      statusDot.value = 'error'
       break
     default:
       statusDot.value = 'offline'

@@ -5,17 +5,17 @@ defineProps<{
   terminal: Terminal | null
 }>()
 </script>
-
 <template>
   <div class="mobile-terminal-bar">
+
     <!-- 方向键区 -->
     <div class="mtb-dpad">
-      <button class="mtb-btn mtb-dpad-up" @click="terminal?.paste('\x1b[A')">↑</button>
+      <button class="mtb-btn mtb-dpad-up" @click="terminal?.input('\x1b[A')">↑</button>
       <div class="mtb-dpad-row">
-        <button class="mtb-btn mtb-dpad-left" @click="terminal?.paste('\x1b[D')">←</button>
-        <button class="mtb-btn mtb-dpad-right" @click="terminal?.paste('\x1b[C')">→</button>
+        <button class="mtb-btn mtb-dpad-left" @click="terminal?.input('\x1b[D')">←</button>
+        <button class="mtb-btn mtb-dpad-right" @click="terminal?.input('\x1b[C')">→</button>
       </div>
-      <button class="mtb-btn mtb-dpad-down" @click="terminal?.paste('\x1b[B')">↓</button>
+      <button class="mtb-btn mtb-dpad-down" @click="terminal?.input('\x1b[B')">↓</button>
     </div>
 
     <!-- 快捷键按钮 -->
