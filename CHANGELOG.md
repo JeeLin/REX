@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.48.0] - 2026-07-29
+
+### Added
+- 全局错误边界：组件崩溃时显示友好错误页（含重试按钮）
+- 响应式表格：审计日志表格在小屏设备水平滚动
+- CSP 安全头：Content-Security-Policy 限制资源加载来源
+
 ## [0.47.1] - 2026-07-29
 
 ### Changed
