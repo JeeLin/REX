@@ -1,0 +1,171 @@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useAuthStore } from '@/stores/auth'
+import { api } from '@/api/client'
+
+const emit = defineEmits<{ cancel: [] }>()
+
+const { t } = useI18n()
+const auth = useAuthStore()
+const password = ref('')
+const loading = ref(false)
+const errorMsg = ref('')
+
+interface LoginResponse {
+  token: string
+  expiresAt: string
+}
+
+async function handleRefresh() {
+  if (!password.value.trim()) return
+  loading.value = true
+  errorMsg.value = ''
+  try {
+    const res = await api.post<LoginResponse>('/auth/login', { password: password.value })
+    auth.setToken(res.token)
+    password.value = ''
+    emit('cancel')
+  } catch (e: unknown) {
+    errorMsg.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    loading.value = false
+  }
+}
+
+function handleCancel() {
+  auth.logout()
+  window.location.href = '/login'
+}
+</script>
+
+<template>
+  <Teleport to="body">
+    <div class="token-refresh-overlay" @click.self="handleCancel">
+      <div class="token-refresh-card">
+        <div class="card-header">
+          <h3>{{ t('auth.tokenRefresh.title') }}</h3>
+          <p class="card-desc">{{ t('auth.tokenRefresh.description') }}</p>
+        </div>
+
+        <form @submit.prevent="handleRefresh">
+          <div class="field">
+            <input
+              v-model="password"
+              type="password"
+              :placeholder="t('auth.tokenRefresh.passwordPlaceholder')"
+              autofocus
+              :disabled="loading"
+            />
+          </div>
+
+          <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
+
+          <div class="actions">
+            <button type="button" class="btn-secondary" :disabled="loading" @click="handleCancel">
+              {{ t('auth.tokenRefresh.cancel') }}
+            </button>
+            <button type="submit" class="btn-primary" :disabled="loading || !password.trim()">
+              {{ loading ? t('auth.tokenRefresh.refreshing') : t('auth.tokenRefresh.submit') }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </Teleport>
+</template>
+
+<style scoped>
+.token-refresh-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+.token-refresh-card {
+  width: 360px;
+  padding: 24px;
+  border-radius: 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.card-header h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.card-desc {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.field {
+  margin-bottom: 12px;
+}
+
+.field input {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-0);
+  color: var(--text-1);
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.field input:focus {
+  border-color: var(--accent);
+}
+
+.error-msg {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(248, 81, 73, 0.1);
+  color: #f85149;
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.btn-secondary,
+.btn-primary {
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  border: none;
+}
+
+.btn-secondary {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+</style>

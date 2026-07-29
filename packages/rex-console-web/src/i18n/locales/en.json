@@ -677,5 +677,15 @@
   "errorBoundary": {
     "title": "Something went wrong",
     "retry": "Retry"
+  },
+  "auth": {
+    "tokenRefresh": {
+      "title": "Session Expired",
+      "description": "Your login session has expired. Please enter your password to continue.",
+      "passwordPlaceholder": "Password",
+      "submit": "Continue",
+      "cancel": "Logout",
+      "refreshing": "Refreshing..."
+    }
   }
 }

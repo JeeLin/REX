@@ -677,5 +677,15 @@
   "errorBoundary": {
     "title": "出了点问题",
     "retry": "重试"
+  },
+  "auth": {
+    "tokenRefresh": {
+      "title": "登录已过期",
+      "description": "您的登录会话已过期，请输入密码继续使用。",
+      "passwordPlaceholder": "输入密码",
+      "submit": "继续",
+      "cancel": "退出登录",
+      "refreshing": "刷新中..."
+    }
   }
 }

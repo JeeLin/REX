@@ -76,6 +76,13 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /** Token 刷新（用于过期弹窗恢复） */
+  function setToken(newToken: string) {
+    token.value = newToken
+    localStorage.setItem('rex-token', newToken)
+    sessionStorage.removeItem('rex-token')
+  }
+
   /** 登出 */
   function logout() {
     token.value = null

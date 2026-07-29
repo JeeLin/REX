@@ -16,6 +16,9 @@ export class ApiError extends Error {
   }
 }
 
+/** 401 弹窗事件：client.ts 拦截 401 后发出，由 App.vue 的 TokenRefreshModal 监听 */
+export const tokenRefreshEvent = new EventTarget()
+
 class ApiClient {
   private baseUrl = '/api'
 
@@ -41,8 +44,11 @@ class ApiClient {
     })
 
     if (res.status === 401) {
-      localStorage.removeItem('rex-token')
-      sessionStorage.removeItem('rex-token')
+      // 不再直接清 token 跳转，而是触发弹窗事件
+      // 弹窗会由 App.vue 的 TokenRefreshModal 监听
+      tokenRefreshEvent.dispatchEvent(new CustomEvent('unauthorized', {
+        detail: { path, options },
+      }))
       throw new AuthError('认证已过期')
     }
 
