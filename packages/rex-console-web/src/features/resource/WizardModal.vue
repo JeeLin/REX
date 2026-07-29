@@ -371,6 +371,13 @@ const colorOptions = [
 .protocol-icon {
   font-size: 24px;
   font-family: var(--font-mono);
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--bg-hover);
 }
 .protocol-name {
   font-size: var(--text-sm);
