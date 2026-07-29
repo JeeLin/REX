@@ -1,7 +1,7 @@
 # M54: Bug fixes
 
 ## Context
-M53（Bug fix + UX polish）完成后，用户测试中发现多个 bug：首次登录密码设置跳转失效、新建资源向导验证错位、Agent Token 显示异常。本里程碑集中修复这些问题。
+M53（Bug fix + UX polish）完成后，用户测试中发现多个 bug。本里程碑集中修复这些问题。
 
 版本类型：patch（bug 修复）
 
@@ -14,7 +14,7 @@ M53（Bug fix + UX polish）完成后，用户测试中发现多个 bug：首次
 |---|------|------|
 | 1 | 修复首次登录密码设置跳转 | ✅ |
 | 2 | 修复新建资源向导验证错位 | ✅ |
-| 3 | 修复 Agent Token 显示与复制/重置 | ⬜ |
+| 3 | 修复 Agent Token 显示与复制/重置 | ✅ |
 
 ## 子任务详细设计
 
@@ -39,17 +39,17 @@ M53（Bug fix + UX polish）完成后，用户测试中发现多个 bug：首次
 
 ### 3 修复 Agent Token 显示与复制/重置
 
-- **功能目标**：环境详情页正确显示 Agent Token，复制和重置功能正常工作
-- **文件结构**（修改）：`packages/rex-console-web/src/pages/EnvironmentDetailPage.vue`、`crates/rex-hub/src/db.rs`
-- **根因**：
-  1. 环境详情 API 查询 `(SELECT a.token_hash FROM agents ...) AS agent_token` 将 `token_hash` 别名为 `agent_token`，但 `token_hash` 列存储的是原始 token（命名误导），需确认实际数据流
-  2. 重置 token 后前端丢弃了 API 返回的新 token，重新从环境 API 获取，但环境 API 可能未正确返回 token
-  3. 无 Agent 注册时 token 显示为 `—`，复制按钮点击无效果（`env.agent_token` 为空）
+- **功能目标**：环境详情页正确显示 Agent Token，无 Agent 时给出提示而非显示无效的复制/重置按钮
+- **文件结构**（修改）：
+  - `packages/rex-console-web/src/pages/EnvironmentDetailPage.vue`
+  - `packages/rex-console-web/src/i18n/locales/en.json`
+  - `packages/rex-console-web/src/i18n/locales/zh.json`
+- **根因**：环境创建后无 Agent 注册时 `agent_token` 为空，模板显示 `—`，但复制/重置按钮仍然可用且无效果
 - **修复方案**：
-  1. 确认后端 `GET /api/environments/{id}` 返回的 `agent_token` 字段正确
-  2. 重置 token 后使用 API 返回的新 token 直接显示，而非重新 fetch 环境
-  3. token 为空时禁用复制按钮，显示提示文字
-- **提交信息**：`fix(agent): correct agent token display and copy/reset`
+  1. 当 `agent_token` 为空时隐藏复制/重置按钮，显示提示文字"暂无注册的 Agent。部署 Agent 后可获取注册令牌。"
+  2. 有 token 时正常显示 token 值和操作按钮
+  3. 添加 i18n 键 `environmentDetail.noAgentToken`（中/英）
+- **提交信息**：`fix(agent): improve agent token display when no agent registered`
 
 ## 设计核对点
 
@@ -63,7 +63,7 @@ M53（Bug fix + UX polish）完成后，用户测试中发现多个 bug：首次
 
 - [x] 步骤1：编写里程碑文档
 - [x] 步骤2：设计核对
-- [ ] 步骤3：开发
+- [x] 步骤3：开发
 - [ ] 步骤4：代码精简
 - [ ] 步骤5：代码审查
 - [ ] 步骤6：测试验证
