@@ -138,7 +138,7 @@ jobs:
           for dir in dist/agents-tmp/binaries-*/; do
             arch=$(basename "$dir" | sed 's/^binaries-//')
             mkdir -p "dist/agents/$arch"
-            cp "$dir"/rex-agent* "dist/agents/$arch/rex-agent"
+            cp "$dir"/rex-agent "dist/agents/$arch/rex-agent"
           done
           rm -rf dist/hub-tmp dist/agents-tmp
           chmod +x dist/agents/*/rex-agent
@@ -226,8 +226,8 @@ jobs:
         run: |
           for dir in artifacts/binaries-*/; do
             arch=$(basename "$dir" | sed 's/^binaries-//')
-            cp "$dir"/rex-agent* "rex-agent-${arch}"
-            cp "$dir"/rex-hub* "rex-hub-${arch}"
+            cp "$dir"/rex-agent "rex-agent-${arch}"
+            cp "$dir"/rex-hub "rex-hub-${arch}"
           done
           chmod +x rex-agent-* rex-hub-* 2>/dev/null || true
       - name: Generate SHA256SUMS
