@@ -127,7 +127,7 @@ async function testConnection() {
   try {
     testResult.value = await store.testConnection({
       protocol: selectedProtocol.value,
-      host: host.value,
+      host: selectedProtocol.value === 'sqlite' ? filePath.value : host.value,
       port: port.value,
       username: username.value,
       config_json: JSON.stringify(buildConfig()),
