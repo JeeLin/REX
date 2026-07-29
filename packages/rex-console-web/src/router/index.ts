@@ -50,14 +50,19 @@ let sessionStarted = false
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
-  // 首次访问时检查认证状态
-  if (!auth.isAuthenticated && to.name !== 'login' && to.name !== 'setup') {
+  // 未登录时检查认证状态，判断是否需要密码设置
+  if (!auth.isAuthenticated) {
     await auth.checkAuth()
   }
 
-  // 需要设置密码 → setup 页面
-  if (auth.requiresSetup && to.name !== 'setup' && to.name !== 'login') {
+  // 需要设置密码 → 强制跳转 setup 页面
+  if (auth.requiresSetup && to.name !== 'setup') {
     return { name: 'setup' }
+  }
+
+  // 不需要设置密码但访问了 setup → 跳转登录页
+  if (!auth.isAuthenticated && !auth.requiresSetup && to.name === 'setup') {
+    return { name: 'login' }
   }
 
   // 未登录 → 登录页，停止 session timeout
