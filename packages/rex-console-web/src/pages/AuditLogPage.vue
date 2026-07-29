@@ -7,6 +7,7 @@ import Card from '@/components/ui/Card.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import ResponsiveTable from '@/components/ResponsiveTable.vue'
 
 const { t } = useI18n()
 const store = useEnvironmentsStore()
@@ -282,7 +283,8 @@ onMounted(async () => {
 
     <Card v-else class="log-card">
       <div v-if="loading" class="loading muted">{{ t('common.loadingEllipsis') }}</div>
-      <table v-else class="log-table">
+      <ResponsiveTable v-else>
+      <table class="log-table">
         <thead>
           <tr>
             <th></th>
@@ -329,6 +331,7 @@ onMounted(async () => {
           </template>
         </tbody>
       </table>
+      </ResponsiveTable>
     </Card>
 
     <!-- Context menu -->
