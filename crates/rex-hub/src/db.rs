@@ -592,6 +592,46 @@ impl Database {
         }
     }
 
+    pub fn find_environment_by_registration_token(&self, token: &str) -> Result<Option<Environment>> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare("SELECT id, name, description, connection_mode, registration_token, created_at, updated_at FROM environments WHERE registration_token = ?1")
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let mut rows = stmt
+            .query_map(rusqlite::params![token], |row| {
+                Ok(Environment {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    connection_mode: row.get(3)?,
+                    registration_token: row.get(4)?,
+                    created_at: row.get(5)?,
+                    updated_at: row.get(6)?,
+                })
+            })
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        match rows.next() {
+            Some(Ok(env)) => Ok(Some(env)),
+            Some(Err(e)) => Err(RExError::Message(e.to_string())),
+            None => Ok(None),
+        }
+    }
+
+    pub fn find_agent_by_env_id(&self, env_id: &str) -> Result<Option<String>> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare("SELECT id FROM agents WHERE environment_id = ?1 LIMIT 1")
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let mut rows = stmt
+            .query_map(rusqlite::params![env_id], |row| row.get::<_, String>(0))
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        match rows.next() {
+            Some(Ok(id)) => Ok(Some(id)),
+            Some(Err(e)) => Err(RExError::Message(e.to_string())),
+            None => Ok(None),
+        }
+    }
+
     pub fn list_all_agents(&self) -> Result<Vec<Agent>> {
         let conn = self.conn()?;
         let mut stmt = conn

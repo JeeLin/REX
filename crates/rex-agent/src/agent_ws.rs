@@ -144,6 +144,8 @@ struct UpdateProgressPayload {
 #[derive(Debug, Serialize)]
 struct AuthPayload {
     token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -261,10 +263,12 @@ async fn connect_and_run(
     };
     let (mut ws_sink, mut ws_stream) = ws_stream.split();
 
-    // 1. 发送 auth（只传 token，Hub 通过 token 查找 agent_id）
+    // 1. 发送 auth（token + name，Hub 通过 token 查找环境并注册 agent）
+    let agent_name = std::env::var("REX_AGENT_NAME").unwrap_or_else(|_| "agent".into());
     let auth_msg = serde_json::to_string(&AgentMsg::Auth {
         payload: AuthPayload {
             token: config.agent_token.clone(),
+            name: Some(agent_name),
         },
     })?;
     ws_sink.send(Message::Text(auth_msg)).await?;

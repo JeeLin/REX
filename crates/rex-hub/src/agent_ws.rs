@@ -35,6 +35,8 @@ enum AgentMsg {
 #[derive(Debug, Deserialize)]
 struct AuthPayload {
     token: String,
+    #[serde(default)]
+    name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -190,17 +192,68 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
         }
     };
 
-    // 2. 通过 token 查找 Agent
+    // 2. 通过注册令牌查找环境，自动注册 Agent
     let db = state.db.clone();
     let token_for_lookup = auth_msg.token.clone();
-    let verified =
-        tokio::task::spawn_blocking(move || db.find_agent_by_token(&token_for_lookup)).await;
-    let verified_id = match verified {
-        Ok(Ok(Some(id))) => id,
+    let env_result =
+        tokio::task::spawn_blocking(move || db.find_environment_by_registration_token(&token_for_lookup)).await;
+    let env = match env_result {
+        Ok(Ok(Some(env))) => env,
         _ => {
             if let Ok(fail) = serde_json::to_string(&HubMsg::AuthFail {
                 payload: AuthFailPayload {
-                    reason: "invalid token or agent not found".into(),
+                    reason: "invalid registration token".into(),
+                },
+            }) {
+                let _ = ws_sink.send(Message::Text(fail.into())).await;
+            }
+            return;
+        }
+    };
+
+    // 3. 查找或创建 Agent 记录
+    let db = state.db.clone();
+    let env_id = env.id.clone();
+    let agent_id = tokio::task::spawn_blocking(move || db.find_agent_by_env_id(&env_id)).await;
+    let verified_id = match agent_id {
+        Ok(Ok(Some(id))) => id,
+        Ok(Ok(None)) => {
+            // 自动创建 Agent 记录
+            let db = state.db.clone();
+            let env_id = env.id.clone();
+            let agent_name = auth_msg.name.clone().unwrap_or_else(|| "agent".into());
+            match tokio::task::spawn_blocking(move || {
+                db.create_agent(&env_id, &agent_name, "", "", "", "", "")
+            }).await {
+                Ok(Ok(agent)) => agent.id,
+                Ok(Err(e)) => {
+                    tracing::error!(error = %e, "failed to create agent");
+                    if let Ok(fail) = serde_json::to_string(&HubMsg::AuthFail {
+                        payload: AuthFailPayload {
+                            reason: "failed to register agent".into(),
+                        },
+                    }) {
+                        let _ = ws_sink.send(Message::Text(fail.into())).await;
+                    }
+                    return;
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "failed to create agent");
+                    if let Ok(fail) = serde_json::to_string(&HubMsg::AuthFail {
+                        payload: AuthFailPayload {
+                            reason: "internal error".into(),
+                        },
+                    }) {
+                        let _ = ws_sink.send(Message::Text(fail.into())).await;
+                    }
+                    return;
+                }
+            }
+        }
+        _ => {
+            if let Ok(fail) = serde_json::to_string(&HubMsg::AuthFail {
+                payload: AuthFailPayload {
+                    reason: "agent lookup failed".into(),
                 },
             }) {
                 let _ = ws_sink.send(Message::Text(fail.into())).await;
