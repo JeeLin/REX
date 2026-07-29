@@ -72,3 +72,4 @@ webpki-roots = "0.26"
 rmpv = "1"
 flate2 = "1"
 zstd = "0.13"
+criterion = { version = "0.5", features = ["html_reports"] }
