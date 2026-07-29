@@ -139,14 +139,14 @@ jobs:
       - name: Download all agent binaries
         uses: actions/download-artifact@v8
         with:
-          pattern: agent-*
+          pattern: binaries-*
           path: dist/agents-tmp/
           merge-multiple: false
 
       - name: Organize agent binaries
         run: |
-          for dir in dist/agents-tmp/agent-*/; do
-            arch=$(basename "$dir" | sed 's/^agent-//')
+          for dir in dist/agents-tmp/binaries-*/; do
+            arch=$(basename "$dir" | sed 's/^binaries-//')
             mkdir -p "dist/agents/$arch"
             cp "$dir"/rex-agent* "dist/agents/$arch/"
           done
@@ -196,13 +196,13 @@ jobs:
       - name: Download agent binary (linux-amd64)
         uses: actions/download-artifact@v8
         with:
-          name: agent-linux-amd64
+          name: binaries-linux-amd64
           path: dist/
 
       - name: Download agent binary (linux-arm64)
         uses: actions/download-artifact@v8
         with:
-          name: agent-linux-arm64
+          name: binaries-linux-arm64
           path: dist/arm64/
 
       - name: Prepare agent README for Docker Hub
@@ -236,28 +236,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Download all agent binaries
+      - name: Download all binaries
         uses: actions/download-artifact@v8
         with:
-          pattern: agent-*
-          path: artifacts/
-          merge-multiple: false
-
-      - name: Download all hub binaries
-        uses: actions/download-artifact@v8
-        with:
-          pattern: hub-*
+          pattern: binaries-*
           path: artifacts/
           merge-multiple: false
 
       - name: Create zip packages
         run: |
-          for dir in artifacts/agent-*/; do
-            arch=$(basename "$dir" | sed 's/^agent-//')
+          for dir in artifacts/binaries-*/; do
+            arch=$(basename "$dir" | sed 's/^binaries-//')
             (cd "$dir" && zip -j "../../rex-agent-${arch}.zip" rex-agent*)
-          done
-          for dir in artifacts/hub-*/; do
-            arch=$(basename "$dir" | sed 's/^hub-//')
             (cd "$dir" && zip -j "../../rex-hub-${arch}.zip" rex-hub*)
           done
 
