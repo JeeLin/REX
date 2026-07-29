@@ -142,9 +142,32 @@ fn worker_main() {
             update_checker::background_update_task(update_data_dir).await;
         });
 
-        rex_hub::tls::serve(app, listener, tls_config)
-            .await
-            .expect("server error");
+        // 优雅关闭：监听 SIGTERM/SIGINT
+        let shutdown_signal = async {
+            let ctrl_c = tokio::signal::ctrl_c();
+            #[cfg(unix)]
+            {
+                let mut sigterm =
+                    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                        .expect("failed to install SIGTERM handler");
+                tokio::select! {
+                    _ = ctrl_c => {},
+                    _ = sigterm.recv() => {},
+                }
+            }
+            #[cfg(not(unix))]
+            {
+                ctrl_c.await.ok();
+            }
+            tracing::info!("shutdown signal received, starting graceful shutdown");
+        };
+
+        let server = rex_hub::tls::serve(app, listener, tls_config);
+        tokio::select! {
+            _ = server => {},
+            _ = shutdown_signal => {},
+        }
+        tracing::info!("server stopped");
     });
 }
 
@@ -156,7 +179,14 @@ fn default_data_dir() -> PathBuf {
 
 /// GET /api/health — 健康检查端点（供 supervisor 验证 worker 存活）
 async fn health_check() -> axum::Json<serde_json::Value> {
-    axum::Json(serde_json::json!({ "status": "ok" }))
+    axum::Json(serde_json::json!({
+        "status": "ok",
+        "version": env!("CARGO_PKG_VERSION"),
+        "uptime": std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+    }))
 }
 
 fn build_router(state: AppState, static_dir: PathBuf) -> Router {
