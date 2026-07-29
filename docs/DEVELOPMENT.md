@@ -104,6 +104,7 @@ rex-agent = 所有 crate（无前端）
 | **M56** | UX polish & stability | — | ✅ |
 | **M57** | Stability, Mobile & Security | — | ✅ |
 | **M58** | Performance, Accessibility & Documentation | — | ✅ |
+| **M59** | Production Hardening & Integration Tests | — | ✅ |
 
 ### M0：项目骨架重建
 

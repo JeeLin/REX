@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.50.0] - 2026-07-29
+
+### Added
+- 优雅关闭：Hub 收到 SIGTERM/SIGINT 时优雅关闭
+- 健康检查：返回版本号和启动时间
+- API 集成测试：认证和环境管理端点测试（5 个测试用例）
+
 ## [0.49.0] - 2026-07-29
 
 ### Added
