@@ -52,7 +52,7 @@ impl AuthConfig {
 
     pub fn generate_token(&self) -> AuthResult<String> {
         let now = chrono::Utc::now();
-        let exp = now + chrono::Duration::days(7);
+        let exp = now + chrono::Duration::days(30);
         let claims = Claims {
             sub: "admin".into(),
             iat: now.timestamp() as usize,
@@ -161,7 +161,7 @@ pub async fn login(
                     ..Default::default()
                 })
                 .ok();
-            let expires = chrono::Utc::now() + chrono::Duration::days(7);
+            let expires = chrono::Utc::now() + chrono::Duration::days(30);
             Ok((
                 StatusCode::OK,
                 Json(serde_json::json!({
@@ -223,7 +223,7 @@ pub async fn set_password(
             &e.to_string(),
         )
     })?;
-    let expires = chrono::Utc::now() + chrono::Duration::days(7);
+    let expires = chrono::Utc::now() + chrono::Duration::days(30);
     Ok((
         StatusCode::OK,
         Json(serde_json::json!({
