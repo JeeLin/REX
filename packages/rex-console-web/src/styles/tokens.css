@@ -135,3 +135,28 @@
   --scrollbar-thumb: #d0d7de;
   --scrollbar-thumb-hover: #afb8c1;
 }
+
+/* 高对比模式 */
+:root[data-theme='high-contrast'] {
+  --bg-deep: #000000;
+  --bg-page: #0a0a0a;
+  --bg-surface: #111111;
+  --bg-elevated: #1a1a1a;
+  --bg-hover: #222222;
+  --text-primary: #ffffff;
+  --text-secondary: #cccccc;
+  --text-muted: #999999;
+  --border: #555555;
+  --border-strong: #777777;
+  --border-subtle: #333333;
+  --accent: #ffaa44;
+  --accent-hover: #ffbb55;
+  --success: #44cc44;
+  --danger: #ff4444;
+  --info: #44aaff;
+  --purple: #aa66ff;
+  --warning: #ffcc00;
+  --scrollbar-width: 8px;
+  --scrollbar-thumb: #666666;
+  --scrollbar-thumb-hover: #888888;
+}

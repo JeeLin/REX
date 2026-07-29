@@ -139,7 +139,7 @@ onMounted(async () => {
       ...remote,
       session_timeout: parseInt(localStorage.getItem('rex-session-timeout') || '30', 10),
     }
-    document.documentElement.dataset.theme = settings.value.theme === 'light' ? 'light' : undefined
+    document.documentElement.dataset.theme = settings.value.theme === 'dark' ? undefined : settings.value.theme
     localStorage.setItem('rex-theme', settings.value.theme)
     // Sync i18n locale from saved settings
     if (settings.value.language) {
@@ -195,6 +195,7 @@ async function saveSettings() {
         <select v-model="settings.theme" class="form-input">
           <option value="dark">{{ t('settings.dark') }}</option>
           <option value="light">{{ t('settings.light') }}</option>
+          <option value="high-contrast">{{ t('settings.highContrast') }}</option>
         </select>
       </div>
       <div class="form-group">
