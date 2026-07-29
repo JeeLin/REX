@@ -314,10 +314,13 @@ async function resetAgentToken() {
           <label class="form-label" style="margin-bottom: var(--space-2)">
             <span>{{ t('environments.agentToken') }}</span>
           </label>
-          <div class="agent-token-row">
-            <code class="agent-token-value mono">{{ env.agent_token || '—' }}</code>
+          <div v-if="env.agent_token" class="agent-token-row">
+            <code class="agent-token-value mono">{{ env.agent_token }}</code>
             <Button variant="secondary" size="sm" @click="copyToken">{{ t('common.copy') }}</Button>
             <Button variant="danger" size="sm" @click="resetAgentToken">{{ t('common.reset') }}</Button>
+          </div>
+          <div v-else class="agent-token-empty muted" style="font-size: var(--text-sm)">
+            {{ t('environmentDetail.noAgentToken') }}
           </div>
         </div>
       </Card>
