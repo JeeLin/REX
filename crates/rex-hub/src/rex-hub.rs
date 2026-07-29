@@ -207,11 +207,13 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
         .route(
             "/api/auth/password",
             axum::routing::post(auth::set_password),
+        )
+        .route(
+            "/api/agents/download",
+            axum::routing::get(update_api::download_agent_binary),
         );
 
     let protected_routes = Router::new()
-        .route(
-            "/api/agents/download",
             axum::routing::get(update_api::download_agent_binary),
         )
         .route(
