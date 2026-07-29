@@ -87,12 +87,17 @@ impl FileConnector for SftpConnector {
             } else {
                 format!("{path}/{name}")
             };
+            let modified = meta.modified().ok().map(|t| {
+                let dur = t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+                chrono::DateTime::from_timestamp(dur.as_secs() as i64, 0)
+                    .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            }).flatten();
             entries.push(FileEntry {
                 name,
                 path: full_path,
                 is_dir: meta.is_dir(),
                 size: meta.len(),
-                modified: None,
+                modified,
                 permissions: None,
                 storage_class: None,
                 acl: None,
