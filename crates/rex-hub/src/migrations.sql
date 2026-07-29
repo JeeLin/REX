@@ -57,3 +57,12 @@ CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- Performance indexes
+CREATE INDEX IF NOT EXISTS idx_resources_environment_id ON resources(environment_id);
+CREATE INDEX IF NOT EXISTS idx_resources_protocol ON resources(protocol);
+CREATE INDEX IF NOT EXISTS idx_agents_environment_id ON agents(environment_id);
+CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
+CREATE INDEX IF NOT EXISTS idx_audit_log_time ON audit_log(time);
+CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
+CREATE INDEX IF NOT EXISTS idx_audit_log_environment_id ON audit_log(environment_id);
