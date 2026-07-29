@@ -41,6 +41,8 @@
     "guideDockerTab": "Docker",
     "guideComposeTab": "Docker Compose",
     "guideConfigTab": "配置文件",
+    "downloadBinary": "下载",
+    "downloadHint": "选择平台后点击下载。下载后使用 `chmod +x rex-agent` 赋予执行权限。",
     "guideDownloadHint": "下载适用于您平台的 Agent 二进制文件",
     "guideTokenHint": "从环境设置中复制 Agent Token",
     "guideStartHint": "运行 Agent 以注册并连接",

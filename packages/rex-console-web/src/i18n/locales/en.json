@@ -39,6 +39,8 @@
     "guideDockerTab": "Docker",
     "guideComposeTab": "Docker Compose",
     "guideConfigTab": "Config File",
+    "downloadBinary": "Download",
+    "downloadHint": "Select your platform and click download. After downloading, make it executable with `chmod +x rex-agent`.",
     "guideDownloadHint": "Download the agent binary for your platform",
     "guideTokenHint": "Copy the agent token from your environment's settings",
     "guideStartHint": "Run the agent to register and connect",

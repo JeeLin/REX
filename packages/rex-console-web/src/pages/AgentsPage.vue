@@ -178,6 +178,11 @@ const allDirectMode = computed(() => {
 const guideExpanded = ref(true)
 const guideTab = ref<'binary' | 'docker' | 'compose' | 'config'>('binary')
 const guideCopySuccess = ref('')
+const downloadArch = ref('linux-amd64')
+const downloadUrl = computed(() => {
+  const [os, arch] = downloadArch.value.split('-')
+  return `${hubHost()}/api/agents/download?os=${os}&arch=${arch}`
+})
 
 watch(hasAgents, (val) => {
   if (val) guideExpanded.value = false
@@ -274,7 +279,20 @@ const filteredLogs = computed(() => {
           <button class="guide-tab" :class="{ active: guideTab === 'compose' }" @click="guideTab = 'compose'">{{ t('agents.guideComposeTab') }}</button>
           <button class="guide-tab" :class="{ active: guideTab === 'config' }" @click="guideTab = 'config'">{{ t('agents.guideConfigTab') }}</button>
         </div>
-        <div class="guide-code">
+        <div v-if="guideTab === 'binary'" class="guide-download">
+          <div class="guide-download-row">
+            <select v-model="downloadArch" class="form-select">
+              <option value="linux-amd64">Linux x86_64</option>
+              <option value="linux-arm64">Linux ARM64</option>
+              <option value="darwin-amd64">macOS x86_64</option>
+              <option value="darwin-arm64">macOS ARM64</option>
+              <option value="windows-amd64">Windows x86_64</option>
+            </select>
+            <a :href="downloadUrl" class="btn btn-primary" download>{{ t('agents.downloadBinary') }}</a>
+          </div>
+          <p class="muted" style="font-size: var(--text-xs); margin-top: var(--space-2)">{{ t('agents.downloadHint') }}</p>
+        </div>
+        <div v-else class="guide-code">
           <div class="guide-code-header">
             <span class="muted">{{ t('agents.deployCopyHint') }}</span>
             <Button variant="secondary" size="sm" @click="copyGuideCode">{{ guideCopySuccess ? t('agents.deployCopied') : t('agents.deployCopy') }}</Button>
@@ -762,6 +780,35 @@ const filteredLogs = computed(() => {
   white-space: pre-wrap;
   word-break: break-all;
   color: var(--text-primary);
+}
+.guide-download {
+  padding: var(--space-4);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.guide-download-row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+.guide-download .form-select {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+.guide-download .btn {
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
 }
 /* Config modal */
 .config-content {
