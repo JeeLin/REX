@@ -103,6 +103,7 @@ rex-agent = 所有 crate（无前端）
 | **M55** | Agent 注册流程修复 | — | ✅ |
 | **M56** | UX polish & stability | — | ✅ |
 | **M57** | Stability, Mobile & Security | — | ✅ |
+| **M58** | Performance, Accessibility & Documentation | — | ✅ |
 
 ### M0：项目骨架重建
 

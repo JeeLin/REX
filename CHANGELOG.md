@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.49.0] - 2026-07-29
+
+### Added
+- 无障碍：Modal 和 Button 组件添加 ARIA 属性（aria-modal、aria-label、aria-busy）
+- 文档：新增用户指南、REST API 文档、部署指南
+
+### Changed
+- 提交规范：CLAUDE.md 强制要求提交前执行 `cargo fmt`
+
 ## [0.48.0] - 2026-07-29
 
 ### Added
