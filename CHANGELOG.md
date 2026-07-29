@@ -8,12 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.47.0] - 2026-07-29
 
 ### Added
-- Agent 注册流程：环境创建时自动生成注册令牌，Agent 连接时自动注册
-- 环境详情页：正确显示注册令牌，支持一键复制
+- Agent 注册流程：每个环境创建时自动生成独立注册令牌，Agent 用该令牌连接 Hub 时自动注册
+- 环境详情页：显示当前环境的注册令牌，支持一键复制
 
 ### Changed
-- Agent 认证：使用环境注册令牌替代 Agent 独立令牌
-- 数据库：移除 agents 表未使用的 agent_token 列
+- Agent 认证：改用环境级注册令牌（environments.registration_token），每个环境独立
+- 数据库：移除 agents 表未使用的 agent_token 列，token_hash 列不再使用
 
 ## [0.46.1] - 2026-07-29
 
