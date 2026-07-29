@@ -1,15 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/api/client'
-
-interface AuthCheckResponse {
-  requires_setup: boolean
-}
-
-interface LoginResponse {
-  token: string
-  expiresAt: string
-}
+import type { AuthCheckResponse, LoginResponse } from '@/types/auth'
 
 /** 从 localStorage 或 sessionStorage 读取 token */
 function readToken(): string | null {
@@ -92,6 +84,6 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     token, requiresSetup, loading, error, isAuthenticated,
-    checkAuth, setupPassword, login, logout,
+    checkAuth, setupPassword, login, setToken, logout,
   }
 })

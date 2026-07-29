@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { api } from '@/api/client'
+import type { LoginResponse } from '@/types/auth'
 
 const emit = defineEmits<{ cancel: [] }>()
 
@@ -11,11 +12,6 @@ const auth = useAuthStore()
 const password = ref('')
 const loading = ref(false)
 const errorMsg = ref('')
-
-interface LoginResponse {
-  token: string
-  expiresAt: string
-}
 
 async function handleRefresh() {
   if (!password.value.trim()) return
