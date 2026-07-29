@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.46.0] - 2026-07-29
+
+### Fixed
+- SSH 终端：修复底部内容截切（overflow: hidden）和切换标签重连问题（v-show 保持 DOM）
+- 资源编辑模态框：根据协议类型动态显示对应字段（SSH/MySQL/Redis/SQLite/S3）
+- 环境详情页：Agent Token 正确显示且支持重置
+
+### Changed
+- 隐藏 xterm.js char-measure-element 测量元素（CSS 强制隐藏）
+
 ## [0.45.0] - 2026-07-28
 
 ### Added
