@@ -67,6 +67,19 @@ function choose(action: string) {
   padding: var(--space-1);
   z-index: 80;
 }
+.ctx-menu :deep(.ctx-item),
+.ctx-menu :deep(.tab-ctx-item) {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.ctx-menu :deep(.ctx-item) :first-child,
+.ctx-menu :deep(.tab-ctx-item) :first-child {
+  font-size: 14px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
 .menu-enter-active,
 .menu-leave-active {
   transition: opacity var(--transition);
