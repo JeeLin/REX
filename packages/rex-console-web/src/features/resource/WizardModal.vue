@@ -21,6 +21,10 @@ const emit = defineEmits<{
 
 const store = useEnvironmentsStore()
 
+// 从环境继承连接方式
+const environment = computed(() => store.environments.find(e => e.id === props.environmentId))
+const connectionMode = computed(() => environment.value?.connection_mode || 'direct')
+
 const step = ref(1)
 const loading = ref(false)
 const error = ref('')
@@ -39,7 +43,6 @@ const selectedProtocol = ref('')
 
 // Step 2: Basic info
 const resName = ref('')
-const connectionMode = ref('direct')
 const resColor = ref('')
 
 // Step 3: Connection details
@@ -188,7 +191,6 @@ function reset() {
   step.value = 1
   selectedProtocol.value = ''
   resName.value = ''
-  connectionMode.value = 'direct'
   resColor.value = ''
   host.value = ''
   port.value = null
@@ -241,13 +243,6 @@ const colorOptions = [
       <label class="form-label">
         <span>{{ t('common.name') }}</span>
         <input v-model="resName" type="text" class="form-input" placeholder="e.g. Web Server" autofocus />
-      </label>
-      <label class="form-label">
-        <span>{{ t('wizard.connectionMode') }}</span>
-        <select v-model="connectionMode" class="form-input">
-          <option value="direct">{{ t('environments.direct') }}</option>
-          <option value="agent">{{ t('environments.agent') }}</option>
-        </select>
       </label>
       <label class="form-label">
         <span>{{ t('wizard.color') }}</span>
@@ -393,10 +388,6 @@ const colorOptions = [
       <div v-if="username" class="confirm-row">
         <span class="confirm-label">{{ t('wizard.username') }}</span>
         <span>{{ username }}</span>
-      </div>
-      <div class="confirm-row">
-        <span class="confirm-label">{{ t('wizard.connectionMode') }}</span>
-        <span>{{ connectionMode }}</span>
       </div>
       <div v-if="error" class="form-error">{{ error }}</div>
     </div>
