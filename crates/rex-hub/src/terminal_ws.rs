@@ -175,10 +175,11 @@ async fn load_resource_conn(
             return Err(format!("resource {rid}: host is empty, please fill in host in resource settings"));
         }
         let port = resource.port.unwrap_or(22);
-        let username = resource.username.clone();
-        if username.is_empty() {
-            return Err(format!("resource {rid}: username is empty, please fill in username in resource settings"));
-        }
+        let username = if resource.username.is_empty() {
+            "root".to_string()
+        } else {
+            resource.username.clone()
+        };
 
         // 从 config_json 解密敏感字段（password、privateKey）
         let (password, private_key) = if !resource.config_json.is_empty() && resource.config_json != "{}" {
