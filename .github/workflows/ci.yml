@@ -41,9 +41,9 @@ jobs:
       - run: bun run test
         working-directory: packages/rex-console-web
 
-  # ── 构建 Agent 二进制（全平台矩阵） ──────────────────
+  # ── 构建 Agent + Hub 二进制（全平台矩阵） ─────────────
   # 产物用于：Docker Hub 镜像内嵌 + Release 发布
-  build-agent:
+  build-binaries:
     needs: [check-rust]
     strategy:
       matrix:
@@ -77,59 +77,16 @@ jobs:
       - name: Install cross-compilation tools
         if: matrix.cross
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-      - name: Build
-        run: cargo build --release -p rex-agent --target ${{ matrix.target }}
+      - name: Build Agent + Hub
+        run: cargo build --release -p rex-agent -p rex-hub --target ${{ matrix.target }}
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
       - uses: actions/upload-artifact@v6
         with:
-          name: agent-${{ matrix.arch }}
-          path: target/${{ matrix.target }}/release/rex-agent*
-
-  # ── 构建 Hub 二进制（全平台矩阵） ────────────────────
-  # 产物用于：Docker Hub 镜像内嵌 + Release 发布
-  build-hub:
-    needs: [check-rust]
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            arch: linux-amd64
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            arch: linux-arm64
-            cross: true
-          - target: x86_64-apple-darwin
-            os: macos-14
-            arch: mac-amd64
-          - target: aarch64-apple-darwin
-            os: macos-14
-            arch: mac-arm64
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-            arch: windows-amd64
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: build-${{ matrix.target }}
-          save-if: ${{ github.event_name == 'push' }}
-      - name: Install cross-compilation tools
-        if: matrix.cross
-        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-      - name: Build
-        run: cargo build --release -p rex-hub --target ${{ matrix.target }}
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-      - uses: actions/upload-artifact@v6
-        with:
-          name: hub-${{ matrix.arch }}
-          path: target/${{ matrix.target }}/release/rex-hub*
+          name: binaries-${{ matrix.arch }}
+          path: |
+            target/${{ matrix.target }}/release/rex-agent*
+            target/${{ matrix.target }}/release/rex-hub*
 
   # ── 构建前端 ──────────
   build-frontend:
@@ -149,7 +106,7 @@ jobs:
 
   # ── Docker: Hub 镜像（包含所有平台 Agent 二进制） ─────
   docker-hub:
-    needs: [build-hub, build-frontend, build-agent]
+    needs: [build-binaries, build-frontend]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -216,9 +173,9 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ── Docker: Agent 镜像（linux/amd64 + linux/arm64） ───
-  # 使用 build-agent 预构建的二进制，不再从源码编译
+  # 使用 build-binaries 预构建的二进制，不再从源码编译
   docker-agent:
-    needs: [build-agent]
+    needs: [build-binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -272,7 +229,7 @@ jobs:
 
   # ── Release: Hub + Agent 二进制 zip + SHA256SUMS ─────
   release:
-    needs: [build-agent, build-hub]
+    needs: [build-binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: write
