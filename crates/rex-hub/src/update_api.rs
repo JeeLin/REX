@@ -108,10 +108,8 @@ pub async fn download_agent_binary(
 
     // 2. 从 GitHub Releases 下载当前版本（确保兼容）
     let version = env!("CARGO_PKG_VERSION");
-    let github_owner =
-        std::env::var("REX_UPDATE_GITHUB_OWNER").unwrap_or_else(|_| "JeeLin".into());
-    let github_repo =
-        std::env::var("REX_UPDATE_GITHUB_REPO").unwrap_or_else(|_| "REX".into());
+    let github_owner = std::env::var("REX_UPDATE_GITHUB_OWNER").unwrap_or_else(|_| "JeeLin".into());
+    let github_repo = std::env::var("REX_UPDATE_GITHUB_REPO").unwrap_or_else(|_| "REX".into());
 
     let binary_name = format!("rex-agent-{os}-{arch}");
     let download_url = format!(
@@ -125,11 +123,7 @@ pub async fn download_agent_binary(
             match resp.bytes().await {
                 Ok(bytes) => {
                     // 缓存到本地
-                    let cache_dir = state
-                        .data_dir
-                        .join("agent-binaries")
-                        .join(os)
-                        .join(arch);
+                    let cache_dir = state.data_dir.join("agent-binaries").join(os).join(arch);
                     let _ = tokio::fs::create_dir_all(&cache_dir).await;
                     let cache_path = cache_dir.join("rex-agent");
                     let _ = tokio::fs::write(&cache_path, &bytes).await;
@@ -157,10 +151,7 @@ pub async fn download_agent_binary(
         }
         Ok(resp) => (
             StatusCode::BAD_GATEWAY,
-            format!(
-                "GitHub download failed: status {}",
-                resp.status()
-            ),
+            format!("GitHub download failed: status {}", resp.status()),
         )
             .into_response(),
         Err(e) => (
