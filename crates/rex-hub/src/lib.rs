@@ -11,6 +11,7 @@ pub mod db;
 pub mod env_api;
 pub mod error;
 pub mod file_api;
+pub mod metrics;
 pub mod middleware;
 pub mod models;
 pub mod redis_api;
