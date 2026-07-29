@@ -10,41 +10,10 @@ env:
   AGENT_IMAGE: ghcr.io/${{ github.repository_owner }}/rex-agent
 
 jobs:
-  # ── Rust 检查（fmt + clippy + test） ──────────────────
-  check-rust:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: check
-          save-if: ${{ github.event_name == 'push' }}
-      - run: cargo fmt --check
-      - run: cargo clippy --workspace --all-targets
-      - run: cargo test --workspace
-
-  # ── 前端检查（type-check + lint + build） ─────────────
-  check-web:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile
-        working-directory: packages/rex-console-web
-      - run: bun run type-check
-        working-directory: packages/rex-console-web
-      - run: bun run lint
-        working-directory: packages/rex-console-web
-      - run: bun run test
-        working-directory: packages/rex-console-web
-
-  # ── 构建 Agent + Hub 二进制（全平台矩阵） ─────────────
+  # ── 构建 Rust 二进制（检查 + 构建合并，全平台矩阵） ─────
+  # 流程：fmt → clippy → test → build（避免重复编译）
   # 产物用于：Docker Hub 镜像内嵌 + Release 发布
   build-binaries:
-    needs: [check-rust]
     strategy:
       matrix:
         include:
@@ -70,6 +39,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+          components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: build-${{ matrix.target }}
@@ -77,6 +47,12 @@ jobs:
       - name: Install cross-compilation tools
         if: matrix.cross
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Check format
+        run: cargo fmt --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets
+      - name: Test
+        run: cargo test --workspace
       - name: Build Agent + Hub
         run: cargo build --release -p rex-agent -p rex-hub --target ${{ matrix.target }}
         env:
@@ -88,14 +64,20 @@ jobs:
             target/${{ matrix.target }}/release/rex-agent*
             target/${{ matrix.target }}/release/rex-hub*
 
-  # ── 构建前端 ──────────
+  # ── 构建前端（检查 + 构建合并） ──────────────────────
+  # 流程：type-check → lint → test → build（避免重复构建）
   build-frontend:
-    needs: [check-web]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
+        working-directory: packages/rex-console-web
+      - run: bun run type-check
+        working-directory: packages/rex-console-web
+      - run: bun run lint
+        working-directory: packages/rex-console-web
+      - run: bun run test
         working-directory: packages/rex-console-web
       - run: bun run build
         working-directory: packages/rex-console-web
@@ -127,7 +109,7 @@ jobs:
       - name: Download hub binary (linux-amd64)
         uses: actions/download-artifact@v8
         with:
-          name: hub-linux-amd64
+          name: binaries-linux-amd64
           path: dist/
 
       - name: Download frontend
@@ -173,7 +155,6 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ── Docker: Agent 镜像（linux/amd64 + linux/arm64） ───
-  # 使用 build-binaries 预构建的二进制，不再从源码编译
   docker-agent:
     needs: [build-binaries]
     runs-on: ubuntu-latest
