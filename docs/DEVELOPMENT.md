@@ -107,6 +107,7 @@ rex-agent = 所有 crate（无前端）
 | **M59** | Production Hardening & Integration Tests | — | ✅ |
 | **M60** | i18n Completion, Data Export & Search Enhancement | — | ✅ |
 | **M61** | Theme Optimization & Notification System | — | ✅ |
+| **M62** | Health Monitoring & WebSocket Enhancement | — | ✅ |
 
 ### M0：项目骨架重建
 

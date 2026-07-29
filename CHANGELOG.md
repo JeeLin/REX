@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.53.0] - 2026-07-29
+
+### Added
+- Prometheus 指标端点：暴露 /metrics 端点，包含 uptime、requests、agent connections
+- Agent 重连优化：指数退避重连（1s → 2s → 4s → ... → 最大 30s）
+
 ## [0.52.0] - 2026-07-29
 
 ### Added
