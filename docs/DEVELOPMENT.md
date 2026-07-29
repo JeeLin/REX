@@ -108,6 +108,9 @@ rex-agent = 所有 crate（无前端）
 | **M60** | i18n Completion, Data Export & Search Enhancement | — | ✅ |
 | **M61** | Theme Optimization & Notification System | — | ✅ |
 | **M62** | Health Monitoring & WebSocket Enhancement | — | ✅ |
+| **M63** | Performance Optimization & Stability | — | ✅ |
+| **M64** | Bug Fix & UX Polish | — | ✅ |
+| **M65** | Auth & Environment Improvements | — | 🔄 |
 
 ### M0：项目骨架重建
 
