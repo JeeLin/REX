@@ -57,6 +57,7 @@ const resEditName = ref('')
 const resEditHost = ref('')
 const resEditPort = ref<string>('')
 const resEditUsername = ref('')
+const resEditProtocol = ref('')
 const resEditError = ref('')
 const resEditLoading = ref(false)
 
@@ -156,6 +157,7 @@ function openResEdit() {
   resEditHost.value = res.host
   resEditPort.value = res.port != null ? String(res.port) : ''
   resEditUsername.value = res.username || ''
+  resEditProtocol.value = res.protocol
   resEditError.value = ''
 
   // 解析 config_json，填充协议特定字段
@@ -448,6 +450,69 @@ async function resetAgentToken() {
           <span>{{ t('wizard.username') }}</span>
           <input v-model="resEditUsername" type="text" class="form-input" />
         </label>
+        <!-- SSH / SFTP fields -->
+        <template v-if="['ssh', 'sftp'].includes(resEditProtocol)">
+          <label class="form-label">
+            <span>{{ t('wizard.password') }}</span>
+            <input v-model="editPassword" type="password" class="form-input" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.privateKey') }}</span>
+            <textarea v-model="editPrivateKey" class="form-input" rows="3" />
+          </label>
+        </template>
+        <!-- MySQL / PostgreSQL fields -->
+        <template v-if="['mysql', 'postgresql'].includes(resEditProtocol)">
+          <label class="form-label">
+            <span>{{ t('wizard.password') }}</span>
+            <input v-model="editPassword" type="password" class="form-input" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.database') }}</span>
+            <input v-model="editDatabaseName" type="text" class="form-input" />
+          </label>
+        </template>
+        <!-- Redis fields -->
+        <template v-if="resEditProtocol === 'redis'">
+          <label class="form-label">
+            <span>{{ t('wizard.password') }}</span>
+            <input v-model="editPassword" type="password" class="form-input" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.redisDb') }}</span>
+            <input v-model.number="editRedisDb" type="number" class="form-input" min="0" />
+          </label>
+        </template>
+        <!-- SQLite fields -->
+        <template v-if="resEditProtocol === 'sqlite'">
+          <label class="form-label">
+            <span>{{ t('wizard.filePath') }}</span>
+            <input v-model="editFilePath" type="text" class="form-input" />
+          </label>
+        </template>
+        <!-- S3 fields -->
+        <template v-if="resEditProtocol === 's3'">
+          <label class="form-label">
+            <span>{{ t('wizard.s3Endpoint') }}</span>
+            <input v-model="editS3Endpoint" type="text" class="form-input" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.s3AccessKey') }}</span>
+            <input v-model="editS3AccessKey" type="text" class="form-input" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.s3SecretKey') }}</span>
+            <input v-model="editS3SecretKey" type="password" class="form-input" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.s3Bucket') }}</span>
+            <input v-model="editS3Bucket" type="text" class="form-input" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.s3Region') }}</span>
+            <input v-model="editS3Region" type="text" class="form-input" />
+          </label>
+        </template>
         <div v-if="resEditError" class="form-error">{{ resEditError }}</div>
         <div class="form-actions">
           <Button type="button" variant="secondary" @click="resEditModal = false">{{ t('common.cancel') }}</Button>
