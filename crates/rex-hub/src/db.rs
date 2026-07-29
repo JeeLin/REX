@@ -592,7 +592,10 @@ impl Database {
         }
     }
 
-    pub fn find_environment_by_registration_token(&self, token: &str) -> Result<Option<Environment>> {
+    pub fn find_environment_by_registration_token(
+        &self,
+        token: &str,
+    ) -> Result<Option<Environment>> {
         let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, name, description, connection_mode, registration_token, created_at, updated_at FROM environments WHERE registration_token = ?1")

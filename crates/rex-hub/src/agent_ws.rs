@@ -195,8 +195,10 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
     // 2. 通过注册令牌查找环境，自动注册 Agent
     let db = state.db.clone();
     let token_for_lookup = auth_msg.token.clone();
-    let env_result =
-        tokio::task::spawn_blocking(move || db.find_environment_by_registration_token(&token_for_lookup)).await;
+    let env_result = tokio::task::spawn_blocking(move || {
+        db.find_environment_by_registration_token(&token_for_lookup)
+    })
+    .await;
     let env = match env_result {
         Ok(Ok(Some(env))) => env,
         _ => {
@@ -224,7 +226,9 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
             let agent_name = auth_msg.name.clone().unwrap_or_else(|| "agent".into());
             match tokio::task::spawn_blocking(move || {
                 db.create_agent(&env_id, &agent_name, "", "", "", "", "")
-            }).await {
+            })
+            .await
+            {
                 Ok(Ok(agent)) => agent.id,
                 Ok(Err(e)) => {
                     tracing::error!(error = %e, "failed to create agent");
