@@ -324,8 +324,10 @@ async fn connect_and_run(
 
     // 5. 心跳任务
     let evt_tx_hb = evt_tx.clone();
+    let heartbeat_interval = config.heartbeat_interval;
     let heartbeat_task = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(config.heartbeat_interval));
+        let mut interval =
+            tokio::time::interval(std::time::Duration::from_secs(heartbeat_interval));
         loop {
             interval.tick().await;
             let hostname = hostname::get()
