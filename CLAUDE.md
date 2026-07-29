@@ -159,6 +159,8 @@ git commit -m 'feat: add agent list api'
 git commit -m 'feat: add agent management'
 ```
 
+**提交前必须执行**：修改 Rust 代码后，提交前必须运行 `cargo fmt` 确保格式正确，否则 CI 会失败。
+
 里程碑完成后：
 1. 保留里程碑文档（`docs/milestones/M{N}*.md`）
 2. 更新 `docs/DEVELOPMENT.md` 里程碑总览表中对应行的状态
