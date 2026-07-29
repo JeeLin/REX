@@ -235,32 +235,18 @@ function confirmDeleteResource() {
 }
 
 async function copyToken() {
-  if (env.value?.agent_token) {
+  if (env.value?.registration_token) {
     try {
-      await navigator.clipboard.writeText(env.value.agent_token)
+      await navigator.clipboard.writeText(env.value.registration_token)
     } catch {
       // fallback
       const el = document.createElement('textarea')
-      el.value = env.value.agent_token!
+      el.value = env.value.registration_token!
       document.body.appendChild(el)
       el.select()
       document.execCommand('copy')
       document.body.removeChild(el)
     }
-  }
-}
-
-async function resetAgentToken() {
-  if (!env.value?.id) return
-  if (!confirm(t('environmentDetail.resetTokenConfirm'))) return
-  try {
-    const agent = await agentsApi.listByEnv(env.value.id)
-    if (agent.length > 0 && agent[0]) {
-      await agentsApi.resetToken(agent[0].id)
-      env.value = await environmentsApi.get(envId)
-    }
-  } catch (e) {
-    console.error('Failed to reset agent token:', e)
   }
 }
 </script>
@@ -309,15 +295,14 @@ async function resetAgentToken() {
         <div v-else class="agent-empty muted">
           {{ t('environmentDetail.noAgent') }}
         </div>
-        <!-- Agent Token -->
+        <!-- Registration Token -->
         <div class="agent-token-section">
           <label class="form-label" style="margin-bottom: var(--space-2)">
             <span>{{ t('environments.agentToken') }}</span>
           </label>
-          <div v-if="env.agent_token" class="agent-token-row">
-            <code class="agent-token-value mono">{{ env.agent_token }}</code>
+          <div v-if="env.registration_token" class="agent-token-row">
+            <code class="agent-token-value mono">{{ env.registration_token }}</code>
             <Button variant="secondary" size="sm" @click="copyToken">{{ t('common.copy') }}</Button>
-            <Button variant="danger" size="sm" @click="resetAgentToken">{{ t('common.reset') }}</Button>
           </div>
           <div v-else class="agent-token-empty muted" style="font-size: var(--text-sm)">
             {{ t('environmentDetail.noAgentToken') }}

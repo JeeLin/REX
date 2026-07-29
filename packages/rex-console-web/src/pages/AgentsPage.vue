@@ -43,7 +43,7 @@ function hubHost(): string {
 
 function envToken(agentEnvId: string): string {
   const env = store.environments.find(e => e.id === agentEnvId)
-  return env?.agent_token || 'YOUR_TOKEN'
+  return env?.registration_token || 'YOUR_TOKEN'
 }
 
 function envName(envId: string): string {

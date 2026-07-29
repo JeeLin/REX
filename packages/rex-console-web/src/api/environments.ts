@@ -7,7 +7,7 @@ export interface Environment {
   connection_mode: string
   resource_count: number
   agent_status: string | null
-  agent_token?: string
+  registration_token: string
   created_at: string
   updated_at: string
 }
