@@ -219,21 +219,26 @@ pub async fn run_agent(config: AgentConfig) {
     let channels: Arc<RwLock<HashMap<String, LocalChannel>>> =
         Arc::new(RwLock::new(HashMap::new()));
 
+    let mut backoff = 1u64; // 初始退避 1 秒
+    const MAX_BACKOFF: u64 = 30;
+
     loop {
         tracing::info!(hub_url = %config.hub_url, "connecting to hub");
 
         match connect_and_run(&config, channels.clone()).await {
             Ok(()) => {
                 tracing::info!("connection closed cleanly");
+                backoff = 1; // 正常关闭，重置退避
             }
             Err(e) => {
                 tracing::error!(error = %e, "connection failed");
             }
         }
 
-        // 断线重连（指数退避）
-        tracing::info!("reconnecting in 5s...");
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        // 指数退避重连：1s → 2s → 4s → 8s → 16s → 30s（最大）
+        tracing::info!(seconds = backoff, "reconnecting");
+        tokio::time::sleep(std::time::Duration::from_secs(backoff)).await;
+        backoff = (backoff * 2).min(MAX_BACKOFF);
     }
 }
 
