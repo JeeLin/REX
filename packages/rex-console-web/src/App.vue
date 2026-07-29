@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
 import { onMounted } from 'vue'
+import ErrorBoundary from './components/ErrorBoundary.vue'
 
 // 早期应用主题，避免闪烁
 const stored = localStorage.getItem('rex-theme') || 'dark'
@@ -20,5 +21,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <RouterView />
+  <ErrorBoundary>
+    <RouterView />
+  </ErrorBoundary>
 </template>

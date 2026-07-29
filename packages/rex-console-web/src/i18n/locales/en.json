@@ -672,5 +672,9 @@
     "splitV": "Split vertical",
     "stopBroadcast": "Stop Broadcast",
     "dragHint": "Drag tab to another pane"
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "retry": "Retry"
   }
 }

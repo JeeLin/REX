@@ -672,5 +672,9 @@
     "splitV": "垂直分屏",
     "stopBroadcast": "停止广播",
     "dragHint": "拖拽标签到其他面板"
+  },
+  "errorBoundary": {
+    "title": "出了点问题",
+    "retry": "重试"
   }
 }
