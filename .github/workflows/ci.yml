@@ -50,9 +50,9 @@ jobs:
       - name: Check format
         run: cargo fmt --check
       - name: Clippy
-        run: cargo clippy --workspace --all-targets
+        run: cargo clippy --workspace --all-targets --release --target ${{ matrix.target }}
       - name: Test
-        run: cargo test --workspace
+        run: cargo test --workspace --release --target ${{ matrix.target }}
       - name: Build Agent + Hub
         run: cargo build --release -p rex-agent -p rex-hub --target ${{ matrix.target }}
         env:
