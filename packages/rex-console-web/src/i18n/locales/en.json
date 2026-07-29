@@ -138,7 +138,7 @@
     "agentSection": "Agent",
     "created": "Created {date}",
     "noAgent": "No agent registered. Deploy an agent to proxy connections for this environment.",
-    "noAgentToken": "No agent registered. Deploy an agent to obtain the registration token.",
+    "noAgentToken": "No agent registered.",
     "noResources": "No resources",
     "resourcesSection": "Resources"
   },

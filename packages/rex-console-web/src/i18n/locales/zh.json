@@ -138,7 +138,7 @@
     "agentSection": "Agent",
     "created": "创建于 {date}",
     "noAgent": "暂无注册的 Agent。部署一个 Agent 来代理此环境的连接。",
-    "noAgentToken": "暂无注册的 Agent。部署 Agent 后可获取注册令牌。",
+    "noAgentToken": "暂无注册的 Agent",
     "noResources": "暂无资源",
     "resourcesSection": "资源"
   },

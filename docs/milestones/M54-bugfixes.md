@@ -6,7 +6,7 @@ M53（Bug fix + UX polish）完成后，用户测试中发现多个 bug。本里
 版本类型：patch（bug 修复）
 
 ## 产品边界
-本阶段修复已知 bug，不涉及新功能。
+本阶段修复已知 bug，不涉及新功能。Agent 注册令牌生成机制属于功能改进，将在后续里程碑中处理。
 
 ## 子任务清单
 
@@ -39,16 +39,17 @@ M53（Bug fix + UX polish）完成后，用户测试中发现多个 bug。本里
 
 ### 3 修复 Agent Token 显示与复制/重置
 
-- **功能目标**：环境详情页正确显示 Agent Token，无 Agent 时给出提示而非显示无效的复制/重置按钮
+- **功能目标**：环境详情页正确显示 Agent Token 状态，无 Agent 时给出明确提示
 - **文件结构**（修改）：
   - `packages/rex-console-web/src/pages/EnvironmentDetailPage.vue`
   - `packages/rex-console-web/src/i18n/locales/en.json`
   - `packages/rex-console-web/src/i18n/locales/zh.json`
-- **根因**：环境创建后无 Agent 注册时 `agent_token` 为空，模板显示 `—`，但复制/重置按钮仍然可用且无效果
+- **根因**：环境创建后无 Agent 注册时 `agent_token` 为空，模板显示 `—`，但复制/重置按钮仍然可用且无效果。同时提示文案"部署 Agent 后可获取注册令牌"存在逻辑矛盾（没有令牌无法部署 Agent）
 - **修复方案**：
-  1. 当 `agent_token` 为空时隐藏复制/重置按钮，显示提示文字"暂无注册的 Agent。部署 Agent 后可获取注册令牌。"
+  1. 当 `agent_token` 为空时隐藏复制/重置按钮，显示提示"暂无注册的 Agent"
   2. 有 token 时正常显示 token 值和操作按钮
   3. 添加 i18n 键 `environmentDetail.noAgentToken`（中/英）
+- **已知限制**：当前架构中注册令牌仅在 Agent 注册后才存储（`agents.token_hash`），环境创建时无令牌可显示。完整的令牌生成机制将在后续里程碑中实现
 - **提交信息**：`fix(agent): improve agent token display when no agent registered`
 
 ## 设计核对点
