@@ -35,10 +35,10 @@ onBeforeUnmount(() => {
       <div v-if="modelValue" class="overlay" @click="emit('update:modelValue', false)" />
     </Transition>
     <Transition name="modal">
-      <div v-if="modelValue" class="modal" :style="{ width }" role="dialog">
+      <div v-if="modelValue" class="modal" :style="{ width }" role="dialog" aria-modal="true" :aria-labelledby="title ? 'modal-title' : undefined">
         <header v-if="title || $slots.header" class="modal-header">
-          <slot name="header"><h3 class="modal-title">{{ title }}</h3></slot>
-          <button class="modal-close" @click="emit('update:modelValue', false)">✕</button>
+          <slot name="header"><h3 id="modal-title" class="modal-title">{{ title }}</h3></slot>
+          <button class="modal-close" :aria-label="$t('common.close')" @click="emit('update:modelValue', false)">✕</button>
         </header>
         <div class="modal-body">
           <slot />

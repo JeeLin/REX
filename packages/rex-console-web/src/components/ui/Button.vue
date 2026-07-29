@@ -6,8 +6,9 @@ withDefaults(
     disabled?: boolean
     loading?: boolean
     block?: boolean
+    ariaLabel?: string
   }>(),
-  { variant: 'secondary', size: 'md', disabled: false, loading: false, block: false },
+  { variant: 'secondary', size: 'md', disabled: false, loading: false, block: false, ariaLabel: '' },
 )
 </script>
 
@@ -16,6 +17,8 @@ withDefaults(
     class="btn"
     :class="[`btn--${variant}`, `btn--${size}`, { 'btn--block': block, 'btn--loading': loading }]"
     :disabled="disabled || loading"
+    :aria-label="ariaLabel || undefined"
+    :aria-busy="loading || undefined"
   >
     <span v-if="loading" class="btn-spinner" />
     <slot />
