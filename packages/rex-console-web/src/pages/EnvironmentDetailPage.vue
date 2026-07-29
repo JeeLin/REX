@@ -249,6 +249,19 @@ async function copyToken() {
     }
   }
 }
+
+async function resetToken() {
+  if (!env.value?.id) return
+  if (!confirm(t('environmentDetail.resetTokenConfirm'))) return
+  try {
+    // 重新生成注册令牌（通过环境更新 API）
+    const newToken = crypto.randomUUID()
+    await environmentsApi.update(env.value.id, { registration_token: newToken })
+    env.value = await environmentsApi.get(envId)
+  } catch (e) {
+    console.error('Failed to reset token:', e)
+  }
+}
 </script>
 
 <template>
@@ -295,14 +308,15 @@ async function copyToken() {
         <div v-else class="agent-empty muted">
           {{ t('environmentDetail.noAgent') }}
         </div>
-        <!-- Registration Token -->
-        <div class="agent-token-section">
+        <!-- Registration Token (仅 Agent 模式显示) -->
+        <div v-if="env.connection_mode === 'agent'" class="agent-token-section">
           <label class="form-label" style="margin-bottom: var(--space-2)">
             <span>{{ t('environments.agentToken') }}</span>
           </label>
           <div v-if="env.registration_token" class="agent-token-row">
             <code class="agent-token-value mono">{{ env.registration_token }}</code>
-            <Button variant="secondary" size="sm" @click="copyToken">{{ t('common.copy') }}</Button>
+            <Button variant="secondary" size="sm" :aria-label="t('common.copy')" @click="copyToken">{{ t('common.copy') }}</Button>
+            <Button variant="secondary" size="sm" :aria-label="t('common.reset')" @click="resetToken">{{ t('common.reset') }}</Button>
           </div>
           <div v-else class="agent-token-empty muted" style="font-size: var(--text-sm)">
             {{ t('environmentDetail.noAgentToken') }}
