@@ -7,6 +7,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { environmentsApi, type Environment } from '@/api/environments'
 import { resourcesApi, type Resource } from '@/api/resources'
 import { agentsApi } from '@/api/agents'
+import { api } from '@/api/client'
 import Card from '@/components/ui/Card.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
@@ -254,9 +255,9 @@ async function resetToken() {
   if (!env.value?.id) return
   if (!confirm(t('environmentDetail.resetTokenConfirm'))) return
   try {
-    // 重新生成注册令牌（通过环境更新 API）
+    // 重新生成注册令牌
     const newToken = crypto.randomUUID()
-    await environmentsApi.update(env.value.id, { registration_token: newToken })
+    await api.put(`/environments/${env.value.id}`, { registration_token: newToken } as any)
     env.value = await environmentsApi.get(envId)
   } catch (e) {
     console.error('Failed to reset token:', e)
