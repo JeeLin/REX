@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
 import { type TestConnectionResult } from '@/api/resources'
 import Button from '@/components/ui/Button.vue'
-import Badge from '@/components/ui/Badge.vue'
 import Modal from '@/components/ui/Modal.vue'
 import { PROTOCOL_ICONS, PROTOCOL_COLORS } from './protocols'
 
@@ -25,7 +24,6 @@ const store = useEnvironmentsStore()
 const environment = computed(() => store.environments.find(e => e.id === props.environmentId))
 const connectionMode = computed(() => environment.value?.connection_mode || 'direct')
 
-const step = ref(1)
 const loading = ref(false)
 const error = ref('')
 
@@ -68,24 +66,6 @@ const defaultPorts: Record<string, number> = {
   ssh: 22, sftp: 22, mysql: 3306, postgresql: 5432, redis: 6379,
 }
 
-const stepTitle = computed(() => {
-  switch (step.value) {
-    case 1: return t('wizard.step1Title')
-    case 2: return t('wizard.step2Title')
-    case 3: return t('wizard.step3Title')
-    case 4: return t('wizard.step4Title')
-    default: return ''
-  }
-})
-
-const canProceedStep1 = computed(() => !!selectedProtocol.value)
-const canProceedStep2 = computed(() => resName.value.trim().length > 0)
-const canProceedStep3 = computed(() => {
-  if (selectedProtocol.value === 'sqlite') return filePath.value.trim().length > 0
-  if (selectedProtocol.value === 's3') return s3Endpoint.value.trim().length > 0 && s3AccessKey.value.trim().length > 0 && s3SecretKey.value.trim().length > 0 && s3Bucket.value.trim().length > 0
-  return host.value.trim().length > 0
-})
-
 function selectProtocol(id: string) {
   selectedProtocol.value = id
   port.value = defaultPorts[id] ?? null
@@ -93,35 +73,6 @@ function selectProtocol(id: string) {
   if (!resName.value) {
     resName.value = id === 's3' ? 'S3 / MinIO' : id.charAt(0).toUpperCase() + id.slice(1)
   }
-}
-
-const stepError = ref('')
-
-function validateStep(): boolean {
-  stepError.value = ''
-  if (step.value === 3 && !['sqlite', 's3'].includes(selectedProtocol.value)) {
-    if (!host.value.trim()) {
-      stepError.value = t('wizard.hostRequired')
-      return false
-    }
-  }
-  if (step.value === 2) {
-    if (!resName.value.trim()) {
-      stepError.value = t('wizard.nameRequired')
-      return false
-    }
-  }
-  return true
-}
-
-function nextStep() {
-  if (!validateStep()) return
-  if (step.value < 4) step.value++
-}
-
-function prevStep() {
-  stepError.value = ''
-  if (step.value > 1) step.value--
 }
 
 async function testConnection() {
@@ -188,7 +139,6 @@ async function submit() {
 }
 
 function reset() {
-  step.value = 1
   selectedProtocol.value = ''
   resName.value = ''
   resColor.value = ''
@@ -221,52 +171,53 @@ const colorOptions = [
 
 <template>
   <Modal :model-value="visible" @update:model-value="handleClose">
-    <template #title>{{ stepTitle }} <span class="step-indicator">Step {{ step }}/4</span></template>
+    <template #title>{{ t('wizard.createResource') }}</template>
 
-    <!-- Step 1: Protocol -->
-    <div v-if="step === 1" class="protocol-grid">
-      <button
-        v-for="p in protocols"
-        :key="p.id"
-        class="protocol-card"
-        :class="{ selected: selectedProtocol === p.id }"
-        @click="selectProtocol(p.id)"
-      >
-        <span class="protocol-icon" :style="{ color: PROTOCOL_COLORS[p.id] }">{{ PROTOCOL_ICONS[p.id] }}</span>
-        <span class="protocol-name">{{ p.id === 's3' ? 'S3 / MinIO' : p.id.charAt(0).toUpperCase() + p.id.slice(1) }}</span>
-        <span class="protocol-desc muted">{{ t(p.descKey) }}</span>
-      </button>
-    </div>
-
-    <!-- Step 2: Basic Info -->
-    <div v-if="step === 2" class="step-form">
-      <label class="form-label">
-        <span>{{ t('common.name') }}</span>
-        <input v-model="resName" type="text" class="form-input" placeholder="e.g. Web Server" autofocus />
-      </label>
-      <label class="form-label">
-        <span>{{ t('wizard.color') }}</span>
-        <div class="color-picker">
+    <div class="wizard-single-page">
+      <!-- Protocol Selection -->
+      <div class="form-label">
+        <span>{{ t('wizard.protocol') }}</span>
+        <div class="protocol-grid">
           <button
-            v-for="c in colorOptions"
-            :key="c"
-            class="color-dot"
-            :class="{ selected: resColor === c }"
-            :style="{ background: c || 'var(--border)' }"
-            @click="resColor = c"
-          />
+            v-for="p in protocols"
+            :key="p.id"
+            class="protocol-card"
+            :class="{ selected: selectedProtocol === p.id }"
+            @click="selectProtocol(p.id)"
+          >
+            <span class="protocol-icon" :style="{ color: PROTOCOL_COLORS[p.id] }">{{ PROTOCOL_ICONS[p.id] }}</span>
+            <span class="protocol-name">{{ p.id === 's3' ? 'S3 / MinIO' : p.id.charAt(0).toUpperCase() + p.id.slice(1) }}</span>
+          </button>
         </div>
-      </label>
-    </div>
+      </div>
 
-    <!-- Step 3: Connection Details -->
-    <div v-if="step === 3" class="step-form">
-      <!-- SSH / SFTP -->
-      <template v-if="['ssh', 'sftp'].includes(selectedProtocol)">
+      <!-- Basic Info (shown after protocol selected) -->
+      <template v-if="selectedProtocol">
         <label class="form-label">
-          <span>{{ t('wizard.host') }}</span>
-          <input v-model="host" type="text" class="form-input" placeholder="e.g. 192.168.1.100" />
+          <span>{{ t('common.name') }}</span>
+          <input v-model="resName" type="text" class="form-input" placeholder="e.g. Web Server" autofocus />
         </label>
+        <label class="form-label">
+          <span>{{ t('wizard.color') }}</span>
+          <div class="color-picker">
+            <button
+              v-for="c in colorOptions"
+              :key="c"
+              class="color-dot"
+              :class="{ selected: resColor === c }"
+              :style="{ background: c || 'var(--border)' }"
+              @click="resColor = c"
+            />
+          </div>
+        </label>
+
+        <!-- Connection Details -->
+        <!-- SSH / SFTP -->
+        <template v-if="['ssh', 'sftp'].includes(selectedProtocol)">
+          <label class="form-label">
+            <span>{{ t('wizard.host') }}</span>
+            <input v-model="host" type="text" class="form-input" placeholder="e.g. 192.168.1.100" />
+          </label>
         <label class="form-label">
           <span>{{ t('wizard.port') }}</span>
           <input v-model.number="port" type="number" class="form-input" />
@@ -369,40 +320,16 @@ const colorOptions = [
         <span v-if="testResult?.ok" class="test-ok">✓ {{ t('wizard.testSuccess') }} ({{ testResult.latency_ms }}ms)</span>
         <span v-else-if="testResult && !testResult.ok" class="test-fail">✕ {{ testResult.error }}</span>
       </div>
+    </template>
     </div>
 
-    <!-- Step 4: Confirm -->
-    <div v-if="step === 4" class="step-confirm">
-      <div class="confirm-row">
-        <span class="confirm-label">{{ t('wizard.protocol') }}</span>
-        <Badge :tone="selectedProtocol === 'redis' ? 'danger' : 'info'">{{ selectedProtocol }}</Badge>
-      </div>
-      <div class="confirm-row">
-        <span class="confirm-label">{{ t('common.name') }}</span>
-        <span>{{ resName }}</span>
-      </div>
-      <div v-if="host" class="confirm-row">
-        <span class="confirm-label">{{ t('wizard.host') }}</span>
-        <span class="mono">{{ host }}{{ port ? `:${port}` : '' }}</span>
-      </div>
-      <div v-if="username" class="confirm-row">
-        <span class="confirm-label">{{ t('wizard.username') }}</span>
-        <span>{{ username }}</span>
-      </div>
-      <div v-if="error" class="form-error">{{ error }}</div>
-    </div>
-
-    <div v-if="stepError" class="form-error" style="margin-bottom: var(--space-3)">{{ stepError }}</div>
+    <div v-if="error" class="form-error" style="margin-bottom: var(--space-3)">{{ error }}</div>
 
     <!-- Actions -->
     <div class="form-actions">
-      <Button v-if="step > 1" variant="secondary" @click="prevStep">{{ t('wizard.back') }}</Button>
-      <div style="flex:1"></div>
       <Button variant="secondary" @click="handleClose">{{ t('common.cancel') }}</Button>
-      <Button v-if="step < 4" variant="primary" :disabled="step === 1 ? !canProceedStep1 : step === 2 ? !canProceedStep2 : !canProceedStep3" @click="nextStep">
-        {{ t('wizard.next') }}
-      </Button>
-      <Button v-if="step === 4" variant="primary" :loading="loading" @click="submit">
+      <div style="flex:1"></div>
+      <Button variant="primary" :loading="loading" :disabled="!selectedProtocol || !resName.trim()" @click="submit">
         {{ t('wizard.create') }}
       </Button>
     </div>
