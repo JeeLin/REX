@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.47.0] - 2026-07-29
+
+### Added
+- Agent 注册流程：环境创建时自动生成注册令牌，Agent 连接时自动注册
+- 环境详情页：正确显示注册令牌，支持一键复制
+
+### Changed
+- Agent 认证：使用环境注册令牌替代 Agent 独立令牌
+- 数据库：移除 agents 表未使用的 agent_token 列
+
 ## [0.46.1] - 2026-07-29
 
 ### Fixed

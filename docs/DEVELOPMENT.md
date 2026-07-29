@@ -100,6 +100,7 @@ rex-agent = 所有 crate（无前端）
 | **M52** | Hub 自动更新机制（阶段2） | — | ✅ |
 | **M53** | Bug fix + UX polish | — | ✅ |
 | **M54** | Bug fixes | — | ✅ |
+| **M55** | Agent 注册流程修复 | — | ✅ |
 
 ### M0：项目骨架重建
 
