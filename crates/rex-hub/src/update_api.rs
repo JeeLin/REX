@@ -66,6 +66,10 @@ impl Default for AgentBinaries {
 // ═══════════════════════════════════════
 
 /// GET /api/agents/download?os=linux&arch=amd64 — 下载 Agent 二进制
+///
+/// 查找顺序：
+/// 1. 本地预置二进制（Docker 内嵌 / 系统路径 / 本地缓存）
+/// 2. GitHub Releases（当前版本，确保兼容）
 pub async fn download_agent_binary(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
@@ -73,6 +77,7 @@ pub async fn download_agent_binary(
     let os = params.get("os").map(|s| s.as_str()).unwrap_or("linux");
     let arch = params.get("arch").map(|s| s.as_str()).unwrap_or("amd64");
 
+    // 1. 尝试本地二进制
     if let Some(path) = state.agent_binaries.find(os, arch) {
         match tokio::fs::read(&path).await {
             Ok(bytes) => {
@@ -82,7 +87,7 @@ pub async fn download_agent_binary(
                 } else {
                     format!("rex-agent-{os}-{arch}.{ext}")
                 };
-                (
+                return (
                     StatusCode::OK,
                     [
                         ("Content-Type", "application/octet-stream"),
@@ -93,20 +98,76 @@ pub async fn download_agent_binary(
                     ],
                     bytes,
                 )
-                    .into_response()
+                    .into_response();
             }
-            Err(e) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("failed to read binary: {e}"),
-            )
-                .into_response(),
+            Err(e) => {
+                tracing::warn!(error = %e, path = %path.display(), "failed to read local agent binary");
+            }
         }
-    } else {
-        (
-            StatusCode::NOT_FOUND,
-            format!("agent binary for os={os} arch={arch} not found"),
+    }
+
+    // 2. 从 GitHub Releases 下载当前版本（确保兼容）
+    let version = env!("CARGO_PKG_VERSION");
+    let github_owner =
+        std::env::var("REX_UPDATE_GITHUB_OWNER").unwrap_or_else(|_| "JeeLin".into());
+    let github_repo =
+        std::env::var("REX_UPDATE_GITHUB_REPO").unwrap_or_else(|_| "REX".into());
+
+    let binary_name = format!("rex-agent-{os}-{arch}");
+    let download_url = format!(
+        "https://github.com/{github_owner}/{github_repo}/releases/download/v{version}/{binary_name}"
+    );
+
+    tracing::info!(url = %download_url, "downloading agent binary from GitHub Releases");
+
+    match reqwest::get(&download_url).await {
+        Ok(resp) if resp.status().is_success() => {
+            match resp.bytes().await {
+                Ok(bytes) => {
+                    // 缓存到本地
+                    let cache_dir = state
+                        .data_dir
+                        .join("agent-binaries")
+                        .join(os)
+                        .join(arch);
+                    let _ = tokio::fs::create_dir_all(&cache_dir).await;
+                    let cache_path = cache_dir.join("rex-agent");
+                    let _ = tokio::fs::write(&cache_path, &bytes).await;
+
+                    let filename = format!("rex-agent-{os}-{arch}");
+                    (
+                        StatusCode::OK,
+                        [
+                            ("Content-Type", "application/octet-stream"),
+                            (
+                                "Content-Disposition",
+                                &format!("attachment; filename=\"{filename}\""),
+                            ),
+                        ],
+                        bytes.to_vec(),
+                    )
+                        .into_response()
+                }
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("failed to read download response: {e}"),
+                )
+                    .into_response(),
+            }
+        }
+        Ok(resp) => (
+            StatusCode::BAD_GATEWAY,
+            format!(
+                "GitHub download failed: status {}",
+                resp.status()
+            ),
         )
-            .into_response()
+            .into_response(),
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            format!("failed to download from GitHub: {e}"),
+        )
+            .into_response(),
     }
 }
 
