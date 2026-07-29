@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.55.1] - 2026-07-29
+
+### Fixed
+- 右键菜单图标大小统一
+- 资源创建向导协议图标添加圆形背景
+
 ## [0.55.0] - 2026-07-29
 
 ### Added
