@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.54.0] - 2026-07-29
+
+### Added
+- Agent 心跳间隔可通过 REX_HEARTBEAT_INTERVAL 环境变量配置（默认 30s）
+
+### Changed
+- 资源创建向导合并为单页表单，操作更便捷
+- 连接方式由环境继承，不再在资源创建时选择
+
+### Fixed
+- SQLite 资源创建时使用用户输入的文件路径（修复 host 硬编码为 localhost）
+- Agent 二进制下载端点改为公开路由，Docker 部署下无需授权即可下载
+- SSH 连接空用户名时默认使用 root
+- SFTP 文件列表返回修改时间（之前硬编码为 None）
+
 ## [0.53.0] - 2026-07-29
 
 ### Added

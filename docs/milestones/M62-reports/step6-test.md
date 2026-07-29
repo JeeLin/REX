@@ -1,10 +1,16 @@
-# 测试验证：M62 v0.53.0
+# 测试验证：M62
 
-| 检查项 | 结果 | 说明 |
-|--------|------|------|
-| Rust 编译 | ✅ | `cargo check` 通过 |
-| Rust 测试 | ✅ | `cargo test --workspace` 通过 |
+## 检查结果
 
-## 结论
+| 检查项 | 结果 |
+|--------|------|
+| `cargo check --locked` | ✅ 通过 |
+| `cargo test --workspace` | ✅ 通过 |
+| `cargo clippy --workspace` | ✅ 通过 |
+| 前端 `type-check` | ✅ 通过 |
+| 前端 `lint` | ✅ 通过（0 error） |
+| 前端 `build` | ✅ 通过 |
 
-✅ 测试全部通过。
+## 汇总
+
+- **结论**：✅ 通过
