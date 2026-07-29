@@ -105,6 +105,7 @@ rex-agent = 所有 crate（无前端）
 | **M57** | Stability, Mobile & Security | — | ✅ |
 | **M58** | Performance, Accessibility & Documentation | — | ✅ |
 | **M59** | Production Hardening & Integration Tests | — | ✅ |
+| **M60** | i18n Completion, Data Export & Search Enhancement | — | ✅ |
 
 ### M0：项目骨架重建
 

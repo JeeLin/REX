@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.51.0] - 2026-07-29
+
+### Changed
+- 国际化：确认所有 UI 文本已完整翻译
+- 审计日志：CSV 导出已支持当前筛选条件
+- 资源搜索：已使用 Vue computed 缓存优化
+
 ## [0.50.0] - 2026-07-29
 
 ### Added
