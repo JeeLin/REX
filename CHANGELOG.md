@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.46.1] - 2026-07-29
+
+### Fixed
+- 登录页面：修复首次运行时不会跳转密码设置页的问题
+- 资源创建向导：修复步骤2错误提示"主机地址为必填项"（验证条件与渲染步骤不匹配）
+- 环境详情页：无 Agent 注册时隐藏无效的复制/重置按钮，显示提示信息
+
 ## [0.46.0] - 2026-07-29
 
 ### Fixed
