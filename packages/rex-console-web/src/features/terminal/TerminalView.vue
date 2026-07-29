@@ -330,7 +330,7 @@ function handleOpenSftp() {
   flex: 1;
   min-height: 0;
   background: #0d1117;
-  overflow: visible;
+  overflow: hidden;
   position: relative;
 }
 

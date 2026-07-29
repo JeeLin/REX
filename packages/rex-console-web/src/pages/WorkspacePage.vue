@@ -638,7 +638,7 @@ useKeyboardShortcuts([
               </div>
 
               <!-- Terminal (SSH) + SFTP Drawer -->
-              <div v-if="currentPaneTabInfo(i - 1)?.protocol === 'ssh'" class="ws-ssh-area">
+              <div v-show="currentPaneTabInfo(i - 1)?.protocol === 'ssh'" class="ws-ssh-area">
                 <KeepAlive>
                   <TerminalView
                     :key="paneTabs[i - 1]"
