@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.52.0] - 2026-07-29
+
+### Added
+- 高对比度模式：新增高对比度主题选项，提升可访问性
+- 通知系统：统一通知组件，支持成功/错误/警告/信息类型，自动消失
+
 ## [0.51.0] - 2026-07-29
 
 ### Changed
