@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.55.0] - 2026-07-29
+
+### Added
+- 性能基准测试：使用 criterion 建立 JSON 序列化/反序列化基准
+- 数据库性能索引：为 resources/agents/audit_log 表添加常用查询索引
+
+### Changed
+- CI 构建优化：合并 build-hub 和 build-agent 为单一 job，避免重复编译共享 crate
+
 ## [0.54.0] - 2026-07-29
 
 ### Added
