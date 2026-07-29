@@ -25,10 +25,11 @@ jobs:
       - name: Check format
         run: cargo fmt --check
       - name: Clippy
-        run: cargo clippy --workspace --release
+        run: cargo clippy --workspace
+      - name: Test
+        run: cargo test --workspace
 
-  # ── 构建 Rust 二进制（clippy → test → build，共享 release target 目录） ──
-  # 产物用于：Docker Hub 镜像内嵌 + Release 发布
+  # ── 构建 Rust 二进制（5 平台矩阵，产物用于 Docker + Release） ──
   build-binaries:
     needs: [lint]
     strategy:
@@ -65,8 +66,6 @@ jobs:
       - name: Install cross-compilation tools
         if: matrix.cross
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-      - name: Test
-        run: cargo test --workspace --release
       - name: Build Agent + Hub
         run: cargo build --release -p rex-agent -p rex-hub --target ${{ matrix.target }}
       - uses: actions/upload-artifact@v6
