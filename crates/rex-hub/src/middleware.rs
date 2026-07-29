@@ -112,5 +112,9 @@ pub async fn security_headers(req: Request<axum::body::Body>, next: Next) -> Res
         "Permissions-Policy",
         "camera=(), microphone=(), geolocation=()".parse().unwrap(),
     );
+    headers.insert(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: wss:; font-src 'self' data:".parse().unwrap(),
+    );
     response
 }
