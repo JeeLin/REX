@@ -177,6 +177,7 @@ pub struct AgentConfig {
     pub agent_token: String,
     pub auto_update: bool,
     pub tls_insecure: bool,
+    pub heartbeat_interval: u64,
 }
 
 impl AgentConfig {
@@ -192,11 +193,16 @@ impl AgentConfig {
         let tls_insecure = std::env::var("REX_TLS_INSECURE")
             .map(|v| v == "true")
             .unwrap_or(false);
+        let heartbeat_interval = std::env::var("REX_HEARTBEAT_INTERVAL")
+            .unwrap_or_else(|_| "30".into())
+            .parse::<u64>()
+            .unwrap_or(30);
         Ok(Self {
             hub_url,
             agent_token,
             auto_update,
             tls_insecure,
+            heartbeat_interval,
         })
     }
 }
@@ -319,7 +325,7 @@ async fn connect_and_run(
     // 5. 心跳任务
     let evt_tx_hb = evt_tx.clone();
     let heartbeat_task = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(config.heartbeat_interval));
         loop {
             interval.tick().await;
             let hostname = hostname::get()
