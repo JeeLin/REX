@@ -338,6 +338,13 @@ function handleOpenSftp() {
   padding: 0;
 }
 
+.tv-container :deep(.xterm-char-measure-element) {
+  position: absolute;
+  top: -9999px;
+  left: -9999px;
+  visibility: hidden;
+}
+
 .tv-overlay {
   position: absolute;
   inset: 24px 0 0 0;

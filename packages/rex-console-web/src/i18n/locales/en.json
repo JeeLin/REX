@@ -49,6 +49,7 @@
     "resetFailed": "Failed to reset token",
     "resetTitle": "Reset Token",
     "resetToken": "Reset Token",
+    "resetTokenConfirm": "Are you sure you want to reset the Agent Token? The old token will become invalid.",
     "title": "Agents",
     "version": "Version"
   },

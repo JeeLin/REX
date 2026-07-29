@@ -49,6 +49,7 @@
     "resetFailed": "重置 Token 失败",
     "resetTitle": "重置 Token",
     "resetToken": "重置 Token",
+    "resetTokenConfirm": "确定要重置 Agent Token 吗？重置后旧 Token 将失效。",
     "title": "Agent",
     "version": "版本"
   },

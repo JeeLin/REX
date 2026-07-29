@@ -6,6 +6,7 @@ import { useEnvironmentsStore } from '@/stores/environments'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { environmentsApi, type Environment } from '@/api/environments'
 import { resourcesApi, type Resource } from '@/api/resources'
+import { agentsApi } from '@/api/agents'
 import Card from '@/components/ui/Card.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
@@ -246,6 +247,20 @@ async function copyToken() {
     }
   }
 }
+
+async function resetAgentToken() {
+  if (!env.value?.id) return
+  if (!confirm(t('environmentDetail.resetTokenConfirm'))) return
+  try {
+    const agent = await agentsApi.listByEnv(env.value.id)
+    if (agent.length > 0 && agent[0]) {
+      await agentsApi.resetToken(agent[0].id)
+      env.value = await environmentsApi.get(envId)
+    }
+  } catch (e) {
+    console.error('Failed to reset agent token:', e)
+  }
+}
 </script>
 
 <template>
@@ -300,6 +315,7 @@ async function copyToken() {
           <div class="agent-token-row">
             <code class="agent-token-value mono">{{ env.agent_token || '—' }}</code>
             <Button variant="secondary" size="sm" @click="copyToken">{{ t('common.copy') }}</Button>
+            <Button variant="danger" size="sm" @click="resetAgentToken">{{ t('common.reset') }}</Button>
           </div>
         </div>
       </Card>
