@@ -8,6 +8,7 @@ pub struct Environment {
     pub name: String,
     pub description: String,
     pub connection_mode: String,
+    pub registration_token: String,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -32,7 +33,6 @@ pub struct EnvironmentDetail {
     pub environment: Environment,
     pub resource_count: i64,
     pub agent_status: Option<String>,
-    pub agent_token: Option<String>,
 }
 
 // --- Resource ---

@@ -240,7 +240,7 @@ impl Database {
     pub fn list_environments(&self) -> Result<Vec<Environment>> {
         let conn = self.conn()?;
         let mut stmt = conn
-            .prepare("SELECT id, name, description, connection_mode, created_at, updated_at FROM environments ORDER BY name")
+            .prepare("SELECT id, name, description, connection_mode, registration_token, created_at, updated_at FROM environments ORDER BY name")
             .map_err(|e| RExError::Message(e.to_string()))?;
         let rows = stmt
             .query_map([], |row| {
@@ -249,8 +249,9 @@ impl Database {
                     name: row.get(1)?,
                     description: row.get(2)?,
                     connection_mode: row.get(3)?,
-                    created_at: row.get(4)?,
-                    updated_at: row.get(5)?,
+                    registration_token: row.get(4)?,
+                    created_at: row.get(5)?,
+                    updated_at: row.get(6)?,
                 })
             })
             .map_err(|e| RExError::Message(e.to_string()))?;
@@ -264,7 +265,7 @@ impl Database {
     pub fn get_environment(&self, id: &str) -> Result<Option<Environment>> {
         let conn = self.conn()?;
         let mut stmt = conn
-            .prepare("SELECT id, name, description, connection_mode, created_at, updated_at FROM environments WHERE id = ?1")
+            .prepare("SELECT id, name, description, connection_mode, registration_token, created_at, updated_at FROM environments WHERE id = ?1")
             .map_err(|e| RExError::Message(e.to_string()))?;
         let mut rows = stmt
             .query_map(rusqlite::params![id], |row| {
@@ -273,8 +274,9 @@ impl Database {
                     name: row.get(1)?,
                     description: row.get(2)?,
                     connection_mode: row.get(3)?,
-                    created_at: row.get(4)?,
-                    updated_at: row.get(5)?,
+                    registration_token: row.get(4)?,
+                    created_at: row.get(5)?,
+                    updated_at: row.get(6)?,
                 })
             })
             .map_err(|e| RExError::Message(e.to_string()))?;
@@ -288,7 +290,7 @@ impl Database {
     pub fn get_environment_by_name(&self, name: &str) -> Result<Option<Environment>> {
         let conn = self.conn()?;
         let mut stmt = conn
-            .prepare("SELECT id, name, description, connection_mode, created_at, updated_at FROM environments WHERE name = ?1")
+            .prepare("SELECT id, name, description, connection_mode, registration_token, created_at, updated_at FROM environments WHERE name = ?1")
             .map_err(|e| RExError::Message(e.to_string()))?;
         let mut rows = stmt
             .query_map(rusqlite::params![name], |row| {
@@ -297,8 +299,9 @@ impl Database {
                     name: row.get(1)?,
                     description: row.get(2)?,
                     connection_mode: row.get(3)?,
-                    created_at: row.get(4)?,
-                    updated_at: row.get(5)?,
+                    registration_token: row.get(4)?,
+                    created_at: row.get(5)?,
+                    updated_at: row.get(6)?,
                 })
             })
             .map_err(|e| RExError::Message(e.to_string()))?;
@@ -312,13 +315,14 @@ impl Database {
     pub fn create_environment(&self, env: &NewEnvironment) -> Result<Environment> {
         let conn = self.conn()?;
         let id = uuid::Uuid::new_v4().to_string();
+        let token = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
         let desc = env.description.as_deref().unwrap_or("");
         let mode = env.connection_mode.as_deref().unwrap_or("direct");
         conn.execute(
-            "INSERT INTO environments (id, name, description, connection_mode, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            rusqlite::params![id, env.name, desc, mode, now, now],
+            "INSERT INTO environments (id, name, description, connection_mode, registration_token, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            rusqlite::params![id, env.name, desc, mode, token, now, now],
         )
         .map_err(|e| RExError::Message(e.to_string()))?;
         Ok(Environment {
@@ -326,6 +330,7 @@ impl Database {
             name: env.name.clone(),
             description: desc.to_string(),
             connection_mode: mode.to_string(),
+            registration_token: token,
             created_at: now.clone(),
             updated_at: now,
         })
@@ -368,10 +373,9 @@ impl Database {
         let conn = self.conn()?;
         let mut stmt = conn
             .prepare(
-                "SELECT e.id, e.name, e.description, e.connection_mode, e.created_at, e.updated_at,
+                "SELECT e.id, e.name, e.description, e.connection_mode, e.registration_token, e.created_at, e.updated_at,
                         COALESCE(r.res_count, 0) AS resource_count,
-                        (SELECT a.status FROM agents a WHERE a.environment_id = e.id LIMIT 1) AS agent_status,
-                        (SELECT a.token_hash FROM agents a WHERE a.environment_id = e.id LIMIT 1) AS agent_token
+                        (SELECT a.status FROM agents a WHERE a.environment_id = e.id LIMIT 1) AS agent_status
                  FROM environments e
                  LEFT JOIN (SELECT environment_id, COUNT(*) AS res_count FROM resources GROUP BY environment_id) r ON r.environment_id = e.id
                  ORDER BY e.name",
@@ -385,12 +389,12 @@ impl Database {
                         name: row.get(1)?,
                         description: row.get(2)?,
                         connection_mode: row.get(3)?,
-                        created_at: row.get(4)?,
-                        updated_at: row.get(5)?,
+                        registration_token: row.get(4)?,
+                        created_at: row.get(5)?,
+                        updated_at: row.get(6)?,
                     },
-                    resource_count: row.get(6)?,
-                    agent_status: row.get(7)?,
-                    agent_token: row.get(8)?,
+                    resource_count: row.get(7)?,
+                    agent_status: row.get(8)?,
                 })
             })
             .map_err(|e| RExError::Message(e.to_string()))?;
@@ -405,10 +409,9 @@ impl Database {
         let conn = self.conn()?;
         let mut stmt = conn
             .prepare(
-                "SELECT e.id, e.name, e.description, e.connection_mode, e.created_at, e.updated_at,
+                "SELECT e.id, e.name, e.description, e.connection_mode, e.registration_token, e.created_at, e.updated_at,
                         COALESCE(r.res_count, 0) AS resource_count,
-                        (SELECT a.status FROM agents a WHERE a.environment_id = e.id LIMIT 1) AS agent_status,
-                        (SELECT a.token_hash FROM agents a WHERE a.environment_id = e.id LIMIT 1) AS agent_token
+                        (SELECT a.status FROM agents a WHERE a.environment_id = e.id LIMIT 1) AS agent_status
                  FROM environments e
                  LEFT JOIN (SELECT environment_id, COUNT(*) AS res_count FROM resources GROUP BY environment_id) r ON r.environment_id = e.id
                  WHERE e.id = ?1",
@@ -422,12 +425,12 @@ impl Database {
                         name: row.get(1)?,
                         description: row.get(2)?,
                         connection_mode: row.get(3)?,
-                        created_at: row.get(4)?,
-                        updated_at: row.get(5)?,
+                        registration_token: row.get(4)?,
+                        created_at: row.get(5)?,
+                        updated_at: row.get(6)?,
                     },
-                    resource_count: row.get(6)?,
-                    agent_status: row.get(7)?,
-                    agent_token: row.get(8)?,
+                    resource_count: row.get(7)?,
+                    agent_status: row.get(8)?,
                 })
             })
             .map_err(|e| RExError::Message(e.to_string()))?;

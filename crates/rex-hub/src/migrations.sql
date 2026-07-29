@@ -1,12 +1,13 @@
 -- REX Hub database schema
 
 CREATE TABLE IF NOT EXISTS environments (
-  id              TEXT PRIMARY KEY,
-  name            TEXT NOT NULL UNIQUE,
-  description     TEXT DEFAULT '',
-  connection_mode TEXT NOT NULL DEFAULT 'direct',
-  created_at      TEXT NOT NULL,
-  updated_at      TEXT NOT NULL
+  id                 TEXT PRIMARY KEY,
+  name               TEXT NOT NULL UNIQUE,
+  description        TEXT DEFAULT '',
+  connection_mode    TEXT NOT NULL DEFAULT 'direct',
+  registration_token TEXT DEFAULT '',
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS resources (
