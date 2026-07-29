@@ -10,10 +10,21 @@ env:
   AGENT_IMAGE: ghcr.io/${{ github.repository_owner }}/rex-agent
 
 jobs:
-  # ── 构建 Rust 二进制（检查 + 构建合并，全平台矩阵） ─────
-  # 流程：fmt → clippy → test → build（避免重复编译）
+  # ── 格式检查（平台无关，只需一次） ──────────────
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Check format
+        run: cargo fmt --check
+
+  # ── 构建 Rust 二进制（clippy → test → build，共享 release target 目录） ──
   # 产物用于：Docker Hub 镜像内嵌 + Release 发布
   build-binaries:
+    needs: [fmt]
     strategy:
       matrix:
         include:
@@ -39,7 +50,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-          components: clippy, rustfmt
+          components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: build-${{ matrix.target }}
@@ -47,10 +58,8 @@ jobs:
       - name: Install cross-compilation tools
         if: matrix.cross
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-      - name: Check format
-        run: cargo fmt --check
       - name: Clippy
-        run: cargo clippy --workspace --all-targets --release --target ${{ matrix.target }}
+        run: cargo clippy --workspace --release --target ${{ matrix.target }}
       - name: Test
         run: cargo test --workspace --release --target ${{ matrix.target }}
       - name: Build Agent + Hub
@@ -95,53 +104,48 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v7
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
-
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Download hub binary (linux-amd64)
         uses: actions/download-artifact@v8
         with:
           name: binaries-linux-amd64
-          path: dist/
-
+          path: dist/hub-tmp/
       - name: Download frontend
         uses: actions/download-artifact@v8
         with:
           name: frontend
           path: dist/static/
-
       - name: Download all agent binaries
         uses: actions/download-artifact@v8
         with:
           pattern: binaries-*
           path: dist/agents-tmp/
           merge-multiple: false
-
-      - name: Organize agent binaries
+      - name: Organize binaries
         run: |
+          # hub binary → dist/rex-hub
+          cp dist/hub-tmp/rex-hub dist/rex-hub
+          # agent binaries → dist/agents/{arch}/rex-agent
           for dir in dist/agents-tmp/binaries-*/; do
             arch=$(basename "$dir" | sed 's/^binaries-//')
             mkdir -p "dist/agents/$arch"
-            cp "$dir"/rex-agent* "dist/agents/$arch/"
+            cp "$dir"/rex-agent* "dist/agents/$arch/rex-agent"
           done
-          rm -rf dist/agents-tmp
+          rm -rf dist/hub-tmp dist/agents-tmp
           chmod +x dist/agents/*/rex-agent
-
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.HUB_IMAGE }}
           tags: type=ref,event=tag
-
       - name: Build and push Hub image
         uses: docker/build-push-action@v7
         with:
@@ -163,39 +167,33 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v7
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
-
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download agent binary (linux-amd64)
+      - name: Download linux agent binaries
         uses: actions/download-artifact@v8
         with:
-          name: binaries-linux-amd64
+          pattern: binaries-linux-*
           path: dist/
-
-      - name: Download agent binary (linux-arm64)
-        uses: actions/download-artifact@v8
-        with:
-          name: binaries-linux-arm64
-          path: dist/arm64/
-
-      - name: Prepare agent README for Docker Hub
-        run: cp docs/agent-readme.md README.md
-
+          merge-multiple: false
+      - name: Organize agent binaries
+        run: |
+          cp dist/binaries-linux-amd64/rex-agent dist/rex-agent
+          mkdir -p dist/arm64
+          cp dist/binaries-linux-arm64/rex-agent dist/arm64/rex-agent
+          rm -rf dist/binaries-*
+      - run: cp docs/agent-readme.md README.md
       - name: Docker meta
         id: meta-agent
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.AGENT_IMAGE }}
           tags: type=ref,event=tag
-
       - name: Build and push Agent image
         uses: docker/build-push-action@v7
         with:
@@ -208,7 +206,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ── Release: Hub + Agent 二进制 zip + SHA256SUMS ─────
+  # ── Release: GitHub Release + SHA256SUMS ─────
   release:
     needs: [build-binaries]
     runs-on: ubuntu-latest
@@ -216,28 +214,22 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
-
       - name: Download all binaries
         uses: actions/download-artifact@v8
         with:
           pattern: binaries-*
           path: artifacts/
           merge-multiple: false
-
       - name: Prepare release binaries
         run: |
           for dir in artifacts/binaries-*/; do
             arch=$(basename "$dir" | sed 's/^binaries-//')
-            # Linux/Windows: 无后缀；macOS: 无后缀
             cp "$dir"/rex-agent* "rex-agent-${arch}"
             cp "$dir"/rex-hub* "rex-hub-${arch}"
-            chmod +x "rex-agent-${arch}" "rex-hub-${arch}" 2>/dev/null || true
           done
-
+          chmod +x rex-agent-* rex-hub-* 2>/dev/null || true
       - name: Generate SHA256SUMS
-        run: |
-          sha256sum rex-hub-* rex-agent-* > SHA256SUMS
-
+        run: sha256sum rex-hub-* rex-agent-* > SHA256SUMS
       - name: Extract changelog for release
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
@@ -250,7 +242,6 @@ jobs:
           echo '```' >> release-body.md
           cat SHA256SUMS >> release-body.md
           echo '```' >> release-body.md
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
