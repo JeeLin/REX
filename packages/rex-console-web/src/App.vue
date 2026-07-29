@@ -2,6 +2,7 @@
 import { RouterView } from 'vue-router'
 import { onMounted } from 'vue'
 import ErrorBoundary from './components/ErrorBoundary.vue'
+import NotificationToast from './components/NotificationToast.vue'
 
 // 早期应用主题，避免闪烁
 const stored = localStorage.getItem('rex-theme') || 'dark'
@@ -23,5 +24,6 @@ onMounted(async () => {
 <template>
   <ErrorBoundary>
     <RouterView />
+    <NotificationToast />
   </ErrorBoundary>
 </template>
