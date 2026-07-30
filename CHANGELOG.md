@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.59.0] - 2026-07-30
+
+### Added
+- VirtualList 组件：长列表虚拟滚动支持
+
+### Changed
+- 构建优化：生产环境移除 console.log
+- 静态资源缓存策略：js/css/字体文件 1 年缓存，API 响应 no-store
+
 ## [0.58.0] - 2026-07-30
 
 ### Added
