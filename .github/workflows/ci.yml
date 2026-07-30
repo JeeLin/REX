@@ -138,7 +138,7 @@ jobs:
           for dir in dist/agents-tmp/binaries-*/; do
             arch=$(basename "$dir" | sed 's/^binaries-//')
             mkdir -p "dist/agents/$arch"
-            cp "$dir"/rex-agent "dist/agents/$arch/rex-agent"
+            [ -f "$dir/rex-agent.exe" ] && cp "$dir/rex-agent.exe" "dist/agents/$arch/rex-agent.exe" || cp "$dir/rex-agent" "dist/agents/$arch/rex-agent"
           done
           rm -rf dist/hub-tmp dist/agents-tmp
           chmod +x dist/agents/*/rex-agent
@@ -226,12 +226,12 @@ jobs:
         run: |
           for dir in artifacts/binaries-*/; do
             arch=$(basename "$dir" | sed 's/^binaries-//')
-            cp "$dir"/rex-agent "rex-agent-${arch}"
-            cp "$dir"/rex-hub "rex-hub-${arch}"
+            [ -f "$dir/rex-agent.exe" ] && cp "$dir/rex-agent.exe" "rex-agent-${arch}.exe" || cp "$dir/rex-agent" "rex-agent-${arch}"
+            [ -f "$dir/rex-hub.exe" ] && cp "$dir/rex-hub.exe" "rex-hub-${arch}.exe" || cp "$dir/rex-hub" "rex-hub-${arch}"
           done
           chmod +x rex-agent-* rex-hub-* 2>/dev/null || true
       - name: Generate SHA256SUMS
-        run: sha256sum rex-hub-* rex-agent-* > SHA256SUMS
+        run: sha256sum rex-hub* rex-agent* > SHA256SUMS
       - name: Extract changelog for release
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
