@@ -338,11 +338,16 @@ function handleOpenSftp() {
   padding: 0;
 }
 
-.tv-container :deep(.xterm-char-measure-element) {
+.tv-container :deep(.xterm-char-measure-element),
+.tv-container :deep(.xterm-helper-helper),
+.tv-container :deep(.xterm-helper) {
   position: absolute;
   top: -9999px;
   left: -9999px;
   visibility: hidden;
+  overflow: hidden;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 .tv-overlay {
