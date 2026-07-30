@@ -88,15 +88,11 @@ async fn query_audit_stats(
 }
 
 /// 安全审计报告：最近 24h 登录失败次数、异常 IP 列表。
-async fn security_report(
-    State(state): State<AppState>,
-) -> ApiResult<serde_json::Value> {
+async fn security_report(State(state): State<AppState>) -> ApiResult<serde_json::Value> {
     let db = state.db.clone();
     let entries = tokio::task::spawn_blocking(move || {
         let filter = AuditFilter {
-            time_from: Some(
-                (chrono::Utc::now() - chrono::Duration::hours(24)).to_rfc3339(),
-            ),
+            time_from: Some((chrono::Utc::now() - chrono::Duration::hours(24)).to_rfc3339()),
             action: Some("AUTH_LOGIN".into()),
             result: Some("failure".into()),
             ..Default::default()

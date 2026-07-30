@@ -114,10 +114,7 @@ pub async fn csrf_protection(req: Request<axum::body::Body>, next: Next) -> Resp
 
     // 静态资源和 WebSocket 路径跳过验证
     let path = uri.path();
-    if path.starts_with("/static")
-        || path.starts_with("/ws")
-        || path.starts_with("/api/agent/ws")
-    {
+    if path.starts_with("/static") || path.starts_with("/ws") || path.starts_with("/api/agent/ws") {
         return next.run(req).await;
     }
 
@@ -224,10 +221,9 @@ pub async fn cache_headers(req: Request<axum::body::Body>, next: Next) -> Respon
 
     // API 响应：不缓存
     if path.starts_with("/api/") {
-        response.headers_mut().insert(
-            "Cache-Control",
-            "no-store".parse().unwrap(),
-        );
+        response
+            .headers_mut()
+            .insert("Cache-Control", "no-store".parse().unwrap());
     }
 
     response
