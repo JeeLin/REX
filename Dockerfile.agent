@@ -2,7 +2,11 @@
 #
 # CI 流程：
 # 1. build-agent → dist/rex-agent (amd64), dist/arm64/rex-agent (arm64)
-# 2. 本 Dockerfile 根据 TARGETARCH 选择对应二进制
+# 2. 本 Dockerfile 根据 TARGETARCH 选择对应二进制（buildx 自动设置）
+#
+# 构建：
+#   docker buildx build --platform linux/amd64,linux/arm64 -f Dockerfile.agent .
+# buildx 会为每个平台分别构建，自动传入 TARGETARCH
 
 FROM debian:bookworm-slim
 
@@ -15,21 +19,14 @@ RUN useradd -r -s /bin/false agent
 WORKDIR /app
 RUN mkdir -p /app/data && chown agent:agent /app/data
 
-# 复制两个架构的二进制，根据 TARGETARCH 选择
-COPY dist/rex-agent /tmp/rex-agent-amd64
-COPY dist/arm64/rex-agent /tmp/rex-agent-arm64
+# 根据 TARGETARCH 只复制对应架构的二进制
+# buildx 自动设置 TARGETARCH 为 amd64 或 arm64
 ARG TARGETARCH
-RUN if [ "$TARGETARCH" = "arm64" ]; then \
-      cp /tmp/rex-agent-arm64 /app/rex-agent; \
-    else \
-      cp /tmp/rex-agent-amd64 /app/rex-agent; \
-    fi && \
-    rm -f /tmp/rex-agent-amd64 /tmp/rex-agent-arm64 && \
-    chmod +x /app/rex-agent
+COPY dist/rex-${TARGETARCH} /app/rex-agent
 
 USER agent
 ENV REX_DATA_DIR=/app/data
 
 # No --worker: supervisor runs as PID 1, spawns worker child process.
-# Supervisor handles crash restart and exit 10 (update-from-hub) with rollback/health checks.
+# Supervisor handles crash restart, exit 10 (update-from-hub) with rollback/health checks.
 CMD ["/app/rex-agent"]

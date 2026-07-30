@@ -185,9 +185,8 @@ jobs:
           merge-multiple: false
       - name: Organize agent binaries
         run: |
-          cp dist/binaries-linux-amd64/rex-agent dist/rex-agent
-          mkdir -p dist/arm64
-          cp dist/binaries-linux-arm64/rex-agent dist/arm64/rex-agent
+          cp dist/binaries-linux-amd64/rex-agent dist/rex-amd64
+          cp dist/binaries-linux-arm64/rex-agent dist/rex-arm64
           rm -rf dist/binaries-*
       - run: cp docs/agent-readme.md README.md
       - name: Docker meta
