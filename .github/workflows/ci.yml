@@ -225,8 +225,18 @@ jobs:
         run: |
           for dir in artifacts/binaries-*/; do
             arch=$(basename "$dir" | sed 's/^binaries-//')
-            [ -f "$dir/rex-agent.exe" ] && cp "$dir/rex-agent.exe" "rex-agent-${arch}.exe" || cp "$dir/rex-agent" "rex-agent-${arch}"
-            [ -f "$dir/rex-hub.exe" ] && cp "$dir/rex-hub.exe" "rex-hub-${arch}.exe" || cp "$dir/rex-hub" "rex-hub-${arch}"
+            # Copy agent binary (handle .exe suffix for Windows)
+            if [ -f "$dir/rex-agent.exe" ]; then
+              cp "$dir/rex-agent.exe" "rex-agent-${arch}.exe"
+            elif [ -f "$dir/rex-agent" ]; then
+              cp "$dir/rex-agent" "rex-agent-${arch}"
+            fi
+            # Copy hub binary
+            if [ -f "$dir/rex-hub.exe" ]; then
+              cp "$dir/rex-hub.exe" "rex-hub-${arch}.exe"
+            elif [ -f "$dir/rex-hub" ]; then
+              cp "$dir/rex-hub" "rex-hub-${arch}"
+            fi
           done
           chmod +x rex-agent-* rex-hub-* 2>/dev/null || true
       - name: Generate SHA256SUMS

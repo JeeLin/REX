@@ -143,7 +143,7 @@ location / {
 
 ## 备份
 
-数据存储在 `REX_DATA_DIR`（默认 `~/.rex`），备份 `rex.db` 文件即可：
+数据存储在 `REX_DATA_DIR`（默认 `./data`），备份 `rex.db` 文件即可：
 
 ```bash
 cp ~/.rex/rex.db ~/rex-backup-$(date +%Y%m%d).db

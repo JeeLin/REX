@@ -6,21 +6,19 @@
 
 ---
 
-## 设计基调（2.0 重设计）
+## 设计理念
 
-2.0 是一次从 0 开始的全面重设计。**视觉语言是 REX 自己的，交互布局与操作逻辑对标成熟专业工具**，降低学习成本、提升专业感：
+**视觉语言是 REX 自己的，交互布局对标成熟专业工具**，降低学习成本、提升专业感。
 
 | 模块 | 对标产品 |
 |------|----------|
 | 工作空间 / SSH 终端 | **Xshell** |
 | 数据库控制台 | **Navicat** |
-| Redis 控制台 | **Another Redis Desktop Manager (ARDM)** |
+| Redis 控制台 | **ARDM** |
 | 文件管理 / 对象存储 | **Xftp** |
 | 管理模块（仪表盘/Agent/审计/设置） | REX 自有设计系统 |
 
-三要素：**现代化**（Web 原生、深色优先、自定义细滚动条）、**极客化**（等宽字体、高信息密度、键盘优先）、**易用化**（对标用户熟悉的专业工具，一致的交互范式贯穿全站）。
-
-> 复刻的是操作方式与布局逻辑，不是 Windows 桌面软件的外观。
+**现代化**（Web 原生、深色优先、自定义细滚动条）、**极客化**（等宽字体、高信息密度、键盘优先）、**易用化**（对标用户熟悉的专业工具，一致的交互范式贯穿全站）。
 
 ---
 
@@ -80,13 +78,16 @@ mise x -- cargo build --workspace
 cd packages/rex-console-web && bun install && bun run dev
 ```
 
-更多部署方式（Docker / 二进制 / 配置文件）详见 [产品文档](docs/PRODUCT.md)。
+更多部署方式（Docker / 二进制 / 配置文件）详见 [部署指南](docs/deployment/README.md)。
 
 ---
 
 ## 文档
 
-- 产品文档：`docs/PRODUCT.md`
-- 开发文档：`docs/DEVELOPMENT.md`
-- 架构文档：`docs/architecture/`
-- 里程碑：`docs/milestones/`
+- [产品文档](docs/PRODUCT.md)
+- [开发文档](docs/DEVELOPMENT.md)
+- [架构文档](docs/architecture/)
+- [API 参考](docs/reference/api-endpoints.md)
+- [环境变量](docs/reference/env-variables.md)
+- [部署指南](docs/deployment/README.md)
+- [Agent 部署](docs/agent-readme.md)
