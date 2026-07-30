@@ -44,11 +44,17 @@ class ApiClient {
     })
 
     if (res.status === 401) {
-      // 不再直接清 token 跳转，而是触发弹窗事件
-      // 弹窗会由 App.vue 的 TokenRefreshModal 监听
-      tokenRefreshEvent.dispatchEvent(new CustomEvent('unauthorized', {
-        detail: { path, options },
-      }))
+      // 登录/注册/密码设置等认证端点不触发弹窗，让调用方自己处理错误
+      const isAuthEndpoint = path.startsWith('/auth/login')
+        || path.startsWith('/auth/password')
+        || path.startsWith('/auth/check')
+
+      if (!isAuthEndpoint) {
+        // 不再直接清 token 跳转，而是触发弹窗事件
+        tokenRefreshEvent.dispatchEvent(new CustomEvent('unauthorized', {
+          detail: { path, options },
+        }))
+      }
       throw new AuthError('认证已过期')
     }
 
