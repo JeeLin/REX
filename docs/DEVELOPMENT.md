@@ -114,7 +114,7 @@ rex-agent = 所有 crate（无前端）
 | **M66** | Mobile Adaptation & Interaction Enhancement | — | ✅ |
 | **M67** | Security Hardening & Audit Enhancement | — | ✅ |
 | **M68** | Performance Optimization | — | ✅ |
-| **M69** | Developer Experience | — | 🔄 |
+| **M69** | Developer Experience | — | ✅ |
 
 ### M0：项目骨架重建
 

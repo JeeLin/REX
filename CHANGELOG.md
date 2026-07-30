@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.60.0] - 2026-07-30
+
+### Added
+- 前端调试面板：环境信息、连接状态、性能指标（Ctrl+Shift+D）
+- 错误追踪增强：ErrorBoundary 显示详细错误信息
+- 后端日志增强：请求/响应体大小、慢请求警告
+- 错误消息国际化：API/网络/表单错误的中英文翻译
+
 ## [0.59.0] - 2026-07-30
 
 ### Added
