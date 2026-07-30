@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.62.0] - 2026-07-30
+
+### Added
+- 全站 i18n 补全：修复所有遗漏的硬编码英文文本
+
+### Fixed
+- 修复前后端 lint warnings（0 errors, 0 warnings）
+- 移除未使用的导入和变量
+- 添加缺失的默认 props
+
 ## [0.61.0] - 2026-07-30
 
 ### Added
