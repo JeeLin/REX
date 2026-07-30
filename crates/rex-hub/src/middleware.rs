@@ -5,7 +5,7 @@ use axum::http::request::Parts;
 use axum::http::Request;
 use axum::http::StatusCode;
 use axum::middleware::Next;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use std::time::Instant;
 
 use crate::auth::Claims;

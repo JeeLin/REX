@@ -178,6 +178,7 @@ impl Database {
                     agent_id: row.get(6)?,
                     result: row.get(7)?,
                     detail: row.get(8)?,
+                    ip: row.get(9)?,
                 })
             })
             .map_err(|e| RExError::Message(e.to_string()))?;

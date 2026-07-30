@@ -111,8 +111,8 @@ async fn security_report(
     let total_failures = entries.len();
     let unique_ips: Vec<String> = entries
         .iter()
-        .filter(|e| !e.ip.is_empty())
-        .map(|e| e.ip.clone())
+        .filter_map(|e| e.ip.clone())
+        .filter(|ip| !ip.is_empty())
         .collect::<std::collections::HashSet<_>>()
         .into_iter()
         .collect();
