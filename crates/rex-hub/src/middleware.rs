@@ -98,6 +98,90 @@ pub async fn request_logger(req: Request<axum::body::Body>, next: Next) -> Respo
     response
 }
 
+/// CSRF 保护中间件：验证 POST/PUT/DELETE 请求的 Origin/Referer 头。
+/// 仅对非 GET/HEAD 请求验证，本地开发地址跳过验证。
+pub async fn csrf_protection(req: Request<axum::body::Body>, next: Next) -> Response {
+    let method = req.method().clone();
+    let uri = req.uri().clone();
+
+    // GET/HEAD/OPTIONS 不需要 CSRF 验证
+    if method != axum::http::Method::POST
+        && method != axum::http::Method::PUT
+        && method != axum::http::Method::DELETE
+    {
+        return next.run(req).await;
+    }
+
+    // 静态资源和 WebSocket 路径跳过验证
+    let path = uri.path();
+    if path.starts_with("/static")
+        || path.starts_with("/ws")
+        || path.starts_with("/api/agent/ws")
+    {
+        return next.run(req).await;
+    }
+
+    // 提取 Origin 或 Referer
+    let origin = req
+        .headers()
+        .get("Origin")
+        .or_else(|| req.headers().get("Referer"));
+
+    match origin {
+        Some(val) => {
+            let origin_str = val.to_str().unwrap_or("");
+
+            // 本地开发地址跳过验证
+            if origin_str.contains("localhost")
+                || origin_str.contains("127.0.0.1")
+                || origin_str.contains("[::1]")
+            {
+                return next.run(req).await;
+            }
+
+            // 提取 host
+            let origin_host = origin_str
+                .strip_prefix("http://")
+                .or_else(|| origin_str.strip_prefix("https://"))
+                .unwrap_or(origin_str)
+                .split('/')
+                .next()
+                .unwrap_or("");
+
+            // 服务器自身的 Host 头
+            let server_host = req
+                .headers()
+                .get("Host")
+                .and_then(|h| h.to_str().ok())
+                .unwrap_or("");
+
+            // 允许无 Origin/Referer 的请求（同源直连）
+            if origin_host == server_host {
+                return next.run(req).await;
+            }
+
+            tracing::warn!(
+                method = %method,
+                path = %path,
+                origin = %origin_str,
+                server = %server_host,
+                "CSRF protection: origin mismatch"
+            );
+
+            // Origin 不匹配，拒绝请求
+            return (
+                StatusCode::FORBIDDEN,
+                "CSRF validation failed: origin mismatch",
+            )
+                .into_response();
+        }
+        None => {
+            // 无 Origin/Referer：允许同源直连（如 curl/API 客户端）
+            return next.run(req).await;
+        }
+    }
+}
+
 /// 安全 HTTP 响应头中间件。
 pub async fn security_headers(req: Request<axum::body::Body>, next: Next) -> Response {
     let mut response = next.run(req).await;
