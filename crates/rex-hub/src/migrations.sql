@@ -66,3 +66,6 @@ CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
 CREATE INDEX IF NOT EXISTS idx_audit_log_time ON audit_log(time);
 CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
 CREATE INDEX IF NOT EXISTS idx_audit_log_environment_id ON audit_log(environment_id);
+
+-- M67: Add IP column to audit_log
+ALTER TABLE audit_log ADD COLUMN ip TEXT DEFAULT '';

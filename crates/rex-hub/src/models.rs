@@ -107,6 +107,7 @@ pub struct NewAuditEntry {
     pub agent_id: Option<String>,
     pub result: String,
     pub detail: Option<String>,
+    pub ip: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]

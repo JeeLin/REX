@@ -101,12 +101,12 @@ impl Database {
         let id = uuid::Uuid::new_v4().to_string();
         let time = chrono::Utc::now().to_rfc3339();
         conn.execute(
-            "INSERT INTO audit_log (id, time, action, target, environment_id, resource_id, agent_id, result, detail)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO audit_log (id, time, action, target, environment_id, resource_id, agent_id, result, detail, ip)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             rusqlite::params![
                 id, time, entry.action, entry.target,
                 entry.environment_id, entry.resource_id, entry.agent_id,
-                entry.result, entry.detail,
+                entry.result, entry.detail, entry.ip,
             ],
         )
         .map_err(|e| RExError::Message(e.to_string()))?;
@@ -116,7 +116,7 @@ impl Database {
     pub fn query_audit_log(&self, filter: &AuditFilter) -> Result<Vec<AuditEntry>> {
         let conn = self.conn()?;
         let mut sql = String::from(
-            "SELECT id, time, action, target, environment_id, resource_id, agent_id, result, detail
+            "SELECT id, time, action, target, environment_id, resource_id, agent_id, result, detail, ip
              FROM audit_log WHERE 1=1",
         );
         let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
