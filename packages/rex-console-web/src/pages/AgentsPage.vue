@@ -128,7 +128,16 @@ async function copyText(text: string) {
     copySuccess.value = 'copied'
     setTimeout(() => { copySuccess.value = '' }, 2000)
   } catch {
-    copySuccess.value = 'failed'
+    // fallback for non-HTTPS environments
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.left = '-9999px'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+    copySuccess.value = 'copied'
     setTimeout(() => { copySuccess.value = '' }, 2000)
   }
 }
@@ -226,7 +235,15 @@ function copyGuideCode() {
     guideCopySuccess.value = 'copied'
     setTimeout(() => { guideCopySuccess.value = '' }, 2000)
   }).catch(() => {
-    guideCopySuccess.value = 'failed'
+    const ta = document.createElement('textarea')
+    ta.value = guideCode.value
+    ta.style.position = 'fixed'
+    ta.style.left = '-9999px'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+    guideCopySuccess.value = 'copied'
     setTimeout(() => { guideCopySuccess.value = '' }, 2000)
   })
 }
