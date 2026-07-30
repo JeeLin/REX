@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.58.0] - 2026-07-30
+
+### Added
+- CSRF 保护：验证 API 请求的 Origin/Referer 头
+- 审计日志 IP 追踪：记录客户端 IP 地址
+- 安全审计报告 API：`GET /api/audit/security-report`（最近 24h 登录失败统计）
+
+### Changed
+- CSP 安全头增强：添加 frame-ancestors、base-uri、form-action 策略
+- Dockerfile 环境变量修正：`DATA_DIR` → `REX_DATA_DIR`
+
 ## [0.57.0] - 2026-07-30
 
 ### Added

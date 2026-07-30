@@ -112,7 +112,7 @@ rex-agent = 所有 crate（无前端）
 | **M64** | Bug Fix & UX Polish | — | ✅ |
 | **M65** | Auth & Environment Improvements | — | ✅ |
 | **M66** | Mobile Adaptation & Interaction Enhancement | — | ✅ |
-| **M67** | Security Hardening & Audit Enhancement | — | 🔄 |
+| **M67** | Security Hardening & Audit Enhancement | — | ✅ |
 
 ### M0：项目骨架重建
 
