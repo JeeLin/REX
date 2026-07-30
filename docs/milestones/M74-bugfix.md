@@ -46,3 +46,8 @@ M73 完成测试覆盖率。本里程碑集中修复已知 bug 和 UX 问题。
 | ⬜ | 🟢 | 最近使用去重 | 用户反馈 | 最近使用的内容可以重复吗 |
 | ⬜ | 🟡 | Agent 下载链接不安全 | 用户反馈 | Agent 下载链接使用 HTTP 而非 HTTPS，浏览器阻止下载 |
 | ⬜ | 🔴 | Agent 部署指南复制按钮报错 | 用户反馈 | Agent Docker 部署指南点击复制报错 Cannot read properties of undefined (reading writeText) |
+| ⬜ | 🟡 | 直连环境显示 agent 内容 | 用户反馈 | 直连的环境不需要 agent 相关内容 |
+| ⬜ | 🟡 | Agent token 按钮文本未翻译 | 用户反馈 | 通过 agent 连接的环境，agent token 右边的两个按钮显示 common.copy 和 common.reset |
+| ⬜ | 🟢 | 环境页面添加 agent 部署说明链接 | 用户反馈 | 环境中是不是加一个跳转 agent 部署说明页面的按钮 |
+| ⬜ | 🟢 | 评估 agent 页面必要性 | 用户反馈 | 需要单独的 agent 页面吗 |
+| ⬜ | 🟢 | 资源栏底部拖拽手柄 | 用户反馈 | 左侧资源栏需要下面的左右拉的栏吗 |
