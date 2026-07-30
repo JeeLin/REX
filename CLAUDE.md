@@ -126,10 +126,17 @@ cargo clippy --workspace --all-targets
 cargo test --workspace
 
 # 前端
-npm run type-check
-npm run lint
-npm run build
+bun run type-check
+bun run lint
+bun run build
 ```
+
+### CI 注意事项
+
+- **Rust 代码必须 `cargo fmt`**：写完 Rust 代码后提交前必须运行 `cargo fmt`，CI 会用 `cargo fmt --check` 检查
+- **前端 type-check**：`bun run type-check`（vue-tsc）检查 TypeScript 类型，确保所有类型正确
+- **前端 lint**：`bun run lint`（ESLint），warning 可接受，error 必须修复
+- **CI 流程**：`fmt` → `clippy + test` → `build`（5 平台矩阵）→ `Docker` → `Release`
 
 测试原则：
 - 所有公开函数和关键逻辑路径必须有测试
