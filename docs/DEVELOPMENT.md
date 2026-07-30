@@ -115,7 +115,7 @@ rex-agent = 所有 crate（无前端）
 | **M67** | Security Hardening & Audit Enhancement | — | ✅ |
 | **M68** | Performance Optimization | — | ✅ |
 | **M69** | Developer Experience | — | ✅ |
-| **M70** | Data Export & Backup | — | 🔄 |
+| **M70** | Data Export & Backup | — | ✅ |
 
 ### M0：项目骨架重建
 

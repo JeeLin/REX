@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.61.0] - 2026-07-30
+
+### Added
+- 审计日志 CSV/JSON 导出
+- 环境配置导出/导入（不含敏感字段）
+- 数据库备份 API（创建/列表/恢复）
+
 ## [0.60.0] - 2026-07-30
 
 ### Added
