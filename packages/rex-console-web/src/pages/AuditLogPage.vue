@@ -284,53 +284,53 @@ onMounted(async () => {
     <Card v-else class="log-card">
       <div v-if="loading" class="loading muted">{{ t('common.loadingEllipsis') }}</div>
       <ResponsiveTable v-else>
-      <table class="log-table">
-        <thead>
-          <tr>
-            <th></th>
-            <th>{{ t('auditLog.time') }}</th>
-            <th>{{ t('auditLog.action') }}</th>
-            <th>{{ t('auditLog.target') }}</th>
-            <th>{{ t('auditLog.environment') }}</th>
-            <th>{{ t('auditLog.result') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <template v-for="entry in entries" :key="entry.id">
-            <tr class="log-row" @click="toggleExpand(entry.id)" @contextmenu.prevent="onContextMenu($event, entry)">
-              <td class="expand-icon">{{ expandedId === entry.id ? '▾' : '▸' }}</td>
-              <td class="mono">{{ timeAgo(entry.time) }}</td>
-              <td>
-                <Badge :tone="entry.action.includes('DELETE') ? 'danger' : entry.action.includes('CREATE') ? 'success' : entry.action.includes('ONLINE') ? 'success' : entry.action.includes('OFFLINE') ? 'danger' : 'info'">
-                  {{ entry.action }}
-                </Badge>
-              </td>
-              <td>{{ entry.target || '—' }}</td>
-              <td>{{ envName(entry.environment_id) }}</td>
-              <td><Badge :tone="resultBadge(entry.result)">{{ entry.result }}</Badge></td>
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>{{ t('auditLog.time') }}</th>
+              <th>{{ t('auditLog.action') }}</th>
+              <th>{{ t('auditLog.target') }}</th>
+              <th>{{ t('auditLog.environment') }}</th>
+              <th>{{ t('auditLog.result') }}</th>
             </tr>
-            <tr v-if="expandedId === entry.id" class="detail-row">
-              <td colspan="6">
-                <div class="detail-content">
-                  <div v-if="entry.agent_id" class="detail-field">
-                    <span class="detail-label muted">Agent ID:</span>
-                    <span class="mono">{{ entry.agent_id }}</span>
+          </thead>
+          <tbody>
+            <template v-for="entry in entries" :key="entry.id">
+              <tr class="log-row" @click="toggleExpand(entry.id)" @contextmenu.prevent="onContextMenu($event, entry)">
+                <td class="expand-icon">{{ expandedId === entry.id ? '▾' : '▸' }}</td>
+                <td class="mono">{{ timeAgo(entry.time) }}</td>
+                <td>
+                  <Badge :tone="entry.action.includes('DELETE') ? 'danger' : entry.action.includes('CREATE') ? 'success' : entry.action.includes('ONLINE') ? 'success' : entry.action.includes('OFFLINE') ? 'danger' : 'info'">
+                    {{ entry.action }}
+                  </Badge>
+                </td>
+                <td>{{ entry.target || '—' }}</td>
+                <td>{{ envName(entry.environment_id) }}</td>
+                <td><Badge :tone="resultBadge(entry.result)">{{ entry.result }}</Badge></td>
+              </tr>
+              <tr v-if="expandedId === entry.id" class="detail-row">
+                <td colspan="6">
+                  <div class="detail-content">
+                    <div v-if="entry.agent_id" class="detail-field">
+                      <span class="detail-label muted">Agent ID:</span>
+                      <span class="mono">{{ entry.agent_id }}</span>
+                    </div>
+                    <div v-if="entry.resource_id" class="detail-field">
+                      <span class="detail-label muted">{{ t('auditLog.resource') }}:</span>
+                      <span>{{ resourceName(entry.resource_id) }}</span>
+                    </div>
+                    <div v-if="entry.detail" class="detail-field">
+                      <span class="detail-label muted">Detail:</span>
+                      <pre v-if="isJsonDetail(entry.detail)" class="detail-code mono">{{ formatDetail(entry.detail) }}</pre>
+                      <span v-else>{{ entry.detail }}</span>
+                    </div>
                   </div>
-                  <div v-if="entry.resource_id" class="detail-field">
-                    <span class="detail-label muted">{{ t('auditLog.resource') }}:</span>
-                    <span>{{ resourceName(entry.resource_id) }}</span>
-                  </div>
-                  <div v-if="entry.detail" class="detail-field">
-                    <span class="detail-label muted">Detail:</span>
-                    <pre v-if="isJsonDetail(entry.detail)" class="detail-code mono">{{ formatDetail(entry.detail) }}</pre>
-                    <span v-else>{{ entry.detail }}</span>
-                  </div>
-                </div>
-              </td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
       </ResponsiveTable>
     </Card>
 

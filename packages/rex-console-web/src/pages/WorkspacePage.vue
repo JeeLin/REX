@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, defineAsyncComponent, watch, KeepAlive } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, defineAsyncComponent, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Splitpanes, Pane } from 'splitpanes'
@@ -662,7 +662,7 @@ useKeyboardShortcuts([
                   <FilesDrawer
                     :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
                   />
-              </div>
+                </div>
               </div>
 
               <!-- SQL (MySQL / PostgreSQL / SQLite) -->

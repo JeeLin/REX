@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
 import { type TestConnectionResult } from '@/api/resources'
@@ -19,10 +19,6 @@ const emit = defineEmits<{
 }>()
 
 const store = useEnvironmentsStore()
-
-// 从环境继承连接方式
-const environment = computed(() => store.environments.find(e => e.id === props.environmentId))
-const connectionMode = computed(() => environment.value?.connection_mode || 'direct')
 
 const loading = ref(false)
 const error = ref('')
@@ -218,109 +214,109 @@ const colorOptions = [
             <span>{{ t('wizard.host') }}</span>
             <input v-model="host" type="text" class="form-input" placeholder="e.g. 192.168.1.100" />
           </label>
-        <label class="form-label">
-          <span>{{ t('wizard.port') }}</span>
-          <input v-model.number="port" type="number" class="form-input" />
-        </label>
-        <label class="form-label">
-          <span>{{ t('wizard.username') }}</span>
-          <input v-model="username" type="text" class="form-input" placeholder="e.g. root" />
-        </label>
-        <label class="form-label">
-          <span>{{ t('wizard.password') }}</span>
-          <input v-model="password" type="password" class="form-input" placeholder="(optional if using key)" />
-        </label>
-        <label class="form-label">
-          <span>{{ t('wizard.privateKey') }}</span>
-          <textarea v-model="privateKey" class="form-input form-textarea" placeholder="(optional) Paste private key" rows="3"></textarea>
-        </label>
-      </template>
+          <label class="form-label">
+            <span>{{ t('wizard.port') }}</span>
+            <input v-model.number="port" type="number" class="form-input" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.username') }}</span>
+            <input v-model="username" type="text" class="form-input" placeholder="e.g. root" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.password') }}</span>
+            <input v-model="password" type="password" class="form-input" placeholder="(optional if using key)" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.privateKey') }}</span>
+            <textarea v-model="privateKey" class="form-input form-textarea" placeholder="(optional) Paste private key" rows="3"></textarea>
+          </label>
+        </template>
 
-      <!-- MySQL / PostgreSQL -->
-      <template v-if="['mysql', 'postgresql'].includes(selectedProtocol)">
-        <label class="form-label">
-          <span>{{ t('wizard.host') }}</span>
-          <input v-model="host" type="text" class="form-input" placeholder="e.g. 10.0.0.5" />
-        </label>
-        <label class="form-label">
-          <span>{{ t('wizard.port') }}</span>
-          <input v-model.number="port" type="number" class="form-input" />
-        </label>
-        <label class="form-label">
-          <span>{{ t('wizard.username') }}</span>
-          <input v-model="username" type="text" class="form-input" placeholder="e.g. root" />
-        </label>
-        <label class="form-label">
-          <span>{{ t('wizard.password') }}</span>
-          <input v-model="password" type="password" class="form-input" />
-        </label>
-        <label class="form-label">
-          <span>{{ t('wizard.database') }}</span>
-          <input v-model="databaseName" type="text" class="form-input" placeholder="(optional)" />
-        </label>
-      </template>
+        <!-- MySQL / PostgreSQL -->
+        <template v-if="['mysql', 'postgresql'].includes(selectedProtocol)">
+          <label class="form-label">
+            <span>{{ t('wizard.host') }}</span>
+            <input v-model="host" type="text" class="form-input" placeholder="e.g. 10.0.0.5" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.port') }}</span>
+            <input v-model.number="port" type="number" class="form-input" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.username') }}</span>
+            <input v-model="username" type="text" class="form-input" placeholder="e.g. root" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.password') }}</span>
+            <input v-model="password" type="password" class="form-input" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.database') }}</span>
+            <input v-model="databaseName" type="text" class="form-input" placeholder="(optional)" />
+          </label>
+        </template>
 
-      <!-- Redis -->
-      <template v-if="selectedProtocol === 'redis'">
-        <label class="form-label">
-          <span>{{ t('wizard.host') }}</span>
-          <input v-model="host" type="text" class="form-input" placeholder="e.g. 127.0.0.1" />
-        </label>
-        <label class="form-label">
-          <span>{{ t('wizard.port') }}</span>
-          <input v-model.number="port" type="number" class="form-input" />
-        </label>
-        <label class="form-label">
-          <span>{{ t('wizard.password') }}</span>
-          <input v-model="password" type="password" class="form-input" placeholder="(optional)" />
-        </label>
-        <label class="form-label">
-          <span>{{ t('wizard.redisDb') }}</span>
-          <input v-model.number="redisDb" type="number" class="form-input" min="0" max="15" />
-        </label>
-      </template>
+        <!-- Redis -->
+        <template v-if="selectedProtocol === 'redis'">
+          <label class="form-label">
+            <span>{{ t('wizard.host') }}</span>
+            <input v-model="host" type="text" class="form-input" placeholder="e.g. 127.0.0.1" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.port') }}</span>
+            <input v-model.number="port" type="number" class="form-input" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.password') }}</span>
+            <input v-model="password" type="password" class="form-input" placeholder="(optional)" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.redisDb') }}</span>
+            <input v-model.number="redisDb" type="number" class="form-input" min="0" max="15" />
+          </label>
+        </template>
 
-      <!-- SQLite -->
-      <template v-if="selectedProtocol === 'sqlite'">
-        <label class="form-label">
-          <span>{{ t('wizard.filePath') }}</span>
-          <input v-model="filePath" type="text" class="form-input" placeholder="/path/to/database.sqlite" />
-        </label>
-      </template>
+        <!-- SQLite -->
+        <template v-if="selectedProtocol === 'sqlite'">
+          <label class="form-label">
+            <span>{{ t('wizard.filePath') }}</span>
+            <input v-model="filePath" type="text" class="form-input" placeholder="/path/to/database.sqlite" />
+          </label>
+        </template>
 
-      <!-- S3 -->
-      <template v-if="selectedProtocol === 's3'">
-        <label class="form-label">
-          <span>{{ t('wizard.s3Endpoint') }}</span>
-          <input v-model="s3Endpoint" type="text" class="form-input" placeholder="https://s3.amazonaws.com" />
-        </label>
-        <label class="form-label">
-          <span>{{ t('wizard.s3AccessKey') }}</span>
-          <input v-model="s3AccessKey" type="text" class="form-input" />
-        </label>
-        <label class="form-label">
-          <span>{{ t('wizard.s3SecretKey') }}</span>
-          <input v-model="s3SecretKey" type="password" class="form-input" />
-        </label>
-        <label class="form-label">
-          <span>{{ t('wizard.s3Bucket') }}</span>
-          <input v-model="s3Bucket" type="text" class="form-input" />
-        </label>
-        <label class="form-label">
-          <span>{{ t('wizard.s3Region') }}</span>
-          <input v-model="s3Region" type="text" class="form-input" placeholder="us-east-1" />
-        </label>
-      </template>
+        <!-- S3 -->
+        <template v-if="selectedProtocol === 's3'">
+          <label class="form-label">
+            <span>{{ t('wizard.s3Endpoint') }}</span>
+            <input v-model="s3Endpoint" type="text" class="form-input" placeholder="https://s3.amazonaws.com" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.s3AccessKey') }}</span>
+            <input v-model="s3AccessKey" type="text" class="form-input" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.s3SecretKey') }}</span>
+            <input v-model="s3SecretKey" type="password" class="form-input" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.s3Bucket') }}</span>
+            <input v-model="s3Bucket" type="text" class="form-input" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.s3Region') }}</span>
+            <input v-model="s3Region" type="text" class="form-input" placeholder="us-east-1" />
+          </label>
+        </template>
 
-      <!-- Test connection -->
-      <div class="test-section">
-        <Button variant="secondary" size="sm" :loading="testLoading" @click="testConnection">
-          {{ t('wizard.testConnection') }}
-        </Button>
-        <span v-if="testResult?.ok" class="test-ok">✓ {{ t('wizard.testSuccess') }} ({{ testResult.latency_ms }}ms)</span>
-        <span v-else-if="testResult && !testResult.ok" class="test-fail">✕ {{ testResult.error }}</span>
-      </div>
-    </template>
+        <!-- Test connection -->
+        <div class="test-section">
+          <Button variant="secondary" size="sm" :loading="testLoading" @click="testConnection">
+            {{ t('wizard.testConnection') }}
+          </Button>
+          <span v-if="testResult?.ok" class="test-ok">✓ {{ t('wizard.testSuccess') }} ({{ testResult.latency_ms }}ms)</span>
+          <span v-else-if="testResult && !testResult.ok" class="test-fail">✕ {{ testResult.error }}</span>
+        </div>
+      </template>
     </div>
 
     <div v-if="error" class="form-error" style="margin-bottom: var(--space-3)">{{ error }}</div>

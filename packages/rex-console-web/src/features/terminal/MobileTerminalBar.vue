@@ -7,7 +7,6 @@ defineProps<{
 </script>
 <template>
   <div class="mobile-terminal-bar">
-
     <!-- 方向键区 -->
     <div class="mtb-dpad">
       <button class="mtb-btn mtb-dpad-up" @click="terminal?.input('\x1b[A')">↑</button>

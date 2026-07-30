@@ -5,7 +5,7 @@ withDefaults(defineProps<{
   rowKey?: (row: T, index: number) => string | number
   striped?: boolean
   compact?: boolean
-}>(), { striped: false, compact: false })
+}>(), { striped: false, compact: false, rowKey: (_row: T, index: number) => index })
 
 defineEmits<{ rowClick: [row: T, index: number] }>()
 </script>
