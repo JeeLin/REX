@@ -436,6 +436,7 @@ const currentTitle = computed(() => {
   left: 0;
   right: 0;
   height: 56px;
+  padding-bottom: env(safe-area-inset-bottom);
   background: var(--bg-surface);
   border-top: 1px solid var(--border);
   z-index: 997;
