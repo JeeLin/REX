@@ -7,6 +7,7 @@ import { useSessionTimeout } from '@/composables/useSessionTimeout'
 import { useAuthStore } from '@/stores/auth'
 import type { Resource } from '@/api/resources'
 import { useRouter } from 'vue-router'
+import { useSwipeGesture } from '@/composables/useSwipeGesture'
 
 const { t } = useI18n()
 const { showWarning, remainingSeconds, extendSession } = useSessionTimeout()
@@ -40,6 +41,13 @@ const mobileMenuOpen = ref(false)
 
 
 const isWorkspace = computed(() => route.path === '/workspace')
+
+// 移动端滑动手势
+const mainRef = ref<HTMLElement | null>(null)
+useSwipeGesture(mainRef, {
+  onSwipeRight: () => { if (window.innerWidth < 768) mobileMenuOpen.value = true },
+  onSwipeLeft: () => { mobileMenuOpen.value = false },
+})
 
 // F11 全屏切换
 function handleGlobalKeydown(e: KeyboardEvent) {
@@ -97,7 +105,7 @@ const currentTitle = computed(() => {
       </nav>
     </aside>
 
-    <div class="main">
+    <div ref="mainRef" class="main">
       <header v-if="!(fullscreen && isWorkspace)" class="topbar">
         <!-- 移动端汉堡按钮 -->
         <button class="hamburger-btn" @click="mobileMenuOpen = !mobileMenuOpen">☰</button>
