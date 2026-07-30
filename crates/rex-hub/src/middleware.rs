@@ -202,8 +202,8 @@ pub async fn security_headers(req: Request<axum::body::Body>, next: Next) -> Res
 
 /// 静态资源缓存中间件：为 js/css 等静态资源添加 Cache-Control。
 pub async fn cache_headers(req: Request<axum::body::Body>, next: Next) -> Response {
+    let path = req.uri().path().to_owned();
     let mut response = next.run(req).await;
-    let path = req.uri().path();
 
     // 静态资源：长期缓存（带 hash 的文件名保证更新时失效）
     if path.ends_with(".js")
