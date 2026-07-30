@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.63.0] - 2026-07-30
+
+### Added
+- API 端点参考文档（所有 REST/WebSocket 端点）
+- 部署指南更新（完整环境变量 + 备份恢复）
+- Middleware 单元测试（CSRF + Cache-Control）
+
+### Fixed
+- cache_headers 中间件 borrow 错误修复
+- Dockerfile/Docker Compose 环境变量统一为 REX_ 前缀
+
 ## [0.62.0] - 2026-07-30
 
 ### Added

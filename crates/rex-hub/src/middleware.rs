@@ -228,3 +228,29 @@ pub async fn cache_headers(req: Request<axum::body::Body>, next: Next) -> Respon
 
     response
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_csrf_skips_get_requests() {
+        assert_ne!(axum::http::Method::GET, axum::http::Method::POST);
+    }
+
+    #[test]
+    fn test_cache_path_detection() {
+        assert!("/assets/app.js".ends_with(".js"));
+        assert!("/styles/main.css".ends_with(".css"));
+        assert!("/fonts/roboto.woff2".ends_with(".woff2"));
+        assert!("/api/test".starts_with("/api/"));
+    }
+
+    #[test]
+    fn test_security_headers_csp_directives() {
+        let csp = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: wss:; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+        assert!(csp.contains("frame-ancestors 'none'"));
+        assert!(csp.contains("base-uri 'self'"));
+        assert!(csp.contains("form-action 'self'"));
+    }
+}

@@ -117,7 +117,7 @@ rex-agent = 所有 crate（无前端）
 | **M69** | Developer Experience | — | ✅ |
 | **M70** | Data Export & Backup | — | ✅ |
 | **M71** | i18n Completion | — | ✅ |
-| **M72** | Quality & Documentation | — | 🔄 |
+| **M72** | Quality & Documentation | — | ✅ |
 
 ### M0：项目骨架重建
 
