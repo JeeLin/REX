@@ -298,8 +298,8 @@ async function resetToken() {
         </span>
       </div>
 
-      <!-- Agent Panel -->
-      <Card class="section-card">
+      <!-- Agent Panel (仅 Agent 模式显示) -->
+      <Card v-if="env.connection_mode === 'agent'" class="section-card">
         <h2 class="section-title">{{ t('environmentDetail.agentSection') }}</h2>
         <div v-if="env.agent_status" class="agent-info">
           <StatusDot :status="agentStatus(env.agent_status)" />
