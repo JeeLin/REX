@@ -25,7 +25,7 @@ COPY dist/agents/ /app/data/agent-binaries/
 
 RUN mkdir -p /app/data /app/data/certs /app/data/acme /app/data/self-signed
 
-ENV DATA_DIR=/app/data
+ENV REX_DATA_DIR=/app/data
 ENV REX_STATIC_DIR=/app/static
 
 EXPOSE 3000
