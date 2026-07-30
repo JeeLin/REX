@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.56.0] - 2026-07-30
+
+### Added
+- 环境变量文档：所有 REX_ 环境变量的完整说明，含分类表格和快速开始示例
+
+### Changed
+- JWT Token 有效期从 7 天延长到 30 天
+
+### Fixed
+- Token 过期：弹出密码输入 Modal 替代跳转登录页，输入密码后自动更新 Token
+
 ## [0.55.1] - 2026-07-29
 
 ### Fixed
