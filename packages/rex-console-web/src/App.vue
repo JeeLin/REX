@@ -12,6 +12,9 @@ document.documentElement.dataset.theme = stored === 'dark' ? undefined : stored
 
 onMounted(async () => {
   // 从后端同步最新设置（覆盖 localStorage）
+  // 仅在已登录时同步，避免 401 触发弹窗
+  const hasToken = localStorage.getItem('rex-token') || sessionStorage.getItem('rex-token')
+  if (!hasToken) return
   try {
     const { settingsApi } = await import('@/api/settings')
     const settings = await settingsApi.get()
