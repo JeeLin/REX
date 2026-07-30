@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.64.0] - 2026-07-30
+
+### Added
+- Rust auth 模块单元测试（token 过期、密码修改、无效 token）
+- 前端 client/useSwipeGesture/useVirtualKeyboard 单元测试
+- API 集成测试（auth 端点）
+- CI coverage 报告支持
+
 ## [0.63.0] - 2026-07-30
 
 ### Added
