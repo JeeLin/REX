@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.64.1] - 2026-07-31
+
+### Fixed
+- Token 过期弹窗：修复路由 guard 跳过弹窗的问题
+- 工作台连接丢失：添加 KeepAlive 保留切换页面时的连接
+- 设置页面：三栏布局重设计（左导航 + 右两列内容）+ 移动端适配
+- 设置页面：删除无用的背景相关设置
+- Agent 部署指南：修复非 HTTPS 环境下复制按钮报错
+- Agent token 按钮：修复 common.copy/common.reset 未翻译
+- 侧栏 host 显示：S3 URL 过长时截断为省略号
+- xterm-helpers：隐藏终端底部遮挡元素
+- 直连环境：不再显示 Agent 相关内容
+- Session timeout：从 30 分钟延长到 2 小时
+
 ## [0.64.0] - 2026-07-30
 
 ### Added
