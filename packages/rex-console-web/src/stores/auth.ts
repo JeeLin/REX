@@ -21,7 +21,15 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const res = await api.request<AuthCheckResponse>('/auth/check')
       requiresSetup.value = res.requires_setup
-    } catch {
+    } catch (e) {
+      // 401 时清除过期 token，让用户留在登录页
+      if (e instanceof Error && e.name === 'AuthError') {
+        token.value = null
+        localStorage.removeItem('rex-token')
+        sessionStorage.removeItem('rex-token')
+        requiresSetup.value = false
+        return
+      }
       // 无法连接后端时假设需要设置
       requiresSetup.value = true
     }
