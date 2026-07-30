@@ -115,7 +115,7 @@ const currentTitle = computed(() => {
         <button class="hamburger-btn" @click="mobileMenuOpen = !mobileMenuOpen">☰</button>
         <span class="topbar-title mono">{{ currentTitle }}</span>
         <div class="topbar-actions">
-          <button v-if="isWorkspace" class="fullscreen-btn mono" :title="fullscreen ? 'Exit fullscreen' : 'Fullscreen'" @click="fullscreen = !fullscreen">
+          <button v-if="isWorkspace" class="fullscreen-btn mono" :title="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" @click="fullscreen = !fullscreen">
             {{ fullscreen ? '⊟' : '⊞' }}
           </button>
           <button class="logout-btn" title="退出登录" @click="sessionLogout">
@@ -131,7 +131,7 @@ const currentTitle = computed(() => {
       <button
         v-if="fullscreen && isWorkspace"
         class="exit-fullscreen-btn mono"
-        title="Exit fullscreen (Esc)"
+        :title="t('common.exitFullscreen') + ' (Esc)'"
         @click="fullscreen = false"
       >
         ⊟
@@ -143,9 +143,9 @@ const currentTitle = computed(() => {
 
     <!-- 移动端浮动快捷按钮 -->
     <div v-if="isWorkspace" class="mobile-fab">
-      <button class="fab-btn" title="New tab">+</button>
-      <button class="fab-btn" title="Split">⊞</button>
-      <button class="fab-btn" title="Find">🔍</button>
+      <button class="fab-btn" :title="t('workspace.newTab')">+</button>
+      <button class="fab-btn" :title="t('workspace.split')">⊞</button>
+      <button class="fab-btn" :title="t('common.find')">🔍</button>
     </div>
 
     <!-- 移动端底部导航（键盘弹出时隐藏） -->

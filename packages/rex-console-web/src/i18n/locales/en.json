@@ -123,7 +123,9 @@
     "noDescription": "No description",
     "refresh": "Refresh",
     "resources": "resources",
-    "save": "Save"
+    "save": "Save",
+    "fullscreen": "Fullscreen",
+    "exitFullscreen": "Exit fullscreen"
   },
   "dashboard": {
     "agentsOnline": "Agents Online",
