@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 import type { Resource } from '@/api/resources'
 import { useRouter } from 'vue-router'
 import { useSwipeGesture } from '@/composables/useSwipeGesture'
+import { useVirtualKeyboard } from '@/composables/useVirtualKeyboard'
 
 const { t } = useI18n()
 const { showWarning, remainingSeconds, extendSession } = useSessionTimeout()
@@ -48,6 +49,9 @@ useSwipeGesture(mainRef, {
   onSwipeRight: () => { if (window.innerWidth < 768) mobileMenuOpen.value = true },
   onSwipeLeft: () => { mobileMenuOpen.value = false },
 })
+
+// 移动端虚拟键盘检测
+const { isKeyboardVisible } = useVirtualKeyboard()
 
 // F11 全屏切换
 function handleGlobalKeydown(e: KeyboardEvent) {
@@ -132,7 +136,7 @@ const currentTitle = computed(() => {
       >
         ⊟
       </button>
-      <main class="content">
+      <main class="content" :class="{ 'content--keyboard-open': isKeyboardVisible }">
         <RouterView />
       </main>
     </div>
@@ -144,8 +148,8 @@ const currentTitle = computed(() => {
       <button class="fab-btn" title="Find">🔍</button>
     </div>
 
-    <!-- 移动端底部导航 -->
-    <nav class="bottom-nav">
+    <!-- 移动端底部导航（键盘弹出时隐藏） -->
+    <nav v-show="!isKeyboardVisible" class="bottom-nav">
       <RouterLink to="/dashboard" class="bottom-nav-item">
         <span class="bottom-nav-icon">◧</span>
         <span class="bottom-nav-label">{{ t('nav.dashboard') }}</span>
@@ -433,6 +437,9 @@ const currentTitle = computed(() => {
   }
   .content {
     padding-bottom: 64px;
+  }
+  .content--keyboard-open {
+    padding-bottom: var(--space-3);
   }
 }
 
