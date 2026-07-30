@@ -33,10 +33,6 @@ export default defineConfig(({ mode }) => ({
     outDir: 'dist',
     target: 'es2020',
     chunkSizeWarningLimit: 600,
-    minify: 'terser',
-    terserOptions: {
-      compress: { drop_console: true },
-    },
     rollupOptions: {
       output: {
         manualChunks: {
