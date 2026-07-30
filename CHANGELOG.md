@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.57.0] - 2026-07-30
+
+### Added
+- 移动端底部导航 safe-area 适配
+- 触摸手势：从左边缘右滑打开侧栏，左滑关闭
+- 虚拟键盘适配：键盘弹出时隐藏底部导航
+
 ## [0.56.0] - 2026-07-30
 
 ### Added
