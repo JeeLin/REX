@@ -214,130 +214,130 @@ async function saveSettings() {
       <!-- 外观设置 -->
       <Card v-show="activeTab === 'appearance'" class="settings-section">
         <h2 class="section-title">{{ t('settings.appearance') }}</h2>
-      <div class="form-group">
-        <label class="form-label">{{ t('settings.theme') }}</label>
-        <select v-model="settings.theme" class="form-input">
-          <option value="dark">{{ t('settings.dark') }}</option>
-          <option value="light">{{ t('settings.light') }}</option>
-          <option value="high-contrast">{{ t('settings.highContrast') }}</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">{{ t('settings.language') }}</label>
-        <select v-model="settings.language" class="form-input" @change="onLanguageChange">
-          <option value="zh">{{ t('settings.langZh') }}</option>
-          <option value="en">{{ t('settings.langEn') }}</option>
-        </select>
-      </div>
-    </Card>
-
-    <Card v-show="activeTab === 'terminal'" class="settings-section">
-      <h2 class="section-title">{{ t('settings.terminal') }}</h2>
-      <div class="form-group">
-        <label class="form-label">{{ t('settings.fontFamily') }}</label>
-        <input v-model="settings.terminal_font" type="text" class="form-input" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">{{ t('settings.fontSize') }}</label>
-        <input v-model="settings.terminal_font_size" type="number" class="form-input" min="10" max="24" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">{{ t('settings.terminalTheme') }}</label>
-        <select v-model="settings.terminal_theme" class="form-input">
-          <option value="default">{{ t('settings.terminalThemeDefault') }}</option>
-          <option value="ubuntu">{{ t('settings.terminalThemeUbuntu') }}</option>
-          <option value="solarized-dark">{{ t('settings.terminalThemeSolarized') }}</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">{{ t('settings.bgOpacity') }}</label>
-        <input v-model.number="settings.terminal_opacity" type="number" class="form-input" min="0" max="100" />
-      </div>
-    </Card>
-
-    <Card v-show="activeTab === 'security'" class="settings-section">
-      <h2 class="section-title">{{ t('settings.security') }}</h2>
-      <div class="form-group">
-        <label class="form-label">{{ t('settings.sessionTimeout') }}</label>
-        <select v-model.number="settings.session_timeout" class="form-input">
-          <option :value="15">15 {{ t('settings.minutes') }}</option>
-          <option :value="30">30 {{ t('settings.minutes') }}</option>
-          <option :value="60">60 {{ t('settings.minutes') }}</option>
-          <option :value="120">120 {{ t('settings.minutes') }}</option>
-        </select>
-      </div>
-      <!-- Password Change -->
-      <div class="password-section">
-        <h3 class="subsection-title">{{ t('settings.changePassword') }}</h3>
         <div class="form-group">
-          <label class="form-label">{{ t('settings.currentPassword') }}</label>
-          <input v-model="currentPassword" type="password" class="form-input" autocomplete="current-password" />
+          <label class="form-label">{{ t('settings.theme') }}</label>
+          <select v-model="settings.theme" class="form-input">
+            <option value="dark">{{ t('settings.dark') }}</option>
+            <option value="light">{{ t('settings.light') }}</option>
+            <option value="high-contrast">{{ t('settings.highContrast') }}</option>
+          </select>
         </div>
         <div class="form-group">
-          <label class="form-label">{{ t('settings.newPassword') }}</label>
-          <input v-model="newPassword" type="password" class="form-input" autocomplete="new-password" />
+          <label class="form-label">{{ t('settings.language') }}</label>
+          <select v-model="settings.language" class="form-input" @change="onLanguageChange">
+            <option value="zh">{{ t('settings.langZh') }}</option>
+            <option value="en">{{ t('settings.langEn') }}</option>
+          </select>
+        </div>
+      </Card>
+
+      <Card v-show="activeTab === 'terminal'" class="settings-section">
+        <h2 class="section-title">{{ t('settings.terminal') }}</h2>
+        <div class="form-group">
+          <label class="form-label">{{ t('settings.fontFamily') }}</label>
+          <input v-model="settings.terminal_font" type="text" class="form-input" />
         </div>
         <div class="form-group">
-          <label class="form-label">{{ t('settings.confirmPassword') }}</label>
-          <input v-model="confirmPassword" type="password" class="form-input" autocomplete="new-password" />
+          <label class="form-label">{{ t('settings.fontSize') }}</label>
+          <input v-model="settings.terminal_font_size" type="number" class="form-input" min="10" max="24" />
         </div>
-        <div v-if="passwordError" class="save-message error">{{ passwordError }}</div>
-        <div v-if="passwordSuccess" class="save-message">{{ passwordSuccess }}</div>
-        <Button
-          variant="secondary"
-          size="sm"
-          :loading="changingPassword"
-          :disabled="!currentPassword || !newPassword || newPassword !== confirmPassword"
-          @click="changePassword"
-        >
-          {{ t('settings.updatePassword') }}
-        </Button>
-      </div>
-    </Card>
+        <div class="form-group">
+          <label class="form-label">{{ t('settings.terminalTheme') }}</label>
+          <select v-model="settings.terminal_theme" class="form-input">
+            <option value="default">{{ t('settings.terminalThemeDefault') }}</option>
+            <option value="ubuntu">{{ t('settings.terminalThemeUbuntu') }}</option>
+            <option value="solarized-dark">{{ t('settings.terminalThemeSolarized') }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ t('settings.bgOpacity') }}</label>
+          <input v-model.number="settings.terminal_opacity" type="number" class="form-input" min="0" max="100" />
+        </div>
+      </Card>
 
-    <!-- Update Section -->
-    <Card v-show="activeTab === 'update'" class="settings-section">
-      <h2 class="section-title">{{ t('settings.update') }}</h2>
-      <div v-if="updateLoading" class="update-progress">
-        <p class="update-status">{{ updateStatusText }}</p>
-        <div class="progress-bar">
-          <div class="progress-fill" :style="{ width: updateProgress + '%' }"></div>
+      <Card v-show="activeTab === 'security'" class="settings-section">
+        <h2 class="section-title">{{ t('settings.security') }}</h2>
+        <div class="form-group">
+          <label class="form-label">{{ t('settings.sessionTimeout') }}</label>
+          <select v-model.number="settings.session_timeout" class="form-input">
+            <option :value="15">15 {{ t('settings.minutes') }}</option>
+            <option :value="30">30 {{ t('settings.minutes') }}</option>
+            <option :value="60">60 {{ t('settings.minutes') }}</option>
+            <option :value="120">120 {{ t('settings.minutes') }}</option>
+          </select>
         </div>
-      </div>
-      <div v-else class="update-info">
-        <div class="update-current">
-          <span class="label">{{ t('settings.currentVersion') }}:</span>
-          <span class="value">{{ currentVersion }}</span>
-        </div>
-        <div v-if="hasUpdate" class="update-available">
-          <div class="update-latest">
-            <span class="label">{{ t('settings.latestVersion') }}:</span>
-            <span class="value">{{ latestVersion }}</span>
+        <!-- Password Change -->
+        <div class="password-section">
+          <h3 class="subsection-title">{{ t('settings.changePassword') }}</h3>
+          <div class="form-group">
+            <label class="form-label">{{ t('settings.currentPassword') }}</label>
+            <input v-model="currentPassword" type="password" class="form-input" autocomplete="current-password" />
           </div>
+          <div class="form-group">
+            <label class="form-label">{{ t('settings.newPassword') }}</label>
+            <input v-model="newPassword" type="password" class="form-input" autocomplete="new-password" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t('settings.confirmPassword') }}</label>
+            <input v-model="confirmPassword" type="password" class="form-input" autocomplete="new-password" />
+          </div>
+          <div v-if="passwordError" class="save-message error">{{ passwordError }}</div>
+          <div v-if="passwordSuccess" class="save-message">{{ passwordSuccess }}</div>
           <Button
-            variant="primary"
-            :loading="updating"
-            @click="triggerUpdate"
+            variant="secondary"
+            size="sm"
+            :loading="changingPassword"
+            :disabled="!currentPassword || !newPassword || newPassword !== confirmPassword"
+            @click="changePassword"
           >
-            {{ t('settings.updateNow') }}
+            {{ t('settings.updatePassword') }}
           </Button>
         </div>
-        <div v-else class="update-up-to-date">
-          <p>{{ t('settings.upToDate') }}</p>
-        </div>
-        <div v-if="updateError" class="update-error">
-          <p>{{ updateError }}</p>
-          <Button variant="secondary" @click="rollbackUpdate">
-            {{ t('settings.rollback') }}
-          </Button>
-        </div>
-      </div>
-    </Card>
+      </Card>
 
-    <div class="save-bar">
-      <span v-if="saveMessage" class="save-message" :class="{ error: saveMessage.includes('failed') }">{{ saveMessage }}</span>
-      <Button variant="primary" :loading="saving" @click="saveSettings">{{ t('settings.saveSettings') }}</Button>
-    </div>
+      <!-- Update Section -->
+      <Card v-show="activeTab === 'update'" class="settings-section">
+        <h2 class="section-title">{{ t('settings.update') }}</h2>
+        <div v-if="updateLoading" class="update-progress">
+          <p class="update-status">{{ updateStatusText }}</p>
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: updateProgress + '%' }"></div>
+          </div>
+        </div>
+        <div v-else class="update-info">
+          <div class="update-current">
+            <span class="label">{{ t('settings.currentVersion') }}:</span>
+            <span class="value">{{ currentVersion }}</span>
+          </div>
+          <div v-if="hasUpdate" class="update-available">
+            <div class="update-latest">
+              <span class="label">{{ t('settings.latestVersion') }}:</span>
+              <span class="value">{{ latestVersion }}</span>
+            </div>
+            <Button
+              variant="primary"
+              :loading="updating"
+              @click="triggerUpdate"
+            >
+              {{ t('settings.updateNow') }}
+            </Button>
+          </div>
+          <div v-else class="update-up-to-date">
+            <p>{{ t('settings.upToDate') }}</p>
+          </div>
+          <div v-if="updateError" class="update-error">
+            <p>{{ updateError }}</p>
+            <Button variant="secondary" @click="rollbackUpdate">
+              {{ t('settings.rollback') }}
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      <div class="save-bar">
+        <span v-if="saveMessage" class="save-message" :class="{ error: saveMessage.includes('failed') }">{{ saveMessage }}</span>
+        <Button variant="primary" :loading="saving" @click="saveSettings">{{ t('settings.saveSettings') }}</Button>
+      </div>
     </div>
   </div>
 </template>

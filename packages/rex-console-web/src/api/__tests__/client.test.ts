@@ -6,7 +6,7 @@ describe('ApiClient', () => {
 
   beforeEach(() => {
     fetchSpy = vi.fn()
-    global.fetch = fetchSpy
+    global.fetch = fetchSpy as typeof global.fetch
     localStorage.setItem('rex-token', 'test-token')
   })
 
