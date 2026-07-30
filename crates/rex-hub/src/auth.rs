@@ -303,4 +303,43 @@ mod tests {
         auth.set_password("correct").unwrap();
         assert!(auth.login("wrong").is_err());
     }
+
+    #[test]
+    fn test_token_expiry() {
+        let (_dir, auth) = test_auth();
+        let token = auth.generate_token().unwrap();
+        let claims = auth.verify_token(&token).unwrap();
+        // Token should expire ~30 days from now
+        let now = chrono::Utc::now().timestamp() as usize;
+        assert!(claims.exp > now + 29 * 86400);
+        assert!(claims.exp <= now + 31 * 86400);
+    }
+
+    #[test]
+    fn test_change_password() {
+        let (_dir, auth) = test_auth();
+        auth.set_password("old123").unwrap();
+        auth.change_password("old123", "new456").unwrap();
+        assert!(auth.login("new456").is_ok());
+        assert!(auth.login("old123").is_err());
+    }
+
+    #[test]
+    fn test_change_password_wrong_current() {
+        let (_dir, auth) = test_auth();
+        auth.set_password("correct").unwrap();
+        assert!(auth.change_password("wrong", "new123").is_err());
+    }
+
+    #[test]
+    fn test_requires_setup_initial() {
+        let (_dir, auth) = test_auth();
+        assert!(auth.requires_setup().unwrap());
+    }
+
+    #[test]
+    fn test_invalid_token() {
+        let (_dir, auth) = test_auth();
+        assert!(auth.verify_token("invalid-token").is_err());
+    }
 }
