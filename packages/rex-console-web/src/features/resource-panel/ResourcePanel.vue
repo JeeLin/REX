@@ -604,6 +604,10 @@ function ctxToggleFavorite() {
 .rp-item-host {
   font-size: var(--text-xs);
   margin-left: auto;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .rp-item-protocol {
   font-size: var(--text-xs);

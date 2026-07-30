@@ -146,7 +146,8 @@
     "noAgent": "No agent registered. Deploy an agent to proxy connections for this environment.",
     "noAgentToken": "No agent registered.",
     "noResources": "No resources",
-    "resourcesSection": "Resources"
+    "resourcesSection": "Resources",
+    "viewDeployGuide": "View Deploy Guide"
   },
   "environments": {
     "agent": "Agent (via reverse tunnel)",

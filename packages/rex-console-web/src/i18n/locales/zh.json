@@ -144,7 +144,8 @@
     "noAgent": "暂无注册的 Agent。部署一个 Agent 来代理此环境的连接。",
     "noAgentToken": "暂无注册的 Agent",
     "noResources": "暂无资源",
-    "resourcesSection": "资源"
+    "resourcesSection": "资源",
+    "viewDeployGuide": "查看部署指南"
   },
   "environments": {
     "agent": "Agent（通过反向隧道）",

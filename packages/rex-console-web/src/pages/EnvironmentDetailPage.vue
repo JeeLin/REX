@@ -322,6 +322,11 @@ async function resetToken() {
             {{ t('environmentDetail.noAgentToken') }}
           </div>
         </div>
+        <div style="margin-top: var(--space-3); font-size: var(--text-sm);">
+          <router-link to="/agents" style="color: var(--accent); text-decoration: none;">
+            {{ t('environmentDetail.viewDeployGuide') }} →
+          </router-link>
+        </div>
       </Card>
 
       <!-- Resources Table -->
