@@ -45,3 +45,4 @@ M73 完成测试覆盖率。本里程碑集中修复已知 bug 和 UX 问题。
 | ⬜ | 🟢 | 删除设置里背景相关内容 | 用户反馈 | 删除设置里背景相关的内容，对应的代码都删掉，没有用 |
 | ⬜ | 🟢 | 最近使用去重 | 用户反馈 | 最近使用的内容可以重复吗 |
 | ⬜ | 🟡 | Agent 下载链接不安全 | 用户反馈 | Agent 下载链接使用 HTTP 而非 HTTPS，浏览器阻止下载 |
+| ⬜ | 🔴 | Agent 部署指南复制按钮报错 | 用户反馈 | Agent Docker 部署指南点击复制报错 Cannot read properties of undefined (reading writeText) |
