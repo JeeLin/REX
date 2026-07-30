@@ -19,6 +19,14 @@ const settings = ref<Settings>({
 const loading = ref(true)
 const saving = ref(false)
 const saveMessage = ref('')
+const activeTab = ref('appearance')
+
+const tabs = [
+  { key: 'appearance', icon: '🎨', labelKey: 'settings.appearance' },
+  { key: 'terminal', icon: '⌨', labelKey: 'settings.terminal' },
+  { key: 'security', icon: '🔒', labelKey: 'settings.security' },
+  { key: 'update', icon: '🔄', labelKey: 'settings.update' },
+]
 
 // Password change
 const currentPassword = ref('')
@@ -185,11 +193,27 @@ async function saveSettings() {
 </script>
 
 <template>
-  <div class="settings-page">
-    <h1 class="page-title">{{ t('settings.title') }}</h1>
+  <div class="settings-layout">
+    <!-- 左侧导航 -->
+    <nav class="settings-nav">
+      <h1 class="page-title">{{ t('settings.title') }}</h1>
+      <button
+        v-for="tab in tabs"
+        :key="tab.key"
+        class="settings-nav-item"
+        :class="{ 'active': activeTab === tab.key }"
+        @click="activeTab = tab.key"
+      >
+        <span class="nav-icon">{{ tab.icon }}</span>
+        <span>{{ t(tab.labelKey) }}</span>
+      </button>
+    </nav>
 
-    <Card class="settings-section">
-      <h2 class="section-title">{{ t('settings.appearance') }}</h2>
+    <!-- 右侧内容（两列） -->
+    <div class="settings-content">
+      <!-- 外观设置 -->
+      <Card v-show="activeTab === 'appearance'" class="settings-section">
+        <h2 class="section-title">{{ t('settings.appearance') }}</h2>
       <div class="form-group">
         <label class="form-label">{{ t('settings.theme') }}</label>
         <select v-model="settings.theme" class="form-input">
@@ -207,7 +231,7 @@ async function saveSettings() {
       </div>
     </Card>
 
-    <Card class="settings-section">
+    <Card v-show="activeTab === 'terminal'" class="settings-section">
       <h2 class="section-title">{{ t('settings.terminal') }}</h2>
       <div class="form-group">
         <label class="form-label">{{ t('settings.fontFamily') }}</label>
@@ -229,18 +253,9 @@ async function saveSettings() {
         <label class="form-label">{{ t('settings.bgOpacity') }}</label>
         <input v-model.number="settings.terminal_opacity" type="number" class="form-input" min="0" max="100" />
       </div>
-      <div class="form-group">
-        <label class="form-label">{{ t('settings.bgImage') }}</label>
-        <select v-model="settings.terminal_bg_image" class="form-input">
-          <option value="none">{{ t('settings.bgImageNone') }}</option>
-          <option value="grid">{{ t('settings.bgImageGrid') }}</option>
-          <option value="dots">{{ t('settings.bgImageDots') }}</option>
-          <option value="gradient">{{ t('settings.bgImageGradient') }}</option>
-        </select>
-      </div>
     </Card>
 
-    <Card class="settings-section">
+    <Card v-show="activeTab === 'security'" class="settings-section">
       <h2 class="section-title">{{ t('settings.security') }}</h2>
       <div class="form-group">
         <label class="form-label">{{ t('settings.sessionTimeout') }}</label>
@@ -281,7 +296,7 @@ async function saveSettings() {
     </Card>
 
     <!-- Update Section -->
-    <Card class="settings-section">
+    <Card v-show="activeTab === 'update'" class="settings-section">
       <h2 class="section-title">{{ t('settings.update') }}</h2>
       <div v-if="updateLoading" class="update-progress">
         <p class="update-status">{{ updateStatusText }}</p>
@@ -323,13 +338,50 @@ async function saveSettings() {
       <span v-if="saveMessage" class="save-message" :class="{ error: saveMessage.includes('failed') }">{{ saveMessage }}</span>
       <Button variant="primary" :loading="saving" @click="saveSettings">{{ t('settings.saveSettings') }}</Button>
     </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.settings-page { max-width: 600px; }
-.page-title { font-size: var(--text-xl); font-weight: 600; color: var(--text-primary); margin-bottom: var(--space-6); }
-.settings-section { margin-bottom: var(--space-4); }
+/* 三栏布局：左侧导航 + 右侧两列内容 */
+.settings-layout {
+  display: flex;
+  gap: var(--space-6);
+  height: 100%;
+}
+.settings-nav {
+  width: 200px;
+  flex-shrink: 0;
+  padding-right: var(--space-4);
+  border-right: 1px solid var(--border);
+}
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 6px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: none;
+  border: none;
+  text-align: left;
+  transition: all var(--transition);
+}
+.settings-nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.settings-nav-item.active { background: var(--bg-elevated); color: var(--text-primary); font-weight: 500; }
+.settings-content {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  align-content: start;
+}
+.settings-section { margin-bottom: 0; }
+.page-title { font-size: var(--text-xl); font-weight: 600; color: var(--text-primary); margin-bottom: var(--space-4); }
 .section-title { font-size: var(--text-md); font-weight: 600; color: var(--text-primary); margin-bottom: var(--space-4); }
 .form-group { margin-bottom: var(--space-3); }
 .form-label { display: block; font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: var(--space-1); }
@@ -338,7 +390,7 @@ async function saveSettings() {
   padding: 8px 12px; color: var(--text-primary); font-size: var(--text-sm); outline: none;
 }
 .form-input:focus { border-color: var(--accent); }
-.save-bar { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-4); }
+.save-bar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-4); }
 .save-message { font-size: var(--text-sm); color: var(--success); }
 .save-message.error { color: var(--danger); }
 .password-section { margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--border); }
@@ -356,4 +408,29 @@ async function saveSettings() {
 .update-error p { color: var(--danger); font-size: var(--text-sm); margin-bottom: var(--space-2); }
 .label { color: var(--text-secondary); font-size: var(--text-sm); }
 .value { color: var(--text-primary); font-size: var(--text-sm); font-weight: 500; }
+
+/* 移动端适配：单列布局 */
+@media (max-width: 768px) {
+  .settings-layout {
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .settings-nav {
+    width: 100%;
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding-right: 0;
+    padding-bottom: var(--space-2);
+    gap: var(--space-1);
+  }
+  .settings-nav-item {
+    white-space: nowrap;
+    padding: var(--space-2);
+  }
+  .settings-content {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
