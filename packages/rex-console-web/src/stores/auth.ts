@@ -22,15 +22,20 @@ export const useAuthStore = defineStore('auth', () => {
       const res = await api.request<AuthCheckResponse>('/auth/check')
       requiresSetup.value = res.requires_setup
     } catch (e) {
-      // 401 时清除过期 token，让用户留在登录页
       if (e instanceof Error && e.name === 'AuthError') {
-        token.value = null
-        localStorage.removeItem('rex-token')
-        sessionStorage.removeItem('rex-token')
+        // 401 时：如果之前有 token（说明是过期），不清除——触发弹窗
+        // 如果之前没有 token（未登录），清除并保持 requiresSetup=false
+        const hadToken = localStorage.getItem('rex-token') || sessionStorage.getItem('rex-token')
+        if (hadToken) {
+          // 保留旧 token 在存储中，router guard 会检测到并触发弹窗
+          // 但设置 isAuthenticated=false 让 router guard 生效
+          token.value = null
+          requiresSetup.value = false
+          return
+        }
         requiresSetup.value = false
         return
       }
-      // 无法连接后端时假设需要设置
       requiresSetup.value = true
     }
   }

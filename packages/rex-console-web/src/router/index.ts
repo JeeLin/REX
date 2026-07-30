@@ -65,8 +65,14 @@ router.beforeEach(async (to) => {
     return { name: 'login' }
   }
 
-  // 未登录 → 登录页，停止 session timeout
+  // 未登录 → 如果有过期 token 则触发弹窗（由 App.vue 处理），否则跳转登录页
   if (!auth.isAuthenticated && to.name !== 'login' && to.name !== 'setup') {
+    const hasExpiredToken = localStorage.getItem('rex-token') || sessionStorage.getItem('rex-token')
+    if (hasExpiredToken) {
+      // 有旧 token 说明是过期了，触发弹窗而不是跳转
+      // token 已被 checkAuth 清除，弹窗会由 App.vue 的 TokenRefreshModal 处理
+      return false // 阻止导航，让用户停留在当前页
+    }
     if (sessionStarted) {
       stopSession()
       sessionStarted = false
