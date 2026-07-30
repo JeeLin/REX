@@ -22,7 +22,7 @@ services:
       - hub-data:/app/data
     environment:
       - REX_SECRET_KEY=${REX_SECRET_KEY}
-      - DATA_DIR=/app/data
+      - REX_DATA_DIR=/app/data
       # ═══ TLS 配置（三选一，都不设置则为 HTTP）══
       # 自签名模式（开发/测试，浏览器会警告证书不可信）
       # - REX_TLS_SELF_SIGNED=true

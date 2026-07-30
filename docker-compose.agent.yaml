@@ -18,7 +18,7 @@ services:
     environment:
       - REX_SERVER=${REX_SERVER}
       - REX_TOKEN=${REX_TOKEN}
-      - DATA_DIR=/app/data
+      - REX_DATA_DIR=/app/data
       # Hub 使用自签名证书时设置此项（跳过 TLS 证书验证）
       # - REX_TLS_INSECURE=true
 
