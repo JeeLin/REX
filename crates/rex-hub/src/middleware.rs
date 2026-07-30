@@ -202,3 +202,33 @@ pub async fn security_headers(req: Request<axum::body::Body>, next: Next) -> Res
     );
     response
 }
+
+/// 静态资源缓存中间件：为 js/css 等静态资源添加 Cache-Control。
+pub async fn cache_headers(req: Request<axum::body::Body>, next: Next) -> Response {
+    let mut response = next.run(req).await;
+    let path = req.uri().path();
+
+    // 静态资源：长期缓存（带 hash 的文件名保证更新时失效）
+    if path.ends_with(".js")
+        || path.ends_with(".css")
+        || path.ends_with(".woff2")
+        || path.ends_with(".woff")
+        || path.ends_with(".ttf")
+        || path.ends_with(".eot")
+    {
+        response.headers_mut().insert(
+            "Cache-Control",
+            "public, max-age=31536000, immutable".parse().unwrap(),
+        );
+    }
+
+    // API 响应：不缓存
+    if path.starts_with("/api/") {
+        response.headers_mut().insert(
+            "Cache-Control",
+            "no-store".parse().unwrap(),
+        );
+    }
+
+    response
+}
