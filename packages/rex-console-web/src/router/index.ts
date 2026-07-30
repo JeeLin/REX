@@ -3,7 +3,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { startSession, stopSession } from '@/composables/useSessionTimeout'
 
-const DEFAULT_SESSION_TIMEOUT = 30 // minutes
+const DEFAULT_SESSION_TIMEOUT = 120 // minutes (2 hours)
 
 const routes: RouteRecordRaw[] = [
   {

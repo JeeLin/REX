@@ -125,7 +125,9 @@
     "resources": "resources",
     "save": "Save",
     "fullscreen": "Fullscreen",
-    "exitFullscreen": "Exit fullscreen"
+    "exitFullscreen": "Exit fullscreen",
+    "copy": "Copy",
+    "reset": "Reset"
   },
   "dashboard": {
     "agentsOnline": "Agents Online",
