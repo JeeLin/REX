@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
 import { onMounted, onUnmounted, ref } from 'vue'
+import { KeepAlive } from 'vue'
 import ErrorBoundary from './components/ErrorBoundary.vue'
 import NotificationToast from './components/NotificationToast.vue'
 import TokenRefreshModal from './components/TokenRefreshModal.vue'
@@ -47,7 +48,9 @@ onUnmounted(() => {
 
 <template>
   <ErrorBoundary>
-    <RouterView />
+    <KeepAlive :include="['WorkspacePage']">
+      <RouterView />
+    </KeepAlive>
     <NotificationToast />
     <TokenRefreshModal v-if="showTokenRefresh" @cancel="onRefreshCancel" />
   </ErrorBoundary>
