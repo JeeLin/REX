@@ -666,6 +666,14 @@ function ctxToggleFavorite() {
   cursor: pointer;
   white-space: nowrap;
 }
+.rp-ctx-item > span:first-child,
+.rp-ctx-item > em:first-child {
+  font-size: 14px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+  font-style: normal;
+}
 .rp-ctx-item:hover {
   background: var(--bg-hover);
 }
