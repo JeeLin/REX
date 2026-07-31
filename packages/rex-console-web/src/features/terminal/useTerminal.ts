@@ -41,6 +41,19 @@ export function useTerminal() {
     term.loadAddon(fit)
     term.open(container)
 
+    // Hide xterm-helper elements to prevent terminal overflow
+    // These are created by xterm.js for character measurement
+    const hideHelpers = () => {
+      container.querySelectorAll('.xterm-helper-helper, .xterm-helper, .xterm-char-measure-element').forEach((el) => {
+        const htmlEl = el as HTMLElement
+        htmlEl.style.cssText = 'position:absolute;top:-9999px;left:-9999px;visibility:hidden;overflow:hidden;width:0!important;height:0!important'
+      })
+    }
+    // Hide immediately and after a delay for late-created elements
+    hideHelpers()
+    setTimeout(hideHelpers, 100)
+    setTimeout(hideHelpers, 500)
+
     // Wait for fonts to load before initial fit to avoid wrong cell metrics
     const doFit = () => {
       try { fit.fit() } catch { /* ignore fit errors during init */ }
