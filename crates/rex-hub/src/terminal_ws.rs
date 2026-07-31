@@ -14,6 +14,7 @@ use futures_util::{SinkExt, StreamExt};
 use rex_ssh::{SshConfig, SshSession, TerminalEvent};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::time::Interval;
 
 use crate::agent_ws::{AgentEvent, ConnectResponse};
 use crate::AppState;
@@ -360,6 +361,7 @@ async fn handle_direct_terminal(mut ws: WebSocket, conn: &ResourceConnInfo, sess
     let (cmd_tx, mut cmd_rx) = mpsc::channel::<ClientMsg>(64);
     let (data_tx, mut data_rx) = mpsc::channel::<String>(512);
 
+    let cmd_tx_for_ping = cmd_tx.clone();
     let ws_read_task = tokio::spawn(async move {
         while let Some(msg) = ws_stream.next().await {
             match msg {
@@ -445,10 +447,23 @@ async fn handle_direct_terminal(mut ws: WebSocket, conn: &ResourceConnInfo, sess
         }
     });
 
+    // 服务端 keepalive ping（每 25 秒发送 ping，防止中间件/代理超时断开）
+    let mut ping_interval = create_server_ping_interval();
+    let ws_ping_task = tokio::spawn(async move {
+        loop {
+            ping_interval.tick().await;
+            // 通过 cmd_tx_for_ping 发送 ping（不直接持有 ws_sink）
+            if cmd_tx_for_ping.send(ClientMsg::Ping).await.is_err() {
+                break;
+            }
+        }
+    });
+
     tokio::select! {
         _ = ws_read_task => {},
         _ = ssh_task => {},
         _ = ws_write_task => {},
+        _ = ws_ping_task => {},
     }
 
     tracing::debug!(
@@ -712,9 +727,30 @@ async fn handle_agent_terminal(
         }
     });
 
+    // 服务端 keepalive ping（每 25 秒发送 ping，防止中间件/代理超时断开）
+    let mut ping_interval = create_server_ping_interval();
+    let agent_ping_task = tokio::spawn(async move {
+        loop {
+            ping_interval.tick().await;
+            let ping_msg = serde_json::json!({
+                "type": "ping",
+                "payload": {}
+            });
+            if agent_conn
+                .sender
+                .send(AgentEvent::Text(ping_msg.to_string()))
+                .await
+                .is_err()
+            {
+                break;
+            }
+        }
+    });
+
     tokio::select! {
         _ = frontend_to_agent => {},
         _ = agent_to_frontend => {},
+        _ = agent_ping_task => {},
     }
 
     // 清理
@@ -745,4 +781,11 @@ async fn send_ws_error(ws: &mut WebSocket, msg: &str) -> Result<(), axum::Error>
         .into(),
     ))
     .await
+}
+
+/// 创建服务端 keepalive ping 定时器（每 25 秒发送一次 ping）
+fn create_server_ping_interval() -> Interval {
+    let mut interval = tokio::time::interval(std::time::Duration::from_secs(25));
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    interval
 }

@@ -192,12 +192,19 @@ pub async fn check_update(
                 "download_url": "",
             })),
         )),
-        Err(e) => Err((
-            StatusCode::BAD_GATEWAY,
-            axum::Json(serde_json::json!({
-                "error": { "code": "UPDATE_CHECK_FAILED", "message": e }
-            })),
-        )),
+        Err(e) => {
+            tracing::warn!(action = "UPDATE_CHECK_FAILED", error = %e, "update check failed, returning gracefully");
+            Ok((
+                StatusCode::OK,
+                axum::Json(serde_json::json!({
+                    "has_update": false,
+                    "current_version": checker.current_version,
+                    "latest_version": checker.current_version,
+                    "download_url": "",
+                    "check_error": e,
+                })),
+            ))
+        }
     }
 }
 
@@ -293,9 +300,9 @@ pub async fn rollback_update(
         Some(s) => s,
         None => {
             return Err((
-                StatusCode::NOT_FOUND,
+                StatusCode::BAD_REQUEST,
                 axum::Json(serde_json::json!({
-                    "error": { "code": "NO_UPDATE_STATE", "message": "no update state found" }
+                    "error": { "code": "NO_UPDATE_STATE", "message": "No update has been performed yet. Nothing to rollback." }
                 })),
             ));
         }

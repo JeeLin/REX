@@ -130,6 +130,9 @@ function getGlobalTerminalSettings() {
   }
 }
 
+// Default terminal font family
+const DEFAULT_FONT_FAMILY = "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace"
+
 // Listen for settings changes from SettingsPage
 function onTerminalSettingsChanged(e: Event) {
   const detail = (e as CustomEvent).detail
@@ -139,6 +142,15 @@ function onTerminalSettingsChanged(e: Event) {
     // Apply theme change immediately
     if (terminal.value && detail.theme) {
       terminal.value.options.theme = getTerminalTheme(detail.theme)
+    }
+    // Apply font change immediately
+    if (terminal.value) {
+      if (detail.fontFamily) {
+        terminal.value.options.fontFamily = detail.fontFamily
+      }
+      if (detail.fontSize) {
+        terminal.value.options.fontSize = detail.fontSize
+      }
     }
   }
 }
@@ -153,6 +165,8 @@ onMounted(() => {
   const theme = props.theme || globalSettings?.theme
   if (theme) termOptions.theme = getTerminalTheme(theme)
   if (props.fontSize) termOptions.fontSize = props.fontSize
+  else if (globalSettings?.fontSize) termOptions.fontSize = globalSettings.fontSize
+  termOptions.fontFamily = globalSettings?.fontFamily || DEFAULT_FONT_FAMILY
   if (props.cursorStyle) termOptions.cursorStyle = props.cursorStyle
   if (props.cursorBlink !== undefined) termOptions.cursorBlink = props.cursorBlink
 

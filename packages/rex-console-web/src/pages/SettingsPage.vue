@@ -176,6 +176,8 @@ async function saveSettings() {
     localStorage.setItem('rex-lang', settings.value.language)
     const terminalSettings = {
       theme: settings.value.terminal_theme,
+      fontFamily: settings.value.terminal_font,
+      fontSize: parseInt(settings.value.terminal_font_size, 10) || 14,
       opacity: settings.value.terminal_opacity,
       backgroundImage: settings.value.terminal_bg_image,
     }

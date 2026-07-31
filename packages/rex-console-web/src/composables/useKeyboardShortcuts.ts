@@ -17,6 +17,7 @@ export function useKeyboardShortcuts(shortcuts: Shortcut[]) {
     }
 
     for (const s of shortcuts) {
+      if (!e.key) continue
       const ctrlMatch = s.ctrl ? (e.ctrlKey || e.metaKey) : !e.ctrlKey && !e.metaKey
       const shiftMatch = s.shift ? e.shiftKey : !e.shiftKey
       const altMatch = s.alt ? e.altKey : !e.altKey
