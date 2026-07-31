@@ -119,6 +119,7 @@ rex-agent = 所有 crate（无前端）
 | **M71** | i18n Completion | — | ✅ |
 | **M72** | Quality & Documentation | — | ✅ |
 | **M73** | Test Coverage & Integration Tests | — | ✅ |
+| **M74** | Bug Fix Round | — | ✅ |
 
 ### M0：项目骨架重建
 

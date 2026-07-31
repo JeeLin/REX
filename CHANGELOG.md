@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.65.0] - 2026-07-31
+
+### Added
+- 审计日志 IP 字段（数据库迁移）
+- 侧栏 host 显示截断（S3 URL 过长时省略号）
+
+### Fixed
+- 21 个 bug 修复（3 🔴 / 12 🟡 / 6 🟢）
+- 所有 🔴 级别 bug 已修复
+
 ## [0.64.1] - 2026-07-31
 
 ### Fixed
