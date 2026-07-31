@@ -165,7 +165,7 @@ onMounted(() => {
   const theme = props.theme || globalSettings?.theme
   if (theme) termOptions.theme = getTerminalTheme(theme)
   if (props.fontSize) termOptions.fontSize = props.fontSize
-  else if (globalSettings?.fontSize) termOptions.fontSize = globalSettings.fontSize
+  else if (globalSettings?.fontSize) termOptions.fontSize = Number(globalSettings.fontSize) || 14
   termOptions.fontFamily = globalSettings?.fontFamily || DEFAULT_FONT_FAMILY
   if (props.cursorStyle) termOptions.cursorStyle = props.cursorStyle
   if (props.cursorBlink !== undefined) termOptions.cursorBlink = props.cursorBlink
