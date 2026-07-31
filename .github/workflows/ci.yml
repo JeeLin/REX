@@ -223,15 +223,17 @@ jobs:
           merge-multiple: false
       - name: Prepare release binaries
         run: |
+          echo "=== Artifacts downloaded ==="
+          ls -la artifacts/ || echo "No artifacts dir"
           for dir in artifacts/binaries-*/; do
+            echo "Processing $dir"
+            ls -la "$dir"
             arch=$(basename "$dir" | sed 's/^binaries-//')
-            # Copy agent binary (handle .exe suffix for Windows)
             if [ -f "$dir/rex-agent.exe" ]; then
               cp "$dir/rex-agent.exe" "rex-agent-${arch}.exe"
             elif [ -f "$dir/rex-agent" ]; then
               cp "$dir/rex-agent" "rex-agent-${arch}"
             fi
-            # Copy hub binary
             if [ -f "$dir/rex-hub.exe" ]; then
               cp "$dir/rex-hub.exe" "rex-hub-${arch}.exe"
             elif [ -f "$dir/rex-hub" ]; then
@@ -239,6 +241,8 @@ jobs:
             fi
           done
           chmod +x rex-agent-* rex-hub-* 2>/dev/null || true
+          echo "=== Release files ==="
+          ls -la rex-agent-* rex-hub-* 2>/dev/null || echo "No release files found"
       - name: Generate SHA256SUMS
         run: sha256sum rex-hub* rex-agent* > SHA256SUMS
       - name: Extract changelog for release
