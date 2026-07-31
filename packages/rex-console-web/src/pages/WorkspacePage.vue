@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, defineAsyncComponent, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, defineAsyncComponent, watch, defineOptions } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Splitpanes, Pane } from 'splitpanes'
+import { useWorkspacePersistence } from '@/composables/useWorkspacePersistence'
+
+defineOptions({ name: 'WorkspacePage' })
 import 'splitpanes/dist/splitpanes.css'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
@@ -71,8 +74,13 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
+// 工作区状态保活：切换页面回来时恢复 tab
+const { restore } = useWorkspacePersistence({ tabs, activeTab, splitCount })
+
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
+  // 从 localStorage 恢复上次的工作区状态
+  restore()
 })
 
 onBeforeUnmount(() => {
