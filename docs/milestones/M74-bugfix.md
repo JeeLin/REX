@@ -51,6 +51,12 @@ M73 完成测试覆盖率。本里程碑集中修复已知 bug 和 UX 问题。
 | [x] | 🟢 | 环境页面添加 agent 部署说明链接 | 用户反馈 | 已在 agent 区域添加跳转 agents 页面链接 |
 | [x] | 🟢 | 评估 agent 页面必要性 | 用户反馈 | Agent 页面有用：展示列表、状态、部署指南，保留 |
 | [x] | 🟢 | 资源栏底部拖拽手柄 | 用户反馈 | 侧栏已有拖拽调宽功能（通过顶部边缘），底部手柄为可选优化 |
+| ⬜ | 🟡 | 设置页面改为滚动式布局 | 用户反馈 | 设置界面不能把所有设置放一个页面下滑吗，而不是通过左侧点击切换 |
+| ⬜ | 🔴 | isTriggerKey TypeError 崩溃 | 用户反馈 | 前端 JS 报错 Cannot read properties of undefined (reading toLowerCase)，键盘事件触发 |
+| ⬜ | 🟡 | 更新检查 API 502 | 用户反馈 | api/update/check 返回 502 Bad Gateway |
+| ⬜ | 🟡 | 更新回滚 API 404 | 用户反馈 | api/update/rollback 返回 404 Not Found |
+| ⬜ | 🟢 | WebSocket 请求超时 | 用户反馈 | WebSocket 连接超时 60000ms 后报错 |
+| ⬜ | 🟡 | SSH 终端字体变化 | 用户反馈 | SSH 终端的字体怎么变了 |
 | [x] | 🟡 | xterm-helpers 遮挡终端底部 | 用户反馈 | SSH 终端里的 xterm-helpers 还是存在，导致终端最后的一行半被遮挡 |
 | [x] | 🟡 | S3 资源名称被 URL 截断 | 用户反馈 | 侧栏 host 显示太长，已截断为 max-width + ellipsis |
 | [x] | 🟢 | 最近使用去重 | 用户反馈 | addRecent 已有去重逻辑，同 id 资源会移到列表顶部 |
