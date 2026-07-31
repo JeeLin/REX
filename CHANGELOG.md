@@ -10,9 +10,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Added
 - 审计日志 IP 字段（数据库迁移）
 - 侧栏 host 显示截断（S3 URL 过长时省略号）
+- Agent 部署说明链接
 
 ### Fixed
 - 21 个 bug 修复（3 🔴 / 12 🟡 / 6 🟢）
+- isTriggerKey TypeError 崩溃（useKeyboardShortcuts null 检查）
+- 更新检查/回滚 API 错误处理
+- WebSocket keepalive ping 机制
+- SSH 终端字体持久化
+- 设置页面三栏布局恢复
+- 直连环境不再显示 Agent 内容
+- Agent 部署指南复制按钮（clipboard fallback）
+- Agent token 按钮翻译
+- xterm-helpers 遮挡修复
 - 所有 🔴 级别 bug 已修复
 
 ## [0.64.1] - 2026-07-31
