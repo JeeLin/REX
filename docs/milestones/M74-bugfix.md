@@ -52,11 +52,11 @@ M73 完成测试覆盖率。本里程碑集中修复已知 bug 和 UX 问题。
 | [x] | 🟢 | 评估 agent 页面必要性 | 用户反馈 | Agent 页面有用：展示列表、状态、部署指南，保留 |
 | [x] | 🟢 | 资源栏底部拖拽手柄 | 用户反馈 | 侧栏已有拖拽调宽功能（通过顶部边缘），底部手柄为可选优化 |
 | [x] | 🟡 | 设置页面改为滚动式布局 | 用户反馈 | 已恢复三栏布局（左导航 + 右两列内容） |
-| [x] | 🔴 | isTriggerKey TypeError 崩溃 | 用户反馈 | xterm.js 内部键盘处理，需特定环境触发 |
-| [x] | 🟡 | 更新检查 API 502 | 用户反馈 | GitHub API 调用超时，部署配置问题 |
+| [x] | 🔴 | isTriggerKey TypeError 崩溃 | 用户反馈 | 修复 useKeyboardShortcuts 中 e.key null 检查 |
+| [x] | 🟡 | 更新检查 API 502 | 用户反馈 | 修复 update_api 错误处理，返回友好错误 |
 | [x] | 🟡 | 更新回滚 API 404 | 用户反馈 | 未执行过更新时回滚返回 404，预期行为 |
-| [x] | 🟢 | WebSocket 请求超时 | 用户反馈 | 网络不稳定导致，需更多上下文排查 |
-| [x] | 🟡 | SSH 终端字体变化 | 用户反馈 | 终端字体设置依赖浏览器系统字体 |
+| [x] | 🟢 | WebSocket 请求超时 | 用户反馈 | 添加 keepalive ping 机制 |
+| [x] | 🟡 | SSH 终端字体变化 | 用户反馈 | 修复 TerminalView 字体持久化逻辑 |
 | [x] | 🟡 | xterm-helpers 遮挡终端底部 | 用户反馈 | SSH 终端里的 xterm-helpers 还是存在，导致终端最后的一行半被遮挡 |
 | [x] | 🟡 | S3 资源名称被 URL 截断 | 用户反馈 | 侧栏 host 显示太长，已截断为 max-width + ellipsis |
 | [x] | 🟢 | 最近使用去重 | 用户反馈 | addRecent 已有去重逻辑，同 id 资源会移到列表顶部 |
