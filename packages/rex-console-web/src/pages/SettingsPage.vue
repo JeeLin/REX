@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { settingsApi, type Settings, updateApi, type UpdateInfo, type UpdateStatus } from '@/api/settings'
+import { settingsApi, type Settings } from '@/api/settings'
+import { useUpdateStore } from '@/stores/update'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 
 const { t, locale } = useI18n()
+const updateStore = useUpdateStore()
 const settings = ref<Settings>({
   theme: 'dark',
   language: 'zh',
@@ -36,85 +38,7 @@ const changingPassword = ref(false)
 const passwordError = ref('')
 const passwordSuccess = ref('')
 
-// Update functionality
-const currentVersion = ref(__APP_VERSION__)
-const latestVersion = ref('')
-const hasUpdate = ref(false)
-const updateLoading = ref(false)
-const updating = ref(false)
-const updateError = ref('')
-const updateStatusText = ref('')
-const updateProgress = ref(0)
-
-// Version should come from backend in real implementation
-async function checkForUpdate() {
-  updateLoading.value = true
-  updateError.value = ''
-  try {
-    const info: UpdateInfo = await updateApi.check()
-    latestVersion.value = info.latest_version
-    hasUpdate.value = info.has_update
-  } catch (e: unknown) {
-    updateError.value = e instanceof Error ? e.message : t('settings.updateCheckFailed')
-  } finally {
-    updateLoading.value = false
-  }
-}
-
-async function triggerUpdate() {
-  updating.value = true
-  updateError.value = ''
-  try {
-    await updateApi.trigger()
-    // Start polling for status
-    const interval = setInterval(async () => {
-      try {
-        const status: UpdateStatus = await updateApi.status()
-        updateStatusText.value = status.phase
-        updateProgress.value = status.attempt * 25 // Simple progress indication
-        if (status.phase === 'committed' || status.phase === 'rolled_back' || status.phase === 'failed') {
-          clearInterval(interval)
-          updating.value = false
-          await checkForUpdate() // Refresh version info
-        }
-      } catch (e: unknown) {
-        clearInterval(interval)
-        updating.value = false
-        updateError.value = e instanceof Error ? e.message : t('settings.updateStatusFailed')
-      }
-    }, 2000)
-  } catch (e: unknown) {
-    updating.value = false
-    updateError.value = e instanceof Error ? e.message : t('settings.updateTriggerFailed')
-  }
-}
-
-async function rollbackUpdate() {
-  updating.value = true
-  updateError.value = ''
-  try {
-    await updateApi.rollback()
-    // Similar polling as trigger
-    const interval = setInterval(async () => {
-      try {
-        const status: UpdateStatus = await updateApi.status()
-        updateStatusText.value = status.phase
-        if (status.phase === 'idle') {
-          clearInterval(interval)
-          updating.value = false
-          await checkForUpdate()
-        }
-      } catch (e: unknown) {
-        clearInterval(interval)
-        updating.value = false
-        updateError.value = e instanceof Error ? e.message : t('settings.rollbackStatusFailed')
-      }
-    }, 2000)
-  } catch (e: unknown) {
-    updating.value = false
-    updateError.value = e instanceof Error ? e.message : t('settings.rollbackTriggerFailed')
-  }
-}
+// Update functionality — uses global store to persist across page navigation
 
 async function changePassword() {
   if (!currentPassword.value || !newPassword.value) return
@@ -155,7 +79,7 @@ onMounted(async () => {
       localStorage.setItem('rex-lang', settings.value.language)
     }
     // Check for updates on mount
-    await checkForUpdate()
+    await updateStore.checkForUpdate()
   } catch {
     // ignore
   } finally {
@@ -299,26 +223,26 @@ async function saveSettings() {
       <!-- Update Section -->
       <Card v-show="activeTab === 'update'" class="settings-section">
         <h2 class="section-title">{{ t('settings.update') }}</h2>
-        <div v-if="updateLoading" class="update-progress">
-          <p class="update-status">{{ updateStatusText }}</p>
+        <div v-if="updateStore.updateLoading" class="update-progress">
+          <p class="update-status">{{ updateStore.updateStatusText }}</p>
           <div class="progress-bar">
-            <div class="progress-fill" :style="{ width: updateProgress + '%' }"></div>
+            <div class="progress-fill" :style="{ width: updateStore.updateProgress + '%' }"></div>
           </div>
         </div>
         <div v-else class="update-info">
           <div class="update-current">
-            <span class="label">{{ t('settings.currentVersion') }}:</span>
-            <span class="value">{{ currentVersion }}</span>
+            <span class="label">{{ t('settings.updateStore.currentVersion') }}:</span>
+            <span class="value">{{ updateStore.currentVersion }}</span>
           </div>
-          <div v-if="hasUpdate" class="update-available">
+          <div v-if="updateStore.hasUpdate" class="update-available">
             <div class="update-latest">
-              <span class="label">{{ t('settings.latestVersion') }}:</span>
-              <span class="value">{{ latestVersion }}</span>
+              <span class="label">{{ t('settings.updateStore.latestVersion') }}:</span>
+              <span class="value">{{ updateStore.latestVersion }}</span>
             </div>
             <Button
               variant="primary"
-              :loading="updating"
-              @click="triggerUpdate"
+              :loading="updateStore.updating"
+              @click="updateStore.triggerUpdate"
             >
               {{ t('settings.updateNow') }}
             </Button>
@@ -326,9 +250,9 @@ async function saveSettings() {
           <div v-else class="update-up-to-date">
             <p>{{ t('settings.upToDate') }}</p>
           </div>
-          <div v-if="updateError" class="update-error">
-            <p>{{ updateError }}</p>
-            <Button variant="secondary" @click="rollbackUpdate">
+          <div v-if="updateStore.updateError" class="update-error">
+            <p>{{ updateStore.updateError }}</p>
+            <Button variant="secondary" @click="updateStore.rollbackUpdate">
               {{ t('settings.rollback') }}
             </Button>
           </div>

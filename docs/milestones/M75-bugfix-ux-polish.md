@@ -149,3 +149,8 @@ M74 完成 bug 修复轮次。本里程碑继续修复已知 bug 和 UX 问题�
 | [x] | 🔴 | isTriggerKey TypeError 崩溃（复发） | 用户反馈 | 确认为浏览器扩展 content_main.js 触发，非应用代码问题，应用已有 e.key 检查 |
 | ⬜ | 🟢 | 左侧资源右键菜单图标大小不一 | 用户反馈 | 侧栏资源右键菜单中各图标尺寸不统一 |
 | ⬜ | 🟢 | 设置页面右侧改为滑动式 | 用户反馈 | 设置页面左侧导航保留，右侧选项改为滑动切换而非一页一页翻页 |
+| ⬜ | 🟡 | 切换页面导致工作区重连 | 用户反馈 | 切换页面后返回工作区，终端会重新连接（需确认新终端组件是否已解决） |
+| ⬜ | 🟡 | 审计日志展开无内容 | 用户反馈 | 审计日志页面每个资源点击展开后没有实际内容 |
+| ⬜ | 🟡 | SFTP 按钮报错 unsupported protocol | 用户反馈 | SSH 终端点击 SFTP 按钮后报错 /api/files/connect unsupported protocol |
+| ⬜ | 🔴 | Agent 部署指南复制按钮崩溃 | 用户反馈 | Agent 部署指南中 docker 等复制按钮点击后报错 Cannot read properties of undefined (reading 'writeText') |
+| ⬜ | 🟢 | Agent 部署镜像改用 ghcr | 用户反馈 | Agent 部署页面 docker 镜像使用 dockerhub，建议改用 ghcr.io |
