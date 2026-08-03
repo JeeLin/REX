@@ -429,13 +429,13 @@ function ctxToggleFavorite() {
     <Teleport to="body">
       <div v-if="ctxMenu.show" class="rp-ctx-overlay" @click="ctxMenu.show = false" @contextmenu.prevent="ctxMenu.show = false" />
       <div v-if="ctxMenu.show" ref="ctxMenuRef" class="rp-ctx-menu" :style="{ top: ctxMenu.y + 'px', left: ctxMenu.x + 'px' }">
-        <div class="rp-ctx-item" @click="ctxOpen">🚀 {{ t('sidebar.openResource') }}</div>
+        <div class="rp-ctx-item" @click="ctxOpen"><span class="rp-ctx-icon">🚀</span> {{ t('sidebar.openResource') }}</div>
         <div class="rp-ctx-item" @click="ctxToggleFavorite">
-          {{ ctxMenu.resource && favStore.isFavorite(ctxMenu.resource.id) ? '★' : '☆' }}
+          <span class="rp-ctx-icon">{{ ctxMenu.resource && favStore.isFavorite(ctxMenu.resource.id) ? '★' : '☆' }}</span>
           {{ ctxMenu.resource && favStore.isFavorite(ctxMenu.resource.id) ? t('sidebar.unfavorite') : t('sidebar.favorites') }}
         </div>
-        <div class="rp-ctx-item" @click="ctxProperties">✏️ {{ t('sidebar.properties') }}</div>
-        <div class="rp-ctx-item rp-ctx-item--danger" @click="ctxDelete">🗑 {{ t('sidebar.delete') }}</div>
+        <div class="rp-ctx-item" @click="ctxProperties"><span class="rp-ctx-icon">✏️</span> {{ t('sidebar.properties') }}</div>
+        <div class="rp-ctx-item rp-ctx-item--danger" @click="ctxDelete"><span class="rp-ctx-icon">🗑</span> {{ t('sidebar.delete') }}</div>
       </div>
     </Teleport>
   </div>
@@ -677,6 +677,14 @@ function ctxToggleFavorite() {
   text-align: center;
   flex-shrink: 0;
   font-style: normal;
+}
+.rp-ctx-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  font-size: 14px;
+  flex-shrink: 0;
 }
 .rp-ctx-item:hover {
   background: var(--bg-hover);
