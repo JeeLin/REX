@@ -261,4 +261,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           body_path: release-body.md
-          files: rex-hub-* rex-agent-* SHA256SUMS
+          files: |
+            rex-hub-*
+            rex-agent-*
+            SHA256SUMS
