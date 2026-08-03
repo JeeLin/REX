@@ -23,6 +23,7 @@ RUN mkdir -p /app/data && chown agent:agent /app/data
 # buildx 自动设置 TARGETARCH 为 amd64 或 arm64
 ARG TARGETARCH
 COPY dist/rex-${TARGETARCH} /app/rex-agent
+RUN chmod +x /app/rex-agent
 
 USER agent
 ENV REX_DATA_DIR=/app/data
