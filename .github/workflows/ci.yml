@@ -68,7 +68,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
       - name: Build Agent + Hub
         run: cargo build --release -p rex-agent -p rex-hub --target ${{ matrix.target }}
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v8
         with:
           name: binaries-${{ matrix.arch }}
           path: |
@@ -92,7 +92,7 @@ jobs:
         working-directory: packages/rex-console-web
       - run: bun run build
         working-directory: packages/rex-console-web
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v8
         with:
           name: frontend
           path: packages/rex-console-web/dist/
