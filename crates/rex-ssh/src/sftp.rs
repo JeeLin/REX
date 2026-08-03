@@ -28,13 +28,15 @@ impl SftpConnector {
 
         let ssh_config = Arc::new(client::Config::default());
         let handler = crate::SshHandler;
-        let mut handle = client::connect(
-            ssh_config,
-            &format!("{}:{}", config.host, config.port),
-            handler,
-        )
-        .await
-        .context("SSH connection failed for SFTP")?;
+        // IPv6 addresses need brackets: [::1]:22
+        let addr = if config.host.contains(':') {
+            format!("[{}]:{}", config.host, config.port)
+        } else {
+            format!("{}:{}", config.host, config.port)
+        };
+        let mut handle = client::connect(ssh_config, &addr, handler)
+            .await
+            .context("SSH connection failed for SFTP")?;
 
         if let Some(ref key_pem) = config.private_key {
             let private_key = russh::keys::decode_secret_key(key_pem, config.password.as_deref())
