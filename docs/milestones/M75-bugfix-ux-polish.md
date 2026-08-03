@@ -147,11 +147,11 @@ M74 完成 bug 修复轮次。本里程碑继续修复已知 bug 和 UX 问题�
 | [x] | 🟡 | SSH 终端不支持多开 | 用户反馈 | 新终端组件已支持多开（由 WorkspacePage 的 tab 系统管理） |
 | [x] | 🟡 | 删除资源后侧栏不更新 | 用户反馈 | 修复 EnvironmentDetailPage 使用 store.deleteResource 而非直接调用 API |
 | [x] | 🔴 | isTriggerKey TypeError 崩溃（复发） | 用户反馈 | 确认为浏览器扩展 content_main.js 触发，非应用代码问题，应用已有 e.key 检查 |
-| ⬜ | 🟢 | 左侧资源右键菜单图标大小不一 | 用户反馈 | 侧栏资源右键菜单中各图标尺寸不统一 |
+| [x] | 🟢 | 左侧资源右键菜单图标大小不一 | 用户反馈 | 包裹 emoji 在 span 中，添加 .rp-ctx-icon 统一样式 |
 | ⬜ | 🟢 | 设置页面右侧改为滑动式 | 用户反馈 | 设置页面左侧导航保留，右侧选项改为滑动切换而非一页一页翻页 |
 | [x] | 🟡 | 切换页面导致工作区重连 | 用户反馈 | 新终端组件 WorkspaceTerminal.vue 使用 KeepAlive + resourceId key，切换页面不会重新创建实例 |
-| ⬜ | 🟡 | 审计日志展开无内容 | 用户反馈 | 审计日志页面每个资源点击展开后没有实际内容 |
+| [x] | 🟡 | 审计日志展开无内容 | 用户反馈 | 展开视图始终显示完整记录信息（ID/时间/操作/环境/资源/结果/详情） |
 | [x] | 🟡 | SFTP 按钮报错 unsupported protocol | 用户反馈 | 修复 file_api.rs 支持 "ssh" 协议连接 SFTP |
 | [x] | 🔴 | Agent 部署指南复制按钮崩溃 | 用户反馈 | 修复 AgentsPage clipboard API 空值检查，添加 fallbackCopy |
 | ⬜ | 🟢 | Agent 部署镜像改用 ghcr | 用户反馈 | Agent 部署页面 docker 镜像使用 dockerhub，建议改用 ghcr.io |
-| ⬜ | 🔴 | ghcr.io Agent 镜像权限被拒 | 用户反馈 | Docker 运行 ghcr.io/jeelin/rex-agent 报错 permission denied，二进制文件缺少执行权限 |
+| [x] | 🔴 | ghcr.io Agent 镜像权限被拒 | 用户反馈 | 修复 Dockerfile.agent 添加 RUN chmod +x /app/rex-agent |
