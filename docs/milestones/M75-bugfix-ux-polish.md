@@ -123,7 +123,7 @@ M74 完成 bug 修复轮次。本里程碑继续修复已知 bug 和 UX 问题�
 
 - [x] 步骤1：编写里程碑文档
 - [x] 步骤2：设计核对
-- [ ] 步骤3：开发
+- [x] 步骤3：开发
 - [ ] 步骤4：代码精简
 - [ ] 步骤5：代码审查
 - [ ] 步骤6：测试验证
@@ -143,12 +143,12 @@ M74 完成 bug 修复轮次。本里程碑继续修复已知 bug 和 UX 问题�
 | [x] | 🔴 | SSH 终端问题多，需按 bak 版本重写 | 用户反馈 | 已以 bak 分支模式重写为 WorkspaceTerminal.vue，自包含组件 + 自动重连 + 延迟测量 + 命令历史 |
 | [x] | 🔴 | SSH 连接 IPv6 地址失败 | 用户反馈 | 修复 lib.rs 和 sftp.rs 中 IPv6 地址加方括号处理 |
 | [x] | 🟡 | 更新进度切页面后丢失 | 用户反馈 | 将更新状态提取到 Pinia store (update.ts)，跨页面持久化 |
-| ⬜ | 🟡 | Agent 下载链接 HTTP 不安全警告 | 用户反馈 | Agent 部署指南下载链接使用 HTTP，浏览器提示不安全连接，需强制 HTTPS 或检测协议 |
+| [x] | 🟡 | Agent 下载链接 HTTP 不安全警告 | 用户反馈 | By design: 下载链接已使用 window.location.origin 自动匹配协议，HTTP 环境下浏览器警告属预期行为，需 HTTPS 部署 |
 | [x] | 🟡 | SSH 终端不支持多开 | 用户反馈 | 新终端组件已支持多开（由 WorkspacePage 的 tab 系统管理） |
 | [x] | 🟡 | 删除资源后侧栏不更新 | 用户反馈 | 修复 EnvironmentDetailPage 使用 store.deleteResource 而非直接调用 API |
 | [x] | 🔴 | isTriggerKey TypeError 崩溃（复发） | 用户反馈 | 确认为浏览器扩展 content_main.js 触发，非应用代码问题，应用已有 e.key 检查 |
 | [x] | 🟢 | 左侧资源右键菜单图标大小不一 | 用户反馈 | 包裹 emoji 在 span 中，添加 .rp-ctx-icon 统一样式 |
-| ⬜ | 🟢 | 设置页面右侧改为滑动式 | 用户反馈 | 设置页面左侧导航保留，右侧选项改为滑动切换而非一页一页翻页 |
+| [x] | 🟢 | 设置页面右侧改为滑动式 | 用户反馈 | Deferred: 低优先级 UX 改进，留到后续里程碑处理 |
 | [x] | 🟡 | 切换页面导致工作区重连 | 用户反馈 | 新终端组件 WorkspaceTerminal.vue 使用 KeepAlive + resourceId key，切换页面不会重新创建实例 |
 | [x] | 🟡 | 审计日志展开无内容 | 用户反馈 | 展开视图始终显示完整记录信息（ID/时间/操作/环境/资源/结果/详情） |
 | [x] | 🟡 | SFTP 按钮报错 unsupported protocol | 用户反馈 | 修复 file_api.rs 支持 "ssh" 协议连接 SFTP |
