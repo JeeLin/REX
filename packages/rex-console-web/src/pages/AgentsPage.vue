@@ -124,6 +124,7 @@ function openConfig(agent: Agent) {
 
 async function copyText(text: string) {
   try {
+    if (!navigator.clipboard?.writeText) throw new Error('clipboard not available')
     await navigator.clipboard.writeText(text)
     copySuccess.value = 'copied'
     setTimeout(() => { copySuccess.value = '' }, 2000)
@@ -231,21 +232,28 @@ auto_update = true`
 })
 
 function copyGuideCode() {
-  navigator.clipboard.writeText(guideCode.value).then(() => {
-    guideCopySuccess.value = 'copied'
-    setTimeout(() => { guideCopySuccess.value = '' }, 2000)
-  }).catch(() => {
-    const ta = document.createElement('textarea')
-    ta.value = guideCode.value
-    ta.style.position = 'fixed'
-    ta.style.left = '-9999px'
-    document.body.appendChild(ta)
-    ta.select()
-    document.execCommand('copy')
-    document.body.removeChild(ta)
-    guideCopySuccess.value = 'copied'
-    setTimeout(() => { guideCopySuccess.value = '' }, 2000)
-  })
+  const text = guideCode.value
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      guideCopySuccess.value = 'copied'
+      setTimeout(() => { guideCopySuccess.value = '' }, 2000)
+    }).catch(() => fallbackCopy(text))
+  } else {
+    fallbackCopy(text)
+  }
+}
+
+function fallbackCopy(text: string) {
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.style.position = 'fixed'
+  ta.style.left = '-9999px'
+  document.body.appendChild(ta)
+  ta.select()
+  document.execCommand('copy')
+  document.body.removeChild(ta)
+  guideCopySuccess.value = 'copied'
+  setTimeout(() => { guideCopySuccess.value = '' }, 2000)
 }
 
 

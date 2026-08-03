@@ -158,7 +158,7 @@ async fn connect(
     };
 
     let conn: Box<dyn FileConnector> = match res.protocol.as_str() {
-        "sftp" => {
+        "sftp" | "ssh" => {
             let conn = rex_ssh::sftp::SftpConnector::connect_with_config(rex_ssh::SshConfig {
                 host: res.host.clone(),
                 port: res.port.unwrap_or(22),
