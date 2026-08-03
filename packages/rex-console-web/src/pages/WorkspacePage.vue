@@ -13,7 +13,7 @@ import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
 import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
 import CommandPalette from '@/features/workspace/CommandPalette.vue'
-import TerminalView from '@/features/terminal/TerminalView.vue'
+import WorkspaceTerminal from '@/features/terminal/WorkspaceTerminal.vue'
 import FilesDrawer from '@/features/files/FilesDrawer.vue'
 import { PROTOCOL_COLORS } from '@/features/resource/protocols'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -648,7 +648,7 @@ useKeyboardShortcuts([
               <!-- Terminal (SSH) + SFTP Drawer -->
               <div v-if="currentPaneTabInfo(i - 1)?.protocol === 'ssh'" class="ws-ssh-area">
                 <KeepAlive>
-                  <TerminalView
+                  <WorkspaceTerminal
                     :key="paneTabs[i - 1]"
                     :tab-id="paneTabs[i - 1]!"
                     :resource-id="currentPaneTabInfo(i - 1)?.resourceId || ''"
