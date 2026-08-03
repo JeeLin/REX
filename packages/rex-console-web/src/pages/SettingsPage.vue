@@ -213,7 +213,7 @@ async function saveSettings() {
 
     <!-- 右侧内容（两列） -->
     <div class="settings-content">
-        <Card v-show="activeTab === 'appearance'" class="settings-section">
+      <Card v-show="activeTab === 'appearance'" class="settings-section">
         <h2 class="section-title">{{ t('settings.appearance') }}</h2>
         <div class="form-group">
           <label class="form-label">{{ t('settings.theme') }}</label>

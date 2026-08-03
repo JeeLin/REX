@@ -17,6 +17,7 @@ interface SerializedTab {
   protocol: string
   resourceId?: string
   environmentId?: string
+  status: string
 }
 
 /**
@@ -24,7 +25,7 @@ interface SerializedTab {
  * Call once in WorkspacePage setup.
  */
 export function useWorkspacePersistence(opts: {
-  tabs: Ref<Array<{ id: string; label: string; protocol: string; resourceId?: string; environmentId?: string }>>
+  tabs: Ref<Array<{ id: string; label: string; protocol: string; resourceId?: string; environmentId?: string; status: string }>>
   activeTab: Ref<string>
   splitCount: Ref<number>
 }) {
@@ -84,6 +85,7 @@ export function useWorkspacePersistence(opts: {
           protocol: t.protocol,
           resourceId: t.resourceId,
           environmentId: t.environmentId,
+          status: t.status,
         })),
         activeTabId: activeTab.value,
         splitCount: splitCount.value,
