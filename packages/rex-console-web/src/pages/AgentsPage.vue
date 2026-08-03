@@ -162,12 +162,12 @@ chmod +x rex-agent
   --name rex-agent \\
   -e REX_SERVER=${host} \\
   -e REX_TOKEN=${token} \\
-  rex/rex-agent:latest`
+  ghcr.io/jeelin/rex-agent:latest`
   }
   if (deployTab.value === 'compose') {
     return `services:
   rex-agent:
-    image: rex/rex-agent:latest
+    image: ghcr.io/jeelin/rex-agent:latest
     environment:
       REX_SERVER: ${host}
       REX_TOKEN: ${token}
@@ -213,12 +213,12 @@ chmod +x rex-agent
   --name rex-agent \\
   -e REX_SERVER=${host} \\
   -e REX_TOKEN=YOUR_TOKEN \\
-  rex/rex-agent:latest`
+  ghcr.io/jeelin/rex-agent:latest`
   }
   if (guideTab.value === 'compose') {
     return `services:
   rex-agent:
-    image: rex/rex-agent:latest
+    image: ghcr.io/jeelin/rex-agent:latest
     environment:
       REX_SERVER: ${host}
       REX_TOKEN: YOUR_TOKEN
