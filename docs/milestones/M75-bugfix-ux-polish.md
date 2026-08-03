@@ -153,5 +153,6 @@ M74 完成 bug 修复轮次。本里程碑继续修复已知 bug 和 UX 问题�
 | [x] | 🟡 | 审计日志展开无内容 | 用户反馈 | 展开视图始终显示完整记录信息（ID/时间/操作/环境/资源/结果/详情） |
 | [x] | 🟡 | SFTP 按钮报错 unsupported protocol | 用户反馈 | 修复 file_api.rs 支持 "ssh" 协议连接 SFTP |
 | [x] | 🔴 | Agent 部署指南复制按钮崩溃 | 用户反馈 | 修复 AgentsPage clipboard API 空值检查，添加 fallbackCopy |
-| ⬜ | 🟢 | Agent 部署镜像改用 ghcr | 用户反馈 | Agent 部署页面 docker 镜像使用 dockerhub，建议改用 ghcr.io |
+| [x] | 🟢 | Agent 部署镜像改用 ghcr | 用户反馈 | 修复 AgentsPage Docker 镜像改为 ghcr.io/jeelin/rex-agent |
 | [x] | 🔴 | ghcr.io Agent 镜像权限被拒 | 用户反馈 | 修复 Dockerfile.agent 添加 RUN chmod +x /app/rex-agent |
+| [x] | 🔴 | SSH 终端选中/复制粘贴失效 | 用户反馈 | 修复 Ctrl+V 显式读取剪贴板，启用 allowProposedApi，优化键盘事件处理 |
