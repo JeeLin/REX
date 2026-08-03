@@ -141,16 +141,16 @@ M74 完成 bug 修复轮次。本里程碑继续修复已知 bug 和 UX 问题�
 | 状态 | 优先级 | 标题 | 来源 | 描述 |
 |------|--------|------|------|------|
 | [x] | 🔴 | SSH 终端问题多，需按 bak 版本重写 | 用户反馈 | 已以 bak 分支模式重写为 WorkspaceTerminal.vue，自包含组件 + 自动重连 + 延迟测量 + 命令历史 |
-| ⬜ | 🔴 | SSH 连接 IPv6 地址失败 | 用户反馈 | SSH 测试时使用 IPv6 地址会导致连接失败 |
-| ⬜ | 🟡 | 更新进度切页面后丢失 | 用户反馈 | 设置页面执行更新时切到其他页面就看不到更新进度了 |
+| [x] | 🔴 | SSH 连接 IPv6 地址失败 | 用户反馈 | 修复 lib.rs 和 sftp.rs 中 IPv6 地址加方括号处理 |
+| [x] | 🟡 | 更新进度切页面后丢失 | 用户反馈 | 将更新状态提取到 Pinia store (update.ts)，跨页面持久化 |
 | ⬜ | 🟡 | Agent 下载链接 HTTP 不安全警告 | 用户反馈 | Agent 部署指南下载链接使用 HTTP，浏览器提示不安全连接，需强制 HTTPS 或检测协议 |
 | [x] | 🟡 | SSH 终端不支持多开 | 用户反馈 | 新终端组件已支持多开（由 WorkspacePage 的 tab 系统管理） |
 | [x] | 🟡 | 删除资源后侧栏不更新 | 用户反馈 | 修复 EnvironmentDetailPage 使用 store.deleteResource 而非直接调用 API |
 | [x] | 🔴 | isTriggerKey TypeError 崩溃（复发） | 用户反馈 | 确认为浏览器扩展 content_main.js 触发，非应用代码问题，应用已有 e.key 检查 |
 | ⬜ | 🟢 | 左侧资源右键菜单图标大小不一 | 用户反馈 | 侧栏资源右键菜单中各图标尺寸不统一 |
 | ⬜ | 🟢 | 设置页面右侧改为滑动式 | 用户反馈 | 设置页面左侧导航保留，右侧选项改为滑动切换而非一页一页翻页 |
-| ⬜ | 🟡 | 切换页面导致工作区重连 | 用户反馈 | 切换页面后返回工作区，终端会重新连接（需确认新终端组件是否已解决） |
+| [x] | 🟡 | 切换页面导致工作区重连 | 用户反馈 | 新终端组件 WorkspaceTerminal.vue 使用 KeepAlive + resourceId key，切换页面不会重新创建实例 |
 | ⬜ | 🟡 | 审计日志展开无内容 | 用户反馈 | 审计日志页面每个资源点击展开后没有实际内容 |
-| ⬜ | 🟡 | SFTP 按钮报错 unsupported protocol | 用户反馈 | SSH 终端点击 SFTP 按钮后报错 /api/files/connect unsupported protocol |
-| ⬜ | 🔴 | Agent 部署指南复制按钮崩溃 | 用户反馈 | Agent 部署指南中 docker 等复制按钮点击后报错 Cannot read properties of undefined (reading 'writeText') |
+| [x] | 🟡 | SFTP 按钮报错 unsupported protocol | 用户反馈 | 修复 file_api.rs 支持 "ssh" 协议连接 SFTP |
+| [x] | 🔴 | Agent 部署指南复制按钮崩溃 | 用户反馈 | 修复 AgentsPage clipboard API 空值检查，添加 fallbackCopy |
 | ⬜ | 🟢 | Agent 部署镜像改用 ghcr | 用户反馈 | Agent 部署页面 docker 镜像使用 dockerhub，建议改用 ghcr.io |
