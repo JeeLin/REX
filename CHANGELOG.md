@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.65.1] - 2026-07-31
+
+### Added
+- 工作区保活：切换页面后返回恢复 tab 状态（24h 有效期）
+- xterm-helpers 修复：完全移除隐藏代码，让 xterm.js 自行管理 DOM
+- CSS 修复：TerminalView 多余闭合括号
+
 ## [0.65.0] - 2026-07-31
 
 ### Added
