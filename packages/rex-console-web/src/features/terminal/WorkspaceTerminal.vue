@@ -177,6 +177,8 @@ function initTerminal() {
     cursorBlink: props.cursorBlink ?? getTerminalSettings().cursorBlink ?? true,
     cursorStyle: (props.cursorStyle as 'block' | 'underline' | 'bar') || 'block',
     scrollback: 10000,
+    allowProposedApi: true,
+    drawBoldTextInBrightColors: true,
   })
 
   fitAddon = new FitAddon()
@@ -199,8 +201,16 @@ function initTerminal() {
       showSearch.value = !showSearch.value
       return false
     }
-    // Ctrl+V → browser paste
+    // Ctrl+V → paste from clipboard
     if (ctrl && event.key === 'v') {
+      event.preventDefault()
+      if (navigator.clipboard?.readText) {
+        navigator.clipboard.readText().then(text => {
+          if (text && ws?.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'terminal.data', data: btoa(text) }))
+          }
+        }).catch(() => {})
+      }
       return false
     }
     // Ctrl+C → copy selection or SIGINT
