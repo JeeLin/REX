@@ -104,9 +104,8 @@ async function submitEdit() {
 
 async function deleteResource(id: string) {
   try {
-    await resourcesApi.delete(envId, id)
+    await store.deleteResource(envId, id)
     resources.value = resources.value.filter(r => r.id !== id)
-    if (env.value) env.value.resource_count--
   } catch {
     // ignore
   }
