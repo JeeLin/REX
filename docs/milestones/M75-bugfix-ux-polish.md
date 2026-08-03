@@ -154,3 +154,4 @@ M74 完成 bug 修复轮次。本里程碑继续修复已知 bug 和 UX 问题�
 | [x] | 🟡 | SFTP 按钮报错 unsupported protocol | 用户反馈 | 修复 file_api.rs 支持 "ssh" 协议连接 SFTP |
 | [x] | 🔴 | Agent 部署指南复制按钮崩溃 | 用户反馈 | 修复 AgentsPage clipboard API 空值检查，添加 fallbackCopy |
 | ⬜ | 🟢 | Agent 部署镜像改用 ghcr | 用户反馈 | Agent 部署页面 docker 镜像使用 dockerhub，建议改用 ghcr.io |
+| ⬜ | 🔴 | ghcr.io Agent 镜像权限被拒 | 用户反馈 | Docker 运行 ghcr.io/jeelin/rex-agent 报错 permission denied，二进制文件缺少执行权限 |
