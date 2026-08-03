@@ -173,6 +173,14 @@ function exportCsv() {
   URL.revokeObjectURL(url)
 }
 
+function actionBadge(action: string) {
+  if (action.includes('DELETE')) return 'danger'
+  if (action.includes('CREATE')) return 'success'
+  if (action.includes('ONLINE')) return 'success'
+  if (action.includes('OFFLINE')) return 'danger'
+  return 'info'
+}
+
 function resultBadge(result: string) {
   return result === 'success' ? 'success' : 'danger'
 }
@@ -310,8 +318,28 @@ onMounted(async () => {
                 <td><Badge :tone="resultBadge(entry.result)">{{ entry.result }}</Badge></td>
               </tr>
               <tr v-if="expandedId === entry.id" class="detail-row">
-                <td colspan="6">
+                <td colspan="7">
                   <div class="detail-content">
+                    <div class="detail-field">
+                      <span class="detail-label muted">ID:</span>
+                      <span class="mono">{{ entry.id }}</span>
+                    </div>
+                    <div class="detail-field">
+                      <span class="detail-label muted">{{ t('auditLog.time', 'Time') }}:</span>
+                      <span>{{ entry.time }}</span>
+                    </div>
+                    <div class="detail-field">
+                      <span class="detail-label muted">{{ t('auditLog.action', 'Action') }}:</span>
+                      <Badge :tone="actionBadge(entry.action)">{{ entry.action }}</Badge>
+                    </div>
+                    <div v-if="entry.target" class="detail-field">
+                      <span class="detail-label muted">{{ t('auditLog.target', 'Target') }}:</span>
+                      <span>{{ entry.target }}</span>
+                    </div>
+                    <div v-if="entry.environment_id" class="detail-field">
+                      <span class="detail-label muted">{{ t('auditLog.environment', 'Environment') }}:</span>
+                      <span>{{ envName(entry.environment_id) }}</span>
+                    </div>
                     <div v-if="entry.agent_id" class="detail-field">
                       <span class="detail-label muted">Agent ID:</span>
                       <span class="mono">{{ entry.agent_id }}</span>
@@ -319,6 +347,10 @@ onMounted(async () => {
                     <div v-if="entry.resource_id" class="detail-field">
                       <span class="detail-label muted">{{ t('auditLog.resource') }}:</span>
                       <span>{{ resourceName(entry.resource_id) }}</span>
+                    </div>
+                    <div class="detail-field">
+                      <span class="detail-label muted">{{ t('auditLog.result', 'Result') }}:</span>
+                      <Badge :tone="resultBadge(entry.result)">{{ entry.result }}</Badge>
                     </div>
                     <div v-if="entry.detail" class="detail-field">
                       <span class="detail-label muted">Detail:</span>
