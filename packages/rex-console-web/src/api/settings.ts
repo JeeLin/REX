@@ -9,6 +9,7 @@ export interface Settings {
   terminal_opacity: number
   terminal_bg_image: string
   session_timeout: number
+  auto_update: boolean
 }
 
 export interface UpdateInfo {

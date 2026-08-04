@@ -17,15 +17,16 @@ const settings = ref<Settings>({
   terminal_opacity: 100,
   terminal_bg_image: 'none',
   session_timeout: 30,
+  auto_update: true,
 })
 const loading = ref(true)
 const saving = ref(false)
 const saveMessage = ref('')
 const activeTab = ref('appearance')
 const contentRef = ref<HTMLElement>()
-const autoUpdate = ref(localStorage.getItem('rex-auto-update') !== 'false')
+const autoUpdate = ref(true)
 watch(autoUpdate, (val) => {
-  localStorage.setItem('rex-auto-update', String(val))
+  settingsApi.update({ auto_update: val })
 })
 
 const tabs = [
@@ -91,6 +92,8 @@ onMounted(async () => {
       locale.value = settings.value.language as 'zh' | 'en'
       localStorage.setItem('rex-lang', settings.value.language)
     }
+    // Load auto_update from backend
+    autoUpdate.value = remote.auto_update !== false
     // Check for updates on mount
     await updateStore.checkForUpdate()
   } catch {
