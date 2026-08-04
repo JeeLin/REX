@@ -19,31 +19,39 @@ pub fn settings_routes() -> axum::Router<AppState> {
     axum::Router::new().route("/", axum::routing::get(get_settings).put(update_settings))
 }
 
+// 默认配置值
+fn default_settings() -> std::collections::HashMap<&'static str, &'static str> {
+    let mut m = std::collections::HashMap::new();
+    m.insert("theme", "dark");
+    m.insert("language", "zh");
+    m.insert("terminal_font", "JetBrains Mono");
+    m.insert("terminal_font_size", "14");
+    m.insert("auto_update", "true");
+    m
+}
+
 async fn get_settings(State(state): State<AppState>) -> ApiResult<serde_json::Value> {
     let db = state.db.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<serde_json::Value, String> {
-        let theme = db
-            .get_setting("theme")
-            .map_err(|e| e.to_string())?
-            .unwrap_or_else(|| "dark".into());
-        let language = db
-            .get_setting("language")
-            .map_err(|e| e.to_string())?
-            .unwrap_or_else(|| "zh".into());
-        let terminal_font = db
-            .get_setting("terminal_font")
-            .map_err(|e| e.to_string())?
-            .unwrap_or_else(|| "JetBrains Mono".into());
-        let terminal_font_size = db
-            .get_setting("terminal_font_size")
-            .map_err(|e| e.to_string())?
-            .unwrap_or_else(|| "14".into());
-        Ok(serde_json::json!({
-            "theme": theme,
-            "language": language,
-            "terminal_font": terminal_font,
-            "terminal_font_size": terminal_font_size,
-        }))
+        let defaults = default_settings();
+        let stored = db.get_all_settings().map_err(|e| e.to_string())?;
+        let mut map = serde_json::Map::new();
+        for (key, default_val) in &defaults {
+            let val = stored.get(*key).map(|s| s.as_str()).unwrap_or(default_val);
+            // auto_update 存为 "true"/"false" 字符串，返回为 bool
+            if *key == "auto_update" {
+                map.insert(key.to_string(), serde_json::Value::Bool(val == "true"));
+            } else {
+                map.insert(key.to_string(), serde_json::Value::String(val.to_string()));
+            }
+        }
+        // 追加 DB 中存在但 defaults 中没有的自定义 key
+        for (k, v) in &stored {
+            if !defaults.contains_key(k.as_str()) {
+                map.insert(k.clone(), serde_json::Value::String(v.clone()));
+            }
+        }
+        Ok(serde_json::Value::Object(map))
     })
     .await
     .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
