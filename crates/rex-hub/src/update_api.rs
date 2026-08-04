@@ -27,7 +27,12 @@ pub struct AgentBinaries {
 impl AgentBinaries {
     pub fn new() -> Self {
         let mut dirs = Vec::new();
-        // Docker 内嵌路径
+        // 环境变量指定路径
+        if let Ok(custom) = std::env::var("REX_AGENT_BINARIES_DIR") {
+            dirs.push(PathBuf::from(custom));
+        }
+        // Docker 内嵌路径（旧版兼容）
+        dirs.push(PathBuf::from("/app/agent-binaries"));
         dirs.push(PathBuf::from("/app/data/agent-binaries"));
         // 系统路径
         dirs.push(PathBuf::from("/usr/local/lib/rex/agents"));
@@ -122,8 +127,11 @@ pub async fn download_agent_binary(
         Ok(resp) if resp.status().is_success() => {
             match resp.bytes().await {
                 Ok(bytes) => {
-                    // 缓存到本地
-                    let cache_dir = state.data_dir.join("agent-binaries").join(os).join(arch);
+                    // 缓存到本地（优先使用环境变量指定的目录）
+                    let cache_base = std::env::var("REX_AGENT_BINARIES_DIR")
+                        .map(PathBuf::from)
+                        .unwrap_or_else(|_| state.data_dir.join("agent-binaries"));
+                    let cache_dir = cache_base.join(os).join(arch);
                     let _ = tokio::fs::create_dir_all(&cache_dir).await;
                     let cache_path = cache_dir.join("rex-agent");
                     let _ = tokio::fs::write(&cache_path, &bytes).await;

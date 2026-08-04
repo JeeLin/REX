@@ -21,11 +21,12 @@ RUN chmod +x /app/rex-hub
 COPY dist/static/ /app/static/
 
 # Agent 二进制（供 /api/agents/download 使用，按 os/arch 目录组织）
-COPY dist/agents/ /app/data/agent-binaries/
+COPY dist/agents/ /app/agent-binaries/
 
 RUN mkdir -p /app/data /app/data/certs /app/data/acme /app/data/self-signed
 
 ENV REX_DATA_DIR=/app/data
+ENV REX_AGENT_BINARIES_DIR=/app/agent-binaries
 ENV REX_STATIC_DIR=/app/static
 
 EXPOSE 3000
