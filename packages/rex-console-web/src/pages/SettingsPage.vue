@@ -374,7 +374,7 @@ async function saveSettings() {
   padding: 8px 12px; color: var(--text-primary); font-size: var(--text-sm); outline: none;
 }
 .form-input:focus { border-color: var(--accent); }
-.save-bar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-4); }
+.save-bar { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-4); padding: var(--space-4); background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); position: sticky; bottom: 0; }
 .save-message { font-size: var(--text-sm); color: var(--success); }
 .save-message.error { color: var(--danger); }
 .password-section { margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--border); }

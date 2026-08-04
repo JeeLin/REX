@@ -39,3 +39,4 @@ M75 完成 Bug Fix & UX Polish。本里程碑继续修复已知 bug。
 |------|--------|------|------|------|
 | [x] | 🔴 | Settings API 泄露敏感数据 | 用户反馈 | 修复 get_settings 过滤 SENSITIVE_KEYS（jwt_secret、password_hash） |
 | [x] | 🔴 | Settings API auto_update 类型不匹配 | 用户反馈 | 修复 settingsApi.update 将 auto_update boolean 转为 string |
+| ⬜ | 🟡 | 设置页面各区块最后一项被截断 | 用户反馈 | 改为滑动式后，每个区块的最后一项显示不完整 |

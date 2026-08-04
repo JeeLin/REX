@@ -23,7 +23,6 @@ withDefaults(defineProps<{ title?: string; padded?: boolean; hoverable?: boolean
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  overflow: hidden;
   transition: border-color var(--transition);
 }
 .card--hoverable:hover {
