@@ -137,7 +137,11 @@ const currentTitle = computed(() => {
         ⊟
       </button>
       <main class="content" :class="{ 'content--keyboard-open': isKeyboardVisible }">
-        <RouterView />
+        <RouterView v-slot="{ Component }">
+          <KeepAlive :exclude="['login', 'setup']">
+            <component :is="Component" />
+          </KeepAlive>
+        </RouterView>
       </main>
     </div>
 
