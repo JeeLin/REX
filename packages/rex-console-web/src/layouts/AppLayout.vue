@@ -276,7 +276,7 @@ const currentTitle = computed(() => {
 .main {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }

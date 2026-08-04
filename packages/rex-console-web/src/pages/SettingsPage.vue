@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { settingsApi, type Settings } from '@/api/settings'
 import { useUpdateStore } from '@/stores/update'
@@ -22,6 +22,11 @@ const loading = ref(true)
 const saving = ref(false)
 const saveMessage = ref('')
 const activeTab = ref('appearance')
+const contentRef = ref<HTMLElement>()
+const autoUpdate = ref(localStorage.getItem('rex-auto-update') !== 'false')
+watch(autoUpdate, (val) => {
+  localStorage.setItem('rex-auto-update', String(val))
+})
 
 const tabs = [
   { key: 'appearance', icon: '🎨', labelKey: 'settings.appearance' },
@@ -29,6 +34,14 @@ const tabs = [
   { key: 'security', icon: '🔒', labelKey: 'settings.security' },
   { key: 'update', icon: '🔄', labelKey: 'settings.update' },
 ]
+
+function scrollToSection(key: string) {
+  activeTab.value = key
+  const el = document.getElementById(`settings-${key}`)
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+}
 
 // Password change
 const currentPassword = ref('')
@@ -128,16 +141,16 @@ async function saveSettings() {
         :key="tab.key"
         class="settings-nav-item"
         :class="{ 'active': activeTab === tab.key }"
-        @click="activeTab = tab.key"
+        @click="scrollToSection(tab.key)"
       >
         <span class="nav-icon">{{ tab.icon }}</span>
         <span>{{ t(tab.labelKey) }}</span>
       </button>
     </nav>
 
-    <!-- 右侧内容（两列） -->
-    <div class="settings-content">
-      <Card v-show="activeTab === 'appearance'" class="settings-section">
+    <!-- 右侧内容 -->
+    <div class="settings-content" ref="contentRef">
+      <Card id="settings-appearance" class="settings-section">
         <h2 class="section-title">{{ t('settings.appearance') }}</h2>
         <div class="form-group">
           <label class="form-label">{{ t('settings.theme') }}</label>
@@ -156,7 +169,7 @@ async function saveSettings() {
         </div>
       </Card>
 
-      <Card v-show="activeTab === 'terminal'" class="settings-section">
+      <Card id="settings-terminal" class="settings-section">
         <h2 class="section-title">{{ t('settings.terminal') }}</h2>
         <div class="form-group">
           <label class="form-label">{{ t('settings.fontFamily') }}</label>
@@ -180,7 +193,7 @@ async function saveSettings() {
         </div>
       </Card>
 
-      <Card v-show="activeTab === 'security'" class="settings-section">
+      <Card id="settings-security" class="settings-section">
         <h2 class="section-title">{{ t('settings.security') }}</h2>
         <div class="form-group">
           <label class="form-label">{{ t('settings.sessionTimeout') }}</label>
@@ -221,8 +234,16 @@ async function saveSettings() {
       </Card>
 
       <!-- Update Section -->
-      <Card v-show="activeTab === 'update'" class="settings-section">
+      <Card id="settings-update" class="settings-section">
         <h2 class="section-title">{{ t('settings.update') }}</h2>
+        <div class="form-group">
+          <label class="form-label">{{ t('settings.autoUpdate', 'Auto Update') }}</label>
+          <label class="toggle-label">
+            <input type="checkbox" v-model="autoUpdate" class="toggle-input" />
+            <span class="toggle-switch"></span>
+            <span>{{ autoUpdate ? t('settings.enabled', 'Enabled') : t('settings.disabled', 'Disabled') }}</span>
+          </label>
+        </div>
         <div v-if="updateStore.updateLoading" class="update-progress">
           <p class="update-status">{{ updateStore.updateStatusText }}</p>
           <div class="progress-bar">
@@ -300,10 +321,45 @@ async function saveSettings() {
 .settings-content {
   flex: 1;
   min-width: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-4);
-  align-content: start;
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+.toggle-input { display: none; }
+.toggle-switch {
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--bg-hover);
+  position: relative;
+  transition: background 0.2s;
+}
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: all 0.2s;
+}
+.toggle-input:checked + .toggle-switch {
+  background: var(--accent);
+}
+.toggle-input:checked + .toggle-switch::after {
+  left: 18px;
+  background: #fff;
 }
 .settings-section { margin-bottom: 0; }
 .page-title { font-size: var(--text-xl); font-weight: 600; color: var(--text-primary); margin-bottom: var(--space-4); }
