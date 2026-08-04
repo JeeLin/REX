@@ -29,8 +29,11 @@ impl SftpConnector {
         let ssh_config = Arc::new(client::Config::default());
         let handler = crate::SshHandler;
         // IPv6 addresses need brackets: [::1]:22
-        let addr = if config.host.contains(':') {
+        // 已有方括号的不再重复添加
+        let addr = if config.host.contains(':') && !config.host.starts_with('[') {
             format!("[{}]:{}", config.host, config.port)
+        } else if config.host.starts_with('[') {
+            format!("{}:{}", config.host, config.port)
         } else {
             format!("{}:{}", config.host, config.port)
         };

@@ -44,8 +44,11 @@ impl SshSession {
     /// 建立 SSH 连接、分配 PTY、启动 shell，返回会话
     pub async fn connect(config: SshConfig) -> Result<Self> {
         // IPv6 addresses need brackets: [::1]:22
-        let addr = if config.host.contains(':') {
+        // 已有方括号的不再重复添加
+        let addr = if config.host.contains(':') && !config.host.starts_with('[') {
             format!("[{}]:{}", config.host, config.port)
+        } else if config.host.starts_with('[') {
+            format!("{}:{}", config.host, config.port)
         } else {
             format!("{}:{}", config.host, config.port)
         };
