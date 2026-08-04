@@ -121,7 +121,7 @@ rex-agent = 所有 crate（无前端）
 | **M73** | Test Coverage & Integration Tests | — | ✅ |
 | **M74** | Bug Fix Round | — | ✅ |
 | **M75** | Bug Fix & UX Polish | — | ✅ |
-| **M76** | Bug Fix | — | 🔄 |
+| **M76** | Bug Fix | — | ✅ |
 
 ### M0：项目骨架重建
 

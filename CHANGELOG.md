@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.65.3] - 2026-08-04
+
+### Fixed
+- Settings API 安全：过滤 jwt_secret、password_hash 等敏感字段
+- Settings API：修复 auto_update boolean→string 类型转换
+- 设置页面：修复 Card overflow:hidden 导致内容截断
+- SSH 终端：修复连接失败后无限重连（仅手动重连时重置计数器）
+- Docker：分离 agent 二进制与用户数据目录，新增 REX_AGENT_BINARIES_DIR 环境变量
+- 工作区：添加 KeepAlive 防止切换页面后 SSH 终端重连
+
 ## [0.65.2] - 2026-08-04
 
 ### Fixed
