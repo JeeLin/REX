@@ -319,7 +319,6 @@ function connectSession() {
 
   ws.onopen = () => {
     connectionStatus.value = 'connected'
-    reconnectAttempts = 0
     emit('update:status', 'online')
     terminal?.focus()
     startPing()

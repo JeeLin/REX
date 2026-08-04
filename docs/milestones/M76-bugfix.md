@@ -40,3 +40,4 @@ M75 完成 Bug Fix & UX Polish。本里程碑继续修复已知 bug。
 | [x] | 🔴 | Settings API 泄露敏感数据 | 用户反馈 | 修复 get_settings 过滤 SENSITIVE_KEYS（jwt_secret、password_hash） |
 | [x] | 🔴 | Settings API auto_update 类型不匹配 | 用户反馈 | 修复 settingsApi.update 将 auto_update boolean 转为 string |
 | [x] | 🟡 | 设置页面各区块最后一项被截断 | 用户反馈 | 修复 Card overflow:hidden 导致内容裁切，save-bar 改为 sticky 定位 |
+| ⬜ | 🔴 | SSH 连接失败后无限重连 | 用户反馈 | SSH 连接失败时自动重连机制不停触发，应达到最大重试次数后停止 |
