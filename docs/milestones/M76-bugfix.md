@@ -37,3 +37,5 @@ M75 完成 Bug Fix & UX Polish。本里程碑继续修复已知 bug。
 
 | 状态 | 优先级 | 标题 | 来源 | 描述 |
 |------|--------|------|------|------|
+| ⬜ | 🔴 | Settings API 泄露敏感数据 | 用户反馈 | GET /api/settings 返回 jwt_secret、password_hash 等敏感字段 |
+| ⬜ | 🔴 | Settings API auto_update 类型不匹配 | 用户反馈 | PUT /api/settings 时 auto_update 传 boolean 但后端 HashMap<String, String> 期望 string |

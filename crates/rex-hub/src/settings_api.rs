@@ -30,6 +30,9 @@ fn default_settings() -> std::collections::HashMap<&'static str, &'static str> {
     m
 }
 
+// 不应通过 API 暴露的敏感 key
+const SENSITIVE_KEYS: &[&str] = &["jwt_secret", "password_hash"];
+
 async fn get_settings(State(state): State<AppState>) -> ApiResult<serde_json::Value> {
     let db = state.db.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<serde_json::Value, String> {
@@ -45,9 +48,9 @@ async fn get_settings(State(state): State<AppState>) -> ApiResult<serde_json::Va
                 map.insert(key.to_string(), serde_json::Value::String(val.to_string()));
             }
         }
-        // 追加 DB 中存在但 defaults 中没有的自定义 key
+        // 追加 DB 中存在但 defaults 中没有的自定义 key（排除敏感字段）
         for (k, v) in &stored {
-            if !defaults.contains_key(k.as_str()) {
+            if !defaults.contains_key(k.as_str()) && !SENSITIVE_KEYS.contains(&k.as_str()) {
                 map.insert(k.clone(), serde_json::Value::String(v.clone()));
             }
         }

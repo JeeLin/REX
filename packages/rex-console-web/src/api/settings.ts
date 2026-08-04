@@ -29,10 +29,13 @@ export interface UpdateStatus {
 export const settingsApi = {
   get: () => api.get<Settings>('/settings'),
   update: (data: Partial<Settings>) => {
-    // Convert session_timeout from number to string for backend API (HashMap<String, String>)
+    // Convert non-string values for backend API (HashMap<String, String>)
     const apiData: Record<string, unknown> = { ...data }
     if ('session_timeout' in apiData && typeof apiData.session_timeout === 'number') {
       apiData.session_timeout = String(apiData.session_timeout)
+    }
+    if ('auto_update' in apiData && typeof apiData.auto_update === 'boolean') {
+      apiData.auto_update = String(apiData.auto_update)
     }
     return api.put<{ ok: boolean }>('/settings', apiData)
   },
