@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.65.2] - 2026-08-04
+
+### Fixed
+- SSH 终端重写：重写为 WorkspaceTerminal.vue，自包含组件 + 自动重连 + 延迟测量 + 命令历史
+- SSH 连接 IPv6 地址支持（lib.rs 和 sftp.rs 地址格式处理）
+- SSH 终端选中/复制粘贴修复（Ctrl+V 显式剪贴板读取）
+- SSH 终端多开支持
+- 删除资源后侧栏实时同步更新
+- 更新进度切页面后持久化（Pinia store）
+- SFTP 按钮报错 unsupported protocol（file_api.rs 支持 ssh 协议）
+- 审计日志展开显示完整记录信息
+- Agent 部署指南复制按钮崩溃修复（clipboard API 空值检查）
+- Agent 部署 Docker 镜像改为 ghcr.io
+- Agent Dockerfile 添加 chmod +x 修复权限被拒
+- 右键菜单图标大小统一
+- 全局页面滚动修复（.main overflow-y: auto）
+- 设置页面改为滑动式布局 + 自动更新开关（后端配置持久化）
+- 设置 API 重构为动态读取（get_all_settings，新增配置无需改代码）
+
 ## [0.65.1] - 2026-07-31
 
 ### Added
