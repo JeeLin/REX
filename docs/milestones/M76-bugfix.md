@@ -41,4 +41,4 @@ M75 完成 Bug Fix & UX Polish。本里程碑继续修复已知 bug。
 | [x] | 🔴 | Settings API auto_update 类型不匹配 | 用户反馈 | 修复 settingsApi.update 将 auto_update boolean 转为 string |
 | [x] | 🟡 | 设置页面各区块最后一项被截断 | 用户反馈 | 修复 Card overflow:hidden 导致内容裁切，save-bar 改为 sticky 定位 |
 | [x] | 🔴 | SSH 连接失败后无限重连 | 用户反馈 | 修复：移除 ws.onopen 中的 reconnectAttempts 重置，仅手动重连时重置 |
-| ⬜ | 🟡 | Docker 数据目录与程序文件混用 | 用户反馈 | /app/data 同时存放程序文件和用户数据，更新镜像时可能冲突，需分离 |
+| [x] | 🟡 | Docker 数据目录与程序文件混用 | 用户反馈 | agent 二进制移至 /app/agent-binaries，通过 REX_AGENT_BINARIES_DIR 环境变量配置 |
