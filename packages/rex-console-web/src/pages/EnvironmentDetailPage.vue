@@ -388,7 +388,7 @@ async function resetToken() {
               <td class="mono">{{ res.port || '—' }}</td>
               <td>{{ res.username || '—' }}</td>
               <td>
-                <button class="icon-btn danger" :title="t('common.delete')" @click="deleteResource(res.id)">✕</button>
+                <button class="icon-btn danger" :title="t('common.delete')" @click="resourceDeleteId = res.id">✕</button>
               </td>
             </tr>
           </tbody>
