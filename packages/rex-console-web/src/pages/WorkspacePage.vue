@@ -425,11 +425,18 @@ function splitVertical() {
   splitCount.value++
   splitDirection.value = 'column'
 }
-function closePane(_idx: number) {
+function closePane(idx: number) {
   if (splitCount.value > 1) {
+    // Remove the tab from the targeted pane before decrementing splitCount
+    if (idx >= 0 && idx < paneTabs.value.length) {
+      paneTabs.value.splice(idx, 1)
+    }
     splitCount.value--
     if (currentPane.value >= splitCount.value) {
       currentPane.value = splitCount.value - 1
+    } else if (currentPane.value > idx) {
+      // If current pane is after the closed one, shift left
+      currentPane.value--
     }
   }
 }
