@@ -116,7 +116,8 @@ pub async fn download_agent_binary(
     let github_owner = std::env::var("REX_UPDATE_GITHUB_OWNER").unwrap_or_else(|_| "JeeLin".into());
     let github_repo = std::env::var("REX_UPDATE_GITHUB_REPO").unwrap_or_else(|_| "REX".into());
 
-    let binary_name = format!("rex-agent-{os}-{arch}");
+    let ext = if os == "windows" { ".exe" } else { "" };
+    let binary_name = format!("rex-agent-{os}-{arch}{ext}");
     let download_url = format!(
         "https://github.com/{github_owner}/{github_repo}/releases/download/v{version}/{binary_name}"
     );
@@ -133,10 +134,11 @@ pub async fn download_agent_binary(
                         .unwrap_or_else(|_| state.data_dir.join("agent-binaries"));
                     let cache_dir = cache_base.join(os).join(arch);
                     let _ = tokio::fs::create_dir_all(&cache_dir).await;
-                    let cache_path = cache_dir.join("rex-agent");
+                    let cache_name = format!("rex-agent{ext}");
+                    let cache_path = cache_dir.join(&cache_name);
                     let _ = tokio::fs::write(&cache_path, &bytes).await;
 
-                    let filename = format!("rex-agent-{os}-{arch}");
+                    let filename = format!("rex-agent-{os}-{arch}{ext}");
                     (
                         StatusCode::OK,
                         [
