@@ -63,7 +63,7 @@ impl FileConnector for S3Connector {
         let prefix = if path.is_empty() || path == "/" {
             String::new()
         } else {
-            let p = path.trim_start_matches('/');
+            let p = path.trim_start_matches('/').trim_end_matches('/');
             format!("{p}/")
         };
 
