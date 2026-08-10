@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.65.4] - 2026-08-10
+
+### Fixed
+- SSH 终端：添加 Unicode11 addon 支持中文字符宽度计算
+- SSH 终端：工具栏添加 SFTP 按钮
+- 设置 API：修复 terminal_font_size 类型不匹配（number→string 转换）
+- SSH 连接：修复 IPv6 地址处理（Agent 端添加方括号）
+- 工作区：修复分屏关闭按钮指向错误 pane
+- S3 文件管理：修复子目录内容不显示（prefix 双斜杠问题）
+- Agent 下载：修复 Windows 二进制文件缺少 .exe 扩展名
+- 环境页：修复侧栏右键导航显示错误环境（onBeforeRouteUpdate）
+- 资源删除：添加确认弹窗防止误操作
+- Agent 测试连接：支持通过 Agent 隧道测试 SSH 连接
+- 代码质量：修复 clippy 警告（needless return、useless format、if-same-then-else）
+
+
 ## [0.65.3] - 2026-08-04
 
 ### Fixed
