@@ -285,6 +285,7 @@ pub async fn test_connection(
                 tokio::task::spawn_blocking(move || db.get_environment(&eid))
                     .await
                     .ok()
+                    .and_then(|r| r.ok())
                     .flatten()
                     .map(|env| env.connection_mode == "agent")
                     .unwrap_or(false)
