@@ -362,8 +362,22 @@ pub async fn test_connection(
                                                     .error
                                                     .unwrap_or("agent connect failed".into()))
                                             } else {
-                                                // Connection successful, close the channel
+                                                // Connection successful, notify agent to close the channel
                                                 if let Some(channel_id) = &resp.channel_id {
+                                                    // Send close message to agent
+                                                    let close_msg = serde_json::json!({
+                                                        "type": "close",
+                                                        "payload": {
+                                                            "channel_id": channel_id
+                                                        }
+                                                    });
+                                                    let _ = conn
+                                                        .sender
+                                                        .send(crate::agent_ws::AgentEvent::Text(
+                                                            close_msg.to_string(),
+                                                        ))
+                                                        .await;
+                                                    // Remove from local channel map
                                                     let mut channels =
                                                         state.agent_tunnel.channels.write().await;
                                                     channels.remove(channel_id);
