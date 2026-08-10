@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, onMounted, watch } from 'vue'
+import { useRoute, useRouter, onBeforeRouteUpdate } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -23,7 +23,7 @@ const router = useRouter()
 const store = useEnvironmentsStore()
 const wsStore = useWorkspaceStore()
 
-const envId = route.params.id as string
+const envId = ref(route.params.id as string)
 const env = ref<Environment | null>(null)
 const resources = ref<Resource[]>([])
 const loading = ref(true)
@@ -62,15 +62,29 @@ const resEditError = ref('')
 const resEditLoading = ref(false)
 
 onMounted(async () => {
+  await loadEnvironment(envId.value)
+})
+
+// Re-fetch when route param changes (e.g., sidebar right-click navigates to different env)
+onBeforeRouteUpdate(async (to) => {
+  const newId = to.params.id as string
+  if (newId && newId !== envId.value) {
+    envId.value = newId
+    await loadEnvironment(newId)
+  }
+})
+
+async function loadEnvironment(id: string) {
+  loading.value = true
   try {
-    env.value = await environmentsApi.get(envId)
-    resources.value = await resourcesApi.listByEnv(envId)
+    env.value = await environmentsApi.get(id)
+    resources.value = await resourcesApi.listByEnv(id)
   } catch {
     router.push('/environments')
   } finally {
     loading.value = false
   }
-})
+}
 
 function openEdit() {
   if (!env.value) return
@@ -88,7 +102,7 @@ async function submitEdit() {
   }
   editLoading.value = true
   try {
-    const updated = await store.updateEnvironment(envId, {
+    const updated = await store.updateEnvironment(envId.value, {
       name: editName.value.trim(),
       description: editDesc.value.trim(),
       connection_mode: editMode.value,
@@ -104,7 +118,7 @@ async function submitEdit() {
 
 async function deleteResource(id: string) {
   try {
-    await store.deleteResource(envId, id)
+    await store.deleteResource(envId.value, id)
     resources.value = resources.value.filter(r => r.id !== id)
   } catch {
     // ignore
@@ -112,7 +126,7 @@ async function deleteResource(id: string) {
 }
 
 async function refreshResources() {
-  resources.value = await resourcesApi.listByEnv(envId)
+  resources.value = await resourcesApi.listByEnv(envId.value)
   // 刷新环境的 resource_count
   if (env.value) {
     env.value.resource_count = resources.value.length
@@ -209,7 +223,7 @@ async function submitResEdit() {
       cfg.region = editS3Region.value || 'us-east-1'
     }
 
-    const updated = await store.updateResource(envId, res.id, {
+    const updated = await store.updateResource(envId.value, res.id, {
       name: resEditName.value.trim(),
       protocol: res.protocol,
       host: resEditHost.value.trim(),
@@ -256,7 +270,7 @@ async function resetToken() {
     // 重新生成注册令牌
     const newToken = crypto.randomUUID()
     await api.put(`/environments/${env.value.id}`, { registration_token: newToken } as Record<string, unknown>)
-    env.value = await environmentsApi.get(envId)
+    env.value = await environmentsApi.get(envId.value)
   } catch (e) {
     console.error('Failed to reset token:', e)
   }
@@ -385,7 +399,7 @@ async function resetToken() {
     <!-- Resource Creation Wizard -->
     <WizardModal
       :visible="showWizard"
-      :environment-id="envId"
+      :environment-id="envId.value"
       @close="showWizard = false"
       @created="showWizard = false; refreshResources()"
     />
