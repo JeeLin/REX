@@ -240,6 +240,7 @@ pub struct TestConnectionRequest {
     #[allow(dead_code)]
     pub username: Option<String>,
     pub config_json: Option<String>,
+    pub environment_id: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -250,6 +251,7 @@ pub struct TestConnectionResult {
 }
 
 pub async fn test_connection(
+    State(state): State<crate::AppState>,
     Json(body): Json<TestConnectionRequest>,
 ) -> ApiResult<TestConnectionResult> {
     // For S3, log endpoint from config_json instead of empty host
@@ -275,20 +277,106 @@ pub async fn test_connection(
         "ssh" | "sftp" => {
             let host = body.host.clone();
             let port = body.port.unwrap_or(22);
-            let addr = if host.contains(':') {
-                format!("[{host}]:{port}")
+
+            // Check if this environment uses agent proxy
+            let use_agent = if let Some(ref env_id) = body.environment_id {
+                let db = state.db.clone();
+                let eid = env_id.clone();
+                tokio::task::spawn_blocking(move || db.get_environment(&eid))
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|env| env.connection_mode == "agent")
+                    .unwrap_or(false)
             } else {
-                format!("{host}:{port}")
+                false
             };
-            match tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                tokio::net::TcpStream::connect(&addr),
-            )
-            .await
-            {
-                Ok(Ok(_)) => Ok(()),
-                Ok(Err(e)) => Err(format!("TCP connect failed: {e}")),
-                Err(_) => Err("connection timed out".into()),
+
+            if use_agent {
+                // Route through agent tunnel
+                let env_id = body.environment_id.as_deref().unwrap_or("");
+                let db = state.db.clone();
+                let eid = env_id.to_string();
+                let agent_result = tokio::task::spawn_blocking(move || {
+                    let agents = db.list_agents_by_env(&eid).unwrap_or_default();
+                    agents.into_iter().find(|a| a.status == "online").map(|a| a.id)
+                })
+                .await
+                .ok()
+                .flatten();
+
+                match agent_result {
+                    Some(agent_id) => {
+                        // Get agent WebSocket connection
+                        let agent_conn = {
+                            let conns = state.agent_tunnel.connections.read().await;
+                            conns.get(&agent_id).cloned()
+                        };
+                        match agent_conn {
+                            Some(conn) => {
+                                // Send connect request via agent tunnel
+                                let request_id = format!("req_{}", &uuid::Uuid::new_v4().to_string()[..8]);
+                                let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
+                                {
+                                    let mut pending = state.agent_tunnel.pending_requests.write().await;
+                                    pending.insert(request_id.clone(), resp_tx);
+                                }
+                                let connect_msg = serde_json::json!({
+                                    "type": "connect",
+                                    "payload": {
+                                        "request_id": request_id,
+                                        "resource_id": "test",
+                                        "protocol": body.protocol,
+                                        "config": {
+                                            "host": host,
+                                            "port": port,
+                                        }
+                                    }
+                                });
+                                if conn.sender.send(crate::agent_ws::AgentEvent::Text(connect_msg.to_string())).await.is_err() {
+                                    Err("failed to send connect request to agent".into())
+                                } else {
+                                    // Wait for agent response (5s timeout)
+                                    match tokio::time::timeout(std::time::Duration::from_secs(5), resp_rx).await {
+                                        Ok(Ok(resp)) => {
+                                            if resp.error.is_some() {
+                                                Err(resp.error.unwrap_or("agent connect failed".into()))
+                                            } else {
+                                                // Connection successful, close the channel
+                                                if let Some(channel_id) = &resp.channel_id {
+                                                    let mut channels = state.agent_tunnel.channels.write().await;
+                                                    channels.remove(channel_id);
+                                                }
+                                                Ok(())
+                                            }
+                                        }
+                                        Ok(Err(_)) => Err("agent response channel closed".into()),
+                                        Err(_) => Err("agent connection timed out".into()),
+                                    }
+                                }
+                            }
+                            None => Err("agent not connected".into()),
+                        }
+                    }
+                    None => Err("no online agent available".into()),
+                }
+            } else {
+                // Direct TCP connection
+                let addr = if host.contains(':') {
+                    format!("[{host}]:{port}")
+                } else {
+                    format!("{host}:{port}")
+                };
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    tokio::net::TcpStream::connect(&addr),
+                )
+                .await
+                {
+                    Ok(Ok(_)) => Ok(()),
+                    Ok(Err(e)) => Err(format!("TCP connect failed: {e}")),
+                    Err(_) => Err("connection timed out".into()),
+                }
             }
         }
         "redis" => {

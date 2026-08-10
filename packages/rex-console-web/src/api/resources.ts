@@ -32,6 +32,7 @@ export interface TestConnectionRequest {
   port?: number | null
   username?: string
   config_json?: string
+  environment_id?: string
 }
 
 export interface TestConnectionResult {

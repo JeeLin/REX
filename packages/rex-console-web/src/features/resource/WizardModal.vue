@@ -81,6 +81,7 @@ async function testConnection() {
       port: port.value,
       username: username.value,
       config_json: JSON.stringify(buildConfig()),
+      environment_id: props.environmentId,
     })
   } catch (e: unknown) {
     testResult.value = { ok: false, error: e instanceof Error ? e.message : String(e) }
