@@ -300,7 +300,10 @@ pub async fn test_connection(
                 let eid = env_id.to_string();
                 let agent_result = tokio::task::spawn_blocking(move || {
                     let agents = db.list_agents_by_env(&eid).unwrap_or_default();
-                    agents.into_iter().find(|a| a.status == "online").map(|a| a.id)
+                    agents
+                        .into_iter()
+                        .find(|a| a.status == "online")
+                        .map(|a| a.id)
                 })
                 .await
                 .ok()
@@ -316,10 +319,12 @@ pub async fn test_connection(
                         match agent_conn {
                             Some(conn) => {
                                 // Send connect request via agent tunnel
-                                let request_id = format!("req_{}", &uuid::Uuid::new_v4().to_string()[..8]);
+                                let request_id =
+                                    format!("req_{}", &uuid::Uuid::new_v4().to_string()[..8]);
                                 let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
                                 {
-                                    let mut pending = state.agent_tunnel.pending_requests.write().await;
+                                    let mut pending =
+                                        state.agent_tunnel.pending_requests.write().await;
                                     pending.insert(request_id.clone(), resp_tx);
                                 }
                                 let connect_msg = serde_json::json!({
@@ -334,18 +339,33 @@ pub async fn test_connection(
                                         }
                                     }
                                 });
-                                if conn.sender.send(crate::agent_ws::AgentEvent::Text(connect_msg.to_string())).await.is_err() {
+                                if conn
+                                    .sender
+                                    .send(crate::agent_ws::AgentEvent::Text(
+                                        connect_msg.to_string(),
+                                    ))
+                                    .await
+                                    .is_err()
+                                {
                                     Err("failed to send connect request to agent".into())
                                 } else {
                                     // Wait for agent response (5s timeout)
-                                    match tokio::time::timeout(std::time::Duration::from_secs(5), resp_rx).await {
+                                    match tokio::time::timeout(
+                                        std::time::Duration::from_secs(5),
+                                        resp_rx,
+                                    )
+                                    .await
+                                    {
                                         Ok(Ok(resp)) => {
                                             if resp.error.is_some() {
-                                                Err(resp.error.unwrap_or("agent connect failed".into()))
+                                                Err(resp
+                                                    .error
+                                                    .unwrap_or("agent connect failed".into()))
                                             } else {
                                                 // Connection successful, close the channel
                                                 if let Some(channel_id) = &resp.channel_id {
-                                                    let mut channels = state.agent_tunnel.channels.write().await;
+                                                    let mut channels =
+                                                        state.agent_tunnel.channels.write().await;
                                                     channels.remove(channel_id);
                                                 }
                                                 Ok(())
