@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
 import '@xterm/xterm/css/xterm.css'
 import { getTerminalTheme } from './terminal-themes'
 import TerminalSearch from './TerminalSearch.vue'
@@ -187,6 +188,11 @@ function initTerminal() {
   const search = new SearchAddon()
   terminal.loadAddon(search)
   searchAddon.value = search
+
+  // Load Unicode11 addon for proper CJK character width calculation
+  const unicode11 = new Unicode11Addon()
+  terminal.loadAddon(unicode11)
+  terminal.unicode.activeVersion = '11'
 
   terminal.open(containerRef.value)
 
@@ -547,6 +553,7 @@ onBeforeUnmount(() => {
         <button class="wt-btn" @click="clearTerminal" :title="t('terminal.clear', 'Clear')">⌫</button>
         <button class="wt-btn" @click="handlePaste" :title="t('terminal.paste', 'Paste')">📋</button>
         <button class="wt-btn" :class="{ active: showSearch }" @click="showSearch = !showSearch" :title="t('terminal.find', 'Find')">🔍</button>
+        <button class="wt-btn" @click="emit('toggle-sftp')" :title="t('terminal.sftp', 'SFTP')">📁</button>
         <span class="wt-sep"></span>
         <span class="wt-protocol">{{ protocol?.toUpperCase() || 'SSH' }}</span>
         <span class="wt-encoding">{{ terminalEncoding }}</span>
