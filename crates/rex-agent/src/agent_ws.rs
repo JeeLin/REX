@@ -444,7 +444,12 @@ async fn handle_connect(
     }
 
     // 建立本地 TCP 连接
-    let addr = format!("{}:{}", host, port);
+    // IPv6 addresses need brackets: [::1]:22
+    let addr = if host.contains(':') && !host.starts_with('[') {
+        format!("[{}]:{}", host, port)
+    } else {
+        format!("{}:{}", host, port)
+    };
     match TcpStream::connect(&addr).await {
         Ok(tcp_stream) => {
             tracing::info!(
