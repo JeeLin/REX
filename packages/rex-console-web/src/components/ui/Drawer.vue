@@ -1,9 +1,22 @@
 <script setup lang="ts">
-withDefaults(
+import { onUnmounted, watch } from 'vue'
+
+const props = withDefaults(
   defineProps<{ modelValue: boolean; side?: 'left' | 'right' | 'bottom'; title?: string; width?: string }>(),
   { side: 'right', title: '', width: '420px' },
 )
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') emit('update:modelValue', false)
+}
+
+watch(() => props.modelValue, (v) => {
+  if (v) document.addEventListener('keydown', onKeydown)
+  else document.removeEventListener('keydown', onKeydown)
+}, { immediate: true })
+
+onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>
@@ -30,7 +43,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(4px);
   z-index: 40;
 }
 .drawer {
@@ -45,7 +58,6 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
   top: 0;
   right: 0;
   bottom: 0;
-  width: 420px;
   max-width: 90vw;
   border-left: 1px solid var(--border);
 }
@@ -53,7 +65,6 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
   top: 0;
   left: 0;
   bottom: 0;
-  width: 420px;
   max-width: 90vw;
 }
 .drawer--bottom {

@@ -4,11 +4,12 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Splitpanes, Pane } from 'splitpanes'
 import { useWorkspacePersistence } from '@/composables/useWorkspacePersistence'
+import 'splitpanes/dist/splitpanes.css'
 
 defineOptions({ name: 'WorkspacePage' })
-import 'splitpanes/dist/splitpanes.css'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
+import ContextMenu from '@/components/ui/ContextMenu.vue'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
 import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
@@ -327,6 +328,25 @@ function disconnectTab(tabId: string) {
   closeTab(tabId)
 }
 
+function handleTabCtxAction(action: string) {
+  const id = tabContextMenu.value.tabId
+  if (!id) return
+  switch (action) {
+    case 'new': showQuickConnect.value = true; break
+    case 'rename': startRename(id); break
+    case 'duplicate': duplicateTab(id); break
+    case 'broadcast': toggleBroadcast(id); break
+    case 'close': closeTab(id); break
+    case 'closeOthers': closeOtherTabs(id); break
+    case 'closeLeft': closeTabsLeft(id); break
+    case 'closeRight': closeTabsRight(id); break
+    case 'closeAll': closeAllTabs(); break
+    case 'props': openProperties(id); break
+    case 'disconnect': disconnectTab(id); break
+  }
+  tabContextMenu.value.show = false
+}
+
 function moveToPane(paneIndex: number) {
   const tabId = tabContextMenu.value.tabId
   if (!tabId) return
@@ -572,45 +592,29 @@ useKeyboardShortcuts([
     </div>
 
     <!-- Tab context menu -->
-    <Teleport to="body">
-      <div v-if="tabContextMenu.show" class="tab-ctx-overlay" @click="tabContextMenu.show = false" @contextmenu.prevent="tabContextMenu.show = false" />
-      <div v-if="tabContextMenu.show" class="tab-ctx-menu" :style="{ top: tabContextMenu.y + 'px', left: tabContextMenu.x + 'px' }">
-        <div class="tab-ctx-item" @click="showQuickConnect = true; tabContextMenu.show = false">➕ {{ t('workspace.newConnection') }}</div>
+    <ContextMenu
+      v-model="tabContextMenu.show"
+      :x="tabContextMenu.x"
+      :y="tabContextMenu.y"
+      @select="(action: string) => handleTabCtxAction(action)"
+    >
+      <template #default="{ choose }">
+        <div class="tab-ctx-item" @click="choose('new')">➕ {{ t('workspace.newConnection') }}</div>
         <div class="tab-ctx-separator" />
-        <div class="tab-ctx-item" @click="startRename(tabContextMenu.tabId)">✏️ {{ t('workspace.rename') }}</div>
-        <div class="tab-ctx-item" @click="duplicateTab(tabContextMenu.tabId)">📋 {{ t('workspace.duplicate') }}</div>
-        <div class="tab-ctx-item" @click="toggleBroadcast(tabContextMenu.tabId)">
+        <div class="tab-ctx-item" @click="choose('rename')">✏️ {{ t('workspace.rename') }}</div>
+        <div class="tab-ctx-item" @click="choose('duplicate')">📋 {{ t('workspace.duplicate') }}</div>
+        <div class="tab-ctx-item" @click="choose('broadcast')">
           {{ tabs.find(tab => tab.id === tabContextMenu.tabId)?.broadcast ? '📡 ' + t('workspace.stopBroadcast') : '📡 ' + t('workspace.broadcastInput') }}
         </div>
         <div class="tab-ctx-separator" />
-        <div class="tab-ctx-item" @click="closeTab(tabContextMenu.tabId)">{{ t('workspace.close') }}</div>
-        <div class="tab-ctx-item" @click="closeOtherTabs(tabContextMenu.tabId)">{{ t('workspace.closeOthers') }}</div>
-        <div class="tab-ctx-item" @click="closeTabsLeft(tabContextMenu.tabId)">{{ t('workspace.closeLeft') }}</div>
-        <div class="tab-ctx-item" @click="closeTabsRight(tabContextMenu.tabId)">{{ t('workspace.closeRight') }}</div>
-        <div class="tab-ctx-item" @click="closeAllTabs()">{{ t('workspace.closeAll') }}</div>
+        <div class="tab-ctx-item" @click="choose('close')">{{ t('workspace.close') }}</div>
+        <div class="tab-ctx-item" @click="choose('closeOthers')">{{ t('workspace.closeOthers') }}</div>
+        <div class="tab-ctx-item" @click="choose('closeLeft')">{{ t('workspace.closeLeft') }}</div>
+        <div class="tab-ctx-item" @click="choose('closeRight')">{{ t('workspace.closeRight') }}</div>
+        <div class="tab-ctx-item" @click="choose('closeAll')">{{ t('workspace.closeAll') }}</div>
         <div class="tab-ctx-separator" />
-        <div
-          v-if="splitCount > 1" class="tab-ctx-item tab-ctx-item--has-sub"
-          @mouseenter="showMovePane = true"
-          @mouseleave="showMovePane = false"
-        >
-          <span>↗ {{ t('workspace.moveToPane') }}</span>
-          <span class="tab-ctx-arrow">▸</span>
-          <div v-if="showMovePane" class="tab-ctx-submenu">
-            <div
-              v-for="p in splitCount"
-              :key="p"
-              class="tab-ctx-item"
-              @click.stop="moveToPane(p - 1)"
-            >
-              <span>{{ t('workspace.pane') }} {{ p }}</span>
-              <span v-if="currentPane === p - 1" class="tab-ctx-check">✓</span>
-            </div>
-          </div>
-        </div>
-        <div v-if="splitCount > 1" class="tab-ctx-separator" />
-        <div class="tab-ctx-item" @click="openProperties(tabContextMenu.tabId)">⚙ {{ t('workspace.properties') }}</div>
-        <div class="tab-ctx-item tab-ctx-item--danger" @click="disconnectTab(tabContextMenu.tabId)">🔌 {{ t('workspace.disconnect') }}</div>
+        <div class="tab-ctx-item" @click="choose('props')">⚙ {{ t('workspace.properties') }}</div>
+        <div class="tab-ctx-item tab-ctx-item--danger" @click="choose('disconnect')">🔌 {{ t('workspace.disconnect') }}</div>
         <div class="tab-ctx-separator" />
         <div class="tab-ctx-label muted">{{ t('workspace.color') }}</div>
         <div class="tab-ctx-colors">
@@ -622,8 +626,8 @@ useKeyboardShortcuts([
             @click="setTabColor(c)"
           />
         </div>
-      </div>
-    </Teleport>
+      </template>
+    </ContextMenu>
 
 
     <div class="ws-main-area">
@@ -633,11 +637,12 @@ useKeyboardShortcuts([
           :horizontal="splitDirection === 'column'"
           class="ws-split"
         >
-          <Pane v-for="i in splitCount" :key="i" :size="100 / splitCount" :min-size="20" @click="currentPane = i - 1">
+          <Pane v-for="i in splitCount" :key="`pane-${i}`" :size="100 / splitCount" :min-size="20">
             <div
               class="ws-pane"
               :class="{ 'ws-pane--active': currentPane === i - 1, 'ws-pane--drag-over': dragOverPane === i - 1 }"
               :title="t('workspace.dragHint')"
+              @click="currentPane = i - 1"
               @dragover.prevent="onPaneDragOver($event)"
               @dragenter.prevent="onPaneDragEnter($event, i - 1)"
               @dragleave="onPaneDragLeave(i - 1)"
@@ -946,9 +951,6 @@ useKeyboardShortcuts([
   align-items: center;
   gap: var(--space-2);
 }
-.ws-placeholder-sub {
-  font-size: var(--text-xs);
-}
 
 /* Status bar */
 .ws-statusbar {
@@ -989,7 +991,7 @@ useKeyboardShortcuts([
   background: var(--bg-hover);
 }
 .ws-broadcast-indicator {
-  color: var(--accent, #E8912D);
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -1001,21 +1003,6 @@ useKeyboardShortcuts([
 }
 
 /* Tab 右键菜单 */
-.tab-ctx-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-}
-.tab-ctx-menu {
-  position: fixed;
-  z-index: 210;
-  min-width: 180px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: var(--space-1) 0;
-}
 .tab-ctx-item {
   padding: var(--space-2) var(--space-3);
   font-size: var(--text-sm);
@@ -1042,22 +1029,6 @@ useKeyboardShortcuts([
 }
 .tab-ctx-item--danger:hover {
   background: rgba(248, 81, 73, 0.15);
-}
-.tab-ctx-submenu {
-  position: absolute;
-  left: 100%;
-  top: -4px;
-  min-width: 140px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: var(--space-1) 0;
-  z-index: 220;
-}
-.tab-ctx-check {
-  margin-left: var(--space-2);
-  color: var(--accent);
 }
 .tab-ctx-separator {
   height: 1px;
@@ -1091,7 +1062,7 @@ useKeyboardShortcuts([
 
 /* Pane drag-over highlight */
 .ws-pane--drag-over {
-  outline: 2px solid #E8912D;
+  outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 

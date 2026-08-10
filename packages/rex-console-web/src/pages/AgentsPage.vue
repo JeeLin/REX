@@ -9,7 +9,12 @@ import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import Modal from '@/components/ui/Modal.vue'
+import Tabs from '@/components/ui/Tabs.vue'
+import Badge from '@/components/ui/Badge.vue'
+import Input from '@/components/ui/Input.vue'
+import Switch from '@/components/ui/Switch.vue'
 import Toast from '@/components/ui/Toast.vue'
+import { agentStatus } from '@/utils/status'
 
 const { t } = useI18n()
 const store = useEnvironmentsStore()
@@ -69,12 +74,6 @@ async function fetchAgents() {
 onMounted(fetchAgents)
 
 const hasAgents = computed(() => agents.value.length > 0)
-
-function agentStatus(status: string): StatusDotStatus {
-  if (status === 'online') return 'online'
-  if (status === 'connecting') return 'connecting'
-  return 'offline'
-}
 
 async function openResetToken(agentId: string) {
   resetAgentId.value = agentId
@@ -232,26 +231,7 @@ auto_update = true`
 })
 
 function copyGuideCode() {
-  const text = guideCode.value
-  if (navigator.clipboard?.writeText) {
-    navigator.clipboard.writeText(text).then(() => {
-      guideCopySuccess.value = 'copied'
-      setTimeout(() => { guideCopySuccess.value = '' }, 2000)
-    }).catch(() => fallbackCopy(text))
-  } else {
-    fallbackCopy(text)
-  }
-}
-
-function fallbackCopy(text: string) {
-  const ta = document.createElement('textarea')
-  ta.value = text
-  ta.style.position = 'fixed'
-  ta.style.left = '-9999px'
-  document.body.appendChild(ta)
-  ta.select()
-  document.execCommand('copy')
-  document.body.removeChild(ta)
+  copyText(guideCode.value)
   guideCopySuccess.value = 'copied'
   setTimeout(() => { guideCopySuccess.value = '' }, 2000)
 }
@@ -265,19 +245,16 @@ const filteredLogs = computed(() => {
 </script>
 
 <template>
-  <div class="agents-page">
+  <div class="page-container agents-page">
     <header class="page-header">
-      <h1 class="page-title">{{ t('agents.title') }}</h1>
+      <div class="page-header-left">
+        <h1 class="page-title mono">{{ t('agents.title') }}</h1>
+        <span class="page-subtitle">{{ t('agents.subtitle', 'Registered agent nodes') }}</span>
+      </div>
     </header>
 
-    <EmptyState
-      v-if="!loading && !hasAgents"
-      icon="⬡"
-      :title="t('agents.noAgents')"
-      :description="allDirectMode ? t('agents.directModeNote') : t('agents.noAgentsDesc')"
-    />
-    <!-- Deployment Guide -->
-    <div class="guide-section">
+    <!-- Deployment Guide — 始终可访问，无 Agent 时默认展开 -->
+    <div v-if="!loading" class="guide-section">
       <button class="guide-toggle" @click="guideExpanded = !guideExpanded">
         <span class="guide-toggle-icon">{{ guideExpanded ? '▾' : '▸' }}</span>
         <span class="guide-toggle-title">{{ t('agents.guideTitle') }}</span>
@@ -327,7 +304,7 @@ const filteredLogs = computed(() => {
       </div>
     </div>
 
-
+    <!-- Agent 列表 -->
     <div v-if="hasAgents" class="agent-grid">
       <Card v-for="agent in agents" :key="agent.id" class="agent-card">
         <div class="agent-card-header">
@@ -340,6 +317,9 @@ const filteredLogs = computed(() => {
               {{ envName(agent.environment_id) }} · {{ agent.hostname || agent.ip || '—' }}
             </div>
           </div>
+          <Badge :tone="agent.status === 'online' ? 'success' : agent.status === 'connecting' ? 'warning' : 'neutral'" size="sm">
+            {{ agent.status }}
+          </Badge>
         </div>
         <div class="agent-details">
           <div class="agent-detail">
@@ -356,10 +336,9 @@ const filteredLogs = computed(() => {
           </div>
         </div>
         <div class="agent-footer">
-          <Button variant="secondary" size="sm" @click="openDeploy(agent)">{{ t('agents.deploy') }}</Button>
-          <Button variant="secondary" size="sm" @click="openConfig(agent)">{{ t('agents.config') }}</Button>
-          <Button variant="secondary" size="sm" @click="openLogs(agent)">{{ t('agents.logs') }}</Button>
-          <Button variant="secondary" size="sm" @click="openResetToken(agent.id)">{{ t('agents.resetToken') }}</Button>
+          <Button variant="ghost" size="sm" @click="openConfig(agent)">{{ t('agents.config') }}</Button>
+          <Button variant="ghost" size="sm" @click="openLogs(agent)">{{ t('agents.logs') }}</Button>
+          <Button variant="ghost" size="sm" @click="openResetToken(agent.id)">{{ t('agents.resetToken') }}</Button>
         </div>
       </Card>
     </div>
@@ -388,7 +367,7 @@ const filteredLogs = computed(() => {
       <template #title>{{ t('agents.logTitle') }} — {{ logAgentName }}</template>
       <div class="log-content">
         <div class="log-filter">
-          <input v-model="logFilter" class="form-input" :placeholder="t('agents.logFilter')" />
+          <Input v-model="logFilter" :placeholder="t('agents.logFilter')" size="sm" />
         </div>
         <div v-if="logLoading" class="log-loading">{{ t('common.loading') }}</div>
         <div v-else-if="filteredLogs.length === 0" class="log-empty">{{ t('agents.noLogs') }}</div>
@@ -458,10 +437,7 @@ const filteredLogs = computed(() => {
           </div>
           <div class="config-row">
             <span class="config-label muted">{{ t('agents.configAutoUpdate') }}</span>
-            <label class="toggle">
-              <input v-model="configAutoUpdate" type="checkbox" />
-              <span class="toggle-slider"></span>
-            </label>
+            <Switch v-model="configAutoUpdate" size="sm" />
           </div>
         </div>
       </div>
@@ -470,19 +446,7 @@ const filteredLogs = computed(() => {
 </template>
 
 <style scoped>
-.agents-page {
-}
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--space-6);
-}
-.page-title {
-  font-size: var(--text-xl);
-  font-weight: 600;
-  color: var(--text-primary);
-}
+.agents-page {}
 .agent-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -532,16 +496,10 @@ const filteredLogs = computed(() => {
   padding-top: var(--space-2);
   border-top: 1px solid var(--border);
 }
-.muted {
-  color: var(--text-muted);
-}
 .empty-hint {
   font-size: var(--text-sm);
   color: var(--text-muted);
   margin-bottom: var(--space-3);
-}
-.mono {
-  font-family: var(--font-mono);
 }
 .modal-content {
   display: flex;
@@ -618,11 +576,11 @@ const filteredLogs = computed(() => {
   color: var(--text-secondary);
 }
 .log-action--agent_online {
-  background: rgba(63, 185, 80, 0.15);
+  background: var(--success-soft);
   color: var(--success);
 }
 .log-action--agent_offline {
-  background: rgba(248, 81, 73, 0.15);
+  background: var(--danger-soft);
   color: var(--danger);
 }
 .log-result {
@@ -861,39 +819,5 @@ const filteredLogs = computed(() => {
   flex-shrink: 0;
   font-size: var(--text-xs);
   min-width: 100px;
-}
-/* Toggle switch */
-.toggle {
-  position: relative;
-  display: inline-block;
-  width: 36px;
-  height: 20px;
-  cursor: pointer;
-}
-.toggle input { opacity: 0; width: 0; height: 0; }
-.toggle-slider {
-  position: absolute;
-  inset: 0;
-  background: var(--bg-hover);
-  border-radius: 10px;
-  transition: background 0.2s;
-}
-.toggle-slider::before {
-  content: '';
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  left: 2px;
-  top: 2px;
-  background: var(--text-muted);
-  border-radius: 50%;
-  transition: transform 0.2s, background 0.2s;
-}
-.toggle input:checked + .toggle-slider {
-  background: var(--accent);
-}
-.toggle input:checked + .toggle-slider::before {
-  transform: translateX(16px);
-  background: #fff;
 }
 </style>

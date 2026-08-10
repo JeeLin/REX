@@ -6,22 +6,36 @@ withDefaults(
     disabled?: boolean
     loading?: boolean
     block?: boolean
+    icon?: boolean
     ariaLabel?: string
   }>(),
-  { variant: 'secondary', size: 'md', disabled: false, loading: false, block: false, ariaLabel: '' },
+  { variant: 'secondary', size: 'md', disabled: false, loading: false, block: false, icon: false, ariaLabel: '' },
 )
+
+function handleClick(e: MouseEvent) {
+  const btn = e.currentTarget as HTMLElement
+  const rect = btn.getBoundingClientRect()
+  const x = e.clientX - rect.left
+  const y = e.clientY - rect.top
+  btn.style.setProperty('--ripple-x', `${x}px`)
+  btn.style.setProperty('--ripple-y', `${y}px`)
+  btn.classList.add('btn--ripple')
+  setTimeout(() => btn.classList.remove('btn--ripple'), 400)
+}
 </script>
 
 <template>
   <button
     class="btn"
-    :class="[`btn--${variant}`, `btn--${size}`, { 'btn--block': block, 'btn--loading': loading }]"
+    :class="[`btn--${variant}`, `btn--${size}`, { 'btn--block': block, 'btn--loading': loading, 'btn--icon': icon }]"
     :disabled="disabled || loading"
     :aria-label="ariaLabel || undefined"
     :aria-busy="loading || undefined"
+    @click="handleClick"
   >
     <span v-if="loading" class="btn-spinner" />
     <slot />
+    <span class="btn-ripple" />
   </button>
 </template>
 
@@ -37,7 +51,12 @@ withDefaults(
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
-  transition: background var(--transition), border-color var(--transition), box-shadow var(--transition);
+  position: relative;
+  overflow: hidden;
+  transition: background var(--transition), border-color var(--transition), box-shadow var(--transition), transform var(--duration-fast) ease;
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 .btn:focus-visible {
   outline: none;
@@ -115,5 +134,26 @@ withDefaults(
 }
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+.btn--icon {
+  padding: 0;
+  width: 36px;
+  height: 36px;
+}
+.btn--icon.btn--sm { width: 28px; height: 28px; }
+.btn--icon.btn--lg { width: 42px; height: 42px; }
+.btn-ripple {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.btn--ripple .btn-ripple {
+  background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), rgba(255,255,255,0.2) 0%, transparent 60%);
+  animation: ripple-expand 0.4s ease-out;
+}
+@keyframes ripple-expand {
+  0% { opacity: 1; transform: scale(0); }
+  100% { opacity: 0; transform: scale(2.5); }
 }
 </style>

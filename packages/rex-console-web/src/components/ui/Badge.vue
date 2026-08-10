@@ -46,23 +46,26 @@ withDefaults(
   color: var(--accent);
 }
 .badge--success {
-  background: rgba(63, 185, 80, 0.14);
+  background: var(--success-soft);
   color: var(--success);
 }
+.badge--success.badge--dot .badge-dot {
+  animation: pulse-green 2s ease-in-out infinite;
+}
 .badge--danger {
-  background: rgba(248, 81, 73, 0.14);
+  background: var(--danger-soft);
   color: var(--danger);
 }
 .badge--info {
-  background: rgba(88, 166, 255, 0.14);
+  background: var(--info-soft);
   color: var(--info);
 }
 .badge--purple {
-  background: rgba(139, 92, 246, 0.14);
+  background: var(--purple-soft);
   color: var(--purple);
 }
 .badge--warning {
-  background: rgba(210, 153, 34, 0.14);
+  background: var(--warning-soft);
   color: var(--warning);
 }
 </style>

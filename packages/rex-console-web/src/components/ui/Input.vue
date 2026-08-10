@@ -9,8 +9,9 @@ const props = withDefaults(
     clearable?: boolean
     error?: string
     size?: 'sm' | 'md' | 'lg'
+    type?: string
   }>(),
-  { modelValue: '', placeholder: '', size: 'md', disabled: false, clearable: false, error: '' },
+  { modelValue: '', placeholder: '', size: 'md', disabled: false, clearable: false, error: '', type: 'text' },
 )
 
 const emit = defineEmits<{
@@ -31,7 +32,7 @@ function onClear() {
     <slot name="prefix" />
     <input
       class="input"
-      type="text"
+      :type="type"
       :value="modelValue"
       :placeholder="placeholder"
       :disabled="disabled"
@@ -55,7 +56,7 @@ function onClear() {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  background: var(--bg-surface);
+  background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   transition: border-color var(--transition), box-shadow var(--transition);

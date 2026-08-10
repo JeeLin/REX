@@ -21,12 +21,12 @@ run = "cd packages/rex-console-web && bun run build"
 [tasks.build]
 description = "Build both frontend and backend (release)"
 depends = ["build-frontend"]
-run = "cargo build --release -p rex-hub"
+run = "cargo build -p rex-hub"
 
 [tasks.start]
 description = "Build and run rex-hub"
 depends = ["build-frontend"]
-run = "cargo run --release -p rex-hub"
+run = "cargo run -p rex-hub"
 
 [tasks.dev-backend]
 description = "Start backend dev server"

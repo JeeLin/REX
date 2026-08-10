@@ -44,7 +44,8 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
   color: var(--text-secondary);
   font-size: var(--text-base);
   white-space: nowrap;
-  transition: color var(--transition);
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--duration-normal) ease;
 }
 .tab:hover {
   color: var(--text-primary);

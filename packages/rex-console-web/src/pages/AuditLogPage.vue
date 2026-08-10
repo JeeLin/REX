@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { auditApi, type AuditEntry, type AuditStats } from '@/api/audit'
 import { useEnvironmentsStore } from '@/stores/environments'
 import Card from '@/components/ui/Card.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
+import ContextMenu from '@/components/ui/ContextMenu.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import Select from '@/components/ui/Select.vue'
 import ResponsiveTable from '@/components/ResponsiveTable.vue'
 
 const { t } = useI18n()
@@ -15,8 +17,10 @@ const store = useEnvironmentsStore()
 const entries = ref<AuditEntry[]>([])
 const loading = ref(true)
 const stats = ref<AuditStats>({ total: 0, success_count: 0, failure_count: 0 })
-const statsLoading = ref(false)
 const expandedId = ref<string | null>(null)
+const currentPage = ref(1)
+const pageSize = 50
+const totalCount = ref(0)
 
 // Context menu
 const ctxMenu = ref({ show: false, x: 0, y: 0, entry: null as AuditEntry | null })
@@ -37,7 +41,19 @@ function ctxViewDetail() {
 
 async function ctxCopyRecord() {
   if (ctxMenu.value.entry) {
-    await navigator.clipboard.writeText(JSON.stringify(ctxMenu.value.entry, null, 2))
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(ctxMenu.value.entry, null, 2))
+    } catch {
+      // fallback for non-HTTPS
+      const ta = document.createElement('textarea')
+      ta.value = JSON.stringify(ctxMenu.value.entry, null, 2)
+      ta.style.position = 'fixed'
+      ta.style.left = '-9999px'
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
   }
   closeCtxMenu()
 }
@@ -68,6 +84,18 @@ function ctxClearFilters() {
   environmentFilter.value = ''
   timeRange.value = 'all'
   closeCtxMenu()
+}
+
+function handleCtxAction(action: string) {
+  switch (action) {
+    case 'detail': ctxViewDetail(); break
+    case 'copy': ctxCopyRecord(); break
+    case 'filterType': ctxFilterByType(); break
+    case 'filterEnv': ctxFilterByEnv(); break
+    case 'refresh': ctxRefresh(); break
+    case 'export': ctxExportCsv(); break
+    case 'clearFilters': ctxClearFilters(); break
+  }
 }
 
 // Filters
@@ -117,49 +145,53 @@ async function fetchEntries() {
   loading.value = true
   const range = getTimeRange()
   try {
-    entries.value = await auditApi.query({
-      action: actionFilter.value || undefined,
-      result: resultFilter.value || undefined,
-      environment_id: environmentFilter.value || undefined,
-      ...range,
-      limit: 100,
-    })
+    const offset = (currentPage.value - 1) * pageSize
+    const [data, statsData] = await Promise.all([
+      auditApi.query({
+        action: actionFilter.value || undefined,
+        result: resultFilter.value || undefined,
+        environment_id: environmentFilter.value || undefined,
+        ...range,
+        limit: pageSize,
+        offset,
+      }),
+      auditApi.stats({
+        action: actionFilter.value || undefined,
+        environment_id: environmentFilter.value || undefined,
+        ...range,
+      }),
+    ])
+    entries.value = data
+    totalCount.value = statsData.total
+    stats.value = statsData
   } catch {
     entries.value = []
+    totalCount.value = 0
   } finally {
     loading.value = false
   }
 }
 
-async function fetchStats() {
-  statsLoading.value = true
-  const range = getTimeRange()
-  try {
-    stats.value = await auditApi.stats({
-      action: actionFilter.value || undefined,
-      environment_id: environmentFilter.value || undefined,
-      ...range,
-    })
-  } catch {
-    stats.value = { total: 0, success_count: 0, failure_count: 0 }
-  } finally {
-    statsLoading.value = false
-  }
-}
-
 function refreshAll() {
   fetchEntries()
-  fetchStats()
 }
 
 function toggleExpand(id: string) {
   expandedId.value = expandedId.value === id ? null : id
 }
 
-function exportCsv() {
+async function exportCsv() {
+  const range = getTimeRange()
+  const allEntries = await auditApi.query({
+    action: actionFilter.value || undefined,
+    result: resultFilter.value || undefined,
+    environment_id: environmentFilter.value || undefined,
+    ...range,
+    limit: 10000,
+  })
   const headers = ['time', 'action', 'target', 'environment_id', 'resource_id', 'agent_id', 'result', 'detail']
-  const rows = entries.value.map(e => headers.map(h => {
-    const val = (e as Record<string, unknown>)[h]
+  const rows = allEntries.map(e => headers.map(h => {
+    const val = (e as unknown as Record<string, unknown>)[h]
     const str = val === null || val === undefined ? '' : String(val)
     return `"${str.replace(/"/g, '""')}"`
   }).join(','))
@@ -227,7 +259,14 @@ function isJsonDetail(detail: string | null): boolean {
   }
 }
 
-watch([actionFilter, resultFilter, environmentFilter, timeRange], refreshAll)
+const totalPages = computed(() => Math.ceil(totalCount.value / pageSize))
+
+watch([actionFilter, resultFilter, environmentFilter, timeRange], () => {
+  currentPage.value = 1
+  refreshAll()
+})
+
+watch(currentPage, fetchEntries)
 
 onMounted(async () => {
   await store.fetchEnvironments()
@@ -238,48 +277,63 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="audit-page">
+  <div class="page-container audit-page">
     <header class="page-header">
-      <h1 class="page-title">{{ t('auditLog.title') }}</h1>
-      <div class="header-actions">
-        <Button variant="secondary" size="sm" @click="exportCsv">{{ t('auditLog.exportCsv') }}</Button>
-        <Button variant="secondary" size="sm" @click="refreshAll">{{ t('common.refresh') }}</Button>
+      <div class="page-header-left">
+        <h1 class="page-title mono">{{ t('auditLog.title') }}</h1>
+        <span class="page-subtitle">{{ t('auditLog.subtitle', 'System activity log') }}</span>
+      </div>
+      <div class="page-header-actions">
+        <Button variant="ghost" size="sm" @click="refreshAll">↻ {{ t('common.refresh') }}</Button>
+        <Button variant="ghost" size="sm" @click="exportCsv">↓ {{ t('auditLog.exportCsv') }}</Button>
       </div>
     </header>
 
     <!-- Stats cards -->
     <div class="stats-row">
       <Card class="stat-card">
-        <div class="stat-value" :class="{ loading: statsLoading }">{{ statsLoading ? '—' : stats.total }}</div>
+        <div class="stat-value" :class="{ loading }">{{ loading ? '—' : stats.total }}</div>
         <div class="stat-label muted">{{ t('auditLog.statTotal') }}</div>
       </Card>
       <Card class="stat-card stat-card--success">
-        <div class="stat-value stat-value--success" :class="{ loading: statsLoading }">{{ statsLoading ? '—' : stats.success_count }}</div>
+        <div class="stat-value stat-value--success" :class="{ loading }">{{ loading ? '—' : stats.success_count }}</div>
         <div class="stat-label muted">{{ t('auditLog.statSuccess') }}</div>
       </Card>
       <Card class="stat-card stat-card--failure">
-        <div class="stat-value stat-value--failure" :class="{ loading: statsLoading }">{{ statsLoading ? '—' : stats.failure_count }}</div>
+        <div class="stat-value stat-value--failure" :class="{ loading }">{{ loading ? '—' : stats.failure_count }}</div>
         <div class="stat-label muted">{{ t('auditLog.statFailure') }}</div>
       </Card>
     </div>
 
     <!-- Filters -->
     <div class="filters">
-      <select v-model="actionFilter" class="filter-select">
-        <option v-for="opt in actionOptions" :key="opt.value" :value="opt.value">{{ opt.value ? opt.value : t(opt.label) }}</option>
-      </select>
-      <select v-model="resultFilter" class="filter-select">
-        <option value="">{{ t('auditLog.allResults') }}</option>
-        <option value="success">{{ t('auditLog.success') }}</option>
-        <option value="failure">{{ t('auditLog.failure') }}</option>
-      </select>
-      <select v-model="environmentFilter" class="filter-select">
-        <option value="">{{ t('auditLog.allEnvironments') }}</option>
-        <option v-for="env in store.environments" :key="env.id" :value="env.id">{{ env.name }}</option>
-      </select>
-      <select v-model="timeRange" class="filter-select">
-        <option v-for="opt in timeRangeOptions" :key="opt.value" :value="opt.value">{{ t(opt.label) }}</option>
-      </select>
+      <Select
+        v-model="actionFilter"
+        :options="actionOptions.map(o => ({ label: o.value ? o.value : t(o.label), value: o.value }))"
+        size="sm"
+      />
+      <Select
+        v-model="resultFilter"
+        :options="[
+          { label: t('auditLog.allResults'), value: '' },
+          { label: t('auditLog.success'), value: 'success' },
+          { label: t('auditLog.failure'), value: 'failure' },
+        ]"
+        size="sm"
+      />
+      <Select
+        v-model="environmentFilter"
+        :options="[
+          { label: t('auditLog.allEnvironments'), value: '' },
+          ...store.environments.map(e => ({ label: e.name, value: e.id })),
+        ]"
+        size="sm"
+      />
+      <Select
+        v-model="timeRange"
+        :options="timeRangeOptions.map(o => ({ label: t(o.label), value: o.value }))"
+        size="sm"
+      />
     </div>
 
     <EmptyState
@@ -366,30 +420,38 @@ onMounted(async () => {
       </ResponsiveTable>
     </Card>
 
+    <!-- Pagination -->
+    <div v-if="totalPages > 1" class="pagination">
+      <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--">← {{ t('common.prev', 'Prev') }}</button>
+      <span class="page-info mono">{{ currentPage }} / {{ totalPages }}</span>
+      <button class="page-btn" :disabled="currentPage >= totalPages" @click="currentPage++">{{ t('common.next', 'Next') }} →</button>
+    </div>
+
     <!-- Context menu -->
-    <Teleport to="body">
-      <div v-if="ctxMenu.show" class="audit-ctx-overlay" @click="closeCtxMenu" @contextmenu.prevent="closeCtxMenu">
-        <div class="audit-ctx-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }" @click.stop>
-          <button class="ctx-item" @click="ctxViewDetail">📋 {{ t('auditLog.viewDetail') }}</button>
-          <button class="ctx-item" @click="ctxCopyRecord">📋 {{ t('auditLog.copy') }}</button>
-          <div class="ctx-divider"></div>
-          <button class="ctx-item" @click="ctxFilterByType">🏷 {{ t('auditLog.filterByType') }}</button>
-          <button class="ctx-item" @click="ctxFilterByEnv">🌍 {{ t('auditLog.filterByEnv') }}</button>
-          <div class="ctx-divider"></div>
-          <button class="ctx-item" @click="ctxRefresh">🔄 {{ t('auditLog.refresh') }}</button>
-          <button class="ctx-item" @click="ctxExportCsv">📥 {{ t('auditLog.export') }}</button>
-          <button class="ctx-item" @click="ctxClearFilters">🧹 {{ t('auditLog.clearFilters') }}</button>
-        </div>
-      </div>
-    </Teleport>
+    <ContextMenu
+      v-model="ctxMenu.show"
+      :x="ctxMenu.x"
+      :y="ctxMenu.y"
+      @select="(action: string) => handleCtxAction(action)"
+    >
+      <template #default="{ choose }">
+        <div class="ctx-item" @click="choose('detail')">📋 {{ t('auditLog.viewDetail') }}</div>
+        <div class="ctx-item" @click="choose('copy')">📋 {{ t('auditLog.copy') }}</div>
+        <div class="ctx-divider"></div>
+        <div class="ctx-item" @click="choose('filterType')">🏷 {{ t('auditLog.filterByType') }}</div>
+        <div class="ctx-item" @click="choose('filterEnv')">🌍 {{ t('auditLog.filterByEnv') }}</div>
+        <div class="ctx-divider"></div>
+        <div class="ctx-item" @click="choose('refresh')">🔄 {{ t('auditLog.refresh') }}</div>
+        <div class="ctx-item" @click="choose('export')">📥 {{ t('auditLog.export') }}</div>
+        <div class="ctx-item" @click="choose('clearFilters')">🧹 {{ t('auditLog.clearFilters') }}</div>
+      </template>
+    </ContextMenu>
   </div>
 </template>
 
 <style scoped>
 .audit-page { height: 100%; overflow-y: auto; }
-.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-4); flex-wrap: wrap; gap: var(--space-3); }
-.page-title { font-size: var(--text-xl); font-weight: 600; color: var(--text-primary); }
-.header-actions { display: flex; gap: var(--space-2); }
+.page-header-actions { display: flex; gap: var(--space-2); }
 .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); margin-bottom: var(--space-4); }
 .stat-card { text-align: center; padding: var(--space-3); }
 .stat-value { font-size: var(--text-xl); font-weight: 700; color: var(--text-primary); }
@@ -397,11 +459,6 @@ onMounted(async () => {
 .stat-value--failure { color: var(--danger); }
 .stat-label { font-size: var(--text-xs); margin-top: var(--space-1); }
 .filters { display: flex; gap: var(--space-2); align-items: center; margin-bottom: var(--space-4); flex-wrap: wrap; }
-.filter-select {
-  background: var(--bg-deep); border: 1px solid var(--border); border-radius: 6px;
-  padding: 6px 10px; color: var(--text-primary); font-size: var(--text-sm); outline: none;
-}
-.filter-select:focus { border-color: var(--accent); }
 .log-card { overflow-x: auto; }
 .loading { padding: var(--space-6); text-align: center; }
 .log-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
@@ -417,27 +474,31 @@ onMounted(async () => {
 .detail-code { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px; padding: var(--space-2); font-size: var(--text-xs); margin: 0; overflow-x: auto; white-space: pre-wrap; }
 .muted { color: var(--text-muted); }
 .mono { font-family: var(--font-mono); }
-
-/* Context menu */
-.audit-ctx-overlay {
-  position: fixed; inset: 0; z-index: 200;
-}
-.audit-ctx-menu {
-  position: fixed; z-index: 201;
-  background: var(--bg-elevated, var(--bg-surface));
-  border: 1px solid var(--border); border-radius: var(--radius, 8px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
-  min-width: 180px; padding: var(--space-1, 4px) 0;
-}
 .ctx-item {
-  display: flex; align-items: center; gap: 8px;
-  width: 100%; padding: var(--space-2, 8px) var(--space-3, 12px);
-  background: none; border: none; color: var(--text-primary); font-size: var(--text-sm, 13px);
-  cursor: pointer; text-align: left;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  color: var(--text-primary);
 }
 .ctx-item:hover { background: var(--bg-hover); }
 .ctx-divider {
   height: 1px; background: var(--border);
-  margin: var(--space-1, 4px) 0;
+  margin: var(--space-1) 0;
 }
+
+/* Pagination */
+.pagination {
+  display: flex; align-items: center; justify-content: center;
+  gap: var(--space-3); padding: var(--space-4) 0;
+}
+.page-btn {
+  padding: var(--space-1) var(--space-3);
+  background: var(--bg-surface); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text-secondary);
+  font-size: var(--text-sm); cursor: pointer;
+  transition: border-color var(--transition), color var(--transition);
+}
+.page-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--text-primary); }
+.page-btn:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
+.page-info { font-size: var(--text-xs); color: var(--text-muted); }
 </style>

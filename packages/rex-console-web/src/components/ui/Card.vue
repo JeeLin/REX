@@ -23,10 +23,17 @@ withDefaults(defineProps<{ title?: string; padded?: boolean; hoverable?: boolean
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  transition: border-color var(--transition);
+  transition: border-color var(--transition), box-shadow var(--transition), transform var(--duration-fast) ease;
+}
+.card--hoverable {
+  cursor: pointer;
 }
 .card--hoverable:hover {
-  border-color: var(--accent);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+.card--hoverable:active {
+  transform: scale(0.99);
 }
 .card-header {
   padding: var(--space-3) var(--space-4);

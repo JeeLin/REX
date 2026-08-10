@@ -30,7 +30,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
   border-radius: var(--radius-pill);
   background: var(--border-strong);
   cursor: pointer;
-  transition: background var(--transition);
+  transition: background var(--duration-normal) ease;
   flex-shrink: 0;
 }
 .switch:focus-visible { box-shadow: var(--ring); }
@@ -42,7 +42,8 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
   position: absolute;
   border-radius: 50%;
   background: #fff;
-  transition: transform var(--transition);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  transition: transform var(--duration-normal) cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .switch--sm .switch-thumb { width: 14px; height: 14px; left: 2px; }
 .switch--md .switch-thumb { width: 18px; height: 18px; left: 2px; }

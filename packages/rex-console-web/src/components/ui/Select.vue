@@ -19,6 +19,8 @@ const emit = defineEmits<{ 'update:modelValue': [value: string | number] }>()
 
 const open = ref(false)
 const triggerRef = ref<HTMLElement | null>(null)
+const dropdownRef = ref<HTMLElement | null>(null)
+const highlightedIndex = ref(-1)
 const dropdownStyle = ref<Record<string, string>>({})
 const selectedLabel = computed(() => props.options.find(o => o.value === props.modelValue)?.label ?? '')
 
@@ -33,42 +35,124 @@ function updatePosition() {
   }
 }
 
+function openDropdown() {
+  if (props.disabled) return
+  open.value = true
+  // Highlight the currently selected option
+  const idx = props.options.findIndex(o => o.value === props.modelValue)
+  highlightedIndex.value = idx >= 0 ? idx : 0
+}
+
+function closeDropdown() {
+  open.value = false
+  highlightedIndex.value = -1
+}
+
+function moveHighlight(delta: number) {
+  const len = props.options.length
+  if (!len) return
+  let next = highlightedIndex.value + delta
+  // Skip disabled options
+  for (let i = 0; i < len; i++) {
+    if (next < 0) next = len - 1
+    if (next >= len) next = 0
+    const opt = props.options[next]
+    if (opt && !opt.disabled) break
+    next += delta > 0 ? 1 : -1
+  }
+  highlightedIndex.value = next
+  // Scroll into view
+  nextTick(() => {
+    const items = dropdownRef.value?.querySelectorAll('.select-option')
+    items?.[next]?.scrollIntoView({ block: 'nearest' })
+  })
+}
+
+function selectHighlighted() {
+  const opt = props.options[highlightedIndex.value]
+  if (opt && !opt.disabled) {
+    emit('update:modelValue', opt.value)
+    closeDropdown()
+  }
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (!open.value) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      openDropdown()
+    }
+    return
+  }
+  switch (e.key) {
+    case 'ArrowDown':
+      e.preventDefault()
+      moveHighlight(1)
+      break
+    case 'ArrowUp':
+      e.preventDefault()
+      moveHighlight(-1)
+      break
+    case 'Enter':
+    case ' ':
+      e.preventDefault()
+      selectHighlighted()
+      break
+    case 'Escape':
+      e.preventDefault()
+      closeDropdown()
+      triggerRef.value?.focus()
+      break
+  }
+}
+
+function select(option: Option) {
+  if (!option.disabled) {
+    emit('update:modelValue', option.value)
+    closeDropdown()
+  }
+}
+
 watch(open, async (v) => {
   if (v) {
     await nextTick()
     updatePosition()
   }
 })
-
-function select(option: Option) {
-  if (!option.disabled) {
-    emit('update:modelValue', option.value)
-    open.value = false
-  }
-}
 </script>
 
 <template>
   <div class="select-wrap" :class="[`select-wrap--${size}`, { 'select-wrap--disabled': disabled }]">
     <button
       ref="triggerRef"
+      type="button"
       class="select-trigger"
       :disabled="disabled"
-      @click="open = !open"
+      :aria-expanded="open"
+      role="combobox"
+      @click="open ? closeDropdown() : openDropdown()"
+      @keydown="onKeydown"
     >
       <span :class="{ 'muted': !selectedLabel }">{{ selectedLabel || placeholder }}</span>
       <span class="select-arrow" :class="{ 'select-arrow--open': open }">▾</span>
     </button>
     <Teleport to="body">
-      <div v-if="open" class="select-overlay" @click="open = false" />
+      <div v-if="open" class="select-overlay" @click="closeDropdown()" />
       <Transition name="select">
-        <div v-if="open" class="select-dropdown" :class="`select-dropdown--${size}`" :style="dropdownStyle">
+        <div v-if="open" ref="dropdownRef" class="select-dropdown" :class="`select-dropdown--${size}`" :style="dropdownStyle" role="listbox">
           <div
-            v-for="option in options"
+            v-for="(option, idx) in options"
             :key="option.value"
             class="select-option"
-            :class="{ 'select-option--selected': option.value === modelValue, 'select-option--disabled': option.disabled }"
+            :class="{
+              'select-option--selected': option.value === modelValue,
+              'select-option--highlighted': idx === highlightedIndex,
+              'select-option--disabled': option.disabled
+            }"
+            role="option"
+            :aria-selected="option.value === modelValue"
             @click="select(option)"
+            @mouseenter="highlightedIndex = idx"
           >
             {{ option.label }}
           </div>
@@ -137,7 +221,9 @@ function select(option: Option) {
   transition: background var(--transition);
 }
 .select-option:hover { background: var(--bg-hover); }
+.select-option--highlighted { background: var(--bg-hover); }
 .select-option--selected { color: var(--accent); background: var(--accent-soft); }
+.select-option--selected.select-option--highlighted { background: var(--accent-soft); }
 .select-option--disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
 .select-enter-active, .select-leave-active { transition: opacity var(--transition), transform var(--transition); }
 .select-enter-from, .select-leave-to { opacity: 0; transform: var(--slide-up); }

@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.66.0] - 2026-08-11
+
+### Added
+- 设计系统：深色模式 CSS 变量、语义化 token（success-soft/danger-soft 等）、pulse-green 动画
+- 通用组件：Table 行选中高亮、Drawer Escape 键关闭、Select 键盘导航、Toast warning tone、barrel exports
+- 登录页：CRT 启动序列动画、毛玻璃卡片、终端美学重设计
+- 仪表盘：Quick Connect 区域、Card/Badge 共享组件
+- Agent 管理页：Badge 状态标签、条件部署指南、Switch 组件
+- 侧栏：全局搜索框、Session 超时弹窗使用共享 Modal
+
+### Changed
+- 全系统 UX/UI 重设计，统一使用共享组件（Input/Select/Switch/Checkbox/ContextMenu/Badge/Card）
+- 硬编码 rgba 颜色替换为 design token 变量
+- 提取共享 agentStatus 工具函数
+- 添加 prefers-reduced-motion 媒体查询支持
+
+### Fixed
+- 安全：修复登录页开放重定向漏洞
+- Drawer：Escape 键监听在初始打开时正确注册
+- Toast：组件卸载时清除未完成的定时器
+- 无障碍：按钮添加 aria-label、Toast 添加 aria-live、搜索框添加 aria-label
+- Dashboard：loading 状态正确显示
+- Settings：autoUpdate 初始加载时不再触发冗余 API 调用
+
+
 ## [0.65.4] - 2026-08-10
 
 ### Fixed

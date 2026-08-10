@@ -38,6 +38,11 @@ const routes: RouteRecordRaw[] = [
     name: 'design-preview',
     component: () => import('../features/design-preview/DesignPreview.vue'),
   },
+  // Catch-all → 首页
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/workspace',
+  },
 ]
 
 const router = createRouter({

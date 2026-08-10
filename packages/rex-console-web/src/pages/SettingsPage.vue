@@ -5,6 +5,9 @@ import { settingsApi, type Settings } from '@/api/settings'
 import { useUpdateStore } from '@/stores/update'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
+import Input from '@/components/ui/Input.vue'
+import Select from '@/components/ui/Select.vue'
+import Switch from '@/components/ui/Switch.vue'
 
 const { t, locale } = useI18n()
 const updateStore = useUpdateStore()
@@ -25,7 +28,9 @@ const saveMessage = ref('')
 const activeTab = ref('appearance')
 const contentRef = ref<HTMLElement>()
 const autoUpdate = ref(true)
+const autoUpdateSynced = ref(false)
 watch(autoUpdate, (val) => {
+  if (!autoUpdateSynced.value) return
   settingsApi.update({ auto_update: val })
 })
 
@@ -94,6 +99,7 @@ onMounted(async () => {
     }
     // Load auto_update from backend
     autoUpdate.value = remote.auto_update !== false
+    autoUpdateSynced.value = true
     // Check for updates on mount
     await updateStore.checkForUpdate()
   } catch {
@@ -157,18 +163,25 @@ async function saveSettings() {
         <h2 class="section-title">{{ t('settings.appearance') }}</h2>
         <div class="form-group">
           <label class="form-label">{{ t('settings.theme') }}</label>
-          <select v-model="settings.theme" class="form-input">
-            <option value="dark">{{ t('settings.dark') }}</option>
-            <option value="light">{{ t('settings.light') }}</option>
-            <option value="high-contrast">{{ t('settings.highContrast') }}</option>
-          </select>
+          <Select
+            v-model="settings.theme"
+            :options="[
+              { label: t('settings.dark'), value: 'dark' },
+              { label: t('settings.light'), value: 'light' },
+              { label: t('settings.highContrast'), value: 'high-contrast' },
+            ]"
+          />
         </div>
         <div class="form-group">
           <label class="form-label">{{ t('settings.language') }}</label>
-          <select v-model="settings.language" class="form-input" @change="onLanguageChange">
-            <option value="zh">{{ t('settings.langZh') }}</option>
-            <option value="en">{{ t('settings.langEn') }}</option>
-          </select>
+          <Select
+            v-model="settings.language"
+            :options="[
+              { label: t('settings.langZh'), value: 'zh' },
+              { label: t('settings.langEn'), value: 'en' },
+            ]"
+            @update:model-value="onLanguageChange"
+          />
         </div>
       </Card>
 
@@ -176,23 +189,26 @@ async function saveSettings() {
         <h2 class="section-title">{{ t('settings.terminal') }}</h2>
         <div class="form-group">
           <label class="form-label">{{ t('settings.fontFamily') }}</label>
-          <input v-model="settings.terminal_font" type="text" class="form-input" />
+          <Input v-model="settings.terminal_font" />
         </div>
         <div class="form-group">
           <label class="form-label">{{ t('settings.fontSize') }}</label>
-          <input v-model="settings.terminal_font_size" type="number" class="form-input" min="10" max="24" />
+          <Input v-model="settings.terminal_font_size" type="number" />
         </div>
         <div class="form-group">
           <label class="form-label">{{ t('settings.terminalTheme') }}</label>
-          <select v-model="settings.terminal_theme" class="form-input">
-            <option value="default">{{ t('settings.terminalThemeDefault') }}</option>
-            <option value="ubuntu">{{ t('settings.terminalThemeUbuntu') }}</option>
-            <option value="solarized-dark">{{ t('settings.terminalThemeSolarized') }}</option>
-          </select>
+          <Select
+            v-model="settings.terminal_theme"
+            :options="[
+              { label: t('settings.terminalThemeDefault'), value: 'default' },
+              { label: t('settings.terminalThemeUbuntu'), value: 'ubuntu' },
+              { label: t('settings.terminalThemeSolarized'), value: 'solarized-dark' },
+            ]"
+          />
         </div>
         <div class="form-group">
           <label class="form-label">{{ t('settings.bgOpacity') }}</label>
-          <input v-model.number="settings.terminal_opacity" type="number" class="form-input" min="0" max="100" />
+          <Input :model-value="String(settings.terminal_opacity)" @update:model-value="settings.terminal_opacity = Number($event)" type="number" />
         </div>
       </Card>
 
@@ -200,27 +216,30 @@ async function saveSettings() {
         <h2 class="section-title">{{ t('settings.security') }}</h2>
         <div class="form-group">
           <label class="form-label">{{ t('settings.sessionTimeout') }}</label>
-          <select v-model.number="settings.session_timeout" class="form-input">
-            <option :value="15">15 {{ t('settings.minutes') }}</option>
-            <option :value="30">30 {{ t('settings.minutes') }}</option>
-            <option :value="60">60 {{ t('settings.minutes') }}</option>
-            <option :value="120">120 {{ t('settings.minutes') }}</option>
-          </select>
+          <Select
+            v-model.number="settings.session_timeout"
+            :options="[
+              { label: `15 ${t('settings.minutes')}`, value: 15 },
+              { label: `30 ${t('settings.minutes')}`, value: 30 },
+              { label: `60 ${t('settings.minutes')}`, value: 60 },
+              { label: `120 ${t('settings.minutes')}`, value: 120 },
+            ]"
+          />
         </div>
         <!-- Password Change -->
         <div class="password-section">
           <h3 class="subsection-title">{{ t('settings.changePassword') }}</h3>
           <div class="form-group">
             <label class="form-label">{{ t('settings.currentPassword') }}</label>
-            <input v-model="currentPassword" type="password" class="form-input" autocomplete="current-password" />
+            <Input v-model="currentPassword" type="password" autocomplete="current-password" />
           </div>
           <div class="form-group">
             <label class="form-label">{{ t('settings.newPassword') }}</label>
-            <input v-model="newPassword" type="password" class="form-input" autocomplete="new-password" />
+            <Input v-model="newPassword" type="password" autocomplete="new-password" />
           </div>
           <div class="form-group">
             <label class="form-label">{{ t('settings.confirmPassword') }}</label>
-            <input v-model="confirmPassword" type="password" class="form-input" autocomplete="new-password" />
+            <Input v-model="confirmPassword" type="password" autocomplete="new-password" />
           </div>
           <div v-if="passwordError" class="save-message error">{{ passwordError }}</div>
           <div v-if="passwordSuccess" class="save-message">{{ passwordSuccess }}</div>
@@ -241,11 +260,7 @@ async function saveSettings() {
         <h2 class="section-title">{{ t('settings.update') }}</h2>
         <div class="form-group">
           <label class="form-label">{{ t('settings.autoUpdate', 'Auto Update') }}</label>
-          <label class="toggle-label">
-            <input type="checkbox" v-model="autoUpdate" class="toggle-input" />
-            <span class="toggle-switch"></span>
-            <span>{{ autoUpdate ? t('settings.enabled', 'Enabled') : t('settings.disabled', 'Disabled') }}</span>
-          </label>
+          <Switch v-model="autoUpdate" size="sm" />
         </div>
         <div v-if="updateStore.updateLoading" class="update-progress">
           <p class="update-status">{{ updateStore.updateStatusText }}</p>
@@ -330,42 +345,8 @@ async function saveSettings() {
   padding: var(--space-4);
   overflow-y: auto;
 }
-.toggle-label {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  cursor: pointer;
-  font-size: var(--text-sm);
-}
-.toggle-input { display: none; }
-.toggle-switch {
-  width: 36px;
-  height: 20px;
-  border-radius: 10px;
-  background: var(--bg-hover);
-  position: relative;
-  transition: background 0.2s;
-}
-.toggle-switch::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  transition: all 0.2s;
-}
-.toggle-input:checked + .toggle-switch {
-  background: var(--accent);
-}
-.toggle-input:checked + .toggle-switch::after {
-  left: 18px;
-  background: #fff;
-}
 .settings-section { margin-bottom: 0; }
-.page-title { font-size: var(--text-xl); font-weight: 600; color: var(--text-primary); margin-bottom: var(--space-4); }
+.page-title { font-size: var(--text-xl); font-weight: 700; color: var(--text-primary); margin-bottom: var(--space-4); }
 .section-title { font-size: var(--text-md); font-weight: 600; color: var(--text-primary); margin-bottom: var(--space-4); }
 .form-group { margin-bottom: var(--space-3); }
 .form-label { display: block; font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: var(--space-1); }
@@ -388,7 +369,7 @@ async function saveSettings() {
 .update-available { display: flex; align-items: center; justify-content: space-between; margin-top: var(--space-3); }
 .update-latest { display: flex; align-items: center; gap: var(--space-2); }
 .update-up-to-date { color: var(--text-secondary); font-size: var(--text-sm); }
-.update-error { margin-top: var(--space-3); padding: var(--space-3); background: rgba(239, 68, 68, 0.1); border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.3); }
+.update-error { margin-top: var(--space-3); padding: var(--space-3); background: var(--danger-soft); border-radius: var(--radius); border: 1px solid rgba(248, 81, 73, 0.3); }
 .update-error p { color: var(--danger); font-size: var(--text-sm); margin-bottom: var(--space-2); }
 .label { color: var(--text-secondary); font-size: var(--text-sm); }
 .value { color: var(--text-primary); font-size: var(--text-sm); font-weight: 500; }

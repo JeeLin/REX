@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 import ResourcePanel from '@/features/resource-panel/ResourcePanel.vue'
 import { useSessionTimeout } from '@/composables/useSessionTimeout'
 import { useAuthStore } from '@/stores/auth'
+import Modal from '@/components/ui/Modal.vue'
+import Button from '@/components/ui/Button.vue'
 import type { Resource } from '@/api/resources'
 import { useRouter } from 'vue-router'
 import { useSwipeGesture } from '@/composables/useSwipeGesture'
@@ -39,6 +41,7 @@ const bottomNav = [
 
 const fullscreen = ref(false)
 const mobileMenuOpen = ref(false)
+const searchQuery = ref('')
 
 
 const isWorkspace = computed(() => route.path === '/workspace')
@@ -79,6 +82,16 @@ const currentTitle = computed(() => {
       <div class="sidebar-brand mono">
         REX<span class="accent">Hub</span>
       </div>
+      <div class="sidebar-search">
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="sidebar-search-input mono"
+          :aria-label="t('common.search', 'Search')"
+          :placeholder="t('common.search', 'Search…')"
+        />
+        <span class="sidebar-search-icon">⌕</span>
+      </div>
       <nav class="sidebar-nav">
         <RouterLink
           v-for="item in mainNav"
@@ -112,13 +125,13 @@ const currentTitle = computed(() => {
     <div ref="mainRef" class="main">
       <header v-if="!(fullscreen && isWorkspace)" class="topbar">
         <!-- 移动端汉堡按钮 -->
-        <button class="hamburger-btn" @click="mobileMenuOpen = !mobileMenuOpen">☰</button>
+        <button class="hamburger-btn" :aria-label="t('common.menu', 'Menu')" @click="mobileMenuOpen = !mobileMenuOpen">☰</button>
         <span class="topbar-title mono">{{ currentTitle }}</span>
         <div class="topbar-actions">
-          <button v-if="isWorkspace" class="fullscreen-btn mono" :title="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" @click="fullscreen = !fullscreen">
+          <button v-if="isWorkspace" class="fullscreen-btn mono" :aria-label="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" :title="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" @click="fullscreen = !fullscreen">
             {{ fullscreen ? '⊟' : '⊞' }}
           </button>
-          <button class="logout-btn" title="退出登录" @click="sessionLogout">
+          <button class="logout-btn" :aria-label="t('common.logout', 'Logout')" title="退出登录" @click="sessionLogout">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
               <polyline points="16 17 21 12 16 7" />
@@ -131,6 +144,7 @@ const currentTitle = computed(() => {
       <button
         v-if="fullscreen && isWorkspace"
         class="exit-fullscreen-btn mono"
+        :aria-label="t('common.exitFullscreen')"
         :title="t('common.exitFullscreen') + ' (Esc)'"
         @click="fullscreen = false"
       >
@@ -138,7 +152,7 @@ const currentTitle = computed(() => {
       </button>
       <main class="content" :class="{ 'content--keyboard-open': isKeyboardVisible }">
         <RouterView v-slot="{ Component }">
-          <KeepAlive :exclude="['login', 'setup']">
+          <KeepAlive :exclude="['login', 'setup', 'EnvironmentDetailPage']">
             <component :is="Component" />
           </KeepAlive>
         </RouterView>
@@ -147,9 +161,9 @@ const currentTitle = computed(() => {
 
     <!-- 移动端浮动快捷按钮 -->
     <div v-if="isWorkspace" class="mobile-fab">
-      <button class="fab-btn" :title="t('workspace.newTab')">+</button>
-      <button class="fab-btn" :title="t('workspace.split')">⊞</button>
-      <button class="fab-btn" :title="t('common.find')">🔍</button>
+      <button class="fab-btn" :aria-label="t('workspace.newTab')" :title="t('workspace.newTab')">+</button>
+      <button class="fab-btn" :aria-label="t('workspace.split')" :title="t('workspace.split')">⊞</button>
+      <button class="fab-btn" :aria-label="t('common.find')" :title="t('common.find')">🔍</button>
     </div>
 
     <!-- 移动端底部导航（键盘弹出时隐藏） -->
@@ -176,25 +190,21 @@ const currentTitle = computed(() => {
     </nav>
 
     <!-- Session timeout warning dialog -->
-    <Teleport to="body">
-      <div v-if="showWarning" class="session-warning-overlay">
-        <div class="session-warning-dialog">
-          <div class="session-warning-icon">⏱️</div>
-          <h3 class="session-warning-title">{{ t('session.warningTitle') }}</h3>
-          <p class="session-warning-message">
-            {{ t('session.warningMessage', { countdown: remainingSeconds }) }}
-          </p>
-          <div class="session-warning-actions">
-            <button class="session-warning-btn session-warning-btn--extend" @click="extendSession">
-              {{ t('session.extend') }}
-            </button>
-            <button class="session-warning-btn session-warning-btn--logout" @click="$router.push('/login')">
-              {{ t('session.logout') }}
-            </button>
-          </div>
+    <Modal :model-value="showWarning" :title="t('session.warningTitle')">
+      <p class="session-warning-message">
+        {{ t('session.warningMessage', { countdown: remainingSeconds }) }}
+      </p>
+      <template #footer>
+        <div class="session-warning-actions">
+          <Button variant="primary" @click="extendSession">
+            {{ t('session.extend') }}
+          </Button>
+          <Button variant="danger" @click="$router.push('/login')">
+            {{ t('session.logout') }}
+          </Button>
         </div>
-      </div>
-    </Teleport>
+      </template>
+    </Modal>
   </div>
 </template>
 
@@ -228,9 +238,36 @@ const currentTitle = computed(() => {
   overflow: hidden;
   white-space: nowrap;
 }
-.brand-mini {
-  color: var(--accent);
-  font-size: var(--text-xl);
+.sidebar-search {
+  position: relative;
+  padding: var(--space-2) var(--space-3);
+}
+.sidebar-search-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 var(--space-3) 0 var(--space-6);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  outline: none;
+  transition: border-color var(--transition);
+}
+.sidebar-search-input:focus {
+  border-color: var(--accent);
+}
+.sidebar-search-input::placeholder {
+  color: var(--text-muted);
+}
+.sidebar-search-icon {
+  position: absolute;
+  left: calc(var(--space-3) + var(--space-2));
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  pointer-events: none;
 }
 .accent {
   color: var(--accent);
@@ -491,37 +528,8 @@ const currentTitle = computed(() => {
 }
 
 /* Session timeout warning */
-.session-warning-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 3000;
-}
-.session-warning-dialog {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-6);
-  width: 380px;
-  max-width: 90vw;
-  text-align: center;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-}
-.session-warning-icon {
-  font-size: 36px;
-  margin-bottom: var(--space-3);
-}
-.session-warning-title {
-  margin: 0 0 var(--space-2);
-  font-size: var(--text-lg);
-  font-weight: 600;
-  color: var(--text-primary);
-}
 .session-warning-message {
-  margin: 0 0 var(--space-5);
+  margin: 0;
   font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.5;
@@ -529,32 +537,7 @@ const currentTitle = computed(() => {
 .session-warning-actions {
   display: flex;
   gap: var(--space-3);
-  justify-content: center;
-}
-.session-warning-btn {
-  padding: var(--space-2) var(--space-5);
-  border-radius: var(--radius);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid var(--border);
-  transition: background var(--transition), color var(--transition);
-}
-.session-warning-btn--extend {
-  background: var(--accent);
-  color: var(--text-on-accent);
-  border-color: var(--accent);
-}
-.session-warning-btn--extend:hover {
-  opacity: 0.9;
-}
-.session-warning-btn--logout {
-  background: var(--bg-hover);
-  color: var(--text-secondary);
-}
-.session-warning-btn--logout:hover {
-  background: var(--danger);
-  color: #fff;
-  border-color: var(--danger);
+  justify-content: flex-end;
+  width: 100%;
 }
 </style>

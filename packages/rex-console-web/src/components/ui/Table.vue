@@ -5,7 +5,8 @@ withDefaults(defineProps<{
   rowKey?: (row: T, index: number) => string | number
   striped?: boolean
   compact?: boolean
-}>(), { striped: false, compact: false, rowKey: (_row: T, index: number) => index })
+  selectedKey?: string | number | null
+}>(), { striped: false, compact: false, rowKey: (_row: T, index: number) => index, selectedKey: null })
 
 defineEmits<{ rowClick: [row: T, index: number] }>()
 </script>
@@ -31,6 +32,7 @@ defineEmits<{ rowClick: [row: T, index: number] }>()
             v-for="(row, i) in rows"
             :key="rowKey ? rowKey(row, i) : i"
             class="tr"
+            :class="{ 'tr--selected': selectedKey != null && rowKey(row, i) === selectedKey }"
             @click="$emit('rowClick', row, i)"
           >
             <td
@@ -83,6 +85,10 @@ defineEmits<{ rowClick: [row: T, index: number] }>()
 }
 .tr:hover {
   background: var(--bg-hover);
+}
+.tr--selected {
+  background: var(--accent-soft);
+  border-left: 2px solid var(--accent);
 }
 .td {
   padding: var(--space-2) var(--space-3);
