@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute, useRouter, onBeforeRouteUpdate } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
@@ -399,7 +399,7 @@ async function resetToken() {
     <!-- Resource Creation Wizard -->
     <WizardModal
       :visible="showWizard"
-      :environment-id="envId.value"
+      :environment-id="envId"
       @close="showWizard = false"
       @created="showWizard = false; refreshResources()"
     />
