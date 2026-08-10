@@ -78,7 +78,7 @@ impl UpdateChecker {
         // 查找当前平台的二进制和 SHA256
         let (os, arch) = get_platform();
         let binary_name = format!("rex-hub-{os}-{arch}");
-        let sha256_name = format!("rex-hub-SHA256SUMS");
+        let sha256_name = "rex-hub-SHA256SUMS".to_string();
 
         let download_url = release
             .assets

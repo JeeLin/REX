@@ -166,15 +166,15 @@ pub async fn csrf_protection(req: Request<axum::body::Body>, next: Next) -> Resp
             );
 
             // Origin 不匹配，拒绝请求
-            return (
+            (
                 StatusCode::FORBIDDEN,
                 "CSRF validation failed: origin mismatch",
             )
-                .into_response();
+                .into_response()
         }
         None => {
             // 无 Origin/Referer：允许同源直连（如 curl/API 客户端）
-            return next.run(req).await;
+            next.run(req).await
         }
     }
 }

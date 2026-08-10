@@ -32,8 +32,6 @@ impl SftpConnector {
         // 已有方括号的不再重复添加
         let addr = if config.host.contains(':') && !config.host.starts_with('[') {
             format!("[{}]:{}", config.host, config.port)
-        } else if config.host.starts_with('[') {
-            format!("{}:{}", config.host, config.port)
         } else {
             format!("{}:{}", config.host, config.port)
         };
