@@ -8,26 +8,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.66.0] - 2026-08-11
 
 ### Added
-- 设计系统：深色模式 CSS 变量、语义化 token（success-soft/danger-soft 等）、pulse-green 动画
-- 通用组件：Table 行选中高亮、Drawer Escape 键关闭、Select 键盘导航、Toast warning tone、barrel exports
-- 登录页：CRT 启动序列动画、毛玻璃卡片、终端美学重设计
-- 仪表盘：Quick Connect 区域、Card/Badge 共享组件
-- Agent 管理页：Badge 状态标签、条件部署指南、Switch 组件
-- 侧栏：全局搜索框、Session 超时弹窗使用共享 Modal
+- 全系统 UX/UI 重设计，深色优先高信息密度界面
+- 设计系统：深色模式 CSS 变量、语义化 token（success-soft/danger-soft 等）、pulse-green 动画、prefers-reduced-motion 支持
+- 通用组件优化：Table 行选中高亮、Drawer Escape 键关闭、Select 键盘导航 + type=button 修复、Toast warning tone、Input type prop 支持、barrel exports
+- 登录页重设计：CRT 启动序列动画、毛玻璃卡片、终端美学、动态版本号显示
+- 仪表盘重设计：统计磁贴 + 辉光效果、Quick Connect 网格、环境卡片
+- 环境管理页重设计：环境磁贴、共享 Input/Select/ContextMenu 组件
+- Agent 管理页重设计：Badge 状态标签、条件部署指南始终可访问、Switch 组件
+- 审计日志重设计：服务端分页（offset/limit）、共享 Select 筛选器、CSV 全量导出
+- 设置页重设计：共享 Input/Select/Switch 组件
+- 侧栏重设计：全局搜索框、Session 超时弹窗使用共享 Modal
+- 工作空间：Tab 右键菜单使用共享 ContextMenu 组件
+- 路由：添加 catch-all 路由 redirect 到工作区
 
 ### Changed
-- 全系统 UX/UI 重设计，统一使用共享组件（Input/Select/Switch/Checkbox/ContextMenu/Badge/Card）
+- 统一使用共享组件（Input/Select/Switch/Checkbox/ContextMenu/Badge/Card）
 - 硬编码 rgba 颜色替换为 design token 变量
 - 提取共享 agentStatus 工具函数
-- 添加 prefers-reduced-motion 媒体查询支持
+- 提取共享 page-header/page-title/page-subtitle CSS 类
+- 审计日志分页改为服务端 offset/limit，合并 fetchEntries + fetchStats
 
 ### Fixed
 - 安全：修复登录页开放重定向漏洞
+- Select：trigger button 添加 type=button 防止 form 误提交
+- KeepAlive：exclude 名称匹配 Vue 推断的组件名（EnvironmentDetailPage）
 - Drawer：Escape 键监听在初始打开时正确注册
 - Toast：组件卸载时清除未完成的定时器
 - 无障碍：按钮添加 aria-label、Toast 添加 aria-live、搜索框添加 aria-label
 - Dashboard：loading 状态正确显示
 - Settings：autoUpdate 初始加载时不再触发冗余 API 调用
+- 部署指南：始终可访问，不再仅在无 Agent 时显示
 
 
 ## [0.65.4] - 2026-08-10
