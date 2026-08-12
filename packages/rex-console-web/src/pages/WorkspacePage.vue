@@ -199,6 +199,25 @@ const tabColors = ['#f85149', '#3fb950', '#58a6ff', '#d29922', '#8b5cf6', '#e891
 const showQuickConnect = ref(false)
 const showMovePane = ref(false)
 
+const paneContextMenu = ref<{ show: boolean; x: number; y: number; paneId: string }>({ show: false, x: 0, y: 0, paneId: '' })
+
+function onPaneContextMenu(e: MouseEvent, paneId: string) {
+  e.preventDefault()
+  e.stopPropagation()
+  paneContextMenu.value = { show: true, x: e.clientX, y: e.clientY, paneId }
+}
+
+function handlePaneCtxAction(action: string) {
+  const paneId = paneContextMenu.value.paneId
+  if (!paneId) return
+  switch (action) {
+    case 'splitRight': splitPane(paneId, 'right'); break
+    case 'splitDown': splitPane(paneId, 'down'); break
+    case 'close': treeClosePane(paneId); break
+  }
+  paneContextMenu.value.show = false
+}
+
 function onTabContextMenu(e: MouseEvent, tabId: string) {
   e.preventDefault()
   tabContextMenu.value = { show: true, x: e.clientX, y: e.clientY, tabId }
@@ -611,6 +630,7 @@ useKeyboardShortcuts([
               :class="{ 'ws-pane--active': allLeaves[i - 1]?.id === activePaneId, 'ws-pane--drag-over': dragOverPane === i - 1 }"
               :title="t('workspace.dragHint')"
               @click="activePaneId = allLeaves[i - 1]?.id || activePaneId"
+              @contextmenu="onPaneContextMenu($event, allLeaves[i - 1]?.id || '')"
               @dragover.prevent="onPaneDragOver($event)"
               @dragenter.prevent="onPaneDragEnter($event, i - 1)"
               @dragleave="onPaneDragLeave(i - 1)"
