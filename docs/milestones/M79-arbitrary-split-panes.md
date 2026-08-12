@@ -15,7 +15,7 @@ M78 完成了全系统 UX/UI 重设计。当前工作空间的分屏系统仅支
 | # | 内容 | 前端/后端 | 状态 |
 |---|------|-----------|------|
 | 1 | 分屏树状数据结构设计与实现 | 前端 | ✅ |
-| 2 | 分屏面板渲染与方向切换 | 前端 | ⬜ |
+| 2 | 分屏面板渲染与方向切换 | 前端 | ✅ |
 | 3 | 分屏关闭与合并逻辑 | 前端 | ⬜ |
 | 4 | 右键菜单分屏操作 | 前端 | ⬜ |
 | 5 | 分屏状态持久化与恢复 | 前端 | ⬜ |
@@ -24,6 +24,7 @@ M78 完成了全系统 UX/UI 重设计。当前工作空间的分屏系统仅支
 | 8 | AuditLogPage 右键菜单改用 ContextMenu | 前端 | ⬜ |
 | 9 | 共享 EnvironmentTile 组件提取 | 前端 | ⬜ |
 | 10 | Select 组件 ARIA combobox 补全 | 前端 | ⬜ |
+| 11 | 快捷键文档维护 | 前端 | ⬜ |
 
 ## 子任务详细设计
 
@@ -151,6 +152,25 @@ M78 完成了全系统 UX/UI 重设计。当前工作空间的分屏系统仅支
   - dropdown 添加 `id` 以关联 `aria-controls`
 - **测试标准**：屏幕阅读器能正确播报 Select 状态
 - **提交信息**：`feat: complete ARIA combobox pattern in Select component`
+
+### 11 快捷键文档维护
+
+- **功能目标**：创建统一的快捷键文档，作为 ShortcutPanel 的数据源，确保快捷键变更时文档同步更新
+- **文件结构**：`packages/rex-console-web/src/config/shortcuts.ts`（新建）
+- **数据模型**：
+  ```ts
+  interface ShortcutEntry {
+    id: string
+    keys: string          // 如 "Ctrl+T"
+    description: string   // 本地化 key
+    category: 'workspace' | 'tab' | 'split' | 'nav'
+  }
+  ```
+- **交互设计**：
+  - ShortcutPanel 组件从 shortcuts.ts 读取数据渲染
+  - 所有 useKeyboardShortcuts 注册的快捷键在此文件中定义描述
+- **测试标准**：ShortcutPanel 显示所有快捷键，文档与代码一致
+- **提交信息**：`feat: centralize keyboard shortcuts documentation`
 
 ## 设计核对点
 

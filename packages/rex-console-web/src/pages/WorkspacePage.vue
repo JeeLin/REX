@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Splitpanes, Pane } from 'splitpanes'
 import { useWorkspacePersistence } from '@/composables/useWorkspacePersistence'
+import { usePaneLayout } from '@/composables/usePaneLayout'
 import 'splitpanes/dist/splitpanes.css'
 
 defineOptions({ name: 'WorkspacePage' })
@@ -52,11 +53,22 @@ interface Tab {
 
 const tabs = ref<Tab[]>([])
 const activeTab = ref<string>('')
-const splitDirection = ref<'row' | 'column'>('row')
-const paneTabs = ref<string[]>([])
-const splitCount = ref(1)
-const currentPane = ref(0)
 const dragOverPane = ref<number | null>(null)
+
+// 树状布局
+const {
+  root: paneLayoutRoot,
+  activePaneId,
+  allLeaves,
+  splitPane,
+  closePane: treeClosePane,
+  applyLayoutPreset,
+  setPaneTab,
+  serialize: serializeLayout,
+  deserialize: deserializeLayout,
+} = usePaneLayout()
+
+const splitCount = computed(() => allLeaves.value.length)
 
 watch(() => wsStore.pendingResource, (resource) => {
   if (!resource) return
@@ -146,25 +158,11 @@ function onEncodingChange(encoding: string) {
 }
 
 function currentPaneTabInfo(paneIndex: number) {
-  const tabId = paneTabs.value[paneIndex]
-  if (tabId === '') return null
-  return tabs.value.find(t => t.id === tabId) ?? tabs.value.find(t => t.id === activeTab.value)
+  const leaf = allLeaves.value[paneIndex]
+  if (!leaf || !leaf.tabId) return null
+  return tabs.value.find(t => t.id === leaf.tabId) ?? tabs.value.find(t => t.id === activeTab.value)
 }
 const activeTabInfo = computed(() => tabs.value.find(t => t.id === activeTab.value))
-// Per-pane tab sync: keep paneTabs array aligned with splitCount
-function syncPanes() {
-  while (paneTabs.value.length < splitCount.value) {
-    paneTabs.value.push(activeTab.value)
-  }
-  if (paneTabs.value.length > splitCount.value) {
-    paneTabs.value.length = splitCount.value
-  }
-  if (currentPane.value >= splitCount.value) {
-    currentPane.value = Math.max(0, splitCount.value - 1)
-  }
-}
-watch(activeTab, syncPanes)
-watch(splitCount, syncPanes)
 
 function openResourceFromTree(node: {
   id: string
@@ -178,7 +176,7 @@ function openResourceFromTree(node: {
   const existing = tabs.value.find(t => t.resourceId === resourceId && t.protocol === protocol)
   if (existing) {
     activeTab.value = existing.id
-    paneTabs.value[currentPane.value] = existing.id
+    setPaneTab(activePaneId.value, existing.id)
     return
   }
 
@@ -192,7 +190,7 @@ function openResourceFromTree(node: {
     status: 'connecting',
   })
   activeTab.value = id
-  paneTabs.value[currentPane.value] = id
+  setPaneTab(activePaneId.value, id)
 }
 
 // Tab 右键菜单
@@ -268,7 +266,8 @@ function onTabDragStart(e: DragEvent, tabId: string) {
   dragTabId.value = tabId
   e.dataTransfer!.effectAllowed = 'move'
   e.dataTransfer!.setData('text/tab-id', tabId)
-  const sourcePane = paneTabs.value.indexOf(tabId)
+  const sourceLeaf = allLeaves.value.find(l => l.tabId === tabId)
+  const sourcePane = sourceLeaf ? allLeaves.value.indexOf(sourceLeaf) : -1
   e.dataTransfer!.setData('text/source-pane', sourcePane >= 0 ? String(sourcePane) : '')
 }
 
@@ -350,20 +349,18 @@ function handleTabCtxAction(action: string) {
 function moveToPane(paneIndex: number) {
   const tabId = tabContextMenu.value.tabId
   if (!tabId) return
-  paneTabs.value[paneIndex] = tabId
-  currentPane.value = paneIndex
+  const targetLeaf = allLeaves.value[paneIndex]
+  if (targetLeaf) setPaneTab(targetLeaf.id, tabId)
   showMovePane.value = false
   tabContextMenu.value.show = false
 }
 
 // Double-click tab to split pane
 function onTabDoubleClick(tabId: string) {
-  if (splitCount.value !== 1) return
+  if (allLeaves.value.length !== 1) return
   currentLayout.value = 'left-right'
-  splitCount.value = 2
-  splitDirection.value = 'row'
-  paneTabs.value = [tabId, '']
-  currentPane.value = 0
+  applyLayoutPreset('left-right')
+  setPaneTab(activePaneId.value, tabId)
 }
 
 // Pane drag & drop handlers
@@ -388,14 +385,17 @@ function onPaneDrop(e: DragEvent, targetPaneIndex: number) {
   dragOverPane.value = null
   const tabId = e.dataTransfer!.getData('text/tab-id')
   if (!tabId) return
-  // 清除源 pane 中的 tab（避免重复渲染）
-  for (let i = 0; i < paneTabs.value.length; i++) {
-    if (paneTabs.value[i] === tabId && i !== targetPaneIndex) {
-      paneTabs.value[i] = ''
+  // 清除源 pane 中的 tab
+  for (const leaf of allLeaves.value) {
+    if (leaf.tabId === tabId && leaf.id !== allLeaves.value[targetPaneIndex]?.id) {
+      setPaneTab(leaf.id, null)
     }
   }
-  paneTabs.value[targetPaneIndex] = tabId
-  currentPane.value = targetPaneIndex
+  const targetLeaf = allLeaves.value[targetPaneIndex]
+  if (targetLeaf) {
+    setPaneTab(targetLeaf.id, tabId)
+    activePaneId.value = targetLeaf.id
+  }
 }
 
 const propsResource = computed(() => {
@@ -438,26 +438,15 @@ function onPropsSave(data: Pick<Tab, 'theme' | 'fontSize' | 'opacity' | 'cursorS
 
 // 分栏操作
 function splitHorizontal() {
-  splitCount.value++
-  splitDirection.value = 'row'
+  splitPane(activePaneId.value, 'right')
 }
 function splitVertical() {
-  splitCount.value++
-  splitDirection.value = 'column'
+  splitPane(activePaneId.value, 'down')
 }
 function closePane(idx: number) {
-  if (splitCount.value > 1) {
-    // Remove the tab from the targeted pane before decrementing splitCount
-    if (idx >= 0 && idx < paneTabs.value.length) {
-      paneTabs.value.splice(idx, 1)
-    }
-    splitCount.value--
-    if (currentPane.value >= splitCount.value) {
-      currentPane.value = splitCount.value - 1
-    } else if (currentPane.value > idx) {
-      // If current pane is after the closed one, shift left
-      currentPane.value--
-    }
+  const leaves = allLeaves.value
+  if (leaves.length > 1 && idx >= 0 && idx < leaves.length) {
+    treeClosePane(leaves[idx]!.id)
   }
 }
 
@@ -476,28 +465,7 @@ const currentLayout = ref<LayoutPreset>('single')
 
 function applyLayout(preset: LayoutPreset) {
   currentLayout.value = preset
-  switch (preset) {
-    case 'single':
-      splitCount.value = 1
-      splitDirection.value = 'row'
-      break
-    case 'left-right':
-      splitCount.value = 2
-      splitDirection.value = 'row'
-      break
-    case 'top-bottom':
-      splitCount.value = 2
-      splitDirection.value = 'column'
-      break
-    case 'grid-four':
-      splitCount.value = 4
-      splitDirection.value = 'row'
-      break
-    case 'main-side':
-      splitCount.value = 2
-      splitDirection.value = 'row'
-      break
-  }
+  applyLayoutPreset(preset)
 }
 
 // 协议状态点颜色
@@ -546,10 +514,10 @@ useKeyboardShortcuts([
   // Ctrl+N: 新建连接
   { key: 'n', ctrl: true, handler: () => { router.push('/resource-new') } },
   // Alt+6-9: 跳转到第 6-9 个标签
-  { key: '6', alt: true, handler: () => { if (tabs.value[5]) { activeTab.value = tabs.value[5].id; paneTabs.value[currentPane.value] = tabs.value[5].id } } },
-  { key: '7', alt: true, handler: () => { if (tabs.value[6]) { activeTab.value = tabs.value[6].id; paneTabs.value[currentPane.value] = tabs.value[6].id } } },
-  { key: '8', alt: true, handler: () => { if (tabs.value[7]) { activeTab.value = tabs.value[7].id; paneTabs.value[currentPane.value] = tabs.value[7].id } } },
-  { key: '9', alt: true, handler: () => { if (tabs.value[8]) { activeTab.value = tabs.value[8].id; paneTabs.value[currentPane.value] = tabs.value[8].id } } },
+  { key: '6', alt: true, handler: () => { if (tabs.value[5]) { activeTab.value = tabs.value[5].id; setPaneTab(activePaneId.value, tabs.value[5].id) } } },
+  { key: '7', alt: true, handler: () => { if (tabs.value[6]) { activeTab.value = tabs.value[6].id; setPaneTab(activePaneId.value, tabs.value[6].id) } } },
+  { key: '8', alt: true, handler: () => { if (tabs.value[7]) { activeTab.value = tabs.value[7].id; setPaneTab(activePaneId.value, tabs.value[7].id) } } },
+  { key: '9', alt: true, handler: () => { if (tabs.value[8]) { activeTab.value = tabs.value[8].id; setPaneTab(activePaneId.value, tabs.value[8].id) } } },
 ])
 </script>
 
@@ -564,7 +532,7 @@ useKeyboardShortcuts([
         :class="{ 'ws-tab--active': activeTab === tab.id, 'ws-tab--dragging': dragTabId === tab.id }"
         draggable="true"
         :title="t('workspace.splitHint')"
-        @click="activeTab = tab.id; paneTabs[currentPane] = tab.id"
+        @click="activeTab = tab.id; setPaneTab(activePaneId, tab.id)"
         @dblclick="onTabDoubleClick(tab.id)"
         @contextmenu="onTabContextMenu($event, tab.id)"
         @dragstart="onTabDragStart($event, tab.id)"
@@ -634,15 +602,15 @@ useKeyboardShortcuts([
       <!-- Split panes -->
       <div class="ws-body">
         <Splitpanes
-          :horizontal="splitDirection === 'column'"
+          :horizontal="paneLayoutRoot.direction === 'column'"
           class="ws-split"
         >
           <Pane v-for="i in splitCount" :key="`pane-${i}`" :size="100 / splitCount" :min-size="20">
             <div
               class="ws-pane"
-              :class="{ 'ws-pane--active': currentPane === i - 1, 'ws-pane--drag-over': dragOverPane === i - 1 }"
+              :class="{ 'ws-pane--active': allLeaves[i - 1]?.id === activePaneId, 'ws-pane--drag-over': dragOverPane === i - 1 }"
               :title="t('workspace.dragHint')"
-              @click="currentPane = i - 1"
+              @click="activePaneId = allLeaves[i - 1]?.id || activePaneId"
               @dragover.prevent="onPaneDragOver($event)"
               @dragenter.prevent="onPaneDragEnter($event, i - 1)"
               @dragleave="onPaneDragLeave(i - 1)"
@@ -661,8 +629,8 @@ useKeyboardShortcuts([
               <div v-if="currentPaneTabInfo(i - 1)?.protocol === 'ssh'" class="ws-ssh-area">
                 <KeepAlive>
                   <WorkspaceTerminal
-                    :key="paneTabs[i - 1]"
-                    :tab-id="paneTabs[i - 1]!"
+                    :key="allLeaves[i - 1]?.tabId || ''"
+                    :tab-id="allLeaves[i - 1]?.tabId || ''!"
                     :resource-id="currentPaneTabInfo(i - 1)?.resourceId || ''"
                     :protocol="currentPaneTabInfo(i - 1)?.protocol"
                     :theme="currentPaneTabInfo(i - 1)?.theme"
@@ -671,7 +639,7 @@ useKeyboardShortcuts([
                     :cursor-style="currentPaneTabInfo(i - 1)?.cursorStyle"
                     :cursor-blink="currentPaneTabInfo(i - 1)?.cursorBlink"
                     :background-image="currentPaneTabInfo(i - 1)?.backgroundImage"
-                    @update:status="onTabStatusChange(paneTabs[i - 1]!, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
+                    @update:status="onTabStatusChange(allLeaves[i - 1]?.tabId || ''!, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
                     @terminal-resize="onTerminalResize"
                     @encoding-change="onEncodingChange"
                     @toggle-sftp="toggleSftpDrawer"
@@ -688,27 +656,27 @@ useKeyboardShortcuts([
               <!-- SQL (MySQL / PostgreSQL / SQLite) -->
               <SqlPage
                 v-else-if="['mysql', 'postgresql', 'sqlite'].includes(currentPaneTabInfo(i - 1)?.protocol || '')"
-                :key="paneTabs[i - 1]"
+                :key="allLeaves[i - 1]?.tabId || ''"
                 :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
                 :db-type="currentPaneTabInfo(i - 1)?.protocol"
-                @update:status="onTabStatusChange(paneTabs[i - 1]!, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
+                @update:status="onTabStatusChange(allLeaves[i - 1]?.tabId || ''!, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
               />
 
               <!-- Redis -->
               <RedisPage
                 v-else-if="currentPaneTabInfo(i - 1)?.protocol === 'redis'"
-                :key="paneTabs[i - 1]"
+                :key="allLeaves[i - 1]?.tabId || ''"
                 :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
-                @update:status="onTabStatusChange(paneTabs[i - 1]!, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
+                @update:status="onTabStatusChange(allLeaves[i - 1]?.tabId || ''!, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
               />
 
               <!-- Files (SFTP / S3) -->
               <FilesPage
                 v-else-if="['sftp', 's3'].includes(currentPaneTabInfo(i - 1)?.protocol || '')"
-                :key="paneTabs[i - 1]"
+                :key="allLeaves[i - 1]?.tabId || ''"
                 :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
                 :protocol="currentPaneTabInfo(i - 1)?.protocol === 's3' ? 's3' : 'sftp'"
-                @update:status="onTabStatusChange(paneTabs[i - 1]!, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
+                @update:status="onTabStatusChange(allLeaves[i - 1]?.tabId || ''!, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
               />
 
               <!-- Empty state -->
