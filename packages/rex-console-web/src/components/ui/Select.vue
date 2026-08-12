@@ -129,6 +129,8 @@ watch(open, async (v) => {
       class="select-trigger"
       :disabled="disabled"
       :aria-expanded="open"
+      :aria-controls="open ? 'select-dropdown' : undefined"
+      :aria-activedescendant="highlightedIndex >= 0 ? `select-option-${highlightedIndex}` : undefined"
       role="combobox"
       @click="open ? closeDropdown() : openDropdown()"
       @keydown="onKeydown"
@@ -143,6 +145,7 @@ watch(open, async (v) => {
           <div
             v-for="(option, idx) in options"
             :key="option.value"
+            :id="`select-option-${idx}`"
             class="select-option"
             :class="{
               'select-option--selected': option.value === modelValue,
