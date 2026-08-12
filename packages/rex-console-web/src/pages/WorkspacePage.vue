@@ -12,6 +12,7 @@ import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import ContextMenu from '@/components/ui/ContextMenu.vue'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
+import { useSftpDrawer } from '@/composables/useSftpDrawer'
 import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
 import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
 import CommandPalette from '@/features/workspace/CommandPalette.vue'
@@ -112,24 +113,8 @@ onBeforeUnmount(() => {
 
 const terminalSize = ref<{ cols: number; rows: number } | null>(null)
 
-// SFTP drawer state (SSH Tab 内)
-const showSftpDrawer = ref(false)
-const sftpDrawerHeight = ref(240)
-let sftpDragStartY = 0
-let sftpDragStartH = 0
-
-function toggleSftpDrawer() {
-  showSftpDrawer.value = !showSftpDrawer.value
-}
-
-function startSftpDrag(e: MouseEvent) {
-  sftpDragStartY = e.clientY
-  sftpDragStartH = sftpDrawerHeight.value
-  document.addEventListener('mousemove', onSftpDrag)
-  document.addEventListener('mouseup', onSftpDragEnd)
-  document.body.style.cursor = 'row-resize'
-  document.body.style.userSelect = 'none'
-}
+// SFTP drawer
+const { show: showSftpDrawer, height: sftpDrawerHeight, toggle: toggleSftpDrawer, startDrag: startSftpDrag } = useSftpDrawer()
 
 function onSftpDrag(e: MouseEvent) {
   const delta = sftpDragStartY - e.clientY

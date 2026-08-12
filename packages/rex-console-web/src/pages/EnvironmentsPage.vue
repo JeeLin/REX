@@ -182,11 +182,14 @@ async function handleImport(event: Event) {
 
     <!-- Environment Grid -->
     <div v-else class="env-grid">
-      <button
+      <div
         v-for="env in store.environments"
         :key="env.id"
         class="env-tile"
+        role="button"
+        tabindex="0"
         @click="router.push(`/environments/${env.id}`)"
+        @keydown.enter="router.push(`/environments/${env.id}`)"
         @contextmenu.prevent="onContextMenu($event, env)"
       >
         <div class="env-tile-top">
