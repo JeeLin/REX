@@ -107,26 +107,12 @@ const timer = setInterval(() => {
 }, 1000)
 onBeforeUnmount(() => {
   clearInterval(timer)
-  document.removeEventListener('mousemove', onSftpDrag)
-  document.removeEventListener('mouseup', onSftpDragEnd)
 })
 
 const terminalSize = ref<{ cols: number; rows: number } | null>(null)
 
 // SFTP drawer
 const { show: showSftpDrawer, height: sftpDrawerHeight, toggle: toggleSftpDrawer, startDrag: startSftpDrag } = useSftpDrawer()
-
-function onSftpDrag(e: MouseEvent) {
-  const delta = sftpDragStartY - e.clientY
-  sftpDrawerHeight.value = Math.min(700, Math.max(120, sftpDragStartH + delta))
-}
-
-function onSftpDragEnd() {
-  document.removeEventListener('mousemove', onSftpDrag)
-  document.removeEventListener('mouseup', onSftpDragEnd)
-  document.body.style.cursor = ''
-  document.body.style.userSelect = ''
-}
 
 function formatConnection(tab: Tab): string {
   const proto = tab.protocol.toUpperCase()
