@@ -7,7 +7,7 @@ interface WorkspaceState {
   version: number
   tabs: SerializedTab[]
   activeTabId: string | null
-  splitCount: number
+  paneLayout: string  // JSON-serialized pane tree
   timestamp: number
 }
 
@@ -20,16 +20,15 @@ interface SerializedTab {
   status: string
 }
 
-/**
- * Persist workspace tabs to localStorage and restore on page reload.
- * Call once in WorkspacePage setup.
- */
 export function useWorkspacePersistence(opts: {
   tabs: Ref<Array<{ id: string; label: string; protocol: string; resourceId?: string; environmentId?: string; status: string }>>
   activeTab: Ref<string>
-  splitCount: Ref<number>
+  paneLayoutSerialize: () => string
+  paneLayoutDeserialize: (data: string) => void
+  allLeaves: Ref<Array<{ id: string; tabId: string | null }>>
+  setPaneTab: (paneId: string, tabId: string | null) => void
 }) {
-  const { tabs, activeTab, splitCount } = opts
+  const { tabs, activeTab, paneLayoutSerialize, paneLayoutDeserialize, allLeaves, setPaneTab } = opts
 
   function restore(): boolean {
     try {
@@ -64,9 +63,23 @@ export function useWorkspacePersistence(opts: {
         activeTab.value = tabs.value[0]!.id
       }
 
-      // Restore split count
-      if (state.splitCount > 0) {
-        splitCount.value = state.splitCount
+      // Restore pane layout
+      if (state.paneLayout) {
+        paneLayoutDeserialize(state.paneLayout)
+      }
+
+      // Restore tab-to-pane bindings
+      if (state.tabs) {
+        for (const t of state.tabs) {
+          const leaves = allLeaves.value
+          // Find first unbound leaf and bind it
+          for (const leaf of leaves) {
+            if (!leaf.tabId) {
+              setPaneTab(leaf.id, t.id)
+              break
+            }
+          }
+        }
       }
 
       return tabs.value.length > 0
@@ -78,7 +91,7 @@ export function useWorkspacePersistence(opts: {
   function save() {
     try {
       const state: WorkspaceState = {
-        version: 1,
+        version: 2,
         tabs: tabs.value.map(t => ({
           id: t.id,
           label: t.label,
@@ -88,7 +101,7 @@ export function useWorkspacePersistence(opts: {
           status: t.status,
         })),
         activeTabId: activeTab.value,
-        splitCount: splitCount.value,
+        paneLayout: paneLayoutSerialize(),
         timestamp: Date.now(),
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
@@ -98,7 +111,7 @@ export function useWorkspacePersistence(opts: {
   }
 
   // Auto-save on state changes
-  watch([tabs, activeTab, splitCount], save, { deep: true })
+  watch([tabs, activeTab], save, { deep: true })
 
   return { restore, save }
 }

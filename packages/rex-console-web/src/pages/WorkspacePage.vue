@@ -88,7 +88,7 @@ function handleKeydown(e: KeyboardEvent) {
 }
 
 // 工作区状态保活：切换页面回来时恢复 tab
-const { restore } = useWorkspacePersistence({ tabs, activeTab, splitCount })
+const { restore } = useWorkspacePersistence({ tabs, activeTab, paneLayoutSerialize: serializeLayout, paneLayoutDeserialize: deserializeLayout, allLeaves, setPaneTab })
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
