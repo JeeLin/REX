@@ -7,6 +7,7 @@ import type { FileEntry } from '@/api/files'
 import FolderSyncDialog from './FolderSyncDialog.vue'
 import MobileFilesBar from './MobileFilesBar.vue'
 import FileEditorDialog from './FileEditorDialog.vue'
+import Button from '@/components/ui/Button.vue'
 
 const { t } = useI18n()
 
@@ -529,12 +530,12 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
     <template v-for="side in (['left','right'] as const)" :key="side">
       <div class="fp-panel" :class="{ 'fp-panel--active': panels[side].active, 'fp-panel--drop': dropTarget === side, 'fp-panel--mobile-hidden': mobileActiveSide !== side }" :style="side==='left' ? {width:leftW+'px'} : {flex:'1',minWidth:'0'}" @click="activate(side)" @dragover="onDragOver($event, side)" @dragleave="onDragLeave" @drop="onDrop($event, side)">
         <div class="ptb">
-          <button class="pb" @click="goUp(side)">↑</button>
+          <Button variant="ghost" icon :title="t('files.up')" @click="goUp(side)">↑</Button>
           <span class="pp mono">{{ panels[side].path }}</span>
-          <button class="pb" :class="{ 'pb--active': syncBrowsing }" :title="t('files.syncBrowsing')" @click="syncBrowsing = !syncBrowsing">🔗</button>
-          <button class="pb" :title="t('files.folderSync')" @click="openSyncDialog">🔄</button>
-          <button class="pb" @click="uploadTo(side)">⬆</button>
-          <button class="pb" @click="loadPanel(side)">↻</button>
+          <Button variant="ghost" icon :class="{ 'pb--active': syncBrowsing }" :title="t('files.syncBrowsing')" @click="syncBrowsing = !syncBrowsing">🔗</Button>
+          <Button variant="ghost" icon :title="t('files.folderSync')" @click="openSyncDialog">🔄</Button>
+          <Button variant="ghost" icon :title="t('files.upload')" @click="uploadTo(side)">⬆</Button>
+          <Button variant="ghost" icon :title="t('files.refresh')" @click="loadPanel(side)">↻</Button>
         </div>
         <div class="pf">
           <div class="fr fh"><span class="cn">{{ t('files.name') }}</span><span class="cs">{{ t('files.size') }}</span><span class="cm">{{ t('files.modified') }}</span><span v-if="isS3" class="csc">{{ t('files.storageClass') }}</span><span v-if="isS3" class="csc">{{ t('files.acl') }}</span></div>
@@ -593,8 +594,8 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
           </div>
           <div class="chmod-octal">{{ t('files.octal') }}: {{ calcOctal().toString(8) }}</div>
           <div style="display:flex;gap:var(--space-2);justify-content:flex-end">
-            <button class="btn" @click="showChmod = false">{{ t('files.cancel') }}</button>
-            <button class="btn" style="background:var(--accent);color:#fff" @click="applyChmod">{{ t('files.apply') }}</button>
+            <Button variant="primary" @click="showChmod = false">{{ t('files.cancel') }}</Button>
+            <Button variant="primary" @click="applyChmod">{{ t('files.apply') }}</Button>
           </div>
         </div>
       </div>
@@ -607,7 +608,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
           <h3>{{ t('files.acl') }}: {{ aclPath }}</h3>
           <div style="margin:var(--space-3) 0">
             <label style="display:block;font-size:var(--text-sm);color:var(--text-muted);margin-bottom:var(--space-1)">{{ t('files.cannedAcl') }}</label>
-            <select v-model="aclValue" style="width:100%;padding:var(--space-2);background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:var(--text-sm)">
+            <select v-model="aclValue" style="width:100%;padding:var(--space-2);background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:var(--text-sm)">
               <option value="private">private</option>
               <option value="public-read">public-read</option>
               <option value="public-read-write">public-read-write</option>
@@ -615,8 +616,8 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
             </select>
           </div>
           <div style="display:flex;gap:var(--space-2);justify-content:flex-end">
-            <button class="btn" @click="showAclDialog = false">{{ t('files.cancel') }}</button>
-            <button class="btn" style="background:var(--accent);color:#fff" @click="applyAcl">{{ t('files.apply') }}</button>
+            <Button variant="ghost" @click="showAclDialog = false">{{ t('files.cancel') }}</Button>
+            <Button variant="primary" @click="applyAcl">{{ t('files.apply') }}</Button>
           </div>
         </div>
       </div>
@@ -649,8 +650,8 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
             {{ t('files.deleteConfirm') }}
           </p>
           <div style="display:flex;gap:var(--space-2);justify-content:flex-end">
-            <button class="btn" style="background:var(--bg-hover);color:var(--text-primary)" @click="cancelDelete">{{ t('files.cancel') }}</button>
-            <button class="btn" style="background:var(--danger);color:#fff" @click="executeDelete">{{ t('files.delete') }}</button>
+            <Button variant="ghost" @click="cancelDelete">{{ t('files.cancel') }}</Button>
+            <Button variant="danger" @click="executeDelete">{{ t('files.delete') }}</Button>
           </div>
         </div>
       </div>
@@ -735,15 +736,11 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
 .f input,.f select{padding:var(--space-2);background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:var(--text-sm);outline:none}
 .f input:focus,.f select:focus{border-color:var(--accent)}
 .err{color:var(--danger);font-size:var(--text-sm)}
-.btn{padding:var(--space-2);background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);cursor:pointer}
-.btn:disabled{opacity:.5}
 .fp-panel{display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden;flex-shrink:0}
 .fp-panel--active{border-left:2px solid var(--accent)}
-.fp-panel--drop{background:rgba(232,145,45,0.08);outline:2px dashed var(--accent);outline-offset:-2px}
+.fp-panel--drop{background:var(--accent-soft);outline:2px dashed var(--accent);outline-offset:-2px}
 .ptb{display:flex;align-items:center;gap:var(--space-1);padding:var(--space-1) var(--space-2);border-bottom:1px solid var(--border);background:var(--bg-surface)}
-.pb{background:none;border:none;color:var(--text-muted);cursor:pointer;padding:var(--space-1);border-radius:var(--radius-sm);font-size:var(--text-sm)}
-.pb:hover{color:var(--text-primary)}
-.pb--active{color:var(--accent);background:rgba(232,145,45,0.1)}
+.pb--active{color:var(--accent);background:var(--accent-soft)}
 .pp{flex:1;font-size:var(--text-xs);color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pf{flex:1;overflow-y:auto}
 .fr{display:flex;padding:var(--space-1) var(--space-3);font-size:var(--text-sm);cursor:pointer}
@@ -777,7 +774,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
   .fp{flex-direction:column}
   .fp-switcher{display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--bg-surface);flex-shrink:0}
   .fp-switcher-btn{flex:1;padding:var(--space-2);background:none;border:none;color:var(--text-muted);font-size:var(--text-sm);cursor:pointer;border-bottom:2px solid transparent}
-  .fp-switcher-btn--active{color:var(--accent);border-bottom-color:var(--accent);background:rgba(232,145,45,0.05)}
+  .fp-switcher-btn--active{color:var(--accent);border-bottom-color:var(--accent);background:var(--accent-soft)}
   .fp-panel--mobile-hidden{display:none !important}
   .fh2{display:none !important}
   .cm{display:none !important}
@@ -794,7 +791,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
 .tq-toggle{position:fixed;bottom:var(--space-4);right:var(--space-4);z-index:90;display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:var(--text-sm);color:var(--text-primary);box-shadow:var(--shadow);transition:border-color 0.15s}
 .tq-toggle:hover{border-color:var(--accent)}
 .tq-badge{font-size:var(--text-xs);padding:1px 6px;border-radius:var(--radius-sm)}
-.tq-badge--done{background:rgba(34,197,94,0.15);color:#22c55e}
+.tq-badge--done{background:var(--success-soft);color:var(--success)}
 
 /* Transfer queue panel */
 .tq-panel{position:fixed;bottom:0;right:0;z-index:200;width:380px;max-height:50vh;background:var(--bg-elevated);border-top:1px solid var(--border);border-left:1px solid var(--border);border-radius:var(--radius) var(--radius) 0 0;display:flex;flex-direction:column;box-shadow:0 -4px 16px rgba(0,0,0,0.25)}
@@ -813,7 +810,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
 .tq-item-status{display:flex;align-items:center;gap:var(--space-2);flex-shrink:0}
 .tq-item-pct{font-size:var(--text-xs);color:var(--text-muted);min-width:36px;text-align:right}
 .tq-item-error{font-size:var(--text-xs);color:var(--danger);max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tq-item-done{color:#22c55e;font-weight:600}
+.tq-item-done{color:var(--success);font-weight:600}
 .tq-item-pending{font-size:var(--text-xs);color:var(--text-muted)}
 
 /* Progress bar */
@@ -824,7 +821,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
 .tq-btn{padding:var(--space-1) var(--space-2);background:var(--bg-hover);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:var(--text-xs);color:var(--text-primary);white-space:nowrap}
 .tq-btn:hover{background:var(--bg-deep)}
 .tq-btn--retry{color:var(--accent);border-color:var(--accent)}
-.tq-btn--retry:hover{background:rgba(232,145,45,0.1)}
+.tq-btn--retry:hover{background:var(--accent-soft)}
 .tq-btn--sm{padding:2px var(--space-2);font-size:var(--text-xs)}
 .tq-empty{padding:var(--space-4);text-align:center;color:var(--text-muted);font-size:var(--text-sm)}
 
