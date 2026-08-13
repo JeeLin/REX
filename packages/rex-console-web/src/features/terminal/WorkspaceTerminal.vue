@@ -12,6 +12,7 @@ import Modal from '@/components/ui/Modal.vue'
 import Button from '@/components/ui/Button.vue'
 import MobileTerminalBar from './MobileTerminalBar.vue'
 import Toast from '@/components/ui/Toast.vue'
+import { clipboard } from '@/utils/clipboard'
 
 const { t } = useI18n()
 const toast = ref<InstanceType<typeof Toast>>()
@@ -19,6 +20,7 @@ const toast = ref<InstanceType<typeof Toast>>()
 const props = defineProps<{
   tabId: string
   resourceId: string
+  name?: string
   host?: string
   port?: number
   protocol?: string
@@ -210,21 +212,14 @@ function initTerminal() {
     // Ctrl+V → paste from clipboard
     if (ctrl && event.key === 'v') {
       event.preventDefault()
-      if (navigator.clipboard?.readText) {
-        navigator.clipboard.readText().then(text => {
-          if (text && ws?.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'terminal.data', data: btoa(text) }))
-          }
-        }).catch(() => {})
-      }
+      void doPaste()
       return false
     }
     // Ctrl+C → copy selection or SIGINT
     if (ctrl && !event.shiftKey && (event.key === 'c' || event.key === 'C')) {
       const selection = terminal?.getSelection()
       if (selection) {
-        navigator.clipboard?.writeText(selection)
-        toast.value?.push(t('terminal.clipboard.copied', 'Copied'), 'success')
+        void doCopy()
         return false
       }
     }
@@ -232,8 +227,7 @@ function initTerminal() {
     if (ctrl && event.shiftKey && (event.key === 'c' || event.key === 'C')) {
       const selection = terminal?.getSelection()
       if (selection) {
-        navigator.clipboard?.writeText(selection)
-        toast.value?.push(t('terminal.clipboard.copied', 'Copied'), 'success')
+        void doCopy()
       }
       return false
     }
@@ -422,25 +416,21 @@ function handleReconnect() {
 }
 
 // ── Copy / Paste ──────────────────────────────────────────
-function handleCopy() {
+async function doCopy() {
   const selection = terminal?.getSelection()
   if (selection) {
-    navigator.clipboard?.writeText(selection)
+    await clipboard.writeText(selection)
     toast.value?.push(t('terminal.clipboard.copied', 'Copied'), 'success')
   }
 }
 
-async function handlePaste() {
-  try {
-    const text = await navigator.clipboard.readText()
-    if (text && ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
-        type: 'terminal.data',
-        data: btoa(text),
-      }))
-    }
-  } catch {
-    // clipboard access denied
+async function doPaste() {
+  const text = await clipboard.readText()
+  if (text && ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'terminal.data',
+      data: btoa(text),
+    }))
   }
 }
 
@@ -448,10 +438,10 @@ function clearTerminal() {
   terminal?.clear()
 }
 
-function handleCopyAddress() {
+async function handleCopyAddress() {
   const address = props.host ? `${props.host}:${props.port || 22}` : ''
   if (address) {
-    navigator.clipboard.writeText(address)
+    await clipboard.writeText(address)
     toast.value?.push(t('terminal.copyAddress', 'Address copied'), 'success')
   }
 }
@@ -461,8 +451,8 @@ function handleContextMenu(event: MouseEvent) {
   if (!terminal) return
   const selection = terminal.getSelection()
   showContextMenu(event.clientX, event.clientY, [
-    { label: t('terminal.ctx.copy', 'Copy'), action: handleCopy, disabled: !selection },
-    { label: t('terminal.ctx.paste', 'Paste'), action: handlePaste },
+    { label: t('terminal.ctx.copy', 'Copy'), action: doCopy, disabled: !selection },
+    { label: t('terminal.ctx.paste', 'Paste'), action: doPaste },
     { label: t('terminal.ctx.selectAll', 'Select All'), action: () => terminal?.selectAll() },
     { separator: true, label: '', action: () => {} },
     { label: t('terminal.ctx.clear', 'Clear'), action: clearTerminal },
@@ -545,13 +535,13 @@ onBeforeUnmount(() => {
     <div class="wt-toolbar" @contextmenu.prevent="handleToolbarContextMenu">
       <div class="wt-info">
         <span class="wt-status-dot" :class="statusDotClass">●</span>
-        <span class="wt-resource-name">{{ host || resourceId }}</span>
+        <span class="wt-resource-name">{{ name || host || resourceId }}</span>
         <span v-if="latency !== null" class="wt-latency" :class="latencyClass">{{ latency }}ms</span>
       </div>
       <div class="wt-spacer"></div>
       <div class="wt-actions">
         <button class="wt-btn" @click="clearTerminal" :title="t('terminal.clear', 'Clear')">⌫</button>
-        <button class="wt-btn" @click="handlePaste" :title="t('terminal.paste', 'Paste')">📋</button>
+        <button class="wt-btn" @click="doPaste" :title="t('terminal.paste', 'Paste')">📋</button>
         <button class="wt-btn" :class="{ active: showSearch }" @click="showSearch = !showSearch" :title="t('terminal.find', 'Find')">🔍</button>
         <button class="wt-btn" @click="emit('toggle-sftp')" :title="t('terminal.sftp', 'SFTP')">📁</button>
         <span class="wt-sep"></span>
