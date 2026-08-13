@@ -459,6 +459,16 @@ useKeyboardShortcuts([
     <!-- Shortcut panel -->
     <ShortcutPanel :show="showShortcuts" @close="showShortcuts = false" />
 
+    <!-- Bottom-right shortcut guide toggle -->
+    <button
+      class="ws-shortcut-fab"
+      :title="t('shortcuts.title')"
+      :aria-label="t('shortcuts.title')"
+      @click="showShortcuts = !showShortcuts"
+    >
+      ⌨
+    </button>
+
     <!-- Resource properties dialog -->
     <ResourceProperties
       v-model:show="showProps"
@@ -778,6 +788,33 @@ useKeyboardShortcuts([
 .ws-pane--drag-over {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
+}
+
+/* Bottom-right shortcut guide toggle */
+.ws-shortcut-fab {
+  position: fixed;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 70;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition), border-color var(--transition);
+}
+.ws-shortcut-fab:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  border-color: var(--accent);
 }
 
 </style>
