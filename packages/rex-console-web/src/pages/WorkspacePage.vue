@@ -621,7 +621,7 @@ useKeyboardShortcuts([
                 <KeepAlive>
                   <WorkspaceTerminal
                     :key="allLeaves[i - 1]?.tabId || ''"
-                    :tab-id="allLeaves[i - 1]?.tabId || ''!"
+                    :tab-id="allLeaves[i - 1]?.tabId || ''"
                     :resource-id="currentPaneTabInfo(i - 1)?.resourceId || ''"
                     :protocol="currentPaneTabInfo(i - 1)?.protocol"
                     :theme="currentPaneTabInfo(i - 1)?.theme"
@@ -630,7 +630,7 @@ useKeyboardShortcuts([
                     :cursor-style="currentPaneTabInfo(i - 1)?.cursorStyle"
                     :cursor-blink="currentPaneTabInfo(i - 1)?.cursorBlink"
                     :background-image="currentPaneTabInfo(i - 1)?.backgroundImage"
-                    @update:status="onTabStatusChange(allLeaves[i - 1]?.tabId || ''!, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
+                    @update:status="onTabStatusChange(allLeaves[i - 1]?.tabId || '', $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
                     @terminal-resize="onTerminalResize"
                     @encoding-change="onEncodingChange"
                     @toggle-sftp="toggleSftpDrawer"
@@ -650,7 +650,7 @@ useKeyboardShortcuts([
                 :key="allLeaves[i - 1]?.tabId || ''"
                 :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
                 :db-type="currentPaneTabInfo(i - 1)?.protocol"
-                @update:status="onTabStatusChange(allLeaves[i - 1]?.tabId || ''!, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
+                @update:status="onTabStatusChange(allLeaves[i - 1]?.tabId || '', $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
               />
 
               <!-- Redis -->
@@ -658,7 +658,7 @@ useKeyboardShortcuts([
                 v-else-if="currentPaneTabInfo(i - 1)?.protocol === 'redis'"
                 :key="allLeaves[i - 1]?.tabId || ''"
                 :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
-                @update:status="onTabStatusChange(allLeaves[i - 1]?.tabId || ''!, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
+                @update:status="onTabStatusChange(allLeaves[i - 1]?.tabId || '', $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
               />
 
               <!-- Files (SFTP / S3) -->
@@ -667,7 +667,7 @@ useKeyboardShortcuts([
                 :key="allLeaves[i - 1]?.tabId || ''"
                 :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
                 :protocol="currentPaneTabInfo(i - 1)?.protocol === 's3' ? 's3' : 'sftp'"
-                @update:status="onTabStatusChange(allLeaves[i - 1]?.tabId || ''!, $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
+                @update:status="onTabStatusChange(allLeaves[i - 1]?.tabId || '', $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
               />
 
               <!-- Empty state -->

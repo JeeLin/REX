@@ -23,7 +23,7 @@ M78 完成了全系统 UX/UI 重设计。当前工作空间的分屏系统仅支
 | 7 | env-tile 嵌套 button 修复 | 前端 | ✅ |
 | 8 | AuditLogPage 右键菜单改用 ContextMenu | 前端 | ✅ |
 | 9 | 共享 EnvironmentTile 组件提取 | 前端 | ✅ |
-| 10 | Select 组件 ARIA combobox 补全 | 前端 | ⬜ |
+| 10 | Select 组件 ARIA combobox 补全 | 前端 | ✅ |
 | 11 | 快捷键文档维护 | 前端 | ✅ |
 
 ## 子任务详细设计
