@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.67.0] - 2026-08-13
+
+### Fixed
+- 工作区：分栏按钮点击无响应（splitHorizontal/splitVertical 现接收 paneId，状态栏与 pane 头部按钮均可分屏）
+- 工作区：pane 右键 ContextMenu 未渲染（补齐模板与 handlePaneCtxAction 绑定）
+- 工作区：复制粘贴多处失效（新增 clipboard 工具，HTTP 下回退到 execCommand）
+- 工作区：终端标题展示资源名称而非资源 ID
+- 工作区：左上/右上分栏图标语义错误（⊞ 四宫格改为 ⬌ 左右 / ⬍ 上下）
+- 工作区：持久化恢复时 tabs 多于布局 leaves 数量未对齐（超额 tab 直接丢弃）
+- 环境页：左侧新建资源后已打开环境页未实时刷新（资源列表改读响应式 envResources store）
+- 环境详情页：编辑旁新增删除按键（带确认弹窗）
+- 资源编辑：新增测试连接按钮
+- IPv6 资源无法连接（mysql/postgresql/redis 统一 bracket_host 包裹 IPv6 地址）
+- 设置：更新选项 i18n 缺失（补充 autoUpdate/currentVersion/latestVersion 翻译）
+- 后端：SSH/SQL/Redis 连接日志增加 resource_name 便于识别
+- Agent：部署引导文档 env 名错误（REX_SERVER/REX_TOKEN 改为 REX_HUB_URL/REX_AGENT_TOKEN），移除不生效的 auto_update 开关（Agent 本就默认自动更新、仅读环境变量）
+
 ## [0.66.0] - 2026-08-11
 
 ### Added
