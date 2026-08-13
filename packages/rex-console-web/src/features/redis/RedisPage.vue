@@ -1244,7 +1244,7 @@ async function flushDb() {
 .btn-primary {
   padding: var(--space-2) var(--space-4);
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -1326,7 +1326,7 @@ async function flushDb() {
 
 .redis-db-item--active {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 .redis-db-count {
@@ -1414,12 +1414,12 @@ async function flushDb() {
   flex-shrink: 0;
 }
 
-.type-string { background: rgba(63,185,80,0.2); color: #3FB950; }
-.type-list { background: rgba(139,92,246,0.2); color: #8B5CF6; }
-.type-set { background: rgba(88,166,255,0.2); color: #58A6FF; }
-.type-zset { background: rgba(232,145,45,0.2); color: #E8912D; }
-.type-hash { background: rgba(248,81,73,0.2); color: #F85149; }
-.type-stream { background: rgba(210,153,34,0.2); color: #D29922; }
+.type-string { background: var(--success-soft); color: var(--success); }
+.type-list { background: var(--purple-soft); color: var(--purple); }
+.type-set { background: var(--info-soft); color: var(--proto-mysql); }
+.type-zset { background: var(--accent-soft); color: var(--accent); }
+.type-hash { background: var(--danger-soft); color: var(--danger); }
+.type-stream { background: var(--warning-soft); color: var(--warning); }
 
 .redis-key-name {
   overflow: hidden;
@@ -1484,7 +1484,7 @@ async function flushDb() {
 .redis-tab--active {
   background: var(--accent);
   border-color: var(--accent);
-  color: white;
+  color: var(--text-on-accent);
 }
 
 .redis-tab-name {
@@ -1792,7 +1792,7 @@ async function flushDb() {
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: white;
+  color: var(--text-on-accent);
 }
 
 .btn-primary:hover {
@@ -1802,7 +1802,7 @@ async function flushDb() {
 .btn-danger {
   background: var(--danger);
   border-color: var(--danger);
-  color: white;
+  color: var(--text-on-accent);
 }
 
 .btn-danger:hover {

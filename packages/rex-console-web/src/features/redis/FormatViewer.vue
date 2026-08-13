@@ -17,11 +17,11 @@ const FORMAT_META: Record<Format, { label: string; color?: string }> = {
   hex: { label: 'Hex' },
   json: { label: 'JSON' },
   binary: { label: 'Binary' },
-  msgpack: { label: 'Msgpack', color: '#58A6FF' },
-  php_serialize: { label: 'PHP', color: '#8B5CF6' },
-  java_serialize: { label: 'Java', color: '#D29922' },
-  pickle: { label: 'Pickle', color: '#3FB950' },
-  compressed: { label: 'Compressed', color: '#F85149' },
+  msgpack: { label: 'Msgpack', color: 'var(--proto-mysql)' },
+  php_serialize: { label: 'PHP', color: 'var(--purple)' },
+  java_serialize: { label: 'Java', color: 'var(--warning)' },
+  pickle: { label: 'Pickle', color: 'var(--success)' },
+  compressed: { label: 'Compressed', color: 'var(--danger)' },
 }
 
 // Client-side format detection (fallback when no formatInfo from backend)
