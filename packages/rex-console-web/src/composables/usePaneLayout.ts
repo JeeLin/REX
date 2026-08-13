@@ -106,7 +106,8 @@ export function usePaneLayout() {
    */
   function splitPane(paneId: string, direction: 'right' | 'down') {
     const result = findNode(root.value, paneId)
-    if (!result || result.node.direction !== null) return  // 只能分叶子
+    if (!result || !result.parent || result.node.direction !== null) return  // 只能分非根叶子
+    if (result.parent.children.length === 0) return  // 无兄弟节点无法插入
 
     const { node, parent } = result
     if (!parent) return
@@ -258,8 +259,8 @@ export function usePaneLayout() {
       if (parsed.root) root.value = parsed.root
       if (parsed.activePaneId) activePaneId.value = parsed.activePaneId
       if (parsed.nodeIdCounter) nodeIdCounter = parsed.nodeIdCounter
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error('Failed to deserialize pane layout:', err)
     }
   }
 

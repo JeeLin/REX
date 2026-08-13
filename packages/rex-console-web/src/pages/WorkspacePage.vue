@@ -13,6 +13,7 @@ import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import ContextMenu from '@/components/ui/ContextMenu.vue'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useSftpDrawer } from '@/composables/useSftpDrawer'
+import { useTabs, type Tab } from '@/composables/useTabs'
 import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
 import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
 import CommandPalette from '@/features/workspace/CommandPalette.vue'
@@ -30,30 +31,6 @@ const { t } = useI18n()
 const router = useRouter()
 const wsStore = useWorkspaceStore()
 
-interface Tab {
-  id: string
-  label: string
-  protocol: 'ssh' | 'mysql' | 'redis' | 'postgresql' | 'sftp' | 'sqlite' | 's3'
-  resourceId?: string
-  environmentId?: string
-  connectionMode?: string
-  agentId?: string
-  status: 'connecting' | 'connected' | 'disconnected' | 'error'
-  color?: string
-  renaming?: boolean
-  broadcast?: boolean
-  // Terminal settings
-  theme?: string
-  fontSize?: number
-  opacity?: number
-  cursorStyle?: string
-  cursorBlink?: boolean
-  backgroundImage?: string
-  encoding?: string
-}
-
-const tabs = ref<Tab[]>([])
-const activeTab = ref<string>('')
 const dragOverPane = ref<number | null>(null)
 
 // 树状布局
@@ -71,9 +48,39 @@ const {
 
 const splitCount = computed(() => allLeaves.value.length)
 
+// Tab 管理：抽离到 useTabs composable（依赖 usePaneLayout 的 activePaneId / setPaneTab）
+const {
+  tabs,
+  activeTab,
+  activeTabInfo,
+  tabContextMenu,
+  dragTabId,
+  tabColors,
+  findTab,
+  formatConnection,
+  openResource,
+  closeTab,
+  closeOtherTabs,
+  closeTabsRight,
+  closeTabsLeft,
+  closeAllTabs,
+  duplicateTab,
+  toggleBroadcast,
+  startRename,
+  finishRename,
+  setTabColor,
+  onTabStatusChange: onTabStatusChangeFromTabs,
+  onTabContextMenu,
+  handleTabCtxAction,
+  onTabDragStart,
+  onTabDragOver,
+  onTabDrop,
+  onTabDragEnd,
+} = useTabs({ activePaneId, setPaneTab })
+
 watch(() => wsStore.pendingResource, (resource) => {
   if (!resource) return
-  openResourceFromTree(resource)
+  openResource(resource)
   wsStore.consumePending()
 }, { immediate: true })
 
@@ -114,59 +121,22 @@ const terminalSize = ref<{ cols: number; rows: number } | null>(null)
 // SFTP drawer
 const { show: showSftpDrawer, height: sftpDrawerHeight, toggle: toggleSftpDrawer, startDrag: startSftpDrag } = useSftpDrawer()
 
-function formatConnection(tab: Tab): string {
-  const proto = tab.protocol.toUpperCase()
-  return proto
-}
-
 function onTerminalResize(cols: number, rows: number) {
   terminalSize.value = { cols, rows }
 }
 
 function onEncodingChange(encoding: string) {
-  const tab = tabs.value.find(t => t.id === activeTab.value)
+  const tab = findTab(activeTab.value)
   if (tab) tab.encoding = encoding
 }
 
 function currentPaneTabInfo(paneIndex: number) {
   const leaf = allLeaves.value[paneIndex]
   if (!leaf || !leaf.tabId) return null
-  return tabs.value.find(t => t.id === leaf.tabId) ?? tabs.value.find(t => t.id === activeTab.value)
-}
-const activeTabInfo = computed(() => tabs.value.find(t => t.id === activeTab.value))
-
-function openResourceFromTree(node: {
-  id: string
-  name: string
-  protocol?: string
-  environmentId?: string
-}) {
-  // 去重：相同 resourceId + protocol 不重复打开
-  const resourceId = node.id
-  const protocol = (node.protocol || 'ssh') as Tab['protocol']
-  const existing = tabs.value.find(t => t.resourceId === resourceId && t.protocol === protocol)
-  if (existing) {
-    activeTab.value = existing.id
-    setPaneTab(activePaneId.value, existing.id)
-    return
-  }
-
-  const id = `tab-${Date.now()}`
-  tabs.value.push({
-    id,
-    label: node.name,
-    protocol,
-    resourceId,
-    environmentId: node.environmentId,
-    status: 'connecting',
-  })
-  activeTab.value = id
-  setPaneTab(activePaneId.value, id)
+  return findTab(leaf.tabId) ?? activeTabInfo.value
 }
 
-// Tab 右键菜单
-const tabContextMenu = ref<{ show: boolean; x: number; y: number; tabId: string }>({ show: false, x: 0, y: 0, tabId: '' })
-const tabColors = ['#f85149', '#3fb950', '#58a6ff', '#d29922', '#8b5cf6', '#e8912d', '#f0883e', '#a371f7']
+// Tab 右键菜单相关本地 UI 状态
 const showQuickConnect = ref(false)
 const showMovePane = ref(false)
 
@@ -189,119 +159,6 @@ function handlePaneCtxAction(action: string) {
   paneContextMenu.value.show = false
 }
 
-function onTabContextMenu(e: MouseEvent, tabId: string) {
-  e.preventDefault()
-  tabContextMenu.value = { show: true, x: e.clientX, y: e.clientY, tabId }
-}
-
-function closeTab(id: string) {
-  const idx = tabs.value.findIndex(t => t.id === id)
-  if (idx < 0) return
-  tabs.value.splice(idx, 1)
-  if (tabs.value.length === 0) {
-    activeTab.value = ''
-    return
-  }
-  if (activeTab.value === id) {
-    activeTab.value = tabs.value[Math.min(idx, tabs.value.length - 1)]!.id
-  }
-}
-
-function closeOtherTabs(id: string) {
-  tabs.value = tabs.value.filter(t => t.id === id)
-  activeTab.value = id
-}
-
-function closeTabsRight(id: string) {
-  const idx = tabs.value.findIndex(t => t.id === id)
-  if (idx >= 0) tabs.value.splice(idx + 1)
-  if (!tabs.value.find(t => t.id === activeTab.value)) {
-    activeTab.value = tabs.value[tabs.value.length - 1]!.id
-  }
-}
-
-function closeTabsLeft(id: string) {
-  const idx = tabs.value.findIndex(t => t.id === id)
-  if (idx > 0) tabs.value.splice(0, idx)
-  if (!tabs.value.find(t => t.id === activeTab.value)) {
-    activeTab.value = tabs.value[0]!.id
-  }
-}
-
-function closeAllTabs() {
-  tabs.value = []
-  activeTab.value = ''
-}
-
-function duplicateTab(id: string) {
-  const tab = tabs.value.find(t => t.id === id)
-  if (!tab) return
-  const newId = `tab-${Date.now()}`
-  tabs.value.push({ ...tab, id: newId, status: 'connecting' })
-  activeTab.value = newId
-  tabContextMenu.value.show = false
-}
-
-// Tab broadcast mode
-function toggleBroadcast(tabId: string) {
-  const tab = tabs.value.find(t => t.id === tabId)
-  if (tab) tab.broadcast = !tab.broadcast
-  tabContextMenu.value.show = false
-}
-
-// Tab 拖拽排序
-const dragTabId = ref('')
-
-function onTabDragStart(e: DragEvent, tabId: string) {
-  dragTabId.value = tabId
-  e.dataTransfer!.effectAllowed = 'move'
-  e.dataTransfer!.setData('text/tab-id', tabId)
-  const sourceLeaf = allLeaves.value.find(l => l.tabId === tabId)
-  const sourcePane = sourceLeaf ? allLeaves.value.indexOf(sourceLeaf) : -1
-  e.dataTransfer!.setData('text/source-pane', sourcePane >= 0 ? String(sourcePane) : '')
-}
-
-function onTabDragOver(e: DragEvent, _targetId: string) {
-  e.preventDefault()
-  e.dataTransfer!.dropEffect = 'move'
-}
-
-function onTabDrop(e: DragEvent, targetId: string) {
-  e.preventDefault()
-  if (!dragTabId.value || dragTabId.value === targetId) return
-  const fromIdx = tabs.value.findIndex(t => t.id === dragTabId.value)
-  const toIdx = tabs.value.findIndex(t => t.id === targetId)
-  if (fromIdx < 0 || toIdx < 0) return
-  const moved = tabs.value.splice(fromIdx, 1)[0]
-  if (moved) tabs.value.splice(toIdx, 0, moved)
-  dragTabId.value = ''
-}
-
-function onTabDragEnd() {
-  dragTabId.value = ''
-  dragOverPane.value = null
-}
-
-function setTabColor(color: string) {
-  const tab = tabs.value.find(t => t.id === tabContextMenu.value.tabId)
-  if (tab) tab.color = color
-  tabContextMenu.value.show = false
-}
-
-function startRename(id: string) {
-  const tab = tabs.value.find(t => t.id === id)
-  if (tab) tab.renaming = true
-  tabContextMenu.value.show = false
-}
-
-function finishRename(id: string, newLabel: string) {
-  const tab = tabs.value.find(t => t.id === id)
-  if (tab) {
-    tab.label = newLabel || tab.label
-    tab.renaming = false
-  }
-}
-
 // 资源属性
 const showProps = ref(false)
 const propsTabId = ref('')
@@ -317,21 +174,19 @@ function disconnectTab(tabId: string) {
   closeTab(tabId)
 }
 
-function handleTabCtxAction(action: string) {
+// 委托纯 tab 动作给 useTabs，本地只处理涉及本页 UI 状态的项
+const ctxActionHandler = handleTabCtxAction
+
+function localHandleTabCtxAction(action: string) {
   const id = tabContextMenu.value.tabId
   if (!id) return
   switch (action) {
     case 'new': showQuickConnect.value = true; break
-    case 'rename': startRename(id); break
-    case 'duplicate': duplicateTab(id); break
-    case 'broadcast': toggleBroadcast(id); break
-    case 'close': closeTab(id); break
-    case 'closeOthers': closeOtherTabs(id); break
-    case 'closeLeft': closeTabsLeft(id); break
-    case 'closeRight': closeTabsRight(id); break
-    case 'closeAll': closeAllTabs(); break
     case 'props': openProperties(id); break
     case 'disconnect': disconnectTab(id); break
+    default:
+      // rename/duplicate/broadcast/close/closeOthers/closeLeft/closeRight/closeAll
+      ctxActionHandler(action)
   }
   tabContextMenu.value.show = false
 }
@@ -443,10 +298,9 @@ function closePane(idx: number) {
 // 快捷键面板
 const showShortcuts = ref(false)
 
-// Tab status 更新
+// Tab status 更新（委托给 useTabs）
 function onTabStatusChange(tabId: string, status: Tab['status']) {
-  const tab = tabs.value.find(t => t.id === tabId)
-  if (tab) tab.status = status
+  onTabStatusChangeFromTabs(tabId, status)
 }
 
 // 布局预设
@@ -554,7 +408,7 @@ useKeyboardShortcuts([
       v-model="tabContextMenu.show"
       :x="tabContextMenu.x"
       :y="tabContextMenu.y"
-      @select="(action: string) => handleTabCtxAction(action)"
+      @select="(action: string) => localHandleTabCtxAction(action)"
     >
       <template #default="{ choose }">
         <div class="tab-ctx-item" @click="choose('new')">➕ {{ t('workspace.newConnection') }}</div>
@@ -562,7 +416,7 @@ useKeyboardShortcuts([
         <div class="tab-ctx-item" @click="choose('rename')">✏️ {{ t('workspace.rename') }}</div>
         <div class="tab-ctx-item" @click="choose('duplicate')">📋 {{ t('workspace.duplicate') }}</div>
         <div class="tab-ctx-item" @click="choose('broadcast')">
-          {{ tabs.find(tab => tab.id === tabContextMenu.tabId)?.broadcast ? '📡 ' + t('workspace.stopBroadcast') : '📡 ' + t('workspace.broadcastInput') }}
+          {{ findTab(tabContextMenu.tabId)?.broadcast ? '📡 ' + t('workspace.stopBroadcast') : '📡 ' + t('workspace.broadcastInput') }}
         </div>
         <div class="tab-ctx-separator" />
         <div class="tab-ctx-item" @click="choose('close')">{{ t('workspace.close') }}</div>

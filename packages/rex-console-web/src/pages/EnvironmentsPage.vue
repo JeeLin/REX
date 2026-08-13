@@ -220,7 +220,7 @@ async function handleImport(event: Event) {
             {{ env.connection_mode }}
           </Badge>
         </div>
-      </button>
+      </div>
     </div>
 
     <!-- Create / Edit Modal -->

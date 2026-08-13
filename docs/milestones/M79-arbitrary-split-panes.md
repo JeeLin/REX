@@ -185,7 +185,7 @@ M78 完成了全系统 UX/UI 重设计。当前工作空间的分屏系统仅支
 
 - [x] 步骤1：编写里程碑文档
 - [x] 步骤2：设计核对
-- [ ] 步骤3：开发
+- [x] 步骤3：开发（补做子任务6 + 修复 🟡）
 - [ ] 步骤4：代码精简
 - [ ] 步骤5：代码审查
 - [ ] 步骤6：测试验证
@@ -196,9 +196,15 @@ M78 完成了全系统 UX/UI 重设计。当前工作空间的分屏系统仅支
 
 | 时间 | 步骤 | 原因 |
 |------|------|------|
-| | | |
+| 2026-08-13 | 步骤3（流程重置） | 文档状态与实际代码脱节：子任务6 useTabs.ts 从未创建，WorkspacePage 仍 1028 行；步骤5 遗留 5 个 🟡 未修复。用户要求保留代码，重置流程从头收尾，并真正拆分 useTabs.ts、修复 🟡 项 |
 
 ## Bugs
 
 | 状态 | 优先级 | 标题 | 来源 | 描述 |
 |------|--------|------|------|------|
+| [x] | 🔴 | 子任务6 未完成：useTabs.ts 未创建，WorkspacePage 仍 1028 行 | 步骤3 重置 | 需从 WorkspacePage 抽取 tab 管理逻辑（创建/关闭/重命名/拖拽/右键菜单）到 useTabs.ts，实现子任务6 原设计目标 |
+| [x] | 🟡 | EnvironmentTile.vue Edit/Delete 按钮缺 aria-label | 步骤5 代码审查 | 建议补全无障碍标签 |
+| [x] | 🟡 | Button.vue ripple setTimeout cleanup 可能在 unmount 后触发 | 步骤5 代码审查 | 低风险，需确保 onUnmounted 清理 |
+| [x] | 🟡 | usePaneLayout.ts deserialize 静默吞掉错误 | 步骤5 代码审查 | 建议加 console.error |
+| [x] | 🟡 | usePaneLayout.ts splitPane 除零保护 | 步骤5 代码审查 | children>0 才能保证，需加前置校验 |
+| [x] | 🟡 | EnvironmentTile.vue action 按钮仅 hover 可见 | 步骤5 代码审查 | 键盘可达性改进建议 |

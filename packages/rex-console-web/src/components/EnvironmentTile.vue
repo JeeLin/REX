@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import Badge from '@/components/ui/Badge.vue'
+
+const { t } = useI18n()
 
 defineProps<{
   name: string
@@ -26,8 +29,8 @@ defineEmits<{
         {{ connectionMode === 'agent' ? '⬡' : '◉' }}
       </div>
       <div v-if="showActions" class="env-tile-actions" @click.stop>
-        <button class="env-tile-action" @click="$emit('edit')">✎</button>
-        <button class="env-tile-action env-tile-action--danger" @click="$emit('delete')">✕</button>
+        <button class="env-tile-action" :aria-label="t('common.edit')" @click="$emit('edit')">✎</button>
+        <button class="env-tile-action env-tile-action--danger" :aria-label="t('common.delete')" @click="$emit('delete')">✕</button>
       </div>
     </div>
     <div class="env-tile-body">
@@ -69,7 +72,8 @@ defineEmits<{
 .env-tile-icon--direct { color: var(--info); background: var(--info-soft); }
 .env-tile-icon--agent { color: var(--accent); background: var(--accent-soft); }
 .env-tile-actions { display: flex; gap: 2px; opacity: 0; transition: opacity var(--transition); }
-.env-tile:hover .env-tile-actions { opacity: 1; }
+.env-tile:hover .env-tile-actions,
+.env-tile:focus-within .env-tile-actions { opacity: 1; }
 .env-tile-action {
   width: 26px; height: 26px; border: none; background: transparent;
   color: var(--text-muted); cursor: pointer; border-radius: var(--radius-sm);

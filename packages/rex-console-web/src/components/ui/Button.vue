@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onBeforeUnmount } from 'vue'
 withDefaults(
   defineProps<{
     variant?: 'primary' | 'secondary' | 'danger' | 'ghost'
@@ -12,6 +13,8 @@ withDefaults(
   { variant: 'secondary', size: 'md', disabled: false, loading: false, block: false, icon: false, ariaLabel: '' },
 )
 
+let rippleTimer: ReturnType<typeof setTimeout> | null = null
+
 function handleClick(e: MouseEvent) {
   const btn = e.currentTarget as HTMLElement
   const rect = btn.getBoundingClientRect()
@@ -20,8 +23,13 @@ function handleClick(e: MouseEvent) {
   btn.style.setProperty('--ripple-x', `${x}px`)
   btn.style.setProperty('--ripple-y', `${y}px`)
   btn.classList.add('btn--ripple')
-  setTimeout(() => btn.classList.remove('btn--ripple'), 400)
+  if (rippleTimer) clearTimeout(rippleTimer)
+  rippleTimer = setTimeout(() => btn.classList.remove('btn--ripple'), 400)
 }
+
+onBeforeUnmount(() => {
+  if (rippleTimer) clearTimeout(rippleTimer)
+})
 </script>
 
 <template>
