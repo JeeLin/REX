@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { executeQuery, type QueryResult } from '@/api/sql'
+import Button from '@/components/ui/Button.vue'
 
 const { t } = useI18n()
 
@@ -150,14 +151,14 @@ function close() {
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="close">{{ t('common.cancel') }}</button>
-          <button
-            class="btn btn-primary"
+          <Button variant="ghost" @click="close">{{ t('common.cancel') }}</Button>
+          <Button
+            variant="primary"
             :disabled="loading || !query.trim() || selectedDbs.length === 0"
             @click="execute"
           >
             {{ loading ? t('sql.executing') : t('sql.execute') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -370,40 +371,6 @@ function close() {
   gap: var(--space-3);
   padding: var(--space-4);
   border-top: 1px solid var(--border);
-}
-
-.btn {
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.btn-secondary {
-  background: var(--bg-deep);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-}
-
-.btn-secondary:hover {
-  background: var(--bg-hover);
-}
-
-.btn-primary {
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  color: white;
-}
-
-.btn-primary:hover {
-  opacity: 0.9;
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .mono {

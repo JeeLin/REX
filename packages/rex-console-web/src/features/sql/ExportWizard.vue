@@ -297,7 +297,7 @@ function escapeCsv(val: string): string {
   background: var(--accent);
   border: none;
   border-radius: var(--radius-sm);
-  color: #fff;
+  color: var(--text-on-accent);
   font-size: var(--text-sm);
   cursor: pointer;
   transition: opacity var(--transition);

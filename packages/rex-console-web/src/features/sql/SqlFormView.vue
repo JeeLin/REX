@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import type { ColumnInfo } from '@/api/sql'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps<{
   columns: ColumnInfo[]
@@ -128,19 +129,19 @@ function formatFieldName(name: string): string {
 
     <!-- Actions -->
     <div class="form-actions">
-      <button class="btn btn-secondary" :disabled="currentIndex === 0" @click="goPrevious">
+      <Button variant="ghost" :disabled="currentIndex === 0" @click="goPrevious">
         Previous
-      </button>
-      <button class="btn btn-secondary" :disabled="currentIndex >= totalRows - 1" @click="goNext">
+      </Button>
+      <Button variant="ghost" :disabled="currentIndex >= totalRows - 1" @click="goNext">
         Next
-      </button>
+      </Button>
       <span class="actions-spacer" />
-      <button v-if="hasChanges" class="btn btn-primary" @click="saveChanges">
+      <Button v-if="hasChanges" variant="primary" @click="saveChanges">
         Save
-      </button>
-      <button v-if="hasChanges" class="btn btn-secondary" @click="discardChanges">
+      </Button>
+      <Button v-if="hasChanges" variant="ghost" @click="discardChanges">
         Discard
-      </button>
+      </Button>
     </div>
   </div>
 </template>
@@ -237,40 +238,6 @@ function formatFieldName(name: string): string {
 
 .actions-spacer {
   flex: 1;
-}
-
-.btn {
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.btn-secondary {
-  background: var(--bg-deep);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.btn-secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  color: white;
-}
-
-.btn-primary:hover {
-  opacity: 0.9;
 }
 
 .mono {

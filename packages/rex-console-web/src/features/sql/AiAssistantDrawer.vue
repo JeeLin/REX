@@ -413,7 +413,7 @@ function close() {
   background: var(--accent);
   border: none;
   border-radius: var(--radius-sm);
-  color: white;
+  color: var(--text-on-accent);
   font-size: var(--text-sm);
   cursor: pointer;
   transition: opacity var(--transition);
@@ -457,7 +457,7 @@ function close() {
   background: var(--accent);
   border: none;
   border-radius: var(--radius-sm);
-  color: white;
+  color: var(--text-on-accent);
   font-size: var(--text-lg);
   cursor: pointer;
   transition: opacity var(--transition);

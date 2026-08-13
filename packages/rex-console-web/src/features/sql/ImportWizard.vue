@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { executeQuery } from '@/api/sql'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -337,31 +338,31 @@ function close() {
         </div>
 
         <div class="modal-footer">
-          <button
+          <Button
             v-if="step === 'preview' || step === 'options'"
-            class="btn btn-secondary"
+            variant="ghost"
             @click="goBack"
           >
             Back
-          </button>
-          <button class="btn btn-secondary" @click="close">
+          </Button>
+          <Button variant="ghost" @click="close">
             {{ step === 'done' ? 'Close' : 'Cancel' }}
-          </button>
-          <button
+          </Button>
+          <Button
             v-if="step === 'preview'"
-            class="btn btn-primary"
+            variant="primary"
             @click="goToOptions"
           >
             Next
-          </button>
-          <button
+          </Button>
+          <Button
             v-if="step === 'options'"
-            class="btn btn-primary"
+            variant="primary"
             :disabled="importing"
             @click="startImport"
           >
             Import
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -611,40 +612,6 @@ function close() {
   gap: var(--space-3);
   padding: var(--space-4);
   border-top: 1px solid var(--border);
-}
-
-.btn {
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.btn-secondary {
-  background: var(--bg-deep);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-}
-
-.btn-secondary:hover {
-  background: var(--bg-hover);
-}
-
-.btn-primary {
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  color: white;
-}
-
-.btn-primary:hover {
-  opacity: 0.9;
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .mono {

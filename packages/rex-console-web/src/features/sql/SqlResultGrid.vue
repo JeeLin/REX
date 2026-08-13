@@ -455,7 +455,7 @@ const hasChanges = computed(() => editHistory.value.size > 0)
   background: var(--success);
   border: none;
   border-radius: var(--radius-sm);
-  color: white;
+  color: var(--text-on-accent);
   font-size: var(--text-xs);
   cursor: pointer;
   transition: opacity var(--transition);

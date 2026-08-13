@@ -779,11 +779,11 @@ onBeforeUnmount(() => {
 
 .sql-run-btn {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 .sql-run-btn:hover:not(:disabled) {
-  background: #d6820f;
+  background: var(--accent-hover);
 }
 
 .sql-toolbar-sep {
