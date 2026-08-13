@@ -12,7 +12,6 @@ import Modal from '@/components/ui/Modal.vue'
 import Tabs from '@/components/ui/Tabs.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Input from '@/components/ui/Input.vue'
-import Switch from '@/components/ui/Switch.vue'
 import Toast from '@/components/ui/Toast.vue'
 import { agentStatus } from '@/utils/status'
 
@@ -40,7 +39,6 @@ const copySuccess = ref('')
 // Config modal
 const configModal = ref(false)
 const configAgent = ref<Agent | null>(null)
-const configAutoUpdate = ref(true)
 
 function hubHost(): string {
   return window.location.origin
@@ -117,7 +115,6 @@ function openDeploy(agent: Agent) {
 
 function openConfig(agent: Agent) {
   configAgent.value = agent
-  configAutoUpdate.value = true
   configModal.value = true
 }
 
@@ -153,14 +150,14 @@ const deployCode = computed(() => {
 curl -LO ${host}/api/agents/download?os=${os}&arch=${arch}
 chmod +x rex-agent
 
-# Register with your environment
-./rex-agent register --server ${host} --token ${token}`
+# Run with your environment's registration token
+REX_HUB_URL=${host} REX_AGENT_TOKEN=${token} ./rex-agent`
   }
   if (deployTab.value === 'docker') {
     return `docker run -d \\
   --name rex-agent \\
-  -e REX_SERVER=${host} \\
-  -e REX_TOKEN=${token} \\
+  -e REX_HUB_URL=${host} \\
+  -e REX_AGENT_TOKEN=${token} \\
   ghcr.io/jeelin/rex-agent:latest`
   }
   if (deployTab.value === 'compose') {
@@ -168,16 +165,23 @@ chmod +x rex-agent
   rex-agent:
     image: ghcr.io/jeelin/rex-agent:latest
     environment:
-      REX_SERVER: ${host}
-      REX_TOKEN: ${token}
+      REX_HUB_URL: ${host}
+      REX_AGENT_TOKEN: ${token}
     restart: unless-stopped`
   }
-  // config file
-  return `# ~/.rex/config.toml
-[agent]
-server = "${host}"
-token = "${token}"
-auto_update = true`
+  // systemd unit
+  return `[Unit]
+Description=REX Agent
+After=network.target
+
+[Service]
+Environment=REX_HUB_URL=${host}
+Environment=REX_AGENT_TOKEN=${token}
+ExecStart=/usr/local/bin/rex-agent
+Restart=always
+
+[Install]
+WantedBy=multi-user.target`
 })
 const allDirectMode = computed(() => {
   return store.environments.length > 0 && store.environments.every(e => e.connection_mode === 'direct')
@@ -204,14 +208,14 @@ const guideCode = computed(() => {
 curl -LO ${host}/api/agents/download?os=linux&arch=amd64
 chmod +x rex-agent
 
-# 2. Register with your environment
-./rex-agent register --server ${host} --token YOUR_TOKEN`
+# 2. Run with your environment's registration token
+REX_HUB_URL=${host} REX_AGENT_TOKEN=YOUR_TOKEN ./rex-agent`
   }
   if (guideTab.value === 'docker') {
     return `docker run -d \\
   --name rex-agent \\
-  -e REX_SERVER=${host} \\
-  -e REX_TOKEN=YOUR_TOKEN \\
+  -e REX_HUB_URL=${host} \\
+  -e REX_AGENT_TOKEN=YOUR_TOKEN \\
   ghcr.io/jeelin/rex-agent:latest`
   }
   if (guideTab.value === 'compose') {
@@ -219,15 +223,22 @@ chmod +x rex-agent
   rex-agent:
     image: ghcr.io/jeelin/rex-agent:latest
     environment:
-      REX_SERVER: ${host}
-      REX_TOKEN: YOUR_TOKEN
+      REX_HUB_URL: ${host}
+      REX_AGENT_TOKEN: YOUR_TOKEN
     restart: unless-stopped`
   }
-  return `# ~/.rex/config.toml
-[agent]
-server = "${host}"
-token = "YOUR_TOKEN"
-auto_update = true`
+  return `[Unit]
+Description=REX Agent
+After=network.target
+
+[Service]
+Environment=REX_HUB_URL=${host}
+Environment=REX_AGENT_TOKEN=YOUR_TOKEN
+ExecStart=/usr/local/bin/rex-agent
+Restart=always
+
+[Install]
+WantedBy=multi-user.target`
 })
 
 function copyGuideCode() {
@@ -434,10 +445,6 @@ const filteredLogs = computed(() => {
           <div class="config-row">
             <span class="config-label muted">{{ t('agents.configServer') }}</span>
             <span class="mono">{{ hubHost() }}</span>
-          </div>
-          <div class="config-row">
-            <span class="config-label muted">{{ t('agents.configAutoUpdate') }}</span>
-            <Switch v-model="configAutoUpdate" size="sm" />
           </div>
         </div>
       </div>
