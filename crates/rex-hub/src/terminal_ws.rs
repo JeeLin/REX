@@ -131,6 +131,7 @@ async fn handle_socket(mut ws: WebSocket, state: AppState, resource_id: String) 
     tracing::info!(
         action = "SSH_DISCONNECT",
         resource_id = %resource_id,
+        name = %conn_info.name,
         "SSH session ended"
     );
 }
