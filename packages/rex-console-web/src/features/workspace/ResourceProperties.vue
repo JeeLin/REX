@@ -217,7 +217,7 @@ function onSave() {
             <label class="props-label">Color Tag</label>
             <div class="props-color-row">
               <span class="props-color-none" :class="{ 'props-color--active': !form.color }" @click="form.color = ''">None</span>
-              <button v-for="c in ['#f85149','#3fb950','#58a6ff','#d29922','#8b5cf6','#e8912d']" :key="c" class="props-color-dot" :class="{ 'props-color--active': form.color === c }" :style="{ background: c }" @click="form.color = c" />
+              <button v-for="c in ['var(--proto-redis)','var(--proto-ssh)','var(--proto-mysql)','var(--proto-sqlite)','var(--proto-postgresql)','var(--proto-s3)']" :key="c" class="props-color-dot" :class="{ 'props-color--active': form.color === c }" :style="{ background: c }" @click="form.color = c" />
             </div>
           </div>
         </template>
@@ -434,14 +434,14 @@ function onSave() {
   transition: transform var(--transition);
 }
 .props-toggle input:checked + .props-toggle-slider {
-  background: var(--accent, #E8912D);
+  background: var(--accent);
 }
 .props-toggle input:checked + .props-toggle-slider::after {
   transform: translateX(16px);
 }
 .props-hint {
-  color: var(--text-secondary, #8b949e);
-  font-size: var(--text-xs, 12px);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
   margin: 0;
 }
 </style>

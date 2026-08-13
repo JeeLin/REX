@@ -162,7 +162,7 @@ function handleClose() {
 }
 
 const colorOptions = [
-  '', '#3FB950', '#58A6FF', '#8B5CF6', '#F85149', '#D29922', '#E8912D', '#F0883E', '#8B949E',
+  '', 'var(--proto-ssh)', 'var(--proto-mysql)', 'var(--proto-postgresql)', 'var(--proto-redis)', 'var(--proto-sqlite)', 'var(--proto-s3)', 'var(--accent-hover)', 'var(--text-muted)',
 ]
 </script>
 
