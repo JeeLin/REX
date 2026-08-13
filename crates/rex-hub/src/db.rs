@@ -237,6 +237,10 @@ impl Database {
             sql.push_str(&format!(" AND environment_id = ?{idx}"));
             params.push(Box::new(env.clone()));
         }
+        if let Some(ref r) = filter.result {
+            sql.push_str(&format!(" AND result = ?{idx}"));
+            params.push(Box::new(r.clone()));
+        }
 
         let param_refs: Vec<&dyn rusqlite::types::ToSql> =
             params.iter().map(|p| p.as_ref()).collect();

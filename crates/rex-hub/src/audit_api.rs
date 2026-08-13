@@ -61,6 +61,7 @@ async fn query_audit_log(
 pub struct AuditStatsQuery {
     pub action: Option<String>,
     pub environment_id: Option<String>,
+    pub result: Option<String>,
     pub time_from: Option<String>,
     pub time_to: Option<String>,
 }
@@ -75,7 +76,7 @@ async fn query_audit_stats(
         action: q.action,
         environment_id: q.environment_id,
         agent_id: None,
-        result: None,
+        result: q.result,
         limit: None,
         offset: None,
     };

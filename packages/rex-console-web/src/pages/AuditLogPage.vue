@@ -157,6 +157,7 @@ async function fetchEntries() {
       }),
       auditApi.stats({
         action: actionFilter.value || undefined,
+        result: resultFilter.value || undefined,
         environment_id: environmentFilter.value || undefined,
         ...range,
       }),

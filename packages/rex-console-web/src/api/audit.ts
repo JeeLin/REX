@@ -43,6 +43,7 @@ export const auditApi = {
   stats: (params?: Omit<AuditQuery, 'limit' | 'offset'>) => {
     const query: Record<string, string> = {}
     if (params?.action) query.action = params.action
+    if (params?.result) query.result = params.result
     if (params?.environment_id) query.environment_id = params.environment_id
     if (params?.time_from) query.time_from = params.time_from
     if (params?.time_to) query.time_to = params.time_to
