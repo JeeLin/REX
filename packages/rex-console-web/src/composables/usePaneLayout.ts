@@ -24,11 +24,12 @@ function newNode(direction: 'row' | 'column' | null, tabId: string | null = null
 }
 
 // 从 id 查找节点及其父节点
-function findNode(root: PaneNode, id: string): { node: PaneNode; parent: PaneNode | null; index: number } | null {
-  if (root.id === id) return { node: root, parent: null, index: -1 }
-  for (let i = 0; i < root.children.length; i++) {
-    const child = root.children[i]!
-    const found = findNode(child, id)
+function findNode(node: PaneNode, id: string, parent: PaneNode | null = null): { node: PaneNode; parent: PaneNode | null; index: number } | null {
+  if (node.id === id) {
+    return { node, parent, index: parent ? parent.children.indexOf(node) : -1 }
+  }
+  for (const child of node.children) {
+    const found = findNode(child, id, node)
     if (found) return found
   }
   return null
