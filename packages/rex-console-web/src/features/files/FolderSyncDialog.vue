@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Button from '@/components/ui/Button.vue'
 
 const { t } = useI18n()
 
@@ -157,9 +158,9 @@ function actionClass(a: string) {
         </div>
 
         <div class="fsd-footer">
-          <button class="fsd-btn" @click="emit('close')">{{ t('files.cancel') }}</button>
-          <button class="fsd-btn" @click="generatePreview">{{ t('files.syncPreview') }}</button>
-          <button class="fsd-btn fsd-btn--primary" @click="onSync">{{ t('files.startSync') }}</button>
+          <Button variant="ghost" @click="emit('close')">{{ t('files.cancel') }}</Button>
+          <Button variant="secondary" @click="generatePreview">{{ t('files.syncPreview') }}</Button>
+          <Button variant="primary" @click="onSync">{{ t('files.startSync') }}</Button>
         </div>
       </div>
     </div>
@@ -356,18 +357,18 @@ function actionClass(a: string) {
 }
 
 .action-copy {
-  background: rgba(63, 185, 80, 0.15);
-  color: #3FB950;
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .action-update {
-  background: rgba(232, 145, 45, 0.15);
-  color: #E8912D;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .action-delete {
-  background: rgba(248, 81, 73, 0.15);
-  color: #F85149;
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .muted {
@@ -381,30 +382,6 @@ function actionClass(a: string) {
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--border);
-}
-
-.fsd-btn {
-  padding: var(--space-2) var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-.fsd-btn:hover {
-  background: var(--bg-hover);
-}
-
-.fsd-btn--primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-.fsd-btn--primary:hover {
-  opacity: 0.9;
 }
 
 @media (max-width: 768px) {
