@@ -208,3 +208,6 @@ M78 完成了全系统 UX/UI 重设计。当前工作空间的分屏系统仅支
 | [x] | 🟡 | usePaneLayout.ts deserialize 静默吞掉错误 | 步骤5 代码审查 | 建议加 console.error |
 | [x] | 🟡 | usePaneLayout.ts splitPane 除零保护 | 步骤5 代码审查 | children>0 才能保证，需加前置校验 |
 | [x] | 🟡 | EnvironmentTile.vue action 按钮仅 hover 可见 | 步骤5 代码审查 | 键盘可达性改进建议 |
+| ⬜ | 🔴 | shortcuts.ts 快捷键文档与代码不一致 | 步骤5 代码审查 | tab-1~5 记为 Alt+1~5（切换标签），但代码 Alt+1~5 是布局预设、Alt+6~9 才是标签跳转；且 layout-single 等也用 Alt+1~5，自相矛盾。需对齐 shortcuts.ts 与 WorkspacePage 实际注册 |
+| ⬜ | 🟡 | WorkspacePage pane 右键 ContextMenu 未渲染 | 步骤5 代码审查 | 子任务4 pane 侧 splitClose/moveToPane 逻辑完整但模板无 ContextMenu，pane 右键菜单不显示 |
+| ⬜ | 🟡 | useWorkspacePersistence 恢复时 tabs>leaves 数量未对齐 | 步骤5 代码审查 | 持久化 tabs 多于布局 leaves 时多余 tab 无法绑定，缺数量校验 |
