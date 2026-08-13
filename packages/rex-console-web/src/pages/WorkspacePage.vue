@@ -60,13 +60,7 @@ const {
   formatConnection,
   openResource,
   closeTab,
-  closeOtherTabs,
-  closeTabsRight,
-  closeTabsLeft,
-  closeAllTabs,
-  duplicateTab,
   toggleBroadcast,
-  startRename,
   finishRename,
   setTabColor,
   onTabStatusChange: onTabStatusChangeFromTabs,
@@ -138,7 +132,6 @@ function currentPaneTabInfo(paneIndex: number) {
 
 // Tab 右键菜单相关本地 UI 状态
 const showQuickConnect = ref(false)
-const showMovePane = ref(false)
 
 const paneContextMenu = ref<{ show: boolean; x: number; y: number; paneId: string }>({ show: false, x: 0, y: 0, paneId: '' })
 
@@ -175,8 +168,6 @@ function disconnectTab(tabId: string) {
 }
 
 // 委托纯 tab 动作给 useTabs，本地只处理涉及本页 UI 状态的项
-const ctxActionHandler = handleTabCtxAction
-
 function localHandleTabCtxAction(action: string) {
   const id = tabContextMenu.value.tabId
   if (!id) return
@@ -186,17 +177,8 @@ function localHandleTabCtxAction(action: string) {
     case 'disconnect': disconnectTab(id); break
     default:
       // rename/duplicate/broadcast/close/closeOthers/closeLeft/closeRight/closeAll
-      ctxActionHandler(action)
+      handleTabCtxAction(action)
   }
-  tabContextMenu.value.show = false
-}
-
-function moveToPane(paneIndex: number) {
-  const tabId = tabContextMenu.value.tabId
-  if (!tabId) return
-  const targetLeaf = allLeaves.value[paneIndex]
-  if (targetLeaf) setPaneTab(targetLeaf.id, tabId)
-  showMovePane.value = false
   tabContextMenu.value.show = false
 }
 
