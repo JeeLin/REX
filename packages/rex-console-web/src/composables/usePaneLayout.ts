@@ -135,13 +135,6 @@ export function usePaneLayout() {
       // 替换 parent.children 中的 node
       const idx = parent.children.indexOf(node)
       parent.children[idx] = wrapper
-
-      // 渲染层只读取 root.direction 决定 Splitpanes 方向。当父节点就是 root
-      // 且只有一个子节点时，把 root 方向归一化为 splitDir，否则首次「上下分栏」
-      // 会被渲染成左右分栏（wrapper 的方向被渲染层忽略）。
-      if (parent.id === 'root' && parent.children.length === 1) {
-        root.value.direction = splitDir
-      }
     }
 
     activePaneId.value = newPane.id

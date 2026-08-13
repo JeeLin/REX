@@ -1,37 +1,30 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, defineAsyncComponent, watch, defineOptions } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, defineOptions, provide } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Splitpanes, Pane } from 'splitpanes'
 import { useWorkspacePersistence } from '@/composables/useWorkspacePersistence'
 import { usePaneLayout } from '@/composables/usePaneLayout'
-import 'splitpanes/dist/splitpanes.css'
-
-defineOptions({ name: 'WorkspacePage' })
+import { useTabs, type Tab } from '@/composables/useTabs'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import ContextMenu from '@/components/ui/ContextMenu.vue'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useSftpDrawer } from '@/composables/useSftpDrawer'
-import { useTabs, type Tab } from '@/composables/useTabs'
 import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
 import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
 import CommandPalette from '@/features/workspace/CommandPalette.vue'
-import WorkspaceTerminal from '@/features/terminal/WorkspaceTerminal.vue'
-import FilesDrawer from '@/features/files/FilesDrawer.vue'
+import PaneNode from '@/features/workspace/PaneNode.vue'
 import { PROTOCOL_COLORS } from '@/features/resource/protocols'
+import { PANE_CTX, type PaneCtx } from '@/features/workspace/paneContext'
 import { useWorkspaceStore } from '@/stores/workspace'
 
-// 懒加载重型组件，拆分 chunk
-const SqlPage = defineAsyncComponent(() => import('@/features/sql/SqlPage.vue'))
-const RedisPage = defineAsyncComponent(() => import('@/features/redis/RedisPage.vue'))
-const FilesPage = defineAsyncComponent(() => import('@/features/files/FilesPage.vue'))
+defineOptions({ name: 'WorkspacePage' })
 
 const { t } = useI18n()
 const router = useRouter()
 const wsStore = useWorkspaceStore()
 
-const dragOverPane = ref<number | null>(null)
+const dragOverPane = ref<string | null>(null)
 
 // 树状布局
 const {
@@ -46,9 +39,7 @@ const {
   deserialize: deserializeLayout,
 } = usePaneLayout()
 
-const splitCount = computed(() => allLeaves.value.length)
-
-// Tab 管理：抽离到 useTabs composable（依赖 usePaneLayout 的 activePaneId / setPaneTab）
+// Tab 管理
 const {
   tabs,
   activeTab,
@@ -124,11 +115,29 @@ function onEncodingChange(encoding: string) {
   if (tab) tab.encoding = encoding
 }
 
-function currentPaneTabInfo(paneIndex: number) {
-  const leaf = allLeaves.value[paneIndex]
-  if (!leaf || !leaf.tabId) return null
-  return findTab(leaf.tabId) ?? activeTabInfo.value
-}
+// 提供分栏渲染上下文给递归的 PaneNode / PaneLeaf
+provide<PaneCtx>(PANE_CTX, {
+  activePaneId,
+  allLeaves,
+  dragOverPane,
+  splitHorizontal,
+  splitVertical,
+  closePane: treeClosePane,
+  setPaneTab,
+  findTab,
+  activeTabInfo,
+  onPaneContextMenu,
+  onPaneDragEnter,
+  onPaneDragLeave,
+  onPaneDrop,
+  onTabStatusChange: onTabStatusChangeFromTabs,
+  onTerminalResize,
+  onEncodingChange,
+  showSftpDrawer,
+  sftpDrawerHeight,
+  toggleSftpDrawer,
+  startSftpDrag,
+})
 
 // Tab 右键菜单相关本地 UI 状态
 const showQuickConnect = ref(false)
@@ -193,34 +202,28 @@ function onTabDoubleClick(tabId: string) {
 }
 
 // Pane drag & drop handlers
-function onPaneDragOver(e: DragEvent) {
-  e.preventDefault()
-  e.dataTransfer!.dropEffect = 'move'
+function onPaneDragEnter(paneId: string) {
+  dragOverPane.value = paneId
 }
 
-function onPaneDragEnter(e: DragEvent, paneIndex: number) {
-  e.preventDefault()
-  dragOverPane.value = paneIndex
-}
-
-function onPaneDragLeave(paneIndex: number) {
-  if (dragOverPane.value === paneIndex) {
+function onPaneDragLeave(paneId: string) {
+  if (dragOverPane.value === paneId) {
     dragOverPane.value = null
   }
 }
 
-function onPaneDrop(e: DragEvent, targetPaneIndex: number) {
+function onPaneDrop(e: DragEvent, targetPaneId: string) {
   e.preventDefault()
   dragOverPane.value = null
   const tabId = e.dataTransfer!.getData('text/tab-id')
   if (!tabId) return
   // 清除源 pane 中的 tab
   for (const leaf of allLeaves.value) {
-    if (leaf.tabId === tabId && leaf.id !== allLeaves.value[targetPaneIndex]?.id) {
+    if (leaf.tabId === tabId && leaf.id !== targetPaneId) {
       setPaneTab(leaf.id, null)
     }
   }
-  const targetLeaf = allLeaves.value[targetPaneIndex]
+  const targetLeaf = allLeaves.value.find((l) => l.id === targetPaneId)
   if (targetLeaf) {
     setPaneTab(targetLeaf.id, tabId)
     activePaneId.value = targetLeaf.id
@@ -275,11 +278,6 @@ function splitVertical(paneId?: string) {
 
 // 快捷键面板
 const showShortcuts = ref(false)
-
-// Tab status 更新（委托给 useTabs）
-function onTabStatusChange(tabId: string, status: Tab['status']) {
-  onTabStatusChangeFromTabs(tabId, status)
-}
 
 // 布局预设
 type LayoutPreset = 'single' | 'left-right' | 'top-bottom' | 'grid-four' | 'main-side'
@@ -433,97 +431,9 @@ useKeyboardShortcuts([
       </template>
     </ContextMenu>
     <div class="ws-main-area">
-      <!-- Split panes -->
+      <!-- 递归分栏渲染：每个容器节点用自身 direction 决定分栏方向，支持上下/左右混合嵌套 -->
       <div class="ws-body">
-        <Splitpanes
-          :horizontal="paneLayoutRoot.direction === 'column'"
-          class="ws-split"
-        >
-          <Pane v-for="i in splitCount" :key="`pane-${i}`" :size="100 / splitCount" :min-size="20">
-            <div
-              class="ws-pane"
-              :class="{ 'ws-pane--active': allLeaves[i - 1]?.id === activePaneId, 'ws-pane--drag-over': dragOverPane === i - 1 }"
-              :title="t('workspace.dragHint')"
-              @click="activePaneId = allLeaves[i - 1]?.id || activePaneId"
-              @contextmenu="onPaneContextMenu($event, allLeaves[i - 1]?.id || '')"
-              @dragover.prevent="onPaneDragOver($event)"
-              @dragenter.prevent="onPaneDragEnter($event, i - 1)"
-              @dragleave="onPaneDragLeave(i - 1)"
-              @drop="onPaneDrop($event, i - 1)"
-            >
-              <div class="ws-pane-header mono">
-                <span>{{ currentPaneTabInfo(i - 1)?.label || t('workspace.noTabOpen') }}</span>
-                <div class="ws-pane-actions">
-                  <button class="ws-pane-btn" :title="t('workspace.splitH')" @click="splitHorizontal(allLeaves[i - 1]?.id)">⬌</button>
-                  <button class="ws-pane-btn" :title="t('workspace.splitV')" @click="splitVertical(allLeaves[i - 1]?.id)">⬍</button>
-                  <button v-if="splitCount > 1" class="ws-pane-btn" :title="t('workspace.closePane')" @click="treeClosePane(allLeaves[i - 1]?.id || '')">×</button>
-                </div>
-              </div>
-
-              <!-- Terminal (SSH) + SFTP Drawer -->
-              <div v-if="currentPaneTabInfo(i - 1)?.protocol === 'ssh'" class="ws-ssh-area">
-                <KeepAlive>
-                  <WorkspaceTerminal
-                    :key="allLeaves[i - 1]?.tabId || ''"
-                    :tab-id="allLeaves[i - 1]?.tabId || ''"
-                    :resource-id="currentPaneTabInfo(i - 1)?.resourceId || ''"
-                    :name="currentPaneTabInfo(i - 1)?.label || ''"
-                    :protocol="currentPaneTabInfo(i - 1)?.protocol"
-                    :theme="currentPaneTabInfo(i - 1)?.theme"
-                    :font-size="currentPaneTabInfo(i - 1)?.fontSize"
-                    :opacity="currentPaneTabInfo(i - 1)?.opacity"
-                    :cursor-style="currentPaneTabInfo(i - 1)?.cursorStyle"
-                    :cursor-blink="currentPaneTabInfo(i - 1)?.cursorBlink"
-                    :background-image="currentPaneTabInfo(i - 1)?.backgroundImage"
-                    @update:status="onTabStatusChange(allLeaves[i - 1]?.tabId || '', $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
-                    @terminal-resize="onTerminalResize"
-                    @encoding-change="onEncodingChange"
-                    @toggle-sftp="toggleSftpDrawer"
-                  />
-                </KeepAlive>
-                <div v-if="showSftpDrawer" class="ws-sftp-drawer" :style="{ height: sftpDrawerHeight + 'px' }">
-                  <div class="ws-sftp-drag-handle" @mousedown.prevent="startSftpDrag" />
-                  <FilesDrawer
-                    :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
-                  />
-                </div>
-              </div>
-
-              <!-- SQL (MySQL / PostgreSQL / SQLite) -->
-              <SqlPage
-                v-else-if="['mysql', 'postgresql', 'sqlite'].includes(currentPaneTabInfo(i - 1)?.protocol || '')"
-                :key="allLeaves[i - 1]?.tabId || ''"
-                :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
-                :db-type="currentPaneTabInfo(i - 1)?.protocol"
-                @update:status="onTabStatusChange(allLeaves[i - 1]?.tabId || '', $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
-              />
-
-              <!-- Redis -->
-              <RedisPage
-                v-else-if="currentPaneTabInfo(i - 1)?.protocol === 'redis'"
-                :key="allLeaves[i - 1]?.tabId || ''"
-                :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
-                @update:status="onTabStatusChange(allLeaves[i - 1]?.tabId || '', $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
-              />
-
-              <!-- Files (SFTP / S3) -->
-              <FilesPage
-                v-else-if="['sftp', 's3'].includes(currentPaneTabInfo(i - 1)?.protocol || '')"
-                :key="allLeaves[i - 1]?.tabId || ''"
-                :resource-id="currentPaneTabInfo(i - 1)?.resourceId"
-                :protocol="currentPaneTabInfo(i - 1)?.protocol === 's3' ? 's3' : 'sftp'"
-                @update:status="onTabStatusChange(allLeaves[i - 1]?.tabId || '', $event === 'online' ? 'connected' : $event === 'connecting' ? 'connecting' : $event === 'error' ? 'error' : 'disconnected')"
-              />
-
-              <!-- Empty state -->
-              <div v-else class="ws-component-placeholder">
-                <div class="ws-placeholder-text muted">
-                  {{ t('workspace.noConnectionDesc') }}
-                </div>
-              </div>
-            </div>
-          </Pane>
-        </Splitpanes>
+        <PaneNode :node="paneLayoutRoot" />
       </div>
     </div>
 

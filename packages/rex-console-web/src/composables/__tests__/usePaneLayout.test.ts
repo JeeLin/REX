@@ -42,23 +42,23 @@ describe('usePaneLayout', () => {
     expect(allLeaves.value).toHaveLength(3)
   })
 
-  it('first downward split normalizes root direction to column (fixes inverted 上下分栏)', () => {
+  it('supports mixed-direction nesting: vertical then horizontal', () => {
     const { root, allLeaves, splitPane, activePaneId } = usePaneLayout()
-    const paneId = allLeaves.value[0]!.id
-    activePaneId.value = paneId
-    splitPane(paneId, 'down')
-    // 渲染层仅读取 root.direction，必须随首次分栏方向归一化，否则会渲染成左右分栏
-    expect(root.value.direction).toBe('column')
-    expect(allLeaves.value).toHaveLength(2)
-  })
-
-  it('first rightward split normalizes root direction to row', () => {
-    const { root, allLeaves, splitPane, activePaneId } = usePaneLayout()
-    const paneId = allLeaves.value[0]!.id
-    activePaneId.value = paneId
-    splitPane(paneId, 'right')
+    const firstPane = allLeaves.value[0]!.id
+    activePaneId.value = firstPane
+    // 先上下分屏（down → column 包裹），再在其中一个 pane 下左右分屏（right → row 包裹）
+    splitPane(firstPane, 'down')
+    const secondPane = allLeaves.value[1]!.id
+    activePaneId.value = secondPane
+    splitPane(secondPane, 'right')
+    // 根方向始终是其初始方向 row，混合方向通过在嵌套层包裹 wrapper 实现
     expect(root.value.direction).toBe('row')
-    expect(allLeaves.value).toHaveLength(2)
+    // 共 3 个叶子
+    expect(allLeaves.value).toHaveLength(3)
+    // 含 row 与 column 两种方向的容器节点（混合方向嵌套生效）
+    const serialized = JSON.stringify(root.value)
+    expect(serialized).toContain('"direction":"row"')
+    expect(serialized).toContain('"direction":"column"')
   })
 
   it('closes a pane and merges parent when only one child remains', () => {
