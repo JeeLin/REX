@@ -587,9 +587,9 @@ onBeforeUnmount(() => {
       <span>{{ termSize.cols }}×{{ termSize.rows }}</span>
       <span v-if="latency !== null" class="wt-latency-bar" :class="latencyClass">{{ latency }}ms</span>
       <span class="wt-statusbar-spacer"></span>
-      <span v-if="connectionStatus === 'connected'" style="color: #000">{{ t('terminal.statusbar.connected', 'Connected') }}</span>
-      <span v-else-if="connectionStatus === 'connecting'" style="color: #000">{{ t('terminal.statusbar.connecting', 'Connecting') }}</span>
-      <span v-else style="color: #fff; background: rgba(0,0,0,0.3); padding: 0 4px; border-radius: 3px">{{ t('terminal.statusbar.disconnected', 'Disconnected') }}</span>
+      <span v-if="connectionStatus === 'connected'" style="color: var(--text-on-accent)">{{ t('terminal.statusbar.connected', 'Connected') }}</span>
+      <span v-else-if="connectionStatus === 'connecting'" style="color: var(--text-on-accent)">{{ t('terminal.statusbar.connecting', 'Connecting') }}</span>
+      <span v-else style="color: var(--text-on-accent); background: rgba(0,0,0,0.3); padding: 0 4px; border-radius: 3px">{{ t('terminal.statusbar.disconnected', 'Disconnected') }}</span>
     </div>
 
     <!-- Mobile toolbar -->
@@ -637,7 +637,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bg-deep, #0d1117);
+  background: var(--bg-deep);
   position: relative;
   overflow: hidden;
 }
@@ -647,8 +647,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   padding: 0 8px;
-  background: var(--bg-surface, #1c2128);
-  border-bottom: 1px solid var(--border, #30363d);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
   height: 32px;
   flex-shrink: 0;
 }
@@ -661,13 +661,13 @@ onBeforeUnmount(() => {
 }
 
 .wt-status-dot { font-size: 10px; }
-.wt-status-dot.online { color: var(--success, #3fb950); }
-.wt-status-dot.connecting { color: var(--warning, #d29922); }
-.wt-status-dot.error { color: var(--danger, #f85149); }
-.wt-status-dot.offline { color: var(--text-muted, #8b949e); }
+.wt-status-dot.online { color: var(--success); }
+.wt-status-dot.connecting { color: var(--warning); }
+.wt-status-dot.error { color: var(--danger); }
+.wt-status-dot.offline { color: var(--text-muted); }
 
 .wt-resource-name {
-  color: var(--text-primary, #e6edf3);
+  color: var(--text-primary);
   font-family: var(--font-mono, monospace);
   font-weight: 500;
 }
@@ -680,9 +680,9 @@ onBeforeUnmount(() => {
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.06);
 }
-.wt-latency.low { color: var(--success, #3fb950); }
-.wt-latency.medium { color: var(--warning, #d29922); }
-.wt-latency.high { color: var(--danger, #f85149); }
+.wt-latency.low { color: var(--success); }
+.wt-latency.medium { color: var(--warning); }
+.wt-latency.high { color: var(--danger); }
 
 .wt-spacer { flex: 1; }
 
@@ -696,7 +696,7 @@ onBeforeUnmount(() => {
 .wt-btn {
   background: none;
   border: none;
-  color: var(--text-muted, #8b949e);
+  color: var(--text-muted);
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 4px;
@@ -704,25 +704,25 @@ onBeforeUnmount(() => {
   transition: all 0.15s;
 }
 .wt-btn:hover {
-  background: var(--bg-hover, #21262d);
-  color: var(--text-primary, #e6edf3);
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 .wt-btn.active {
   background: var(--accent-muted, rgba(232, 145, 45, 0.15));
-  color: var(--accent, #e8912d);
+  color: var(--accent);
 }
 
 .wt-sep {
   width: 1px;
   height: 14px;
-  background: var(--border, #30363d);
+  background: var(--border);
   margin: 0 4px;
 }
 
 .wt-protocol, .wt-encoding, .wt-size {
   font-family: var(--font-mono, monospace);
   font-size: 10px;
-  color: var(--text-muted, #8b949e);
+  color: var(--text-muted);
   padding: 0 4px;
 }
 
@@ -730,7 +730,7 @@ onBeforeUnmount(() => {
 .wt-container {
   flex: 1;
   min-height: 0;
-  background: #0d1117;
+  background: var(--bg-deep);
   overflow: hidden;
   position: relative;
 }
@@ -763,14 +763,14 @@ onBeforeUnmount(() => {
 
 .wt-overlay-text {
   font-size: 13px;
-  color: var(--text-muted, #8b949e);
+  color: var(--text-muted);
   margin-bottom: 12px;
 }
 
 .wt-reconnect-btn {
   padding: 6px 16px;
-  background: var(--accent, #e8912d);
-  color: #fff;
+  background: var(--accent);
+  color: var(--text-on-accent);
   border: none;
   border-radius: 6px;
   font-family: var(--font-mono, monospace);
@@ -785,8 +785,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   padding: 0 8px;
-  background: var(--accent, #e8912d);
-  color: #000;
+  background: var(--accent);
+  color: var(--text-on-accent);
   height: 22px;
   flex-shrink: 0;
   font-size: 11px;
@@ -800,16 +800,16 @@ onBeforeUnmount(() => {
 .wt-latency-bar {
   font-weight: 700;
 }
-.wt-latency-bar.low { color: #000; }
-.wt-latency-bar.medium { color: #000; }
-.wt-latency-bar.high { color: #fff; background: rgba(0,0,0,0.3); padding: 0 4px; border-radius: 3px; }
+.wt-latency-bar.low { color: var(--text-on-accent); }
+.wt-latency-bar.medium { color: var(--text-on-accent); }
+.wt-latency-bar.high { color: var(--text-on-accent); background: rgba(0,0,0,0.3); padding: 0 4px; border-radius: 3px; }
 
 /* ── Context menu ── */
 .wt-ctx-menu {
   position: fixed;
   z-index: 1000;
-  background: var(--bg-surface, #1c2128);
-  border: 1px solid var(--border, #30363d);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 4px 0;
   min-width: 160px;
@@ -822,17 +822,17 @@ onBeforeUnmount(() => {
   padding: 6px 12px;
   background: none;
   border: none;
-  color: var(--text-primary, #e6edf3);
+  color: var(--text-primary);
   font-size: 12px;
   text-align: left;
   cursor: pointer;
   transition: background 0.1s;
 }
 .wt-ctx-item:hover {
-  background: var(--bg-hover, #21262d);
+  background: var(--bg-hover);
 }
 .wt-ctx-item.danger {
-  color: var(--danger, #f85149);
+  color: var(--danger);
 }
 .wt-ctx-item.disabled {
   opacity: 0.4;
@@ -841,7 +841,7 @@ onBeforeUnmount(() => {
 
 .wt-ctx-sep {
   height: 1px;
-  background: var(--border, #30363d);
+  background: var(--border);
   margin: 4px 0;
 }
 </style>
