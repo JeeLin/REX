@@ -205,6 +205,7 @@ async fn connect(
                 action = "SQL_CONNECT",
                 db_type = %db_type,
                 resource_id = %body.resource_id,
+                resource_name = %res.name,
                 session_id = %session_id,
                 "SQL connection established"
             );
@@ -216,6 +217,7 @@ async fn connect(
                 action = "SQL_CONNECT",
                 db_type = %db_type,
                 resource_id = %body.resource_id,
+                resource_name = %res.name,
                 error = %e,
                 "SQL connection failed"
             );

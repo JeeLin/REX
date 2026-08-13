@@ -199,6 +199,7 @@ async fn connect(
     tracing::info!(
         action = "REDIS_CONNECT",
         resource_id = %body.resource_id,
+        resource_name = %res.name,
         host = %res.host,
         port = res.port.unwrap_or(6379),
         "Redis connecting"
@@ -217,6 +218,7 @@ async fn connect(
                 action = "REDIS_CONNECT",
                 session_id = %session_id,
                 resource_id = %body.resource_id,
+                resource_name = %res.name,
                 "Redis connected"
             );
 

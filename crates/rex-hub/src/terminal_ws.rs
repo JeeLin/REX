@@ -78,6 +78,7 @@ pub struct TerminalQuery {
 
 /// 资源连接信息
 struct ResourceConnInfo {
+    name: String,
     host: String,
     port: u16,
     username: String,
@@ -285,6 +286,7 @@ async fn load_resource_conn(
         }
 
         Ok(ResourceConnInfo {
+            name: resource.name.clone(),
             host,
             port,
             username,
@@ -307,6 +309,7 @@ async fn handle_direct_terminal(mut ws: WebSocket, conn: &ResourceConnInfo, sess
     tracing::info!(
         action = "SSH_DIRECT_CONNECT",
         session_id = %session_id,
+        resource_name = %conn.name,
         host = %conn.host,
         port = conn.port,
         username = %conn.username,
