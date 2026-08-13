@@ -152,6 +152,8 @@ function handlePaneCtxAction(action: string) {
   paneContextMenu.value.show = false
 }
 
+// 关闭 pane 按钮（header 上的 ×）使用模板内直接调用 treeClosePane
+
 // 资源属性
 const showProps = ref(false)
 const propsTabId = ref('')
@@ -263,18 +265,12 @@ function onPropsSave(data: Pick<Tab, 'theme' | 'fontSize' | 'opacity' | 'cursorS
   tab.backgroundImage = data.backgroundImage
 }
 
-// 分栏操作
-function splitHorizontal() {
-  splitPane(activePaneId.value, 'right')
+// 分栏操作：对指定 pane 分栏（按钮所属的 pane），而非全局 activePaneId
+function splitHorizontal(paneId?: string) {
+  splitPane(paneId || activePaneId.value, 'right')
 }
-function splitVertical() {
-  splitPane(activePaneId.value, 'down')
-}
-function closePane(idx: number) {
-  const leaves = allLeaves.value
-  if (leaves.length > 1 && idx >= 0 && idx < leaves.length) {
-    treeClosePane(leaves[idx]!.id)
-  }
+function splitVertical(paneId?: string) {
+  splitPane(paneId || activePaneId.value, 'down')
 }
 
 // 快捷键面板
@@ -423,7 +419,19 @@ useKeyboardShortcuts([
       </template>
     </ContextMenu>
 
-
+    <!-- Pane context menu (right-click on a pane body) -->
+    <ContextMenu
+      v-model="paneContextMenu.show"
+      :x="paneContextMenu.x"
+      :y="paneContextMenu.y"
+      @select="(action: string) => handlePaneCtxAction(action)"
+    >
+      <template #default="{ choose }">
+        <div class="tab-ctx-item" @click="choose('splitRight')">⤵ {{ t('workspace.splitH') }}</div>
+        <div class="tab-ctx-item" @click="choose('splitDown')">⤵ {{ t('workspace.splitV') }}</div>
+        <div class="tab-ctx-item tab-ctx-item--danger" @click="choose('close')">{{ t('workspace.closePane') }}</div>
+      </template>
+    </ContextMenu>
     <div class="ws-main-area">
       <!-- Split panes -->
       <div class="ws-body">
@@ -446,9 +454,9 @@ useKeyboardShortcuts([
               <div class="ws-pane-header mono">
                 <span>{{ currentPaneTabInfo(i - 1)?.label || t('workspace.noTabOpen') }}</span>
                 <div class="ws-pane-actions">
-                  <button class="ws-pane-btn" :title="t('workspace.splitH')" @click="splitHorizontal">⊞</button>
-                  <button class="ws-pane-btn" :title="t('workspace.splitV')" @click="splitVertical">⊟</button>
-                  <button v-if="splitCount > 1" class="ws-pane-btn" :title="t('workspace.closePane')" @click="closePane(i - 1)">×</button>
+                  <button class="ws-pane-btn" :title="t('workspace.splitH')" @click="splitHorizontal(allLeaves[i - 1]?.id)">⬌</button>
+                  <button class="ws-pane-btn" :title="t('workspace.splitV')" @click="splitVertical(allLeaves[i - 1]?.id)">⬍</button>
+                  <button v-if="splitCount > 1" class="ws-pane-btn" :title="t('workspace.closePane')" @click="treeClosePane(allLeaves[i - 1]?.id || '')">×</button>
                 </div>
               </div>
 
@@ -459,6 +467,7 @@ useKeyboardShortcuts([
                     :key="allLeaves[i - 1]?.tabId || ''"
                     :tab-id="allLeaves[i - 1]?.tabId || ''"
                     :resource-id="currentPaneTabInfo(i - 1)?.resourceId || ''"
+                    :name="currentPaneTabInfo(i - 1)?.label || ''"
                     :protocol="currentPaneTabInfo(i - 1)?.protocol"
                     :theme="currentPaneTabInfo(i - 1)?.theme"
                     :font-size="currentPaneTabInfo(i - 1)?.fontSize"
@@ -531,8 +540,8 @@ useKeyboardShortcuts([
       <span v-if="activeTabInfo?.broadcast" class="ws-status-item ws-broadcast-indicator">📡 {{ t('workspace.broadcastIndicator') }}</span>
       <span class="ws-status-spacer" />
       <span class="ws-status-item ws-quick-actions">
-        <button class="ws-action-btn" title="Split horizontal" @click="splitHorizontal">⊞</button>
-        <button class="ws-action-btn" title="Split vertical" @click="splitVertical">⊟</button>
+        <button class="ws-action-btn" title="Split horizontal" @click="() => splitHorizontal()">⬌</button>
+        <button class="ws-action-btn" title="Split vertical" @click="() => splitVertical()">⬍</button>
       </span>
       <span class="ws-status-item">{{ now }}</span>
     </div>

@@ -69,7 +69,7 @@ const statCards = [
       <!-- Stats Row -->
       <div class="stats-row">
         <div
-          v-for="(card, idx) in statCards"
+          v-for="card in statCards"
           :key="card.key"
           class="stat-tile"
           :style="{ '--stat-color': card.color, '--stat-bg': card.bg }"
