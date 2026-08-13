@@ -42,6 +42,25 @@ describe('usePaneLayout', () => {
     expect(allLeaves.value).toHaveLength(3)
   })
 
+  it('first downward split normalizes root direction to column (fixes inverted 上下分栏)', () => {
+    const { root, allLeaves, splitPane, activePaneId } = usePaneLayout()
+    const paneId = allLeaves.value[0]!.id
+    activePaneId.value = paneId
+    splitPane(paneId, 'down')
+    // 渲染层仅读取 root.direction，必须随首次分栏方向归一化，否则会渲染成左右分栏
+    expect(root.value.direction).toBe('column')
+    expect(allLeaves.value).toHaveLength(2)
+  })
+
+  it('first rightward split normalizes root direction to row', () => {
+    const { root, allLeaves, splitPane, activePaneId } = usePaneLayout()
+    const paneId = allLeaves.value[0]!.id
+    activePaneId.value = paneId
+    splitPane(paneId, 'right')
+    expect(root.value.direction).toBe('row')
+    expect(allLeaves.value).toHaveLength(2)
+  })
+
   it('closes a pane and merges parent when only one child remains', () => {
     const { allLeaves, splitPane, closePane, activePaneId } = usePaneLayout()
     const firstPane = allLeaves.value[0]!.id
