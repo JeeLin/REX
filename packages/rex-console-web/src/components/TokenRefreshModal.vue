@@ -87,7 +87,7 @@ function handleCancel() {
   width: 360px;
   padding: 24px;
   border-radius: 12px;
-  background: var(--surface-1);
+  background: var(--bg-surface);
   border: 1px solid var(--border);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
@@ -96,13 +96,13 @@ function handleCancel() {
   margin: 0 0 4px;
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-1);
+  color: var(--text-primary);
 }
 
 .card-desc {
   margin: 0 0 16px;
   font-size: 13px;
-  color: var(--text-2);
+  color: var(--text-secondary);
 }
 
 .field {
@@ -114,8 +114,8 @@ function handleCancel() {
   padding: 8px 12px;
   border-radius: 6px;
   border: 1px solid var(--border);
-  background: var(--surface-0);
-  color: var(--text-1);
+  background: var(--bg-deep);
+  color: var(--text-primary);
   font-size: 14px;
   outline: none;
   box-sizing: border-box;
@@ -129,8 +129,8 @@ function handleCancel() {
   margin-bottom: 12px;
   padding: 8px 12px;
   border-radius: 6px;
-  background: rgba(248, 81, 73, 0.1);
-  color: #f85149;
+  background: var(--danger-soft);
+  color: var(--danger);
   font-size: 13px;
 }
 
@@ -150,13 +150,13 @@ function handleCancel() {
 }
 
 .btn-secondary {
-  background: var(--surface-2);
-  color: var(--text-2);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
 }
 
 .btn-primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 .btn-primary:disabled,

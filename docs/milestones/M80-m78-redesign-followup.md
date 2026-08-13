@@ -24,14 +24,14 @@ M78 完成了「全系统 UX/UI 重设计」，但审计发现只重做了 9 个
 |---|------|-----------|------|
 | 1 | 设计系统补充与清理：确认 `--text-on-accent`、协议色 `--proto-*`、映射不存在 token 的等价名 | 前端 | ⬜ |
 | 2 | terminal/WorkspaceTerminal.vue：38 处裸 hex → token；状态栏徽章 `#fff`/`#000` → `--text-on-accent` | 前端 | ⬜ |
-| 3 | files/FilesPage.vue：移除自身 `.btn`、裸 `<button>` 改用 Button、内联色改用 token、修复 `--bg-secondary` | 前端 | ⬜ |
-| 4 | files/FileEditorDialog.vue：删除自带 `.btn` 伪系统，改用 Button；移除 `--border-default`/`--color-primary`；离谱色 → token | 前端 | ⬜ |
-| 5 | files/FilesDrawer.vue + MobileFilesBar.vue：裸 `<button>` 改用 Button/IconButton | 前端 | ⬜ |
-| 6 | files/FolderSyncDialog.vue：硬编码协议色板 → `--proto-*` | 前端 | ⬜ |
-| 7 | sql/ 系列：SqlPage/TableDesigner/ImportWizard/SqlResultGrid/ColumnEditor/GlobalQueryModal/ExportWizard/SqlFormView/AiAssistantDrawer 原生 table/btn → ui 库 + token | 前端 | ⬜ |
-| 8 | redis/ 系列：RedisPage/FormatViewer/RedisStatus 硬编码类型色板 → `--proto-*` | 前端 | ⬜ |
-| 9 | workspace/ResourceProperties.vue + resource/WizardModal.vue：硬编码协议色/资源色 → `--proto-*` | 前端 | ⬜ |
-| 10 | resource-panel/ResourcePanel.vue 离谱色 `#f5a623` → `--accent`；components/TokenRefreshModal.vue 移除不存在 token 回退 | 前端 | ⬜ |
+| 3 | files/FilesPage.vue：移除自身 `.btn`、裸 `<button>` 改用 Button、内联色改用 token、修复 `--bg-secondary` | 前端 | ✅ |
+| 4 | files/FileEditorDialog.vue：删除自带 `.btn` 伪系统，改用 Button；移除 `--border-default`/`--color-primary`；离谱色 → token | 前端 | ✅ |
+| 5 | files/FilesDrawer.vue + MobileFilesBar.vue：裸 `<button>` 改用 Button/IconButton | 前端 | ✅ |
+| 6 | files/FolderSyncDialog.vue：硬编码协议色板 → `--proto-*` | 前端 | ✅ |
+| 7 | sql/ 系列：SqlPage/TableDesigner/ImportWizard/SqlResultGrid/ColumnEditor/GlobalQueryModal/ExportWizard/SqlFormView/AiAssistantDrawer 原生 table/btn → ui 库 + token | 前端 | ✅ |
+| 8 | redis/ 系列：RedisPage/FormatViewer/RedisStatus 硬编码类型色板 → `--proto-*` | 前端 | ✅ |
+| 9 | workspace/ResourceProperties.vue + resource/WizardModal.vue：硬编码协议色/资源色 → `--proto-*` | 前端 | ✅ |
+| 10 | resource-panel/ResourcePanel.vue 离谱色 `#f5a623` → `--accent`；components/TokenRefreshModal.vue 移除不存在 token 回退 | 前端 | ✅ |
 
 ## 子任务详细设计
 

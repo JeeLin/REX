@@ -632,7 +632,7 @@ function ctxToggleFavorite() {
   opacity: 1;
 }
 .rp-star--active {
-  color: #f5a623;
+  color: var(--accent);
 }
 .rp-empty-item {
   cursor: default;
