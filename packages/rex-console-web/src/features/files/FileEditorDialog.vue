@@ -21,6 +21,7 @@ import { cpp } from '@codemirror/lang-cpp'
 import { java } from '@codemirror/lang-java'
 import { yaml } from '@codemirror/lang-yaml'
 import * as filesApi from '@/api/files'
+import Button from '@/components/ui/Button.vue'
 const { t } = useI18n()
 
 
@@ -171,10 +172,10 @@ onBeforeUnmount(() => {
             <span class="editor-meta">{{ formatSize(fileSize) }}</span>
           </div>
           <div class="editor-actions">
-            <button class="btn btn-primary btn-sm" :disabled="saving || loading" @click="save">
+            <Button variant="primary" size="sm" :disabled="saving || loading" @click="save">
               {{ saving ? t('files.saving') : t('files.save') + ' (Ctrl+S)' }}
-            </button>
-            <button class="btn btn-ghost btn-sm" @click="emit('close')">{{ t('files.close') }}</button>
+            </Button>
+            <Button variant="ghost" size="sm" @click="emit('close')">{{ t('files.close') }}</Button>
           </div>
         </div>
 
@@ -207,9 +208,9 @@ onBeforeUnmount(() => {
   width: 90vw;
   height: 85vh;
   max-width: 1200px;
-  background: var(--bg-surface, #1c2128);
-  border: 1px solid var(--border-default, #30363d);
-  border-radius: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -219,44 +220,44 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-default, #30363d);
-  background: var(--bg-elevated, #21262d);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
 }
 
 .editor-title {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
 }
 
 .editor-filename {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
-  color: var(--text-primary, #e6edf3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .editor-meta {
-  font-size: 12px;
-  color: var(--text-secondary, #8b949e);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .editor-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   flex-shrink: 0;
 }
 
 .editor-error {
-  padding: 8px 16px;
-  background: rgba(248, 81, 73, 0.1);
-  color: #f85149;
-  font-size: 12px;
-  border-bottom: 1px solid var(--border-default, #30363d);
+  padding: var(--space-2) var(--space-4);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-xs);
+  border-bottom: 1px solid var(--border);
 }
 
 .editor-loading {
@@ -264,37 +265,12 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   flex: 1;
-  color: var(--text-secondary, #8b949e);
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .editor-content {
   flex: 1;
   overflow: hidden;
 }
-
-.btn {
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
-  border: none;
-  transition: background 0.15s;
-}
-
-.btn-sm { padding: 4px 10px; }
-
-.btn-primary {
-  background: var(--color-primary, #e8912d);
-  color: #fff;
-}
-.btn-primary:hover { background: #d07e24; }
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.btn-ghost {
-  background: transparent;
-  color: var(--text-secondary, #8b949e);
-  border: 1px solid var(--border-default, #30363d);
-}
-.btn-ghost:hover { background: var(--bg-hover, #21262d); }
 </style>
