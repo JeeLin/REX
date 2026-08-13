@@ -373,6 +373,7 @@
   },
   "settings": {
     "appearance": "外观",
+    "autoUpdate": "自动更新",
     "bgImage": "背景图",
     "bgImageDots": "圆点",
     "bgImageGradient": "渐变",

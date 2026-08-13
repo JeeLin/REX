@@ -259,7 +259,7 @@ async function saveSettings() {
       <Card id="settings-update" class="settings-section">
         <h2 class="section-title">{{ t('settings.update') }}</h2>
         <div class="form-group">
-          <label class="form-label">{{ t('settings.autoUpdate', 'Auto Update') }}</label>
+          <label class="form-label">{{ t('settings.autoUpdate') }}</label>
           <Switch v-model="autoUpdate" size="sm" />
         </div>
         <div v-if="updateStore.updateLoading" class="update-progress">
@@ -270,12 +270,12 @@ async function saveSettings() {
         </div>
         <div v-else class="update-info">
           <div class="update-current">
-            <span class="label">{{ t('settings.updateStore.currentVersion') }}:</span>
+            <span class="label">{{ t('settings.currentVersion') }}:</span>
             <span class="value">{{ updateStore.currentVersion }}</span>
           </div>
           <div v-if="updateStore.hasUpdate" class="update-available">
             <div class="update-latest">
-              <span class="label">{{ t('settings.updateStore.latestVersion') }}:</span>
+              <span class="label">{{ t('settings.latestVersion') }}:</span>
               <span class="value">{{ updateStore.latestVersion }}</span>
             </div>
             <Button

@@ -375,6 +375,7 @@
   },
   "settings": {
     "appearance": "Appearance",
+    "autoUpdate": "Auto Update",
     "bgImage": "Background Image",
     "bgImageDots": "Dots",
     "bgImageGradient": "Gradient",
