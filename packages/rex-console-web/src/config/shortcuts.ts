@@ -8,18 +8,13 @@ export interface ShortcutEntry {
 export const SHORTCUTS: ShortcutEntry[] = [
   // Workspace
   { id: 'cmd-palette', keys: 'Ctrl+K', description: 'Command palette', category: 'workspace' },
-  { id: 'toggle-sftp', keys: 'Ctrl+J', description: 'Toggle SFTP drawer', category: 'workspace' },
+  { id: 'toggle-sftp', keys: 'Ctrl+B', description: 'Toggle SFTP drawer', category: 'workspace' },
   { id: 'broadcast-input', keys: 'Ctrl+Shift+B', description: 'Toggle broadcast input', category: 'workspace' },
 
   // Tab
   { id: 'new-ssh', keys: 'Ctrl+T', description: 'New SSH connection', category: 'tab' },
   { id: 'new-tab', keys: 'Ctrl+N', description: 'New connection (quick connect)', category: 'tab' },
   { id: 'close-tab', keys: 'Ctrl+W', description: 'Close active tab', category: 'tab' },
-  { id: 'tab-1', keys: 'Alt+1', description: 'Switch to tab 1', category: 'tab' },
-  { id: 'tab-2', keys: 'Alt+2', description: 'Switch to tab 2', category: 'tab' },
-  { id: 'tab-3', keys: 'Alt+3', description: 'Switch to tab 3', category: 'tab' },
-  { id: 'tab-4', keys: 'Alt+4', description: 'Switch to tab 4', category: 'tab' },
-  { id: 'tab-5', keys: 'Alt+5', description: 'Switch to tab 5', category: 'tab' },
   { id: 'tab-6', keys: 'Alt+6', description: 'Switch to tab 6', category: 'tab' },
   { id: 'tab-7', keys: 'Alt+7', description: 'Switch to tab 7', category: 'tab' },
   { id: 'tab-8', keys: 'Alt+8', description: 'Switch to tab 8', category: 'tab' },
