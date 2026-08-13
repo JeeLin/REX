@@ -3,6 +3,7 @@ import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import * as filesApi from '@/api/files'
 import type { FileEntry } from '@/api/files'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps<{
   resourceId?: string
@@ -240,9 +241,9 @@ onBeforeUnmount(async () => {
         </span>
       </div>
       <div class="fd-actions">
-        <button class="fd-btn" title="Go up" @click="goUp">↑</button>
-        <button class="fd-btn" title="Refresh" @click="loadDir">↻</button>
-        <button class="fd-btn" title="Upload" @click="upload">⬆</button>
+        <Button variant="ghost" size="sm" icon title="Go up" @click="goUp">↑</Button>
+        <Button variant="ghost" size="sm" icon title="Refresh" @click="loadDir">↻</Button>
+        <Button variant="ghost" size="sm" icon title="Upload" @click="upload">⬆</Button>
         <span class="fd-count muted">{{ entries.length }} items<template v-if="selected.size"> · {{ selected.size }} sel</template></span>
       </div>
     </div>
@@ -340,11 +341,6 @@ onBeforeUnmount(async () => {
 .fd-crumb-name { color: var(--text-secondary); }
 .fd-crumb:last-child .fd-crumb-name { color: var(--text-primary); font-weight: 600; }
 .fd-actions { display: flex; align-items: center; gap: var(--space-1); flex-shrink: 0; }
-.fd-btn {
-  background: none; border: none; color: var(--text-muted); cursor: pointer;
-  padding: 2px 4px; border-radius: var(--radius-sm); font-size: var(--text-sm);
-}
-.fd-btn:hover { color: var(--text-primary); }
 .fd-count { font-size: var(--text-xs); color: var(--text-muted); margin-left: var(--space-2); }
 
 .fd-list { flex: 1; overflow-y: auto; min-height: 0; }
@@ -386,7 +382,7 @@ onBeforeUnmount(async () => {
 .fd-transfer-fill--indeterminate { width: 40%; animation: fd-slide 1.5s infinite; }
 @keyframes fd-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
 .fd-transfer-status { width: 16px; text-align: center; flex-shrink: 0; }
-.fd-transfer-status--ok { color: var(--success, #3FB950); }
+.fd-transfer-status--ok { color: var(--success); }
 .fd-transfer-status--err { color: var(--danger); }
 .fd-transfer-speed { width: 70px; text-align: right; flex-shrink: 0; }
 .fd-transfer-cancel {

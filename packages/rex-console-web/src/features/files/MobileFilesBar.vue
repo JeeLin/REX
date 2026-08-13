@@ -58,7 +58,7 @@ function onMore(action: string) {
   right: 0;
   z-index: 50;
   padding: var(--space-2);
-  background: rgba(13, 17, 23, 0.95);
+  background: var(--bg-deep);
   backdrop-filter: blur(8px);
   border-top: 1px solid var(--border);
   justify-content: center;
