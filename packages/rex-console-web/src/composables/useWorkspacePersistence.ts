@@ -44,8 +44,12 @@ export function useWorkspacePersistence(opts: {
         return false
       }
 
-      // Restore tabs
-      for (const t of state.tabs) {
+      // Restore tabs — 持久化的 tabs 数量可能超过当前布局 leaves 数量。
+      // 只恢复前 N 个（N = leaves 数量），多余的 tab 无 pane 可绑定，直接丢弃，
+      // 避免 tabs>leaves 不对齐导致多余 tab 无法打开。
+      const leafCount = allLeaves.value.length || 1
+      const tabsToRestore = state.tabs.slice(0, leafCount)
+      for (const t of tabsToRestore) {
         tabs.value.push({
           id: t.id,
           label: t.label,

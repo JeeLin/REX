@@ -210,9 +210,9 @@ M78 完成了全系统 UX/UI 重设计。当前工作空间的分屏系统仅支
 | [x] | 🟡 | EnvironmentTile.vue action 按钮仅 hover 可见 | 步骤5 代码审查 | 键盘可达性改进建议 |
 | [x] | 🔴 | shortcuts.ts 快捷键文档与代码不一致 | 步骤5 代码审查 | tab-1~5 记为 Alt+1~5（切换标签），但代码 Alt+1~5 是布局预设、Alt+6~9 才是标签跳转；且 layout-single 等也用 Alt+1~5，自相矛盾。需对齐 shortcuts.ts 与 WorkspacePage 实际注册 |
 | [x] | 🟡 | WorkspacePage pane 右键 ContextMenu 未渲染 | 步骤5 代码审查 | 子任务4 pane 侧 splitClose/moveToPane 逻辑完整但模板无 ContextMenu，pane 右键菜单不显示 |
-| ⬜ | 🟡 | useWorkspacePersistence 恢复时 tabs>leaves 数量未对齐 | 步骤5 代码审查 | 持久化 tabs 多于布局 leaves 时多余 tab 无法绑定，缺数量校验 |
+| [x] | 🟡 | useWorkspacePersistence 恢复时 tabs>leaves 数量未对齐 | 步骤5 代码审查 | 持久化 tabs 多于布局 leaves 时多余 tab 无法绑定，缺数量校验 |
 | [x] | 🟡 | wt-resource-name 应展示资源名称而非资源ID | 用户反馈 | 工作区终端标题 wt-resource-name 当前显示的是资源ID，应展示资源名称 |
-| ⬜ | 🟡 | 工作区复制粘贴功能多处无法使用 | 用户反馈 | 工作区的复制粘贴功能很多都无法使用，需排查剪贴板/右键菜单/快捷键链路 |
+| [x] | 🟡 | 工作区复制粘贴功能多处无法使用 | 用户反馈 | 工作区的复制粘贴功能很多都无法使用，需排查剪贴板/右键菜单/快捷键链路 |
 | [x] | 🔴 | 工作区右上角分栏按钮点击无用 | 用户反馈 | 工作区右上角的分栏按钮点击后无反应，无法正常分栏（与 M79 分屏系统相关） |
 | ⬜ | 🟢 | Immersive Translate 浏览器插件 dynamic-i18n 版本不匹配 | 用户反馈 | 浏览器插件报错：dynamic-i18n version mismatch: expected 6, got 5。属第三方插件问题，非本应用缺陷，记录备查 |
 | ⬜ | 🟡 | 左侧新建资源后已打开环境页未实时刷新 | 用户反馈 | 在左侧新建资源后，之前打开的环境页面没有实时刷新，新资源未展示出来 |
