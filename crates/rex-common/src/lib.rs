@@ -31,6 +31,16 @@ impl From<std::io::Error> for RExError {
 
 pub type Result<T> = std::result::Result<T, RExError>;
 
+/// 为连接 URL 格式化主机地址：IPv6 地址需要用方括号包裹
+///（`[::1]:3306`），IPv4 与域名保持原样。已带方括号的地址不再重复包裹。
+pub fn bracket_host(host: &str) -> String {
+    if host.contains(':') && !host.starts_with('[') {
+        format!("[{host}]")
+    } else {
+        host.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -52,6 +62,23 @@ mod tests {
     fn test_rex_error_is_error() {
         let err = RExError::Message("test".into());
         let _: &dyn std::error::Error = &err;
+    }
+
+    #[test]
+    fn test_bracket_host_ipv6() {
+        assert_eq!(bracket_host("::1"), "[::1]");
+        assert_eq!(bracket_host("2001:db8::1"), "[2001:db8::1]");
+    }
+
+    #[test]
+    fn test_bracket_host_ipv4_and_hostname() {
+        assert_eq!(bracket_host("127.0.0.1"), "127.0.0.1");
+        assert_eq!(bracket_host("example.com"), "example.com");
+    }
+
+    #[test]
+    fn test_bracket_host_already_bracketed() {
+        assert_eq!(bracket_host("[::1]"), "[::1]");
     }
 }
 

@@ -1,6 +1,7 @@
 //! PostgreSQL 协议实现 — 基于 sqlx 的 SqlConnector。
 
 use anyhow::{Context, Result};
+use rex_common::bracket_host;
 use rex_common::sql::{
     ColumnInfo, ConnectRequest, DdlResult, ForeignKeyInfo, IndexInfo, QueryResult, SqlConnector,
     TableInfo,
@@ -22,11 +23,11 @@ impl PostgresConnector {
     /// 建立 PostgreSQL 连接
     pub async fn connect(req: ConnectRequest) -> Result<Self> {
         let database = req.database.as_deref().unwrap_or("postgres");
+        let host = bracket_host(&req.host);
         let url = format!(
-            "postgres://{}:{}@{}:{}/{}",
+            "postgres://{}:{}@{host}:{}/{}",
             req.username,
             req.password.as_deref().unwrap_or(""),
-            req.host,
             req.port,
             database
         );

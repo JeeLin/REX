@@ -2,6 +2,7 @@
 
 use anyhow::{Context, Result};
 use redis::cmd as redis_cmd;
+use rex_common::bracket_host;
 use rex_common::redis::{
     DbInfo, FormatInfo, KeyInfo, KeyspaceInfo, RedisConnectRequest, RedisConnector, RedisInfo,
     RedisValue,
@@ -17,10 +18,11 @@ pub struct RedisConnectorImpl {
 impl RedisConnectorImpl {
     /// 建立 Redis 连接
     pub async fn connect(req: RedisConnectRequest) -> Result<Self> {
+        let host = bracket_host(&req.host);
         let url = if let Some(ref password) = req.password {
-            format!("redis://:{}@{}:{}", password, req.host, req.port)
+            format!("redis://:{}@{host}:{}", password, req.port)
         } else {
-            format!("redis://{}:{}", req.host, req.port)
+            format!("redis://{host}:{}", req.port)
         };
 
         let client = redis::Client::open(url.as_str())
