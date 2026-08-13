@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter, onBeforeRouteUpdate } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { environmentsApi, type Environment } from '@/api/environments'
-import { resourcesApi, type Resource } from '@/api/resources'
+import type { Resource } from '@/api/resources'
 import { api } from '@/api/client'
 import Card from '@/components/ui/Card.vue'
 import Badge from '@/components/ui/Badge.vue'
@@ -25,7 +25,8 @@ const wsStore = useWorkspaceStore()
 
 const envId = ref(route.params.id as string)
 const env = ref<Environment | null>(null)
-const resources = ref<Resource[]>([])
+// 资源列表直接取自共享 store（envResources），保证侧栏新建/删除资源时本页实时刷新
+const resources = computed<Resource[]>(() => store.envResources.get(envId.value) || [])
 const loading = ref(true)
 const showWizard = ref(false)
 const editModal = ref(false)
@@ -50,6 +51,7 @@ const editS3Region = ref('')
 // Context menu state
 const ctxMenu = ref<{ show: boolean; x: number; y: number; resource: Resource | null }>({ show: false, x: 0, y: 0, resource: null })
 const resourceDeleteId = ref<string | null>(null)
+const deleteConfirmId = ref<string | ''>('')
 
 // Resource edit modal state
 const resEditModal = ref(false)
@@ -60,6 +62,8 @@ const resEditUsername = ref('')
 const resEditProtocol = ref('')
 const resEditError = ref('')
 const resEditLoading = ref(false)
+const resEditTesting = ref(false)
+const resEditTestResult = ref<{ ok: boolean; msg: string } | null>(null)
 
 onMounted(async () => {
   await loadEnvironment(envId.value)
@@ -78,7 +82,7 @@ async function loadEnvironment(id: string) {
   loading.value = true
   try {
     env.value = await environmentsApi.get(id)
-    resources.value = await resourcesApi.listByEnv(id)
+    await store.fetchResources(id)
   } catch {
     router.push('/environments')
   } finally {
@@ -116,20 +120,31 @@ async function submitEdit() {
   }
 }
 
+async function deleteEnvironment() {
+  const id = deleteConfirmId.value
+  deleteConfirmId.value = ''
+  if (!id) return
+  try {
+    await store.deleteEnvironment(id)
+    router.push('/environments')
+  } catch (e: unknown) {
+    editError.value = e instanceof Error ? e.message : String(e)
+  }
+}
+
 async function deleteResource(id: string) {
   try {
     await store.deleteResource(envId.value, id)
-    resources.value = resources.value.filter(r => r.id !== id)
   } catch {
     // ignore
   }
 }
 
 async function refreshResources() {
-  resources.value = await resourcesApi.listByEnv(envId.value)
+  await store.fetchResources(envId.value)
   // 刷新环境的 resource_count
   if (env.value) {
-    env.value.resource_count = resources.value.length
+    env.value.resource_count = (store.envResources.get(envId.value) || []).length
   }
 }
 
@@ -231,13 +246,64 @@ async function submitResEdit() {
       username: resEditUsername.value.trim() || undefined,
       config_json: JSON.stringify(cfg),
     })
-    const idx = resources.value.findIndex(r => r.id === res.id)
-    if (idx >= 0) resources.value[idx] = updated
+    const list = store.envResources.get(envId.value)
+    if (list) {
+      const idx = list.findIndex(r => r.id === res.id)
+      if (idx >= 0) {
+        list[idx] = updated
+        store.envResources.set(envId.value, [...list])
+      }
+    }
     resEditModal.value = false
   } catch (e: unknown) {
     resEditError.value = e instanceof Error ? e.message : String(e)
   } finally {
     resEditLoading.value = false
+  }
+}
+
+async function testResConnection() {
+  if (!resEditName.value.trim() || !resEditHost.value.trim()) {
+    resEditTestResult.value = { ok: false, msg: t('wizard.hostRequired') }
+    return
+  }
+  const cfg: Record<string, unknown> = {}
+  if (['ssh', 'sftp'].includes(resEditProtocol.value)) {
+    if (editPassword.value) cfg.password = editPassword.value
+    if (editPrivateKey.value) cfg.private_key = editPrivateKey.value
+  } else if (['mysql', 'postgresql'].includes(resEditProtocol.value)) {
+    if (editPassword.value) cfg.password = editPassword.value
+    if (editDatabaseName.value) cfg.database_name = editDatabaseName.value
+  } else if (resEditProtocol.value === 'redis') {
+    if (editPassword.value) cfg.password = editPassword.value
+    cfg.db = editRedisDb.value
+  } else if (resEditProtocol.value === 'sqlite') {
+    cfg.file_path = editFilePath.value
+  } else if (resEditProtocol.value === 's3') {
+    cfg.endpoint = editS3Endpoint.value
+    cfg.access_key = editS3AccessKey.value
+    cfg.secret_key = editS3SecretKey.value
+    cfg.bucket = editS3Bucket.value
+    cfg.region = editS3Region.value || 'us-east-1'
+  }
+  resEditTesting.value = true
+  resEditTestResult.value = null
+  try {
+    const res = await store.testConnection({
+      protocol: resEditProtocol.value,
+      host: resEditHost.value.trim(),
+      port: resEditPort.value ? Number(resEditPort.value) : null,
+      username: resEditUsername.value.trim() || undefined,
+      config_json: JSON.stringify(cfg),
+      environment_id: envId.value,
+    })
+    resEditTestResult.value = res.ok
+      ? { ok: true, msg: t('wizard.testSuccess') }
+      : { ok: false, msg: res.error || t('wizard.testFailed') }
+  } catch (e: unknown) {
+    resEditTestResult.value = { ok: false, msg: e instanceof Error ? e.message : t('wizard.testFailed') }
+  } finally {
+    resEditTesting.value = false
   }
 }
 
@@ -297,6 +363,7 @@ async function resetToken() {
         </div>
         <div class="env-header-actions">
           <Button variant="secondary" size="sm" @click="openEdit">{{ t('common.edit') }}</Button>
+          <Button variant="danger" size="sm" :aria-label="t('common.delete')" @click="deleteConfirmId = env.id ?? ''">{{ t('common.delete') }}</Button>
         </div>
       </div>
 
@@ -430,6 +497,18 @@ async function resetToken() {
         </div>
       </form>
     </Modal>
+
+    <!-- Environment Delete Confirmation -->
+    <Modal :model-value="!!deleteConfirmId" @update:model-value="deleteConfirmId = ''">
+      <template #title>{{ t('environments.deleteEnvironment') }}</template>
+      <p style="color: var(--text-secondary); margin-bottom: 16px">
+        {{ t('environments.deleteConfirm') }}
+      </p>
+      <div class="form-actions">
+        <Button variant="secondary" @click="deleteConfirmId = ''">{{ t('common.cancel') }}</Button>
+        <Button variant="danger" :loading="false" @click="deleteEnvironment">{{ t('common.delete') }}</Button>
+      </div>
+    </Modal>
     <!-- Resource Context Menu -->
     <div v-if="ctxMenu.show" class="ctx-overlay" @click="closeCtxMenu" @contextmenu.prevent="closeCtxMenu" />
     <div v-if="ctxMenu.show" class="res-ctx-menu" :style="{ top: ctxMenu.y + 'px', left: ctxMenu.x + 'px' }">
@@ -535,8 +614,12 @@ async function resetToken() {
         </template>
         <div v-if="resEditError" class="form-error">{{ resEditError }}</div>
         <div class="form-actions">
+          <Button type="button" variant="secondary" :loading="resEditTesting" @click="testResConnection">{{ t('wizard.testConnection') }}</Button>
           <Button type="button" variant="secondary" @click="resEditModal = false">{{ t('common.cancel') }}</Button>
           <Button type="submit" variant="primary" :loading="resEditLoading">{{ t('common.save') }}</Button>
+        </div>
+        <div v-if="resEditTestResult" class="form-error" :style="{ color: resEditTestResult.ok ? 'var(--success)' : 'var(--danger)' }">
+          {{ resEditTestResult.msg }}
         </div>
       </form>
     </Modal>
