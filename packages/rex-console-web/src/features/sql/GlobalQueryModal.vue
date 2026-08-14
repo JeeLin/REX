@@ -127,6 +127,7 @@ function close() {
               class="query-input mono"
               rows="6"
               :placeholder="t('sql.queryPlaceholder')"
+              @keydown.enter.exact.prevent="execute"
             />
           </div>
 
