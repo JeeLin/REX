@@ -129,3 +129,16 @@ pub struct AuditStats {
     pub success_count: i64,
     pub failure_count: i64,
 }
+
+/// 命名 SQL 查询（用户保存的可复用查询片段）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SavedQuery {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub sql: String,
+    #[serde(default)]
+    pub db_type: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+}

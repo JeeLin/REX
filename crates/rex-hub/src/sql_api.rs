@@ -5,9 +5,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::models::SavedQuery;
 use crate::resource_conn::load_resource_config;
 use crate::AppState;
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
@@ -57,6 +58,12 @@ pub fn sql_routes() -> axum::Router<AppState> {
         .route("/indexes", axum::routing::get(indexes))
         .route("/foreign_keys", axum::routing::get(foreign_keys))
         .route("/ddl", axum::routing::get(ddl))
+        .route("/saved-queries", axum::routing::get(list_saved_queries))
+        .route("/saved-queries", axum::routing::post(upsert_saved_query))
+        .route(
+            "/saved-queries/:id",
+            axum::routing::delete(delete_saved_query),
+        )
 }
 
 // ---------------------------------------------------------------------------
@@ -407,5 +414,63 @@ async fn ddl(
     match conn.ddl(&params.db, &params.table).await {
         Ok(d) => (StatusCode::OK, Json(d)).into_response(),
         Err(e) => error_response("QUERY_FAILED", &e.to_string()).into_response(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Saved SQL Queries (命名查询，持久化于 settings 表)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+struct SavedQueryBody {
+    #[serde(default)]
+    id: String,
+    name: String,
+    #[serde(default)]
+    sql: String,
+    #[serde(default)]
+    db_type: Option<String>,
+}
+
+/// GET /api/sql/saved-queries
+async fn list_saved_queries(State(state): State<AppState>) -> impl IntoResponse {
+    let db = state.db.clone();
+    match db.list_saved_queries() {
+        Ok(list) => (StatusCode::OK, Json(list)).into_response(),
+        Err(e) => error_response("DB_ERROR", &e.to_string()).into_response(),
+    }
+}
+
+/// POST /api/sql/saved-queries
+async fn upsert_saved_query(
+    State(state): State<AppState>,
+    Json(body): Json<SavedQueryBody>,
+) -> impl IntoResponse {
+    if body.name.trim().is_empty() {
+        return error_response("INVALID_NAME", "query name must not be empty").into_response();
+    }
+    let db = state.db.clone();
+    let q = SavedQuery {
+        id: body.id,
+        name: body.name,
+        sql: body.sql,
+        db_type: body.db_type,
+        updated_at: None,
+    };
+    match db.upsert_saved_query(&q) {
+        Ok(stored) => (StatusCode::OK, Json(stored)).into_response(),
+        Err(e) => error_response("DB_ERROR", &e.to_string()).into_response(),
+    }
+}
+
+/// DELETE /api/sql/saved-queries/:id
+async fn delete_saved_query(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let db = state.db.clone();
+    match db.delete_saved_query(&id) {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => error_response("DB_ERROR", &e.to_string()).into_response(),
     }
 }

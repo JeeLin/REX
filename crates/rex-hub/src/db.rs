@@ -112,6 +112,59 @@ impl Database {
         Ok(map)
     }
 
+    // --- Saved SQL Queries ---
+    //
+    // 命名 SQL 查询以 JSON 数组存放于 settings 表的 "saved_queries" 键下（单用户，无需独立表）。
+
+    const SAVED_QUERIES_KEY: &'static str = "saved_queries";
+
+    pub fn list_saved_queries(&self) -> Result<Vec<SavedQuery>> {
+        let raw = match self.get_setting(Self::SAVED_QUERIES_KEY)? {
+            Some(v) if !v.is_empty() => v,
+            _ => return Ok(Vec::new()),
+        };
+        let mut list: Vec<SavedQuery> = serde_json::from_str(&raw)
+            .map_err(|e| RExError::Message(format!("failed to parse saved_queries: {e}")))?;
+        // 按更新时间降序（无时间的排末尾）
+        list.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        Ok(list)
+    }
+
+    pub fn upsert_saved_query(&self, q: &SavedQuery) -> Result<SavedQuery> {
+        let mut list = self.list_saved_queries()?;
+        let now = chrono::Utc::now().to_rfc3339();
+        let id = if q.id.is_empty() {
+            uuid::Uuid::new_v4().to_string()
+        } else {
+            q.id.clone()
+        };
+        let stored = SavedQuery {
+            id: id.clone(),
+            name: q.name.clone(),
+            sql: q.sql.clone(),
+            db_type: q.db_type.clone(),
+            updated_at: Some(now),
+        };
+        if let Some(pos) = list.iter().position(|x| x.id == id) {
+            list[pos] = stored.clone();
+        } else {
+            list.push(stored.clone());
+        }
+        let json = serde_json::to_string(&list)
+            .map_err(|e| RExError::Message(format!("failed to serialize saved_queries: {e}")))?;
+        self.set_setting(Self::SAVED_QUERIES_KEY, &json)?;
+        Ok(stored)
+    }
+
+    pub fn delete_saved_query(&self, id: &str) -> Result<()> {
+        let mut list = self.list_saved_queries()?;
+        list.retain(|x| x.id != id);
+        let json = serde_json::to_string(&list)
+            .map_err(|e| RExError::Message(format!("failed to serialize saved_queries: {e}")))?;
+        self.set_setting(Self::SAVED_QUERIES_KEY, &json)?;
+        Ok(())
+    }
+
     // --- Audit Log ---
 
     pub fn write_audit_log(&self, entry: &NewAuditEntry) -> Result<()> {
@@ -849,6 +902,52 @@ mod tests {
         assert_eq!(db.get_setting("key1").unwrap(), Some("value1".into()));
         db.set_setting("key1", "value2").unwrap();
         assert_eq!(db.get_setting("key1").unwrap(), Some("value2".into()));
+    }
+
+    // --- Saved SQL Queries ---
+
+    #[test]
+    fn test_saved_queries_crud() {
+        let (_dir, db) = test_db();
+        // 初始为空
+        assert!(db.list_saved_queries().unwrap().is_empty());
+
+        // 新建
+        let created = db
+            .upsert_saved_query(&SavedQuery {
+                id: String::new(),
+                name: "q1".into(),
+                sql: "SELECT 1".into(),
+                db_type: Some("mysql".into()),
+                updated_at: None,
+            })
+            .unwrap();
+        assert!(!created.id.is_empty());
+        assert!(created.updated_at.is_some());
+
+        // 列表返回一个
+        let list = db.list_saved_queries().unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].name, "q1");
+
+        // 覆盖更新（同 id）
+        let created2 = db
+            .upsert_saved_query(&SavedQuery {
+                id: created.id.clone(),
+                name: "q1-renamed".into(),
+                sql: "SELECT 2".into(),
+                db_type: None,
+                updated_at: None,
+            })
+            .unwrap();
+        assert_eq!(created.id, created2.id);
+        let list = db.list_saved_queries().unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].name, "q1-renamed");
+
+        // 删除
+        db.delete_saved_query(&created.id).unwrap();
+        assert!(db.list_saved_queries().unwrap().is_empty());
     }
 
     // --- Audit Log ---
