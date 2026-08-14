@@ -61,7 +61,7 @@ pub fn sql_routes() -> axum::Router<AppState> {
         .route("/saved-queries", axum::routing::get(list_saved_queries))
         .route("/saved-queries", axum::routing::post(upsert_saved_query))
         .route(
-            "/saved-queries/:id",
+            "/saved-queries/{id}",
             axum::routing::delete(delete_saved_query),
         )
 }
