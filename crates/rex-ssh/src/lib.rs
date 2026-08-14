@@ -21,6 +21,8 @@ pub struct SshConfig {
     pub private_key: Option<String>,
     /// KeepAlive 间隔（秒），0 表示禁用
     pub keepalive_interval: Option<u32>,
+    /// 会话建立后自动执行的初始化脚本（多行以 `\n` 分隔，逐行发送）
+    pub init_script: Option<String>,
 }
 
 /// 终端事件 — 从 SSH 会话流向 WebSocket
@@ -38,6 +40,16 @@ pub struct SshSession {
     write_half: ChannelWriteHalf<client::Msg>,
     /// SSH 事件接收（终端输出 / 断开通知）
     events: mpsc::Receiver<TerminalEvent>,
+}
+
+/// 将初始化脚本按行拆分，跳过空行并去除行尾空白。
+/// 纯逻辑，便于单元测试。
+fn split_init_script(script: &str) -> Vec<String> {
+    script
+        .lines()
+        .map(|l| l.trim_end().to_string())
+        .filter(|l| !l.is_empty())
+        .collect()
 }
 
 impl SshSession {
@@ -107,6 +119,16 @@ impl SshSession {
             .request_shell(true)
             .await
             .context("failed to request shell")?;
+
+        // 会话建立后执行初始化脚本（逐行发送，失败仅记录不阻断）
+        if let Some(ref script) = config.init_script {
+            for line in split_init_script(script) {
+                if let Err(e) = write_half.data(format!("{}\n", line).as_bytes()).await {
+                    tracing::warn!("init_script line failed: {e}");
+                    break;
+                }
+            }
+        }
 
         // 事件通道：SSH 读取 → WebSocket 写入
         let (event_tx, event_rx) = mpsc::channel::<TerminalEvent>(512);
@@ -193,5 +215,27 @@ impl client::Handler for SshHandler {
         // DEV ONLY: 跳过主机密钥校验（生产环境应校验 known_hosts）
         tracing::warn!("SSH host key verification disabled (dev mode) — MITM risk");
         Ok(true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_split_init_script() {
+        // 单行
+        assert_eq!(split_init_script("echo hi"), vec!["echo hi"]);
+        // 多行，跳过空行
+        assert_eq!(
+            split_init_script("cd /data/logs\n\necho ready\n"),
+            vec!["cd /data/logs", "echo ready"]
+        );
+        // 去除行尾空白
+        assert_eq!(split_init_script("ls   \n"), vec!["ls"]);
+        // 全空
+        assert!(split_init_script("\n\n").is_empty());
+        // 空字符串即无命令
+        assert!(split_init_script("").is_empty());
     }
 }

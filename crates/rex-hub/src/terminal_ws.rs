@@ -87,6 +87,7 @@ struct ResourceConnInfo {
     use_agent: bool,
     agent_id: Option<String>,
     keepalive_interval: Option<u32>,
+    init_script: Option<String>,
 }
 
 /// GET /ws/terminal?token=jwt&resourceId=xxx
@@ -184,8 +185,8 @@ async fn load_resource_conn(
             resource.username.clone()
         };
 
-        // 从 config_json 解密敏感字段（password、privateKey）
-        let (password, private_key) = if !resource.config_json.is_empty() && resource.config_json != "{}" {
+        // 从 config_json 解密敏感字段（password、privateKey、initScript）
+        let (password, private_key, init_script) = if !resource.config_json.is_empty() && resource.config_json != "{}" {
             let config_str = crypto
                 .decrypt(&resource.config_json)
                 .map_err(|e| {
@@ -206,6 +207,11 @@ async fn load_resource_conn(
                 .get("privateKey")
                 .and_then(|v| v.as_str())
                 .map(String::from);
+            let init_script = config
+                .get("initScript")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.trim().is_empty())
+                .map(String::from);
 
             tracing::debug!(
                 action = "SSH_CONFIG_LOADED",
@@ -215,10 +221,10 @@ async fn load_resource_conn(
                 "sensitive config loaded"
             );
 
-            (pw, pk)
+            (pw, pk, init_script)
         } else {
             tracing::debug!(action = "SSH_CONFIG_PARSE", resource_id = %rid, "no config_json — using defaults");
-            (None, None)
+            (None, None, None)
         };
 
         let auth_method = if private_key.is_some() {
@@ -296,6 +302,7 @@ async fn load_resource_conn(
             use_agent,
             agent_id,
             keepalive_interval: None,
+            init_script,
         })
     })
     .await
@@ -326,6 +333,7 @@ async fn handle_direct_terminal(mut ws: WebSocket, conn: &ResourceConnInfo, sess
         password: conn.password.clone(),
         private_key: conn.private_key.clone(),
         keepalive_interval: conn.keepalive_interval,
+        init_script: conn.init_script.clone(),
     };
 
     let session = match SshSession::connect(config).await {

@@ -178,6 +178,12 @@ async fn connect(
                     .get("keepalive_interval")
                     .and_then(|v| v.as_u64())
                     .map(|v| v as u32),
+                init_script: res
+                    .config
+                    .get("initScript")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.trim().is_empty())
+                    .map(String::from),
             })
             .await;
             match conn {
