@@ -795,7 +795,7 @@ useKeyboardShortcuts([
   position: fixed;
   right: var(--space-3);
   bottom: var(--space-3);
-  z-index: 70;
+  z-index: 1000;
   width: 40px;
   height: 40px;
   display: flex;
@@ -815,6 +815,15 @@ useKeyboardShortcuts([
   color: var(--text-primary);
   background: var(--bg-hover);
   border-color: var(--accent);
+}
+
+/* 移动端：底栏（z-997）与右下浮动按钮簇会盖住/碰撞 FAB，移到左下并抬高避开 */
+@media (max-width: 768px) {
+  .ws-shortcut-fab {
+    right: auto;
+    left: var(--space-3);
+    bottom: calc(56px + var(--space-3));
+  }
 }
 
 </style>
