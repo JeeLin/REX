@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.68.0] - 2026-08-14
+
+### Changed
+- 设计系统：feature 组件（files/sql/redis/terminal/workspace/resource/resource-panel）全量迁移到 design token 与 `components/ui/*`，移除硬编码 hex 与不存在的 token 回退
+- 审计日志：分页统计（stats）现正确遵循结果筛选条件，分页计数与实际列表一致
+
+### Fixed
+- 工作区：分栏方向递归渲染，支持上下/左右混合嵌套（此前所有分屏共用单一方向）
+- 终端：SSH 断开日志补充可读的资源名称（原仅 resource_id）
+- 界面：右下角新增快捷键速查指南快捷开关
+- 手机端：SQL 全局查询框回车执行而非插入换行
+- 文档：修正 Agent 部署文档，移除实际未使用的 `REX_AGENT_ID` 环境变量，校准认证失败提示（仅 `REX_HUB_URL` 与 `REX_AGENT_TOKEN` 为必填，Agent ID 由 Hub 依令牌自动分配）
+
 ## [0.67.0] - 2026-08-13
 
 ### Fixed
