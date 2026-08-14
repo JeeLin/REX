@@ -431,3 +431,28 @@ docs/milestones/
 依赖：M68
 版本类型：minor
 版本号：0.60.0
+
+### M81：SQL 查询保存 + SSH 初始化脚本 + 缺陷修复与覆盖率补全 ← 新增（下一步）
+
+**核心功能**：
+1. SQL 查询文件保存（后端支撑的全局命名列表，支持保存/打开/重命名/删除）
+2. SSH 连接成功后执行初始化脚本（如 cd 到指定目录；`SshConfig` 增加 `init_script` 字段并在 terminal 会话建立后执行）
+3. 修复 M80 阶段沉淀的缺陷（🔴 更新检查降级、🟡 审计日志分页不可见、🟡 分栏不作用于聚焦 pane）
+4. 测试覆盖率补全至 90% 门槛
+
+**子任务预估**：
+- SQL 查询保存：
+  - 后端 API + 持久化（复用 `settings` 表存储命名查询列表的 JSON）
+  - 前端保存/打开/重命名/删除 UI（命名查询列表弹层）
+- SSH 初始化脚本：
+  - `rex-ssh` 的 `SshConfig` 增加 `init_script`，`SshSession` 建立后逐行发送执行
+  - 前端在资源连接配置中增加「初始化脚本」输入框，写入 `config_json`
+- 缺陷修复：
+  - 🔴 更新检查：改用 `/releases` 列表取真正最高语义化版本，或仅当 latest 严格大于 current 才更新
+  - 🟡 审计日志分页：常显分页控件（数据少显示「共 N 条」），补每页条数/跳页/总数，后端 `ORDER BY time DESC, id DESC` 稳定排序
+  - 🟡 分栏聚焦：让「当前聚焦/最近交互的 pane」可靠写回 `activePaneId`（监听 `focusin`/`pointerdown` 或 split 时取最近聚焦 leaf）
+- 测试覆盖率：补齐 Rust 单元/集成测试 + 前端测试，使 `cargo llvm-cov --workspace` 与前端覆盖率达 90%
+
+依赖：M80
+版本类型：minor
+版本号：0.69.0
