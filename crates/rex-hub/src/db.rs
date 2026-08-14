@@ -223,7 +223,7 @@ impl Database {
             params.push(Box::new(r.clone()));
         }
 
-        sql.push_str(" ORDER BY time DESC");
+        sql.push_str(" ORDER BY time DESC, id DESC");
 
         if let Some(limit) = filter.limit {
             sql.push_str(&format!(" LIMIT {limit}"));
@@ -988,6 +988,61 @@ mod tests {
         let entries = db.query_audit_log(&filter).unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].action, "SSH_CONNECT");
+    }
+
+    #[test]
+    fn test_audit_log_pagination_stable_order() {
+        let (_dir, db) = test_db();
+        // 写入 5 条，时间单调递增（time DESC 即最新在前）
+        for i in 0..5 {
+            db.write_audit_log(&NewAuditEntry {
+                action: format!("ACTION_{i}"),
+                result: "success".into(),
+                ..Default::default()
+            })
+            .unwrap();
+        }
+
+        // 全量（limit 10）→ 期望 5 条，按 time DESC 顺序排列
+        let all = db
+            .query_audit_log(&AuditFilter {
+                limit: Some(10),
+                offset: Some(0),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(all.len(), 5);
+        let all_ids: Vec<&str> = all.iter().map(|e| e.id.as_str()).collect();
+
+        // 分页：第一页 3 条，第二页 2 条；两页拼接应等于全量顺序且互不重复
+        let page1 = db
+            .query_audit_log(&AuditFilter {
+                limit: Some(3),
+                offset: Some(0),
+                ..Default::default()
+            })
+            .unwrap();
+        let page2 = db
+            .query_audit_log(&AuditFilter {
+                limit: Some(3),
+                offset: Some(3),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(page1.len(), 3);
+        assert_eq!(page2.len(), 2);
+
+        let page1_ids: Vec<&str> = page1.iter().map(|e| e.id.as_str()).collect();
+        let page2_ids: Vec<&str> = page2.iter().map(|e| e.id.as_str()).collect();
+        let mut combined = page1_ids.clone();
+        combined.extend(page2_ids.iter().copied());
+        assert_eq!(combined, all_ids, "分页拼接必须与全量排序一致");
+
+        // 稳定二级排序：time 相同也能靠 id 稳定区分，这里验证无重复 id
+        let mut sorted = combined.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), 5, "分页不应出现重复记录");
     }
 
     // --- Environments ---

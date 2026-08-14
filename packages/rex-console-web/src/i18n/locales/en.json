@@ -91,6 +91,10 @@
     "timeAll": "All Time",
     "timeToday": "Today",
     "title": "Audit Log",
+    "pageSize": "Page Size",
+    "totalCount": "Total {n} entries",
+    "gotoPage": "Go to page",
+    "pageUnit": "Page",
     "viewDetail": "View Details"
   },
   "commandPalette": {

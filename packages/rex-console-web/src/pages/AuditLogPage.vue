@@ -19,7 +19,12 @@ const loading = ref(true)
 const stats = ref<AuditStats>({ total: 0, success_count: 0, failure_count: 0 })
 const expandedId = ref<string | null>(null)
 const currentPage = ref(1)
-const pageSize = 50
+const pageSize = ref(50)
+const pageSizeOptions = [
+  { label: '20', value: 20 },
+  { label: '50', value: 50 },
+  { label: '100', value: 100 },
+]
 const totalCount = ref(0)
 
 // Context menu
@@ -145,14 +150,14 @@ async function fetchEntries() {
   loading.value = true
   const range = getTimeRange()
   try {
-    const offset = (currentPage.value - 1) * pageSize
+    const offset = (currentPage.value - 1) * pageSize.value
     const [data, statsData] = await Promise.all([
       auditApi.query({
         action: actionFilter.value || undefined,
         result: resultFilter.value || undefined,
         environment_id: environmentFilter.value || undefined,
         ...range,
-        limit: pageSize,
+        limit: pageSize.value,
         offset,
       }),
       auditApi.stats({
@@ -260,14 +265,32 @@ function isJsonDetail(detail: string | null): boolean {
   }
 }
 
-const totalPages = computed(() => Math.ceil(totalCount.value / pageSize))
+const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / pageSize.value)))
+
+const gotoPage = ref(1)
 
 watch([actionFilter, resultFilter, environmentFilter, timeRange], () => {
   currentPage.value = 1
+  gotoPage.value = 1
   refreshAll()
 })
 
-watch(currentPage, fetchEntries)
+watch(pageSize, () => {
+  currentPage.value = 1
+  gotoPage.value = 1
+  refreshAll()
+})
+
+// 跳页：输入页码后回车跳转到目标页
+function applyGoto() {
+  const target = Math.min(Math.max(1, Math.floor(gotoPage.value || 1)), totalPages.value)
+  currentPage.value = target
+}
+
+watch(currentPage, () => {
+  gotoPage.value = currentPage.value
+  fetchEntries()
+})
 
 onMounted(async () => {
   await store.fetchEnvironments()
@@ -422,10 +445,27 @@ onMounted(async () => {
     </Card>
 
     <!-- Pagination -->
-    <div v-if="totalPages > 1" class="pagination">
+    <div class="pagination">
+      <span class="page-total muted">{{ t('auditLog.totalCount', { n: totalCount }) }}</span>
+      <Select
+        v-model="pageSize"
+        :options="pageSizeOptions.map(o => ({ label: o.label, value: o.value }))"
+        size="sm"
+      />
       <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--">← {{ t('common.prev', 'Prev') }}</button>
       <span class="page-info mono">{{ currentPage }} / {{ totalPages }}</span>
       <button class="page-btn" :disabled="currentPage >= totalPages" @click="currentPage++">{{ t('common.next', 'Next') }} →</button>
+      <span class="page-goto">
+        <span class="muted">{{ t('auditLog.gotoPage') }}</span>
+        <input
+          v-model.number="gotoPage"
+          class="page-goto-input mono"
+          type="number"
+          min="1"
+          :max="totalPages"
+          @keyup.enter="applyGoto"
+        />
+      </span>
     </div>
 
     <!-- Context menu -->
@@ -490,8 +530,10 @@ onMounted(async () => {
 /* Pagination */
 .pagination {
   display: flex; align-items: center; justify-content: center;
+  flex-wrap: wrap;
   gap: var(--space-3); padding: var(--space-4) 0;
 }
+.page-total { font-size: var(--text-xs); }
 .page-btn {
   padding: var(--space-1) var(--space-3);
   background: var(--bg-surface); border: 1px solid var(--border);
@@ -502,4 +544,16 @@ onMounted(async () => {
 .page-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--text-primary); }
 .page-btn:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
 .page-info { font-size: var(--text-xs); color: var(--text-muted); }
+.page-goto { display: flex; align-items: center; gap: var(--space-1); font-size: var(--text-xs); }
+.page-goto-input {
+  width: 56px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  outline: none;
+}
+.page-goto-input:focus { border-color: var(--accent); }
 </style>

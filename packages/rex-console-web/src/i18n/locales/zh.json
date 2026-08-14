@@ -91,6 +91,10 @@
     "timeAll": "全部时间",
     "timeToday": "今天",
     "title": "审计日志",
+    "pageSize": "每页条数",
+    "totalCount": "共 {n} 条",
+    "gotoPage": "跳转到第几页",
+    "pageUnit": "页",
     "viewDetail": "查看详情"
   },
   "commandPalette": {
