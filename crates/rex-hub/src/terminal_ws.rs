@@ -190,12 +190,12 @@ async fn load_resource_conn(
             let config_str = crypto
                 .decrypt(&resource.config_json)
                 .map_err(|e| {
-                    tracing::error!(action = "SSH_CONFIG_DECRYPT", resource_id = %rid, error = %e, "config_json decryption failed");
+                    tracing::error!(action = "SSH_CONFIG_DECRYPT", resource_id = %rid, resource_name = %resource.name, error = %e, "config_json decryption failed");
                     format!("decrypt failed: {e}")
                 })?;
 
             let config: serde_json::Value = serde_json::from_str(&config_str).map_err(|e| {
-                tracing::error!(action = "SSH_CONFIG_PARSE", resource_id = %rid, error = %e, "config_json parse failed");
+                tracing::error!(action = "SSH_CONFIG_PARSE", resource_id = %rid, resource_name = %resource.name, error = %e, "config_json parse failed");
                 format!("invalid config json: {e}")
             })?;
 
@@ -223,7 +223,7 @@ async fn load_resource_conn(
 
             (pw, pk, init_script)
         } else {
-            tracing::debug!(action = "SSH_CONFIG_PARSE", resource_id = %rid, "no config_json — using defaults");
+            tracing::debug!(action = "SSH_CONFIG_PARSE", resource_id = %rid, resource_name = %resource.name, "no config_json — using defaults");
             (None, None, None)
         };
 
@@ -248,11 +248,11 @@ async fn load_resource_conn(
         let env = db
             .get_environment(&resource.environment_id)
             .map_err(|e| {
-                tracing::error!(action = "SSH_ENV_LOAD", resource_id = %rid, env_id = %resource.environment_id, error = %e, "failed to load environment");
+                tracing::error!(action = "SSH_ENV_LOAD", resource_id = %rid, resource_name = %resource.name, env_id = %resource.environment_id, error = %e, "failed to load environment");
                 format!("db error: {e}")
             })?
             .ok_or_else(|| {
-                tracing::warn!(action = "SSH_ENV_NOT_FOUND", resource_id = %rid, env_id = %resource.environment_id, "environment not found");
+                tracing::warn!(action = "SSH_ENV_NOT_FOUND", resource_id = %rid, resource_name = %resource.name, env_id = %resource.environment_id, "environment not found");
                 "environment not found".to_string()
             })?;
 

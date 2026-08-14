@@ -205,6 +205,7 @@ async fn delete_resource(
         action = "RESOURCE_DELETE",
         env_id = %env_id,
         resource_id = %resource_id,
+        resource_name = %res_name,
         "deleting resource"
     );
 

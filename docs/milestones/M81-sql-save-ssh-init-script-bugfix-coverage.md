@@ -189,5 +189,5 @@ M80 完成了 M78 重设计的收尾（feature 组件 token 化迁移，v0.68.0�
 | [x] | 🟡 | 审计日志分页对用户不可见 / 单薄 | 缺陷池（M80） | 分页条被 `v-if="totalPages > 1"` 隐藏，≤50 条时不可见；缺每页条数/跳页/总数。M81 #6 修复。 |
 | [x] | 🟡 | 分栏不作用于当前聚焦的 pane | 缺陷池（M80） | `activePaneId` 仅 `.ws-pane` `@click` 更新，xterm focus 后失效，状态栏/快捷键分栏永远作用于默认叶子。M81 #7 修复。 |
 | [x] | 🔴 | saved-queries 路由 panic 导致 worker 启动崩溃 | 用户反馈 | `sql_api.rs:63` 用 axum 0.8 不兼容的 `:id` 冒号捕获语法注册 DELETE 路由，worker 启动即 panic（exit_code=101）。已改为 `{id}`。M81 #9 修复。 |
-| ⬜ | 🟡 | 资源日志未覆盖该资源所有相关日志 | 用户反馈 | `resource_name=xyz`，资源连接、断开等日志只有资源ID等信息，缺少资源名称 |
+| [x] | 🟡 | 资源日志未覆盖该资源所有相关日志 | 用户反馈 | 后端 `tracing!` 日志中大量 SSH 连接相关语句只带 `resource_id` 未带 `resource_name`（之前只补了一部分）。已在 `terminal_ws.rs` 的补全路径（SSH_CONFIG_DECRYPT/SSH_CONFIG_PARSE/SSH_ENV_LOAD/SSH_ENV_NOT_FOUND 及空 config_json 分支，此时 `resource.name` 已在作用域）补上 `resource_name`；`SSH_RESOURCE_LOAD` 的 4 处为「资源加载前/加载失败」路径，name 尚不可得，保持仅 `resource_id`。另修复 `resource_api.rs` 的 `RESOURCE_DELETE` 日志已算出 `res_name` 却未写入。M81 修复。 |
 | [x] | 🟡 | 重启服务后工作区连接栏出现两个相同资源（旧+新） | 用户反馈 | 重启服务后，点击资源连接跳转工作区时，顶部连接栏（tab 栏）出现一个旧 tab 和一个新 tab，两个同一资源重复。`restore()` 重推持久化 tab 未与内存中已开 tab 判重，而与 `openResource` 的即时动作叠加产生重复。已在 `restore()` 增加按 (resourceId, protocol) 去重（与 `openResource` 判重键一致），并补充单测。M81 修复。 |
