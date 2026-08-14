@@ -71,7 +71,10 @@ impl UpdateChecker {
             .map_err(|e| format!("failed to parse release JSON: {e}"))?;
 
         let latest_version = release.tag_name.trim_start_matches('v');
-        if latest_version == self.current_version {
+
+        // 比较语义化版本号：仅当 latest 比当前版本更新时才更新，
+        // 避免「Latest」被标成更旧版本时把已更新的用户降级。
+        if compare_version(latest_version, &self.current_version) != std::cmp::Ordering::Greater {
             return Ok(None);
         }
 
@@ -309,6 +312,30 @@ pub fn read_update_status(data_dir: &std::path::Path) -> Option<UpdateStateFile>
     serde_json::from_str(&data).ok()
 }
 
+/// 比较两个语义化版本号（形如 `v0.68.0` / `0.65.4` / `1.10.0`），按 `.` 分段逐段比较。
+/// 前缀 `v` 会被忽略；缺省小版本段视为 0；空版本视为最小。
+/// 返回 `Ordering::Greater` 表示 `a` 比 `b` 新。
+fn compare_version(a: &str, b: &str) -> std::cmp::Ordering {
+    let parse = |s: &str| -> Vec<u32> {
+        s.trim_start_matches('v')
+            .split('.')
+            .map(|seg| seg.parse::<u32>().unwrap_or(0))
+            .collect()
+    };
+    let av = parse(a);
+    let bv = parse(b);
+    let len = av.len().max(bv.len());
+    for i in 0..len {
+        let x = av.get(i).copied().unwrap_or(0);
+        let y = bv.get(i).copied().unwrap_or(0);
+        match x.cmp(&y) {
+            std::cmp::Ordering::Equal => continue,
+            other => return other,
+        }
+    }
+    std::cmp::Ordering::Equal
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -329,16 +356,48 @@ mod tests {
         assert!(!os.is_empty());
         assert!(!arch.is_empty());
     }
+
+    #[test]
+    fn test_compare_version() {
+        // 逐段比较，而非字符串比较
+        assert_eq!(
+            compare_version("0.68.0", "0.65.4"),
+            std::cmp::Ordering::Greater
+        );
+        assert_eq!(
+            compare_version("0.65.4", "0.68.0"),
+            std::cmp::Ordering::Less
+        );
+        assert_eq!(compare_version("1.2.0", "1.10.0"), std::cmp::Ordering::Less);
+        assert_eq!(
+            compare_version("1.10.0", "1.2.0"),
+            std::cmp::Ordering::Greater
+        );
+        assert_eq!(
+            compare_version("0.68.0", "0.68.0"),
+            std::cmp::Ordering::Equal
+        );
+        // 前缀比较
+        assert_eq!(compare_version("1.0", "1.0.1"), std::cmp::Ordering::Less);
+        assert_eq!(compare_version("1.0.1", "1.0"), std::cmp::Ordering::Greater);
+        // 前导 v 不影响
+        assert_eq!(
+            compare_version("v0.68.0", "0.68.0"),
+            std::cmp::Ordering::Equal
+        );
+        // 空版本视为最小
+        assert_eq!(compare_version("0.68.0", ""), std::cmp::Ordering::Greater);
+    }
 }
 
 /// GitHub Release API 响应结构
-#[derive(serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 struct GitHubRelease {
     tag_name: String,
     assets: Vec<GitHubAsset>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 struct GitHubAsset {
     name: String,
     browser_download_url: String,

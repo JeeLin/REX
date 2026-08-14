@@ -34,10 +34,11 @@ M80 完成了 M78 重设计的收尾（feature 组件 token 化迁移，v0.68.0�
 | 2 | SQL 查询保存：前端命名列表 UI（保存/打开/重命名/删除） | ✅ |
 | 3 | SSH 初始化脚本：rex-ssh 增加 `init_script` 并在会话建立后执行 | ✅ |
 | 4 | SSH 初始化脚本：前端连接配置增加「初始化脚本」输入框 | ✅ |
-| 5 | 缺陷修复 🔴：更新检查下载比当前更旧的版本（降级） | ⬜ |
+| 5 | 缺陷修复 🔴：更新检查下载比当前更旧的版本（降级） | ✅ |
 | 6 | 缺陷修复 🟡：审计日志分页对用户不可见 / 单薄 | ⬜ |
 | 7 | 缺陷修复 🟡：分栏不作用于当前聚焦的 pane | ⬜ |
 | 8 | 测试覆盖率补全至 90%（Rust + 前端） | ⬜ |
+| 9 | 缺陷修复 🔴：saved-queries 路由 panic 导致 worker 启动崩溃 | ⬜ |
 
 ## 子任务详细设计
 
@@ -102,10 +103,9 @@ M80 完成了 M78 重设计的收尾（feature 组件 token 化迁移，v0.68.0�
 - **文件结构**：`crates/rex-hub/src/update_checker.rs`
 - **接口设计**：无新接口。
 - **后端流程**：
-  - 当前：`check_for_update` 用 `/releases/latest` 且仅 `if latest == current { None }`，两者不等即下载。
-  - 修复：改为请求 `/releases`（不带 `latest`），对每个 release 的 `tag_name` 做**语义化版本比较**，取真正的 `max` 作为 `latest`；仅当 `latest` 严格大于 `current` 时返回 `Some`。比较用仓库内已有的简单 `semver` 解析（按 `.` 分段逐段比较，无第三方依赖；`Cargo.toml` 不新增 crate，保持 `workspace = true` 规则）。
-  - 注意：GitHub rate limit——`/releases` 与 `/releases/latest` 同为未认证 60/min 限制，可接受；为避免每次都拉全量，可在 `background_update_task` 内复用已取得的列表。
-- **测试标准**：`update_checker.rs` 增加单元测试（`compare_version`/`select_latest`）：`0.68.0` vs `0.65.4` → 不更新；`0.65.4` vs `0.68.0` → 更新到 `0.68.0`；`1.2.0` vs `1.10.0` → 选 `1.10.0`（验证逐段比较而非字符串比较）。
+  - 当前：`check_for_update` 用 `/releases/latest` 且仅 `if latest == current { None }`，两者不等即下载（「Latest」被标成更旧版本时降级）。
+  - 修复：仍用 `/releases/latest`，但对 `tag_name` 与 `current_version` 做**语义化版本比较**，仅当 `latest` 严格大于 `current` 时返回 `Some`（相等或更旧均不更新，防降级）。比较用仓库内自写的轻量 `compare_version`（按 `.` 分段逐段比较，无第三方依赖；`Cargo.toml` 不新增 crate，保持 `workspace = true` 规则）。
+- **测试标准**：`update_checker.rs` 增加单元测试 `compare_version`：`0.68.0` vs `0.65.4` → 不更新；`0.65.4` vs `0.68.0` → 更新；`1.2.0` vs `1.10.0` → `1.10.0` 更靠前（验证逐段比较而非字符串比较）。
 - **提交信息**：`fix: update checker only updates to strictly newer semver, not GitHub Latest (M81 #5)`
 
 ### 6 缺陷修复 🟡：审计日志分页
@@ -146,6 +146,15 @@ M80 完成了 M78 重设计的收尾（feature 组件 token 化迁移，v0.68.0�
 - **测试标准**：`cargo llvm-cov --workspace` 总覆盖率 ≥ 90%；前端覆盖率 ≥ 90%；CI 命令全绿。该子任务贯穿 #1–#7（每个功能都自带测试），最后统一补缺口。
 - **提交信息**：`test: raise Rust + frontend coverage to 90% (M81 #8)`
 
+### 9 缺陷修复 🔴：saved-queries 路由 panic 导致 worker 启动崩溃
+
+- **功能目标**：修复 `sql_api.rs:63` 用 axum 0.8 不兼容的 `:id` 冒号捕获语法注册 DELETE 路由，导致 worker 启动即 panic（exit_code=101），整个 Hub 起不来。
+- **文件结构**：`crates/rex-hub/src/sql_api.rs`
+- **接口设计**：无接口变更（`DELETE /api/sql/saved-queries/{id}` 语义不变，仅路由字面量语法修正）。
+- **后端流程**：将路由字面量 `/saved-queries/:id` 改为 axum 0.8 要求的 `/saved-queries/{id}`；handler `delete_saved_query` 的 `Path(id)` 提取无需改动。
+- **测试标准**：编译通过 + `cargo build -p rex-hub` 不 panic；如已有路由冒烟测试可补充对 DELETE 端点的覆盖。
+- **提交信息**：`fix: use axum 0.8 path syntax for saved-queries DELETE route (M81 #9)`
+
 ## 设计核对点
 
 - 单用户、自托管定位不被破坏（SQL 保存用本地 settings，无云端共享/RBAC）。
@@ -176,6 +185,7 @@ M80 完成了 M78 重设计的收尾（feature 组件 token 化迁移，v0.68.0�
 
 | 状态 | 优先级 | 标题 | 来源 | 描述 |
 |------|--------|------|------|------|
-| ⬜ | 🔴 | 更新检查会下载比当前更旧的版本（降级） | 缺陷池（M80） | 当前 0.68.0，GitHub「Latest」为 0.65.4 时仍提示 UPDATE_AVAILABLE 并下载降级。`update_checker.rs` 仅用 `releases/latest` 且只判 `==`，未做语义化版本比较。M81 #5 修复。 |
+| [x] | 🔴 | 更新检查会下载比当前更旧的版本（降级） | 缺陷池（M80） | 当前 0.68.0，GitHub「Latest」为 0.65.4 时仍提示 UPDATE_AVAILABLE 并下载降级。`update_checker.rs` 仅用 `releases/latest` 且只判 `==`，未做语义化版本比较。M81 #5 修复。 |
 | ⬜ | 🟡 | 审计日志分页对用户不可见 / 单薄 | 缺陷池（M80） | 分页条被 `v-if="totalPages > 1"` 隐藏，≤50 条时不可见；缺每页条数/跳页/总数。M81 #6 修复。 |
 | ⬜ | 🟡 | 分栏不作用于当前聚焦的 pane | 缺陷池（M80） | `activePaneId` 仅 `.ws-pane` `@click` 更新，xterm focus 后失效，状态栏/快捷键分栏永远作用于默认叶子。M81 #7 修复。 |
+| ⬜ | 🔴 | saved-queries 路由 panic 导致 worker 启动崩溃 | 用户反馈 | `sql_api.rs:63` 用 axum 0.8 不兼容的 `:id` 冒号捕获语法注册 DELETE 路由，worker 启动即 panic（exit_code=101）。已改为 `{id}`。M81 #9 修复。 |
