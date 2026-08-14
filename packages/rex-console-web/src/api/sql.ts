@@ -132,3 +132,40 @@ export async function getDdl(sessionId: string, db: string, table: string): Prom
   if (!res.ok) throw new Error('Failed to fetch DDL')
   return await res.json()
 }
+
+// --- Saved SQL Queries (命名查询，持久化于 Hub settings 表) ---
+
+export interface SavedQuery {
+  id: string
+  name: string
+  sql: string
+  db_type?: string | null
+  updated_at?: string | null
+}
+
+export async function listSavedQueries(): Promise<SavedQuery[]> {
+  const res = await fetch(`${API_BASE}/saved-queries`, { headers: authHeaders() })
+  if (!res.ok) throw new Error('Failed to fetch saved queries')
+  return await res.json()
+}
+
+export async function upsertSavedQuery(q: Partial<SavedQuery> & { name: string; sql: string }): Promise<SavedQuery> {
+  const res = await fetch(`${API_BASE}/saved-queries`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(q),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error?.message || 'Failed to save query')
+  }
+  return await res.json()
+}
+
+export async function deleteSavedQuery(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/saved-queries/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Failed to delete saved query')
+}

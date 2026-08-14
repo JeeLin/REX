@@ -12,8 +12,20 @@ import GlobalQueryModal from './GlobalQueryModal.vue'
 import AiAssistantDrawer from './AiAssistantDrawer.vue'
 import ImportWizard from './ImportWizard.vue'
 import SqlFormView from './SqlFormView.vue'
+import SavedQueryList from './SavedQueryList.vue'
+import Modal from '@/components/ui/Modal.vue'
+import Input from '@/components/ui/Input.vue'
+import Button from '@/components/ui/Button.vue'
 import { useSqlQuery } from './useSqlQuery'
-import { connect as sqlConnect, disconnect as sqlDisconnect, getDdl, type ConnectRequest, type QueryResult } from '@/api/sql'
+import {
+  connect as sqlConnect,
+  disconnect as sqlDisconnect,
+  getDdl,
+  upsertSavedQuery,
+  type ConnectRequest,
+  type QueryResult,
+  type SavedQuery,
+} from '@/api/sql'
 
 const { t } = useI18n()
 const emit = defineEmits<{
@@ -167,6 +179,7 @@ interface QueryTab {
   result: QueryResult | null
   loading: boolean
   error: string | null
+  dbType?: string
 }
 
 interface DesignerTab {
@@ -194,6 +207,7 @@ function isDesignerTab(tab: AnyTab): tab is DesignerTab {
 function createTab(initialSql = ''): QueryTab {
   const tab: QueryTab = {
     id: nextTabId++,
+    dbType: props.dbType,
     title: `${t('sql.query')} ${tabs.value.length + 1}`,
     sql: initialSql,
     dirty: false,
@@ -304,6 +318,46 @@ function onSave(sql: string) {
   a.download = `query-${Date.now()}.sql`
   a.click()
   URL.revokeObjectURL(url)
+}
+
+// Saved-query (命名查询) panel
+const showSavedQueries = ref(false)
+
+// Save-as-named-query modal
+const showSaveNamed = ref(false)
+const saveName = ref('')
+const saveSql = ref('')
+const savingNamed = ref(false)
+const saveError = ref('')
+
+function onSaveNamed(sql: string) {
+  saveSql.value = sql
+  saveName.value = ''
+  saveError.value = ''
+  showSaveNamed.value = true
+}
+
+async function confirmSaveNamed() {
+  const name = saveName.value.trim()
+  if (!name) return
+  savingNamed.value = true
+  saveError.value = ''
+  try {
+    await upsertSavedQuery({ name, sql: saveSql.value, db_type: activeQueryTab.value?.dbType })
+    showSaveNamed.value = false
+  } catch (e) {
+    saveError.value = (e as Error).message
+  } finally {
+    savingNamed.value = false
+  }
+}
+
+function onOpenSavedQuery(q: SavedQuery) {
+  const tab = activeQueryTab.value
+  if (tab) {
+    tab.sql = q.sql
+    tab.dirty = true
+  }
 }
 
 const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.value))
@@ -486,6 +540,9 @@ onBeforeUnmount(() => {
           <button class="sql-toolbar-btn sql-zoom-btn" :title="t('sql.zoomIn') + ' (Ctrl+=)'" @click="onZoomIn">+</button>
           <button class="sql-toolbar-btn sql-zoom-btn" :title="t('sql.zoomOut') + ' (Ctrl+-)'" @click="onZoomOut">−</button>
           <button class="sql-toolbar-btn sql-zoom-btn" :title="t('sql.resetZoom') + ' (Ctrl+0)'" @click="onZoomReset">1:1</button>
+          <div class="sql-toolbar-sep" />
+          <button class="sql-toolbar-btn" :title="t('sql.saveQuery')" @click="activeQueryTab && onSaveNamed(activeQueryTab.sql)">💾 {{ t('sql.saveQuery') }}</button>
+          <button class="sql-toolbar-btn" :title="t('sql.savedQueries')" @click="showSavedQueries = true">📂 {{ t('sql.savedQueries') }}</button>
         </div>
       </div>
 
@@ -621,6 +678,33 @@ onBeforeUnmount(() => {
         @close="showImport = false"
         @imported="onImported"
       />
+
+      <!-- Saved Queries -->
+      <SavedQueryList
+        :open="showSavedQueries"
+        @update:open="showSavedQueries = $event"
+        @open="onOpenSavedQuery"
+      />
+
+      <!-- Save as named query -->
+      <Modal
+        v-model:model-value="showSaveNamed"
+        :title="t('sql.saveQueryAs')"
+        width="380px"
+      >
+        <Input
+          v-model="saveName"
+          :placeholder="t('sql.savedQueryNamePlaceholder')"
+          @keydown.enter="confirmSaveNamed"
+        />
+        <p v-if="saveError" class="saved-query-error">{{ saveError }}</p>
+        <template #footer>
+          <Button variant="ghost" :disabled="savingNamed" @click="showSaveNamed = false">{{ t('cancel') }}</Button>
+          <Button variant="primary" :loading="savingNamed" :disabled="!saveName.trim()" @click="confirmSaveNamed">
+            {{ t('sql.saveQuery') }}
+          </Button>
+        </template>
+      </Modal>
     </div>
   </div>
 </template>
@@ -993,5 +1077,10 @@ onBeforeUnmount(() => {
 .view-btn--active {
   color: var(--accent);
   background: rgba(232, 145, 45, 0.1);
+}
+
+.saved-query-error {
+  color: var(--danger);
+  margin-top: var(--space-2);
 }
 </style>
