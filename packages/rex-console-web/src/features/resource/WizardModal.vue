@@ -45,6 +45,7 @@ const port = ref<number | null>(null)
 const username = ref('')
 const password = ref('')
 const privateKey = ref('')
+const initScript = ref('')
 const databaseName = ref('')
 const filePath = ref('')
 const s3Endpoint = ref('')
@@ -95,6 +96,7 @@ function buildConfig(): Record<string, unknown> {
   if (['ssh', 'sftp'].includes(selectedProtocol.value)) {
     if (password.value) cfg.password = password.value
     if (privateKey.value) cfg.private_key = privateKey.value
+    if (initScript.value.trim()) cfg.initScript = initScript.value
   } else if (['mysql', 'postgresql'].includes(selectedProtocol.value)) {
     if (password.value) cfg.password = password.value
     if (databaseName.value) cfg.database_name = databaseName.value
@@ -144,6 +146,7 @@ function reset() {
   username.value = ''
   password.value = ''
   privateKey.value = ''
+  initScript.value = ''
   databaseName.value = ''
   filePath.value = ''
   s3Endpoint.value = ''
@@ -230,6 +233,10 @@ const colorOptions = [
           <label class="form-label">
             <span>{{ t('wizard.privateKey') }}</span>
             <textarea v-model="privateKey" class="form-input form-textarea" placeholder="(optional) Paste private key" rows="3"></textarea>
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.initScript') }}</span>
+            <textarea v-model="initScript" class="form-input form-textarea" placeholder="(optional) cd /data/logs&#10;echo ready" rows="3"></textarea>
           </label>
         </template>
 

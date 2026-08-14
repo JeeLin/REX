@@ -625,6 +625,7 @@
     "filePath": "File Path",
     "host": "Host",
     "hostRequired": "Host address is required",
+    "initScript": "Initialization Script",
     "mysqlDesc": "Database",
     "nameRequired": "Resource name is required",
     "next": "Next",
