@@ -5,18 +5,18 @@ REX Agent 是部署在内网服务器上的轻量级反向代理进程。它通�
 ## 前置条件
 
 1. **Hub 已部署并运行** — 需要 Hub 的 URL（如 `http://hub.example.com:3000`）
-2. **获取注册令牌** — 在 Hub 管理页面创建环境后，获取 Agent 注册令牌（token）
-3. **记录 Agent ID** — 创建环境时会分配 Agent ID
+2. **获取注册令牌** — 在 Hub 管理页面创建环境后，获取 Agent 注册令牌（token）。Agent 连接时仅凭令牌完成认证，Hub 据此自动把 Agent 绑定到对应环境并分配 Agent ID，**无需手动配置 Agent ID**。
 
 ## 配置
 
-Agent 通过环境变量配置：
+Agent 通过环境变量配置，以下两个变量必填：
 
-| 变量 | 必填 | 说明 |
-|------|------|------|
-| `REX_HUB_URL` | ✅ | Hub 的 URL（如 `http://192.168.1.100:3000`） |
-| `REX_AGENT_TOKEN` | ✅ | Agent 注册令牌 |
-| `REX_AGENT_ID` | ✅ | Agent ID（创建环境时分配） |
+| 变量 | 必填 | 说明 | 取值来源 |
+|------|------|------|----------|
+| `REX_HUB_URL` | ✅ | Hub 的访问地址（如 `http://192.168.1.100:3000`）。生产环境建议用 `https://` 域名，Agent 通过 WebSocket（`wss://`）自动跟随 | 部署 Hub 时确定 |
+| `REX_AGENT_TOKEN` | ✅ | 该环境的注册令牌，作为 Agent 连接 Hub 的凭证 | Hub 管理页面 → 环境 → 「Agent 令牌」复制 |
+
+> `REX_HUB_URL` 与 `REX_AGENT_TOKEN` **每个环境一组、互不相同**。先在 Hub 管理页面创建好环境并复制 `REX_AGENT_TOKEN`，再填入下方任意一种部署方式。下文所有示例中的 `your-agent-token-here` / `http://hub.example.com:3000` 均为占位符，需替换为你自己的实际值。Agent ID 由 Hub 在认证成功后自动分配，不在客户端配置。
 
 ## 方式一：二进制部署
 
@@ -38,7 +38,6 @@ chmod +x rex-agent
 ```bash
 export REX_HUB_URL="http://hub.example.com:3000"
 export REX_AGENT_TOKEN="your-agent-token-here"
-export REX_AGENT_ID="your-agent-id-here"
 
 ./rex-agent
 ```
@@ -56,7 +55,6 @@ After=network.target
 Type=simple
 Environment=REX_HUB_URL=http://hub.example.com:3000
 Environment=REX_AGENT_TOKEN=your-agent-token-here
-Environment=REX_AGENT_ID=your-agent-id-here
 ExecStart=/opt/rex-agent/rex-agent
 Restart=always
 RestartSec=5
@@ -87,7 +85,6 @@ docker run -d \
   --restart always \
   -e REX_HUB_URL="http://hub.example.com:3000" \
   -e REX_AGENT_TOKEN="your-agent-token-here" \
-  -e REX_AGENT_ID="your-agent-id-here" \
   your-registry/rex-agent:latest
 ```
 
@@ -105,7 +102,6 @@ services:
     environment:
       - REX_HUB_URL=http://hub.example.com:3000
       - REX_AGENT_TOKEN=your-agent-token-here
-      - REX_AGENT_ID=your-agent-id-here
 ```
 
 启动：
@@ -145,8 +141,7 @@ INFO authenticated agent_id=xxx
 | 现象 | 可能原因 | 解决方案 |
 |------|----------|----------|
 | `connection refused` | Hub 未运行或端口不对 | 确认 Hub 正在运行，检查 `REX_HUB_URL` |
-| `auth failed: invalid token` | Token 错误 | 在 Hub 页面重新获取 Token |
-| `auth failed: agent not found` | Agent ID 错误 | 确认 `REX_AGENT_ID` 与 Hub 中的一致 |
+| `auth failed: invalid registration token` | Token 错误或已失效 | 在 Hub 管理页面重新获取该环境的 Agent 令牌 |
 | 超时 | 网络不通 | 检查防火墙规则，确保能访问 Hub 的端口 |
 
 ### Agent 连接后频繁断开
