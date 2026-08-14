@@ -31,6 +31,8 @@ const {
   root: paneLayoutRoot,
   activePaneId,
   allLeaves,
+  lastFocusedPaneId,
+  focusPane,
   splitPane,
   closePane: treeClosePane,
   applyLayoutPreset,
@@ -119,6 +121,7 @@ function onEncodingChange(encoding: string) {
 provide<PaneCtx>(PANE_CTX, {
   activePaneId,
   allLeaves,
+  focusPane,
   dragOverPane,
   splitHorizontal,
   splitVertical,
@@ -268,12 +271,13 @@ function onPropsSave(data: Pick<Tab, 'theme' | 'fontSize' | 'opacity' | 'cursorS
   tab.backgroundImage = data.backgroundImage
 }
 
-// 分栏操作：对指定 pane 分栏（按钮所属的 pane），而非全局 activePaneId
+// 分栏操作：带参时作用于参数 pane；不带参时优先用最近聚焦的 pane，
+// 使状态栏按钮 / Ctrl+\ 作用于用户正在交互的 pane，而非陈旧的 activePaneId。
 function splitHorizontal(paneId?: string) {
-  splitPane(paneId || activePaneId.value, 'right')
+  splitPane(paneId || lastFocusedPaneId.value || activePaneId.value, 'right')
 }
 function splitVertical(paneId?: string) {
-  splitPane(paneId || activePaneId.value, 'down')
+  splitPane(paneId || lastFocusedPaneId.value || activePaneId.value, 'down')
 }
 
 // 快捷键面板

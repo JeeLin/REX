@@ -103,4 +103,30 @@ describe('usePaneLayout', () => {
     // 无效数据不应破坏现有布局
     expect(allLeaves.value.length).toBe(before)
   })
+
+  it('focusPane updates both activePaneId and lastFocusedPaneId', () => {
+    const { allLeaves, splitPane, activePaneId, lastFocusedPaneId, focusPane } = usePaneLayout()
+    const firstPane = allLeaves.value[0]!.id
+    splitPane(firstPane, 'right')
+    const secondPane = allLeaves.value[1]!.id
+
+    // 初始活跃为 split 新生成的 pane
+    expect(activePaneId.value).toBe(secondPane)
+    // 聚焦第一个 pane：active 与 lastFocused 同步更新
+    focusPane(firstPane)
+    expect(activePaneId.value).toBe(firstPane)
+    expect(lastFocusedPaneId.value).toBe(firstPane)
+
+    // 以聚焦的 pane 为目标再次分屏，应在其旁新增一个 leaf（2 → 3）
+    splitPane(lastFocusedPaneId.value, 'right')
+    expect(allLeaves.value).toHaveLength(3)
+  })
+
+  it('focusPane ignores unknown pane ids', () => {
+    const { allLeaves, activePaneId, lastFocusedPaneId, focusPane } = usePaneLayout()
+    const firstPane = allLeaves.value[0]!.id
+    focusPane('does-not-exist')
+    expect(activePaneId.value).toBe(firstPane)
+    expect(lastFocusedPaneId.value).toBe(firstPane)
+  })
 })

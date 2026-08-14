@@ -89,6 +89,11 @@ export function usePaneLayout() {
 
   const activePaneId = ref<string>(root.value.children[0]!.id)
 
+  // 最近一次聚焦（focusin / pointerdown）的 pane。
+  // 状态栏分栏按钮、快捷键（Ctrl+\）不带参时优先用它作为目标，
+  // 使分栏作用于「用户正在交互的 pane」而非陈旧/默认的 activePaneId。
+  const lastFocusedPaneId = ref<string>(activePaneId.value)
+
   // 所有叶子节点
   const allLeaves = computed(() => findLeaves(root.value))
 
@@ -265,11 +270,23 @@ export function usePaneLayout() {
     }
   }
 
+  /**
+   * 记录某 pane 被聚焦，统一更新 activePaneId 与 lastFocusedPaneId。
+   * 供 PaneLeaf 的 focusin / pointerdown 调用，使分栏始终作用于当前交互的 pane。
+   */
+  function focusPane(paneId: string) {
+    if (!findNode(root.value, paneId)) return
+    activePaneId.value = paneId
+    lastFocusedPaneId.value = paneId
+  }
+
   return {
     root,
     activePaneId,
     activePane,
     allLeaves,
+    lastFocusedPaneId,
+    focusPane,
     splitPane,
     closePane,
     mergeDirection,

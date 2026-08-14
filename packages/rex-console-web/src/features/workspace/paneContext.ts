@@ -6,6 +6,8 @@ import type { Tab } from '@/composables/useTabs'
 export interface PaneCtx {
   activePaneId: Ref<string>
   allLeaves: Ref<{ id: string; tabId: string | null }[]>
+  // 记录某 pane 被聚焦，统一更新 activePaneId 与 lastFocusedPaneId
+  focusPane: (paneId: string) => void
   dragOverPane: Ref<string | null>
   // 分栏/关闭
   splitHorizontal: (paneId?: string) => void
