@@ -463,7 +463,7 @@ async fn upsert_saved_query(
     }
 }
 
-/// DELETE /api/sql/saved-queries/:id
+/// DELETE /api/sql/saved-queries/{id}
 async fn delete_saved_query(
     State(state): State<AppState>,
     Path(id): Path<String>,
