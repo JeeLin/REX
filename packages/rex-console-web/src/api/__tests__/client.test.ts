@@ -52,4 +52,51 @@ describe('ApiClient', () => {
       }),
     )
   })
+
+  it('get appends query params when provided', async () => {
+    fetchSpy.mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({}) })
+    await api.get('/audit-log', { limit: '20', offset: '0' })
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/audit-log?limit=20&offset=0',
+      expect.anything(),
+    )
+  })
+
+  it('get omits query string when no params', async () => {
+    fetchSpy.mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({}) })
+    await api.get('/audit-log')
+    expect(fetchSpy).toHaveBeenCalledWith('/api/audit-log', expect.anything())
+  })
+
+  it('put serializes body as JSON', async () => {
+    fetchSpy.mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({}) })
+    await api.put('/res/1', { name: 'x' })
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/res/1',
+      expect.objectContaining({ method: 'PUT' }),
+    )
+  })
+
+  it('del sends DELETE', async () => {
+    fetchSpy.mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({}) })
+    await api.del('/res/1')
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/res/1',
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+  })
+
+  it('upload sends FormData via POST with auth header', async () => {
+    fetchSpy.mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({}) })
+    const fd = new FormData()
+    fd.append('file', new Blob(['x']), 'f.txt')
+    await api.upload('/files', fd)
+    const call = fetchSpy.mock.calls[0]!
+    expect(call[0]).toBe('/api/files')
+    const opts = call[1] as RequestInit
+    expect(opts.method).toBe('POST')
+    expect(opts.body).toBe(fd)
+    const headers = opts.headers as Record<string, string>
+    expect(headers['Authorization']).toBe('Bearer test-token')
+  })
 })

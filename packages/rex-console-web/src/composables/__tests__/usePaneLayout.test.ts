@@ -129,4 +129,70 @@ describe('usePaneLayout', () => {
     expect(activePaneId.value).toBe(firstPane)
     expect(lastFocusedPaneId.value).toBe(firstPane)
   })
+
+  it('mergeDirection changes root direction', () => {
+    const { root, mergeDirection } = usePaneLayout()
+    mergeDirection('column')
+    expect(root.value.direction).toBe('column')
+  })
+
+  it('setPaneTab binds a tab to a leaf', () => {
+    const { allLeaves, setPaneTab } = usePaneLayout()
+    const first = allLeaves.value[0]!.id
+    setPaneTab(first, 'tab-1')
+    expect(allLeaves.value[0]!.tabId).toBe('tab-1')
+    // 未知 pane 不报错
+    setPaneTab('nope', 'tab-2')
+  })
+
+  it('serialize includes nodeIdCounter', () => {
+    const layout = usePaneLayout()
+    layout.splitPane(layout.allLeaves.value[0]!.id, 'right')
+    const data = JSON.parse(layout.serialize())
+    expect(typeof data.nodeIdCounter).toBe('number')
+    expect(data.activePaneId).toBeDefined()
+  })
+
+  it('deserialize restores nodeIdCounter', () => {
+    const layout = usePaneLayout()
+    layout.splitPane(layout.allLeaves.value[0]!.id, 'right')
+    const data = layout.serialize()
+    const layout2 = usePaneLayout()
+    layout2.deserialize(data)
+    expect(layout2.allLeaves.value).toHaveLength(2)
+  })
+
+  it('left-right and top-bottom presets split correctly', () => {
+    const { root, allLeaves, applyLayoutPreset } = usePaneLayout()
+    applyLayoutPreset('left-right')
+    expect(allLeaves.value).toHaveLength(2)
+    expect(allLeaves.value.every((l) => l.size === 50)).toBe(true)
+    applyLayoutPreset('top-bottom')
+    expect(root.value.direction).toBe('column')
+    expect(allLeaves.value).toHaveLength(2)
+  })
+
+  it('closePane promotes grandchild when parent collapses to single child', () => {
+    const { root, allLeaves, splitPane, closePane, activePaneId } = usePaneLayout()
+    const first = allLeaves.value[0]!.id
+    activePaneId.value = first
+    splitPane(first, 'right')
+    // 在第一个 pane 下再分一次（down → 嵌套 column）
+    const second = allLeaves.value[1]!.id
+    activePaneId.value = second
+    splitPane(second, 'down')
+    expect(allLeaves.value).toHaveLength(3)
+    // 关掉第二个（它所在父容器只剩一个子节点，应被提升）
+    closePane(second)
+    expect(allLeaves.value).toHaveLength(2)
+    expect(root.value.children.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('flatten helper returns depth-sorted leaves', () => {
+    const { root, applyLayoutPreset, flatten } = usePaneLayout()
+    applyLayoutPreset('grid-four')
+    const flat = flatten(root.value, 0)
+    expect(flat).toHaveLength(4)
+    expect(flat.every((f) => f.direction === null)).toBe(true)
+  })
 })

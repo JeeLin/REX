@@ -49,16 +49,17 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.1.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "@vue/test-utils": "2.4.6",
     "eslint": "^10.5.0",
     "eslint-plugin-vue": "^10.9.2",
     "happy-dom": "^20.10.6",
+    "rollup-plugin-visualizer": "^5.14.0",
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.61.1",
     "vite": "^6.0.0",
     "vitest": "^4.1.9",
-    "vue-tsc": "^2.1.0",
-    "rollup-plugin-visualizer": "^5.14.0"
+    "vue-tsc": "^2.1.0"
   },
   "overrides": {
     "@codemirror/view": "6.43.6",

@@ -49,6 +49,29 @@ describe('auth store', () => {
       await store.checkAuth()
       expect(store.requiresSetup).toBe(true)
     })
+
+    it('should clear token on AuthError when no prior token', async () => {
+      const authErr = new Error('expired') as Error & { name: string }
+      authErr.name = 'AuthError'
+      mockApi.request.mockRejectedValue(authErr)
+      const store = useAuthStore()
+      await store.checkAuth()
+      expect(store.token).toBeNull()
+      expect(store.requiresSetup).toBe(false)
+    })
+
+    it('should keep token in storage on AuthError when a token existed before', async () => {
+      localStorage.setItem('rex-token', 'old-token')
+      const authErr = new Error('expired') as Error & { name: string }
+      authErr.name = 'AuthError'
+      mockApi.request.mockRejectedValue(authErr)
+      const store = useAuthStore()
+      await store.checkAuth()
+      // token 在内存中清空（让 router guard 触发弹窗），但存储保留旧值
+      expect(store.token).toBeNull()
+      expect(localStorage.getItem('rex-token')).toBe('old-token')
+      expect(store.requiresSetup).toBe(false)
+    })
   })
 
   describe('login', () => {
@@ -99,6 +122,28 @@ describe('auth store', () => {
       expect(store.token).toBeNull()
       expect(localStorage.getItem('rex-token')).toBeNull()
       expect(store.isAuthenticated).toBe(false)
+    })
+  })
+
+  describe('setToken', () => {
+    it('should move token to localStorage and clear sessionStorage', () => {
+      sessionStorage.setItem('rex-token', 'old-session')
+      const store = useAuthStore()
+      store.setToken('refreshed-token')
+      expect(store.token).toBe('refreshed-token')
+      expect(localStorage.getItem('rex-token')).toBe('refreshed-token')
+      expect(sessionStorage.getItem('rex-token')).toBeNull()
+    })
+  })
+
+  describe('login remember=false', () => {
+    it('should store token in sessionStorage only', async () => {
+      mockApi.post.mockResolvedValue({ token: 'session-token', expiresAt: '' })
+      const store = useAuthStore()
+      await store.login('pw', false)
+      expect(store.token).toBe('session-token')
+      expect(sessionStorage.getItem('rex-token')).toBe('session-token')
+      expect(localStorage.getItem('rex-token')).toBeNull()
     })
   })
 })
