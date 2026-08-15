@@ -449,7 +449,7 @@ onMounted(async () => {
       <span class="page-total muted">{{ t('auditLog.totalCount', { n: totalCount }) }}</span>
       <Select
         v-model="pageSize"
-        :options="pageSizeOptions.map(o => ({ label: o.label, value: o.value }))"
+        :options="pageSizeOptions"
         size="sm"
       />
       <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--">← {{ t('common.prev', 'Prev') }}</button>

@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useWorkspacePersistence } from '@/composables/useWorkspacePersistence'
 import { usePaneLayout } from '@/composables/usePaneLayout'
-import { useTabs, type Tab } from '@/composables/useTabs'
+import { useTabs, nextTabId, type Tab } from '@/composables/useTabs'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import ContextMenu from '@/components/ui/ContextMenu.vue'
@@ -306,7 +306,7 @@ function statusColor(status: Tab['status']): StatusDotStatus {
 useKeyboardShortcuts([
   { key: 't', ctrl: true, handler: () => {
     // Ctrl+T 新建 SSH tab
-    const id = `tab-${Date.now()}`
+    const id = nextTabId()
     tabs.value.push({ id, label: 'New Tab', protocol: 'ssh', status: 'connecting' })
     activeTab.value = id
   } },

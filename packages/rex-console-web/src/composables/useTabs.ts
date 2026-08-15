@@ -41,7 +41,7 @@ const TAB_COLORS = ['#f85149', '#3fb950', '#58a6ff', '#d29922', '#8b5cf6', '#e89
 // 单调递增序号 + 时间戳，保证同一毫秒内的多次开/复制也得到唯一 tab id
 // （避免 tab-${Date.now()} 在并发调用时碰撞，产生重复 id）
 let tabSeq = 0
-function nextTabId(): string {
+export function nextTabId(): string {
   tabSeq += 1
   return `tab-${Date.now()}-${tabSeq}`
 }
