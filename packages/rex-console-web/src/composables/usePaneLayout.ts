@@ -178,6 +178,11 @@ export function usePaneLayout() {
         activePaneId.value = leaves[0]!.id
       }
     }
+    // lastFocusedPaneId 必须跟随有效 pane：被关闭的 pane 可能正是上次聚焦者，
+    // 悬空会令 splitHorizontal/Vetical 以已移除 id 调 splitPane 而 no-op。
+    if (!findNode(root.value, lastFocusedPaneId.value)) {
+      lastFocusedPaneId.value = activePaneId.value
+    }
   }
 
   /**
@@ -235,6 +240,8 @@ export function usePaneLayout() {
         break
     }
     activePaneId.value = root.value.children[0]!.id
+    // 重建整棵树后旧 pane id 全部失效，同步 lastFocusedPaneId 避免分栏 no-op。
+    lastFocusedPaneId.value = activePaneId.value
   }
 
   /**

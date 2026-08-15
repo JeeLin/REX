@@ -195,4 +195,41 @@ describe('usePaneLayout', () => {
     expect(flat).toHaveLength(4)
     expect(flat.every((f) => f.direction === null)).toBe(true)
   })
+
+  it('closing the focused pane keeps lastFocusedPaneId valid so split still works', () => {
+    const { allLeaves, splitPane, closePane, focusPane, lastFocusedPaneId, activePaneId } = usePaneLayout()
+    const first = allLeaves.value[0]!.id
+    // 分出新 pane 并聚焦它
+    splitPane(first, 'right')
+    const second = allLeaves.value[1]!.id
+    focusPane(second)
+    expect(lastFocusedPaneId.value).toBe(second)
+    // 关闭刚聚焦的 pane
+    closePane(second)
+    // lastFocusedPaneId 不应悬空在已移除的 second 上
+    expect(lastFocusedPaneId.value).not.toBe(second)
+    // 关闭后以 lastFocusedPaneId 为目标的分栏应仍生效（不再 no-op）
+    const target = lastFocusedPaneId.value
+    const before = allLeaves.value.length
+    splitPane(target, 'right')
+    expect(allLeaves.value.length).toBe(before + 1)
+    expect(activePaneId.value).not.toBeNull()
+  })
+
+  it('applyLayoutPreset keeps lastFocusedPaneId valid after tree rebuild', () => {
+    const { allLeaves, splitPane, focusPane, lastFocusedPaneId, applyLayoutPreset } = usePaneLayout()
+    const first = allLeaves.value[0]!.id
+    splitPane(first, 'right')
+    focusPane(allLeaves.value[1]!.id)
+    const stale = lastFocusedPaneId.value
+    // 重建整棵树，旧 id 全部失效
+    applyLayoutPreset('single')
+    expect(lastFocusedPaneId.value).not.toBe(stale)
+    // 新布局下分栏仍作用于有效 pane（首叶子）
+    const target = lastFocusedPaneId.value
+    expect(allLeaves.value.find((l) => l.id === target)).toBeDefined()
+    const before = allLeaves.value.length
+    splitPane(target, 'right')
+    expect(allLeaves.value.length).toBe(before + 1)
+  })
 })

@@ -37,7 +37,7 @@ M80 完成了 M78 重设计的收尾（feature 组件 token 化迁移，v0.68.0�
 | 5 | 缺陷修复 🔴：更新检查下载比当前更旧的版本（降级） | ✅ |
 | 6 | 缺陷修复 🟡：审计日志分页对用户不可见 / 单薄 | ✅ |
 | 7 | 缺陷修复 🟡：分栏不作用于当前聚焦的 pane | ✅ |
-| 8 | 测试覆盖率补全至 90%（Rust + 前端） | ⬜ |
+| 8 | 测试覆盖率补全至 90%（Rust + 前端） | ✅ |
 | 9 | 缺陷修复 🔴：saved-queries 路由 panic 导致 worker 启动崩溃 | ✅ |
 
 ## 子任务详细设计
@@ -168,6 +168,8 @@ M80 完成了 M78 重设计的收尾（feature 组件 token 化迁移，v0.68.0�
 
 - [x] 步骤1：编写里程碑文档
 - [x] 步骤2：设计核对
+- [x] 步骤1：编写里程碑文档
+- [x] 步骤2：设计核对
 - [ ] 步骤3：开发
 - [ ] 步骤4：代码精简
 - [ ] 步骤5：代码审查
@@ -179,7 +181,7 @@ M80 完成了 M78 重设计的收尾（feature 组件 token 化迁移，v0.68.0�
 
 | 时间 | 步骤 | 原因 |
 |------|------|------|
-| | | |
+| 2026-08-15 | 步骤5 | 代码审查发现 🔴：`lastFocusedPaneId` 在 closePane/applyLayoutPreset 后悬空，导致无参分栏 no-op，违反 M81 #7 目标。打回步骤3 修复后重跑 4→5→6→7。 |
 
 ## Bugs
 
@@ -191,3 +193,4 @@ M80 完成了 M78 重设计的收尾（feature 组件 token 化迁移，v0.68.0�
 | [x] | 🔴 | saved-queries 路由 panic 导致 worker 启动崩溃 | 用户反馈 | `sql_api.rs:63` 用 axum 0.8 不兼容的 `:id` 冒号捕获语法注册 DELETE 路由，worker 启动即 panic（exit_code=101）。已改为 `{id}`。M81 #9 修复。 |
 | [x] | 🟡 | 资源日志未覆盖该资源所有相关日志 | 用户反馈 | 后端 `tracing!` 日志中大量 SSH 连接相关语句只带 `resource_id` 未带 `resource_name`（之前只补了一部分）。已在 `terminal_ws.rs` 的补全路径（SSH_CONFIG_DECRYPT/SSH_CONFIG_PARSE/SSH_ENV_LOAD/SSH_ENV_NOT_FOUND 及空 config_json 分支，此时 `resource.name` 已在作用域）补上 `resource_name`；`SSH_RESOURCE_LOAD` 的 4 处为「资源加载前/加载失败」路径，name 尚不可得，保持仅 `resource_id`。另修复 `resource_api.rs` 的 `RESOURCE_DELETE` 日志已算出 `res_name` 却未写入。M81 修复。 |
 | [x] | 🟡 | 重启服务后工作区连接栏出现两个相同资源（旧+新） | 用户反馈 | 重启服务后，点击资源连接跳转工作区时，顶部连接栏（tab 栏）出现一个旧 tab 和一个新 tab，两个同一资源重复。`restore()` 重推持久化 tab 未与内存中已开 tab 判重，而与 `openResource` 的即时动作叠加产生重复。已在 `restore()` 增加按 (resourceId, protocol) 去重（与 `openResource` 判重键一致），并补充单测。M81 修复。 |
+| [x] | 🔴 | 关闭/重置布局后分栏 no-op（lastFocusedPaneId 悬空） | 步骤5代码审查 | M81 #7 引入 `lastFocusedPaneId` 让分栏作用于聚焦 pane；但 `usePaneLayout.ts` 的 `closePane`（175–180）与 `applyLayoutPreset`（237）只更新 `activePaneId`、不修复 `lastFocusedPaneId`。聚焦 pane A 后关闭 A，`lastFocusedPaneId` 仍指向已移除的 A；随后 `splitHorizontal()`（`WorkspacePage.vue:277`）以 stale 的 `'A'` 调 `splitPane('A')`，`findNode` 返回 null → 分栏 no-op。已在 `closePane` 末尾（activePaneId 已切到有效叶子后）与 `applyLayoutPreset` 末尾同步 `lastFocusedPaneId` 到有效 pane，并补充回归测试。M81 修复。 |
