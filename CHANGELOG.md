@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+## [0.69.0] - 2026-08-15
+
+### Added
+- SQL 控制台：命名查询保存/打开/重命名/删除（后端持久化于 settings 表，前端 `SavedQueryList` UI）
+- SSH：资源连接配置新增「初始化脚本」，会话建立后逐行自动执行（如 `cd /data/logs`）
+
+### Changed
+- 工作区：分栏现在作用于最近聚焦的 pane（`lastFocusedPaneId` 在关闭/重置布局后自动同步到有效 pane，避免分栏 no-op）
+- 审计日志：分页控件常显，补充每页条数、跳页与总数；后端排序稳定（`time DESC, id DESC`）
+- 更新检查：基于语义化版本逐段比较，仅当 Latest 严格更新时才升级，杜绝降级
+- 前端：tab id 统一由 `nextTabId()` 生成，避免同毫秒碰撞产生重复 tab
+
+### Fixed
+- 工作区：重启后连接栏出现同一资源重复 tab（`restore()` 按 resourceId+protocol 去重）
+- 后端日志：补全 SSH 相关语句的 `resource_name`，`RESOURCE_DELETE` 写入已算出的名称
+- Hub 启动崩溃：saved-queries DELETE 路由改用 axum 0.8 的 `{id}` 语法，修复 worker 启动 panic
+
 ## [0.68.0] - 2026-08-14
 
 ### Changed
