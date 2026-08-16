@@ -16,6 +16,7 @@ use rex_hub::middleware::{self, AuthUser};
 use rex_hub::redis_api::{self, RedisState};
 use rex_hub::resource_api;
 use rex_hub::settings_api;
+use rex_hub::sip_ws;
 use rex_hub::sql_api::{self, SqlState};
 use rex_hub::terminal_ws;
 use rex_hub::tunnel_ws;
@@ -252,6 +253,7 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
         .nest("/api/redis", redis_api::redis_routes())
         .nest("/api/files", file_api::file_routes())
         .route("/ws/terminal", axum::routing::get(terminal_ws::ws_handler))
+        .route("/ws/sip", axum::routing::get(sip_ws::ws_handler))
         .route("/ws/tunnel", axum::routing::get(tunnel_ws::ws_handler))
         .layer(axum::middleware::from_extractor_with_state::<
             AuthUser,

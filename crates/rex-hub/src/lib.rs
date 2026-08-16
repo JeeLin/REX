@@ -18,6 +18,7 @@ pub mod redis_api;
 pub mod resource_api;
 pub mod resource_conn;
 pub mod settings_api;
+pub mod sip_ws;
 pub mod sql_api;
 pub mod terminal_ws;
 pub mod tls;

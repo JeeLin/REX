@@ -104,4 +104,6 @@ pub trait SipUaTrait {
 /// 安全的 `SipUa` 句柄：包真 baresip 实现，构造时选择真 / Mock。
 pub use baresip_ua::SipUa;
 
+pub use mock::{MockAction, MockSipUa};
+
 pub const APP_NAME: &str = "rex-sip";
