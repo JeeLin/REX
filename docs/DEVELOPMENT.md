@@ -456,3 +456,51 @@ docs/milestones/
 依赖：M80
 版本类型：minor
 版本号：0.69.0
+
+### M82a：SIP 电话资源基础（信令打通 + Agent 链式 UA + 资源模型） ← 新增（下一步）
+
+**核心功能**：新增第 8 种资源类型 `sip`（SIP 电话）。Hub 侧 baresip UA（UA₁）打通拨号/接听/挂断/保持/转 DTMF；Agent 侧 baresip UA（UA₂）经现有 WebSocket 隧道链式转发（channel_id 多路复用，复用 `agent_ws.rs`），内网 SIP 服务器由 Agent 出网；前端 `features/sip/` 拨号盘 + 通话状态；复用 terminal_ws 的 `/ws` 范式建立 `/ws/sip` 控制/事件通道。M82a 只打通信令层（能发起并结束一通电话），音频在 M82b。
+
+**子任务预估**：
+- `crates/rex-sip`：baresip FFI 封装（C 库 libre/retask，需 `-sys`/预编译 + FFI），Hub 与 Agent 两个二进制共用，分别当 UA₁/UA₂
+- 资源模型加 `sip` 协议（第 8 种）+ 资源创建向导 SIP 配置段（服务器/账号/密码/认证）
+- Hub UA₁ + `/ws/sip` 控制/事件消息模型（dial/answer/hangup/hold/unhold/dtmf ↔ registered/incoming/callState/sipMessage）
+- Agent UA₂ 隧道链式转发（channel_id 复用现有 `agent_ws.rs`，无需新隧道）
+- 前端 `features/sip/`：Dialpad + 通话状态组件（复用设计 token）
+- 前后端联调：经 Hub 直连与经 Agent 链式各拨通一通电话（信令层）
+
+**依赖**：M81
+**版本类型**：minor
+**版本号**：0.70.0
+
+> 技术风险：baresip 是 C 库，FFI 封装与跨平台编译（预编译 `.a` 或 build.rs 编 libre）是 M82a 唯一显著风险点，规划时优先验证；baresip 不能跑在浏览器，必须在 Hub/Agent 服务端。
+
+### M82b：浏览器实时双向音频（Opus-over-WebSocket 媒体通道）
+
+**核心功能**：Hub 侧终止 RTP，将 PCM 编码为 Opus，经 WebSocket 媒体通道实时推流到浏览器；浏览器用 Web Audio 解码播放，麦克风经 `getUserMedia` 采集、反向编码回传，实现浏览器与对端**实时双向**通话（满足「时时对话」）。这是产品原则「媒体不经过浏览器」的显式例外（用户明确要求浏览器实时听/说），媒体为实时流而非批量文件传输。
+
+**子任务预估**：
+- Hub 侧 RTP 收包 + Opus 编码管线（baresip/opus，从 UA₁ 的 RTP 抽 PCM → Opus）
+- `/ws/sip` 二进制媒体帧协议 + 浏览器↔Hub 上行麦克风帧（与信令文本帧区分）
+- 前端 Web Audio 播放 + 麦克风采集（getUserMedia）+ Opus 解码（WebCodecs/opus.js）
+- 延迟/回声优化与联调（端到端可听可说）
+
+**依赖**：M82a
+**版本类型**：minor
+**版本号**：0.70.1
+
+### M82c：通话记录 + 录音 + 信令抓包 + 展示图
+
+**核心功能**：通话记录（CDR：起止时间/对端/时长/状态）持久化与前端表格；通话录音（baresip aufile 模块本地落盘）前端回放；SIP 信令抓包（UA₁/UA₂ 两侧报文捕获）前端回看/下载；一条通话记录关联其录音与抓包数据，并配可视化展示图（时间线/报文序列视图）。
+
+**子任务预估**：
+- CDR 数据模型 + Hub 持久化（SQLite）+ 列表/详情 API
+- 前端通话记录表格组件（筛选/排序/详情抽屉）
+- 录音：Hub 落盘（aufile）+ 前端回放器（进度/暂停）
+- 信令抓包：Hub 捕获存储（UA₁/UA₂ 两侧）+ 前端报文/时间线视图 + 下载
+- 关联与展示图：一条记录挂录音 + 抓包，配可视化展示图
+- 前后端联调与测试（覆盖录制/抓包/记录关联）
+
+**依赖**：M82b
+**版本类型**：minor
+**版本号**：0.70.2
