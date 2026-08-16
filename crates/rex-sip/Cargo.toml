@@ -1,0 +1,18 @@
+[package]
+name = "rex-sip"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rex-common = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[build-dependencies]
+bindgen = { workspace = true }
+cc = { workspace = true }
+pkg-config = { workspace = true }
