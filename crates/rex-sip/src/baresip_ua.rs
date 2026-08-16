@@ -16,13 +16,12 @@ use tokio::sync::mpsc;
 
 // baresip / re 自动生成绑定中的类型与函数（来自 `crate::bindings` 的 include）。
 use crate::{
-    account_set_auth_pass, account_set_auth_user, bevent_ev_BEVENT_CALL_CLOSED,
-    bevent_ev_BEVENT_CALL_ESTABLISHED, bevent_ev_BEVENT_CALL_HOLD,
-    bevent_ev_BEVENT_CALL_INCOMING, bevent_ev_BEVENT_CALL_RESUME,
-    bevent_ev_BEVENT_CALL_RINGING, bevent_ev_BEVENT_REGISTER_FAIL, bevent_ev_BEVENT_REGISTER_OK,
-    bevent_get_call, bevent_get_text, bevent_register, baresip_init, call, call_hold,
-    call_send_digit, ua, ua_account, ua_alloc, ua_answer, ua_connect, ua_hangup, ua_register,
-    ua_stop_register, vidmode_VIDMODE_OFF,
+    account_set_auth_pass, account_set_auth_user, baresip_init, bevent_ev_BEVENT_CALL_CLOSED,
+    bevent_ev_BEVENT_CALL_ESTABLISHED, bevent_ev_BEVENT_CALL_HOLD, bevent_ev_BEVENT_CALL_INCOMING,
+    bevent_ev_BEVENT_CALL_RESUME, bevent_ev_BEVENT_CALL_RINGING, bevent_ev_BEVENT_REGISTER_FAIL,
+    bevent_ev_BEVENT_REGISTER_OK, bevent_get_call, bevent_get_text, bevent_register, call,
+    call_hold, call_send_digit, ua, ua_account, ua_alloc, ua_answer, ua_connect, ua_hangup,
+    ua_register, ua_stop_register, vidmode_VIDMODE_OFF,
 };
 
 /// 全局 bevent 回调的共享状态：事件 sink + call_id→call* 映射。
@@ -161,8 +160,10 @@ impl BaresipSipUa {
         unsafe {
             let acc = ua_account(ua_ptr);
             if !acc.is_null() {
-                if let Ok(pass) = CString::new(cfg.password.clone()) {
-                    account_set_auth_pass(acc, pass.as_ptr());
+                if let Some(pass) = &cfg.password {
+                    if let Ok(pass) = CString::new(pass.clone()) {
+                        account_set_auth_pass(acc, pass.as_ptr());
+                    }
                 }
                 if let Ok(user) = CString::new(cfg.username.clone()) {
                     account_set_auth_user(acc, user.as_ptr());
@@ -361,7 +362,7 @@ mod tests {
                 server: "s".into(),
                 port: 5060,
                 username: "u".into(),
-                password: "p".into(),
+                password: Some("p".into()),
                 display_name: None,
                 transport: crate::SipTransport::Udp,
             },

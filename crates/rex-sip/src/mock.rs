@@ -117,7 +117,7 @@ mod tests {
             server: "sip.example.com".into(),
             port: 5060,
             username: "1000".into(),
-            password: "secret".into(),
+            password: Some("secret".into()),
             display_name: None,
             transport: crate::SipTransport::Udp,
         }

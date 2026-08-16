@@ -14,7 +14,13 @@
 
 // baresip / re 的自动生成 FFI 绑定（含 `ua`/`call`/`account` 等 C 类型与函数）。
 // 隔离在私有模块内，对所有 clippy/rustc 诊断 blanket allow，避免生成代码噪声。
-#[allow(clippy::all, clippy::pedantic, clippy::nursery, clippy::style, warnings)]
+#[allow(
+    clippy::all,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::style,
+    warnings
+)]
 mod ffi {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
@@ -51,7 +57,7 @@ pub struct SipConfig {
     pub server: String,
     pub port: u16,
     pub username: String,
-    pub password: String,
+    pub password: Option<String>,
     pub display_name: Option<String>,
     pub transport: SipTransport,
 }

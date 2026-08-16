@@ -32,41 +32,36 @@ fn main() {
 
     // 1) libre: configure + build + install (static only)
     if !re_install.join("lib/libre.a").exists() {
-        run(Command::new("cmake")
-            .args([
-                "-S",
-                re_src.to_str().unwrap(),
-                "-B",
-                re_build.to_str().unwrap(),
-                &format!("-DCMAKE_INSTALL_PREFIX={}", re_install.to_str().unwrap()),
-                "-DLIBRE_BUILD_SHARED=OFF",
-                "-DLIBRE_BUILD_STATIC=ON",
-                "-DCMAKE_BUILD_TYPE=Release",
-            ]));
+        run(Command::new("cmake").args([
+            "-S",
+            re_src.to_str().unwrap(),
+            "-B",
+            re_build.to_str().unwrap(),
+            &format!("-DCMAKE_INSTALL_PREFIX={}", re_install.to_str().unwrap()),
+            "-DLIBRE_BUILD_SHARED=OFF",
+            "-DLIBRE_BUILD_STATIC=ON",
+            "-DCMAKE_BUILD_TYPE=Release",
+        ]));
         run(Command::new("cmake").args([
             "--build",
             re_build.to_str().unwrap(),
             "-j",
             &nproc.to_string(),
         ]));
-        run(Command::new("cmake").args([
-            "--install",
-            re_build.to_str().unwrap(),
-        ]));
+        run(Command::new("cmake").args(["--install", re_build.to_str().unwrap()]));
     }
 
     // 2) baresip: configure (find libre via CMAKE_PREFIX_PATH) + build (static)
     if !baresip_build.join("libbaresip.a").exists() {
-        run(Command::new("cmake")
-            .args([
-                "-S",
-                baresip_src.to_str().unwrap(),
-                "-B",
-                baresip_build.to_str().unwrap(),
-                &format!("-DCMAKE_PREFIX_PATH={}", re_install.to_str().unwrap()),
-                "-DSTATIC=ON",
-                "-DCMAKE_BUILD_TYPE=Release",
-            ]));
+        run(Command::new("cmake").args([
+            "-S",
+            baresip_src.to_str().unwrap(),
+            "-B",
+            baresip_build.to_str().unwrap(),
+            &format!("-DCMAKE_PREFIX_PATH={}", re_install.to_str().unwrap()),
+            "-DSTATIC=ON",
+            "-DCMAKE_BUILD_TYPE=Release",
+        ]));
         run(Command::new("cmake").args([
             "--build",
             baresip_build.to_str().unwrap(),
@@ -96,20 +91,23 @@ fn main() {
 
     // 3) bindgen（baresip.h 依赖 re.h 先 include，故用包装头）
     let wrapper = out_dir.join("rex-sip-wrapper.h");
-    std::fs::write(
-        &wrapper,
-        "#include <re.h>\n#include <baresip.h>\n",
-    )
-    .expect("write wrapper header");
+    std::fs::write(&wrapper, "#include <re.h>\n#include <baresip.h>\n")
+        .expect("write wrapper header");
     let bindings = bindgen::Builder::default()
         .header(wrapper.to_str().unwrap())
         .clang_arg("-includestdint.h")
         .clang_arg("-includestdbool.h")
         .clang_arg("-includestring.h")
         .clang_arg("-includestddef.h")
-        .clang_arg(format!("-I{}", baresip_src.join("include").to_str().unwrap()))
+        .clang_arg(format!(
+            "-I{}",
+            baresip_src.join("include").to_str().unwrap()
+        ))
         .clang_arg(format!("-I{}", re_src.join("include").to_str().unwrap()))
-        .clang_arg(format!("-I{}", re_install.join("include").to_str().unwrap()))
+        .clang_arg(format!(
+            "-I{}",
+            re_install.join("include").to_str().unwrap()
+        ))
         .allowlist_type("ua")
         .allowlist_type("call")
         .allowlist_type("account")

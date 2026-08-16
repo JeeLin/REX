@@ -522,6 +522,33 @@ pub async fn test_connection(
             }
             None => Err("missing config_json for S3".into()),
         },
+        "sip" => {
+            // SIP 测试连接：校验 config_json 必填字段（server/username）。
+            // 匿名注册（无 password）也是合法的，故 password 非必填。
+            // 真正的 REGISTER 拨测在子任务 #3 的 /ws/sip 信令联调中完成。
+            match body.config_json {
+                Some(ref cfg) => match serde_json::from_str::<serde_json::Value>(cfg) {
+                    Ok(v) => {
+                        let server = v
+                            .get("server")
+                            .and_then(|s| s.as_str())
+                            .or(Some(body.host.as_str()))
+                            .filter(|s| !s.is_empty());
+                        let username = v
+                            .get("username")
+                            .and_then(|s| s.as_str())
+                            .or(body.username.as_deref())
+                            .filter(|s| !s.is_empty());
+                        match (server, username) {
+                            (Some(_), Some(_)) => Ok(()),
+                            _ => Err("missing server or username for SIP".into()),
+                        }
+                    }
+                    Err(e) => Err(format!("invalid config_json: {e}")),
+                },
+                None => Err("missing config_json for SIP".into()),
+            }
+        }
         _ => Err(format!("unsupported protocol: {}", body.protocol)),
     };
     let latency = start.elapsed().as_millis() as u64;
