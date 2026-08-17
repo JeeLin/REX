@@ -8,11 +8,6 @@
 //! - `KIND_SIGNAL`（0）：控制/事件帧（SipControl / SipEvent JSON）
 //! - `KIND_MEDIA`（1）：媒体帧（原始 S16LE PCM 字节）
 
-/// 默认采样率（Hz），与 baresip 窄带语音一致。
-pub const MEDIA_SRATE: u32 = 8000;
-/// 默认声道数（单声道）。
-pub const MEDIA_CHANNELS: u8 = 1;
-
 /// 将一帧 S16LE PCM 样本编码为 WebSocket 二进制帧字节（直接小端 i16 拼接）。
 pub fn encode_pcm_frame(pcm: &[i16]) -> Vec<u8> {
     let mut out = Vec::with_capacity(pcm.len() * 2);
@@ -34,16 +29,6 @@ pub fn decode_media_frame(bytes: &[u8]) -> Vec<i16> {
         out.push(i16::from_le_bytes([lo, hi]));
     }
     out
-}
-
-/// 媒体帧方向：仅用于隧道内区分媒体帧与控制帧，直连 WebSocket 帧直接为 PCM 字节、
-/// 方向由数据流隐含（Hub→浏览器为下行、浏览器→Hub 为上行）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MediaKind {
-    /// Hub→浏览器下行（远端 PCM）。
-    Down,
-    /// 浏览器→Hub 上行（麦克风 PCM）。
-    Up,
 }
 
 /// 隧道内二进制帧「信令」种类字节（kind=0）。
