@@ -84,6 +84,7 @@ mod tests {
 
 pub mod file_transfer;
 pub mod redis;
+pub mod sip_media;
 pub mod sql;
 pub mod supervisor;
 pub mod update;

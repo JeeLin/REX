@@ -644,12 +644,14 @@ async fn handle_connect_sip(
         );
     }
 
-    // UA₂ 事件流 → 隧道 SipEvent 帧；Hub 经隧道发来的 SipControl 帧 → UA₂。
+    // UA₂ 事件流 → 隧道 SipEvent 帧；Hub 经隧道发来的 SipControl/媒体帧 → UA₂。
     run_sip_ua2(ua, channel_id, evt_tx, channels, data_rx).await;
 }
 
 /// 驱动 UA₂：把 baresip 事件封装为 `SipEvent` JSON 经隧道回 Hub；
-/// 把 Hub 经隧道发来的 `SipControl` 帧转调 UA₂ 方法。任一方向结束即清理。
+/// 把 baresip 抽出的接收 PCM 封装为介质帧（kind=1）经隧道回 Hub（M82b 下行）；
+/// 把 Hub 经隧道发来的 `SipControl` 帧转调 UA₂ 方法、媒体帧（kind=1）喂回 UA₂ 发送链路
+/// （M82b 上行）。任一方向结束即清理。
 async fn run_sip_ua2(
     ua: rex_sip::SipUa,
     channel_id: String,
@@ -674,7 +676,33 @@ async fn run_sip_ua2(
         return;
     }
 
-    // UA₂ 事件 → 隧道帧。
+    // --- M82b 实时音频：baresip 抽出接收 PCM → on_rtp 回调 → 隧道媒体帧（kind=1） ---
+    // 回调在 baresip 泵线程内同步调用，故经独立 mpsc 通道把封装后的 PCM 帧交给
+    // media_task 叠加 channelId 前缀，经隧道发 Hub（再转浏览器播放）。
+    let (media_tx, mut media_rx) = mpsc::channel::<Vec<u8>>(128);
+    ua.on_rtp(Box::new(move |pcm: &[i16]| {
+        let frame = rex_common::sip_media::encode_pcm_frame(pcm);
+        let _ = media_tx.try_send(rex_common::sip_media::wrap_tunnel_frame(
+            rex_common::sip_media::KIND_MEDIA,
+            &frame,
+        ));
+    }));
+    let evt_tx_media = evt_tx.clone();
+    let media_channel_id = channel_id.clone();
+    let media_task = tokio::spawn(async move {
+        while let Some(inner) = media_rx.recv().await {
+            // 叠加 4 字节 channelId 前缀（隧道读取循环会剥掉）。
+            let mut frame = (media_channel_id.parse::<u32>().unwrap_or(0))
+                .to_be_bytes()
+                .to_vec();
+            frame.extend_from_slice(&inner);
+            if evt_tx_media.send(AgentEvent::Binary(frame)).await.is_err() {
+                break;
+            }
+        }
+    });
+
+    // UA₂ 事件 → 隧道帧（信令 channelId 前缀由 `send_sip_event` 封装）。
     let mut events = ua.events();
     let evt_tx_event = evt_tx.clone();
     let event_task = tokio::spawn(async move {
@@ -685,7 +713,7 @@ async fn run_sip_ua2(
         }
     });
 
-    // 隧道帧 → UA₂ 控制。
+    // 隧道帧 → UA₂：首字节 kind 区分信令（kind=0 SipControl JSON）与媒体（kind=1 PCM）。
     let ua_ctrl = ua.clone();
     let ctrl_channel_id = channel_id.clone();
     let ctrl_task = tokio::spawn(async move {
@@ -693,15 +721,10 @@ async fn run_sip_ua2(
             if frame.is_empty() {
                 break; // 关闭信号
             }
-            let ctrl: rex_sip::SipControl = match serde_json::from_slice(&frame) {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::warn!(action = "SIP_CTRL_PARSE", channel_id = %ctrl_channel_id, error = %e, "invalid SipControl frame");
-                    continue;
-                }
-            };
-            if let Err(e) = dispatch_sip_control(ua_ctrl.as_ref(), &ctrl).await {
-                tracing::warn!(action = "SIP_CTRL_DISPATCH", channel_id = %ctrl_channel_id, error = %e, "SipControl dispatch failed");
+            if let Err(e) =
+                dispatch_sip_tunnel_frame(ua_ctrl.as_ref(), &ctrl_channel_id, &frame).await
+            {
+                tracing::warn!(action = "SIP_TUNNEL_FRAME", channel_id = %ctrl_channel_id, error = %e, "tunnel frame handling failed");
             }
         }
     });
@@ -709,6 +732,7 @@ async fn run_sip_ua2(
     tokio::select! {
         _ = event_task => {},
         _ = ctrl_task => {},
+        _ = media_task => {},
     }
 
     cleanup_sip_channel(&channels, &channel_id).await;
@@ -731,9 +755,9 @@ async fn send_sip_event(
     evt_tx.send(AgentEvent::Binary(frame)).await
 }
 
-/// 将 Hub 发来的 `SipControl` 转调 UA₂ 对应方法。
-async fn dispatch_sip_control(
-    ua: &rex_sip::SipUa,
+/// 将 Hub 发来的 `SipControl` 转调 UA₂ 对应方法。泛型 `SipUaTrait`，便于 Mock 单测。
+async fn dispatch_sip_control<U: SipUaTrait + Sync + ?Sized>(
+    ua: &U,
     ctrl: &rex_sip::SipControl,
 ) -> Result<(), String> {
     match ctrl {
@@ -757,6 +781,29 @@ async fn dispatch_sip_control(
             ua.dtmf(call_id, *digit).await.map_err(|e| e.to_string())
         }
     }
+}
+
+/// 处理 Hub 经隧道发来的单帧（已剥去 4 字节 channelId 前缀）：首字节 kind 区分
+/// 信令帧（kind=0，SipControl JSON）与媒体帧（kind=1，原始 S16LE PCM）。媒体帧解码后
+/// 喂回 UA₂ 发送链路（M82b 上行），信令帧转调 UA₂ 对应方法。泛型 `SipUaTrait` 便于 Mock 单测。
+async fn dispatch_sip_tunnel_frame<U: SipUaTrait + Sync + ?Sized>(
+    ua: &U,
+    channel_id: &str,
+    frame: &[u8],
+) -> Result<(), String> {
+    let (kind, payload) = rex_common::sip_media::unwrap_tunnel_frame(frame);
+    if kind == rex_common::sip_media::KIND_MEDIA {
+        let pcm = rex_common::sip_media::decode_media_frame(payload);
+        if !pcm.is_empty() {
+            ua.send_audio(pcm).await.map_err(|e| e.to_string())?;
+        }
+        return Ok(());
+    }
+    let ctrl: rex_sip::SipControl =
+        serde_json::from_slice(payload).map_err(|e| format!("invalid SipControl frame: {e}"))?;
+    dispatch_sip_control(ua, &ctrl)
+        .await
+        .map_err(|e| format!("SipControl dispatch failed (channel {channel_id}): {e}"))
 }
 
 /// 从 channel 表移除 SIP 会话，并通知 Hub 关闭。
@@ -962,5 +1009,120 @@ mod tests {
         let decoded = u32::from_be_bytes([frame[0], frame[1], frame[2], frame[3]]);
         assert_eq!(decoded.to_string(), channel_id);
         assert_eq!(&frame[4..], b"shell output");
+    }
+
+    // --- 子任务 #3：Agent UA₂ 媒体转发（M82b）---
+    //
+    // `dispatch_sip_tunnel_frame` 解析 Hub 经隧道发来的单帧（已剥 4B channelId 前缀）：
+    // 首字节 kind=0 → SipControl JSON 转调 UA₂；kind=1 → 原始 PCM 喂回 UA₂ 发送链路。
+    // 下列测试用 MockSipUa 锁定这两种帧的路由契约。
+
+    #[tokio::test]
+    async fn tunnel_signal_frame_dispatches_control_to_ua2() {
+        let ua = rex_sip::MockSipUa::new(
+            rex_sip::SipConfig {
+                server: "sip.x".into(),
+                port: 5060,
+                username: "u".into(),
+                password: None,
+                display_name: None,
+                transport: rex_sip::SipTransport::Udp,
+            },
+            vec![],
+        );
+        // kind=0 信令帧：SipControl::Dial JSON。
+        let ctrl = rex_sip::SipControl::Dial {
+            destination: "2000".into(),
+        };
+        let frame = rex_common::sip_media::wrap_tunnel_frame(
+            rex_common::sip_media::KIND_SIGNAL,
+            &serde_json::to_vec(&ctrl).unwrap(),
+        );
+        dispatch_sip_tunnel_frame(&ua, "11", &frame).await.unwrap();
+        let acts = ua.actions.lock().unwrap();
+        assert_eq!(acts.len(), 1);
+        assert_eq!(acts[0], rex_sip::MockAction::Dial("2000".into()));
+    }
+
+    #[tokio::test]
+    async fn tunnel_media_frame_feeds_pcm_to_ua2_send_audio() {
+        let ua = rex_sip::MockSipUa::new(
+            rex_sip::SipConfig {
+                server: "sip.x".into(),
+                port: 5060,
+                username: "u".into(),
+                password: None,
+                display_name: None,
+                transport: rex_sip::SipTransport::Udp,
+            },
+            vec![],
+        );
+        // kind=1 媒体帧：上行麦克风 PCM（S16LE i16）。
+        let pcm: Vec<i16> = vec![10, -20, 30, -40];
+        let pcm_bytes = rex_common::sip_media::encode_pcm_frame(&pcm);
+        let frame =
+            rex_common::sip_media::wrap_tunnel_frame(rex_common::sip_media::KIND_MEDIA, &pcm_bytes);
+        dispatch_sip_tunnel_frame(&ua, "11", &frame).await.unwrap();
+        let acts = ua.actions.lock().unwrap();
+        // 媒体帧不应触发任何 SipControl 动作，仅 send_audio（PCM 字节数）。
+        assert_eq!(acts.len(), 1);
+        assert_eq!(acts[0], rex_sip::MockAction::SendAudio(pcm_bytes.len() / 2));
+    }
+
+    #[tokio::test]
+    async fn tunnel_signal_vs_media_do_not_cross_dispatch() {
+        let ua = rex_sip::MockSipUa::new(
+            rex_sip::SipConfig {
+                server: "sip.x".into(),
+                port: 5060,
+                username: "u".into(),
+                password: None,
+                display_name: None,
+                transport: rex_sip::SipTransport::Udp,
+            },
+            vec![],
+        );
+        // 一个信令帧 + 一个媒体帧，断言信令只产生 Dial、媒体只产生 send_audio。
+        let dial = rex_common::sip_media::wrap_tunnel_frame(
+            rex_common::sip_media::KIND_SIGNAL,
+            &serde_json::to_vec(&rex_sip::SipControl::Dial {
+                destination: "9000".into(),
+            })
+            .unwrap(),
+        );
+        dispatch_sip_tunnel_frame(&ua, "1", &dial).await.unwrap();
+        let pcm = vec![1i16, 2, 3, 4];
+        let media = rex_common::sip_media::wrap_tunnel_frame(
+            rex_common::sip_media::KIND_MEDIA,
+            &rex_common::sip_media::encode_pcm_frame(&pcm),
+        );
+        dispatch_sip_tunnel_frame(&ua, "1", &media).await.unwrap();
+
+        let acts = ua.actions.lock().unwrap();
+        assert_eq!(acts[0], rex_sip::MockAction::Dial("9000".into()));
+        assert_eq!(acts[1], rex_sip::MockAction::SendAudio(4));
+    }
+
+    #[tokio::test]
+    async fn tunnel_media_frame_empty_pcm_skips_send_audio() {
+        // kind=1 但 payload 为空（无 PCM 字节）→ decode_media_frame 得空 → 不调用
+        // send_audio，避免空帧干扰 UA₂ 发送链路；同时也不应误触发任何 SipControl。
+        let ua = rex_sip::MockSipUa::new(
+            rex_sip::SipConfig {
+                server: "sip.x".into(),
+                port: 5060,
+                username: "u".into(),
+                password: None,
+                display_name: None,
+                transport: rex_sip::SipTransport::Udp,
+            },
+            vec![],
+        );
+        let frame = rex_common::sip_media::wrap_tunnel_frame(
+            rex_common::sip_media::KIND_MEDIA,
+            &[], // 仅 kind 字节，无 payload
+        );
+        dispatch_sip_tunnel_frame(&ua, "1", &frame).await.unwrap();
+        assert!(ua.actions.lock().unwrap().is_empty());
     }
 }
