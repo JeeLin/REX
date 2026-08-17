@@ -1,6 +1,6 @@
 import { ref, computed, type Ref } from 'vue'
 
-export type TabProtocol = 'ssh' | 'mysql' | 'redis' | 'postgresql' | 'sftp' | 'sqlite' | 's3'
+export type TabProtocol = 'ssh' | 'mysql' | 'redis' | 'postgresql' | 'sftp' | 'sqlite' | 's3' | 'sip'
 
 export interface Tab {
   id: string

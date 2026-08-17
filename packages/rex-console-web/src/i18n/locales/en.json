@@ -599,6 +599,22 @@
     "zoomIn": "Zoom In",
     "zoomOut": "Zoom Out"
   },
+  "sip": {
+    "enterNumber": "Enter number",
+    "clear": "Clear",
+    "call": "Call",
+    "notRegistered": "Not registered yet",
+    "registered": "Registered",
+    "registering": "Registering...",
+    "regFailed": "Registration failed",
+    "disconnected": "Disconnected",
+    "incoming": "Incoming call",
+    "answer": "Answer",
+    "decline": "Decline",
+    "hold": "Hold",
+    "unhold": "Unhold",
+    "hangup": "Hang Up"
+  },
   "terminal": {
     "clear": "Clear",
     "connect": "Connect",

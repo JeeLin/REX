@@ -9,6 +9,7 @@ import { defineAsyncComponent } from 'vue'
 const SqlPage = defineAsyncComponent(() => import('@/features/sql/SqlPage.vue'))
 const RedisPage = defineAsyncComponent(() => import('@/features/redis/RedisPage.vue'))
 const FilesPage = defineAsyncComponent(() => import('@/features/files/FilesPage.vue'))
+const SipPage = defineAsyncComponent(() => import('@/features/sip/SipPage.vue'))
 
 const props = defineProps<{ leafId: string }>()
 const ctx = inject<PaneCtx>(PANE_CTX)!
@@ -97,6 +98,15 @@ function onStatus(tabId: string, status: string) {
       :key="tabInfo?.id || ''"
       :resource-id="tabInfo?.resourceId"
       :protocol="tabInfo?.protocol === 's3' ? 's3' : 'sftp'"
+      @update:status="(s: string) => tabInfo?.id && onStatus(tabInfo.id, s)"
+    />
+
+    <!-- SIP Phone -->
+    <SipPage
+      v-else-if="tabInfo?.protocol === 'sip'"
+      :key="tabInfo?.id || ''"
+      :resource-id="tabInfo?.resourceId"
+      :name="tabInfo?.label"
       @update:status="(s: string) => tabInfo?.id && onStatus(tabInfo.id, s)"
     />
 

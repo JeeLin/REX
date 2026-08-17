@@ -597,6 +597,22 @@
     "zoomIn": "放大",
     "zoomOut": "缩小"
   },
+  "sip": {
+    "enterNumber": "输入号码",
+    "clear": "清除",
+    "call": "呼叫",
+    "notRegistered": "尚未注册",
+    "registered": "已注册",
+    "registering": "注册中...",
+    "regFailed": "注册失败",
+    "disconnected": "已断开",
+    "incoming": "来电",
+    "answer": "接听",
+    "decline": "拒接",
+    "hold": "保持",
+    "unhold": "取消保持",
+    "hangup": "挂断"
+  },
   "terminal": {
     "clear": "清屏",
     "connect": "连接",
