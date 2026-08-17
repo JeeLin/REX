@@ -9,6 +9,7 @@ path = "src/rex-agent.rs"
 
 [dependencies]
 rex-common = { workspace = true }
+rex-sip = { workspace = true }
 tokio = { workspace = true }
 tokio-tungstenite = { workspace = true }
 futures-util = { workspace = true }

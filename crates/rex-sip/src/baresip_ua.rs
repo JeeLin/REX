@@ -312,7 +312,7 @@ unsafe fn map_bevent(ev: crate::bevent_ev, event: *mut crate::bevent) -> Option<
         bevent_ev_BEVENT_REGISTER_OK => Some(SipEvent::Registered),
         bevent_ev_BEVENT_REGISTER_FAIL => {
             let reason = event_text(event);
-            Some(SipEvent::RegistrationFailed(reason))
+            Some(SipEvent::RegistrationFailed { reason })
         }
         bevent_ev_BEVENT_CALL_INCOMING => {
             let call = bevent_get_call(event);

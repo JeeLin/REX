@@ -64,6 +64,7 @@ pub struct SipConfig {
 
 /// 通话状态。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum CallState {
     Ringing,
     Active,
@@ -72,13 +73,50 @@ pub enum CallState {
 }
 
 /// SIP UA 事件（从 baresip `bevent` 事件总线映射）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// 经隧道在 Agent(UA₂) ↔ Hub(UA₁) 之间序列化传输（见 [`SipControl`]）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum SipEvent {
     Registered,
-    RegistrationFailed(String),
+    RegistrationFailed { reason: String },
     IncomingCall { call_id: String, from: String },
     CallState { call_id: String, state: CallState },
     Message { raw: String },
+}
+
+/// Agent(UA₂) ↔ Hub(UA₁) 隧道上的控制指令（前端控制帧的线格式等价物）。
+///
+/// Hub 收到前端 `sip.dial` 等后转封装为 [`SipControl`]，经隧道 binary 帧
+/// `[4B channelId][json]` 发给 Agent 的 UA₂；Agent 调用对应 `SipUaTrait` 方法。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SipControl {
+    Register,
+    Dial {
+        destination: String,
+    },
+    Answer {
+        #[serde(rename = "callId")]
+        call_id: String,
+    },
+    Hangup {
+        #[serde(rename = "callId")]
+        call_id: String,
+    },
+    Hold {
+        #[serde(rename = "callId")]
+        call_id: String,
+    },
+    Unhold {
+        #[serde(rename = "callId")]
+        call_id: String,
+    },
+    Dtmf {
+        #[serde(rename = "callId")]
+        call_id: String,
+        digit: char,
+    },
 }
 
 /// 所有 UA 实现的统一抽象。真实现用 baresip FFI（[`baresip_ua::BaresipSipUa`]），

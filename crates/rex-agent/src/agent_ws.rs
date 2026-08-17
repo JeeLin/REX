@@ -1,9 +1,11 @@
 //! Agent WebSocket 客户端 — 连接 Hub，处理认证、心跳、资源连接代理、更新。
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
+use rex_sip::SipUaTrait;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -417,6 +419,12 @@ async fn handle_connect(
     evt_tx: mpsc::Sender<AgentEvent>,
     channels: Arc<RwLock<HashMap<String, LocalChannel>>>,
 ) {
+    // SIP 资源走 Agent 内网 UA₂：不建 TCP，由 UA₂ 直接对内网 SIP server 信令。
+    if req.protocol == "sip" {
+        handle_connect_sip(req, evt_tx, channels).await;
+        return;
+    }
+
     let channel_id = format!("ch_{}", &uuid::Uuid::new_v4().to_string()[..8]);
 
     // 解析目标地址
@@ -562,6 +570,244 @@ async fn handle_connect(
     }
 }
 
+/// SIP 资源专用 channel 计数：保证 channel_id 为数值，使隧道二进制帧的
+/// `u32` 前缀可正确往返（见 `crates/rex-hub/src/agent_ws.rs` 的 `from_be_bytes` 路由）。
+static SIP_CHANNEL_SEQ: AtomicU32 = AtomicU32::new(1);
+
+/// 处理 SIP 资源的 connect 请求：Agent 内起真实 SipUa（UA₂）作为最终 SIP 终端，
+/// 直接对内网 SIP server 信令。Hub 与前端仅做 JSON 控制/事件的中继（见 Hub 侧
+/// `sip_ws::handle_agent_sip`），不跑任何 UA、不搬运原始 SIP 字节。
+async fn handle_connect_sip(
+    req: ConnectRequest,
+    evt_tx: mpsc::Sender<AgentEvent>,
+    channels: Arc<RwLock<HashMap<String, LocalChannel>>>,
+) {
+    // channel_id 必须为数值，否则隧道二进制帧的 u32 前缀无法路由。
+    let channel_id = SIP_CHANNEL_SEQ.fetch_add(1, Ordering::SeqCst).to_string();
+
+    let sip_cfg = match parse_sip_config(&req.config) {
+        Ok(c) => c,
+        Err(e) => {
+            let err_msg = serde_json::to_string(&AgentMsg::ConnectError {
+                payload: ConnectErrorPayload {
+                    request_id: req.request_id,
+                    error: e,
+                },
+            })
+            .unwrap();
+            let _ = evt_tx.send(AgentEvent::Text(err_msg)).await;
+            return;
+        }
+    };
+
+    let ua = match rex_sip::SipUa::real(sip_cfg) {
+        Ok(ua) => ua,
+        Err(e) => {
+            let err_msg = serde_json::to_string(&AgentMsg::ConnectError {
+                payload: ConnectErrorPayload {
+                    request_id: req.request_id,
+                    error: format!("SIP UA init failed: {e}"),
+                },
+            })
+            .unwrap();
+            let _ = evt_tx.send(AgentEvent::Text(err_msg)).await;
+            return;
+        }
+    };
+
+    // 通知 Hub 连接成功（UA₂ 已就绪）。
+    let ok_msg = serde_json::to_string(&AgentMsg::Connected {
+        payload: ConnectedPayload {
+            request_id: req.request_id,
+            channel_id: channel_id.clone(),
+        },
+    })
+    .unwrap();
+    let _ = evt_tx.send(AgentEvent::Text(ok_msg)).await;
+
+    // 注册 channel（用于接收 Hub 经隧道发来的 SipControl 帧）。
+    let (data_tx, mut data_rx) = mpsc::channel::<Vec<u8>>(512);
+    {
+        let mut chs = channels.write().await;
+        chs.insert(
+            channel_id.clone(),
+            LocalChannel {
+                channel_id: channel_id.clone(),
+                data_tx,
+            },
+        );
+    }
+
+    // UA₂ 事件流 → 隧道 SipEvent 帧；Hub 经隧道发来的 SipControl 帧 → UA₂。
+    run_sip_ua2(ua, channel_id, evt_tx, channels, data_rx).await;
+}
+
+/// 驱动 UA₂：把 baresip 事件封装为 `SipEvent` JSON 经隧道回 Hub；
+/// 把 Hub 经隧道发来的 `SipControl` 帧转调 UA₂ 方法。任一方向结束即清理。
+async fn run_sip_ua2(
+    ua: rex_sip::SipUa,
+    channel_id: String,
+    evt_tx: mpsc::Sender<AgentEvent>,
+    channels: Arc<RwLock<HashMap<String, LocalChannel>>>,
+    mut data_rx: mpsc::Receiver<Vec<u8>>,
+) {
+    let ch_id_num = channel_id.parse::<u32>().unwrap_or(0);
+    let ua = Arc::new(ua);
+
+    // 注册 UA₂，错误直接上报并结束。
+    if let Err(e) = ua.register().await {
+        let _ = send_sip_event(
+            &evt_tx,
+            ch_id_num,
+            &rex_sip::SipEvent::RegistrationFailed {
+                reason: e.to_string(),
+            },
+        )
+        .await;
+        cleanup_sip_channel(&channels, &channel_id).await;
+        return;
+    }
+
+    // UA₂ 事件 → 隧道帧。
+    let mut events = ua.events();
+    let evt_tx_event = evt_tx.clone();
+    let event_task = tokio::spawn(async move {
+        while let Some(ev) = events.recv().await {
+            if send_sip_event(&evt_tx_event, ch_id_num, &ev).await.is_err() {
+                break;
+            }
+        }
+    });
+
+    // 隧道帧 → UA₂ 控制。
+    let ua_ctrl = ua.clone();
+    let ctrl_channel_id = channel_id.clone();
+    let ctrl_task = tokio::spawn(async move {
+        while let Some(frame) = data_rx.recv().await {
+            if frame.is_empty() {
+                break; // 关闭信号
+            }
+            let ctrl: rex_sip::SipControl = match serde_json::from_slice(&frame) {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::warn!(action = "SIP_CTRL_PARSE", channel_id = %ctrl_channel_id, error = %e, "invalid SipControl frame");
+                    continue;
+                }
+            };
+            if let Err(e) = dispatch_sip_control(ua_ctrl.as_ref(), &ctrl).await {
+                tracing::warn!(action = "SIP_CTRL_DISPATCH", channel_id = %ctrl_channel_id, error = %e, "SipControl dispatch failed");
+            }
+        }
+    });
+
+    tokio::select! {
+        _ = event_task => {},
+        _ = ctrl_task => {},
+    }
+
+    cleanup_sip_channel(&channels, &channel_id).await;
+    tracing::info!(action = "SIP_UA2_END", channel_id = %channel_id, "agent SIP UA2 session ended");
+}
+
+/// 将 UA₂ 事件封成 `[4B channelId][SipEvent JSON]` 二进制帧经隧道发往 Hub。
+async fn send_sip_event(
+    evt_tx: &mpsc::Sender<AgentEvent>,
+    ch_id_num: u32,
+    ev: &rex_sip::SipEvent,
+) -> Result<(), mpsc::error::SendError<AgentEvent>> {
+    let payload = match serde_json::to_vec(ev) {
+        Ok(p) => p,
+        Err(_) => return Ok(()),
+    };
+    let mut frame = Vec::with_capacity(4 + payload.len());
+    frame.extend_from_slice(&ch_id_num.to_be_bytes());
+    frame.extend_from_slice(&payload);
+    evt_tx.send(AgentEvent::Binary(frame)).await
+}
+
+/// 将 Hub 发来的 `SipControl` 转调 UA₂ 对应方法。
+async fn dispatch_sip_control(
+    ua: &rex_sip::SipUa,
+    ctrl: &rex_sip::SipControl,
+) -> Result<(), String> {
+    match ctrl {
+        rex_sip::SipControl::Register => ua.register().await.map_err(|e| e.to_string()),
+        rex_sip::SipControl::Dial { destination } => ua
+            .dial(destination)
+            .await
+            .map(|_| ())
+            .map_err(|e| e.to_string()),
+        rex_sip::SipControl::Answer { call_id } => {
+            ua.answer(call_id).await.map_err(|e| e.to_string())
+        }
+        rex_sip::SipControl::Hangup { call_id } => {
+            ua.hangup(call_id).await.map_err(|e| e.to_string())
+        }
+        rex_sip::SipControl::Hold { call_id } => ua.hold(call_id).await.map_err(|e| e.to_string()),
+        rex_sip::SipControl::Unhold { call_id } => {
+            ua.unhold(call_id).await.map_err(|e| e.to_string())
+        }
+        rex_sip::SipControl::Dtmf { call_id, digit } => {
+            ua.dtmf(call_id, *digit).await.map_err(|e| e.to_string())
+        }
+    }
+}
+
+/// 从 channel 表移除 SIP 会话，并通知 Hub 关闭。
+async fn cleanup_sip_channel(
+    channels: &Arc<RwLock<HashMap<String, LocalChannel>>>,
+    channel_id: &str,
+) {
+    {
+        let mut chs = channels.write().await;
+        chs.remove(channel_id);
+    }
+}
+
+/// 从 connect config 解析 SIP 配置（对应 Hub 侧 `load_sip_conn` 的字段约定）。
+fn parse_sip_config(cfg: &serde_json::Value) -> Result<rex_sip::SipConfig, String> {
+    let server = cfg
+        .get("server")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "sip: missing server".to_string())?
+        .to_string();
+    let port = cfg
+        .get("port")
+        .and_then(|v| v.as_u64())
+        .map(|p| p as u16)
+        .unwrap_or(5060);
+    let username = cfg
+        .get("username")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "sip: missing username".to_string())?
+        .to_string();
+    let password = cfg
+        .get("password")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let display_name = cfg
+        .get("displayName")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let transport = match cfg
+        .get("transport")
+        .and_then(|v| v.as_str())
+        .unwrap_or("udp")
+    {
+        "tcp" => rex_sip::SipTransport::Tcp,
+        "tls" => rex_sip::SipTransport::Tls,
+        _ => rex_sip::SipTransport::Udp,
+    };
+    Ok(rex_sip::SipConfig {
+        server,
+        port,
+        username,
+        password,
+        display_name,
+        transport,
+    })
+}
+
 enum AgentEvent {
     Text(String),
     Binary(Vec<u8>),
@@ -634,4 +880,54 @@ fn build_ws_url(hub_url: &str, token: &str) -> Result<String, Box<dyn std::error
     url.set_path("/ws/agent");
     url.query_pairs_mut().append_pair("token", token);
     Ok(url.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_sip_config_full() {
+        let cfg = serde_json::json!({
+            "server": "sip.example.com",
+            "port": 5061,
+            "username": "1000",
+            "password": "secret",
+            "displayName": "Alice",
+            "transport": "tls"
+        });
+        let sip = parse_sip_config(&cfg).unwrap();
+        assert_eq!(sip.server, "sip.example.com");
+        assert_eq!(sip.port, 5061);
+        assert_eq!(sip.username, "1000");
+        assert_eq!(sip.password.as_deref(), Some("secret"));
+        assert_eq!(sip.display_name.as_deref(), Some("Alice"));
+        assert_eq!(sip.transport, rex_sip::SipTransport::Tls);
+    }
+
+    #[test]
+    fn parse_sip_config_defaults_and_optional_password() {
+        let cfg = serde_json::json!({
+            "server": "sip.x",
+            "username": "u"
+        });
+        let sip = parse_sip_config(&cfg).unwrap();
+        assert_eq!(sip.port, 5060);
+        assert_eq!(sip.transport, rex_sip::SipTransport::Udp);
+        assert!(sip.password.is_none());
+        assert!(sip.display_name.is_none());
+    }
+
+    #[test]
+    fn parse_sip_config_missing_server_errors() {
+        let cfg = serde_json::json!({ "username": "u" });
+        assert!(parse_sip_config(&cfg).is_err());
+    }
+
+    #[test]
+    fn sip_channel_seq_is_numeric() {
+        // 隧道二进制帧前缀要求 SIP channel_id 为数值。
+        let id = SIP_CHANNEL_SEQ.fetch_add(1, Ordering::SeqCst).to_string();
+        assert!(id.parse::<u32>().is_ok());
+    }
 }

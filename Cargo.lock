@@ -3570,6 +3570,7 @@ dependencies = [
  "hostname",
  "reqwest",
  "rex-common",
+ "rex-sip",
  "rustls 0.23.40",
  "serde",
  "serde_json",
