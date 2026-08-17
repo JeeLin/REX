@@ -39,6 +39,8 @@ export function decodeEvent(raw: string): SipServerEvent | null {
 
 export type SipClientHandlers = {
   onEvent?: (e: SipServerEvent) => void
+  /** 下行媒体帧（原始 S16LE PCM 二进制）回调，仅媒体通道时触发。 */
+  onMedia?: (data: ArrayBuffer) => void
   onOpen?: () => void
   onClose?: () => void
   onError?: (e: Event) => void
@@ -57,13 +59,21 @@ export class SipClient {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
     const url = `${proto}//${location.host}/ws/sip?resourceId=${encodeURIComponent(this.resourceId)}&token=${encodeURIComponent(token)}`
     const ws = new WebSocket(url)
+    // 媒体帧为二进制（ArrayBuffer），需显式声明 binaryType 才能拿到 ArrayBuffer。
+    ws.binaryType = 'arraybuffer'
     this.ws = ws
     ws.onopen = () => {
       this.startHeartbeat()
       this.handlers.onOpen?.()
     }
     ws.onmessage = (ev) => {
-      if (typeof ev.data !== 'string') return
+      // 二进制帧 = 下行媒体（原始 S16LE PCM），直接交 onMedia 处理。
+      if (typeof ev.data !== 'string') {
+        if (ev.data instanceof ArrayBuffer) {
+          this.handlers.onMedia?.(ev.data)
+        }
+        return
+      }
       const event = decodeEvent(ev.data)
       if (event) this.handlers.onEvent?.(event)
     }
@@ -72,6 +82,13 @@ export class SipClient {
       this.handlers.onClose?.()
     }
     ws.onerror = (e) => this.handlers.onError?.(e)
+  }
+
+  /** 上行发送一帧媒体（原始 S16LE PCM 二进制帧）。 */
+  sendMediaFrame(data: ArrayBuffer): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(data)
+    }
   }
 
   private startHeartbeat(): void {

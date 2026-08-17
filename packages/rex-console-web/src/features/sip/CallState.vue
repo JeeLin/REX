@@ -7,6 +7,7 @@ const props = defineProps<{
   registrationFailed?: string | null
   incoming: { callId: string; from: string } | null
   call: { callId: string; state: SipCallState; from?: string } | null
+  micOn: boolean
 }>()
 
 const emit = defineEmits<{
@@ -15,6 +16,7 @@ const emit = defineEmits<{
   hold: [callId: string]
   unhold: [callId: string]
   dtmf: [callId: string, digit: string]
+  toggleMic: []
 }>()
 
 const { t } = useI18n()
@@ -91,6 +93,14 @@ const dtmfKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '*', '#']
           @click="emit('hold', call.callId)"
         >
           {{ t('sip.hold') }}
+        </button>
+        <button
+          class="btn-action"
+          :class="{ 'btn-action--on': micOn }"
+          :disabled="call.state !== 'active'"
+          @click="emit('toggleMic')"
+        >
+          {{ micOn ? t('sip.micOn') : t('sip.micOff') }}
         </button>
         <button class="btn-hangup" @click="emit('hangup', call.callId)">{{ t('sip.hangup') }}</button>
       </div>
@@ -231,6 +241,15 @@ const dtmfKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '*', '#']
   border-radius: 8px;
   padding: 10px var(--space-3);
   cursor: pointer;
+}
+.btn-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-action--on {
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
 }
 .btn-hangup {
   flex: 1;

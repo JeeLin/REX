@@ -611,7 +611,9 @@
     "decline": "拒接",
     "hold": "保持",
     "unhold": "取消保持",
-    "hangup": "挂断"
+    "hangup": "挂断",
+    "micOn": "麦克风开",
+    "micOff": "麦克风关"
   },
   "terminal": {
     "clear": "清屏",

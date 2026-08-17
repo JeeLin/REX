@@ -613,7 +613,9 @@
     "decline": "Decline",
     "hold": "Hold",
     "unhold": "Unhold",
-    "hangup": "Hang Up"
+    "hangup": "Hang Up",
+    "micOn": "Mic On",
+    "micOff": "Mic Off"
   },
   "terminal": {
     "clear": "Clear",

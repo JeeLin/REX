@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import Dialpad from './Dialpad.vue'
 import CallState from './CallState.vue'
 import { SipClient, type SipCallState, type SipServerEvent } from '@/api/sip'
+import { SipAudio, encodePcmFrame, decodeMediaFrame } from '@/api/sipMedia'
 
 const props = defineProps<{
   resourceId?: string
@@ -19,6 +20,8 @@ const registrationFailed = ref<string | null>(null)
 const incoming = ref<{ callId: string; from: string } | null>(null)
 const currentCall = ref<{ callId: string; state: SipCallState; from?: string } | null>(null)
 const connected = ref(false)
+const micOn = ref(false)
+const audio = new SipAudio()
 
 let client: SipClient | null = null
 
@@ -55,17 +58,48 @@ function handleEvent(e: SipServerEvent) {
   }
 }
 
+// 下行媒体帧（原始 S16LE PCM）→ 解码 → 播放。
+function handleMedia(data: ArrayBuffer) {
+  const pcm = decodeMediaFrame(data)
+  if (pcm.length > 0) audio.playPcm(pcm)
+}
+
 function applyCallState(callId: string, state: SipCallState) {
   if (state === 'ended') {
     if (incoming.value?.callId === callId) incoming.value = null
     if (currentCall.value?.callId === callId) currentCall.value = null
+    teardownAudio()
     emit('update:status', registered.value ? 'online' : 'error')
     return
   }
   const from = currentCall.value?.from ?? incoming.value?.from
+  const wasActive = currentCall.value?.state === 'active'
   currentCall.value = { callId, state, from }
   incoming.value = null
+  // 进入通话（含通话中状态切换）→ 确保下行播放链路就绪。
+  if (!wasActive && (state === 'active' || state === 'ringing')) {
+    audio.initPlayback()
+  }
   emit('update:status', state === 'ringing' ? 'connecting' : 'online')
+}
+
+async function onToggleMic() {
+  if (!micOn.value) {
+    audio.initPlayback()
+    await audio.startMic((frame) => {
+      client?.sendMediaFrame(encodePcmFrame(frame))
+    })
+    micOn.value = audio.micActive
+  } else {
+    audio.stopMic()
+    micOn.value = false
+  }
+}
+
+function teardownAudio() {
+  audio.stopMic()
+  micOn.value = false
+  audio.close()
 }
 
 function onAnswer(callId: string) {
@@ -97,6 +131,7 @@ function onDial(destination: string) {
 onMounted(() => {
   client = new SipClient(props.resourceId || '', {
     onEvent: handleEvent,
+    onMedia: handleMedia,
     onOpen: () => {
       connected.value = true
       emit('update:status', 'connecting')
@@ -111,6 +146,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  teardownAudio()
   client?.close()
   client = null
 })
@@ -135,11 +171,13 @@ const statusLabel = computed(() => {
         :registration-failed="registrationFailed"
         :incoming="incoming"
         :call="currentCall"
+        :mic-on="micOn"
         @answer="onAnswer"
         @hangup="onHangup"
         @hold="onHold"
         @unhold="onUnhold"
         @dtmf="onDtmf"
+        @toggle-mic="onToggleMic"
       />
       <Dialpad :registered="registered" @dial="onDial" />
     </div>
