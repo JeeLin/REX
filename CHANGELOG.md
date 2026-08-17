@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.70.0] - 2026-08-17
+
+### Added
+- SIP 电话资源：新增第 8 种资源协议 `sip`（信令层打通，仅含 register/dial/answer/hangup/hold/unhold/dtmf + 事件流，音频流留待 0.70.1）
+- `crates/rex-sip`：基于 baresip（C 库，全平台）进程内 FFI 封装（bindgen 自动绑定 + git submodule 固定 v4.10.0 + CMake 构建），提供安全 `SipUa` API，Hub/Agent 共用当 UA₁/UA₂
+- 资源模型：`protocol` 枚举增 `sip`，`load_sip_conn` 解析 SIP 配置（server/port/username/password/displayName/transport）
+- Hub `/ws/sip`：控制/事件消息通道（范式镜像 terminal_ws），复用 JWT query token 鉴权
+- Agent UA₂：经现有 WebSocket 隧道（`agent_ws.rs` channel_id 多路复用 + binary 帧）链式转发 SIP 流量，内网 SIP 服务器由 Agent 出网
+- 前端 `features/sip/`：拨号盘（Dialpad）+ 通话状态（CallState/SipPage）+ `/ws/sip` 客户端；资源向导增 SIP 配置段
+
+### Fixed
+- SIP 注册：前端向导 `buildConfig` 补传 `password`，修复需认证注册静默失败
+- Agent 链式回传：统一数值 `AGENT_CHANNEL_SEQ` 生成所有 protocol 的 channel_id，修复非 SIP 通道回传帧被丢弃（隧道二进制帧 `[4B u32]` 前缀 parse 失败回退 0 落空）
+- SIP 事件回传：Hub 侧 `handle_agent_sip` 不再重复剥 4 字节 channelId，修复 Agent 回传的来电/通话状态永远到不了前端
+- rex-sip 线程安全：单例化 baresip 运行时（避免重复 init / 多 `re_main` 争抢）、`mqueue` 主线程序列化控制 API（消除跨线程竞争）、`bevent_cb` 去除递归锁（消除首个来电死锁）、`calls` map 在 CALL_CLOSED 立即移除（消除 UAF）
 
 ## [0.69.0] - 2026-08-15
 

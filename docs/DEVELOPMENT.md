@@ -457,7 +457,7 @@ docs/milestones/
 版本类型：minor
 版本号：0.69.0
 
-### M82a：SIP 电话资源基础（信令打通 + Agent 链式 UA + 资源模型） ← 新增（下一步）
+### M82a：SIP 电话资源基础（信令打通 + Agent 链式 UA + 资源模型） ✅ 已完成
 
 **核心功能**：新增第 8 种资源类型 `sip`（SIP 电话）。Hub 侧 baresip UA（UA₁）打通拨号/接听/挂断/保持/转 DTMF；Agent 侧 baresip UA（UA₂）经现有 WebSocket 隧道链式转发（channel_id 多路复用，复用 `agent_ws.rs`），内网 SIP 服务器由 Agent 出网；前端 `features/sip/` 拨号盘 + 通话状态；复用 terminal_ws 的 `/ws` 范式建立 `/ws/sip` 控制/事件通道。M82a 只打通信令层（能发起并结束一通电话），音频在 M82b。
 
@@ -475,7 +475,7 @@ docs/milestones/
 
 > 技术风险：baresip 是 C 库，FFI 封装与跨平台编译（预编译 `.a` 或 build.rs 编 libre）是 M82a 唯一显著风险点，规划时优先验证；baresip 不能跑在浏览器，必须在 Hub/Agent 服务端。
 
-### M82b：浏览器实时双向音频（Opus-over-WebSocket 媒体通道）
+### M82b：浏览器实时双向音频（Opus-over-WebSocket 媒体通道） ← 新增（下一步）
 
 **核心功能**：Hub 侧终止 RTP，将 PCM 编码为 Opus，经 WebSocket 媒体通道实时推流到浏览器；浏览器用 Web Audio 解码播放，麦克风经 `getUserMedia` 采集、反向编码回传，实现浏览器与对端**实时双向**通话（满足「时时对话」）。这是产品原则「媒体不经过浏览器」的显式例外（用户明确要求浏览器实时听/说），媒体为实时流而非批量文件传输。
 
