@@ -117,6 +117,9 @@ function buildConfig(): Record<string, unknown> {
     cfg.region = s3Region.value || 'us-east-1'
   } else if (selectedProtocol.value === 'sip') {
     cfg.server = sipServer.value
+    cfg.username = username.value
+    if (password.value) cfg.password = password.value
+    if (port.value != null) cfg.port = port.value
     if (sipDisplay.value.trim()) cfg.displayName = sipDisplay.value
     cfg.transport = sipTransport.value
   }
