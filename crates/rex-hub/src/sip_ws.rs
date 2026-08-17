@@ -20,7 +20,6 @@ use rex_sip::{CallState, SipEvent, SipUa, SipUaTrait};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Interval;
-use uuid::Uuid;
 
 use crate::app::AppState;
 use crate::resource_conn::{load_resource_config, load_sip_conn};
@@ -99,7 +98,7 @@ struct IncomingPayload {
 struct CallStatePayload {
     #[serde(rename = "callId")]
     call_id: String,
-    state: String,
+    state: CallState,
 }
 
 #[derive(Debug, Serialize)]
@@ -139,8 +138,10 @@ async fn handle_socket(mut ws: WebSocket, state: AppState, resource_id: String) 
     };
 
     // agent 资源：Hub 不跑 UA，仅做 JSON 控制/事件中继，转发到 Agent 的 UA₂。
-    if is_agent_resource(&state, &resource_id).await {
-        handle_agent_sip(ws, &state, &resource_id, &sip_cfg).await;
+    // `find_online_agent` 在 connection_mode != "agent" 时即返回 None，故无需
+    // 再用 `is_agent_resource` 单独判定（两者查的是同一份 resource/env 数据）。
+    if let Some(agent_id) = find_online_agent(&state, &resource_id).await {
+        handle_agent_sip(ws, &state, &resource_id, &sip_cfg, &agent_id).await;
         return;
     }
 
@@ -178,18 +179,11 @@ async fn handle_agent_sip(
     state: &AppState,
     resource_id: &str,
     cfg: &rex_sip::SipConfig,
+    agent_id: &str,
 ) {
-    let agent_id = match find_online_agent(state, resource_id).await {
-        Some(id) => id,
-        None => {
-            let _ = send_ws_error(&mut ws, "no online agent for this environment").await;
-            return;
-        }
-    };
-
     let agent_conn = {
         let conns = state.agent_tunnel.connections.read().await;
-        conns.get(&agent_id).cloned()
+        conns.get(agent_id).cloned()
     };
     let agent_conn = match agent_conn {
         Some(c) => c,
@@ -526,25 +520,12 @@ fn map_event(ev: SipEvent) -> Option<ServerMsg> {
             payload: IncomingPayload { call_id, from },
         }),
         SipEvent::CallState { call_id, state } => Some(ServerMsg::CallState {
-            payload: CallStatePayload {
-                call_id,
-                state: call_state_str(state),
-            },
+            payload: CallStatePayload { call_id, state },
         }),
         SipEvent::Message { raw } => Some(ServerMsg::SipMessage {
             payload: RawPayload { raw },
         }),
     }
-}
-
-fn call_state_str(s: CallState) -> String {
-    match s {
-        CallState::Ringing => "ringing",
-        CallState::Active => "active",
-        CallState::Held => "held",
-        CallState::Ended => "ended",
-    }
-    .to_string()
 }
 
 /// 解析经隧道回 Hub 的 SipEvent 帧。
@@ -575,23 +556,6 @@ async fn dispatch_cmd<U: SipUaTrait + ?Sized>(ua: &U, cmd: ClientMsg) -> Result<
     }
 }
 
-/// 判断资源是否走 Agent 隧道（环境 connection_mode == "agent"）。
-async fn is_agent_resource(state: &AppState, resource_id: &str) -> bool {
-    let db = state.db.clone();
-    let rid = resource_id.to_string();
-    tokio::task::spawn_blocking(move || {
-        let resource = match db.get_resource(&rid) {
-            Ok(Some(r)) => r,
-            _ => return false,
-        };
-        db.get_environment(&resource.environment_id)
-            .map(|opt| opt.map(|e| e.connection_mode == "agent").unwrap_or(false))
-            .unwrap_or(false)
-    })
-    .await
-    .unwrap_or(false)
-}
-
 async fn send_ws_error(ws: &mut WebSocket, msg: &str) -> Result<(), axum::Error> {
     ws.send(Message::Text(
         serde_json::to_string(&ServerMsg::Error {
@@ -615,7 +579,7 @@ fn create_server_ping_interval() -> Interval {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rex_sip::{MockAction, MockSipUa};
+    use rex_sip::MockSipUa;
 
     fn cfg() -> rex_sip::SipConfig {
         rex_sip::SipConfig {
