@@ -18,7 +18,6 @@ tracing-subscriber = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 url = { workspace = true }
-uuid = { workspace = true }
 hostname = { workspace = true }
 reqwest = { workspace = true }
 sha2 = { workspace = true }

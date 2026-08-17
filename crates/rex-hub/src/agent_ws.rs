@@ -566,12 +566,12 @@ mod tests {
 
     #[test]
     fn test_agent_msg_connected_deserialize() {
-        let json = r#"{"type":"connected","payload":{"request_id":"req_1","channel_id":"ch_1"}}"#;
+        let json = r#"{"type":"connected","payload":{"request_id":"req_1","channel_id":"1"}}"#;
         let msg: AgentMsg = serde_json::from_str(json).unwrap();
         match msg {
             AgentMsg::Connected { payload } => {
                 assert_eq!(payload.request_id, "req_1");
-                assert_eq!(payload.channel_id, "ch_1");
+                assert_eq!(payload.channel_id, "1");
             }
             _ => panic!("expected Connected"),
         }
@@ -621,14 +621,14 @@ mod tests {
 
         // Simulate Agent response
         let resp = ConnectResponse {
-            channel_id: Some("ch_1".to_string()),
+            channel_id: Some("1".to_string()),
             error: None,
         };
         let sender = pending.remove("req_1").unwrap();
         sender.send(resp).unwrap();
 
         let result = rx.try_recv().unwrap();
-        assert_eq!(result.channel_id.unwrap(), "ch_1");
+        assert_eq!(result.channel_id.unwrap(), "1");
         assert!(result.error.is_none());
     }
 

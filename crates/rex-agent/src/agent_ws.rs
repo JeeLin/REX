@@ -425,7 +425,11 @@ async fn handle_connect(
         return;
     }
 
-    let channel_id = format!("ch_{}", &uuid::Uuid::new_v4().to_string()[..8]);
+    // channel_id 必须为数值：隧道二进制帧以「4B u32 channelId」前缀路由，
+    // Hub/Agent 两侧均用 `u32::from_be_bytes` 解前缀后 `to_string()` 查表。
+    // 若为非数值（如旧 "ch_{uuid}"），`parse::<u32>()` 失败回退为 0，会导致
+    // 回传帧全部命中键 "0" 而丢帧——终端/SQL/Redis/S3 等协议因此无返回。
+    let channel_id = AGENT_CHANNEL_SEQ.fetch_add(1, Ordering::SeqCst).to_string();
 
     // 解析目标地址
     let host = req
@@ -570,9 +574,11 @@ async fn handle_connect(
     }
 }
 
-/// SIP 资源专用 channel 计数：保证 channel_id 为数值，使隧道二进制帧的
-/// `u32` 前缀可正确往返（见 `crates/rex-hub/src/agent_ws.rs` 的 `from_be_bytes` 路由）。
-static SIP_CHANNEL_SEQ: AtomicU32 = AtomicU32::new(1);
+/// 全资源共享的 channel 计数：所有 protocol（ssh/sql/redis/s3/sip…）统一用
+/// 数值 channel_id，使隧道二进制帧的「4B u32 前缀」在 Hub/Agent 两侧正确往返
+/// （见 `crates/rex-hub/src/agent_ws.rs` 的 `from_be_bytes` 路由）。非数值
+/// channel_id 会导致 `parse::<u32>()` 失败回退为 0、回传帧全部丢帧。
+static AGENT_CHANNEL_SEQ: AtomicU32 = AtomicU32::new(1);
 
 /// 处理 SIP 资源的 connect 请求：Agent 内起真实 SipUa（UA₂）作为最终 SIP 终端，
 /// 直接对内网 SIP server 信令。Hub 与前端仅做 JSON 控制/事件的中继（见 Hub 侧
@@ -583,7 +589,7 @@ async fn handle_connect_sip(
     channels: Arc<RwLock<HashMap<String, LocalChannel>>>,
 ) {
     // channel_id 必须为数值，否则隧道二进制帧的 u32 前缀无法路由。
-    let channel_id = SIP_CHANNEL_SEQ.fetch_add(1, Ordering::SeqCst).to_string();
+    let channel_id = AGENT_CHANNEL_SEQ.fetch_add(1, Ordering::SeqCst).to_string();
 
     let sip_cfg = match parse_sip_config(&req.config) {
         Ok(c) => c,
@@ -925,9 +931,36 @@ mod tests {
     }
 
     #[test]
-    fn sip_channel_seq_is_numeric() {
-        // 隧道二进制帧前缀要求 SIP channel_id 为数值。
-        let id = SIP_CHANNEL_SEQ.fetch_add(1, Ordering::SeqCst).to_string();
+    fn agent_channel_seq_is_numeric() {
+        // 隧道二进制帧前缀要求所有 channel_id 为数值，否则 `parse::<u32>()`
+        // 失败回退为 0，回传帧会以键 "0" 落空而丢帧。
+        let id = AGENT_CHANNEL_SEQ.fetch_add(1, Ordering::SeqCst).to_string();
         assert!(id.parse::<u32>().is_ok());
+    }
+
+    #[test]
+    fn non_numeric_channel_id_drops_return_frame() {
+        // 回归：非数值 channel_id 经 `parse::<u32>().unwrap_or(0)` 后前缀为 0，
+        // 而 map 以原始串为键，导致回传帧丢帧——证明改用数值 channel_id 的必要性。
+        let bad = "ch_1234abcd";
+        assert_eq!(bad.parse::<u32>().unwrap_or(0), 0);
+    }
+
+    #[test]
+    fn numeric_channel_id_round_trips_through_tunnel_prefix() {
+        // 修复后契约：数值 channel_id 经「本端 parse::<u32>() → 4B 前缀」编码，
+        // Hub 侧 `u32::from_be_bytes` 解前缀后 `to_string()` 得到的键，必须等于
+        // 本端注册 channel 时用的 channel_id——否则回传帧落空被丢弃。
+        let channel_id = AGENT_CHANNEL_SEQ.fetch_add(1, Ordering::SeqCst).to_string();
+        let ch_id_num = channel_id.parse::<u32>().unwrap();
+
+        // 模拟 Agent TCP→Hub 编码：前缀 = channel_id 的 u32 大端。
+        let mut frame = ch_id_num.to_be_bytes().to_vec();
+        frame.extend_from_slice(b"shell output");
+
+        // 模拟 Hub 解码：读前 4 字节 → 键。
+        let decoded = u32::from_be_bytes([frame[0], frame[1], frame[2], frame[3]]);
+        assert_eq!(decoded.to_string(), channel_id);
+        assert_eq!(&frame[4..], b"shell output");
     }
 }
