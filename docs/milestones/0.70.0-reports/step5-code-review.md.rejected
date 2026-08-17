@@ -1,0 +1,42 @@
+# 代码审查：0.70.0 SIP 电话资源基础
+
+## 变更概览
+
+- **变更文件**：41 个（`git diff --name-only milestone-0.70.0-start`），核心为 `crates/rex-sip/*`（新增 FFI crate）、`crates/rex-hub/src/{sip_ws,agent_ws,resource_conn,resource_api}.rs`、`crates/rex-agent/src/agent_ws.rs`、前端 `features/sip/*` + 资源向导 SIP 段。
+- **审查方式**：3 路并行审查 agent（Hub/Agent 隧道、rex-sip FFI、前端 SIP/向导），逐文件 + 跨文件交叉核对；关键 🔴 由主线程独立读源码复核。
+- **审查维度**：正确性、安全性、健壮性（错误处理/资源释放/并发安全）、可维护性、性能、规范（AGENTS.md 无 `## 代码审查维度`，采用 devflow-review 内置默认集）。
+
+## 问题列表
+
+| # | 严重程度 | 文件 | 行号 | 描述 |
+|---|----------|------|------|------|
+| 1 | 🔴 | `packages/rex-console-web/src/features/resource/WizardModal.vue` | 118-122 | SIP 向导 `buildConfig()` 的 `sip` 分支只序列化 `server/displayName/transport`，**漏掉 `password`**（其余协议 ssh/mysql/redis 均写 `cfg.password`）。后端 `load_sip_conn`（`resource_conn.rs:98-101`）只从 `config.password` 读密码，且 `submit()` 不在顶层传 password。结果：任何需认证的 SIP 中继静默以匿名注册/失败，用户填的密码被丢弃。"测试连接" 亦因用同一 `buildConfig()` 而失效。 |
+| 2 | 🔴 | `crates/rex-sip/src/baresip_ua.rs` | 299,303,320,334 | **递归 `std::sync::Mutex` 死锁**：`bevent_cb` 在 line 299 锁 `STATE`，随后 line 303 调用 `map_bevent`，其 `BEVENT_CALL_INCOMING` 分支 line 320 调 `state_calls_insert`（line 334 再次 `STATE.lock()`）。`std::sync::Mutex` 不可重入 → 首个来电即死锁，整个 SIP 子系统永久冻结。 |
+| 3 | 🔴 | `crates/rex-sip/src/baresip_ua.rs` | 147,175 | **每 `SipUa::real()` 重复初始化**：`new()` 每次调用都 `baresip_init`（line 147）并无条件 `std::thread::spawn(re_main)`（line 175）。`STATE` 为进程全局单例，Hub 每开一个 SIP WS 就建一个 `SipUa`。两个 SIP 资源 ⇒ 两个 `re_main` 线程争抢同一个 baresip 全局实例，且 `calls` 指针表跨 UA 共享 → 卡死或状态错乱。baresip 设计为每进程仅一个 `re_main`。 |
+| 4 | 🔴 | `crates/rex-sip/src/baresip_ua.rs` | 238,326 | **悬垂指针（UAF）**：`calls: Mutex<HashMap<String,*mut call>>` 仅在 `hangup`（line 238）移除条目；`BEVENT_CALL_CLOSED`（line 326）只 emit 事件、**不移除**。baresip 在 CALL_CLOSED 后释放 `struct call`，但 map 仍持有该裸指针；此后对该 `call_id` 的 `dtmf`/`hold`/`unhold`（line 244-267）解引用已释放指针 → UB。 |
+| 5 | 🔴 | `crates/rex-sip/src/baresip_ua.rs` | 188-267 | **跨线程调用 baresip API（数据竞争/UB）**：`register/dial/answer/hangup/hold/unhold/dtmf` 在 tokio worker 线程上执行 `ua_register/ua_connect/ua_answer/ua_hangup/call_hold/call_send_digit`，而 `re_main` 跑在独立 OS 线程。baresip/libre 是单线程主循环模型，跨线程访问内部状态构成数据竞争（本 crate 注释 line 120-123 声称"仅事件跨线程"，但控制 API 实际违反了该约定）。 |
+| 6 | 🟡 | `crates/rex-hub/src/sip_ws.rs` | 199-202,226-227,248-251 | `pending_requests` oneshot 泄漏：send-failure 与 timeout 两条 early-return 路径丢弃 `resp_rx` 但**未从 map 移除 `resp_tx`**，且 `handle_agent_socket` 清理时不清 `pending_requests`。每次失败/超时的 SIP connect 永久残留一项（与 terminal_ws/tunnel_ws 既有同类问题同源）。 |
+| 7 | 🟡 | `crates/rex-agent/src/agent_ws.rs` | 714 | Agent SIP 会话结束（`run_sip_ua2` → `cleanup_sip_channel`）只 `chs.remove(channel_id)`，**不发 `AgentMsg::Closed`**（对照 `handle_connect` line 549-555）。前端仍连接时 Agent 侧 UA₂ 结束 → Hub 仍保留 `tunnel_data[channel_id]` 并持续转发 `SipControl`，Agent 读循环 lookup 失败静默丢帧，前端拨号无任何反馈。 |
+| 8 | 🟡 | `crates/rex-sip/src/baresip_ua.rs` | 153 | `port`/`transport` 被解析但 AOR 构造为 `sip:{username}@{server}`（line 153），**未带端口与 transport**。配了非默认端口（测试断言 5061）仍连 5060；`transport:"tls"` 无法生效，违反 `load_sip_conn` 的配置契约。 |
+| 9 | 🟡 | `crates/rex-sip/src/baresip_ua.rs` | 288-295 | 无关闭路径：`Drop` 仅 `ua_stop_register`，全 crate 无 `re_cancel`/`baresip_close`/`ua_close`。`re_main` 线程 spawn 后永不退出（detached JoinHandle），dropped `SipUa` 无法停止事件循环或释放 `ua`。 |
+| 10 | 🟡 | `packages/rex-console-web/src/api/sip.ts` | 70-74 | WS 断线后 `onclose` 仅 `stopHeartbeat`+`onClose`，**无重连**。隧道抖动（Hub 重启/Agent 重连/网络闪断）后 SIP 面板永久 `disconnected` 不恢复。 |
+| 11 | 🟡 | `packages/rex-console-web/src/features/sip/SipPage.vue` | 40-44,58-69 | 单槽 `incoming`/`currentCall`：第二个来电覆盖第一个；`applyCallState` 用 `currentCall?.from ?? incoming?.from` 派生 from，拨号后收到 `call_state` 会误用 incoming 的 from 标注外呼。 |
+| 12 | 🟢 | `packages/rex-console-web/src/features/sip/SipPage.vue` | 48-51 | `sip.error` 一律写入 `registrationFailed` 并置 `error` 态，通话中报错（如 DTMF 被拒）会误显"注册失败"。 |
+| 13 | 🟢 | `packages/rex-console-web/src/features/sip/Dialpad.vue` | 14,28-31 | 拨号前无号码格式校验，可提交任意串（如 `abc`）。 |
+| 14 | 🟢 | `crates/rex-sip/src/lib.rs` | 55 | `SipConfig` 派生 `Debug`，密码明文 footgun（当前未 log，但未来 `tracing::debug!("{:?}", cfg)` 会泄露）。 |
+
+## 已确认正确的区域 ✅
+
+- **隧道帧前缀剥离次数**：Agent `send_sip_event` 与 Hub→Agent 控制各加一次 4 字节前缀；Hub `/ws/agent` 读循环仅剥一次（`agent_ws.rs:350-352`）；`decode_tunnel_sip_event` 不再跳过字节（回归 #7 已修）。轮转测试 `agent_tunnel_frame_not_double_stripped` 等验证通过。
+- **`run_sip_ua2` 生命周期**：event_task/ctrl_task 均自终止，`LocalChannel` 条目 register 失败与 `select!` 后必删，`Arc<SipUa>` 随任务结束释放。无泄漏。
+- **鉴权**：`/ws/sip` 位于 `protected_routes`，携带 `AuthUser` JWT 中间件（同 `/ws/terminal`）。
+- **XSS**：SIP 组件无 `v-html`，`from`/`reason`/`raw` 均经 `{{ }}` 转义；拨号号码仅进 `<input v-model>` 与 JSON 载荷。
+- **serde 契约**：`CallState`/`SipEvent`/`SipControl` 变体命名与 `snake_case`/`callId` 一致。前端边界统一用 `callId`；内部 `SipEvent.call_id`(snake) 经 `map_event` 映射为 `ServerMsg.callId` 后才到前端，故审查中提出的 callId/call_id 不对称**并非 bug**。
+- **i18n**：SIP 所有叶键（en/zh）齐备，向导键齐备，无硬编码用户可见文案。
+
+## 汇总
+
+- 🔴 必须修复：**5**（#1 前端密码丢失、#2 递归锁死锁、#3 重复 re_main、#4 UAF、#5 跨线程 baresip 调用）
+- 🟡 应该修复：6（#6-#11）
+- 🟢 可选改进：3（#12-#14）
+- **结论**：存在 🔴 必须修复项 → 步骤5 不通过，按打回动作回到步骤3 修复后重跑 4→5→6→7。
