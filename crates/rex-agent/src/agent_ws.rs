@@ -632,7 +632,7 @@ async fn handle_connect_sip(
     let _ = evt_tx.send(AgentEvent::Text(ok_msg)).await;
 
     // 注册 channel（用于接收 Hub 经隧道发来的 SipControl 帧）。
-    let (data_tx, mut data_rx) = mpsc::channel::<Vec<u8>>(512);
+    let (data_tx, data_rx) = mpsc::channel::<Vec<u8>>(512);
     {
         let mut chs = channels.write().await;
         chs.insert(
