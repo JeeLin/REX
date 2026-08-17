@@ -606,7 +606,7 @@ async fn handle_connect_sip(
         }
     };
 
-    let ua = match rex_sip::SipUa::real(sip_cfg) {
+    let ua = match rex_sip::SipUa::real(sip_cfg).await {
         Ok(ua) => ua,
         Err(e) => {
             let err_msg = serde_json::to_string(&AgentMsg::ConnectError {

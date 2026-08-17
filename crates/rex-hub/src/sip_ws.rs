@@ -153,7 +153,7 @@ async fn handle_socket(mut ws: WebSocket, state: AppState, resource_id: String) 
         "SIP UA connection initiated"
     );
 
-    let ua = match SipUa::real(sip_cfg) {
+    let ua = match SipUa::real(sip_cfg).await {
         Ok(ua) => Arc::new(ua),
         Err(e) => {
             let _ = send_ws_error(&mut ws, &format!("SIP UA init failed: {e}")).await;
