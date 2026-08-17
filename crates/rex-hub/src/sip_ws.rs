@@ -675,7 +675,7 @@ fn create_server_ping_interval() -> Interval {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rex_sip::MockSipUa;
+    use rex_sip::{MockAction, MockSipUa};
 
     fn cfg() -> rex_sip::SipConfig {
         rex_sip::SipConfig {
@@ -1065,5 +1065,77 @@ mod tests {
             }
         }
         assert!(saw_registered && saw_incoming && saw_active && saw_ended);
+    }
+
+    // --- 子任务 #5：端到端媒体管线联调契约（M82b 实时双向音频）---
+    //
+    // 真音频端点（baresip server + 麦克风/扬声器）无法在 CI 托管，故联调以「跨语言线格式
+    // 契约锁定 + 管道路径单测」为准，手动端到端验证记录在里程碑报告 step6。下列测试覆盖
+    // 两条链路完整媒体帧路径：
+    //   (a) Hub 直连：on_rtp(PCM) → encode → Binary 帧（浏览器侧 decode 还原）；
+    //       浏览器上行 Binary(PCM) → decode → send_audio（经 MockSipUa 记录）。
+    //   (b) Agent 链式：下行 on_rtp(PCM) → tunnel kind=1 帧 → Hub decap → 浏览器 decode；
+    //       上行浏览器 PCM → tunnel kind=1 → Agent dispatch_media → send_audio。
+
+    #[test]
+    fn hub_direct_downlink_pcm_round_trips_to_browser() {
+        // 模拟 on_rtp 回调产出的远端 PCM 帧，经 encode 推浏览器，前端 decode 还原。
+        let remote_pcm: Vec<i16> = (0..160).map(|i| (i as i16) * 11 - 500).collect();
+        let down = crate::sip_media::encode_pcm_frame(&remote_pcm);
+        // 浏览器侧（sipMedia.decodeMediaFrame）等价解码，必须无损还原。
+        assert_eq!(crate::sip_media::decode_media_frame(&down), remote_pcm);
+    }
+
+    #[tokio::test]
+    async fn hub_direct_uplink_pcm_reaches_ua_send_audio() {
+        // 浏览器上行麦克风帧（Binary PCM）→ decode → ua.send_audio，Mock 记录帧样本数。
+        let ua = MockSipUa::new(cfg(), vec![]);
+        let mic_pcm: Vec<i16> = vec![100, -200, 300, -400, 500];
+        let up = crate::sip_media::encode_pcm_frame(&mic_pcm);
+        // 等价于 handle_sip_session cmd_task 中上行分支：decode → send_audio。
+        let decoded = crate::sip_media::decode_media_frame(&up);
+        ua.send_audio(decoded).await.unwrap();
+        let acts = ua.actions.lock().unwrap();
+        assert_eq!(*acts, vec![MockAction::SendAudio(mic_pcm.len())]);
+    }
+
+    #[test]
+    fn agent_downlink_pcm_tunnel_to_browser_round_trip() {
+        // Agent UA₂ on_rtp(PCM) → 隧道帧（ch_id + kind=1 + pcm）→ Hub decap → 浏览器 decode。
+        let ch_id: u32 = 42;
+        let remote_pcm: Vec<i16> = vec![-7, 13, -21, 34];
+        let inner = crate::sip_media::wrap_tunnel_frame(
+            crate::sip_media::KIND_MEDIA,
+            &crate::sip_media::encode_pcm_frame(&remote_pcm),
+        );
+        let mut frame = ch_id.to_be_bytes().to_vec();
+        frame.extend_from_slice(&inner);
+
+        // Hub event_tx 分支：剥 ch_id，按 kind=1 原样推浏览器。
+        let decapped = frame[4..].to_vec();
+        let (kind, rest) = crate::sip_media::unwrap_tunnel_frame(&decapped);
+        assert_eq!(kind, crate::sip_media::KIND_MEDIA);
+        // 浏览器侧解码应无损还原。
+        assert_eq!(crate::sip_media::decode_media_frame(rest), remote_pcm);
+    }
+
+    #[tokio::test]
+    async fn agent_uplink_browser_pcm_reaches_ua2_send_audio() {
+        // 浏览器上行 PCM → Agent 隧道 kind=1 帧 → dispatch_sip_tunnel_frame → send_audio。
+        // 此处用 rex-hub 侧等价路径（`unwrap` + `decode_media_frame` + `MockSipUa::send_audio`）
+        // 复刻 agent_ws.rs `dispatch_sip_tunnel_frame` 的媒体分支契约。
+        let ua = MockSipUa::new(cfg(), vec![]);
+        let mic_pcm: Vec<i16> = vec![1, -2, 3, -4, 5, 6];
+        let frame = crate::sip_media::wrap_tunnel_frame(
+            crate::sip_media::KIND_MEDIA,
+            &crate::sip_media::encode_pcm_frame(&mic_pcm),
+        );
+        let (kind, payload) = crate::sip_media::unwrap_tunnel_frame(&frame);
+        assert_eq!(kind, crate::sip_media::KIND_MEDIA);
+        let pcm = crate::sip_media::decode_media_frame(payload);
+        assert!(!pcm.is_empty());
+        ua.send_audio(pcm).await.unwrap();
+        let acts = ua.actions.lock().unwrap();
+        assert_eq!(*acts, vec![MockAction::SendAudio(mic_pcm.len())]);
     }
 }

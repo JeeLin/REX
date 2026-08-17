@@ -84,7 +84,7 @@ export class SipAudio {
     if (!this.supported || !this.createCtx || this.ctx) return
     const ctx = new this.createCtx()
     this.ctx = ctx
-    const node = ctx.createScriptProcessor(4096, 1, 1)
+    const node = ctx.createScriptProcessor(2048, 1, 1)
     node.onaudioprocess = (e: AudioProcessingEvent) => {
       const out = e.outputBuffer.getChannelData(0)
       let i = 0
@@ -119,7 +119,7 @@ export class SipAudio {
     if (this.micActive) return
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     const source = this.ctx.createMediaStreamSource(stream)
-    const node = this.ctx.createScriptProcessor(4096, 1, 1)
+    const node = this.ctx.createScriptProcessor(2048, 1, 1)
     const sink = this.ctx.createGain()
     sink.gain.value = 0 // 捕获路径不外放，避免回声
     node.onaudioprocess = (e: AudioProcessingEvent) => {
