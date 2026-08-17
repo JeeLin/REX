@@ -7,6 +7,7 @@ export const PROTOCOL_ICONS: Record<string, string> = {
   redis: 'R',
   sqlite: 'S',
   s3: '☁',
+  sip: '☎',
 }
 
 export const PROTOCOL_COLORS: Record<string, string> = {
@@ -17,6 +18,7 @@ export const PROTOCOL_COLORS: Record<string, string> = {
   redis: '#F85149',
   sqlite: '#D29922',
   s3: '#E8912D',
+  sip: '#2DD4BF',
 }
 
 export const PROTOCOL_NAMES: Record<string, string> = {
@@ -27,6 +29,7 @@ export const PROTOCOL_NAMES: Record<string, string> = {
   redis: 'Redis',
   sqlite: 'SQLite',
   s3: 'S3 / MinIO',
+  sip: 'SIP Phone',
 }
 
 export type ProtocolType = keyof typeof PROTOCOL_ICONS

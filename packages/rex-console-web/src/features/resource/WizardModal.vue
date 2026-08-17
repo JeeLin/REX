@@ -32,6 +32,7 @@ const protocols = [
   { id: 'redis', descKey: 'wizard.redisDesc' },
   { id: 'sqlite', descKey: 'wizard.sqliteDesc' },
   { id: 's3', descKey: 'wizard.s3Desc' },
+  { id: 'sip', descKey: 'wizard.sipDesc' },
 ]
 const selectedProtocol = ref('')
 
@@ -54,13 +55,16 @@ const s3SecretKey = ref('')
 const s3Bucket = ref('')
 const s3Region = ref('')
 const redisDb = ref(0)
+const sipServer = ref('')
+const sipDisplay = ref('')
+const sipTransport = ref<'udp' | 'tcp' | 'tls'>('udp')
 
 // Test connection
 const testResult = ref<TestConnectionResult | null>(null)
 const testLoading = ref(false)
 
 const defaultPorts: Record<string, number> = {
-  ssh: 22, sftp: 22, mysql: 3306, postgresql: 5432, redis: 6379,
+  ssh: 22, sftp: 22, mysql: 3306, postgresql: 5432, redis: 6379, sip: 5060,
 }
 
 function selectProtocol(id: string) {
@@ -78,7 +82,7 @@ async function testConnection() {
   try {
     testResult.value = await store.testConnection({
       protocol: selectedProtocol.value,
-      host: selectedProtocol.value === 'sqlite' ? filePath.value : host.value,
+      host: resourceHost(),
       port: port.value,
       username: username.value,
       config_json: JSON.stringify(buildConfig()),
@@ -111,8 +115,20 @@ function buildConfig(): Record<string, unknown> {
     cfg.secret_key = s3SecretKey.value
     cfg.bucket = s3Bucket.value
     cfg.region = s3Region.value || 'us-east-1'
+  } else if (selectedProtocol.value === 'sip') {
+    cfg.server = sipServer.value
+    if (sipDisplay.value.trim()) cfg.displayName = sipDisplay.value
+    cfg.transport = sipTransport.value
   }
   return cfg
+}
+
+// 资源顶层 host：sqlite 用 file_path；s3 用 endpoint；sip 用 SIP server 地址。
+function resourceHost(): string {
+  if (selectedProtocol.value === 'sqlite') return filePath.value
+  if (selectedProtocol.value === 's3') return s3Endpoint.value
+  if (selectedProtocol.value === 'sip') return sipServer.value
+  return host.value
 }
 
 async function submit() {
@@ -122,7 +138,7 @@ async function submit() {
     await store.createResource(props.environmentId, {
       name: resName.value.trim(),
       protocol: selectedProtocol.value,
-      host: selectedProtocol.value === 'sqlite' ? filePath.value : (selectedProtocol.value === 's3' ? s3Endpoint.value : host.value),
+      host: resourceHost(),
       port: port.value,
       username: username.value || undefined,
       config_json: JSON.stringify(buildConfig()),
@@ -155,6 +171,9 @@ function reset() {
   s3Bucket.value = ''
   s3Region.value = ''
   redisDb.value = 0
+  sipServer.value = ''
+  sipDisplay.value = ''
+  sipTransport.value = 'udp'
   testResult.value = null
   error.value = ''
 }
@@ -313,6 +332,38 @@ const colorOptions = [
           <label class="form-label">
             <span>{{ t('wizard.s3Region') }}</span>
             <input v-model="s3Region" type="text" class="form-input" placeholder="us-east-1" />
+          </label>
+        </template>
+
+        <!-- SIP -->
+        <template v-if="selectedProtocol === 'sip'">
+          <label class="form-label">
+            <span>{{ t('wizard.sipServer') }}</span>
+            <input v-model="sipServer" type="text" class="form-input" placeholder="e.g. sip.example.com" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.port') }}</span>
+            <input v-model.number="port" type="number" class="form-input" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.username') }}</span>
+            <input v-model="username" type="text" class="form-input" placeholder="e.g. 1000" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.password') }}</span>
+            <input v-model="password" type="password" class="form-input" placeholder="(optional for anonymous)" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.sipDisplayName') }}</span>
+            <input v-model="sipDisplay" type="text" class="form-input" placeholder="(optional) e.g. Alice" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.sipTransport') }}</span>
+            <select v-model="sipTransport" class="form-input">
+              <option value="udp">UDP</option>
+              <option value="tcp">TCP</option>
+              <option value="tls">TLS</option>
+            </select>
           </label>
         </template>
 
