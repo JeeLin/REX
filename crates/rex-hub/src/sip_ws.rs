@@ -324,13 +324,14 @@ async fn handle_agent_sip(
     let event_channel_id = channel_id.clone();
     let event_tx = tokio::spawn(async move {
         while let Some(data) = data_rx.recv().await {
-            if data.len() < 4 {
-                continue;
-            }
-            let ev: rex_sip::SipEvent = match serde_json::from_slice(&data[4..]) {
-                Ok(e) => e,
-                Err(e) => {
-                    tracing::warn!(action = "SIP_AGENT_EVENT_PARSE", channel_id = %event_channel_id, error = %e, "invalid SipEvent frame");
+            // `data` 来自 `tunnel_data`：Agent 经 `/ws/agent` 隧道发来的二进制帧已由
+            // `agent_ws.rs` 的读取循环剥去 4 字节 channelId 前缀，这里已是纯 SipEvent JSON。
+            // 切勿再跳过 4 字节（回归 #7：此前错误地 `data[4..]`，截掉 JSON 头部导致
+            // 所有 Agent 回传的 SipEvent 解析失败、被丢弃，前端永远收不到来电/通话状态）。
+            let ev = match decode_tunnel_sip_event(&data) {
+                Some(e) => e,
+                None => {
+                    tracing::warn!(action = "SIP_AGENT_EVENT_PARSE", channel_id = %event_channel_id, "invalid SipEvent frame");
                     continue;
                 }
             };
@@ -544,6 +545,15 @@ fn call_state_str(s: CallState) -> String {
         CallState::Ended => "ended",
     }
     .to_string()
+}
+
+/// 解析经隧道回 Hub 的 SipEvent 帧。
+///
+/// `data` 来自 `tunnel_data`：Agent 的 UA₂ 经 `send_sip_event` 所发 `[4B channelId][SipEvent JSON]`
+/// 二进制帧，已由 `agent_ws.rs` 的 `/ws/agent` 读取循环剥去 4 字节 channelId 前缀，此处已是纯
+/// `SipEvent` JSON，直接反序列化即可（不要再跳过 4 字节 —— 见回归 #7）。
+fn decode_tunnel_sip_event(data: &[u8]) -> Option<rex_sip::SipEvent> {
+    serde_json::from_slice(data).ok()
 }
 
 /// 将前端控制消息分发到 UA。返回 `Err` 表示需要向用户报告的错误。
@@ -763,5 +773,148 @@ mod tests {
         let s = serde_json::to_string(&m).unwrap();
         assert!(s.contains("registration_failed"));
         assert!(s.contains("auth failed"));
+    }
+
+    // --- 子任务 #7：前后端联调（契约锁定 + Agent 链路回归）---
+    //
+    // CI 无法托管真 SIP server，联调以「合约测试 + 手动验证」为准（见里程碑文档 #7）。
+    // 下列测试锁定两条链路的关键契约：
+    //   (a) Hub UA₁ 直连：SipEvent → 前端 ServerMsg 的 JSON 字段（callId camelCase / state snake_case）；
+    //   (b) Agent UA₂ 链式：Agent 经隧道回 Hub 的 `[4B channelId][SipEvent JSON]` 二进制帧，在
+    //       被 `/ws/agent` 读取循环剥去 4 字节前缀后，必须能被 `decode_tunnel_sip_event` 正确还原
+    //       —— 这是 #7 回归 bug（之前错误地再跳过 4 字节导致 JSON 头部被截、事件全丢）的对锁。
+
+    // 模拟 Agent 经隧道发回 Hub 的二进制帧：前 4 字节为 channelId（u32 大端）。
+    fn agent_tunnel_frame(channel_id: u32, ev: &rex_sip::SipEvent) -> Vec<u8> {
+        let mut frame = channel_id.to_be_bytes().to_vec();
+        let json = serde_json::to_vec(ev).unwrap();
+        frame.extend_from_slice(&json);
+        frame
+    }
+
+    #[test]
+    fn agent_tunnel_frame_round_trips_through_hub_decapsulation() {
+        // Agent 端 send_sip_event 构造的帧：IncomingCall。
+        let ev = SipEvent::IncomingCall {
+            call_id: "call-1".into(),
+            from: "2000@example.com".into(),
+        };
+        let frame = agent_tunnel_frame(2, &ev);
+
+        // Hub `/ws/agent` 读取循环剥去前 4 字节 channelId（见 agent_ws.rs:347-361）。
+        assert!(frame.len() >= 4);
+        let decapsulated = frame[4..].to_vec();
+
+        // Hub SIP 事件任务用 decode_tunnel_sip_event 反序列化（不要再跳过 4 字节）。
+        let got = decode_tunnel_sip_event(&decapsulated).expect("decoded SipEvent");
+        assert_eq!(
+            got,
+            SipEvent::IncomingCall {
+                call_id: "call-1".into(),
+                from: "2000@example.com".into()
+            }
+        );
+    }
+
+    #[test]
+    fn agent_tunnel_frame_not_double_stripped() {
+        // 回归 #7：旧代码 `serde_json::from_slice(&data[4..])` 在 decapsulated 上再跳 4 字节，
+        // 截掉 `{"ty` 导致解析失败。这里断言新代码直接反序列化成功、旧代码必失败。
+        let ev = SipEvent::CallState {
+            call_id: "call-1".into(),
+            state: CallState::Active,
+        };
+        let decapsulated = agent_tunnel_frame(7, &ev)[4..].to_vec();
+
+        // 新代码：成功。
+        assert!(decode_tunnel_sip_event(&decapsulated).is_some());
+
+        // 旧代码（双重剥离）：必失败 —— 证明 bug 已被修复。
+        let old_decode: Option<rex_sip::SipEvent> = serde_json::from_slice(&decapsulated[4..]).ok();
+        assert!(
+            old_decode.is_none(),
+            "旧代码的双重剥离应失败，否则回归未真正修复"
+        );
+    }
+
+    #[test]
+    fn agent_event_maps_to_frontend_contract() {
+        // Agent 链路的 SipEvent 经 tunnel 回 Hub 后，必须映射成前端 decodeEvent 期望的 JSON：
+        // `sip.incoming` payload 含 camelCase `callId`；`sip.call_state` payload 含 snake_case state。
+        let incoming = decode_tunnel_sip_event(
+            &agent_tunnel_frame(
+                3,
+                &SipEvent::IncomingCall {
+                    call_id: "call-9".into(),
+                    from: "3000@example.com".into(),
+                },
+            )[4..],
+        )
+        .unwrap();
+        let incoming_json = serde_json::to_string(&map_event(incoming).unwrap()).unwrap();
+        assert!(incoming_json.contains("sip.incoming"));
+        assert!(incoming_json.contains("\"callId\":\"call-9\""));
+        assert!(incoming_json.contains("\"from\":\"3000@example.com\""));
+
+        let call_state = decode_tunnel_sip_event(
+            &agent_tunnel_frame(
+                3,
+                &SipEvent::CallState {
+                    call_id: "call-9".into(),
+                    state: CallState::Active,
+                },
+            )[4..],
+        )
+        .unwrap();
+        let cs_json = serde_json::to_string(&map_event(call_state).unwrap()).unwrap();
+        assert!(cs_json.contains("sip.call_state"));
+        assert!(cs_json.contains("\"callId\":\"call-9\""));
+        assert!(cs_json.contains("\"state\":\"active\""));
+    }
+
+    #[test]
+    fn full_agent_chain_signaling_sequence() {
+        // 模拟 Agent 链式一通信令的完整事件流（前端期望看到的序列）：
+        // registered → incoming → call_state:Active → call_state:Ended。
+        let events = vec![
+            SipEvent::Registered,
+            SipEvent::IncomingCall {
+                call_id: "call-1".into(),
+                from: "2000@example.com".into(),
+            },
+            SipEvent::CallState {
+                call_id: "call-1".into(),
+                state: CallState::Active,
+            },
+            SipEvent::CallState {
+                call_id: "call-1".into(),
+                state: CallState::Ended,
+            },
+        ];
+        let mut saw_registered = false;
+        let mut saw_incoming = false;
+        let mut saw_active = false;
+        let mut saw_ended = false;
+        for ev in &events {
+            let decapsulated = agent_tunnel_frame(1, ev)[4..].to_vec();
+            let parsed = decode_tunnel_sip_event(&decapsulated).expect("round-trip");
+            let json = serde_json::to_string(&map_event(parsed).unwrap()).unwrap();
+            if json.contains("sip.registered") {
+                saw_registered = true;
+            }
+            if json.contains("sip.incoming") {
+                assert!(json.contains("\"callId\":\"call-1\""));
+                saw_incoming = true;
+            }
+            if json.contains("sip.call_state") {
+                if json.contains("\"state\":\"active\"") {
+                    saw_active = true;
+                }
+                if json.contains("\"state\":\"ended\"") {
+                    saw_ended = true;
+                }
+            }
+        }
+        assert!(saw_registered && saw_incoming && saw_active && saw_ended);
     }
 }
