@@ -24,6 +24,12 @@ use tokio::time::Interval;
 use crate::app::AppState;
 use crate::resource_conn::{load_resource_config, load_sip_conn};
 
+/// 统一出站帧：事件为 Text（JSON），媒体为 Binary（原始 S16LE PCM）。
+enum Outbound {
+    Text(String),
+    Binary(Vec<u8>),
+}
+
 /// 前端 → 后端的控制消息
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
@@ -253,7 +259,7 @@ async fn handle_agent_sip(
 
     tracing::info!(action = "SIP_AGENT_CONNECTED", agent_id = %agent_id, channel_id = %channel_id, resource_id = %resource_id, "agent SIP UA2 tunnel established");
 
-    // 通知前端连接成功。
+    // 通知前端连接成功（直发，未进统一出站通道）。
     let (mut ws_sink, mut ws_stream) = ws.split();
     if ws_sink
         .send(Message::Text(
@@ -266,6 +272,8 @@ async fn handle_agent_sip(
     {
         return;
     }
+    // 统一出站通道：Agent 回传的信令/媒体帧经此发往浏览器（单一 writer 独占 ws_sink）。
+    let (out_tx, mut out_rx) = mpsc::channel::<Outbound>(128);
     // 注意：Registered 帧仅表示隧道就绪，真实注册结果由 Agent UA₂ 经 SipEvent 回推。
 
     // 注册 tunnel data channel（接收 Agent 回传的 SipEvent 二进制帧）。
@@ -297,6 +305,18 @@ async fn handle_agent_sip(
                         }
                     }
                 }
+                // 浏览器上行麦克风 PCM（S16LE 二进制帧）→ 隧道媒体帧（kind=1）发给 Agent UA₂。
+                Ok(Message::Binary(bytes)) => {
+                    let media =
+                        crate::sip_media::wrap_tunnel_frame(crate::sip_media::KIND_MEDIA, &bytes);
+                    let mut frame = Vec::with_capacity(4 + media.len());
+                    frame.extend_from_slice(&ch_id_num.to_be_bytes());
+                    frame.extend_from_slice(&media);
+                    let _ = agent_for_send
+                        .sender
+                        .send(crate::agent_ws::AgentEvent::Bytes(frame))
+                        .await;
+                }
                 Ok(Message::Close(_)) | Err(_) => break,
                 _ => {}
             }
@@ -314,27 +334,56 @@ async fn handle_agent_sip(
             .await;
     });
 
-    // Agent SipEvent 帧 → 前端 ServerMsg。
+    // Agent 回传帧 → 前端（经统一出站通道）。隧道 payload 首字节为 kind：
+    // kind=0 信令（SipEvent JSON），kind=1 媒体（PCM 二进制帧）。
     let event_channel_id = channel_id.clone();
+    let out_tx_for_event = out_tx.clone();
     let event_tx = tokio::spawn(async move {
         while let Some(data) = data_rx.recv().await {
-            // `data` 来自 `tunnel_data`：Agent 经 `/ws/agent` 隧道发来的二进制帧已由
-            // `agent_ws.rs` 的读取循环剥去 4 字节 channelId 前缀，这里已是纯 SipEvent JSON。
-            // 切勿再跳过 4 字节（回归 #7：此前错误地 `data[4..]`，截掉 JSON 头部导致
-            // 所有 Agent 回传的 SipEvent 解析失败、被丢弃，前端永远收不到来电/通话状态）。
-            let ev = match decode_tunnel_sip_event(&data) {
-                Some(e) => e,
-                None => {
-                    tracing::warn!(action = "SIP_AGENT_EVENT_PARSE", channel_id = %event_channel_id, "invalid SipEvent frame");
-                    continue;
-                }
-            };
-            if let Some(msg) = map_event(ev) {
-                if let Ok(s) = serde_json::to_string(&msg) {
-                    if ws_sink.send(Message::Text(s.into())).await.is_err() {
+            // `data` 来自 `tunnel_data`：Agent 经 `/ws/agent` 隧道发来的帧已由
+            // `agent_ws.rs` 读取循环剥去 4 字节 channelId 前缀，此处 payload = `[1B kind][rest]`。
+            let (kind, rest) = crate::sip_media::unwrap_tunnel_frame(&data);
+            match kind {
+                crate::sip_media::KIND_MEDIA => {
+                    // 媒体帧（Agent UA₂ 抽出的下行 PCM）→ 原样推浏览器播放。
+                    if out_tx_for_event
+                        .send(Outbound::Binary(rest.to_vec()))
+                        .await
+                        .is_err()
+                    {
                         break;
                     }
                 }
+                _ => {
+                    // 信令帧：SipEvent JSON → 前端 ServerMsg。
+                    let ev = match decode_tunnel_sip_event(rest) {
+                        Some(e) => e,
+                        None => {
+                            tracing::warn!(action = "SIP_AGENT_EVENT_PARSE", channel_id = %event_channel_id, "invalid SipEvent frame");
+                            continue;
+                        }
+                    };
+                    if let Some(msg) = map_event(ev) {
+                        if let Ok(s) = serde_json::to_string(&msg) {
+                            if out_tx_for_event.send(Outbound::Text(s)).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // 单一 writer：消费统一出站通道，独占 ws_sink。
+    let writer = tokio::spawn(async move {
+        while let Some(out) = out_rx.recv().await {
+            let msg = match out {
+                Outbound::Text(s) => Message::Text(s.into()),
+                Outbound::Binary(b) => Message::Binary(b.into()),
+            };
+            if ws_sink.send(msg).await.is_err() {
+                break;
             }
         }
     });
@@ -362,6 +411,7 @@ async fn handle_agent_sip(
     tokio::select! {
         _ = frontend_to_agent => {},
         _ = event_tx => {},
+        _ = writer => {},
         _ = ping_task => {},
     }
 
@@ -418,7 +468,7 @@ async fn find_online_agent(state: &AppState, resource_id: &str) -> Option<String
     .flatten()
 }
 
-/// 真正的信令会话：注册 + 事件回推 + 控制指令下发
+/// 真正的信令会话：注册 + 事件回推 + 控制指令下发 + 实时音频媒体通道（M82b）
 async fn handle_sip_session(mut ws: WebSocket, ua: Arc<SipUa>, resource_id: &str) {
     // 注册 UA
     if let Err(e) = ua.register().await {
@@ -429,8 +479,6 @@ async fn handle_sip_session(mut ws: WebSocket, ua: Arc<SipUa>, resource_id: &str
     // 事件回推任务：baresip 事件流 → 前端帧
     let mut events = ua.events();
     let (event_tx, mut event_rx) = mpsc::channel::<ServerMsg>(64);
-    let event_tx_for_cmd = event_tx.clone();
-    let event_tx_for_ping = event_tx.clone();
     let event_pump = tokio::spawn(async move {
         while let Some(ev) = events.recv().await {
             if let Some(msg) = map_event(ev) {
@@ -443,8 +491,22 @@ async fn handle_sip_session(mut ws: WebSocket, ua: Arc<SipUa>, resource_id: &str
 
     let (mut ws_sink, mut ws_stream) = ws.split();
 
-    // 前端 → UA 控制指令任务
+    // 统一出站通道：事件（Text）与媒体（Binary）都经此发往浏览器，由单一 writer 任务
+    // 独占 ws_sink（SplitSink 不 Clone，故不能多任务各持一份）。
+    let (out_tx, mut out_rx) = mpsc::channel::<Outbound>(128);
+
+    // --- 实时音频媒体通道（M82b）：baresip 抽出的 RX PCM → on_rtp 回调 → PCM 帧 →
+    //     经 out_tx 交 writer 以 `Message::Binary` 推浏览器。回调在 baresip 泵线程内同步
+    //     调用，发送失败（浏览器已断）即丢弃该帧。
+    let out_tx_for_rtp = out_tx.clone();
+    ua.on_rtp(Box::new(move |pcm: &[i16]| {
+        let frame = crate::sip_media::encode_pcm_frame(pcm);
+        let _ = out_tx_for_rtp.try_send(Outbound::Binary(frame));
+    }));
+
+    // 前端 → UA 控制指令任务（兼收媒体二进制帧）
     let ua_for_cmd = ua.clone();
+    let out_tx_for_cmd = out_tx.clone();
     let cmd_task = tokio::spawn(async move {
         while let Some(msg) = ws_stream.next().await {
             match msg {
@@ -457,14 +519,26 @@ async fn handle_sip_session(mut ws: WebSocket, ua: Arc<SipUa>, resource_id: &str
                         }
                     };
                     if let Err(e) = dispatch_cmd(ua_for_cmd.as_ref(), cmd).await {
-                        if event_tx_for_cmd
-                            .send(ServerMsg::Error {
-                                payload: ReasonPayload { reason: e },
-                            })
+                        if out_tx_for_cmd
+                            .send(Outbound::Text(
+                                serde_json::to_string(&ServerMsg::Error {
+                                    payload: ReasonPayload { reason: e },
+                                })
+                                .unwrap_or_default(),
+                            ))
                             .await
                             .is_err()
                         {
                             break;
+                        }
+                    }
+                }
+                // 浏览器上行麦克风 PCM（S16LE 二进制帧）→ 解码 → 喂回 baresip 发送链路。
+                Ok(Message::Binary(bytes)) => {
+                    let pcm = crate::sip_media::decode_media_frame(&bytes);
+                    if !pcm.is_empty() {
+                        if let Err(e) = ua_for_cmd.send_audio(pcm).await {
+                            tracing::debug!(action = "SIP_MEDIA_UP", error = %e, "send_audio failed");
                         }
                     }
                 }
@@ -474,14 +548,28 @@ async fn handle_sip_session(mut ws: WebSocket, ua: Arc<SipUa>, resource_id: &str
         }
     });
 
-    // 事件 → 前端帧任务
-    let writer = tokio::spawn(async move {
+    // 事件 → 前端帧任务（经统一出站通道）
+    let out_tx_for_event = out_tx.clone();
+    let event_relay = tokio::spawn(async move {
         while let Some(msg) = event_rx.recv().await {
             let frame = match serde_json::to_string(&msg) {
                 Ok(s) => s,
                 Err(_) => continue,
             };
-            if ws_sink.send(Message::Text(frame.into())).await.is_err() {
+            if out_tx_for_event.send(Outbound::Text(frame)).await.is_err() {
+                break;
+            }
+        }
+    });
+
+    // 单一 writer：消费统一出站通道，独占 ws_sink。
+    let writer = tokio::spawn(async move {
+        while let Some(out) = out_rx.recv().await {
+            let msg = match out {
+                Outbound::Text(s) => Message::Text(s.into()),
+                Outbound::Binary(b) => Message::Binary(b.into()),
+            };
+            if ws_sink.send(msg).await.is_err() {
                 break;
             }
         }
@@ -489,10 +577,17 @@ async fn handle_sip_session(mut ws: WebSocket, ua: Arc<SipUa>, resource_id: &str
 
     // 服务端 keepalive ping（每 25 秒，防止中间件/代理超时断开）；前端忽略该帧
     let mut ping_interval = create_server_ping_interval();
+    let out_tx_for_ping = out_tx.clone();
     let ping_task = tokio::spawn(async move {
         loop {
             ping_interval.tick().await;
-            if event_tx_for_ping.send(ServerMsg::KeepAlive).await.is_err() {
+            if out_tx_for_ping
+                .send(Outbound::Text(
+                    serde_json::to_string(&ServerMsg::KeepAlive).unwrap_or_default(),
+                ))
+                .await
+                .is_err()
+            {
                 break;
             }
         }
@@ -501,6 +596,7 @@ async fn handle_sip_session(mut ws: WebSocket, ua: Arc<SipUa>, resource_id: &str
     // 任一任务结束即结束会话（其余任务在 JoinHandle drop 时自动取消）
     tokio::select! {
         _ = event_pump => {},
+        _ = event_relay => {},
         _ = cmd_task => {},
         _ = writer => {},
         _ = ping_task => {},
@@ -834,6 +930,95 @@ mod tests {
         assert!(cs_json.contains("sip.call_state"));
         assert!(cs_json.contains("\"callId\":\"call-9\""));
         assert!(cs_json.contains("\"state\":\"active\""));
+    }
+
+    // --- 子任务 #2：媒体通道契约（M82b 下行/上行 PCM 帧经隧道 kind 封装）---
+    //
+    // 直连 UA₁：浏览器↔Hub 之间媒体帧即原始 S16LE PCM 二进制（无 kind 字节，方向隐含）。
+    // Agent UA₂ 链式：Hub↔Agent 隧道上媒体帧带 1 字节 kind（KIND_MEDIA=1），与信令帧（=0）
+    // 区分，再叠加 4 字节 channelId 前缀。下列测试对锁这两条媒体路径的帧契约。
+
+    #[test]
+    fn direct_media_pcm_binary_carries_samples_no_kind() {
+        // 直连路径：前端解码后的上行 PCM 二进制帧不带 kind 字节，长度严格为样本数*2。
+        let pcm: Vec<i16> = vec![-32000, 0, 1234, 7];
+        let up = crate::sip_media::encode_pcm_frame(&pcm);
+        assert_eq!(up.len(), pcm.len() * 2);
+        // 下行（UA₁ 抽出的远端 PCM）原样推浏览器，解码后样本一致。
+        let down = crate::sip_media::decode_media_frame(&up);
+        assert_eq!(down, pcm);
+    }
+
+    #[test]
+    fn agent_downlink_media_frame_preserves_pcm_through_tunnel() {
+        // Agent UA₂ 抽出下行 PCM → 经隧道发 `[4B channelId][1B kind=1][pcm]` 给 Hub。
+        // Hub 读取循环剥去 4 字节 channelId，剩余 `[1B kind][pcm]`，由 event_tx 按 kind 分发。
+        let ch_id: u32 = 11;
+        let pcm: Vec<i16> = vec![-100, 256, -512, 1];
+        let pcm_bytes = crate::sip_media::encode_pcm_frame(&pcm);
+        // Agent 侧封装：kind + pcm。
+        let tunnel_inner =
+            crate::sip_media::wrap_tunnel_frame(crate::sip_media::KIND_MEDIA, &pcm_bytes);
+        // 叠加 channelId 前缀（agent_ws.rs 读取循环前会剥掉）。
+        let mut frame = ch_id.to_be_bytes().to_vec();
+        frame.extend_from_slice(&tunnel_inner);
+
+        // Hub 侧：剥 channelId。
+        let decapped = frame[4..].to_vec();
+        let (kind, rest) = crate::sip_media::unwrap_tunnel_frame(&decapped);
+        assert_eq!(kind, crate::sip_media::KIND_MEDIA);
+        // 媒体帧原样转 Binary 推浏览器 → 浏览器解码得到原始 PCM。
+        let got = crate::sip_media::decode_media_frame(rest);
+        assert_eq!(got, pcm);
+    }
+
+    #[test]
+    fn agent_uplink_browser_pcm_wraps_to_media_tunnel_frame() {
+        // 浏览器上行麦克风 PCM（Binary 帧）→ Hub frontend_to_agent 包裹为 tunnel 媒体帧
+        // `[4B channelId][1B kind=1][pcm]` 发给 Agent UA₂。
+        let ch_id: u32 = 5;
+        let pcm: Vec<i16> = vec![42, -42, 8000, -8000];
+        let up = crate::sip_media::encode_pcm_frame(&pcm);
+        // frontend_to_agent 逻辑：wrap kind + 加 ch_id 前缀。
+        let media = crate::sip_media::wrap_tunnel_frame(crate::sip_media::KIND_MEDIA, &up);
+        let mut frame = ch_id.to_be_bytes().to_vec();
+        frame.extend_from_slice(&media);
+        // Agent 侧剥 channelId 后，按 kind 识别为媒体帧 → decode 喂回 UA₂ 发送链路。
+        let decapped = frame[4..].to_vec();
+        let (kind, rest) = crate::sip_media::unwrap_tunnel_frame(&decapped);
+        assert_eq!(kind, crate::sip_media::KIND_MEDIA);
+        let got = crate::sip_media::decode_media_frame(rest);
+        assert_eq!(got, pcm);
+    }
+
+    #[test]
+    fn tunnel_kind_signal_vs_media_distinguished() {
+        // 同一隧道上信令帧（kind=0）与媒体帧（kind=1）必须按 kind 走不同分发分支。
+        let ch_id: u32 = 1;
+        // 信令帧：SipEvent JSON → kind=0。
+        let sig = crate::sip_media::wrap_tunnel_frame(
+            crate::sip_media::KIND_SIGNAL,
+            &serde_json::to_vec(&rex_sip::SipEvent::Registered).unwrap(),
+        );
+        let mut sig_frame = ch_id.to_be_bytes().to_vec();
+        sig_frame.extend_from_slice(&sig);
+        let sig_decap = sig_frame[4..].to_vec();
+        let (sig_kind, sig_rest) = crate::sip_media::unwrap_tunnel_frame(&sig_decap);
+        assert_eq!(sig_kind, crate::sip_media::KIND_SIGNAL);
+        assert!(decode_tunnel_sip_event(sig_rest).is_some());
+
+        // 媒体帧：随机 PCM → kind=1。
+        let pcm = vec![1i16, 2, 3];
+        let med = crate::sip_media::wrap_tunnel_frame(
+            crate::sip_media::KIND_MEDIA,
+            &crate::sip_media::encode_pcm_frame(&pcm),
+        );
+        let mut med_frame = ch_id.to_be_bytes().to_vec();
+        med_frame.extend_from_slice(&med);
+        let med_decap = med_frame[4..].to_vec();
+        let (med_kind, med_rest) = crate::sip_media::unwrap_tunnel_frame(&med_decap);
+        assert_eq!(med_kind, crate::sip_media::KIND_MEDIA);
+        assert_eq!(crate::sip_media::decode_media_frame(med_rest), pcm);
     }
 
     #[test]
