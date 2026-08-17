@@ -19,13 +19,15 @@ use tokio::sync::oneshot;
 
 // baresip / re 自动生成绑定中的类型与函数（来自 `crate::bindings` 的 include）。
 use crate::{
-    account_set_auth_pass, account_set_auth_user, baresip_init, bevent_ev_BEVENT_CALL_CLOSED,
-    bevent_ev_BEVENT_CALL_ESTABLISHED, bevent_ev_BEVENT_CALL_HOLD, bevent_ev_BEVENT_CALL_INCOMING,
-    bevent_ev_BEVENT_CALL_RESUME, bevent_ev_BEVENT_CALL_RINGING, bevent_ev_BEVENT_REGISTER_FAIL,
-    bevent_ev_BEVENT_REGISTER_OK, bevent_get_call, bevent_get_text, bevent_register, call,
-    call_hold, call_send_digit, mqueue, mqueue_alloc, mqueue_push, re_main, ua, ua_account,
-    ua_alloc, ua_answer, ua_connect, ua_hangup, ua_register, ua_stop_register, vidmode_VIDMODE_OFF,
+    account_set_auth_pass, account_set_auth_user, audio_bridge, audio_set_player, audio_set_source,
+    baresip_init, bevent_ev_BEVENT_CALL_CLOSED, bevent_ev_BEVENT_CALL_ESTABLISHED,
+    bevent_ev_BEVENT_CALL_HOLD, bevent_ev_BEVENT_CALL_INCOMING, bevent_ev_BEVENT_CALL_RESUME,
+    bevent_ev_BEVENT_CALL_RINGING, bevent_ev_BEVENT_REGISTER_FAIL, bevent_ev_BEVENT_REGISTER_OK,
+    bevent_get_call, bevent_get_text, bevent_register, call, call_audio, call_hold,
+    call_send_digit, mqueue, mqueue_alloc, mqueue_push, re_main, ua, ua_account, ua_alloc,
+    ua_answer, ua_connect, ua_hangup, ua_register, ua_stop_register, vidmode_VIDMODE_OFF,
 };
+use crate::audio_bridge::AudioBridge;
 
 /// 全局 bevent 回调的共享状态：事件 sink + call_id→call* 映射 + 主线程 mqueue。
 struct BaresipState {
@@ -33,6 +35,8 @@ struct BaresipState {
     calls: Mutex<HashMap<String, *mut call>>,
     /// 唯一 `re_main` 线程服务的 mqueue，所有控制操作经它序列化到主线程执行。
     mq: *mut mqueue,
+    /// 音频桥接（M82b）：自定义 baresip 音频驱动 state + RX/TX PCM 队列。
+    audio: Arc<AudioBridge>,
 }
 
 unsafe impl Send for BaresipState {}
@@ -108,10 +112,16 @@ impl SipUaTrait for SipUa {
             SipUa::Mock(u) => u.events(),
         }
     }
-    fn on_rtp(&self, cb: impl FnMut(&[u8]) + Send + 'static) {
+    fn on_rtp(&self, cb: Box<dyn FnMut(&[i16]) + Send + 'static>) {
         match self {
             SipUa::Real(u) => u.on_rtp(cb),
             SipUa::Mock(u) => u.on_rtp(cb),
+        }
+    }
+    async fn send_audio(&self, pcm: Vec<i16>) -> anyhow::Result<()> {
+        match self {
+            SipUa::Real(u) => u.send_audio(pcm).await,
+            SipUa::Mock(u) => u.send_audio(pcm).await,
         }
     }
 }
@@ -181,7 +191,14 @@ fn ensure_runtime() -> Result<*mut mqueue> {
             txs: Mutex::new(Vec::new()),
             calls: Mutex::new(HashMap::new()),
             mq,
+            audio: Arc::new(AudioBridge::new()),
         });
+        // 注册自定义 baresip 音频驱动（ausrc/auplay），接管 RTP↔PCM 搬运（M82b）。
+        // 注册失败即回收 STATE 并返回错误，避免后续 UA 在缺音频驱动下建立通话。
+        if let Err(e) = audio_bridge::register_audio_drivers(&s.audio) {
+            *g = None;
+            return Err(e);
+        }
         *g = Some(s.clone());
         // 启动唯一的 re_main 事件循环线程（baresip 单 OS 线程主循环）。
         std::thread::spawn(|| {
@@ -300,6 +317,18 @@ impl SipUaTrait for BaresipSipUa {
         let (tx, rx) = mpsc::unbounded_channel();
         self.state.txs.lock().unwrap().push(tx);
         rx
+    }
+
+    /// 注册远端→浏览器 PCM 回调：直接挂到共享 `AudioBridge`（M82b）。泵线程每帧 RX
+    /// PCM 到达即触发；回调在 baresip 泵线程内同步调用。
+    fn on_rtp(&self, cb: Box<dyn FnMut(&[i16]) + Send + 'static>) {
+        self.state.audio.set_on_rtp(Box::new(cb));
+    }
+
+    /// 浏览器麦克风 PCM 回传：压入 `AudioBridge` 的 TX 队列，由泵线程取走去编码发对端。
+    async fn send_audio(&self, pcm: Vec<i16>) -> Result<()> {
+        self.state.audio.push_tx(pcm);
+        Ok(())
     }
 }
 
@@ -586,7 +615,26 @@ unsafe fn map_bevent(ev: crate::bevent_ev, event: *mut crate::bevent) -> Option<
             Some(SipEvent::IncomingCall { call_id: id, from })
         }
         bevent_ev_BEVENT_CALL_RINGING => Some(call_state(event, CallState::Ringing)),
-        bevent_ev_BEVENT_CALL_ESTABLISHED => Some(call_state(event, CallState::Active)),
+        bevent_ev_BEVENT_CALL_ESTABLISHED => {
+            // 通话建立：把自定义 ausrc/auplay 驱动挂到该 call 的 audio 上，接管 RTP↔PCM
+            // （M82b）。本回调运行在 baresip `re_main` 线程，可安全调用 audio_* API。
+            let call = bevent_get_call(event);
+            if !call.is_null() {
+                unsafe {
+                    let au = call_audio(call);
+                    if !au.is_null() {
+                        let src = CString::new(crate::audio_bridge::DRIVER_NAME_AUSRC)
+                            .unwrap_or_default();
+                        let play = CString::new(crate::audio_bridge::DRIVER_NAME_AUPLAY)
+                            .unwrap_or_default();
+                        let dev = CString::new(crate::audio_bridge::DEVICE_NAME).unwrap_or_default();
+                        audio_set_source(au, src.as_ptr(), dev.as_ptr());
+                        audio_set_player(au, play.as_ptr(), dev.as_ptr());
+                    }
+                }
+            }
+            Some(call_state(event, CallState::Active))
+        }
         bevent_ev_BEVENT_CALL_CLOSED => {
             let call = bevent_get_call(event);
             let id = format!("call-{:p}", call);

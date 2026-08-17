@@ -91,8 +91,16 @@ fn main() {
 
     // 3) bindgen（baresip.h 依赖 re.h 先 include，故用包装头）
     let wrapper = out_dir.join("rex-sip-wrapper.h");
-    std::fs::write(&wrapper, "#include <re.h>\n#include <baresip.h>\n")
-        .expect("write wrapper header");
+    // 注意：`re.h` 不拉入 libre 的 `rem` 音频/视频帧模块（rem.h → rem_audio.h 等），
+    // 而 `auframe`/`aufmt` 类型定义在 rem 模块中。若只 include re.h + baresip.h，
+    // bindgen 会把 `auframe` 收紧为不透明零大小结构体、且看不到 `aufmt` 枚举，
+    // 导致音频回调里无法读取 `auf->sampv`/`sampc`。故此处额外 include `rem.h`，
+    // 使音频帧类型能被完整解析（M82b 音频驱动接管所需）。
+    std::fs::write(
+        &wrapper,
+        "#include <re.h>\n#include <rem.h>\n#include <baresip.h>\n",
+    )
+    .expect("write wrapper header");
     let bindings = bindgen::Builder::default()
         .header(wrapper.to_str().unwrap())
         .clang_arg("-includestdint.h")
@@ -132,6 +140,14 @@ fn main() {
         .allowlist_type("sdp_session")
         .allowlist_type("sdp_media")
         .allowlist_type("auframe")
+        .allowlist_type("aufmt")
+        .allowlist_type("ausrc")
+        .allowlist_type("auplay")
+        .allowlist_type("ausrc_st")
+        .allowlist_type("auplay_st")
+        .allowlist_type("ausrc_prm")
+        .allowlist_type("auplay_prm")
+        .allowlist_type("audio")
         .allowlist_type("vidframe")
         .allowlist_type("vidrect")
         .allowlist_type("vidsz")

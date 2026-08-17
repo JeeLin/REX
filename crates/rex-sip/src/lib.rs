@@ -27,6 +27,7 @@ mod ffi {
 
 pub use ffi::*;
 
+pub mod audio_bridge;
 pub mod baresip_ua;
 pub mod mock;
 
@@ -119,6 +120,13 @@ pub enum SipControl {
     },
 }
 
+/// 音频帧格式（内部 baresip↔Rust 边界统一 S16LE；fmt 仅记录协商结果）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AudioFormat {
+    pub srate: u32,
+    pub channels: u8,
+}
+
 /// 所有 UA 实现的统一抽象。真实现用 baresip FFI（[`baresip_ua::BaresipSipUa`]），
 /// 测试用 [`mock::MockSipUa`]。
 #[async_trait::async_trait]
@@ -132,10 +140,14 @@ pub trait SipUaTrait {
     async fn dtmf(&self, call_id: &str, digit: char) -> anyhow::Result<()>;
     /// 接收事件流；多次调用返回独立的 receiver。
     fn events(&self) -> mpsc::UnboundedReceiver<SipEvent>;
-    /// 音频钩子（M82b 使用，M82a 留空桩，接口预留）。
-    #[allow(unused_variables)]
-    fn on_rtp(&self, _cb: impl FnMut(&[u8]) + Send + 'static) {
-        /* no-op in 0.70.0 */
+    /// 注册远端→浏览器 PCM 回调（接收侧，M82b）。每帧 RX PCM（i16 LE）到达即触发。
+    /// 默认 no-op（Mock 可覆盖）；真实现经 baresip 音频驱动桥接上抛。
+    fn on_rtp(&self, _cb: Box<dyn FnMut(&[i16]) + Send + 'static>) {
+        let _ = _cb;
+    }
+    /// 浏览器麦克风 PCM 回传（发送侧，M82b）。把 i16 LE PCM 喂回 baresip 发送链路。
+    async fn send_audio(&self, _pcm: Vec<i16>) -> anyhow::Result<()> {
+        Ok(())
     }
 }
 

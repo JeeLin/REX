@@ -28,6 +28,7 @@ pub enum MockAction {
     Hold(String),
     Unhold(String),
     Dtmf(String, char),
+    SendAudio(usize),
 }
 
 impl MockSipUa {
@@ -96,6 +97,15 @@ impl SipUaTrait for MockSipUa {
 
     async fn dtmf(&self, call_id: &str, digit: char) -> Result<()> {
         self.record(MockAction::Dtmf(call_id.to_string(), digit));
+        Ok(())
+    }
+
+    fn on_rtp(&self, _cb: Box<dyn FnMut(&[i16]) + Send + 'static>) {
+        // Mock 不依赖真 baresip，仅接收回调，不触发（handler 单测直接驱动 RX）。
+    }
+
+    async fn send_audio(&self, pcm: Vec<i16>) -> Result<()> {
+        self.record(MockAction::SendAudio(pcm.len()));
         Ok(())
     }
 
