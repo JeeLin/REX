@@ -18,6 +18,7 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
 // baresip / re 自动生成绑定中的类型与函数（来自 `crate::bindings` 的 include）。
+use crate::audio_bridge::AudioBridge;
 use crate::{
     account_set_auth_pass, account_set_auth_user, audio_bridge, audio_set_player, audio_set_source,
     baresip_init, bevent_ev_BEVENT_CALL_CLOSED, bevent_ev_BEVENT_CALL_ESTABLISHED,
@@ -27,7 +28,6 @@ use crate::{
     call_send_digit, mqueue, mqueue_alloc, mqueue_push, re_main, ua, ua_account, ua_alloc,
     ua_answer, ua_connect, ua_hangup, ua_register, ua_stop_register, vidmode_VIDMODE_OFF,
 };
-use crate::audio_bridge::AudioBridge;
 
 /// 全局 bevent 回调的共享状态：事件 sink + call_id→call* 映射 + 主线程 mqueue。
 struct BaresipState {
@@ -123,6 +123,12 @@ impl SipUaTrait for SipUa {
         match self {
             SipUa::Real(u) => u.send_audio(pcm).await,
             SipUa::Mock(u) => u.send_audio(pcm).await,
+        }
+    }
+    fn quality(&self) -> crate::audio_bridge::QualitySnapshot {
+        match self {
+            SipUa::Real(u) => u.quality(),
+            SipUa::Mock(u) => u.quality(),
         }
     }
 }
@@ -330,6 +336,11 @@ impl SipUaTrait for BaresipSipUa {
     async fn send_audio(&self, pcm: Vec<i16>) -> Result<()> {
         self.state.audio.push_tx(pcm);
         Ok(())
+    }
+
+    /// 媒体质量快照（子任务 #5）：来自共享 `AudioBridge` 的 RX 管线遥测。
+    fn quality(&self) -> crate::audio_bridge::QualitySnapshot {
+        self.state.audio.quality_snapshot()
     }
 }
 
@@ -628,7 +639,8 @@ unsafe fn map_bevent(ev: crate::bevent_ev, event: *mut crate::bevent) -> Option<
                             .unwrap_or_default();
                         let play = CString::new(crate::audio_bridge::DRIVER_NAME_AUPLAY)
                             .unwrap_or_default();
-                        let dev = CString::new(crate::audio_bridge::DEVICE_NAME).unwrap_or_default();
+                        let dev =
+                            CString::new(crate::audio_bridge::DEVICE_NAME).unwrap_or_default();
                         audio_set_source(au, src.as_ptr(), dev.as_ptr());
                         audio_set_player(au, play.as_ptr(), dev.as_ptr());
                     }

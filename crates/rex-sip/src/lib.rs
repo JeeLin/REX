@@ -150,6 +150,11 @@ pub trait SipUaTrait {
     async fn send_audio(&self, _pcm: Vec<i16>) -> anyhow::Result<()> {
         Ok(())
     }
+    /// 实时媒体质量快照（子任务 #5）。默认零值（Mock 可覆盖）。
+    #[allow(clippy::type_complexity)]
+    fn quality(&self) -> crate::audio_bridge::QualitySnapshot {
+        crate::audio_bridge::QualitySnapshot::default()
+    }
 }
 
 /// 安全的 `SipUa` 句柄：包真 baresip 实现，构造时选择真 / Mock。

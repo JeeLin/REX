@@ -647,7 +647,10 @@
     "unhold": "Unhold",
     "hangup": "Hang Up",
     "micOn": "Mic On",
-    "micOff": "Mic Off"
+    "micOff": "Mic Off",
+    "qualityLoss": "Loss",
+    "qualityJitter": "Jitter",
+    "qualityRtt": "Delay"
   },
   "terminal": {
     "clear": "Clear",

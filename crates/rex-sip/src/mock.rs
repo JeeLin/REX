@@ -109,6 +109,10 @@ impl SipUaTrait for MockSipUa {
         Ok(())
     }
 
+    fn quality(&self) -> crate::audio_bridge::QualitySnapshot {
+        crate::audio_bridge::QualitySnapshot::default()
+    }
+
     fn events(&self) -> mpsc::UnboundedReceiver<SipEvent> {
         let (tx, rx) = mpsc::unbounded_channel();
         for ev in self.injected.lock().unwrap().iter() {

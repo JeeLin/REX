@@ -23,6 +23,9 @@ const connected = ref(false)
 const micOn = ref(false)
 const audio = new SipAudio()
 
+// 实时媒体质量指标（子任务 #5）：丢帧率 / 抖动 / 延迟代理。
+const quality = ref<{ loss: number; jitter: number; rtt: number } | null>(null)
+
 let client: SipClient | null = null
 
 function getToken(): string {
@@ -55,6 +58,9 @@ function handleEvent(e: SipServerEvent) {
     case 'sip.sip_message':
     case 'sip.ping':
       break
+    case 'sip.quality':
+      quality.value = e.payload
+      break
   }
 }
 
@@ -68,6 +74,7 @@ function applyCallState(callId: string, state: SipCallState) {
   if (state === 'ended') {
     if (incoming.value?.callId === callId) incoming.value = null
     if (currentCall.value?.callId === callId) currentCall.value = null
+    quality.value = null
     teardownAudio()
     emit('update:status', registered.value ? 'online' : 'error')
     return
@@ -180,6 +187,20 @@ const statusLabel = computed(() => {
         @toggle-mic="onToggleMic"
       />
       <Dialpad :registered="registered" @dial="onDial" />
+      <div v-if="quality && currentCall?.state === 'active'" class="quality-card">
+        <div class="q-metric">
+          <span class="q-label muted">{{ t('sip.qualityLoss') }}</span>
+          <span class="q-value mono">{{ (quality.loss * 100).toFixed(1) }}%</span>
+        </div>
+        <div class="q-metric">
+          <span class="q-label muted">{{ t('sip.qualityJitter') }}</span>
+          <span class="q-value mono">{{ quality.jitter.toFixed(1) }} ms</span>
+        </div>
+        <div class="q-metric">
+          <span class="q-label muted">{{ t('sip.qualityRtt') }}</span>
+          <span class="q-value mono">{{ quality.rtt.toFixed(1) }} ms</span>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -216,4 +237,16 @@ const statusLabel = computed(() => {
   gap: var(--space-3);
   padding: var(--space-3) 0;
 }
+.quality-card {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.q-metric { display: flex; flex-direction: column; gap: 2px; }
+.q-label { font-size: var(--text-xs); }
+.q-value { font-size: var(--text-base); font-weight: 600; color: var(--text-primary); }
+.mono { font-family: var(--font-mono); }
 </style>

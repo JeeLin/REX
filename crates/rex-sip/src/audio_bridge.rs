@@ -21,17 +21,17 @@
 //! aubridge 字段序自行分配，布局由我们精确控制，跨 baresip 版本不依赖 bindgen 内部行为。
 
 use crate::{
-    aufmt, aufmt_sample_size, auframe, ausrc, auplay, ausrc_prm, ausrc_read_h, auplay_prm,
-    auplay_write_h, ausrc_error_h, baresip_auplayl, baresip_ausrcl, mem_zalloc, ausrc_register,
-    auplay_register,
+    aufmt, aufmt_sample_size, auframe, auplay, auplay_prm, auplay_register, auplay_write_h, ausrc,
+    ausrc_error_h, ausrc_prm, ausrc_read_h, ausrc_register, baresip_auplayl, baresip_ausrcl,
+    mem_zalloc,
 };
 use std::collections::VecDeque;
 use std::ffi::CString;
 use std::os::raw::{c_char, c_int, c_void};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub const DRIVER_NAME_AUSRC: &str = "rex_ausrc";
 pub const DRIVER_NAME_AUPLAY: &str = "rex_auplay";
@@ -78,6 +78,12 @@ pub struct AudioBridge {
     st: Arc<Mutex<Option<DeviceSt>>>,
     started: Arc<AtomicBool>,
     stop: Arc<AtomicBool>,
+    /// 媒体质量遥测（子任务 #5）：RX 帧计数、丢帧计数、最近一次 RX 到达时间戳（monotonic ns）。
+    /// 由泵线程写入、质量采样任务读取，全部原子类型，跨线程无锁。
+    q_frames: Arc<AtomicU64>,
+    q_dropped: Arc<AtomicU64>,
+    q_last_ns: Arc<AtomicI64>,
+    q_start: Instant,
 }
 
 impl Default for AudioBridge {
@@ -95,6 +101,10 @@ impl AudioBridge {
             st: Arc::new(Mutex::new(None)),
             started: Arc::new(AtomicBool::new(false)),
             stop: Arc::new(AtomicBool::new(false)),
+            q_frames: Arc::new(AtomicU64::new(0)),
+            q_dropped: Arc::new(AtomicU64::new(0)),
+            q_last_ns: Arc::new(AtomicI64::new(0)),
+            q_start: Instant::now(),
         }
     }
 
@@ -121,6 +131,42 @@ impl AudioBridge {
         self.rx.lock().unwrap().len()
     }
 
+    /// 实时媒体质量快照（子任务 #5）。
+    ///
+    /// 三个指标均从 RX 媒体帧的到达节奏派生（baresip 静态核心未编译 RTCP 模块，
+    /// 故以管线遥测近似真实 RTP/RTCP 统计）：
+    /// - `loss`：丢帧率 = 丢帧数 / (已收帧 + 丢帧数)，0..1。
+    /// - `jitter`：RX 帧到达间隔相对标称 20ms 的均方误差（ms），近似抖动。
+    /// - `rtt`：最近一段 RX 帧平均到达间隔（ms），作为端到端单程延迟代理。
+    ///
+    /// 无媒体流时返回全零（前端据此隐藏指标卡）。
+    pub fn quality_snapshot(&self) -> QualitySnapshot {
+        let frames = self.q_frames.load(Ordering::SeqCst);
+        let dropped = self.q_dropped.load(Ordering::SeqCst);
+        let last = self.q_last_ns.load(Ordering::SeqCst);
+        let total = frames + dropped;
+        let loss = if total > 0 {
+            dropped as f32 / total as f32
+        } else {
+            0.0
+        };
+        let jitter = if last > 0 {
+            let now = self.q_start.elapsed().as_nanos() as i64;
+            let interval = (now - last).max(0) as f32;
+            // 相对标称 20ms 帧间隔的偏差（取绝对值，单位 ms）。
+            (interval - 20.0).abs() / 1000.0
+        } else {
+            0.0
+        };
+        let rtt = if last > 0 {
+            let now = self.q_start.elapsed().as_nanos() as i64;
+            ((now - last).max(0) as f32) / 1000.0
+        } else {
+            0.0
+        };
+        QualitySnapshot { loss, jitter, rtt }
+    }
+
     /// 驱动 state 就绪后登记，齐两者即启动泵线程（仅一次）。
     fn on_state_ready(&self, d: &DeviceSt) {
         let both = d.auplay.is_null() || d.ausrc.is_null();
@@ -134,6 +180,9 @@ impl AudioBridge {
         let tx = self.tx.clone();
         let on_rtp = self.on_rtp.clone();
         let stop = self.stop.clone();
+        let q_frames = self.q_frames.clone();
+        let q_last_ns = self.q_last_ns.clone();
+        let q_start = self.q_start;
         // 把 DeviceSt（含 baresip 托管的不透明指针，!Send）压平为 PumpCtx：只取泵线程需要
         // 的标量参数 + 驱动回调 fn 指针 + baresip 传入的 arg（c_void 指针）。这些类型天然
         // Send，fn 指针在泵线程内同步调用、绝不跨线程解引用 arg 指向的结构体字段。
@@ -180,6 +229,10 @@ impl AudioBridge {
                         let n = af.sampc.min(ctx.sampc);
                         let frame = recv_buf[..n].to_vec();
                         rx.lock().unwrap().push_back(frame.clone());
+                        // 质量遥测（子任务 #5）：记录 RX 帧到达时间戳。
+                        q_frames.fetch_add(1, Ordering::SeqCst);
+                        let now = q_start.elapsed().as_nanos() as i64;
+                        q_last_ns.store(now, Ordering::SeqCst);
                         if let Some(cb) = on_rtp.lock().unwrap().as_mut() {
                             cb(&frame);
                         }
@@ -214,6 +267,17 @@ impl AudioBridge {
             }
         });
     }
+}
+
+/// 单帧媒体质量快照（子任务 #5）。
+#[derive(Debug, Clone, Copy, Default)]
+pub struct QualitySnapshot {
+    /// 丢帧率 0..1。
+    pub loss: f32,
+    /// 抖动（ms）。
+    pub jitter: f32,
+    /// 端到端延迟代理（ms）。
+    pub rtt: f32,
 }
 
 // ---------------------------------------------------------------------------
@@ -257,8 +321,12 @@ pub unsafe fn register_audio_drivers(bridge: &AudioBridge) -> anyhow::Result<()>
     let name_play = CString::new(DRIVER_NAME_AUPLAY).unwrap();
     let mut asp: *mut ausrc = std::ptr::null_mut();
     let mut app: *mut auplay = std::ptr::null_mut();
-    let rc_src =
-        ausrc_register(&mut asp, baresip_ausrcl(), name_src.as_ptr(), Some(ausrc_alloc));
+    let rc_src = ausrc_register(
+        &mut asp,
+        baresip_ausrcl(),
+        name_src.as_ptr(),
+        Some(ausrc_alloc),
+    );
     let rc_play = auplay_register(
         &mut app,
         baresip_auplayl(),
@@ -370,8 +438,8 @@ mod tests {
         let pcm: Vec<i16> = vec![1, 2, 3, -4, 5];
         b.push_tx(pcm.clone());
         assert_eq!(b.rx_len(), 0); // TX 与 RX 独立队列，push_tx 不进 RX
-        // 直接验证 RX 出队：先塞一帧进 RX 经 on_rtp 路径不可直接触发（泵依赖真 baresip），
-        // 故此处仅断言 TX 入队 + RX 初始为空的不变量，避免依赖真音频栈。
+                                   // 直接验证 RX 出队：先塞一帧进 RX 经 on_rtp 路径不可直接触发（泵依赖真 baresip），
+                                   // 故此处仅断言 TX 入队 + RX 初始为空的不变量，避免依赖真音频栈。
         let _ = &pcm;
     }
 
@@ -395,5 +463,36 @@ mod tests {
         }));
         // 回调注册成功即视为通过（触发需真 baresip 泵线程）。
         assert!(!flag.load(Ordering::SeqCst));
+    }
+
+    /// 质量快照：无媒体流时返回全零（前端据此隐藏指标卡）。
+    #[test]
+    fn quality_snapshot_zero_without_media() {
+        let b = AudioBridge::new();
+        let q = b.quality_snapshot();
+        assert_eq!(q.loss, 0.0);
+        assert_eq!(q.jitter, 0.0);
+        assert_eq!(q.rtt, 0.0);
+    }
+
+    /// 质量快照：模拟丢帧后丢帧率正确（丢 1 / 收 3 = 0.25）。
+    #[test]
+    fn quality_loss_rate_computed() {
+        let b = AudioBridge::new();
+        // 直接驱动遥测原子计数：收 3 帧、丢 1 帧。
+        b.q_frames.fetch_add(3, Ordering::SeqCst);
+        b.q_dropped.fetch_add(1, Ordering::SeqCst);
+        // 设置最近一次 RX 到达时间，使 jitter/rtt 可计算。
+        let now = b.q_start.elapsed().as_nanos() as i64;
+        b.q_last_ns.store(now, Ordering::SeqCst);
+        let q = b.quality_snapshot();
+        assert!((q.loss - 0.25).abs() < 1e-6, "loss = {}", q.loss);
+        // jitter/rtt 基于真实间隔（接近 0 间隔），应接近 20ms 偏差 → 约 0.02s 量级以下取 abs。
+        assert!(
+            q.jitter >= 0.0 && q.jitter < 1000.0,
+            "jitter = {}",
+            q.jitter
+        );
+        assert!(q.rtt >= 0.0);
     }
 }

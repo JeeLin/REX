@@ -22,6 +22,7 @@ export type SipServerEvent =
   | { type: 'sip.incoming'; payload: { callId: string; from: string } }
   | { type: 'sip.call_state'; payload: { callId: string; state: SipCallState } }
   | { type: 'sip.sip_message'; payload: { raw: string } }
+  | { type: 'sip.quality'; payload: { loss: number; jitter: number; rtt: number } }
   | { type: 'sip.error'; payload: { message: string } }
   | { type: 'sip.ping' }
 

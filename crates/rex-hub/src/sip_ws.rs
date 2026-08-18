@@ -81,6 +81,8 @@ enum ServerMsg {
     CallState { payload: CallStatePayload },
     #[serde(rename = "sip.sip_message")]
     SipMessage { payload: RawPayload },
+    #[serde(rename = "sip.quality")]
+    Quality { payload: QualityPayload },
     #[serde(rename = "sip.error")]
     Error { payload: ReasonPayload },
     /// 服务端心跳（前端忽略）
@@ -110,6 +112,16 @@ struct CallStatePayload {
 #[derive(Debug, Serialize)]
 struct RawPayload {
     raw: String,
+}
+
+#[derive(Debug, Serialize)]
+struct QualityPayload {
+    /// 丢帧率 0..1。
+    loss: f32,
+    /// 抖动（ms）。
+    jitter: f32,
+    /// 端到端延迟代理（ms）。
+    rtt: f32,
 }
 
 /// URL 查询参数
@@ -630,6 +642,33 @@ async fn handle_sip_session(
         }
     });
 
+    // 实时质量指标采样（子任务 #5）：每秒从 UA 取一次质量快照，经 `sip.quality` 事件推浏览器。
+    let ua_for_quality = ua.clone();
+    let out_tx_for_quality = out_tx.clone();
+    let quality_task = tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(1));
+        loop {
+            tick.tick().await;
+            let q = ua_for_quality.quality();
+            if out_tx_for_quality
+                .send(Outbound::Text(
+                    serde_json::to_string(&ServerMsg::Quality {
+                        payload: QualityPayload {
+                            loss: q.loss,
+                            jitter: q.jitter,
+                            rtt: q.rtt,
+                        },
+                    })
+                    .unwrap_or_default(),
+                ))
+                .await
+                .is_err()
+            {
+                break;
+            }
+        }
+    });
+
     // 任一任务结束即结束会话（其余任务在 JoinHandle drop 时自动取消）
     tokio::select! {
         _ = event_pump => {},
@@ -637,6 +676,7 @@ async fn handle_sip_session(
         _ = cmd_task => {},
         _ = writer => {},
         _ = ping_task => {},
+        _ = quality_task => {},
     }
 
     tracing::debug!(action = "SIP_SESSION_END", resource_id, "sip session ended");
@@ -961,6 +1001,23 @@ mod tests {
         let s = serde_json::to_string(&m).unwrap();
         assert!(s.contains("registration_failed"));
         assert!(s.contains("auth failed"));
+    }
+
+    #[test]
+    fn quality_event_serializes_metric_fields() {
+        // 子任务 #5：sip.quality 事件携带 loss/jitter/rtt 字段，命名与前端解码对齐。
+        let m = ServerMsg::Quality {
+            payload: QualityPayload {
+                loss: 0.25,
+                jitter: 12.5,
+                rtt: 80.0,
+            },
+        };
+        let s = serde_json::to_string(&m).unwrap();
+        assert!(s.contains("sip.quality"));
+        assert!(s.contains("\"loss\":0.25"));
+        assert!(s.contains("\"jitter\":12.5"));
+        assert!(s.contains("\"rtt\":80"));
     }
 
     // --- 子任务 #7：前后端联调（契约锁定 + Agent 链路回归）---

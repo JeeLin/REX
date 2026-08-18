@@ -50,7 +50,7 @@ describe('cdrApi', () => {
     })
     expect(res.records).toHaveLength(1)
     expect(res.total).toBe(1)
-    const url = fetchMock.mock.calls[0][0] as string
+    const url = fetchMock.mock.calls[0]![0] as string
     expect(url).toContain('/api/sip/cdr?')
     expect(url).toContain('direction=out')
     expect(url).toContain('state=ended')
@@ -63,7 +63,7 @@ describe('cdrApi', () => {
   it('list omits empty params', async () => {
     const fetchMock = mockFetchOnce({ records: [], total: 0 })
     await cdrApi.list(undefined)
-    const url = fetchMock.mock.calls[0][0] as string
+    const url = fetchMock.mock.calls[0]![0] as string
     // 无过滤参数时不应携带任何 query key（仅可能带空 ? 后缀）。
     expect(url).not.toContain('direction=')
     expect(url).not.toContain('state=')
@@ -75,7 +75,7 @@ describe('cdrApi', () => {
     const fetchMock = mockFetchOnce(sampleRecord)
     const rec = await cdrApi.get('cdr:call-1')
     expect(rec.id).toBe('cdr:call-1')
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/sip/cdr/cdr:call-1')
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/sip/cdr/cdr:call-1')
   })
 
   it('list throws ApiError on non-2xx', async () => {

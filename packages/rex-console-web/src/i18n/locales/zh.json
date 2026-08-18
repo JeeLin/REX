@@ -645,7 +645,10 @@
     "unhold": "取消保持",
     "hangup": "挂断",
     "micOn": "麦克风开",
-    "micOff": "麦克风关"
+    "micOff": "麦克风关",
+    "qualityLoss": "丢包",
+    "qualityJitter": "抖动",
+    "qualityRtt": "延迟"
   },
   "terminal": {
     "clear": "清屏",
