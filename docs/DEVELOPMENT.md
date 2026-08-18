@@ -21,13 +21,17 @@
 
 ```text
 crates/
-├── rex-common        通用类型、错误定义、CLI、supervisor、版本、更新状态
+├── rex-common        通用类型、错误定义、CLI、supervisor 模块、sip_media 媒体帧编解码、更新状态
 ├── rex-ssh           SSH/SFTP 协议实现
 ├── rex-mysql         MySQL 协议实现
 ├── rex-postgresql    PostgreSQL 协议实现
+├── rex-sqlite        SQLite 协议实现
+├── rex-redis         Redis 协议实现（含 FormatViewer 解码）
+├── rex-s3            S3/MinIO 协议实现（含 multipart 续传）
+├── rex-sip           SIP 电话（baresip FFI：UA/音频桥/视频桥/抓包/CDR/录音）
 ├── rex-transfer      文件传输引擎（FileConnector trait）
-├── rex-hub           Hub 二进制入口（整合所有 crate + 前端静态资源）
-└── rex-agent         Agent 二进制入口（整合所有 crate）
+├── rex-hub           Hub 二进制入口（整合所有 crate + 前端静态资源 + WebSocket 隧道模块）
+└── rex-agent         Agent 二进制入口（整合所有 crate + WebSocket 隧道）
 ```
 
 Hub 和 Agent 共享所有协议 crate，区别在于：
@@ -126,6 +130,12 @@ rex-agent = 所有 crate（无前端）
 | **M78** | 全系统 UX/UI 重设计 | — | ✅ |
 | **M79** | 任意方向分屏系统 + 工作空间重构 | — | ✅ |
 | **M80** | M78 重设计收尾（feature 组件 token 化迁移） | — | ✅ |
+| **M81** | SQL 查询保存 + SSH 初始化脚本 + 缺陷修复与覆盖率补全 | — | ✅ |
+| **M82a** | SIP 电话资源基础（信令打通 + Agent 链式 UA + 资源模型） | 软电话 | ✅（0.70.0） |
+| **M82b** | 浏览器实时双向音频（PCM-over-WebSocket 媒体通道） | 软电话 | ✅（0.70.1） |
+| **M82c** | 音视频增强 + 通话记录 + 录音 + 抓包 + 质量监控 | 软电话 | ✅（0.70.2） |
+| **M82d** | 测试补全 + 文档重写 + 全量 review/优化 + 压测 | — | ✅ 进行中（0.70.3） |
+| **M82e** | SIP 资源按名称管理 + 多账户切换 | 软电话 | ⬜（0.70.4，下一步） |
 
 ### M0：项目骨架重建
 

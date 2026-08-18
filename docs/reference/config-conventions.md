@@ -56,76 +56,38 @@ auto_update: true
 
 ### 仓库结构
 
+仓库根即 workspace 根（不是 `rex-hub/` 子目录）。crate 位于 `crates/*`，前端位于 `packages/rex-console-web`，文档位于 `docs/`：
+
 ```text
-rex-hub/
-├── Cargo.toml
-├── README.md
+REX/
+├── Cargo.toml                 # workspace 根 + [workspace.dependencies]
 ├── crates/
-│   ├── rex-common/        通用类型、错误定义、配置解析
+│   ├── rex-common/        通用类型、错误定义、配置解析、supervisor 模块、sip_media、更新
 │   ├── rex-ssh/           SSH/SFTP 协议实现
 │   ├── rex-mysql/         MySQL 协议实现
 │   ├── rex-postgresql/    PostgreSQL 协议实现
 │   ├── rex-redis/         Redis 协议实现
 │   ├── rex-sqlite/        SQLite 协议实现
 │   ├── rex-s3/            S3/MinIO 协议实现
-│   ├── rex-transfer/      文件传输引擎
-│   ├── rex-tunnel/        WebSocket 隧道
-│   ├── rex-supervisor/    进程 supervisor
-│   ├── rex-hub/           Hub 二进制入口
-│   └── rex-agent/         Agent 二进制入口
+│   ├── rex-sip/           SIP 电话（baresip FFI：UA/音频桥/视频桥/抓包/CDR/录音）
+│   ├── rex-transfer/      文件传输引擎（FileConnector 抽象）
+│   ├── rex-hub/           Hub 二进制入口（整合所有 crate + 前端托管 + WebSocket 隧道模块）
+│   └── rex-agent/         Agent 二进制入口（整合所有 crate + WebSocket 隧道）
 ├── packages/
 │   └── rex-console-web/   Vue 3 前端
 └── docs/
 ```
 
-### Workspace 依赖
-
-根 `Cargo.toml` 定义 workspace 和共享依赖版本：
-
-```toml
-[workspace]
-members = [
-  "crates/rex-common",
-  "crates/rex-ssh",
-  "crates/rex-mysql",
-  "crates/rex-postgresql",
-  "crates/rex-redis",
-  "crates/rex-sqlite",
-  "crates/rex-s3",
-  "crates/rex-transfer",
-  "crates/rex-tunnel",
-  "crates/rex-supervisor",
-  "crates/rex-hub",
-  "crates/rex-agent",
-]
-resolver = "2"
-
-[workspace.package]
-edition = "2021"
-license = "MIT"
-
-[workspace.dependencies]
-anyhow = "1"
-async-trait = "0.1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tokio = { version = "1", features = ["full"] }
-tracing = "0.1"
-uuid = { version = "1", features = ["v4", "serde"] }
-```
+> 注：`supervisor`（进程模型）是 `rex-common` 的模块，`tunnel`（WebSocket 隧道）是 `rex-hub`/`rex-agent` 内的模块——它们不是独立 crate。workspace 用 `members = ["crates/*"]` 自动包含全部 crate。
 
 ### 协议 crate 边界
 
-每个协议 crate 只负责协议实现，不依赖 Hub 或 Agent 业务层。
+每个协议 crate 只负责协议实现，不依赖 Hub 或 Agent 业务层。各协议以统一 trait 向上层输出能力（`rex-common` 内定义）：
 
-协议 crate 输出统一能力：
-
-```rust
-pub trait ResourceConnector: Send + Sync {
-    fn protocol(&self) -> ResourceProtocol;
-    fn connect(&self, config: ResourceConfig) -> impl Future<Output = Result<Connection>>;
-}
-```
+- `rex-common::sql::SqlConnector`（`sql_api.rs` 用 `SqlConnectorFactory` 按 `DatabaseType` 分派 `MySqlConnector`/`PostgresConnector`/`SqliteConnector`）
+- `rex-common::redis::RedisConnector`
+- `rex-common::file_transfer::FileConnector`（`SftpConnector` / `S3Connector` / 本地实现）
+- `rex-sip` 通过 `rex-common::sip_media` 的 PCM/视频帧编解码与隧道帧封装对接 Hub/Agent
 
 Hub 和 Agent 都通过同一套协议 crate 建立连接，区别只在于连接入口：
 

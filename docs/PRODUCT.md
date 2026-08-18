@@ -91,7 +91,7 @@ Agent 设备信息：操作系统、架构、主机名、系统版本——影�
 
 ### 2.3 资源 (Resource)
 
-可连接的远程实体，属于一个环境，通过指定协议连接。支持 7 种协议：
+可连接的远程实体，属于一个环境，通过指定协议连接。支持 8 种协议：
 
 | 协议 | 图标 | 用途 | 色值 |
 |------|------|------|------|
@@ -102,6 +102,7 @@ Agent 设备信息：操作系统、架构、主机名、系统版本——影�
 | Redis | `R` | 缓存管理 | `#F85149` 红色 |
 | SQLite | `S` | 本地数据库 | `#D29922` 橙色 |
 | S3 / MinIO | ☁ | 对象存储 | `#E8912D` 主色 |
+| SIP 电话 | ☎ | 软电话 / 通话 | `#2DD4BF` 青色 |
 
 ### 2.4 连接方式
 
@@ -271,23 +272,40 @@ Redis 缓存管理界面。**双面板：左连接+键树 / 右固定值查看�
 
 **批量操作：** 批量删除（checkbox + 规则）/ 批量 TTL / 导入导出（选中键导出文件、导入键、导入 CMD 批量命令）。
 
-### 3.10 Agent 管理
+### 3.10 SIP 电话 — 对标软电话（浏览器实时通话）
+
+SIP 软电话资源（第 8 种协议）。Hub 侧 baresip UA（UA₁）负责信令（拨号/接听/挂断/保持/转 DTMF），Agent 侧 baresip UA（UA₂）经现有 WebSocket 隧道链式转发，让内网 SIP 服务器由 Agent 出网。
+
+**信令与媒体：**
+- 拨号盘 + 通话状态（拨号中/通话中/保持/挂断），支持 DTMF、通话保持/恢复。
+- 浏览器**实时双向音频**：Hub/Agent 终止 RTP 抽出原始 S16LE PCM，经 WebSocket 媒体通道（原始 PCM 二进制帧）推流到浏览器；浏览器用 Web Audio 播放、麦克风经 `getUserMedia` 采集回传（回声抑制）。媒体为实时流，是「文件传输不经过浏览器」原则的显式例外。
+- 视频（可选）：浏览器实时视频（WebCodecs + `<video>`），与音频共用隧道/WebSocket 帧。
+
+**可观测与记录：**
+- 通话记录（CDR）：起止/对端/时长/状态（SQLite 持久化）+ 前端表格（筛选/排序/详情）。
+- 通话录音：Hub 落盘（mp3/wav），前端回放（进度/暂停/下载）。
+- 信令抓包：UA₁/UA₂ 两侧 SIP 报文捕获导出 pcap，前端回看/下载。
+- 音视频质量监控：丢包率、端到端延迟、抖动可视化。
+
+**设计要点：** baresip 是 C 库，不能跑在浏览器，必须在 Hub/Agent 服务端；Hub/Agent 版本须一致（无跨版本兼容）。
+
+### 3.11 Agent 管理
 
 卡片式展示 Agent（名称+状态、环境、设备信息、元信息网格、配置/日志/重置令牌按钮）。配置弹窗（环境/Agent ID/版本只读、服务器/令牌、auto_update 开关 + 更新状态：update_phase/update_error/版本一致性）。日志查看器（级别筛选、自动滚动、终端风）。令牌重置弹窗。部署指南（二进制/Docker/Compose/配置 4 种，按 Agent OS/架构推荐下载命令）。
 
-### 3.11 审计日志
+### 3.12 审计日志
 
 操作记录查询（时间范围/用户/环境/操作类型筛选）。统计卡片（总数/成功/失败/活跃用户）。表格（时间/用户/环境/操作彩色标签/摘要/结果）。点击行展开结构化详情 + 命令/SQL 代码块。CSV 导出。右键（查看详情/复制/按类型或环境筛选/刷新/导出/清除筛选）。
 
-### 3.12 个人设置
+### 3.13 个人设置
 
 分区块：个人信息、外观（主题/语言/侧边栏）、终端（字体/字体族/光标闪烁/保活）、安全（会话超时/配置加密/审计日志）、更新（Hub 自动检查/当前版本/版本总览含所有 Agent）。
 
-### 3.13 主题系统
+### 3.14 主题系统
 
 CSS 变量（`--bg-deep` / `--bg-surface` / `--bg-elevated` / `--bg-hover` / `--text-*` / `--border*` / 品牌色）实现深色/浅色/跟随系统。极客风：接近纯黑终端背景、克制用色、高对比。REX 自有，不照搬桌面软件。
 
-### 3.14 国际化 (i18n)
+### 3.15 国际化 (i18n)
 
 中（zh）/ 英（en）双语。设置页或侧栏切换，持久化 localStorage。新增功能必须同步补翻译。
 
@@ -305,7 +323,7 @@ CSS 变量（`--bg-deep` / `--bg-surface` / `--bg-elevated` / `--bg-hover` / `--
 
 ### 全屏页面（无侧边栏/底部导航）
 
-terminal / sql / files 全屏工作态（含工作空间外壳）；login 全屏。
+terminal / sql / files / sip 全屏工作态（含工作空间外壳）；login 全屏。
 
 ---
 
@@ -412,6 +430,7 @@ terminal / sql / files 全屏工作态（含工作空间外壳）；login 全屏
 | `terminal` | SSH 终端 | 全屏 | ✗（含外壳） |
 | `sql` | SQL 控制台 | 全屏 | ✗（含外壳） |
 | `files` | SFTP 文件管理 | 全屏 | ✗（含外壳） |
+| `sip`（工作区 Tab） | SIP 软电话 | 全屏 | ✗（含外壳） |
 | `agents` | Agent 管理 | 标准 | ✓ |
 | `audit-log` | 审计日志 | 标准 | ✓ |
 | `settings` | 个人设置 | 标准 | ✓ |
@@ -436,15 +455,17 @@ Hub 和 Agent 均为单二进制 + supervisor + worker。父进程 supervisor（
 阶段 2：worker 检查更新→下载→校验 SHA256→备份→写 update-state→优雅退出→supervisor 替换→健康轮询（失败 3 次回滚）。Hub/Agent 同进程模型。
 
 ### 共享 Rust crate
-Hub 和 Agent 共享协议与传输 crate：
-- `rex-ssh`（SSH/SFTP）、`rex-mysql`、`rex-postgresql`、`rex-redis`、`rex-sqlite`、`rex-s3`（协议实现）
-- `rex-transfer`（文件传输引擎）
-- `rex-common`（通用类型/错误/配置/supervisor/版本）
-- `rex-hub`（整合 + 前端托管）、`rex-agent`（整合）
+Hub 和 Agent 共享协议与传输 crate（workspace 根 `Cargo.toml` `members = ["crates/*"]`）：
+- 协议实现：`rex-ssh`（SSH/SFTP）、`rex-mysql`、`rex-postgresql`、`rex-redis`、`rex-sqlite`、`rex-s3`、`rex-sip`（baresip FFI：UA/音频桥/视频桥/抓包/CDR/录音）
+- `rex-transfer`（文件传输引擎，统一 `FileConnector` 抽象）
+- `rex-common`（通用类型/错误/配置解析/`supervisor` 模块/`sip_media` 媒体帧编解码/更新）
+- `rex-hub`（整合所有 crate + 前端静态资源托管）、`rex-agent`（整合所有 crate）
+
+> 注：`supervisor`（进程模型）与 `tunnel`（WebSocket 隧道）是 `rex-common` / `rex-hub` 内的**模块**，并非独立 crate。
 
 ### 文件传输架构
-- 前端（Vue）：文件浏览器 UI、传输队列 UI、进度、冲突处理弹窗；只调 Hub API/WebSocket，不经浏览器中转。
-- 后端 `rex-transfer`：任务调度、进度、取消、重试、校验；通过统一连接器对接 SSH/SFTP、S3、本地。
+- 前端（Vue）：文件浏览器 UI、传输队列 UI、进度、冲突处理弹窗；只调 Hub 的 `/api/files` REST + WebSocket，不经浏览器中转。
+- 后端 `rex-transfer` + `FileConnector` trait：统一抽象对接 SSH/SFTP（`SftpConnector`）、S3/MinIO（`S3Connector`）、本地（`MemConnector` 等）；支持分片上传/续传（`upload(remote_path, data, offset, progress)`、`download_range`）。
 - 数据在 Hub/Agent/远端之间传输，不经过浏览器。
 - 冲突处理：覆盖/跳过/另存/失败。安全：路径规范化禁 `../` 逃逸、限大小/并发/速率、审计所有文件操作。
 
@@ -467,5 +488,6 @@ Docker / 二进制 / 配置文件三种方式，自托管。Hub 与 Agent 各自
 | DB (Navicat) | 两栏+导航树、Tab 多开查询、`.` 补全、结果网格内联编辑+Apply/Discard、表设计器多 Tab、导入导出向导、DDL 抽屉 |
 | Redis (ARDM) | 键树虚拟滚动+命名空间+SCAN 分页、固定右栏(可开 Tab)、通用 FormatViewer、集合表格编辑器、Monaco CLI、Server Status、批量操作 |
 | 文件 (Xftp) | 双面板活动面板模型、传输队列抽屉(进度/吞吐/暂停/续传)、路径栏/面包屑、同步浏览、chmod 矩阵、Edit 临时下载回传、F5/F6 |
+| SIP 电话 | 拨号盘/通话状态、DTMF/保持、浏览器实时双向音频（Web Audio + getUserMedia）、（可选）实时视频、CDR、录音回放、信令抓包 pcap、质量监控 |
 
 不可引入：多用户、RBAC、企业协作（AGENTS.md 硬性约束）。

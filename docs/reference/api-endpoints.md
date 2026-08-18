@@ -12,6 +12,8 @@
 { "password": "string" }
 ```
 
+> 单用户模型：无用户名，仅密码。首次访问需经 `POST /api/auth/password` 设置密码（`requires_setup=true` 时）。
+
 **响应：**
 ```json
 { "token": "string", "expiresAt": "2026-01-01T00:00:00Z" }
@@ -105,16 +107,35 @@
 
 ---
 
-## 备份
+## 资源连接（控制台）
 
-### POST /api/backup/create
-创建数据库备份。
+### GET /api/environments/:id/resources/:resource_id/files/**
+文件管理（SFTP/S3），见 `file_api`：`/connect` `/list` `/stat` `/mkdir` `/rename` `/delete` `/upload` `/download` `/acl`。
 
-### GET /api/backup/list
-列出所有备份。
+### POST /api/sql/connect
+连接 SQL 数据库（mysql/postgresql/sqlite），返回会话 id；后续 `/query` `/tables` `/columns` `/indexes` `/foreign_keys` `/ddl` `/databases` `/disconnect` 均带该 id。
 
-### POST /api/backup/restore
-恢复备份。
+### POST /api/redis/connect
+连接 Redis，返回会话 id；后续 `/scan` `/key` `/get` `/set` `/del` `/ttl` `/info` `/databases` `/command` `/select` `/disconnect` 均带该 id。
+
+### POST /api/dashboard/**
+仪表盘统计（环境数 / 资源数 / Agent 在线数 / 今日操作数）。
+
+### /api/settings/**
+系统设置读写（主题、语言、终端、安全、更新开关等；保存的 SQL 查询列表也存于此）。
+
+---
+
+## SIP 电话
+
+### /api/sip/cdr/**
+通话记录（CDR）：`GET /` 列表、`GET /:id` 详情。
+
+### /api/sip/recording/:id
+通话录音：`/start` `/stop` `/:id`（回放/下载）。
+
+### /api/sip/capture/:id
+信令抓包（pcap）：`/start` `/stop` `/packets` `/pcap` 导出。
 
 ---
 
@@ -126,11 +147,11 @@ Agent WebSocket 隧道。通过 query param `?token=<jwt>` 认证。
 ### /ws/terminal/:resource_id
 终端 WebSocket 连接。
 
-### /ws/sql/:resource_id
-SQL 控制台 WebSocket 连接。
+### /ws/sip
+SIP 控制/媒体 WebSocket 连接。
 
-### /ws/redis/:resource_id
-Redis 控制台 WebSocket 连接。
+### /ws/tunnel
+Agent 链式隧道帧转发（媒体/信令经 `kind` 字节多路复用）。
 
 ---
 

@@ -72,6 +72,30 @@ CREATE TABLE audit_log (
 );
 ```
 
+核心表还包括 SIP 相关表（见 `migrations.sql`）：
+
+```sql
+CREATE TABLE cdr (
+  id            TEXT PRIMARY KEY,
+  resource_id   TEXT NOT NULL,
+  peer          TEXT NOT NULL DEFAULT '',
+  call_id       TEXT NOT NULL DEFAULT '',
+  start_time    TEXT NOT NULL,
+  end_time      TEXT,
+  duration_sec  INTEGER DEFAULT 0,
+  direction     TEXT NOT NULL DEFAULT 'out',   -- out / in
+  status        TEXT NOT NULL,                 -- answered / missed / failed
+  recording     TEXT                                -- 录音文件路径（可选）
+);
+```
+
+```sql
+CREATE TABLE settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+```
+
 ## 凭据加密
 
 资源密码、SSH 私钥密码、Agent token 等敏感字段不应明文存库。

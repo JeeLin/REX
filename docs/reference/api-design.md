@@ -2,7 +2,7 @@
 
 ## 认证
 
-单用户登录：
+单用户登录（仅密码，无用户名）：
 
 ```http
 POST /api/auth/login
@@ -12,7 +12,6 @@ POST /api/auth/login
 
 ```json
 {
-  "username": "admin",
   "password": "password"
 }
 ```
@@ -21,7 +20,7 @@ POST /api/auth/login
 
 ```json
 {
-  "token": "rex_session_xxx",
+  "token": "<JWT>",
   "expiresAt": "2026-06-17T00:00:00Z"
 }
 ```

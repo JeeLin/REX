@@ -8,26 +8,25 @@
 
 ## FileConnector trait
 
+统一抽象（定义于 `rex-common::file_transfer`），各协议实现它：
+
 ```rust
-#[async_trait]
 pub trait FileConnector: Send + Sync {
-    /// 获取文件/目录元信息
-    async fn stat(&self, path: &str) -> Result<FileStat>;
-
-    /// 打开文件进行读取
-    async fn open_read(&self, path: &str) -> Result<InputStream>;
-
-    /// 打开文件进行写入
-    async fn open_write(&self, path: &str) -> Result<OutputStream>;
-
-    /// 重命名/移动文件
-    async fn rename(&self, from: &str, to: &str) -> Result<()>;
-
-    /// 删除文件
-    async fn remove(&self, path: &str) -> Result<()>;
-
-    /// 列出目录内容
-    async fn list_dir(&self, path: &str) -> Result<Vec<FileStat>>;
+    async fn list(&mut self, path: &str) -> Result<Vec<FileEntry>>;
+    async fn stat(&mut self, path: &str) -> Result<FileEntry>;
+    async fn upload(&mut self, remote_path: &str, data: Vec<u8>, offset: u64, progress: Option<&ProgressCallback>) -> Result<UploadResult>;
+    async fn download(&mut self, path: &str) -> Result<Vec<u8>>;
+    // 支持 Range：从 offset 开始最多 limit 字节（续传/分片）
+    async fn download_range(&mut self, path: &str, offset: u64, limit: Option<u64>) -> Result<Vec<u8>>;
+    async fn delete(&mut self, path: &str) -> Result<()>;
+    async fn rename(&mut self, from: &str, to: &str) -> Result<()>;
+    async fn mkdir(&mut self, path: &str) -> Result<()>;
+    // 编辑器临时下载/保存（限小文件，最大 5MB）
+    async fn read_for_edit(&mut self, path: &str) -> Result<Vec<u8>>;
+    async fn save_from_edit(&mut self, path: &str, data: Vec<u8>) -> Result<()>;
+    async fn close(&mut self) -> Result<()>;
+    fn as_any(&self) -> &dyn std::any::Any;
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
 ```
 
@@ -35,12 +34,9 @@ pub trait FileConnector: Send + Sync {
 
 | 实现 | 协议 | 说明 |
 |------|------|------|
-| `SshFileConnector` | SSH/SFTP | 通过 SSH 通道的 SFTP |
-| `SftpFileConnector` | SFTP | 独立 SFTP 连接 |
-| `MysqlFileConnector` | MySQL | 数据库导出/导入 |
-| `S3FileConnector` | S3/MinIO | 对象存储操作 |
-| `DockerFileConnector` | Docker | 容器内文件操作 |
-| `LocalFileConnector` | 本地 | Agent 本机文件 |
+| `SftpConnector`（rex-ssh） | SSH/SFTP | 通过 SSH 通道的 SFTP |
+| `S3Connector`（rex-s3） | S3/MinIO | 对象存储操作（含 multipart 续传） |
+| `MemConnector`（rex-transfer 测试用） | 内存 | 单测/集成测试的内存实现 |
 
 ---
 
@@ -105,41 +101,34 @@ pub struct TransferProgress {
 - 暂停/恢复/取消
 - 处理冲突
 
-### 创建传输任务
+### 文件操作端点（`/api/files/*`，由 `file_api` 提供）
 
-```http
-POST /api/transfers
-Content-Type: application/json
+| 端点 | 说明 |
+|------|------|
+| `POST /connect` | 按 resource 建立后端 `FileConnector`（SFTP 或 S3） |
+| `GET /list` | 列目录 |
+| `GET /stat` | 取文件/目录元信息 |
+| `POST /mkdir` | 建目录 |
+| `POST /rename` | 重命名/移动 |
+| `DELETE /delete` | 删除 |
+| `POST /upload` | 上传（支持 offset 断点续传，`progress` 回调回报进度） |
+| `GET /download` | 下载（支持 Range，对应 `download_range`） |
+| `POST /acl` | S3 ACL 读写 |
 
-{
-  "source": {
-    "type": "ssh",
-    "resourceId": "res_xxx",
-    "path": "/home/pi/file.tar.gz"
-  },
-  "target": {
-    "type": "sftp",
-    "resourceId": "res_yyy",
-    "path": "/volume1/backup/file.tar.gz"
-  },
-  "conflict": "rename"
-}
-```
+> 前端通过 `FileConnector` 的 `upload(offset)/download_range(offset, limit)` 实现断点续传与分片；进度由后端 `ProgressCallback` 经 REST 响应或前端轮询/状态展示，不经过浏览器中转数据。
 
-### 进度推送
+### 跨连接传输路径
 
-```http
-WS /ws/transfers
-```
-
-事件：
-
-```ts
-type TransferEvent =
-  | { type: 'progress'; taskId: string; progress: TransferProgress }
-  | { type: 'completed'; taskId: string }
-  | { type: 'failed'; taskId: string; message: string }
-  | { type: 'canceled'; taskId: string };
+```text
+前端选择源文件 + 目标连接
+  ↓
+Hub 建立 source / target 两个 FileConnector
+  ↓
+source.download_range() 分片读取
+  ↓
+target.upload(remote_path, chunk, offset, progress) 分片写入
+  ↓
+校验、rename、写入审计日志
 ```
 
 ### 冲突处理
@@ -160,22 +149,4 @@ type ConflictPolicy = 'overwrite' | 'skip' | 'rename' | 'fail';
 完成后校验大小和 SHA256
   ↓
 原子 rename
-```
-
-### 跨连接传输路径
-
-```text
-前端选择源文件 + 目标连接
-  ↓
-Hub 创建 transfer task
-  ↓
-TransferCoordinator 找到 source connector 和 target connector
-  ↓
-source.open_read()
-  ↓
-target.open_write()
-  ↓
-流式分块复制
-  ↓
-校验、rename、写入审计日志
 ```
