@@ -474,21 +474,22 @@ docs/milestones/
 
 > 技术风险：baresip 是 C 库，FFI 封装与跨平台编译（预编译 `.a` 或 build.rs 编 libre）是 M82a 唯一显著风险点，规划时优先验证；baresip 不能跑在浏览器，必须在 Hub/Agent 服务端。
 
-### M82b：浏览器实时双向音频（PCM-over-WebSocket 媒体通道） ← 新增（下一步）
+### M82b：浏览器实时双向音频（PCM-over-WebSocket 媒体通道） ✅ 已完成
 
-**核心功能**：Hub 侧终止 RTP，将 PCM 编码为 Opus，经 WebSocket 媒体通道实时推流到浏览器；浏览器用 Web Audio 解码播放，麦克风经 `getUserMedia` 采集、反向编码回传，实现浏览器与对端**实时双向**通话（满足「时时对话」）。这是产品原则「媒体不经过浏览器」的显式例外（用户明确要求浏览器实时听/说），媒体为实时流而非批量文件传输。
+**核心功能**：Hub/Agent 终止 RTP，抽出原始 S16LE PCM，经 WebSocket 媒体通道（**原始 PCM 二进制帧，不线上编码**）实时推流到浏览器；浏览器用 Web Audio 原生消费播放，麦克风经 `getUserMedia` 采集原始 PCM、反向回传，实现浏览器与对端**实时双向**通话（满足「时时对话」）。这是产品原则「媒体不经过浏览器」的显式例外（用户明确要求浏览器实时听/说），媒体为实时流而非批量文件传输。
 
 **子任务预估**：
-- Hub 侧 RTP 收包 + Opus 编码管线（baresip/opus，从 UA₁ 的 RTP 抽 PCM → Opus）
-- `/ws/sip` 二进制媒体帧协议 + 浏览器↔Hub 上行麦克风帧（与信令文本帧区分）
-- 前端 Web Audio 播放 + 麦克风采集（getUserMedia）+ Opus 解码（WebCodecs/opus.js）
+- Hub/Agent 侧 RTP 收包 + 原始 S16LE PCM 抽取（baresip `ausrc`/`auplay` 驱动，从 UA 抽 PCM，不碰 `call_audio()` 私有结构）
+- `/ws/sip` 二进制媒体帧协议（**原始 PCM 小端 i16，无 kind 字节**）+ 浏览器↔Hub 上行麦克风帧（与信令文本帧区分）
+- Agent UA₂ 媒体经隧道 binary 帧（首字节 kind 区分媒体/信令，channel_id 多路复用）链式转发
+- 前端 Web Audio 播放（ScriptProcessor 原生消费 PCM）+ 麦克风采集（getUserMedia）+ 回声抑制（gain=0）+ 延迟/抖动基础优化
 - 延迟/回声优化与联调（端到端可听可说）
 
 **依赖**：M82a
 **版本类型**：minor
 **版本号**：0.70.1
 
-### M82c：音视频增强 + 通话记录 + 录音 + 抓包 + 质量监控（0.70.2）
+### M82c：音视频增强 + 通话记录 + 录音 + 抓包 + 质量监控（0.70.2） ← 新增（下一步）
 
 **核心功能**（承接用户规划）：在 M82b 浏览器实时双向音频基础上，补齐通话可观测性与媒体能力：
 - **视频支持**：浏览器实时视频（复用 M82b 的 `vidbridge`/`vidsrc` 同构机制 + 前端 WebCodecs + `<video>`，与音频媒体通道共用隧道/WebSocket 帧）。

@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.70.1] - 2026-08-18
+
+### Added
+- 浏览器实时双向音频：Hub/Agent 终止 RTP 抽出原始 S16LE PCM，经 `/ws/sip` 媒体通道（**原始 PCM 二进制帧，不线上编码**）实时推流浏览器；浏览器 Web Audio 原生播放 + `getUserMedia` 采集麦克风 PCM 回传，通话中可听可说
+- `crates/rex-sip`：`ausrc`/`auplay` 自定义音频驱动接管 baresip 音频管线，`SipUaTrait` 新增 `send_audio(Vec<i16>)` 上行接口；`on_rtp` 钩子在泵线程内同步抽取 PCM（绝不 await/阻塞）
+- Hub `/ws/sip` 媒体通道：`encode_pcm_frame`/`decode_media_frame` 原始 PCM 与二进制帧互转；统一 `Outbound` 出站通道 + 单一 writer 独占 `SplitSink`；下行 on_rtp→Binary、上行 Binary→`send_audio`
+- Agent UA₂ 媒体转发：隧道 binary 帧 `[4B channelId][1B kind][payload]` 首字节 kind 区分媒体/信令（`KIND_SIGNAL=0`/`KIND_MEDIA=1`），复用 channel_id 多路复用，不新造隧道
+- 前端 `api/sipMedia.ts`：PCM 编解码 + `SipAudio`（下行播放队列 / 上行麦克风采集，无 AudioContext 时安全空转）；`features/sip/` 通话中麦克风开关、扬声器/静音、挂断清理
+
+### Changed
+- 媒体格式：经用户确认，本阶段**不引入 opus 等线上编码**——媒体帧直接携带原始 S16LE i16 LE PCM（单用户自托管局域网场景带宽足够、延迟更低、无额外依赖）；后续若支持视频再按需引入多种音频编码
+
 ## [0.70.0] - 2026-08-17
 
 ### Added
