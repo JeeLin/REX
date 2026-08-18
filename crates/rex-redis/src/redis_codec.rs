@@ -2,7 +2,7 @@
 //!
 //! 支持格式：Msgpack、PHPSerialize、JavaSerialize、Pickle、zlib/gzip/zstd 压缩。
 
-use flate2::read::{DeflateDecoder, GzDecoder};
+use flate2::read::{GzDecoder, ZlibDecoder};
 use std::io::Read;
 
 /// 检测到的格式名称（与前端 FormatViewer 标签对应）。
@@ -144,9 +144,9 @@ fn detect_compressed(bytes: &[u8], raw_size: usize) -> Option<FormatDetection> {
         }
     }
 
-    // zlib: CMF byte 0x78 (deflate, window size 32k)
+    // zlib: CMF byte 0x78 (deflate, window size 32k) — zlib 容器需 ZlibDecoder
     if !bytes.is_empty() && bytes[0] == 0x78 {
-        let mut decoder = DeflateDecoder::new(bytes);
+        let mut decoder = ZlibDecoder::new(bytes);
         let mut buf = Vec::new();
         if decoder.read_to_end(&mut buf).is_ok() && !buf.is_empty() {
             let inner = detect_and_decode(&buf);
@@ -669,5 +669,66 @@ mod tests {
         assert_eq!(DetectedFormat::Pickle.name(), "pickle");
         assert_eq!(DetectedFormat::Text.name(), "text");
         assert_eq!(DetectedFormat::Binary.name(), "binary");
+    }
+
+    // --- Additional PHPSerialize / compression edge cases ---
+
+    #[test]
+    fn test_php_serialize_object() {
+        // O:4:"User":1:{...}
+        let bytes = b"O:4:\"User\":1:{s:3:\"age\";i:30;}";
+        let d = detect_and_decode(bytes);
+        assert_eq!(d.format, DetectedFormat::PhpSerialize);
+    }
+
+    #[test]
+    fn test_php_serialize_bool_null_double() {
+        assert_eq!(
+            detect_and_decode(b"N;").format,
+            DetectedFormat::PhpSerialize
+        );
+        assert_eq!(
+            detect_and_decode(b"d:3.14;").format,
+            DetectedFormat::PhpSerialize
+        );
+        // 普通文本不以 PHP 标记开头，不应误判
+        assert_ne!(
+            detect_and_decode(b"hello").format,
+            DetectedFormat::PhpSerialize
+        );
+    }
+
+    #[test]
+    fn test_zlib_json() {
+        // 使用 zlib 容器（0x78 头部），与 detect_compressed 的 zlib 分支匹配
+        use flate2::write::ZlibEncoder;
+        use flate2::Compression;
+        use std::io::Write;
+
+        let json = r#"{"zlib":"ok","n":1}"#;
+        let mut enc = ZlibEncoder::new(Vec::new(), Compression::default());
+        enc.write_all(json.as_bytes()).unwrap();
+        let compressed = enc.finish().unwrap();
+
+        let d = detect_and_decode(&compressed);
+        assert_eq!(d.compression, Some("zlib".into()));
+        assert_eq!(d.format, DetectedFormat::Json);
+        assert!(d.decoded.unwrap().contains("zlib"));
+    }
+
+    #[test]
+    fn test_gzip_of_text() {
+        use flate2::write::GzEncoder;
+        use flate2::Compression;
+        use std::io::Write;
+
+        let text = "plain text payload";
+        let mut enc = GzEncoder::new(Vec::new(), Compression::default());
+        enc.write_all(text.as_bytes()).unwrap();
+        let compressed = enc.finish().unwrap();
+
+        let d = detect_and_decode(&compressed);
+        assert_eq!(d.compression, Some("gzip".into()));
+        assert_eq!(d.format, DetectedFormat::Text);
     }
 }

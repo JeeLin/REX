@@ -52,16 +52,20 @@ fn split_init_script(script: &str) -> Vec<String> {
         .collect()
 }
 
+/// 拼装 SSH 连接地址；IPv6 需加方括号（已有方括号不再重复添加）。
+/// 纯逻辑，便于单元测试。
+fn format_ssh_addr(host: &str, port: u16) -> String {
+    if host.contains(':') && !host.starts_with('[') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    }
+}
+
 impl SshSession {
     /// 建立 SSH 连接、分配 PTY、启动 shell，返回会话
     pub async fn connect(config: SshConfig) -> Result<Self> {
-        // IPv6 addresses need brackets: [::1]:22
-        // 已有方括号的不再重复添加
-        let addr = if config.host.contains(':') && !config.host.starts_with('[') {
-            format!("[{}]:{}", config.host, config.port)
-        } else {
-            format!("{}:{}", config.host, config.port)
-        };
+        let addr = format_ssh_addr(&config.host, config.port);
 
         // SSH 客户端配置
         let mut ssh_config = client::Config::default();
@@ -237,5 +241,26 @@ mod tests {
         assert!(split_init_script("\n\n").is_empty());
         // 空字符串即无命令
         assert!(split_init_script("").is_empty());
+    }
+
+    #[test]
+    fn test_format_ssh_addr_ipv4() {
+        assert_eq!(format_ssh_addr("192.168.1.1", 22), "192.168.1.1:22");
+    }
+
+    #[test]
+    fn test_format_ssh_addr_ipv6_gets_brackets() {
+        assert_eq!(format_ssh_addr("::1", 22), "[::1]:22");
+        assert_eq!(format_ssh_addr("2001:db8::1", 2222), "[2001:db8::1]:2222");
+    }
+
+    #[test]
+    fn test_format_ssh_addr_ipv6_existing_brackets_untouched() {
+        assert_eq!(format_ssh_addr("[::1]", 22), "[::1]:22");
+    }
+
+    #[test]
+    fn test_format_ssh_addr_hostname() {
+        assert_eq!(format_ssh_addr("example.com", 22), "example.com:22");
     }
 }
