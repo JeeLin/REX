@@ -648,7 +648,17 @@
     "micOff": "麦克风关",
     "qualityLoss": "丢包",
     "qualityJitter": "抖动",
-    "qualityRtt": "延迟"
+    "qualityRtt": "延迟",
+    "capture": "抓包",
+    "captureStart": "开始抓包",
+    "captureStop": "停止抓包",
+    "captureEmpty": "尚未捕获报文",
+    "captureDownload": "下载 pcap",
+    "recordStart": "开始录音",
+    "recordStop": "停止录音",
+    "videoStart": "开始视频",
+    "videoStop": "停止视频",
+    "captureCount": "报文数：{n}"
   },
   "terminal": {
     "clear": "清屏",

@@ -29,6 +29,7 @@ pub enum MockAction {
     Unhold(String),
     Dtmf(String, char),
     SendAudio(usize),
+    SendVideo(usize),
 }
 
 impl MockSipUa {
@@ -106,6 +107,15 @@ impl SipUaTrait for MockSipUa {
 
     async fn send_audio(&self, pcm: Vec<i16>) -> Result<()> {
         self.record(MockAction::SendAudio(pcm.len()));
+        Ok(())
+    }
+
+    fn on_video(&self, _cb: Box<dyn FnMut(&crate::video_bridge::VideoFrame) + Send + 'static>) {
+        // Mock 不依赖真 baresip，仅接收回调，不触发（handler 单测直接驱动 RX）。
+    }
+
+    async fn send_video(&self, frame: crate::video_bridge::VideoFrame) -> Result<()> {
+        self.record(MockAction::SendVideo(frame.rgba.len()));
         Ok(())
     }
 

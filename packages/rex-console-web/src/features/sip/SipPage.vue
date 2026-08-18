@@ -3,8 +3,15 @@ import { onMounted, onBeforeUnmount, ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Dialpad from './Dialpad.vue'
 import CallState from './CallState.vue'
-import { SipClient, type SipCallState, type SipServerEvent } from '@/api/sip'
-import { SipAudio, encodePcmFrame, decodeMediaFrame } from '@/api/sipMedia'
+import { SipClient, type SipCallState, type SipServerEvent, sipCaptureApi, recordingApi } from '@/api/sip'
+import {
+  SipAudio,
+  SipVideo,
+  encodePcmFrame,
+  decodeMediaFrame,
+  encodeVideoFrame,
+  decodeVideoFrame,
+} from '@/api/sipMedia'
 
 const props = defineProps<{
   resourceId?: string
@@ -23,10 +30,85 @@ const connected = ref(false)
 const micOn = ref(false)
 const audio = new SipAudio()
 
+// 浏览器实时视频（子任务 #1）：下行 RGBA 像素帧渲染到 canvas + 上行摄像头采集回传。
+const video = new SipVideo()
+const videoOn = ref(false)
+const videoError = ref<string | null>(null)
+const videoCanvas = ref<HTMLCanvasElement | null>(null)
+
 // 实时媒体质量指标（子任务 #5）：丢帧率 / 抖动 / 延迟代理。
 const quality = ref<{ loss: number; jitter: number; rtt: number } | null>(null)
 
 let client: SipClient | null = null
+
+// 信令抓包（子任务 #3）：UA₁ 真实 SIP 字节经 baresip 钩子全局捕获，UA₂ 中继层 JSON。
+const capturing = ref(false)
+const captureError = ref<string | null>(null)
+
+async function onToggleCapture() {
+  captureError.value = null
+  try {
+    if (!capturing.value) {
+      await sipCaptureApi.start(props.resourceId || '')
+      capturing.value = true
+    } else {
+      const r = await sipCaptureApi.stop(props.resourceId || '')
+      capturing.value = false
+      void r
+    }
+  } catch (e) {
+    captureError.value = e instanceof Error ? e.message : String(e)
+  }
+}
+
+// 通话录音（子任务 #2）：Hub 在通话进行时捕获下行 PCM 落盘为 WAV，关联各 CDR。
+const recording = ref(false)
+const recordError = ref<string | null>(null)
+
+async function onToggleRecord() {
+  recordError.value = null
+  try {
+    if (!recording.value) {
+      await recordingApi.start(props.resourceId || '')
+      recording.value = true
+    } else {
+      await recordingApi.stop(props.resourceId || '')
+      recording.value = false
+    }
+  } catch (e) {
+    recordError.value = e instanceof Error ? e.message : String(e)
+  }
+}
+
+// 浏览器实时视频（子任务 #1）：开启后把下行像素帧渲染到 canvas，并上行采集摄像头回传。
+async function onToggleVideo() {
+  videoError.value = null
+  try {
+    if (!videoOn.value) {
+      if (videoCanvas.value) video.attachCanvas(videoCanvas.value)
+      await video.startCamera((f) => {
+        const buf = encodeVideoFrame(f.width, f.height, f.rgba)
+        client?.sendVideoFrame(buf)
+      })
+      videoOn.value = video.camActive
+    } else {
+      video.stopCamera()
+      videoOn.value = false
+    }
+  } catch (e) {
+    videoError.value = e instanceof Error ? e.message : String(e)
+  }
+}
+
+// 下行视频帧（原始 RGBA 像素）→ 解码 → 渲染到 canvas。
+function handleVideo(data: ArrayBuffer) {
+  try {
+    const { width, height, rgba } = decodeVideoFrame(data)
+    video.renderFrame(width, height, rgba)
+  } catch {
+    // 畸形视频帧静默忽略（与音频解码同策略）。
+  }
+}
 
 function getToken(): string {
   return localStorage.getItem('rex-token') || ''
@@ -76,6 +158,8 @@ function applyCallState(callId: string, state: SipCallState) {
     if (currentCall.value?.callId === callId) currentCall.value = null
     quality.value = null
     teardownAudio()
+    video.stopCamera()
+    videoOn.value = false
     emit('update:status', registered.value ? 'online' : 'error')
     return
   }
@@ -139,6 +223,7 @@ onMounted(() => {
   client = new SipClient(props.resourceId || '', {
     onEvent: handleEvent,
     onMedia: handleMedia,
+    onVideo: handleVideo,
     onOpen: () => {
       connected.value = true
       emit('update:status', 'connecting')
@@ -154,8 +239,12 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   teardownAudio()
+  video.stopCamera()
+  video.close()
+  videoOn.value = false
   client?.close()
   client = null
+  capturing.value = false
 })
 
 const statusLabel = computed(() => {
@@ -187,6 +276,35 @@ const statusLabel = computed(() => {
         @toggle-mic="onToggleMic"
       />
       <Dialpad :registered="registered" @dial="onDial" />
+      <div class="capture-bar">
+        <button class="capture-btn" :class="{ active: capturing }" @click="onToggleCapture">
+          {{ capturing ? t('sip.captureStop') : t('sip.captureStart') }}
+        </button>
+        <a
+          v-if="capturing"
+          class="capture-dl"
+          :href="sipCaptureApi.pcapUrl(props.resourceId || '')"
+          target="_blank"
+          rel="noopener"
+        >{{ t('sip.captureDownload') }}</a>
+        <button class="capture-btn" :class="{ active: recording }" @click="onToggleRecord">
+          {{ recording ? t('sip.recordStop') : t('sip.recordStart') }}
+        </button>
+        <button class="capture-btn" :class="{ active: videoOn }" @click="onToggleVideo">
+          {{ videoOn ? t('sip.videoStop') : t('sip.videoStart') }}
+        </button>
+        <span v-if="captureError" class="capture-err muted">{{ captureError }}</span>
+        <span v-if="recordError" class="capture-err muted">{{ recordError }}</span>
+        <span v-if="videoError" class="capture-err muted">{{ videoError }}</span>
+      </div>
+      <!-- 浏览器实时视频渲染画布（子任务 #1）：下行 RGBA 像素帧经 SipVideo 渲染。 -->
+      <canvas
+        v-show="videoOn"
+        ref="videoCanvas"
+        class="video-canvas"
+        width="320"
+        height="240"
+      ></canvas>
       <div v-if="quality && currentCall?.state === 'active'" class="quality-card">
         <div class="q-metric">
           <span class="q-label muted">{{ t('sip.qualityLoss') }}</span>
@@ -236,6 +354,42 @@ const statusLabel = computed(() => {
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-3) 0;
+}
+.capture-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.capture-btn {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+.capture-btn.active {
+  border-color: var(--danger, #e5484d);
+  color: var(--danger, #e5484d);
+}
+.capture-dl {
+  font-size: var(--text-sm);
+  color: var(--accent, #4a9eff);
+  text-decoration: none;
+}
+.capture-err { font-size: var(--text-xs); }
+.video-canvas {
+  width: 100%;
+  max-height: 320px;
+  background: #000;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  object-fit: contain;
 }
 .quality-card {
   display: flex;

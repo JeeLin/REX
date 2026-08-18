@@ -317,10 +317,16 @@ async fn handle_agent_sip(
                         }
                     }
                 }
-                // 浏览器上行麦克风 PCM（S16LE 二进制帧）→ 隧道媒体帧（kind=1）发给 Agent UA₂。
+                // 浏览器上行二进制帧（音频 PCM / 视频像素）→ 隧道媒体帧发给 Agent UA₂。
+                // 首字节 kind 在浏览器侧已按音频/视频区分，原样透传 kind（1=音频 / 2=视频）。
                 Ok(Message::Binary(bytes)) => {
-                    let media =
-                        crate::sip_media::wrap_tunnel_frame(crate::sip_media::KIND_MEDIA, &bytes);
+                    let (kind, payload) = crate::sip_media::unwrap_tunnel_frame(&bytes);
+                    let media_kind = if kind == crate::sip_media::KIND_VIDEO {
+                        crate::sip_media::KIND_VIDEO
+                    } else {
+                        crate::sip_media::KIND_MEDIA
+                    };
+                    let media = crate::sip_media::wrap_tunnel_frame(media_kind, payload);
                     let mut frame = Vec::with_capacity(4 + media.len());
                     frame.extend_from_slice(&ch_id_num.to_be_bytes());
                     frame.extend_from_slice(&media);
@@ -352,6 +358,8 @@ async fn handle_agent_sip(
     let out_tx_for_event = out_tx.clone();
     let agent_cdr_db = state.db.clone();
     let agent_cdr_rid = resource_id.to_string();
+    let agent_capture = state.sip_capture.clone();
+    let agent_cdr_db_recording = state.sip_recording.clone();
     let event_tx = tokio::spawn(async move {
         let mut trackers: std::collections::HashMap<String, CdrTracker> = Default::default();
         while let Some(data) = data_rx.recv().await {
@@ -361,6 +369,18 @@ async fn handle_agent_sip(
             match kind {
                 crate::sip_media::KIND_MEDIA => {
                     // 媒体帧（Agent UA₂ 抽出的下行 PCM）→ 原样推浏览器播放。
+                    // 录音（子任务 #2）：下行 PCM 同时写入录音缓冲（按当前激活通话分文件落盘）。
+                    crate::sip_recording::append_tunnel_media(&agent_cdr_db_recording, rest);
+                    if out_tx_for_event
+                        .send(Outbound::Binary(rest.to_vec()))
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+                crate::sip_media::KIND_VIDEO => {
+                    // 视频帧（Agent UA₂ 抽出的下行像素）→ 原样推浏览器渲染（子任务 #1）。
                     if out_tx_for_event
                         .send(Outbound::Binary(rest.to_vec()))
                         .await
@@ -378,11 +398,24 @@ async fn handle_agent_sip(
                             continue;
                         }
                     };
+                    // 抓包（子任务 #3）：Agent UA₂ 入站 SipEvent 经隧道回 Hub 后记录
+                    // （UA₁ 真实 SIP 字节由 rex_sip::capture 的 baresip 钩子捕获，此处仅 UA₂）。
+                    if agent_capture.is_active(&agent_cdr_rid) {
+                        if let Ok(json) = serde_json::to_string(&ev) {
+                            agent_capture.record_ua2(&agent_cdr_rid, "ua2_in", &json);
+                        }
+                    }
                     match &ev {
                         rex_sip::SipEvent::IncomingCall { call_id, from } => {
                             trackers.insert(
                                 call_id.clone(),
-                                CdrTracker::new(&agent_cdr_rid, call_id, from, "in"),
+                                CdrTracker::new(
+                                    &agent_cdr_rid,
+                                    call_id,
+                                    from,
+                                    "in",
+                                    agent_cdr_db_recording.clone(),
+                                ),
                             );
                         }
                         rex_sip::SipEvent::CallState { call_id, state } => {
@@ -515,13 +548,19 @@ async fn handle_sip_session(
     let (event_tx, mut event_rx) = mpsc::channel::<ServerMsg>(64);
     let db_for_cdr = state.db.clone();
     let rid = resource_id.to_string();
+    let rec_for_cdr = state.sip_recording.clone();
     let event_pump = tokio::spawn(async move {
         let db = db_for_cdr;
         let mut trackers: std::collections::HashMap<String, CdrTracker> = Default::default();
         while let Some(ev) = events.recv().await {
+            // UA₁ 真实 SIP 信令字节已由 rex_sip::capture 的 baresip 钩子全局捕获（子任务 #3），
+            // 此处不再做中继层 JSON 记录。
             match &ev {
                 SipEvent::IncomingCall { call_id, from } => {
-                    trackers.insert(call_id.clone(), CdrTracker::new(&rid, call_id, from, "in"));
+                    trackers.insert(
+                        call_id.clone(),
+                        CdrTracker::new(&rid, call_id, from, "in", rec_for_cdr.clone()),
+                    );
                 }
                 SipEvent::CallState { call_id, state } => {
                     if let Some(tr) = trackers.get_mut(call_id) {
@@ -548,9 +587,27 @@ async fn handle_sip_session(
     //     经 out_tx 交 writer 以 `Message::Binary` 推浏览器。回调在 baresip 泵线程内同步
     //     调用，发送失败（浏览器已断）即丢弃该帧。
     let out_tx_for_rtp = out_tx.clone();
+    // 录音（子任务 #2）：下行 PCM 同时写入录音缓冲（按当前激活通话分文件落盘）。
+    let rec_for_rtp = state.sip_recording.clone();
     ua.on_rtp(Box::new(move |pcm: &[i16]| {
         let frame = crate::sip_media::encode_pcm_frame(pcm);
+        // 录音在本次借用 frame 后再 move 进 out_tx，避免 use-after-move。
+        crate::sip_recording::append_tunnel_media(&rec_for_rtp, &frame);
         let _ = out_tx_for_rtp.try_send(Outbound::Binary(frame));
+    }));
+
+    // 浏览器实时视频（0.70.2 子任务 #1）：下行对端像素帧 → 视频隧道帧（KIND_VIDEO）→ 浏览器。
+    let out_tx_for_video = out_tx.clone();
+    ua.on_video(Box::new(move |vf: &rex_sip::video_bridge::VideoFrame| {
+        if let Ok(bytes) = crate::sip_media::encode_video_frame(
+            crate::sip_media::VideoPixFmt::Rgba,
+            vf.width,
+            vf.height,
+            &vf.rgba,
+        ) {
+            let frame = crate::sip_media::wrap_tunnel_frame(crate::sip_media::KIND_VIDEO, &bytes);
+            let _ = out_tx_for_video.try_send(Outbound::Binary(frame));
+        }
     }));
 
     // 前端 → UA 控制指令任务（兼收媒体二进制帧）
@@ -567,6 +624,8 @@ async fn handle_sip_session(
                             continue;
                         }
                     };
+                    // UA₁ 真实 SIP 信令字节(含拨号/应答等触发的 request)已由 rex_sip::capture 的
+                    // baresip 钩子全局捕获（子任务 #3），此处不再做中继层 JSON 记录。
                     if let Err(e) = dispatch_cmd(ua_for_cmd.as_ref(), cmd).await {
                         if out_tx_for_cmd
                             .send(Outbound::Text(
@@ -582,12 +641,28 @@ async fn handle_sip_session(
                         }
                     }
                 }
-                // 浏览器上行麦克风 PCM（S16LE 二进制帧）→ 解码 → 喂回 baresip 发送链路。
+                // 浏览器上行二进制帧：首字节 kind 区分音频（PCM）/视频（像素）。
                 Ok(Message::Binary(bytes)) => {
-                    let pcm = crate::sip_media::decode_media_frame(&bytes);
-                    if !pcm.is_empty() {
-                        if let Err(e) = ua_for_cmd.send_audio(pcm).await {
-                            tracing::debug!(action = "SIP_MEDIA_UP", error = %e, "send_audio failed");
+                    let (kind, payload) = crate::sip_media::unwrap_tunnel_frame(&bytes);
+                    if kind == crate::sip_media::KIND_VIDEO {
+                        // 视频上行：解码像素帧 → 喂回 baresip 发送链路（0.70.2 子任务 #1）。
+                        if let Ok((_, w, h, rgba)) = crate::sip_media::decode_video_frame(payload) {
+                            let frame = rex_sip::video_bridge::VideoFrame {
+                                width: w,
+                                height: h,
+                                rgba,
+                            };
+                            if let Err(e) = ua_for_cmd.send_video(frame).await {
+                                tracing::debug!(action = "SIP_VIDEO_UP", error = %e, "send_video failed");
+                            }
+                        }
+                    } else {
+                        // 音频上行：解码 S16LE PCM → 喂回 baresip 发送链路（M82b）。
+                        let pcm = crate::sip_media::decode_media_frame(payload);
+                        if !pcm.is_empty() {
+                            if let Err(e) = ua_for_cmd.send_audio(pcm).await {
+                                tracing::debug!(action = "SIP_MEDIA_UP", error = %e, "send_audio failed");
+                            }
                         }
                     }
                 }
@@ -694,10 +769,20 @@ struct CdrTracker {
     direction: String,
     created_at: Option<String>,
     active_at: Option<String>,
+    /// 录音落盘后的 CDR 主键（`cdr:{call_id}`），用于落盘文件名与 URL 回填。
+    cdr_id: String,
+    /// 录音注册表（子任务 #2）：通话结束时把下行缓冲落盘并回填 `recording_url`。
+    recording: std::sync::Arc<crate::sip_recording::SipRecordingRegistry>,
 }
 
 impl CdrTracker {
-    fn new(resource_id: &str, call_id: &str, peer: &str, direction: &str) -> Self {
+    fn new(
+        resource_id: &str,
+        call_id: &str,
+        peer: &str,
+        direction: &str,
+        recording: std::sync::Arc<crate::sip_recording::SipRecordingRegistry>,
+    ) -> Self {
         CdrTracker {
             resource_id: resource_id.to_string(),
             call_id: call_id.to_string(),
@@ -705,6 +790,8 @@ impl CdrTracker {
             direction: direction.to_string(),
             created_at: None,
             active_at: None,
+            cdr_id: format!("cdr:{call_id}"),
+            recording,
         }
     }
 
@@ -729,6 +816,8 @@ impl CdrTracker {
                 if self.active_at.is_none() {
                     self.active_at = Some(Self::now_iso());
                 }
+                // 录音（子任务 #2）：通话接通即开始承接下行媒体帧到本 call 缓冲。
+                self.recording.begin_call(&self.call_id);
             }
             CallState::Held => {}
             CallState::Ended => {}
@@ -750,6 +839,14 @@ impl CdrTracker {
             }
             _ => (None, 0),
         };
+        // 录音（子任务 #2）：通话结束把下行缓冲落盘，回填 `recording_url`。
+        let recording_url = if matches!(state, CallState::Ended | CallState::Held) {
+            self.recording
+                .finalize_call(&self.cdr_id)
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
         let cdr = crate::models::NewCdr {
             id: self.id(),
             resource_id: self.resource_id.clone(),
@@ -766,7 +863,7 @@ impl CdrTracker {
                 CallState::Ended => "ended",
             }
             .to_string(),
-            recording_url: String::new(),
+            recording_url,
             pcap_url: String::new(),
         };
         let _ = db.upsert_cdr(&cdr);
@@ -1177,6 +1274,71 @@ mod tests {
     }
 
     #[test]
+    fn agent_uplink_browser_video_wraps_to_video_tunnel_frame() {
+        // 浏览器上行视频像素帧（Binary 帧，kind=2）→ Hub frontend_to_agent 透传 kind
+        // 包裹为 tunnel 视频帧 `[4B channelId][1B kind=2][pixels]` 发给 Agent UA₂；
+        // Agent 侧按 kind 识别为视频帧 → decode 喂回 UA₂ 发送链路（0.70.2 子任务 #1）。
+        let ch_id: u32 = 7;
+        let vf = rex_sip::video_bridge::VideoFrame {
+            width: 2,
+            height: 2,
+            rgba: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+        };
+        let pix = crate::sip_media::encode_video_frame(
+            crate::sip_media::VideoPixFmt::Rgba,
+            vf.width,
+            vf.height,
+            &vf.rgba,
+        )
+        .unwrap();
+        // 浏览器侧上行帧：wrap kind=2 + 像素。Hub 剥出 kind 后原样透传 kind 给隧道帧。
+        let media = crate::sip_media::wrap_tunnel_frame(crate::sip_media::KIND_VIDEO, &pix);
+        let mut frame = ch_id.to_be_bytes().to_vec();
+        frame.extend_from_slice(&media);
+        let decapped = frame[4..].to_vec();
+        let (kind, rest) = crate::sip_media::unwrap_tunnel_frame(&decapped);
+        assert_eq!(kind, crate::sip_media::KIND_VIDEO);
+        // downlink Hub→browser 同样按 kind=2 原样推 Binary（rest 已是视频像素帧）。
+        let (dw, w, h, rgba) = crate::sip_media::decode_video_frame(&rest[..]).unwrap();
+        assert_eq!(dw, crate::sip_media::VideoPixFmt::Rgba);
+        assert_eq!(w, 2);
+        assert_eq!(h, 2);
+        assert_eq!(rgba, vf.rgba);
+    }
+
+    #[test]
+    fn video_and_audio_uplink_kinds_kept_distinct() {
+        // 浏览器同时上行音频（kind=1）与视频（kind=2），Hub 透传时 kind 互不串台。
+        let audio_pcm = vec![1i16, -2];
+        let audio_frame = crate::sip_media::wrap_tunnel_frame(
+            crate::sip_media::KIND_MEDIA,
+            &crate::sip_media::encode_pcm_frame(&audio_pcm),
+        );
+        let video_rgba = vec![9u8; 4 * 4]; // 2x2 RGBA
+        let video_frame = crate::sip_media::wrap_tunnel_frame(
+            crate::sip_media::KIND_VIDEO,
+            &crate::sip_media::encode_video_frame(
+                crate::sip_media::VideoPixFmt::Rgba,
+                2,
+                2,
+                &video_rgba,
+            )
+            .unwrap(),
+        );
+        let (ak, ap) = crate::sip_media::unwrap_tunnel_frame(&audio_frame);
+        let (vk, vp) = crate::sip_media::unwrap_tunnel_frame(&video_frame);
+        assert_eq!(ak, crate::sip_media::KIND_MEDIA);
+        assert_eq!(vk, crate::sip_media::KIND_VIDEO);
+        // 互不得出对方数据。
+        assert_ne!(ap, vp);
+        assert_eq!(crate::sip_media::decode_media_frame(ap), audio_pcm);
+        assert_eq!(
+            crate::sip_media::decode_video_frame(vp).unwrap().3,
+            video_rgba
+        );
+    }
+
+    #[test]
     fn tunnel_kind_signal_vs_media_distinguished() {
         // 同一隧道上信令帧（kind=0）与媒体帧（kind=1）必须按 kind 走不同分发分支。
         let ch_id: u32 = 1;
@@ -1333,7 +1495,15 @@ mod tests {
     fn cdr_tracker_creates_and_finalizes_record() {
         let dir = tempdir().unwrap();
         let db = Database::open(&dir.path().join("cdr-test.db")).unwrap();
-        let mut tr = CdrTracker::new("res-1", "call-1", "sip:bob@x", "out");
+        let mut tr = CdrTracker::new(
+            "res-1",
+            "call-1",
+            "sip:bob@x",
+            "out",
+            Arc::new(crate::sip_recording::SipRecordingRegistry::new(
+                tempdir().unwrap().path().to_path_buf(),
+            )),
+        );
 
         // 拨号 → ringing，落 start_time。
         tr.apply(CallState::Ringing, &db);
@@ -1360,7 +1530,15 @@ mod tests {
     fn cdr_tracker_idempotent_on_same_call() {
         let dir = tempdir().unwrap();
         let db = Database::open(&dir.path().join("cdr-test2.db")).unwrap();
-        let mut tr = CdrTracker::new("res-1", "call-9", "sip:carol@y", "in");
+        let mut tr = CdrTracker::new(
+            "res-1",
+            "call-9",
+            "sip:carol@y",
+            "in",
+            Arc::new(crate::sip_recording::SipRecordingRegistry::new(
+                tempdir().unwrap().path().to_path_buf(),
+            )),
+        );
         tr.apply(CallState::Ringing, &db);
         tr.apply(CallState::Active, &db);
         tr.apply(CallState::Ended, &db);

@@ -19,14 +19,16 @@ use tokio::sync::oneshot;
 
 // baresip / re 自动生成绑定中的类型与函数（来自 `crate::bindings` 的 include）。
 use crate::audio_bridge::AudioBridge;
+use crate::video_bridge::VideoBridge;
 use crate::{
     account_set_auth_pass, account_set_auth_user, audio_bridge, audio_set_player, audio_set_source,
     baresip_init, bevent_ev_BEVENT_CALL_CLOSED, bevent_ev_BEVENT_CALL_ESTABLISHED,
     bevent_ev_BEVENT_CALL_HOLD, bevent_ev_BEVENT_CALL_INCOMING, bevent_ev_BEVENT_CALL_RESUME,
     bevent_ev_BEVENT_CALL_RINGING, bevent_ev_BEVENT_REGISTER_FAIL, bevent_ev_BEVENT_REGISTER_OK,
     bevent_get_call, bevent_get_text, bevent_register, call, call_audio, call_hold,
-    call_send_digit, mqueue, mqueue_alloc, mqueue_push, re_main, ua, ua_account, ua_alloc,
-    ua_answer, ua_connect, ua_hangup, ua_register, ua_stop_register, vidmode_VIDMODE_OFF,
+    call_send_digit, call_video, mqueue, mqueue_alloc, mqueue_push, re_main, ua, ua_account,
+    ua_alloc, ua_answer, ua_connect, ua_hangup, ua_register, ua_stop_register, video_bridge,
+    video_set_devicename, video_set_source, vidmode_VIDMODE_OFF,
 };
 
 /// 全局 bevent 回调的共享状态：事件 sink + call_id→call* 映射 + 主线程 mqueue。
@@ -38,6 +40,9 @@ struct BaresipState {
     /// 音频桥接（M82b）：自定义 baresip 音频驱动 state + RX/TX PCM 队列。
     #[allow(clippy::arc_with_non_send_sync)]
     audio: Arc<AudioBridge>,
+    /// 视频桥接（0.70.2 子任务 #1）：自定义 baresip 视频驱动 state + RX/TX 像素队列。
+    #[allow(clippy::arc_with_non_send_sync)]
+    video: Arc<VideoBridge>,
 }
 
 unsafe impl Send for BaresipState {}
@@ -125,6 +130,18 @@ impl SipUaTrait for SipUa {
             SipUa::Mock(u) => u.send_audio(pcm).await,
         }
     }
+    fn on_video(&self, cb: Box<dyn FnMut(&crate::video_bridge::VideoFrame) + Send + 'static>) {
+        match self {
+            SipUa::Real(u) => u.on_video(cb),
+            SipUa::Mock(u) => u.on_video(cb),
+        }
+    }
+    async fn send_video(&self, frame: crate::video_bridge::VideoFrame) -> anyhow::Result<()> {
+        match self {
+            SipUa::Real(u) => u.send_video(frame).await,
+            SipUa::Mock(u) => u.send_video(frame).await,
+        }
+    }
     fn quality(&self) -> crate::audio_bridge::QualitySnapshot {
         match self {
             SipUa::Real(u) => u.quality(),
@@ -199,6 +216,7 @@ fn ensure_runtime() -> Result<*mut mqueue> {
             calls: Mutex::new(HashMap::new()),
             mq,
             audio: Arc::new(AudioBridge::new()),
+            video: Arc::new(VideoBridge::new()),
         });
         // 注册自定义 baresip 音频驱动（ausrc/auplay），接管 RTP↔PCM 搬运（M82b）。
         // 注册失败即回收 STATE 并返回错误，避免后续 UA 在缺音频驱动下建立通话。
@@ -206,13 +224,26 @@ fn ensure_runtime() -> Result<*mut mqueue> {
             *g = None;
             return Err(e);
         }
+        // 注册自定义 baresip 视频驱动（vidsrc/vidisp），接管 RTP↔像素搬运（0.70.2 子任务 #1）。
+        // 端到端视频需 baresip 带视频编解码器（当前构建未含，联调需本地重编译），框架层在此打通。
+        if let Err(e) = video_bridge::register_video_drivers(&s.video) {
+            *g = None;
+            return Err(e);
+        }
         *g = Some(s.clone());
+        // 注册 SIP 报文追踪钩子（子任务 #3）：UA₁ 真实 SIP 字节捕获。
+        crate::capture::install_trace();
         // 启动唯一的 re_main 事件循环线程（baresip 单 OS 线程主循环）。
         std::thread::spawn(|| {
             re_main(None);
         });
         Ok(mq)
     }
+}
+
+/// 对外暴露：确保 baresip runtime 已初始化（供抓包在首个 UA 之前启动）。
+pub fn ensure_runtime_initialized() -> anyhow::Result<()> {
+    ensure_runtime().map(|_| ())
 }
 
 /// 接收主线程经 mqueue 回传的控制操作结果。
@@ -335,6 +366,19 @@ impl SipUaTrait for BaresipSipUa {
     /// 浏览器麦克风 PCM 回传：压入 `AudioBridge` 的 TX 队列，由泵线程取走去编码发对端。
     async fn send_audio(&self, pcm: Vec<i16>) -> Result<()> {
         self.state.audio.push_tx(pcm);
+        Ok(())
+    }
+
+    /// 注册下行视频像素帧回调：直接挂到共享 `VideoBridge`（0.70.2 子任务 #1）。baresip 解出
+    /// 对端视频帧后经 `vidisp` 的 `disph` 回调提取像素触发；回调在 baresip `re_main` 线程内同步调用。
+    fn on_video(&self, cb: Box<dyn FnMut(&crate::video_bridge::VideoFrame) + Send + 'static>) {
+        self.state.video.set_on_video(Box::new(cb));
+    }
+
+    /// 浏览器上行视频像素帧回传：压入 `VideoBridge` 的 TX 队列，由 baresip `vidsrc` 的
+    /// `frameh` 回调取走去编码发对端。
+    async fn send_video(&self, frame: crate::video_bridge::VideoFrame) -> Result<()> {
+        self.state.video.push_tx(frame);
         Ok(())
     }
 
@@ -629,7 +673,8 @@ unsafe fn map_bevent(ev: crate::bevent_ev, event: *mut crate::bevent) -> Option<
         bevent_ev_BEVENT_CALL_RINGING => Some(call_state(event, CallState::Ringing)),
         bevent_ev_BEVENT_CALL_ESTABLISHED => {
             // 通话建立：把自定义 ausrc/auplay 驱动挂到该 call 的 audio 上，接管 RTP↔PCM
-            // （M82b）。本回调运行在 baresip `re_main` 线程，可安全调用 audio_* API。
+            // （M82b）；同时把 vidsrc/vidisp 驱动挂到 video 上，接管 RTP↔像素（0.70.2 子任务 #1）。
+            // 本回调运行在 baresip `re_main` 线程，可安全调用 audio_*/video_* API。
             let call = bevent_get_call(event);
             if !call.is_null() {
                 unsafe {
@@ -643,6 +688,21 @@ unsafe fn map_bevent(ev: crate::bevent_ev, event: *mut crate::bevent) -> Option<
                             CString::new(crate::audio_bridge::DEVICE_NAME).unwrap_or_default();
                         audio_set_source(au, src.as_ptr(), dev.as_ptr());
                         audio_set_player(au, play.as_ptr(), dev.as_ptr());
+                    }
+                    // 视频驱动：vidsrc 作 source、vidisp 作 display，均挂到该 call 的 video。
+                    // 端到端视频需 baresip 带视频编解码器（当前构建未含，联调需本地重编译）。
+                    let v = call_video(call);
+                    if !v.is_null() {
+                        let vsrc = CString::new(crate::video_bridge::DRIVER_NAME_VIDSRC)
+                            .unwrap_or_default();
+                        let vdisp = CString::new(crate::video_bridge::DRIVER_NAME_VIDISP)
+                            .unwrap_or_default();
+                        let dev =
+                            CString::new(crate::video_bridge::DEVICE_NAME).unwrap_or_default();
+                        // vidsrc 作 source 驱动、vidisp 作 display 驱动，均挂到该 call 的 video。
+                        // 本 baresip 版本用 `video_set_devicename(v, src, disp)` 同时设源与显示设备。
+                        video_set_source(v, vsrc.as_ptr(), dev.as_ptr());
+                        video_set_devicename(v, vsrc.as_ptr(), vdisp.as_ptr());
                     }
                 }
             }

@@ -29,7 +29,9 @@ pub use ffi::*;
 
 pub mod audio_bridge;
 pub mod baresip_ua;
+pub mod capture;
 pub mod mock;
+pub mod video_bridge;
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -148,6 +150,17 @@ pub trait SipUaTrait {
     }
     /// 浏览器麦克风 PCM 回传（发送侧，M82b）。把 i16 LE PCM 喂回 baresip 发送链路。
     async fn send_audio(&self, _pcm: Vec<i16>) -> anyhow::Result<()> {
+        Ok(())
+    }
+    /// 注册下行视频像素帧回调（接收侧，0.70.2 子任务 #1）。每帧对端视频像素（RGBA）到达即触发。
+    /// 默认 no-op（Mock 可覆盖）；真实现经 baresip 视频驱动桥接上抛。
+    #[allow(clippy::type_complexity)]
+    fn on_video(&self, _cb: Box<dyn FnMut(&crate::video_bridge::VideoFrame) + Send + 'static>) {
+        let _ = _cb;
+    }
+    /// 浏览器上行视频像素帧回传（发送侧，0.70.2 子任务 #1）。把 RGBA 像素喂回 baresip 发送链路。
+    async fn send_video(&self, _frame: crate::video_bridge::VideoFrame) -> anyhow::Result<()> {
+        let _ = _frame;
         Ok(())
     }
     /// 实时媒体质量快照（子任务 #5）。默认零值（Mock 可覆盖）。

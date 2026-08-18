@@ -680,12 +680,29 @@ async fn run_sip_ua2(
     // 回调在 baresip 泵线程内同步调用，故经独立 mpsc 通道把封装后的 PCM 帧交给
     // media_task 叠加 channelId 前缀，经隧道发 Hub（再转浏览器播放）。
     let (media_tx, mut media_rx) = mpsc::channel::<Vec<u8>>(128);
+    let rtp_tx = media_tx.clone();
     ua.on_rtp(Box::new(move |pcm: &[i16]| {
         let frame = rex_common::sip_media::encode_pcm_frame(pcm);
-        let _ = media_tx.try_send(rex_common::sip_media::wrap_tunnel_frame(
+        let _ = rtp_tx.try_send(rex_common::sip_media::wrap_tunnel_frame(
             rex_common::sip_media::KIND_MEDIA,
             &frame,
         ));
+    }));
+    // 浏览器实时视频（0.70.2 子任务 #1）：UA₂ 解出对端像素帧 → 视频隧道帧（kind=2）
+    // → 经 media_task 叠加 channelId 前缀发 Hub（转浏览器渲染）。复用同一 media_tx 通道。
+    let video_tx = media_tx.clone();
+    ua.on_video(Box::new(move |vf: &rex_sip::video_bridge::VideoFrame| {
+        if let Ok(bytes) = rex_common::sip_media::encode_video_frame(
+            rex_common::sip_media::VideoPixFmt::Rgba,
+            vf.width,
+            vf.height,
+            &vf.rgba,
+        ) {
+            let _ = video_tx.try_send(rex_common::sip_media::wrap_tunnel_frame(
+                rex_common::sip_media::KIND_VIDEO,
+                &bytes,
+            ));
+        }
     }));
     let evt_tx_media = evt_tx.clone();
     let media_channel_id = channel_id.clone();
@@ -792,6 +809,19 @@ async fn dispatch_sip_tunnel_frame<U: SipUaTrait + Sync + ?Sized>(
     frame: &[u8],
 ) -> Result<(), String> {
     let (kind, payload) = rex_common::sip_media::unwrap_tunnel_frame(frame);
+    if kind == rex_common::sip_media::KIND_VIDEO {
+        // 视频上行：解码像素帧 → 喂回 UA₂ 发送链路（0.70.2 子任务 #1）。
+        if let Ok((_, w, h, rgba)) = rex_common::sip_media::decode_video_frame(payload) {
+            ua.send_video(rex_sip::video_bridge::VideoFrame {
+                width: w,
+                height: h,
+                rgba,
+            })
+            .await
+            .map_err(|e| e.to_string())?;
+        }
+        return Ok(());
+    }
     if kind == rex_common::sip_media::KIND_MEDIA {
         let pcm = rex_common::sip_media::decode_media_frame(payload);
         if !pcm.is_empty() {
@@ -1101,6 +1131,95 @@ mod tests {
         let acts = ua.actions.lock().unwrap();
         assert_eq!(acts[0], rex_sip::MockAction::Dial("9000".into()));
         assert_eq!(acts[1], rex_sip::MockAction::SendAudio(4));
+    }
+
+    #[tokio::test]
+    async fn tunnel_video_frame_feeds_pixels_to_ua2_send_video() {
+        // 子任务 #1：kind=2 视频帧（上行像素）→ dispatch 走 send_video（不串到音频/信令）。
+        let ua = rex_sip::MockSipUa::new(
+            rex_sip::SipConfig {
+                server: "sip.x".into(),
+                port: 5060,
+                username: "u".into(),
+                password: None,
+                display_name: None,
+                transport: rex_sip::SipTransport::Udp,
+            },
+            vec![],
+        );
+        let rgba = vec![11u8; 4 * 9]; // 3x3 RGBA
+        let pix = rex_common::sip_media::encode_video_frame(
+            rex_common::sip_media::VideoPixFmt::Rgba,
+            3,
+            3,
+            &rgba,
+        )
+        .unwrap();
+        let frame =
+            rex_common::sip_media::wrap_tunnel_frame(rex_common::sip_media::KIND_VIDEO, &pix);
+        dispatch_sip_tunnel_frame(&ua, "11", &frame).await.unwrap();
+        let acts = ua.actions.lock().unwrap();
+        assert_eq!(acts.len(), 1);
+        assert_eq!(acts[0], rex_sip::MockAction::SendVideo(rgba.len()));
+    }
+
+    #[tokio::test]
+    async fn tunnel_video_signal_media_do_not_cross_dispatch() {
+        // 信令 / 音频 / 视频 三帧互不串台，各走各自 dispatch 分支。
+        let ua = rex_sip::MockSipUa::new(
+            rex_sip::SipConfig {
+                server: "sip.x".into(),
+                port: 5060,
+                username: "u".into(),
+                password: None,
+                display_name: None,
+                transport: rex_sip::SipTransport::Udp,
+            },
+            vec![],
+        );
+        dispatch_sip_tunnel_frame(
+            &ua,
+            "1",
+            &rex_common::sip_media::wrap_tunnel_frame(
+                rex_common::sip_media::KIND_SIGNAL,
+                &serde_json::to_vec(&rex_sip::SipControl::Dial {
+                    destination: "9000".into(),
+                })
+                .unwrap(),
+            ),
+        )
+        .await
+        .unwrap();
+        let pcm = vec![1i16, 2, 3, 4];
+        dispatch_sip_tunnel_frame(
+            &ua,
+            "1",
+            &rex_common::sip_media::wrap_tunnel_frame(
+                rex_common::sip_media::KIND_MEDIA,
+                &rex_common::sip_media::encode_pcm_frame(&pcm),
+            ),
+        )
+        .await
+        .unwrap();
+        let rgba = vec![7u8; 4 * 4];
+        let pix = rex_common::sip_media::encode_video_frame(
+            rex_common::sip_media::VideoPixFmt::Rgba,
+            2,
+            2,
+            &rgba,
+        )
+        .unwrap();
+        dispatch_sip_tunnel_frame(
+            &ua,
+            "1",
+            &rex_common::sip_media::wrap_tunnel_frame(rex_common::sip_media::KIND_VIDEO, &pix),
+        )
+        .await
+        .unwrap();
+        let acts = ua.actions.lock().unwrap();
+        assert_eq!(acts[0], rex_sip::MockAction::Dial("9000".into()));
+        assert_eq!(acts[1], rex_sip::MockAction::SendAudio(4));
+        assert_eq!(acts[2], rex_sip::MockAction::SendVideo(rgba.len()));
     }
 
     #[tokio::test]

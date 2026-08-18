@@ -77,6 +77,54 @@ export const cdrApi = {
   get: (id: string) => api.get<CdrRecord>(`/sip/cdr/${id}`),
 }
 
+// --- SIP 信令抓包 API（与 /api/sip/capture 对齐）---
+
+export interface SipCaptureRecord {
+  ts_us: number
+  direction: 'ua1_out' | 'ua1_in' | 'ua2_in'
+  raw: string
+}
+
+export const sipCaptureApi = {
+  /** 开始对某 resource 抓包（幂等）。 */
+  start: (resourceId: string) =>
+    api.post<{ resource_id: string; active: boolean }>(
+      `/sip/capture/${encodeURIComponent(resourceId)}/start`,
+    ),
+  /** 停止抓包，返回累计报文数。 */
+  stop: (resourceId: string) =>
+    api.post<{ resource_id: string; active: boolean; count: number }>(
+      `/sip/capture/${encodeURIComponent(resourceId)}/stop`,
+    ),
+  /** 取当前累积的报文快照（可分页）。 */
+  packets: (resourceId: string, limit?: number) => {
+    const query: Record<string, string> = {}
+    if (limit) query.limit = String(limit)
+    return api.get<SipCaptureRecord[]>(
+      `/sip/capture/${encodeURIComponent(resourceId)}/packets`,
+      query,
+    )
+  },
+  /** 下载 pcap 文件（链路类型 RAW，包体为 SIP 文本）。供 `<a href>` 直链下载。 */
+  pcapUrl: (resourceId: string) =>
+    `/api/sip/capture/${encodeURIComponent(resourceId)}/pcap`,
+}
+
+// --- SIP 通话录音开关（与 /api/sip/recording 对齐，子任务 #2）---
+
+export const recordingApi = {
+  /** 开始录音（幂等，按 resource 全局开启；按 call_id 分文件落盘）。 */
+  start: (resourceId: string) =>
+    api.post<{ resource_id: string; active: boolean }>(
+      `/sip/recording/${encodeURIComponent(resourceId)}/start`,
+    ),
+  /** 停止录音。 */
+  stop: (resourceId: string) =>
+    api.post<{ resource_id: string; active: boolean }>(
+      `/sip/recording/${encodeURIComponent(resourceId)}/stop`,
+    ),
+}
+
 export function encodeControl(msg: SipClientMsg): string {
   return JSON.stringify(msg)
 }
@@ -93,8 +141,10 @@ export function decodeEvent(raw: string): SipServerEvent | null {
 
 export type SipClientHandlers = {
   onEvent?: (e: SipServerEvent) => void
-  /** 下行媒体帧（原始 S16LE PCM 二进制）回调，仅媒体通道时触发。 */
+  /** 下行音频媒体帧（原始 S16LE PCM 二进制，kind=1）回调，仅媒体通道时触发。 */
   onMedia?: (data: ArrayBuffer) => void
+  /** 下行视频媒体帧（原始 RGBA 像素二进制，kind=2）回调，仅媒体通道时触发（子任务 #1）。 */
+  onVideo?: (data: ArrayBuffer) => void
   onOpen?: () => void
   onClose?: () => void
   onError?: (e: Event) => void
@@ -121,10 +171,19 @@ export class SipClient {
       this.handlers.onOpen?.()
     }
     ws.onmessage = (ev) => {
-      // 二进制帧 = 下行媒体（原始 S16LE PCM），直接交 onMedia 处理。
+      // 二进制帧 = 下行媒体（首字节 kind 区分音频 PCM / 视频像素），拆 kind 后分派。
       if (typeof ev.data !== 'string') {
         if (ev.data instanceof ArrayBuffer) {
-          this.handlers.onMedia?.(ev.data)
+          const bytes = new Uint8Array(ev.data)
+          const kind = bytes[0] ?? 0
+          // 剥去首字节 kind，把 payload 交对应回调。
+          const payload = ev.data.slice(1)
+          if (kind === 2) {
+            this.handlers.onVideo?.(payload)
+          } else {
+            // kind=1（音频）及其它默认按音频媒体处理。
+            this.handlers.onMedia?.(payload)
+          }
         }
         return
       }
@@ -138,11 +197,24 @@ export class SipClient {
     ws.onerror = (e) => this.handlers.onError?.(e)
   }
 
-  /** 上行发送一帧媒体（原始 S16LE PCM 二进制帧）。 */
+  /** 上行发送一帧音频媒体（原始 S16LE PCM 二进制帧）。 */
   sendMediaFrame(data: ArrayBuffer): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(data)
     }
+  }
+
+  /**
+   * 上行发送一帧视频媒体（原始 RGBA 像素二进制帧）。包裹 kind=2 首字节后发送，
+   * 与后端 `KIND_VIDEO` 路由对齐（子任务 #1）。
+   */
+  sendVideoFrame(data: ArrayBuffer): void {
+    if (this.ws?.readyState !== WebSocket.OPEN) return
+    const payload = new Uint8Array(data)
+    const framed = new Uint8Array(payload.length + 1)
+    framed[0] = 2 // KIND_VIDEO
+    framed.set(payload, 1)
+    this.ws.send(framed.buffer)
   }
 
   private startHeartbeat(): void {

@@ -650,7 +650,17 @@
     "micOff": "Mic Off",
     "qualityLoss": "Loss",
     "qualityJitter": "Jitter",
-    "qualityRtt": "Delay"
+    "qualityRtt": "Delay",
+    "capture": "Capture",
+    "captureStart": "Start capture",
+    "captureStop": "Stop capture",
+    "captureEmpty": "No packets captured",
+    "captureDownload": "Download pcap",
+    "recordStart": "Start recording",
+    "recordStop": "Stop recording",
+    "videoStart": "Start video",
+    "videoStop": "Stop video",
+    "captureCount": "Packets: {n}"
   },
   "terminal": {
     "clear": "Clear",
