@@ -1,3 +1,6 @@
+//! 凭据加密：资源密码、SSH 私钥密码、Agent token 等敏感字段用 AES-256-GCM
+//! 加密后存库（密文 + nonce + 算法标识）。密钥由 `REX_SECRET_KEY` 派生。
+
 use aes_gcm::{
     aead::{Aead, KeyInit, OsRng},
     Aes256Gcm, Nonce,

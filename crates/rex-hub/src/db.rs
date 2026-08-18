@@ -1,3 +1,6 @@
+//! SQLite 访问层：基于 r2d2 连接池封装 CRUD 与审计日志写入。
+//! 数据目录下的 `hub.db` 为本地唯一持久化存储。
+
 use std::path::Path;
 
 use rex_common::RExError;

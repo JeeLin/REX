@@ -1,3 +1,6 @@
+//! 持久化模型：环境、资源、Agent、审计日志等数据库行的 Rust 结构定义，
+//! 与 `migrations.sql` 中的表结构一一对应。
+
 use serde::{Deserialize, Serialize};
 
 // --- Environment ---
