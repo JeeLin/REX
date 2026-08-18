@@ -1299,7 +1299,7 @@ mod tests {
         let (kind, rest) = crate::sip_media::unwrap_tunnel_frame(&decapped);
         assert_eq!(kind, crate::sip_media::KIND_VIDEO);
         // downlink Hub→browser 同样按 kind=2 原样推 Binary（rest 已是视频像素帧）。
-        let (dw, w, h, rgba) = crate::sip_media::decode_video_frame(&rest[..]).unwrap();
+        let (dw, w, h, rgba) = crate::sip_media::decode_video_frame(rest).unwrap();
         assert_eq!(dw, crate::sip_media::VideoPixFmt::Rgba);
         assert_eq!(w, 2);
         assert_eq!(h, 2);

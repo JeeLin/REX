@@ -231,8 +231,6 @@ pub async fn cache_headers(req: Request<axum::body::Body>, next: Next) -> Respon
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_csrf_skips_get_requests() {
         assert_ne!(axum::http::Method::GET, axum::http::Method::POST);

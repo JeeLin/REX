@@ -77,25 +77,21 @@ unsafe extern "C" fn sip_trace_cb(
 unsafe fn endpoint_label(src: *const sa, dst: *const sa) -> String {
     let mut buf = [0i8; 64];
     let mut s = String::new();
-    if !src.is_null() {
-        if sa_ntop(src, buf.as_mut_ptr(), buf.len() as i32) > 0 {
-            s.push_str(
-                std::ffi::CStr::from_ptr(buf.as_ptr())
-                    .to_str()
-                    .unwrap_or(""),
-            );
-        }
+    if !src.is_null() && sa_ntop(src, buf.as_mut_ptr(), buf.len() as i32) > 0 {
+        s.push_str(
+            std::ffi::CStr::from_ptr(buf.as_ptr())
+                .to_str()
+                .unwrap_or(""),
+        );
     }
     s.push_str(" -> ");
     let mut buf = [0i8; 64];
-    if !dst.is_null() {
-        if sa_ntop(dst, buf.as_mut_ptr(), buf.len() as i32) > 0 {
-            s.push_str(
-                std::ffi::CStr::from_ptr(buf.as_ptr())
-                    .to_str()
-                    .unwrap_or(""),
-            );
-        }
+    if !dst.is_null() && sa_ntop(dst, buf.as_mut_ptr(), buf.len() as i32) > 0 {
+        s.push_str(
+            std::ffi::CStr::from_ptr(buf.as_ptr())
+                .to_str()
+                .unwrap_or(""),
+        );
     }
     s
 }

@@ -250,25 +250,48 @@ fn try_msgpack(bytes: &[u8], raw_size: usize) -> Option<FormatDetection> {
 fn try_pickle(bytes: &[u8], raw_size: usize) -> Option<FormatDetection> {
     let first = *bytes.first()?;
 
-    // Protocol 2+: 0x80 PROTO
-    // Protocol 0-1: first printable char, but we check 0x28 (OP: PROTO in protocol 0)
-    // Actually pickle protocol 0 starts with various ops.
-    // More reliable: 0x80 (protocol ≥ 2) or if it starts with common pickle ops
-    // like SHORT_BINUNICODE (0x8c), SHORT_BINBYTES (0x43), BINBYTES (0x62), etc.
-    let is_pickle = match first {
-        0x80 => true, // PROTO (protocol ≥ 2)
-        0x8c => true, // SHORT_BINUNICODE (protocol ≥ 4)
-        0x8d => true, // SHORT_BINUNICODE8
-        0x8e => true, // SHORT_BINBYTES8
-        0x43 => true, // BINBYTES (protocol 1)
-        0x42 => true, // BINPERSID
-        0x62 => true, // BINBYTES
-        0x63 => true, // GLOBAL
-        0x28 => true, // MARK (protocol 0, common start)
+    // 判定需「结构性」约束，避免与正常文本误判：
+    // - 高字节 opcode（0x80/0x8c/0x8d/0x8e）不是合法 UTF-8 首字节，基本可确定是 pickle 帧
+    // - 0x43/0x42/0x62 等 ASCII 字母 opcode 过于常见（如 `Compress…`、`b:1;`），
+    //   必须校验后续长度字段落在缓冲内，否则只是普通文本
+    // - 0x63 GLOBAL 必须后随 `module\nclass\n` 结构
+    // - 0x28 MARK（`(`）过于常见，不再作为单独判据，避免误报
+    let looks_like_pickle = match first {
+        0x80 | 0x8c | 0x8d | 0x8e => true, // PROTO / SHORT_BINUNICODE* / SHORT_BINBYTES8（高字节，非 UTF-8 首字节）
+        0x43 | 0x42 => {
+            // BINBYTES(proto1, 4B LE len) / BINPERSID(4B LE len)：长度须落在缓冲内
+            bytes.len() >= 5 && {
+                let n = u32::from_le_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]) as usize;
+                5 + n <= bytes.len()
+            }
+        }
+        0x62 => {
+            // BINBYTES(proto0/1, 1B len)：长度须落在缓冲内（排除 `b:1;` 之类文本）
+            bytes.len() >= 2 && {
+                let n = bytes[1] as usize;
+                2 + n <= bytes.len()
+            }
+        }
+        0x63 => {
+            // GLOBAL：必须后随 `module\nclass\n`（排除 `compress me` 之类文本）
+            match bytes.get(1..) {
+                Some(rest) => match std::str::from_utf8(rest) {
+                    Ok(s) => match s.find('\n') {
+                        Some(e1) if e1 > 0 => {
+                            let class_part = &s[e1 + 1..];
+                            !class_part.is_empty() && class_part.find('\n').is_some()
+                        }
+                        _ => false,
+                    },
+                    Err(_) => false,
+                },
+                None => false,
+            }
+        }
         _ => false,
     };
 
-    if !is_pickle {
+    if !looks_like_pickle {
         return None;
     }
 
@@ -641,6 +664,34 @@ mod tests {
         let d = detect_and_decode(bytes);
         assert_eq!(d.format, DetectedFormat::Text);
         assert!(d.decoded.is_none());
+    }
+
+    #[test]
+    fn test_pickle_not_false_positive_on_normal_text() {
+        // 回归：首字节为 'c'/'b'/'(' 的普通文本不应被误判为 Pickle
+        for text in [b"compress me".as_slice(), b"hello world".as_slice()] {
+            let d = detect_and_decode(text);
+            assert_ne!(
+                d.format,
+                DetectedFormat::Pickle,
+                "普通文本不应判为 Pickle: {:?}",
+                text
+            );
+        }
+    }
+
+    #[test]
+    fn test_pickle_not_false_positive_on_php_bool() {
+        // 回归：PHP `b:1;` 以 'b' 开头，不应被 BINBYTES 误判为 Pickle
+        let d = detect_and_decode(b"b:1;");
+        assert_ne!(d.format, DetectedFormat::Pickle);
+    }
+
+    #[test]
+    fn test_pickle_globals_must_have_structure() {
+        // 回归：单独 0x63 后无 `module\nclass\n` 不应判为 Pickle
+        let d = detect_and_decode(&[0x63, b'c', b'o', b'm', b'p', b'r', b'e', b's', b's']);
+        assert_ne!(d.format, DetectedFormat::Pickle);
     }
 
     // --- Binary tests ---
