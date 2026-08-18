@@ -36,6 +36,7 @@ struct BaresipState {
     /// 唯一 `re_main` 线程服务的 mqueue，所有控制操作经它序列化到主线程执行。
     mq: *mut mqueue,
     /// 音频桥接（M82b）：自定义 baresip 音频驱动 state + RX/TX PCM 队列。
+    #[allow(clippy::arc_with_non_send_sync)]
     audio: Arc<AudioBridge>,
 }
 

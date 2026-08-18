@@ -328,7 +328,8 @@ useKeyboardShortcuts([
   { key: '3', alt: true, handler: () => applyLayout('top-bottom') },
   { key: '4', alt: true, handler: () => applyLayout('grid-four') },
   { key: '5', alt: true, handler: () => applyLayout('main-side') },
-  { key: 'F1', handler: () => { showShortcuts.value = !showShortcuts.value } },
+  // 移动端隐藏桌面风格快捷键面板（触屏无键盘快捷键，改触屏友好交互）
+  { key: 'F1', handler: () => { if (window.innerWidth >= 768) showShortcuts.value = !showShortcuts.value } },
   { key: 'b', ctrl: true, handler: () => {
     if (activeTabInfo.value?.protocol === 'ssh') toggleSftpDrawer()
   } },

@@ -24,8 +24,9 @@ pub fn decode_media_frame(bytes: &[u8]) -> Vec<i16> {
     let n = bytes.len() / 2;
     let mut out = Vec::with_capacity(n);
     for i in 0..n {
-        let lo = bytes[i * 2] as u8;
-        let hi = bytes[i * 2 + 1] as u8;
+        // `bytes[*]` 已是 u8，无需 `as u8`（clippy `cast_same_type`）。
+        let lo = bytes[i * 2];
+        let hi = bytes[i * 2 + 1];
         out.push(i16::from_le_bytes([lo, hi]));
     }
     out

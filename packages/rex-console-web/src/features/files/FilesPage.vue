@@ -528,7 +528,8 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
     </div>
 
     <template v-for="side in (['left','right'] as const)" :key="side">
-      <div class="fp-panel" :class="{ 'fp-panel--active': panels[side].active, 'fp-panel--drop': dropTarget === side, 'fp-panel--mobile-hidden': mobileActiveSide !== side }" :style="side==='left' ? {width:leftW+'px'} : {flex:'1',minWidth:'0'}" @click="activate(side)" @dragover="onDragOver($event, side)" @dragleave="onDragLeave" @drop="onDrop($event, side)">
+      <!-- S3 单 bucket/prefix 模型双栏无意义，合并为单栏（仅渲染 left 面板） -->
+      <div v-if="!(isS3 && side === 'right')" class="fp-panel" :class="{ 'fp-panel--active': panels[side].active, 'fp-panel--drop': dropTarget === side, 'fp-panel--mobile-hidden': mobileActiveSide !== side }" :style="isS3 ? {flex:'1',minWidth:'0'} : (side==='left' ? {width:leftW+'px'} : {flex:'1',minWidth:'0'})" @click="activate(side)" @dragover="onDragOver($event, side)" @dragleave="onDragLeave" @drop="onDrop($event, side)">
         <div class="ptb">
           <Button variant="ghost" icon :title="t('files.up')" @click="goUp(side)">↑</Button>
           <span class="pp mono">{{ panels[side].path }}</span>
@@ -550,7 +551,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
         </div>
         <div class="ps">{{ panels[side].entries.length }} {{ t('files.items') }}<template v-if="panels[side].selected.size"> · {{ panels[side].selected.size }} {{ t('files.selected') }}</template></div>
       </div>
-      <div v-if="side==='left'" class="fh2" :class="{ 'fh2--a': dragging }" @mousedown.prevent="onDS" />
+      <div v-if="side==='left' && !isS3" class="fh2" :class="{ 'fh2--a': dragging }" @mousedown.prevent="onDS" />
     </template>
 
     <div v-if="ctx.show" ref="ctxRef" class="fctx" :style="{top:ctx.y+'px',left:ctx.x+'px'}">

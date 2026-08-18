@@ -64,14 +64,26 @@ struct PumpCtx {
 }
 
 /// 双方向 PCM 缓冲 + 驱动 state。RX = 远端→我们；TX = 我们→远端（麦克风回传）。
+///
+/// `AudioBridge` 跨线程（泵线程 ↔ WS 编码器）共享，但 clippy 报 `Arc not Send+Sync` 为误报：
+/// 持有的 `DeviceSt` 含 baresip 托管的 `!Send` 裸指针，实际只经 `PumpCtx` 扁平标量安全搬运，
+/// 故这里统一 `#[allow]` 该 FFI 既定误报，不改变并发语义。
 #[derive(Clone)]
+#[allow(clippy::arc_with_non_send_sync)]
 pub struct AudioBridge {
     rx: Arc<Mutex<VecDeque<Vec<i16>>>>,
     tx: Arc<Mutex<VecDeque<Vec<i16>>>>,
+    #[allow(clippy::type_complexity)]
     on_rtp: Arc<Mutex<Option<Box<dyn FnMut(&[i16]) + Send + 'static>>>>,
     st: Arc<Mutex<Option<DeviceSt>>>,
     started: Arc<AtomicBool>,
     stop: Arc<AtomicBool>,
+}
+
+impl Default for AudioBridge {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AudioBridge {
@@ -87,6 +99,7 @@ impl AudioBridge {
     }
 
     /// 注册远端→浏览器 PCM 回调（接收侧）。每帧 RX PCM 到达时同步调用。
+    #[allow(clippy::type_complexity)]
     pub fn set_on_rtp(&self, cb: Box<dyn FnMut(&[i16]) + Send + 'static>) {
         *self.on_rtp.lock().unwrap() = Some(cb);
     }

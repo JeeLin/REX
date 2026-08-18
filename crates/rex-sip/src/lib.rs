@@ -142,6 +142,7 @@ pub trait SipUaTrait {
     fn events(&self) -> mpsc::UnboundedReceiver<SipEvent>;
     /// 注册远端→浏览器 PCM 回调（接收侧，M82b）。每帧 RX PCM（i16 LE）到达即触发。
     /// 默认 no-op（Mock 可覆盖）；真实现经 baresip 音频驱动桥接上抛。
+    #[allow(clippy::type_complexity)]
     fn on_rtp(&self, _cb: Box<dyn FnMut(&[i16]) + Send + 'static>) {
         let _ = _cb;
     }
