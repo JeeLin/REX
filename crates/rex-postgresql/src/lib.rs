@@ -298,3 +298,23 @@ impl SqlConnector for PostgresConnector {
         Ok(DdlResult { ddl })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::escape_identifier;
+
+    #[test]
+    fn escape_identifier_wraps_in_double_quotes() {
+        assert_eq!(escape_identifier("users"), "\"users\"");
+    }
+
+    #[test]
+    fn escape_identifier_doubles_inner_quotes() {
+        assert_eq!(escape_identifier("a\"b"), "\"a\"\"b\"");
+    }
+
+    #[test]
+    fn escape_identifier_handles_empty() {
+        assert_eq!(escape_identifier(""), "\"\"");
+    }
+}

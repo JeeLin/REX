@@ -415,6 +415,14 @@ impl FileConnector for S3Connector {
 }
 
 impl S3Connector {
+    /// 单文件上传与分片上传的分界（5MB）。
+    pub const MULTIPART_THRESHOLD: u64 = 5 * 1024 * 1024;
+
+    /// 根据数据大小决定是否走分片上传（>= 阈值走 multipart）。
+    pub fn should_use_multipart(total: u64) -> bool {
+        total > Self::MULTIPART_THRESHOLD
+    }
+
     /// 生成 presigned URL（临时访问链接）
     pub async fn presigned_url(&self, key: &str, expires_in_secs: u64) -> Result<String> {
         use aws_sdk_s3::presigning::PresigningConfig;
@@ -609,12 +617,7 @@ impl S3Connector {
     /// 设置对象的 Canned ACL
     pub async fn put_acl(&self, key: &str, canned_acl: &str) -> Result<()> {
         let key = key.trim_start_matches('/');
-        let acl = match canned_acl {
-            "public-read" => aws_sdk_s3::types::ObjectCannedAcl::PublicRead,
-            "public-read-write" => aws_sdk_s3::types::ObjectCannedAcl::PublicReadWrite,
-            "authenticated-read" => aws_sdk_s3::types::ObjectCannedAcl::AuthenticatedRead,
-            _ => aws_sdk_s3::types::ObjectCannedAcl::Private,
-        };
+        let acl = Self::canned_acl_from_str(canned_acl);
 
         self.client
             .put_object_acl()
@@ -625,5 +628,66 @@ impl S3Connector {
             .await
             .context("failed to set object ACL")?;
         Ok(())
+    }
+
+    /// 将 Canned ACL 字符串映射为 SDK 枚举（未知值回退 Private）。
+    pub fn canned_acl_from_str(canned_acl: &str) -> aws_sdk_s3::types::ObjectCannedAcl {
+        match canned_acl {
+            "public-read" => aws_sdk_s3::types::ObjectCannedAcl::PublicRead,
+            "public-read-write" => aws_sdk_s3::types::ObjectCannedAcl::PublicReadWrite,
+            "authenticated-read" => aws_sdk_s3::types::ObjectCannedAcl::AuthenticatedRead,
+            _ => aws_sdk_s3::types::ObjectCannedAcl::Private,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::S3Connector;
+
+    #[test]
+    fn multipart_threshold_constant() {
+        assert_eq!(S3Connector::MULTIPART_THRESHOLD, 5 * 1024 * 1024);
+    }
+
+    #[test]
+    fn should_use_multipart_boundary() {
+        assert!(!S3Connector::should_use_multipart(0));
+        assert!(!S3Connector::should_use_multipart(
+            S3Connector::MULTIPART_THRESHOLD
+        ));
+        assert!(S3Connector::should_use_multipart(
+            S3Connector::MULTIPART_THRESHOLD + 1
+        ));
+    }
+
+    #[test]
+    fn canned_acl_from_str_maps_known_values() {
+        use aws_sdk_s3::types::ObjectCannedAcl;
+        assert_eq!(
+            S3Connector::canned_acl_from_str("public-read"),
+            ObjectCannedAcl::PublicRead
+        );
+        assert_eq!(
+            S3Connector::canned_acl_from_str("public-read-write"),
+            ObjectCannedAcl::PublicReadWrite
+        );
+        assert_eq!(
+            S3Connector::canned_acl_from_str("authenticated-read"),
+            ObjectCannedAcl::AuthenticatedRead
+        );
+    }
+
+    #[test]
+    fn canned_acl_from_str_falls_back_to_private() {
+        use aws_sdk_s3::types::ObjectCannedAcl;
+        assert_eq!(
+            S3Connector::canned_acl_from_str("unknown-acl"),
+            ObjectCannedAcl::Private
+        );
+        assert_eq!(
+            S3Connector::canned_acl_from_str(""),
+            ObjectCannedAcl::Private
+        );
     }
 }

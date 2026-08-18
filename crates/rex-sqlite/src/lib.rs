@@ -252,3 +252,98 @@ impl SqlConnector for SqliteConnector {
         Ok(DdlResult { ddl })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::SqliteConnector;
+    use base64::Engine;
+    use rex_common::sql::{ColumnInfo, ConnectRequest, SqlConnector};
+
+    fn mem_req() -> ConnectRequest {
+        ConnectRequest {
+            host: ":memory:".to_string(),
+            port: 0,
+            username: String::new(),
+            password: None,
+            database: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn connect_opens_in_memory_db() {
+        let c = SqliteConnector::connect(mem_req()).await;
+        assert!(c.is_ok());
+    }
+
+    #[tokio::test]
+    async fn execute_query_returns_rows_and_columns() {
+        let mut c = SqliteConnector::connect(mem_req()).await.unwrap();
+        c.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT);")
+            .await
+            .unwrap();
+        c.execute("INSERT INTO t (id, name) VALUES (1, 'a'), (2, 'b');")
+            .await
+            .unwrap();
+        let res = c
+            .execute("SELECT id, name FROM t ORDER BY id")
+            .await
+            .unwrap();
+        assert_eq!(res.columns.len(), 2);
+        assert_eq!(res.rows.len(), 2);
+        assert_eq!(res.rows[0][0], serde_json::json!(1));
+        assert_eq!(res.rows[0][1], serde_json::json!("a"));
+        assert_eq!(res.rows[1][1], serde_json::json!("b"));
+    }
+
+    #[tokio::test]
+    async fn execute_non_query_reports_affected_rows() {
+        let mut c = SqliteConnector::connect(mem_req()).await.unwrap();
+        c.execute("CREATE TABLE t (id INTEGER);").await.unwrap();
+        let res = c
+            .execute("INSERT INTO t (id) VALUES (1), (2), (3)")
+            .await
+            .unwrap();
+        assert_eq!(res.affected_rows, 3);
+        assert!(res.columns.is_empty());
+    }
+
+    #[tokio::test]
+    async fn tables_lists_user_tables_only() {
+        let mut c = SqliteConnector::connect(mem_req()).await.unwrap();
+        c.execute("CREATE TABLE foo (id INTEGER);").await.unwrap();
+        let tables = c.tables("").await.unwrap();
+        assert!(tables.iter().any(|t| t.name == "foo"));
+        assert!(!tables.iter().any(|t| t.name.starts_with("sqlite_")));
+    }
+
+    #[tokio::test]
+    async fn columns_reports_pk_and_nullable() {
+        let mut c = SqliteConnector::connect(mem_req()).await.unwrap();
+        c.execute("CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT NOT NULL, note TEXT);")
+            .await
+            .unwrap();
+        let cols: Vec<ColumnInfo> = c.columns("", "foo").await.unwrap();
+        let id = cols.iter().find(|c| c.name == "id").unwrap();
+        assert!(id.is_primary_key);
+        let note = cols.iter().find(|c| c.name == "note").unwrap();
+        assert!(note.nullable);
+        let name = cols.iter().find(|c| c.name == "name").unwrap();
+        assert!(!name.nullable);
+    }
+
+    #[tokio::test]
+    async fn blob_value_is_base64_encoded() {
+        let mut c = SqliteConnector::connect(mem_req()).await.unwrap();
+        c.execute("CREATE TABLE b (data BLOB);").await.unwrap();
+        let bytes = vec![0u8, 1, 2, 3];
+        c.execute(&format!(
+            "INSERT INTO b (data) VALUES (X'{}')",
+            bytes.iter().map(|b| format!("{b:02x}")).collect::<String>()
+        ))
+        .await
+        .unwrap();
+        let res = c.execute("SELECT data FROM b").await.unwrap();
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+        assert_eq!(res.rows[0][0], serde_json::json!(b64));
+    }
+}

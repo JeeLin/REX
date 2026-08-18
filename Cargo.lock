@@ -3733,6 +3733,7 @@ dependencies = [
  "rex-common",
  "rusqlite",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -3758,6 +3759,12 @@ dependencies = [
 [[package]]
 name = "rex-transfer"
 version = "0.70.2"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "rex-common",
+ "tokio",
+]
 
 [[package]]
 name = "rfc6979"
