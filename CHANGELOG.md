@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.70.2] - 2026-08-18
+
+### Added
+- 浏览器实时视频（框架层）：新增 `vidbridge` 视频驱动桥（与 `audio_bridge` 同构），媒体通道扩展视频媒体类型（kind=2，原始 RGBA 像素帧）；前端 `<canvas>` + getUserMedia 采集 + 开关；编解码 round-trip 与隧道帧路由单测覆盖（端到端真视频需重建 baresip，超出本里程碑）
+- 通话录音：Hub 在通话建立后捕获下行 PCM 媒体帧落盘为 WAV（16-bit PCM, 8kHz, 单声道），按 call_id 分文件关联各自 CDR；前端回放器（进度/暂停/下载）+ 录音开关
+- 信令抓包：UA₁（Hub 直连，全局 `sip_trace` 钩子抓真实 SIP 字节）/ UA₂（Agent 链式，中继层按 resource 捕获 JSON）合并编码为 libpcap（LINKTYPE_RAW）；前端开始/停止/下载 pcap
+- 通话记录 CDR：每通电话起止时间/对端/时长/状态持久化（SQLite `calls` 表），列表/详情 REST API（稳定排序 `ORDER BY time DESC, id DESC`），前端表格（筛选/排序/详情）关联录音与抓包
+- 音视频质量监控：实时采集丢包率/端到端延迟/抖动（baresip RTP 统计回调/RTCP），`sip.quality` 事件经 WebSocket 周期推送，前端实时指标卡片
+- 缺陷收口：修复 9 条遗留 bug（🔴 更新检查语义化版本比较、🟡 审计分页常显/分栏聚焦/S3 单栏/SQL 子类归并、🟢 移动端/转换清理），向后兼容
+
+### Changed
+- 媒体通道：在 M82b 音频帧（kind=1, S16LE PCM）基础上扩展视频媒体类型（kind=2, RGBA 像素），复用同一 `[kind][payload]` 解复用结构；不改音频契约、不破坏 Hub/Agent 版本一致模型
+
 ## [0.70.1] - 2026-08-18
 
 ### Added
