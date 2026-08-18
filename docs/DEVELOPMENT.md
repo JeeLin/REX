@@ -510,6 +510,16 @@ docs/milestones/
 **依赖**：M82b
 **版本类型**：minor
 **版本号**：0.70.2
+**缺陷池 bug**（从 docs/BUGS.md 全量纳入，规划时已清空缺陷池，dev-flow 步骤1 落成里程碑文档 Bugs 表 ⬜）：
+- 🔴 版本更新检查会降级下载旧版（`update_checker.rs` 仅比 `releases/latest`，需改 `/releases` 列表取最高语义化版本或仅 latest 严格大于 current 才更新）
+- 🟡 审计日志分页不可见/单薄（常显分页控件 + 每页条数/跳页/总数；后端 `ORDER BY time DESC, id DESC` 稳定排序）
+- 🟡 分栏不作用于当前聚焦 pane（`activePaneId` 仅 click 更新，需 `focusin`/交互入口或 split 时取最近聚焦 leaf）
+- 🟡 S3 双栏无意义应合并单栏 + 移动操作移右键菜单
+- 🟡 SQL 后端子类维护分散，按 mysql/pgsql/sqlite 归并分组
+- 🟢 手机端不需要快捷键按钮（隐藏/改触屏友好）
+- 🟢 手机端仪表盘 Quick Connect 仍两列（统一单列）
+- 🟢 `sip_media.rs` 冗余 `u8` 类型转换（clippy `cast_same_type`）
+- 🟢 baresip FFI 封装 clippy 样式建议（`Arc not Send+Sync` 为已知误报，重构时一并处理）
 
 ### M82d：测试补全 + 文档重写 + 全量 review/优化 + 单侧/整体/压测（0.70.3）
 
