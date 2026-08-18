@@ -9,6 +9,8 @@ use crate::crypto::CredentialCrypto;
 use crate::db::Database;
 use crate::file_api::FileState;
 use crate::redis_api::RedisState;
+use crate::sip_capture::SipCaptureRegistry;
+use crate::sip_recording::SipRecordingRegistry;
 use crate::sql_api::SqlState;
 use crate::update_api::AgentBinaries;
 
@@ -22,5 +24,7 @@ pub struct AppState {
     pub file_pool: FileState,
     pub agent_tunnel: Arc<AgentTunnelState>,
     pub agent_binaries: Arc<AgentBinaries>,
+    pub sip_capture: Arc<SipCaptureRegistry>,
+    pub sip_recording: Arc<SipRecordingRegistry>,
     pub data_dir: PathBuf,
 }

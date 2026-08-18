@@ -1,0 +1,29 @@
+# 0.70.2 步骤4：代码精简（simplify）
+
+检查范围：`git diff --name-only milestone-0.70.2-start`（全里程碑，子任务 #1–#6）。
+重点复查本子任务新增的 `crates/rex-sip/src/video_bridge.rs` 与既有 `audio_bridge.rs` 的同构一致性。
+
+## 发现
+
+### 🟡 视频桥 `rx` 队列为死代码（框架层冗余）
+- 位置：`crates/rex-sip/src/video_bridge.rs`
+  - `VideoBridge.rx: Arc<Mutex<VecDeque<VideoFrame>>>`（L54）
+  - `pop_rx()`（L107）/ `rx_len()`（L112）
+  - `vidisp_disp` 内 `bridge.rx.lock().unwrap().push_back(f.clone())`（L329）
+- 现象：下行帧在 `vidisp_disp` 中**已同步经 `on_video` 回调上抛**给 Hub 隧道逻辑；`rx` 队列仅被 `push_back`，从未被生产路径 `pop_rx` 消费——`pop_rx`/`rx_len` 仅测试使用。
+- 对比音频桥：音频 `rx` 由泵线程 `pop_rx` 消费（真实消费方）；视频泵仅作停机哨兵，无消费方，故视频 `rx` 无对应用途。
+- 处置：🟡 可维护性冗余（死代码），登记入 Bugs，打回开发阶段移除 `rx` 队列、`pop_rx`、`rx_len` 及 `vidisp_disp` 中的 `push_back`，仅保留 `on_video` 下行路径。
+
+### 🟢 视频桥 FFI 警告（非阻断）
+- `rex-sip` 的 `arc_with_non_send_sync` clippy 警告在 `video_bridge.rs` 已通过构造处 `#[allow]` 消除；其余 `audio_bridge.rs`/`baresip_ua.rs`/`capture.rs` 的同类警告为前序子任务遗留，不在本子任务引入范围，CI 默认门禁（exit 0）不受影响。记缺陷池，下版本统一清理。
+  - `| 0.70.2 | 🟢 | 清理 baresip FFI 的 arc_with_non_send_sync clippy 警告 | 步骤4代码精简 | audio_bridge.rs/baresip_ua.rs/capture.rs 构造处缺 allow，前序子任务遗留 |`
+
+## 走向
+
+- 🔴：无
+- 🟡：1 项（视频桥 `rx` 死代码），登记入里程碑 Bugs 表，触发打回开发阶段修复后重跑 4→5→6→7。
+- 🟢：1 项（FFI clippy 警告清理），入缺陷池，不阻断当前里程碑。
+
+## 门禁结论
+
+存在 🟡 发现 → 不勾选步骤4，按打回动作取消步骤3/4/5/6/7 勾选，回到步骤3 修复后重跑。

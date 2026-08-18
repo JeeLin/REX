@@ -17,6 +17,10 @@ use rex_hub::middleware::{self, AuthUser};
 use rex_hub::redis_api::{self, RedisState};
 use rex_hub::resource_api;
 use rex_hub::settings_api;
+use rex_hub::sip_capture::SipCaptureRegistry;
+use rex_hub::sip_capture_api;
+use rex_hub::sip_recording::SipRecordingRegistry;
+use rex_hub::sip_recording_api;
 use rex_hub::sip_ws;
 use rex_hub::sql_api::{self, SqlState};
 use rex_hub::terminal_ws;
@@ -120,6 +124,8 @@ fn worker_main() {
             file_pool,
             agent_tunnel,
             agent_binaries,
+            sip_capture: Arc::new(SipCaptureRegistry::new()),
+            sip_recording: Arc::new(SipRecordingRegistry::new(data_dir.clone())),
             data_dir: data_dir.clone(),
         };
 
@@ -246,6 +252,11 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
         .nest("/api/dashboard", dashboard_api::dashboard_routes())
         .nest("/api/audit-log", audit_api::audit_routes())
         .nest("/api/sip/cdr", cdr_api::cdr_routes())
+        .nest("/api/sip/capture", sip_capture_api::sip_capture_routes())
+        .nest(
+            "/api/sip/recording",
+            sip_recording_api::sip_recording_routes(),
+        )
         .nest("/api/settings", settings_api::settings_routes())
         .route(
             "/api/resources/test-connection",

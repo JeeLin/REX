@@ -29,6 +29,10 @@ fn test_state() -> (tempfile::TempDir, AppState) {
         )),
         agent_tunnel: Arc::new(rex_hub::agent_ws::AgentTunnelState::new()),
         agent_binaries: Arc::new(rex_hub::update_api::AgentBinaries::new()),
+        sip_capture: Arc::new(rex_hub::sip_capture::SipCaptureRegistry::new()),
+        sip_recording: Arc::new(rex_hub::sip_recording::SipRecordingRegistry::new(
+            dir.path().to_path_buf(),
+        )),
         data_dir: dir.path().to_path_buf(),
     };
     (dir, state)

@@ -203,3 +203,14 @@ pub struct CdrFilter {
     pub limit: Option<u64>,
     pub offset: Option<u64>,
 }
+
+/// 单条 SIP 抓包报文（前端回看/下载用）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SipCaptureRecord {
+    /// Unix 微秒时间戳。
+    pub ts_us: u64,
+    /// 方向：ua1_out / ua1_in / ua2_in。
+    pub direction: String,
+    /// 原始 SIP 报文文本（JSON 线格式）。
+    pub raw: String,
+}
