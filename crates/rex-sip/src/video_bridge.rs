@@ -50,11 +50,9 @@ struct VideoDeviceSt {
 #[derive(Clone)]
 #[allow(clippy::arc_with_non_send_sync)]
 pub struct VideoBridge {
-    /// 下行：对端→浏览器（RX 像素帧，RGBA 行优先）。
-    rx: Arc<Mutex<VecDeque<VideoFrame>>>,
     /// 上行：浏览器→对端（TX 像素帧，RGBA 行优先），由泵线程经 baresip `frameh` 取用。
     tx: Arc<Mutex<VecDeque<VideoFrame>>>,
-    /// 下行像素帧回调（接收侧）。每帧到达时同步调用。
+    /// 下行像素帧回调（接收侧）。baresip 解出对端帧即同步上抛，无独立 RX 队列。
     #[allow(clippy::type_complexity)]
     on_video: Arc<Mutex<Option<Box<dyn FnMut(&VideoFrame) + Send + 'static>>>>,
     st: Arc<Mutex<Option<VideoDeviceSt>>>,
@@ -81,7 +79,6 @@ impl VideoBridge {
     pub fn new() -> Self {
         #[allow(clippy::arc_with_non_send_sync)]
         Self {
-            rx: Arc::new(Mutex::new(VecDeque::new())),
             tx: Arc::new(Mutex::new(VecDeque::new())),
             on_video: Arc::new(Mutex::new(None)),
             st: Arc::new(Mutex::new(None)),
@@ -101,16 +98,6 @@ impl VideoBridge {
         if frame.rgba.len() == frame.width as usize * frame.height as usize * 4 {
             self.tx.lock().unwrap().push_back(frame);
         }
-    }
-
-    /// 取出一帧下行像素帧（独立渲染任务调用，非回调线程）。
-    pub fn pop_rx(&self) -> Option<VideoFrame> {
-        self.rx.lock().unwrap().pop_front()
-    }
-
-    /// 下行队列帧数（jitter buffer 估算）。
-    pub fn rx_len(&self) -> usize {
-        self.rx.lock().unwrap().len()
     }
 
     fn on_state_ready(&self, d: &VideoDeviceSt) {
@@ -326,7 +313,6 @@ unsafe extern "C" fn vidisp_disp(
         (st.arg as *const VideoBridge).as_ref()
     };
     if let Some(bridge) = bridge {
-        bridge.rx.lock().unwrap().push_back(f.clone());
         if let Some(cb) = bridge.on_video.lock().unwrap().as_mut() {
             cb(&f);
         }
@@ -344,26 +330,18 @@ unsafe extern "C" fn video_st_destructor(_arg: *mut c_void) {}
 mod tests {
     use super::*;
 
-    /// 下行/上行队列进出一致：push_tx 后 pop_rx 取出相同像素帧（说明 TX 与 RX 独立队列）。
+    /// 合法帧进入 TX 队列、畸形帧被拒（TX 是唯一上行缓冲，下行经回调同步上抛）。
     #[test]
-    fn tx_push_rx_pop_roundtrip() {
+    fn push_tx_queue_and_reject_malformed() {
         let b = VideoBridge::new();
-        assert_eq!(b.rx_len(), 0);
-        let f = VideoFrame {
+        let ok = VideoFrame {
             width: 2,
             height: 2,
             rgba: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
         };
-        b.push_tx(f.clone());
-        assert_eq!(b.rx_len(), 0); // TX 与 RX 独立队列
-        b.rx.lock().unwrap().push_back(f.clone());
-        assert_eq!(b.pop_rx(), Some(f));
-    }
-
-    /// 尺寸不匹配的帧不入 TX 队列（避免 baresip 取到畸形缓冲）。
-    #[test]
-    fn malformed_frame_dropped() {
-        let b = VideoBridge::new();
+        b.push_tx(ok.clone());
+        assert_eq!(b.tx.lock().unwrap().len(), 1);
+        assert_eq!(b.tx.lock().unwrap().pop_front(), Some(ok));
         let bad = VideoFrame {
             width: 2,
             height: 2,
@@ -373,7 +351,7 @@ mod tests {
         assert_eq!(b.tx.lock().unwrap().len(), 0);
     }
 
-    /// on_video 回调注册后不 panic（真链路触发需真 baresip）。
+    /// on_video 回调注册后，下行帧经 vidisp_disp 内核逻辑上抛（模拟回调触发）。
     #[test]
     fn on_video_callback_registered() {
         let b = VideoBridge::new();
@@ -383,6 +361,16 @@ mod tests {
             f.store(true, Ordering::SeqCst);
         }));
         assert!(!flag.load(Ordering::SeqCst));
+        // 模拟一帧下行：回调被触发。
+        let frame = VideoFrame {
+            width: 1,
+            height: 1,
+            rgba: vec![255, 0, 0, 255],
+        };
+        if let Some(cb) = b.on_video.lock().unwrap().as_mut() {
+            cb(&frame);
+        }
+        assert!(flag.load(Ordering::SeqCst));
     }
 
     /// RGBA 逐行提取（vidisp_disp 内核逻辑）round-trip：模拟带行步的 vidframe。
