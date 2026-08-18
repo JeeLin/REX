@@ -195,6 +195,7 @@ impl BaresipSipUa {
 
 /// 保证 baresip 运行时单例：首次调用执行 `baresip_init`、注册 bevent/mqueue、spawn `re_main`；
 /// 后续调用直接返回已有的 mqueue 指针。
+#[allow(clippy::arc_with_non_send_sync)]
 fn ensure_runtime() -> Result<*mut mqueue> {
     let mut g = STATE.lock().unwrap();
     if let Some(s) = g.as_ref() {

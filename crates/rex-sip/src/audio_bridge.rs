@@ -93,6 +93,7 @@ impl Default for AudioBridge {
 }
 
 impl AudioBridge {
+    #[allow(clippy::arc_with_non_send_sync)]
     pub fn new() -> Self {
         Self {
             rx: Arc::new(Mutex::new(VecDeque::new())),
