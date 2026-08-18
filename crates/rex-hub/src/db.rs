@@ -878,6 +878,177 @@ impl Database {
         .map_err(|e| RExError::Message(e.to_string()))?;
         Ok(())
     }
+
+    // --- SIP CDR ---
+
+    /// Upsert 一通 CDR（按 id 插入或更新；通话进行中多次状态变更复用同 id）。
+    pub fn upsert_cdr(&self, cdr: &NewCdr) -> Result<()> {
+        let conn = self.conn()?;
+        let duration = if cdr.duration_sec > 0 {
+            cdr.duration_sec
+        } else {
+            0
+        };
+        conn.execute(
+            "INSERT INTO cdr (id, resource_id, peer, call_id, start_time, end_time, duration_sec, direction, state, recording_url, pcap_url)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)
+             ON CONFLICT(id) DO UPDATE SET
+               peer=excluded.peer, call_id=excluded.call_id, end_time=excluded.end_time,
+               duration_sec=excluded.duration_sec, direction=excluded.direction,
+               state=excluded.state, recording_url=excluded.recording_url, pcap_url=excluded.pcap_url",
+            rusqlite::params![
+                cdr.id, cdr.resource_id, cdr.peer, cdr.call_id, cdr.start_time,
+                cdr.end_time, duration, cdr.direction, cdr.state,
+                cdr.recording_url, cdr.pcap_url,
+            ],
+        )
+        .map_err(|e| RExError::Message(e.to_string()))?;
+        Ok(())
+    }
+
+    /// 查询 CDR 列表，支持 resource/direction/state/时间范围过滤 + 排序 + 分页。
+    pub fn query_cdr(&self, filter: &CdrFilter) -> Result<Vec<CdrRecord>> {
+        let conn = self.conn()?;
+        let mut sql = String::from(
+            "SELECT id, resource_id, peer, call_id, start_time, end_time, duration_sec, direction, state, recording_url, pcap_url
+             FROM cdr WHERE 1=1",
+        );
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+        let mut idx = 1;
+        if let Some(ref r) = filter.resource_id {
+            sql.push_str(&format!(" AND resource_id = ?{idx}"));
+            params.push(Box::new(r.clone()));
+            idx += 1;
+        }
+        if let Some(ref d) = filter.direction {
+            sql.push_str(&format!(" AND direction = ?{idx}"));
+            params.push(Box::new(d.clone()));
+            idx += 1;
+        }
+        if let Some(ref s) = filter.state {
+            sql.push_str(&format!(" AND state = ?{idx}"));
+            params.push(Box::new(s.clone()));
+            idx += 1;
+        }
+        if let Some(ref f) = filter.from {
+            sql.push_str(&format!(" AND start_time >= ?{idx}"));
+            params.push(Box::new(f.clone()));
+            idx += 1;
+        }
+        if let Some(ref t) = filter.to {
+            sql.push_str(&format!(" AND start_time <= ?{idx}"));
+            params.push(Box::new(t.clone()));
+        }
+        // 稳定排序：start_time DESC, id DESC（与审计日志一致）。
+        match filter.sort.as_deref() {
+            Some("start_asc") => sql.push_str(" ORDER BY start_time ASC, id ASC"),
+            _ => sql.push_str(" ORDER BY start_time DESC, id DESC"),
+        }
+        if let Some(limit) = filter.limit {
+            sql.push_str(&format!(" LIMIT {limit}"));
+        }
+        if let Some(offset) = filter.offset {
+            sql.push_str(&format!(" OFFSET {offset}"));
+        }
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params.iter().map(|p| p.as_ref()).collect();
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let rows = stmt
+            .query_map(param_refs.as_slice(), |row| {
+                Ok(CdrRecord {
+                    id: row.get(0)?,
+                    resource_id: row.get(1)?,
+                    peer: row.get(2)?,
+                    call_id: row.get(3)?,
+                    start_time: row.get(4)?,
+                    end_time: row.get(5)?,
+                    duration_sec: row.get(6)?,
+                    direction: row.get(7)?,
+                    state: row.get(8)?,
+                    recording_url: row.get(9)?,
+                    pcap_url: row.get(10)?,
+                })
+            })
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r.map_err(|e| RExError::Message(e.to_string()))?);
+        }
+        Ok(out)
+    }
+
+    /// CDR 总数（供分页；与 query_cdr 同样过滤条件，但不分页/排序）。
+    pub fn count_cdr(&self, filter: &CdrFilter) -> Result<i64> {
+        let conn = self.conn()?;
+        let mut sql = String::from("SELECT COUNT(*) FROM cdr WHERE 1=1");
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+        let mut idx = 1;
+        if let Some(ref r) = filter.resource_id {
+            sql.push_str(&format!(" AND resource_id = ?{idx}"));
+            params.push(Box::new(r.clone()));
+            idx += 1;
+        }
+        if let Some(ref d) = filter.direction {
+            sql.push_str(&format!(" AND direction = ?{idx}"));
+            params.push(Box::new(d.clone()));
+            idx += 1;
+        }
+        if let Some(ref s) = filter.state {
+            sql.push_str(&format!(" AND state = ?{idx}"));
+            params.push(Box::new(s.clone()));
+            idx += 1;
+        }
+        if let Some(ref f) = filter.from {
+            sql.push_str(&format!(" AND start_time >= ?{idx}"));
+            params.push(Box::new(f.clone()));
+            idx += 1;
+        }
+        if let Some(ref t) = filter.to {
+            sql.push_str(&format!(" AND start_time <= ?{idx}"));
+            params.push(Box::new(t.clone()));
+        }
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params.iter().map(|p| p.as_ref()).collect();
+        let n = conn
+            .query_row(&sql, param_refs.as_slice(), |row| row.get::<_, i64>(0))
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        Ok(n)
+    }
+
+    /// 按 id 取单条 CDR（详情抽屉用）。
+    pub fn get_cdr(&self, id: &str) -> Result<Option<CdrRecord>> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, resource_id, peer, call_id, start_time, end_time, duration_sec, direction, state, recording_url, pcap_url
+                 FROM cdr WHERE id = ?1",
+            )
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let mut rows = stmt
+            .query_map(rusqlite::params![id], |row| {
+                Ok(CdrRecord {
+                    id: row.get(0)?,
+                    resource_id: row.get(1)?,
+                    peer: row.get(2)?,
+                    call_id: row.get(3)?,
+                    start_time: row.get(4)?,
+                    end_time: row.get(5)?,
+                    duration_sec: row.get(6)?,
+                    direction: row.get(7)?,
+                    state: row.get(8)?,
+                    recording_url: row.get(9)?,
+                    pcap_url: row.get(10)?,
+                })
+            })
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        match rows.next() {
+            Some(Ok(r)) => Ok(Some(r)),
+            Some(Err(e)) => Err(RExError::Message(e.to_string())),
+            None => Ok(None),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1043,6 +1214,122 @@ mod tests {
         sorted.sort();
         sorted.dedup();
         assert_eq!(sorted.len(), 5, "分页不应出现重复记录");
+    }
+
+    // --- SIP CDR ---
+
+    fn sample_cdr(id: &str, peer: &str) -> NewCdr {
+        NewCdr {
+            id: id.into(),
+            resource_id: "res-1".into(),
+            peer: peer.into(),
+            call_id: format!("call-{id}"),
+            start_time: "2026-08-18T10:00:00Z".into(),
+            end_time: Some("2026-08-18T10:05:00Z".into()),
+            duration_sec: 300,
+            direction: "out".into(),
+            state: "ended".into(),
+            recording_url: String::new(),
+            pcap_url: String::new(),
+        }
+    }
+
+    #[test]
+    fn test_upsert_and_get_cdr() {
+        let (_dir, db) = test_db();
+        assert!(db.get_cdr("c1").unwrap().is_none());
+        db.upsert_cdr(&sample_cdr("c1", "sip:bob@x")).unwrap();
+        let rec = db.get_cdr("c1").unwrap().expect("CDR 应存在");
+        assert_eq!(rec.resource_id, "res-1");
+        assert_eq!(rec.peer, "sip:bob@x");
+        assert_eq!(rec.direction, "out");
+        assert_eq!(rec.state, "ended");
+        assert_eq!(rec.duration_sec, 300);
+    }
+
+    #[test]
+    fn test_cdr_upsert_is_idempotent_on_same_id() {
+        let (_dir, db) = test_db();
+        db.upsert_cdr(&sample_cdr("c1", "sip:bob@x")).unwrap();
+        // 同 id 更新：修改 peer / state，不应新增行
+        let mut updated = sample_cdr("c1", "sip:alice@y");
+        updated.state = "missed".into();
+        db.upsert_cdr(&updated).unwrap();
+        let all = db.query_cdr(&CdrFilter::default()).unwrap();
+        assert_eq!(all.len(), 1, "同 id upsert 不新增行");
+        assert_eq!(all[0].peer, "sip:alice@y");
+        assert_eq!(all[0].state, "missed");
+    }
+
+    #[test]
+    fn test_cdr_filter_and_pagination() {
+        let (_dir, db) = test_db();
+        db.upsert_cdr(&sample_cdr("c1", "sip:bob@x")).unwrap();
+        let mut c2 = sample_cdr("c2", "sip:carol@z");
+        c2.direction = "in".into();
+        db.upsert_cdr(&c2).unwrap();
+        db.upsert_cdr(&sample_cdr("c3", "sip:dave@w")).unwrap();
+
+        // 过滤 direction=in
+        let inbound = db
+            .query_cdr(&CdrFilter {
+                direction: Some("in".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(inbound.len(), 1);
+        assert_eq!(inbound[0].peer, "sip:carol@z");
+        assert_eq!(
+            db.count_cdr(&CdrFilter {
+                direction: Some("in".into()),
+                ..Default::default()
+            })
+            .unwrap(),
+            1
+        );
+
+        // 分页 + 稳定排序（start_time DESC, id DESC）
+        let page1 = db
+            .query_cdr(&CdrFilter {
+                limit: Some(2),
+                offset: Some(0),
+                ..Default::default()
+            })
+            .unwrap();
+        let page2 = db
+            .query_cdr(&CdrFilter {
+                limit: Some(2),
+                offset: Some(2),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(page1.len(), 2);
+        assert_eq!(page2.len(), 1);
+        let p1: Vec<&str> = page1.iter().map(|r| r.id.as_str()).collect();
+        let p2: Vec<&str> = page2.iter().map(|r| r.id.as_str()).collect();
+        assert!(!p1.contains(&p2[0]), "分页不应重叠");
+
+        // start_asc 排序反向前两条，应与 start_desc 的逆向一致（start_time 相同，稳定二级排序按 id）。
+        let asc = db
+            .query_cdr(&CdrFilter {
+                sort: Some("start_asc".into()),
+                limit: Some(2),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(asc.len(), 2);
+        let desc = db
+            .query_cdr(&CdrFilter {
+                limit: Some(2),
+                ..Default::default()
+            })
+            .unwrap();
+        // start_time 相同，稳定二级排序按 id：
+        //   asc 取 id 最小在前 → asc[0] == "c1"；
+        //   desc 取 id 最大在前 → 末条 == "c1"（即 id 最小者落在第二页末）。
+        assert_eq!(asc[0].id, "c1", "asc 首条应为 id 最小者");
+        assert_eq!(desc[0].id, "c3", "desc 首条应为 id 最大者");
+        assert_eq!(desc[desc.len() - 1].id, "c2");
     }
 
     // --- Environments ---

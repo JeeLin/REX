@@ -67,3 +67,20 @@ CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
 CREATE INDEX IF NOT EXISTS idx_audit_log_time ON audit_log(time);
 CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
 CREATE INDEX IF NOT EXISTS idx_audit_log_environment_id ON audit_log(environment_id);
+
+-- SIP 通话记录 (CDR)
+CREATE TABLE IF NOT EXISTS cdr (
+  id            TEXT PRIMARY KEY,
+  resource_id   TEXT NOT NULL,
+  peer          TEXT NOT NULL DEFAULT '',
+  call_id       TEXT NOT NULL DEFAULT '',
+  start_time    TEXT NOT NULL,
+  end_time      TEXT,
+  duration_sec  INTEGER DEFAULT 0,
+  direction     TEXT NOT NULL DEFAULT 'out',   -- out / in
+  state         TEXT NOT NULL DEFAULT 'ended', -- missed / answered / ended
+  recording_url TEXT DEFAULT '',
+  pcap_url      TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_cdr_resource_id ON cdr(resource_id);
+CREATE INDEX IF NOT EXISTS idx_cdr_start_time ON cdr(start_time);

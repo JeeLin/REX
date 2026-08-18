@@ -1,6 +1,8 @@
 // SIP /ws/sip 客户端：消息帧编解码 + WebSocket 连接 + 心跳。
 // 消息模型与后端 `crates/rex-hub/src/sip_ws.rs` 的 ClientMsg/ServerMsg 对齐。
 
+import { api } from './client'
+
 export type SipCallState = 'ringing' | 'active' | 'held' | 'ended'
 
 // 浏览器 → Hub 的控制指令
@@ -22,6 +24,57 @@ export type SipServerEvent =
   | { type: 'sip.sip_message'; payload: { raw: string } }
   | { type: 'sip.error'; payload: { message: string } }
   | { type: 'sip.ping' }
+
+// --- CDR（通话记录）API 类型（与 /api/sip/cdr 对齐）---
+
+export type CdrDirection = 'out' | 'in'
+export type CdrState = 'ringing' | 'active' | 'held' | 'ended' | 'missed'
+
+export interface CdrRecord {
+  id: string
+  resource_id: string
+  peer: string
+  call_id: string
+  start_time: string
+  end_time: string | null
+  duration_sec: number
+  direction: CdrDirection
+  state: CdrState
+  recording_url: string
+  pcap_url: string
+}
+
+export interface CdrQuery {
+  resource_id?: string
+  direction?: CdrDirection
+  state?: CdrState
+  from?: string
+  to?: string
+  sort?: 'start_desc' | 'start_asc'
+  limit?: number
+  offset?: number
+}
+
+export interface CdrListResult {
+  records: CdrRecord[]
+  total: number
+}
+
+export const cdrApi = {
+  list: (params?: CdrQuery) => {
+    const query: Record<string, string> = {}
+    if (params?.resource_id) query.resourceId = params.resource_id
+    if (params?.direction) query.direction = params.direction
+    if (params?.state) query.state = params.state
+    if (params?.from) query.from = params.from
+    if (params?.to) query.to = params.to
+    if (params?.sort) query.sort = params.sort
+    if (params?.limit) query.limit = String(params.limit)
+    if (params?.offset) query.offset = String(params.offset)
+    return api.get<CdrListResult>('/sip/cdr', query)
+  },
+  get: (id: string) => api.get<CdrRecord>(`/sip/cdr/${id}`),
+}
 
 export function encodeControl(msg: SipClientMsg): string {
   return JSON.stringify(msg)

@@ -5,6 +5,7 @@ pub mod agent_ws;
 pub mod app;
 pub mod audit_api;
 pub mod auth;
+pub mod cdr_api;
 pub mod crypto;
 pub mod dashboard_api;
 pub mod db;

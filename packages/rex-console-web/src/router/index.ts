@@ -29,6 +29,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'environments/:id', name: 'environment-detail', component: () => import('../pages/EnvironmentDetailPage.vue') },
       { path: 'agents', name: 'agents', component: () => import('../pages/AgentsPage.vue') },
       { path: 'audit-log', name: 'audit-log', component: () => import('../pages/AuditLogPage.vue') },
+      { path: 'sip/cdr', name: 'sip-cdr', component: () => import('../pages/CdrPage.vue') },
       { path: 'settings', name: 'settings', component: () => import('../pages/SettingsPage.vue') },
     ],
   },

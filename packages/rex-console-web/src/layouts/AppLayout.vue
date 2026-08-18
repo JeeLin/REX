@@ -36,6 +36,7 @@ const mainNav = [
 
 const bottomNav = [
   { to: '/audit-log', key: 'nav.auditLog', icon: '☰' },
+  { to: '/sip/cdr', key: 'nav.cdr', icon: '📞' },
   { to: '/settings', key: 'nav.settings', icon: '⚙' },
 ]
 

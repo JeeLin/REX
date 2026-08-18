@@ -167,7 +167,7 @@ async fn handle_socket(mut ws: WebSocket, state: AppState, resource_id: String) 
         }
     };
 
-    handle_sip_session(ws, ua, &resource_id).await;
+    handle_sip_session(ws, ua, &resource_id, &state).await;
 
     tracing::info!(action = "SIP_DISCONNECT", resource_id = %resource_id, "SIP session ended");
 }
@@ -338,7 +338,10 @@ async fn handle_agent_sip(
     // kind=0 信令（SipEvent JSON），kind=1 媒体（PCM 二进制帧）。
     let event_channel_id = channel_id.clone();
     let out_tx_for_event = out_tx.clone();
+    let agent_cdr_db = state.db.clone();
+    let agent_cdr_rid = resource_id.to_string();
     let event_tx = tokio::spawn(async move {
+        let mut trackers: std::collections::HashMap<String, CdrTracker> = Default::default();
         while let Some(data) = data_rx.recv().await {
             // `data` 来自 `tunnel_data`：Agent 经 `/ws/agent` 隧道发来的帧已由
             // `agent_ws.rs` 读取循环剥去 4 字节 channelId 前缀，此处 payload = `[1B kind][rest]`。
@@ -355,7 +358,7 @@ async fn handle_agent_sip(
                     }
                 }
                 _ => {
-                    // 信令帧：SipEvent JSON → 前端 ServerMsg。
+                    // 信令帧：SipEvent JSON → 前端 ServerMsg（兼持久化 CDR，子任务 #4）。
                     let ev = match decode_tunnel_sip_event(rest) {
                         Some(e) => e,
                         None => {
@@ -363,6 +366,20 @@ async fn handle_agent_sip(
                             continue;
                         }
                     };
+                    match &ev {
+                        rex_sip::SipEvent::IncomingCall { call_id, from } => {
+                            trackers.insert(
+                                call_id.clone(),
+                                CdrTracker::new(&agent_cdr_rid, call_id, from, "in"),
+                            );
+                        }
+                        rex_sip::SipEvent::CallState { call_id, state } => {
+                            if let Some(tr) = trackers.get_mut(call_id) {
+                                tr.apply(*state, &agent_cdr_db);
+                            }
+                        }
+                        _ => {}
+                    }
                     if let Some(msg) = map_event(ev) {
                         if let Ok(s) = serde_json::to_string(&msg) {
                             if out_tx_for_event.send(Outbound::Text(s)).await.is_err() {
@@ -469,18 +486,38 @@ async fn find_online_agent(state: &AppState, resource_id: &str) -> Option<String
 }
 
 /// 真正的信令会话：注册 + 事件回推 + 控制指令下发 + 实时音频媒体通道（M82b）
-async fn handle_sip_session(mut ws: WebSocket, ua: Arc<SipUa>, resource_id: &str) {
+async fn handle_sip_session(
+    mut ws: WebSocket,
+    ua: Arc<SipUa>,
+    resource_id: &str,
+    state: &AppState,
+) {
     // 注册 UA
     if let Err(e) = ua.register().await {
         let _ = send_ws_error(&mut ws, &format!("SIP register failed: {e}")).await;
         return;
     }
 
-    // 事件回推任务：baresip 事件流 → 前端帧
+    // 事件回推任务：baresip 事件流 → 前端帧 + CDR 持久化（子任务 #4）。
     let mut events = ua.events();
     let (event_tx, mut event_rx) = mpsc::channel::<ServerMsg>(64);
+    let db_for_cdr = state.db.clone();
+    let rid = resource_id.to_string();
     let event_pump = tokio::spawn(async move {
+        let db = db_for_cdr;
+        let mut trackers: std::collections::HashMap<String, CdrTracker> = Default::default();
         while let Some(ev) = events.recv().await {
+            match &ev {
+                SipEvent::IncomingCall { call_id, from } => {
+                    trackers.insert(call_id.clone(), CdrTracker::new(&rid, call_id, from, "in"));
+                }
+                SipEvent::CallState { call_id, state } => {
+                    if let Some(tr) = trackers.get_mut(call_id) {
+                        tr.apply(*state, &db);
+                    }
+                }
+                _ => {}
+            }
             if let Some(msg) = map_event(ev) {
                 if event_tx.send(msg).await.is_err() {
                     break;
@@ -603,6 +640,97 @@ async fn handle_sip_session(mut ws: WebSocket, ua: Arc<SipUa>, resource_id: &str
     }
 
     tracing::debug!(action = "SIP_SESSION_END", resource_id, "sip session ended");
+}
+
+/// CDR 持久化挂钩：把通话状态变更写入 SQLite（子任务 #4）。
+///
+/// 简单状态机：拨号/来电 → 创建 CDR（ringing）；active → 标记接通并开始计时；
+/// ended/missed → 落止时间与时长。所有写入走 spawn_blocking 避免阻塞事件泵。
+/// CDR id 以 call_id 为基础，保证同通电话多次状态变更幂等 upsert。
+struct CdrTracker {
+    resource_id: String,
+    call_id: String,
+    peer: String,
+    direction: String,
+    created_at: Option<String>,
+    active_at: Option<String>,
+}
+
+impl CdrTracker {
+    fn new(resource_id: &str, call_id: &str, peer: &str, direction: &str) -> Self {
+        CdrTracker {
+            resource_id: resource_id.to_string(),
+            call_id: call_id.to_string(),
+            peer: peer.to_string(),
+            direction: direction.to_string(),
+            created_at: None,
+            active_at: None,
+        }
+    }
+
+    fn id(&self) -> String {
+        format!("cdr:{}", self.call_id)
+    }
+
+    fn now_iso() -> String {
+        // 用 chrono 生成 RFC3339；若不可用退回空串（DB 列有默认值）。
+        use chrono::Utc;
+        Utc::now().to_rfc3339()
+    }
+
+    fn apply(&mut self, state: CallState, db: &crate::db::Database) {
+        match state {
+            CallState::Ringing => {
+                if self.created_at.is_none() {
+                    self.created_at = Some(Self::now_iso());
+                }
+            }
+            CallState::Active => {
+                if self.active_at.is_none() {
+                    self.active_at = Some(Self::now_iso());
+                }
+            }
+            CallState::Held => {}
+            CallState::Ended => {}
+        }
+        let start = self.created_at.clone().unwrap_or_else(Self::now_iso);
+        let (end, duration) = match state {
+            CallState::Ended | CallState::Held => {
+                let end = Self::now_iso();
+                let dur = self.active_at.as_ref().map(|a| {
+                    let t0 = chrono::DateTime::parse_from_rfc3339(a)
+                        .map(|d| d.timestamp())
+                        .unwrap_or(0);
+                    let t1 = chrono::DateTime::parse_from_rfc3339(&end)
+                        .map(|d| d.timestamp())
+                        .unwrap_or(0);
+                    (t1 - t0).max(0)
+                });
+                (Some(end), dur.unwrap_or(0))
+            }
+            _ => (None, 0),
+        };
+        let cdr = crate::models::NewCdr {
+            id: self.id(),
+            resource_id: self.resource_id.clone(),
+            peer: self.peer.clone(),
+            call_id: self.call_id.clone(),
+            start_time: start,
+            end_time: end,
+            duration_sec: duration,
+            direction: self.direction.clone(),
+            state: match state {
+                CallState::Ringing => "ringing",
+                CallState::Active => "active",
+                CallState::Held => "held",
+                CallState::Ended => "ended",
+            }
+            .to_string(),
+            recording_url: String::new(),
+            pcap_url: String::new(),
+        };
+        let _ = db.upsert_cdr(&cdr);
+    }
 }
 
 /// 将 [`SipEvent`] 映射为前端 [`ServerMsg`]。返回 `None` 表示忽略该事件。
@@ -1137,5 +1265,52 @@ mod tests {
         ua.send_audio(pcm).await.unwrap();
         let acts = ua.actions.lock().unwrap();
         assert_eq!(*acts, vec![MockAction::SendAudio(mic_pcm.len())]);
+    }
+
+    // --- 子任务 #4：CDR 状态机持久化（状态机驱动 call_state 事件 → 行正确）---
+
+    use crate::db::Database;
+    use tempfile::tempdir;
+
+    #[test]
+    fn cdr_tracker_creates_and_finalizes_record() {
+        let dir = tempdir().unwrap();
+        let db = Database::open(&dir.path().join("cdr-test.db")).unwrap();
+        let mut tr = CdrTracker::new("res-1", "call-1", "sip:bob@x", "out");
+
+        // 拨号 → ringing，落 start_time。
+        tr.apply(CallState::Ringing, &db);
+        let created = db.get_cdr("cdr:call-1").unwrap().expect("CDR 已创建");
+        assert_eq!(created.peer, "sip:bob@x");
+        assert_eq!(created.direction, "out");
+        assert_eq!(created.state, "ringing");
+
+        // 接通 → active（不落 end_time）。
+        tr.apply(CallState::Active, &db);
+        let active = db.get_cdr("cdr:call-1").unwrap().unwrap();
+        assert_eq!(active.state, "active");
+        assert!(active.end_time.is_none());
+
+        // 挂断 → ended，落 end_time + duration。
+        tr.apply(CallState::Ended, &db);
+        let ended = db.get_cdr("cdr:call-1").unwrap().unwrap();
+        assert_eq!(ended.state, "ended");
+        assert!(ended.end_time.is_some());
+        assert!(ended.duration_sec >= 0);
+    }
+
+    #[test]
+    fn cdr_tracker_idempotent_on_same_call() {
+        let dir = tempdir().unwrap();
+        let db = Database::open(&dir.path().join("cdr-test2.db")).unwrap();
+        let mut tr = CdrTracker::new("res-1", "call-9", "sip:carol@y", "in");
+        tr.apply(CallState::Ringing, &db);
+        tr.apply(CallState::Active, &db);
+        tr.apply(CallState::Ended, &db);
+        // 同 call_id 只应有一行。
+        let all = db.query_cdr(&crate::models::CdrFilter::default()).unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].peer, "sip:carol@y");
+        assert_eq!(all[0].direction, "in");
     }
 }

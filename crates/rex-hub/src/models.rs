@@ -142,3 +142,64 @@ pub struct SavedQuery {
     #[serde(default)]
     pub updated_at: Option<String>,
 }
+
+// --- SIP CDR (Call Detail Record) ---
+
+/// 通话记录（持久化到 SQLite，前端表格展示 + 关联录音/抓包）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CdrRecord {
+    pub id: String,
+    pub resource_id: String,
+    pub peer: String,
+    pub call_id: String,
+    #[serde(default)]
+    pub start_time: String,
+    #[serde(default)]
+    pub end_time: Option<String>,
+    #[serde(default)]
+    pub duration_sec: i64,
+    #[serde(default = "default_direction")]
+    pub direction: String,
+    #[serde(default = "default_cdr_state")]
+    pub state: String,
+    #[serde(default)]
+    pub recording_url: String,
+    #[serde(default)]
+    pub pcap_url: String,
+}
+
+fn default_direction() -> String {
+    "out".into()
+}
+fn default_cdr_state() -> String {
+    "ended".into()
+}
+
+/// 新建/更新 CDR 的入参（Hub 通话状态机驱动写入）。
+#[derive(Debug, Clone, Default)]
+pub struct NewCdr {
+    pub id: String,
+    pub resource_id: String,
+    pub peer: String,
+    pub call_id: String,
+    pub start_time: String,
+    pub end_time: Option<String>,
+    pub duration_sec: i64,
+    pub direction: String,
+    pub state: String,
+    pub recording_url: String,
+    pub pcap_url: String,
+}
+
+/// CDR 列表查询过滤 + 分页 + 排序。
+#[derive(Debug, Clone, Default)]
+pub struct CdrFilter {
+    pub resource_id: Option<String>,
+    pub direction: Option<String>,
+    pub state: Option<String>,
+    pub from: Option<String>,
+    pub to: Option<String>,
+    pub sort: Option<String>, // start_desc | start_asc
+    pub limit: Option<u64>,
+    pub offset: Option<u64>,
+}
