@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.70.3] - 2026-08-19
+
+### Fixed
+- MySQL：`escape_identifier` 反引号转义（注入防护）
+- Redis 媒体帧：`ZlibDecoder` 取代手写 zlib 解码，修复部分帧解压失败；`try_pickle` 增加结构校验，消除误判正例
+- rex-sip：baresip FFI `#[allow(clippy::arc_with_non_send_sync)]` 显式标注，消除 clippy 警告
+
+### Changed
+- 全仓库测试补全：5 个 0 测试 crate（rex-mysql/rex-postgresql/rex-sqlite/rex-s3/rex-transfer）补齐单元 + 集成测试；rex-ssh/rex-redis 补短板；前端薄弱 feature 补单测
+- 文档重写（PRODUCT/DEVELOPMENT/架构/参考）对齐实际实现，去除过时描述
+- 全仓库代码注释核对与补全（模块头/FFI 契约/关键流程）
+- 按 dev-flow 步骤4/5 维度全量 review + 简化（消除重复/过度设计/拆大函数/统一风格）
+- `cargo fmt`/`clippy` 全仓库零 warning
+
+### Performance
+- 媒体通道压测：PCM 2.28M frames/s、视频 1280x720 1869 fps、隧道 35.5M frames/s、8 路并发 6.77M frames/s，验证 raw-media-over-WebSocket 设计对单用户自托管可行
+
 ## [0.70.2] - 2026-08-18
 
 ### Added
