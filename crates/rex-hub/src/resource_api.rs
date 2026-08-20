@@ -523,25 +523,25 @@ pub async fn test_connection(
             None => Err("missing config_json for S3".into()),
         },
         "sip" => {
-            // SIP 测试连接：校验 config_json 必填字段（server/username）。
+            // SIP 测试连接：校验 config_json（SipProfile）解析后能选出生效账户
+            // （账户自带 server + 生效账户 username）。复用 load_sip_conn，校验逻辑与信令注册一致。
             // 匿名注册（无 password）也是合法的，故 password 非必填。
-            // 真正的 REGISTER 拨测在子任务 #3 的 /ws/sip 信令联调中完成。
-            match body.config_json {
-                Some(ref cfg) => match serde_json::from_str::<serde_json::Value>(cfg) {
-                    Ok(v) => {
-                        let server = v
-                            .get("server")
-                            .and_then(|s| s.as_str())
-                            .or(Some(body.host.as_str()))
-                            .filter(|s| !s.is_empty());
-                        let username = v
-                            .get("username")
-                            .and_then(|s| s.as_str())
-                            .or(body.username.as_deref())
-                            .filter(|s| !s.is_empty());
-                        match (server, username) {
-                            (Some(_), Some(_)) => Ok(()),
-                            _ => Err("missing server or username for SIP".into()),
+            // 真正的 REGISTER 拨测在 /ws/sip 信令联调中完成。
+            match &body.config_json {
+                Some(cfg) => match serde_json::from_str::<serde_json::Value>(cfg) {
+                    Ok(value) => {
+                        let info = crate::resource_conn::ResourceConnInfo {
+                            resource_id: String::new(),
+                            name: String::new(),
+                            protocol: "sip".into(),
+                            host: body.host.clone(),
+                            port: body.port,
+                            username: body.username.clone().unwrap_or_default(),
+                            config: value,
+                        };
+                        match crate::resource_conn::load_sip_conn(&info) {
+                            Ok(_) => Ok(()),
+                            Err(e) => Err(format!("invalid SIP config: {e}")),
                         }
                     }
                     Err(e) => Err(format!("invalid config_json: {e}")),
