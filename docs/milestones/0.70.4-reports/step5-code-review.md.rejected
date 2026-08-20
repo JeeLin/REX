@@ -1,0 +1,43 @@
+# 代码审查报告：0.70.4 SIP 资源按名称管理 + 多账户切换
+
+## 变更概览
+
+- **基准**：`milestone-0.70.4-start` tag 已于本地 tag 清理时删除，改用其目标提交 `9b97f342` 作为 diff 基准（`git diff --name-only 9b97f342`）。
+- **变更文件**（10 个，不含里程碑文档/非代码）：
+  - `crates/rex-sip/src/lib.rs`
+  - `crates/rex-hub/src/resource_conn.rs`
+  - `crates/rex-hub/src/resource_api.rs`
+  - `packages/rex-console-web/src/features/resource/WizardModal.vue`
+  - `packages/rex-console-web/src/features/resource/__tests__/WizardModal.sip.test.ts`
+  - `packages/rex-console-web/src/features/sip/SipPage.vue`
+  - `packages/rex-console-web/src/features/sip/SipPage.test.ts`
+  - `packages/rex-console-web/src/features/workspace/PaneLeaf.vue`
+  - `packages/rex-console-web/src/i18n/locales/en.json`
+  - `packages/rex-console-web/src/i18n/locales/zh.json`
+- **审查时间**：dev-flow 步骤5
+- **审查维度**：`AGENTS.md` 无 `## 代码审查维度` 段落，按 devflow-review 内置默认维度（正确性 / 安全性 / 健壮性 / 可维护性 / 性能 / 规范）执行；4 个并行审查 agent 覆盖。
+
+## 问题列表
+
+| # | 严重程度 | 文件 | 行号 | 描述 |
+|---|----------|------|------|------|
+| 1 | 🟡 | `crates/rex-hub/src/resource_conn.rs` | 99-103 | `SipAccount.port` 有 `#[serde(default = "default_sip_port")]`（默认 5060），故 `active.port` 永远不为 0，`if active.port != 0` 恒真，`info.port.unwrap_or(DEFAULT_SIP_PORT)` 分支永不执行——资源顶层 `port` 对 SIP 实际无效。步骤4 判为 🟢（"哨兵语义"），但步骤5 复核：serde 默认值已吞掉 0，哨兵不可达，属死代码。建议移除死分支与注释，或把 serde default 改为 `0` 让哨兵真实生效。 |
+| 2 | 🟡 | `packages/rex-console-web/src/features/resource/WizardModal.vue` | 183-186 | SIP 资源顶层 `host`（用于列表展示）取 `sipAccounts.value[0]?.server`，而 `buildConfig()` 按 `username` 过滤后发出的是"有效账户"列表。当首个账户无 username/无 server 时，顶层 `host` 落到空串，而 `create_resource` 校验 `host required`（`resource_api.rs:92`）会拒绝创建——即使存在有效 active 账户。应改为从过滤后/active 账户取 server。 |
+| 3 | 🟡 | `packages/rex-console-web/src/features/resource/WizardModal.vue` | 158-177 | `buildConfig` 按 `username.trim()` 过滤账户后，再判断 `activeAccount` 是否落在保留集合；若不在则回退 `accounts[0].id`。当 active 账户被过滤掉时，保存的 `activeAccount` 与 UI 单选框选中项不一致（静默切到另一账户），用户无感知。 |
+| 4 | 🟡 | `packages/rex-console-web/src/features/sip/SipPage.vue` | 305-306 | `selectAccount` 中 `JSON.parse(res.config_json)` 无 try/catch，仅依赖外层 catch；解析失败时把 parse error 写成 `registrationFailed` 误导用户。与同文件 `parseSipProfile`（270 行）的严谨守卫不一致。 |
+| 5 | 🟡 | `packages/rex-console-web/src/features/sip/SipPage.vue` | 328 | 面板标题回退用 `t('wizard.sipServer')`——该 key 属于向导表单标签语义，作为面板标题层级错配，且若向导标签改词会连带影响面板。建议新增 `sip.title` 专用 key。 |
+| 6 | 🟢 | `packages/rex-console-web/src/features/sip/SipPage.vue` | 298-315 | 切换账户前多一次 `resourcesApi.get` 全量读取，再 PATCH。后端 `update_resource` 独立回读行并重写 `name/protocol/host/port/username`。当前前端回显了所有字段，未丢失；但若漏回显任一字段即遭覆盖（潜在 clobber）。属 API 粒度过粗，可后续引入专用 `set_active_account` 端点或字段级合并，超本 diff 范围，记入缺陷池。 |
+| 7 | 🟢 | `packages/rex-console-web/src/features/sip/SipPage.vue` | 298-322 | 切换仅持久化 `activeAccount`，已建立的 `SipClient` WebSocket（mount 时按旧账户注册）不会即时刷新——切换后需重建面板才生效（与里程碑文档"不强制实时 re-register"一致）。非缺陷，仅提示用户可见行为。 |
+| 8 | 🟢 | `crates/rex-hub/src/resource_conn.rs` | 82 | `serde_json::from_value(cfg.clone())` 克隆整个 JsonValue 仅作丢弃；可 `from_value(cfg.take()?)` 或直接借用避免分配。非热路径，影响极小。 |
+| 9 | 🟢 | `packages/rex-console-web/src/features/resource/WizardModal.vue` / `SipPage.vue` | — | 两套 `SipAccountForm` / `SipAccountView` 类型均镜像后端 `SipProfile`，`transport` 联合类型 `'udp'|'tcp'|'tls'` 两处手敲。可抽到 `@/api/resources` 共享，避免漂移。范围外重构。 |
+
+## 范围外（非本里程碑引入，仅提示）
+
+- **`SipPage.vue:139`** `sip.error` 分支读取 `e.payload.message`，但后端 `ReasonPayload`（`sip_ws.rs:94,923`）序列化 `{"reason":"..."}`；WS 错误时错误消息会显示 `undefined`。此为 0.70.4 之前既有 bug（`payload.message` 所在 hunk 不在本 diff），且前端 `sip.ts:26` 类型声明亦为 `message`，契约早已错位。**不计入本里程碑门禁**，建议单独 `/dev-bug` 处理。
+
+## 汇总
+
+- 🔴 必须修复：0
+- 🟡 应该修复：5（#1-#5,全部在本 diff 范围内，属可维护性/健壮性缺陷）
+- 🟢 可选改进：4（#6-#9）
+- **结论**：审查发现 **5 个 🟡**，按门禁须登记入 Bugs 表并打回开发阶段（步骤3）修复后重跑 4→5→6→7。无 🔴。
