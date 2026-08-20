@@ -303,7 +303,12 @@ async function selectAccount(id: string) {
     // 重新读取完整资源：update 端点要求全字段（name/protocol/host/port/username），
     // 仅改写 activeAccount 后写回，避免覆盖其他字段。
     const res = await resourcesApi.get(props.environmentId, props.resourceId)
-    const cfg = JSON.parse(res.config_json) as Record<string, unknown>
+    let cfg: Record<string, unknown>
+    try {
+      cfg = JSON.parse(res.config_json) as Record<string, unknown>
+    } catch (e) {
+      throw new Error(`invalid resource config: ${e instanceof Error ? e.message : String(e)}`)
+    }
     cfg.activeAccount = id
     await resourcesApi.update(props.environmentId, props.resourceId, {
       name: res.name,
@@ -325,7 +330,7 @@ async function selectAccount(id: string) {
 <template>
   <div class="sip-page">
     <header class="sip-header">
-      <span class="sip-title">{{ name || t('wizard.sipServer') }}</span>
+      <span class="sip-title">{{ name || t('sip.title') }}</span>
       <div class="sip-header-right">
         <select
           v-if="sipAccounts.length > 1"

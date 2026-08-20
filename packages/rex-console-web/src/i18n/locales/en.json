@@ -632,6 +632,7 @@
     "zoomOut": "Zoom Out"
   },
   "sip": {
+    "title": "SIP",
     "enterNumber": "Enter number",
     "clear": "Clear",
     "call": "Call",

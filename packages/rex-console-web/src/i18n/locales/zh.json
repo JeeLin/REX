@@ -630,6 +630,7 @@
     "zoomOut": "缩小"
   },
   "sip": {
+    "title": "SIP",
     "enterNumber": "输入号码",
     "clear": "清除",
     "call": "呼叫",
