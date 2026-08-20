@@ -106,6 +106,7 @@ function onStatus(tabId: string, status: string) {
       v-else-if="tabInfo?.protocol === 'sip'"
       :key="tabInfo?.id || ''"
       :resource-id="tabInfo?.resourceId"
+      :environment-id="tabInfo?.environmentId"
       :name="tabInfo?.label"
       @update:status="(s: string) => tabInfo?.id && onStatus(tabInfo.id, s)"
     />

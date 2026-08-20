@@ -66,3 +66,77 @@ describe('SipPage quality card', () => {
 function client(wrapper: any) {
   return (wrapper.vm as any).client as any
 }
+
+// 多账户切换（0.70.4）：挂载资源含多个账户时显示下拉，切换触发 update 写回 activeAccount。
+// 用 vi.hoisted 提升常量，避免 vi.mock 工厂被 hoist 到其定义之前而引用未初始化变量。
+const { sipProfile } = vi.hoisted(() => ({
+  sipProfile: JSON.stringify({
+    accounts: [
+      { id: 'a1', server: 'pbx.example.com', username: 'alice', displayName: 'Alice' },
+      { id: 'a2', server: 'pbx2.example.com', username: 'bob', displayName: 'Bob' },
+    ],
+    activeAccount: 'a1',
+  }),
+}))
+
+vi.mock('@/api/resources', () => ({
+  resourcesApi: {
+    get: vi.fn().mockResolvedValue({
+      id: 'r1',
+      environment_id: 'env1',
+      name: 'Phone',
+      protocol: 'sip',
+      host: 'pbx.example.com',
+      port: 5060,
+      username: 'alice',
+      config_json: sipProfile,
+      color: null,
+      sort_order: 0,
+      created_at: '',
+      updated_at: '',
+    }),
+    update: vi.fn().mockResolvedValue({}),
+  },
+}))
+
+describe('SipPage multi-account switch', () => {
+  beforeEach(() => {
+    localStorage.setItem('rex-token', 'tok')
+    vi.clearAllMocks()
+  })
+
+  it('renders an account selector with all accounts and the active one selected', async () => {
+    const wrapper = mount(SipPage, {
+      props: { resourceId: 'r1', environmentId: 'env1', name: 'Phone' },
+      global: { stubs: ['Dialpad', 'CallState'], plugins: [i18n] },
+    })
+    await flushPromises()
+    await nextTick()
+
+    const select = wrapper.find('.account-select')
+    expect(select.exists()).toBe(true)
+    const options = select.findAll('option').map((o) => o.text())
+    expect(options).toEqual(['Alice', 'Bob'])
+    expect(select.attributes('value')).toBe('a1')
+  })
+
+  it('switching account writes activeAccount back via update', async () => {
+    const wrapper = mount(SipPage, {
+      props: { resourceId: 'r1', environmentId: 'env1', name: 'Phone' },
+      global: { stubs: ['Dialpad', 'CallState'], plugins: [i18n] },
+    })
+    await flushPromises()
+    await nextTick()
+
+    const select = wrapper.find('.account-select')
+    await select.setValue('a2')
+    await flushPromises()
+    await nextTick()
+
+    const mod = (await import('@/api/resources')) as any
+    const resourcesApi = mod.resourcesApi
+    expect(resourcesApi.update).toHaveBeenCalledTimes(1)
+    const cfg = JSON.parse(resourcesApi.update.mock.calls[0]![2].config_json)
+    expect(cfg.activeAccount).toBe('a2')
+  })
+})

@@ -12,9 +12,11 @@ import {
   encodeVideoFrame,
   decodeVideoFrame,
 } from '@/api/sipMedia'
+import { resourcesApi, type Resource } from '@/api/resources'
 
 const props = defineProps<{
   resourceId?: string
+  environmentId?: string
   name?: string
 }>()
 
@@ -235,6 +237,7 @@ onMounted(() => {
     onError: () => emit('update:status', 'error'),
   })
   client.connect(getToken())
+  void loadSipResource()
 })
 
 onBeforeUnmount(() => {
@@ -253,13 +256,93 @@ const statusLabel = computed(() => {
   if (registered.value) return t('sip.registered')
   return t('sip.registering')
 })
+
+// 多账户切换（0.70.4）：一个名称下挂多个账户，下拉切换生效账户并写回资源。
+interface SipAccountView {
+  id: string
+  username: string
+  displayName?: string
+}
+const sipAccounts = ref<SipAccountView[]>([])
+const activeAccount = ref<string>('')
+const switchingAccount = ref(false)
+
+function parseSipProfile(raw: string) {
+  try {
+    const cfg = JSON.parse(raw) as {
+      accounts?: SipAccountView[]
+      activeAccount?: string
+    }
+    sipAccounts.value = (cfg.accounts ?? []).map((a) => ({
+      id: a.id,
+      username: a.username,
+      displayName: a.displayName,
+    }))
+    activeAccount.value = cfg.activeAccount ?? sipAccounts.value[0]?.id ?? ''
+  } catch {
+    sipAccounts.value = []
+    activeAccount.value = ''
+  }
+}
+
+async function loadSipResource() {
+  if (!props.environmentId || !props.resourceId) return
+  try {
+    const res: Resource = await resourcesApi.get(props.environmentId, props.resourceId)
+    parseSipProfile(res.config_json)
+  } catch {
+    // 资源读取失败不阻断通话面板，仅不显示账户切换。
+  }
+}
+
+async function selectAccount(id: string) {
+  if (!props.environmentId || !props.resourceId) return
+  if (id === activeAccount.value) return
+  switchingAccount.value = true
+  try {
+    // 重新读取完整资源：update 端点要求全字段（name/protocol/host/port/username），
+    // 仅改写 activeAccount 后写回，避免覆盖其他字段。
+    const res = await resourcesApi.get(props.environmentId, props.resourceId)
+    const cfg = JSON.parse(res.config_json) as Record<string, unknown>
+    cfg.activeAccount = id
+    await resourcesApi.update(props.environmentId, props.resourceId, {
+      name: res.name,
+      protocol: res.protocol,
+      host: res.host,
+      port: res.port,
+      username: res.username || undefined,
+      config_json: JSON.stringify(cfg),
+    })
+    activeAccount.value = id
+  } catch (e) {
+    registrationFailed.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    switchingAccount.value = false
+  }
+}
 </script>
 
 <template>
   <div class="sip-page">
     <header class="sip-header">
       <span class="sip-title">{{ name || t('wizard.sipServer') }}</span>
-      <span class="sip-status muted">{{ statusLabel }}</span>
+      <div class="sip-header-right">
+        <select
+          v-if="sipAccounts.length > 1"
+          class="account-select"
+          :value="activeAccount"
+          :disabled="switchingAccount"
+          @change="selectAccount(($event.target as HTMLSelectElement).value)"
+        >
+          <option v-for="a in sipAccounts" :key="a.id" :value="a.id">
+            {{ a.displayName || a.username }}
+          </option>
+        </select>
+        <span v-else-if="sipAccounts.length === 1" class="sip-account-muted muted">
+          {{ sipAccounts[0]?.displayName || sipAccounts[0]?.username }}
+        </span>
+        <span class="sip-status muted">{{ statusLabel }}</span>
+      </div>
     </header>
     <div class="sip-body">
       <CallState
@@ -341,11 +424,28 @@ const statusLabel = computed(() => {
   border-bottom: 1px solid var(--border);
   font-size: var(--text-sm);
 }
+.sip-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
 .sip-title {
   font-weight: 600;
   color: var(--text-primary);
 }
 .sip-status {
+  font-size: var(--text-xs);
+}
+.account-select {
+  height: 24px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  padding: 0 var(--space-1);
+}
+.sip-account-muted {
   font-size: var(--text-xs);
 }
 .sip-body {
