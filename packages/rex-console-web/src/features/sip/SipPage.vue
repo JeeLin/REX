@@ -13,6 +13,7 @@ import {
   decodeVideoFrame,
 } from '@/api/sipMedia'
 import { resourcesApi, type Resource } from '@/api/resources'
+import { type SipAccountView, resolveActiveAccount } from './types'
 
 const props = defineProps<{
   resourceId?: string
@@ -258,11 +259,6 @@ const statusLabel = computed(() => {
 })
 
 // 多账户切换（0.70.4）：一个名称下挂多个账户，下拉切换生效账户并写回资源。
-interface SipAccountView {
-  id: string
-  username: string
-  displayName?: string
-}
 const sipAccounts = ref<SipAccountView[]>([])
 const activeAccount = ref<string>('')
 const switchingAccount = ref(false)
@@ -273,12 +269,17 @@ function parseSipProfile(raw: string) {
       accounts?: SipAccountView[]
       activeAccount?: string
     }
-    sipAccounts.value = (cfg.accounts ?? []).map((a) => ({
+    const accounts = cfg.accounts ?? []
+    sipAccounts.value = accounts.map((a) => ({
       id: a.id,
+      server: a.server,
+      port: a.port,
+      transport: a.transport,
       username: a.username,
+      password: a.password,
       displayName: a.displayName,
     }))
-    activeAccount.value = cfg.activeAccount ?? sipAccounts.value[0]?.id ?? ''
+    activeAccount.value = resolveActiveAccount(accounts, cfg.activeAccount ?? '')?.id ?? ''
   } catch {
     sipAccounts.value = []
     activeAccount.value = ''

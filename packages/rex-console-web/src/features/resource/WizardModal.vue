@@ -6,6 +6,7 @@ import { type TestConnectionResult } from '@/api/resources'
 import Button from '@/components/ui/Button.vue'
 import Modal from '@/components/ui/Modal.vue'
 import { PROTOCOL_ICONS, PROTOCOL_COLORS } from './protocols'
+import { type SipAccountForm, type SipAccountView, resolveActiveAccount } from '@/features/sip/types'
 
 const { t } = useI18n()
 const props = defineProps<{
@@ -56,15 +57,6 @@ const s3Bucket = ref('')
 const s3Region = ref('')
 const redisDb = ref(0)
 // SIP：名称（= 资源名，仅展示分组）+ 多账户，每个账户自带 server/port/transport 与凭据。
-interface SipAccountForm {
-  id: string
-  server: string
-  port: number | null
-  transport: 'udp' | 'tcp' | 'tls'
-  username: string
-  password: string
-  displayName: string
-}
 const sipAccounts = ref<SipAccountForm[]>([
   { id: 'a1', server: '', port: null, transport: 'udp', username: '', password: '', displayName: '' },
 ])
@@ -157,27 +149,25 @@ function buildConfig(): Record<string, unknown> {
     cfg.region = s3Region.value || 'us-east-1'
   } else if (selectedProtocol.value === 'sip') {
     // SipProfile 形状：名称（仅展示）+ 多账户，每个账户自带 server/port/transport 与凭据。
-    const accounts = sipAccounts.value
+    const accounts: SipAccountView[] = sipAccounts.value
       .filter((a) => a.username.trim())
       .map((a) => {
-        const acc: Record<string, unknown> = {
+        const acc: SipAccountView = {
           id: a.id,
           server: a.server.trim(),
+          port: a.port ?? 5060,
           transport: a.transport,
           username: a.username.trim(),
         }
-        if (a.port != null) acc.port = a.port
         if (a.password) acc.password = a.password
         if (a.displayName.trim()) acc.displayName = a.displayName.trim()
         return acc
       })
-    // 确保 activeAccount 指向被保留的账户（过滤掉空账户后可能失效），
-    // 且与 UI 单选框选中项一致——不静默切到别的账户。
-    const active = accounts.some((a) => a.id === sipActiveAccount.value)
-      ? sipActiveAccount.value
-      : (accounts[0]?.id as string | undefined)
+    // 生效账户用共享解析规则（active 或 first），与后端 load_sip_conn 语义一致，
+    // 确保 activeAccount 指向被保留的账户（过滤掉空账户后可能失效）。
+    const active = resolveActiveAccount(accounts, sipActiveAccount.value)
     cfg.accounts = accounts
-    if (active) cfg.activeAccount = active
+    if (active) cfg.activeAccount = active.id
   }
   return cfg
 }
@@ -188,10 +178,17 @@ function resourceHost(): string {
   if (selectedProtocol.value === 'sqlite') return filePath.value
   if (selectedProtocol.value === 's3') return s3Endpoint.value
   if (selectedProtocol.value === 'sip') {
-    const retained = sipAccounts.value.filter((a) => a.username.trim())
-    const active =
-      retained.find((a) => a.id === sipActiveAccount.value) ?? retained[0]
-    return active?.server?.trim() ?? ''
+    const retained: SipAccountView[] = sipAccounts.value
+      .filter((a) => a.username.trim())
+      .map((a) => ({
+        id: a.id,
+        server: a.server.trim(),
+        port: a.port ?? 5060,
+        transport: a.transport,
+        username: a.username.trim(),
+      }))
+    const active = resolveActiveAccount(retained, sipActiveAccount.value)
+    return active?.server ?? ''
   }
   return host.value
 }
