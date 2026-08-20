@@ -52,7 +52,7 @@ pub struct NewResource {
     pub sort_order: Option<i64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Resource {
     pub id: String,
     pub environment_id: String,

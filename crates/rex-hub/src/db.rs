@@ -645,6 +645,7 @@ impl Database {
 
     /// 仅改写 SIP 资源的生效账户（`config_json.activeAccount`），其余字段不动。
     /// `account_id` 必须属于该资源的 `SipProfile.accounts`，否则拒绝。
+    /// 仅 SIP 资源允许调用（非 SIP 协议直接拒绝）。
     /// `config_json` 以密文存储，本函数负责解密-改-加密写回。
     pub fn set_resource_active_account(
         &self,
@@ -653,14 +654,40 @@ impl Database {
         id: &str,
         account_id: &str,
     ) -> Result<Resource> {
-        let mut resource = self
-            .get_resource(id)?
-            .ok_or_else(|| RExError::Message("resource not found".into()))?;
-        if resource.config_json.is_empty() || resource.config_json == "{}" {
+        let conn = self.conn()?;
+        // 单次查询取所需字段（id/protocol/config_json），避免全列映射与二次取连接。
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, environment_id, name, protocol, config_json FROM resources \
+                 WHERE environment_id = ?1 AND id = ?2",
+            )
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let mut rows = stmt
+            .query_map(rusqlite::params![env_id, id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            })
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let (res_id, res_env_id, res_name, protocol, config_json) = match rows.next() {
+            Some(Ok(t)) => t,
+            Some(Err(e)) => return Err(RExError::Message(e.to_string())),
+            None => return Err(RExError::Message("resource not found".into())),
+        };
+        if protocol != "sip" {
+            return Err(RExError::Message(
+                "set_active_account only applies to sip resources".into(),
+            ));
+        }
+        if config_json.is_empty() || config_json == "{}" {
             return Err(RExError::Message("resource has no config_json".into()));
         }
         let decrypted = crypto
-            .decrypt(&resource.config_json)
+            .decrypt(&config_json)
             .map_err(|e| RExError::Message(format!("decrypt failed: {e}")))?;
         let mut profile: serde_json::Value = serde_json::from_str(&decrypted)
             .map_err(|e| RExError::Message(format!("invalid config_json: {e}")))?;
@@ -683,16 +710,22 @@ impl Database {
             .encrypt(&updated)
             .map_err(|e| RExError::Message(format!("encrypt failed: {e}")))?;
 
-        let conn = self.conn()?;
         let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
             "UPDATE resources SET config_json = ?1, updated_at = ?2 WHERE environment_id = ?3 AND id = ?4",
-            rusqlite::params![encrypted, now, env_id, id],
+            rusqlite::params![encrypted, now, &res_env_id, &res_id],
         )
         .map_err(|e| RExError::Message(e.to_string()))?;
-        resource.config_json = updated;
-        resource.updated_at = now;
-        Ok(resource)
+
+        Ok(Resource {
+            id: res_id,
+            environment_id: res_env_id,
+            name: res_name,
+            protocol,
+            config_json: updated,
+            updated_at: now,
+            ..Default::default()
+        })
     }
 
     pub fn delete_resource(&self, env_id: &str, id: &str) -> Result<()> {
@@ -1657,9 +1690,30 @@ mod tests {
             )
             .unwrap();
 
-        // config_json 为空：拒绝（非 SIP 资源不应被误改）。
+        // 非 SIP 协议：直接拒绝（即便 config_json 为空）。
         let err = db
             .set_resource_active_account(&crypto, &env.id, &res.id, "a1")
+            .unwrap_err();
+        assert!(err.to_string().contains("only applies to sip"));
+
+        // SIP 资源但 config_json 为空：拒绝（非 SIP 资源不应被误改）。
+        let sip = db
+            .create_resource(
+                &env.id,
+                &NewResource {
+                    name: "sip-empty".into(),
+                    protocol: "sip".into(),
+                    host: "sip.example.com".into(),
+                    port: None,
+                    username: None,
+                    config_json: None,
+                    color: None,
+                    sort_order: None,
+                },
+            )
+            .unwrap();
+        let err = db
+            .set_resource_active_account(&crypto, &env.id, &sip.id, "a1")
             .unwrap_err();
         assert!(err.to_string().contains("no config_json"));
     }
