@@ -67,58 +67,51 @@ pub fn load_resource_config(
     })
 }
 
-/// 从 `ResourceConnInfo` 解析 SIP 配置（`config_json` 内字段）。
+/// 从 `ResourceConnInfo` 解析 SIP 配置。
 ///
-/// SIP 协议特有字段：`server`、`port?`、`username`、`password`、`displayName?`、
-/// `transport?`（udp/tcp/tls，默认 udp）。`password` 已在 `load_resource_config`
-/// 中由 crypto 解密，此处直接读取明文。
+/// `config_json` 为 `SipProfile` 形状（`{ accounts[], activeAccount }`）：
+/// 选取 `activeAccount` 对应账户（不存在则回退 `accounts[0]`），该账户自带
+/// `server`/`port`/`transport` 与登录凭据，直接构造生效的 [`rex_sip::SipConfig`]。
 ///
-/// 资源顶层 `host` 缺省时回退到 `config.server`；顶层 `port` 缺省时回退到
-/// `config.port` 或默认 5060。
+/// 资源顶层 `host`/`port` 不再作为 server 来源（server 已下沉到账户层）；
+/// 仅当账户 `server` 缺省时回退资源顶层 `host`（兼容直连场景下的缺省写法）。
+/// `password` 已在 `load_resource_config` 中由 crypto 解密，此处直接读取明文。
 pub fn load_sip_conn(info: &ResourceConnInfo) -> Result<rex_sip::SipConfig, String> {
     let cfg = &info.config;
-    let server = if !info.host.is_empty() {
-        Some(info.host.clone())
+    let profile: rex_sip::SipProfile =
+        serde_json::from_value(cfg.clone()).map_err(|e| format!("sip: invalid profile: {e}"))?;
+    let active = profile
+        .accounts
+        .iter()
+        .find(|a| a.id == profile.active_account)
+        .or_else(|| profile.accounts.first())
+        .ok_or_else(|| "sip: no account available".to_string())?;
+
+    // server 优先取账户自带；缺省时回退资源顶层 host。
+    let server = if !active.server.is_empty() {
+        active.server.clone()
     } else {
-        cfg.get("server").and_then(|v| v.as_str()).map(String::from)
-    }
-    .ok_or_else(|| "sip: missing server".to_string())?;
-    let port = info
-        .port
-        .or_else(|| cfg.get("port").and_then(|v| v.as_u64()).map(|p| p as u16))
-        .unwrap_or(5060);
-    let username = if !info.username.is_empty() {
-        Some(info.username.clone())
-    } else {
-        cfg.get("username")
-            .and_then(|v| v.as_str())
-            .map(String::from)
-    }
-    .ok_or_else(|| "sip: missing username".to_string())?;
-    let password = cfg
-        .get("password")
-        .and_then(|v| v.as_str())
-        .map(String::from);
-    let display_name = cfg
-        .get("displayName")
-        .and_then(|v| v.as_str())
-        .map(String::from);
-    let transport = match cfg
-        .get("transport")
-        .and_then(|v| v.as_str())
-        .unwrap_or("udp")
-    {
-        "tcp" => rex_sip::SipTransport::Tcp,
-        "tls" => rex_sip::SipTransport::Tls,
-        _ => rex_sip::SipTransport::Udp,
+        info.host.clone()
     };
+    if server.is_empty() {
+        return Err("sip: missing server".to_string());
+    }
+    let port = if active.port != 0 {
+        active.port
+    } else {
+        info.port.unwrap_or(rex_sip::DEFAULT_SIP_PORT)
+    };
+    if active.username.is_empty() {
+        return Err("sip: missing username".to_string());
+    }
+
     Ok(rex_sip::SipConfig {
         server,
         port,
-        username,
-        password,
-        display_name,
-        transport,
+        username: active.username.clone(),
+        password: active.password.clone(),
+        display_name: active.display_name.clone(),
+        transport: active.transport,
     })
 }
 
@@ -139,39 +132,74 @@ mod tests {
     }
 
     #[test]
-    fn load_sip_conn_parses_full_config() {
-        let cfg = r#"{"server":"sip.example.com","port":5061,"username":"1000","password":"secret","displayName":"Alice","transport":"tls"}"#;
+    fn load_sip_conn_resolves_active_account_from_profile() {
+        let cfg = r#"{
+            "accounts":[
+                {"id":"a1","server":"pbx.example.com","port":5061,"transport":"tcp","username":"alice","password":"pa","displayName":"Alice"},
+                {"id":"a2","server":"pbx2.example.com","port":5062,"transport":"tls","username":"bob","password":"pb","displayName":"Bob"}
+            ],
+            "activeAccount":"a2"
+        }"#;
         let sip = load_sip_conn(&info_with_config(cfg)).unwrap();
-        assert_eq!(sip.server, "sip.example.com");
-        assert_eq!(sip.port, 5061);
-        assert_eq!(sip.username, "1000");
-        assert_eq!(sip.password.as_deref(), Some("secret"));
-        assert_eq!(sip.display_name.as_deref(), Some("Alice"));
+        // 生效账户应为 a2，且 server/port/transport 取自身携带值。
+        assert_eq!(sip.server, "pbx2.example.com");
+        assert_eq!(sip.port, 5062);
         assert_eq!(sip.transport, rex_sip::SipTransport::Tls);
+        assert_eq!(sip.username, "bob");
+        assert_eq!(sip.password.as_deref(), Some("pb"));
+        assert_eq!(sip.display_name.as_deref(), Some("Bob"));
     }
 
     #[test]
-    fn load_sip_conn_defaults_port_and_transport() {
-        let cfg = r#"{"server":"sip.x","username":"u","password":"p"}"#;
+    fn load_sip_conn_active_account_fallback_to_first() {
+        let cfg = r#"{
+            "accounts":[
+                {"id":"a1","server":"pbx.example.com","username":"alice","password":"pa"},
+                {"id":"a2","server":"pbx2.example.com","username":"bob","password":"pb"}
+            ],
+            "activeAccount":"does-not-exist"
+        }"#;
         let sip = load_sip_conn(&info_with_config(cfg)).unwrap();
-        assert_eq!(sip.port, 5060);
+        // activeAccount 不存在 → 回退 accounts[0]
+        assert_eq!(sip.username, "alice");
+        assert_eq!(sip.server, "pbx.example.com");
+        assert_eq!(sip.port, 5060); // 默认端口
         assert_eq!(sip.transport, rex_sip::SipTransport::Udp);
-        assert!(sip.display_name.is_none());
+    }
+
+    #[test]
+    fn load_sip_conn_account_server_defaults_to_top_level_host() {
+        // 账户 server 缺省时回退资源顶层 host。
+        let mut info = info_with_config(
+            r#"{"accounts":[{"id":"a1","username":"alice"}],"activeAccount":"a1"}"#,
+        );
+        info.host = "top.example.com".into();
+        let sip = load_sip_conn(&info).unwrap();
+        assert_eq!(sip.server, "top.example.com");
+        assert_eq!(sip.username, "alice");
     }
 
     #[test]
     fn load_sip_conn_anonymous_password_optional() {
         // 匿名注册（无 password）也是合法的 SIP 配置。
-        let cfg = r#"{"server":"sip.x","username":"u"}"#;
+        let cfg =
+            r#"{"accounts":[{"id":"a1","server":"sip.x","username":"u"}],"activeAccount":"a1"}"#;
         let sip = load_sip_conn(&info_with_config(cfg)).unwrap();
         assert!(sip.password.is_none());
+        assert_eq!(sip.transport, rex_sip::SipTransport::Udp);
     }
 
     #[test]
-    fn load_sip_conn_falls_back_to_top_level_host() {
-        let mut info = info_with_config(r#"{"username":"u","password":"p"}"#);
-        info.host = "top.example.com".into();
-        let sip = load_sip_conn(&info).unwrap();
-        assert_eq!(sip.server, "top.example.com");
+    fn load_sip_conn_missing_account_is_error() {
+        let cfg = r#"{"accounts":[],"activeAccount":"a1"}"#;
+        let res = load_sip_conn(&info_with_config(cfg));
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn load_sip_conn_missing_username_is_error() {
+        let cfg = r#"{"accounts":[{"id":"a1","server":"sip.x"}],"activeAccount":"a1"}"#;
+        let res = load_sip_conn(&info_with_config(cfg));
+        assert!(res.is_err());
     }
 }

@@ -37,8 +37,12 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 /// SIP 传输方式。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// config_json（前端与 `SipProfile`）使用小写 `udp`/`tcp`/`tls`，故序列化用小写。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SipTransport {
+    #[default]
     Udp,
     Tcp,
     Tls,
@@ -55,6 +59,10 @@ impl SipTransport {
 }
 
 /// SIP UA 配置（对应资源模型里的 `config_json` SIP 段）。
+///
+/// `SipConfig` 是**解析后生效配置**：Hub/Agent 的 UA 仍以单份 `SipConfig`
+/// 注册/拨号（FFI 边界与隧道帧不变）。多账户切换在存储层与解析层完成，
+/// 不触及 UA 实现（见 [`SipProfile`] / [`SipAccount`]）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SipConfig {
     pub server: String,
@@ -63,6 +71,57 @@ pub struct SipConfig {
     pub password: Option<String>,
     pub display_name: Option<String>,
     pub transport: SipTransport,
+}
+
+/// SIP 账户（名称下的一个注册身份）。
+///
+/// 每个账户自带完整 server profile（`server`/`port`/`transport`）与登录凭据，
+/// 名称仅是展示分组，不绑定服务器。一个 `SipProfile` 可挂多个账户，
+/// 前端切换「当前生效账户」即改变 [`SipProfile::active_account`] 指向的 `id`。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SipAccount {
+    /// 账户本地标识（同一 profile 内唯一）。
+    pub id: String,
+    /// 注册域（SIP 服务器地址），缺省时回退资源顶层 `host`。
+    #[serde(default)]
+    pub server: String,
+    /// 注册端口，默认 5060。
+    #[serde(default = "default_sip_port")]
+    pub port: u16,
+    /// 传输方式，默认 udp。
+    #[serde(default)]
+    pub transport: SipTransport,
+    /// 注册用户名（SIP AOR 的用户部分）。
+    pub username: String,
+    /// 注册密码（可选，匿名注册为 None）。
+    #[serde(default)]
+    pub password: Option<String>,
+    /// 显示名（可选）。
+    #[serde(default)]
+    pub display_name: Option<String>,
+}
+
+/// SIP 资源存储层模型：「名称（= 资源名，仅展示分组）+ 多账户」。
+///
+/// 这是 `resources.config_json` 中 SIP 段的形状。名称不进 `config_json`，
+/// 取 `Resource.name`；注册/拨号所需服务器与凭据全部在生效账户的 [`SipAccount`] 中。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SipProfile {
+    /// 名称下挂载的多个账户（各自带 server profile + 凭据）。
+    #[serde(default)]
+    pub accounts: Vec<SipAccount>,
+    /// 当前生效账户 id（指向 [`SipAccount::id`]）。
+    #[serde(default)]
+    pub active_account: String,
+}
+
+/// SIP 默认注册端口。
+pub const DEFAULT_SIP_PORT: u16 = 5060;
+
+fn default_sip_port() -> u16 {
+    DEFAULT_SIP_PORT
 }
 
 /// 通话状态。
