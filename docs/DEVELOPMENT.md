@@ -136,6 +136,7 @@ rex-agent = 所有 crate（无前端）
 | **M82c** | 音视频增强 + 通话记录 + 录音 + 抓包 + 质量监控 | 软电话 | ✅（0.70.2） |
 | **M82d** | 测试补全 + 文档重写 + 全量 review/优化 + 压测 | — | ✅ 已完成（0.70.3） |
 | **M82e** | SIP 资源按名称管理 + 多账户切换 | 软电话 | ✅ 已完成（0.70.4） |
+| **M82f** | 缺陷池清理 + SIP 配置收口（3 🟢 收口） | 软电话/SIP | ← 新增（下一步） |
 
 ### M0：项目骨架重建
 
@@ -565,3 +566,17 @@ docs/milestones/
 **依赖**：M82d
 **版本类型**：minor（数据模型迁移属向后兼容的渐进改造）
 **版本号**：0.70.4
+
+### M82f：缺陷池清理 + SIP 配置收口（0.70.5）← 新增（下一步）
+
+**核心功能**：消费 0.70.4 步骤5 代码审查遗留的 3 个 🟢 缺陷池条目，收口 SIP 配置层的镜像与逃生舱，消除类型/逻辑漂移并减少多余往返。无新功能，纯质量收口。
+
+**子任务预估**：
+1. `load_sip_conn` 移除顶层 `host` 回退逃生舱（模型已声明 server 完全下沉账户；移除属行为收敛，仅影响 legacy/异常 payload）
+2. 抽出共享 `SipProfile` TS 类型 + "active 或 first" 解析规则（消除 `load_sip_conn` / `SipPage.parseSipProfile` / `WizardModal.buildConfig` 三处镜像的类型/逻辑漂移）
+3. 新增 `set_active_account` 专用端点，消除 `SipPage.selectAccount` 切换账户先 `get` 再 `update` 的多余 GET 往返
+
+**依赖**：M82e
+**版本类型**：patch（无新功能，仅缺陷池 🟢 收口 + 重构）
+**版本号**：0.70.5
+**缺陷池 bug**：移除 load_sip_conn 顶层 host 回退逃生舱（🟢）、抽出共享 SipProfile TS 类型与 active/first 解析规则（🟢）、selectAccount 减少多余 GET 往返（🟢）— 已从 docs/BUGS.md 纳入并在规划时删除对应行
