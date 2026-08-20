@@ -55,9 +55,47 @@ const s3SecretKey = ref('')
 const s3Bucket = ref('')
 const s3Region = ref('')
 const redisDb = ref(0)
-const sipServer = ref('')
-const sipDisplay = ref('')
-const sipTransport = ref<'udp' | 'tcp' | 'tls'>('udp')
+// SIP：名称（= 资源名，仅展示分组）+ 多账户，每个账户自带 server/port/transport 与凭据。
+interface SipAccountForm {
+  id: string
+  server: string
+  port: number | null
+  transport: 'udp' | 'tcp' | 'tls'
+  username: string
+  password: string
+  displayName: string
+}
+const sipAccounts = ref<SipAccountForm[]>([
+  { id: 'a1', server: '', port: null, transport: 'udp', username: '', password: '', displayName: '' },
+])
+const sipActiveAccount = ref('a1')
+
+function addSipAccount() {
+  const n = sipAccounts.value.length + 1
+  const id = `a${n}`
+  sipAccounts.value.push({
+    id,
+    server: '',
+    port: null,
+    transport: 'udp',
+    username: '',
+    password: '',
+    displayName: '',
+  })
+  sipActiveAccount.value = id
+}
+
+function removeSipAccount(id: string) {
+  if (sipAccounts.value.length <= 1) return
+  sipAccounts.value = sipAccounts.value.filter((a) => a.id !== id)
+  if (sipActiveAccount.value === id) {
+    sipActiveAccount.value = sipAccounts.value[0]?.id ?? 'a1'
+  }
+}
+
+function setActiveSipAccount(id: string) {
+  sipActiveAccount.value = id
+}
 
 // Test connection
 const testResult = ref<TestConnectionResult | null>(null)
@@ -116,21 +154,36 @@ function buildConfig(): Record<string, unknown> {
     cfg.bucket = s3Bucket.value
     cfg.region = s3Region.value || 'us-east-1'
   } else if (selectedProtocol.value === 'sip') {
-    cfg.server = sipServer.value
-    cfg.username = username.value
-    if (password.value) cfg.password = password.value
-    if (port.value != null) cfg.port = port.value
-    if (sipDisplay.value.trim()) cfg.displayName = sipDisplay.value
-    cfg.transport = sipTransport.value
+    // SipProfile 形状：名称（仅展示）+ 多账户，每个账户自带 server/port/transport 与凭据。
+    const accounts = sipAccounts.value
+      .filter((a) => a.username.trim())
+      .map((a) => {
+        const acc: Record<string, unknown> = {
+          id: a.id,
+          server: a.server.trim(),
+          transport: a.transport,
+          username: a.username.trim(),
+        }
+        if (a.port != null) acc.port = a.port
+        if (a.password) acc.password = a.password
+        if (a.displayName.trim()) acc.displayName = a.displayName.trim()
+        return acc
+      })
+    // 确保 activeAccount 指向被保留的账户（过滤掉空账户后可能失效）。
+    const active = accounts.some((a) => a.id === sipActiveAccount.value)
+      ? sipActiveAccount.value
+      : (accounts[0]?.id as string | undefined)
+    cfg.accounts = accounts
+    if (active) cfg.activeAccount = active
   }
   return cfg
 }
 
-// 资源顶层 host：sqlite 用 file_path；s3 用 endpoint；sip 用 SIP server 地址。
+// 资源顶层 host：sqlite 用 file_path；s3 用 endpoint；sip 取首个账户 server（便于列表展示）。
 function resourceHost(): string {
   if (selectedProtocol.value === 'sqlite') return filePath.value
   if (selectedProtocol.value === 's3') return s3Endpoint.value
-  if (selectedProtocol.value === 'sip') return sipServer.value
+  if (selectedProtocol.value === 'sip') return sipAccounts.value[0]?.server ?? ''
   return host.value
 }
 
@@ -174,9 +227,10 @@ function reset() {
   s3Bucket.value = ''
   s3Region.value = ''
   redisDb.value = 0
-  sipServer.value = ''
-  sipDisplay.value = ''
-  sipTransport.value = 'udp'
+  sipAccounts.value = [
+    { id: 'a1', server: '', port: null, transport: 'udp', username: '', password: '', displayName: '' },
+  ]
+  sipActiveAccount.value = 'a1'
   testResult.value = null
   error.value = ''
 }
@@ -338,36 +392,68 @@ const colorOptions = [
           </label>
         </template>
 
-        <!-- SIP -->
+        <!-- SIP：名称（资源名）+ 多账户，每账户自带 server/port/transport -->
         <template v-if="selectedProtocol === 'sip'">
-          <label class="form-label">
-            <span>{{ t('wizard.sipServer') }}</span>
-            <input v-model="sipServer" type="text" class="form-input" placeholder="e.g. sip.example.com" />
-          </label>
-          <label class="form-label">
-            <span>{{ t('wizard.port') }}</span>
-            <input v-model.number="port" type="number" class="form-input" />
-          </label>
-          <label class="form-label">
-            <span>{{ t('wizard.username') }}</span>
-            <input v-model="username" type="text" class="form-input" placeholder="e.g. 1000" />
-          </label>
-          <label class="form-label">
-            <span>{{ t('wizard.password') }}</span>
-            <input v-model="password" type="password" class="form-input" placeholder="(optional for anonymous)" />
-          </label>
-          <label class="form-label">
-            <span>{{ t('wizard.sipDisplayName') }}</span>
-            <input v-model="sipDisplay" type="text" class="form-input" placeholder="(optional) e.g. Alice" />
-          </label>
-          <label class="form-label">
-            <span>{{ t('wizard.sipTransport') }}</span>
-            <select v-model="sipTransport" class="form-input">
-              <option value="udp">UDP</option>
-              <option value="tcp">TCP</option>
-              <option value="tls">TLS</option>
-            </select>
-          </label>
+          <!-- 多账户 -->
+          <div class="sip-accounts">
+            <div class="sip-accounts-head">
+              <span>{{ t('wizard.sipAccounts') }}</span>
+              <Button variant="secondary" size="sm" @click="addSipAccount">{{ t('wizard.addAccount') }}</Button>
+            </div>
+            <div
+              v-for="acc in sipAccounts"
+              :key="acc.id"
+              class="sip-account-card"
+              :class="{ active: sipActiveAccount === acc.id }"
+            >
+              <div class="sip-account-head">
+                <label class="sip-account-radio">
+                  <input
+                    type="radio"
+                    :name="'sip-active-account'"
+                    :checked="sipActiveAccount === acc.id"
+                    @change="setActiveSipAccount(acc.id)"
+                  />
+                  <span>{{ t('wizard.activeAccount') }}</span>
+                </label>
+                <button
+                  v-if="sipAccounts.length > 1"
+                  class="sip-account-remove"
+                  @click="removeSipAccount(acc.id)"
+                >✕</button>
+              </div>
+              <label class="form-label">
+                <span>{{ t('wizard.sipServer') }}</span>
+                <input v-model="acc.server" type="text" class="form-input" placeholder="e.g. sip.example.com" />
+              </label>
+              <div class="sip-account-row">
+                <label class="form-label">
+                  <span>{{ t('wizard.port') }}</span>
+                  <input v-model.number="acc.port" type="number" class="form-input" />
+                </label>
+                <label class="form-label">
+                  <span>{{ t('wizard.sipTransport') }}</span>
+                  <select v-model="acc.transport" class="form-input">
+                    <option value="udp">UDP</option>
+                    <option value="tcp">TCP</option>
+                    <option value="tls">TLS</option>
+                  </select>
+                </label>
+              </div>
+              <label class="form-label">
+                <span>{{ t('wizard.username') }}</span>
+                <input v-model="acc.username" type="text" class="form-input" placeholder="e.g. 1000" />
+              </label>
+              <label class="form-label">
+                <span>{{ t('wizard.password') }}</span>
+                <input v-model="acc.password" type="password" class="form-input" placeholder="(optional for anonymous)" />
+              </label>
+              <label class="form-label">
+                <span>{{ t('wizard.sipDisplayName') }}</span>
+                <input v-model="acc.displayName" type="text" class="form-input" placeholder="(optional) e.g. Alice" />
+              </label>
+            </div>
+          </div>
         </template>
 
         <!-- Test connection -->
@@ -541,5 +627,65 @@ const colorOptions = [
   align-items: center;
   gap: var(--space-2);
   margin-top: var(--space-4);
+}
+
+.sip-accounts {
+  border-top: 1px solid var(--border);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+}
+
+.sip-accounts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.sip-account-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  margin-bottom: var(--space-2);
+  background: var(--bg-surface);
+}
+
+.sip-account-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.sip-account-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.sip-account-radio {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.sip-account-remove {
+  background: transparent;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: var(--font-size-md);
+  padding: 0 var(--space-1);
+}
+.sip-account-row {
+  display: flex;
+  gap: var(--space-2);
+}
+.sip-account-row .form-label {
+  flex: 1;
 }
 </style>

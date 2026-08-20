@@ -66,16 +66,18 @@ describe('WizardModal SIP config section', () => {
     expect(options).toEqual(expect.arrayContaining(['udp', 'tcp', 'tls']))
   })
 
-  it('serializes sip config_json with server/transport on submit', async () => {
+  it('serializes sip config_json into SipProfile shape with accounts on submit', async () => {
     const wrapper = mount(WizardModal, {
       props: { visible: true, environmentId: 'env1' },
     })
     await clickSip(wrapper)
     await wrapper.vm.$nextTick()
 
+    // 账户卡片内的 server / username / transport 字段。
     await wrapper.find('input[placeholder="e.g. sip.example.com"]').setValue('sip.example.com')
     await wrapper.find('input[placeholder="e.g. 1000"]').setValue('1000')
-    await wrapper.find('select.form-input').setValue('tls')
+    const selects = wrapper.findAll('select.form-input')
+    await selects[0]!.setValue('tls')
     await wrapper.find('input[placeholder="e.g. Web Server"]').setValue('My Phone')
 
     const submitBtn = wrapper.findAll('button').find((b) => b.text().includes('wizard.create'))
@@ -89,8 +91,34 @@ describe('WizardModal SIP config section', () => {
     const payload = call[1] as { protocol: string; host: string; config_json: string }
     expect(payload.protocol).toBe('sip')
     const cfg = JSON.parse(payload.config_json)
-    expect(cfg.server).toBe('sip.example.com')
-    expect(cfg.transport).toBe('tls')
+    // 无顶层 server/transport：server/transport 下沉到账户。
+    expect(cfg.server).toBeUndefined()
+    expect(cfg.transport).toBeUndefined()
     expect(payload.host).toBe('sip.example.com')
+    // SipProfile 形状：多账户（自带 server/transport）+ 生效账户。
+    expect(Array.isArray(cfg.accounts)).toBe(true)
+    expect(cfg.accounts).toHaveLength(1)
+    expect(cfg.accounts[0].server).toBe('sip.example.com')
+    expect(cfg.accounts[0].transport).toBe('tls')
+    expect(cfg.accounts[0].username).toBe('1000')
+    expect(cfg.activeAccount).toBe('a1')
+  })
+
+  it('adds an account and marks the new one active', async () => {
+    const wrapper = mount(WizardModal, {
+      props: { visible: true, environmentId: 'env1' },
+    })
+    await clickSip(wrapper)
+    await wrapper.vm.$nextTick()
+
+    const addBtn = wrapper.findAll('button').find((b) => b.text().includes('wizard.addAccount'))
+    expect(addBtn).toBeTruthy()
+    await addBtn!.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    const cards = wrapper.findAll('.sip-account-card')
+    expect(cards).toHaveLength(2)
+    // 新增账户成为生效账户（active class）。
+    expect(wrapper.findAll('.sip-account-card.active')).toHaveLength(1)
   })
 })
