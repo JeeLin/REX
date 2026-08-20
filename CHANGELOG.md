@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.70.4] - 2026-08-20
+
+### Added
+- SIP 资源：按名称管理 + 多账户切换（每个账户自带完整 server profile + 凭据，可切换当前生效账户）
+
+### Changed
+- SIP 配置模型拆分：`SipConfig`（解析后生效配置）与 `SipProfile`（accounts[] + activeAccount 存储层）分离；`load_sip_conn` 解析 profile 选出生效账户构造 `SipConfig`
+- 前端资源向导：SIP 协议改为名称 + 多账户编辑，每账户自带 server/port/transport/username/password/displayName
+- 前端软电话面板：适配多账户切换（切换即写回 activeAccount）
+- 文档对齐：PRODUCT.md / data-models.md 补充 SipProfile 新形状
+
+### Fixed
+- SIP 账户 id 碰撞（删除后再新增复用旧 id）
+- SIP 提交未校验至少 1 个有效账户（前端先校验）
+- `load_sip_conn` 未拒绝 port 0（显式传 0 绕过 serde default 5060）
+
 ## [0.70.3] - 2026-08-19
 
 ### Fixed
