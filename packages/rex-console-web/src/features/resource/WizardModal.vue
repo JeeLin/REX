@@ -149,20 +149,7 @@ function buildConfig(): Record<string, unknown> {
     cfg.region = s3Region.value || 'us-east-1'
   } else if (selectedProtocol.value === 'sip') {
     // SipProfile 形状：名称（仅展示）+ 多账户，每个账户自带 server/port/transport 与凭据。
-    const accounts: SipAccountView[] = sipAccounts.value
-      .filter((a) => a.username.trim())
-      .map((a) => {
-        const acc: SipAccountView = {
-          id: a.id,
-          server: a.server.trim(),
-          port: a.port ?? 5060,
-          transport: a.transport,
-          username: a.username.trim(),
-        }
-        if (a.password) acc.password = a.password
-        if (a.displayName.trim()) acc.displayName = a.displayName.trim()
-        return acc
-      })
+    const accounts = toSipAccounts()
     // 生效账户用共享解析规则（active 或 first），与后端 load_sip_conn 语义一致，
     // 确保 activeAccount 指向被保留的账户（过滤掉空账户后可能失效）。
     const active = resolveActiveAccount(accounts, sipActiveAccount.value)
@@ -172,22 +159,32 @@ function buildConfig(): Record<string, unknown> {
   return cfg
 }
 
+// 由账户表单派生 SipAccountView[]：过滤空 username 账户并归一化字段。
+// buildConfig 与 resourceHost 共用，避免两处重复变换产生漂移。
+function toSipAccounts(): SipAccountView[] {
+  return sipAccounts.value
+    .filter((a) => a.username.trim())
+    .map((a) => {
+      const acc: SipAccountView = {
+        id: a.id,
+        server: a.server.trim(),
+        port: a.port ?? 5060,
+        transport: a.transport,
+        username: a.username.trim(),
+      }
+      if (a.password) acc.password = a.password
+      if (a.displayName.trim()) acc.displayName = a.displayName.trim()
+      return acc
+    })
+}
+
 // 资源顶层 host：sqlite 用 file_path；s3 用 endpoint；sip 取生效账户 server（便于列表展示）。
 // 直接由账户列表派生，避免维护易过期的 sipHost ref。
 function resourceHost(): string {
   if (selectedProtocol.value === 'sqlite') return filePath.value
   if (selectedProtocol.value === 's3') return s3Endpoint.value
   if (selectedProtocol.value === 'sip') {
-    const retained: SipAccountView[] = sipAccounts.value
-      .filter((a) => a.username.trim())
-      .map((a) => ({
-        id: a.id,
-        server: a.server.trim(),
-        port: a.port ?? 5060,
-        transport: a.transport,
-        username: a.username.trim(),
-      }))
-    const active = resolveActiveAccount(retained, sipActiveAccount.value)
+    const active = resolveActiveAccount(toSipAccounts(), sipActiveAccount.value)
     return active?.server ?? ''
   }
   return host.value
