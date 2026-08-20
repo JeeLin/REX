@@ -69,8 +69,6 @@ const sipAccounts = ref<SipAccountForm[]>([
   { id: 'a1', server: '', port: null, transport: 'udp', username: '', password: '', displayName: '' },
 ])
 const sipActiveAccount = ref('a1')
-// 生效账户 server（用于资源顶层 host/列表展示），与解析层 active 账户保持一致。
-const sipHost = ref('')
 
 function addSipAccount() {
   const n = sipAccounts.value.length + 1
@@ -178,20 +176,21 @@ function buildConfig(): Record<string, unknown> {
       : (accounts[0]?.id as string | undefined)
     cfg.accounts = accounts
     if (active) cfg.activeAccount = active
-    // 顶层 host 取生效账户的 server（用于列表展示），与解析层 active 账户一致。
-    sipHost.value =
-      (accounts.find((a) => a.id === active)?.server as string | undefined) ??
-      sipAccounts.value[0]?.server ??
-      ''
   }
   return cfg
 }
 
 // 资源顶层 host：sqlite 用 file_path；s3 用 endpoint；sip 取生效账户 server（便于列表展示）。
+// 直接由账户列表派生，避免维护易过期的 sipHost ref。
 function resourceHost(): string {
   if (selectedProtocol.value === 'sqlite') return filePath.value
   if (selectedProtocol.value === 's3') return s3Endpoint.value
-  if (selectedProtocol.value === 'sip') return sipHost.value
+  if (selectedProtocol.value === 'sip') {
+    const retained = sipAccounts.value.filter((a) => a.username.trim())
+    const active =
+      retained.find((a) => a.id === sipActiveAccount.value) ?? retained[0]
+    return active?.server?.trim() ?? ''
+  }
   return host.value
 }
 
@@ -199,7 +198,6 @@ async function submit() {
   loading.value = true
   error.value = ''
   try {
-    // 先 buildConfig 以刷新生效账户 server（sipHost），再读取 host。
     const cfg = buildConfig()
     await store.createResource(props.environmentId, {
       name: resName.value.trim(),
