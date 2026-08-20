@@ -96,11 +96,9 @@ pub fn load_sip_conn(info: &ResourceConnInfo) -> Result<rex_sip::SipConfig, Stri
     if server.is_empty() {
         return Err("sip: missing server".to_string());
     }
-    let port = if active.port != 0 {
-        active.port
-    } else {
-        info.port.unwrap_or(rex_sip::DEFAULT_SIP_PORT)
-    };
+    // 端口取账户自带（`SipAccount` serde 默认 5060，`active.port` 恒不为 0），
+    // 故资源顶层 port 对 SIP 不生效——server/port 已完全下沉到账户层。
+    let port = active.port;
     if active.username.is_empty() {
         return Err("sip: missing username".to_string());
     }
