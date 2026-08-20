@@ -643,6 +643,58 @@ impl Database {
             .ok_or_else(|| RExError::Message("resource not found after update".into()))
     }
 
+    /// 仅改写 SIP 资源的生效账户（`config_json.activeAccount`），其余字段不动。
+    /// `account_id` 必须属于该资源的 `SipProfile.accounts`，否则拒绝。
+    /// `config_json` 以密文存储，本函数负责解密-改-加密写回。
+    pub fn set_resource_active_account(
+        &self,
+        crypto: &crate::crypto::CredentialCrypto,
+        env_id: &str,
+        id: &str,
+        account_id: &str,
+    ) -> Result<Resource> {
+        let mut resource = self
+            .get_resource(id)?
+            .ok_or_else(|| RExError::Message("resource not found".into()))?;
+        if resource.config_json.is_empty() || resource.config_json == "{}" {
+            return Err(RExError::Message("resource has no config_json".into()));
+        }
+        let decrypted = crypto
+            .decrypt(&resource.config_json)
+            .map_err(|e| RExError::Message(format!("decrypt failed: {e}")))?;
+        let mut profile: serde_json::Value = serde_json::from_str(&decrypted)
+            .map_err(|e| RExError::Message(format!("invalid config_json: {e}")))?;
+        let accounts = profile
+            .get("accounts")
+            .and_then(|a| a.as_array())
+            .ok_or_else(|| RExError::Message("config_json missing accounts".into()))?;
+        if !accounts
+            .iter()
+            .any(|a| a.get("id").and_then(|v| v.as_str()) == Some(account_id))
+        {
+            return Err(RExError::Message(format!(
+                "account {account_id} not found in resource"
+            )));
+        }
+        profile["activeAccount"] = serde_json::Value::String(account_id.to_string());
+        let updated = serde_json::to_string(&profile)
+            .map_err(|e| RExError::Message(format!("serialize failed: {e}")))?;
+        let encrypted = crypto
+            .encrypt(&updated)
+            .map_err(|e| RExError::Message(format!("encrypt failed: {e}")))?;
+
+        let conn = self.conn()?;
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE resources SET config_json = ?1, updated_at = ?2 WHERE environment_id = ?3 AND id = ?4",
+            rusqlite::params![encrypted, now, env_id, id],
+        )
+        .map_err(|e| RExError::Message(e.to_string()))?;
+        resource.config_json = updated;
+        resource.updated_at = now;
+        Ok(resource)
+    }
+
     pub fn delete_resource(&self, env_id: &str, id: &str) -> Result<()> {
         let conn = self.conn()?;
         conn.execute(
@@ -1499,6 +1551,117 @@ mod tests {
             .unwrap();
         db.delete_resource(&env.id, &res.id).unwrap();
         assert!(db.get_resource(&res.id).unwrap().is_none());
+    }
+
+    // --- set_resource_active_account ---
+
+    #[test]
+    fn test_set_resource_active_account() {
+        use crate::crypto::CredentialCrypto;
+
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::open(&db_path).unwrap();
+        // 同一数据目录派生密钥：加解密一致（与运行时 AppState.crypto 同源）。
+        let crypto = CredentialCrypto::from_data_dir(dir.path()).unwrap();
+
+        let env = db
+            .create_environment(&NewEnvironment {
+                name: "env".into(),
+                description: None,
+                connection_mode: None,
+            })
+            .unwrap();
+
+        let profile = serde_json::json!({
+            "accounts": [
+                { "id": "a1", "server": "sip1.example.com", "port": 5060, "transport": "udp", "username": "u1", "displayName": "A1" },
+                { "id": "a2", "server": "sip2.example.com", "port": 5060, "transport": "udp", "username": "u2", "displayName": "A2" },
+            ],
+            "activeAccount": "a1",
+        });
+        let encrypted = crypto.encrypt(&profile.to_string()).unwrap();
+
+        let res = db
+            .create_resource(
+                &env.id,
+                &NewResource {
+                    name: "sip-res".into(),
+                    protocol: "sip".into(),
+                    host: "sip.example.com".into(),
+                    port: None,
+                    username: None,
+                    config_json: Some(encrypted),
+                    color: None,
+                    sort_order: None,
+                },
+            )
+            .unwrap();
+
+        // 有效 account_id：写回成功，activeAccount 改变。
+        // 返回值的 config_json 为明文（与 get_resource handler 解密后返回给前端一致）。
+        let updated = db
+            .set_resource_active_account(&crypto, &env.id, &res.id, "a2")
+            .unwrap();
+        let decrypted: serde_json::Value = serde_json::from_str(&updated.config_json).unwrap();
+        assert_eq!(decrypted["activeAccount"], "a2");
+
+        // 持久化验证：重新读取仍为 a2。
+        let reread = db.get_resource(&res.id).unwrap().unwrap();
+        let reread_dec: serde_json::Value =
+            serde_json::from_str(&crypto.decrypt(&reread.config_json).unwrap()).unwrap();
+        assert_eq!(reread_dec["activeAccount"], "a2");
+
+        // 无效 account_id：拒绝。
+        let err = db
+            .set_resource_active_account(&crypto, &env.id, &res.id, "nope")
+            .unwrap_err();
+        assert!(err.to_string().contains("not found in resource"));
+
+        // 不存在的资源：拒绝。
+        let missing = db
+            .set_resource_active_account(&crypto, &env.id, "ghost", "a1")
+            .unwrap_err();
+        assert!(missing.to_string().contains("resource not found"));
+    }
+
+    #[test]
+    fn test_set_resource_active_account_rejects_empty_config() {
+        use crate::crypto::CredentialCrypto;
+
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::open(&db_path).unwrap();
+        let crypto = CredentialCrypto::from_data_dir(dir.path()).unwrap();
+
+        let env = db
+            .create_environment(&NewEnvironment {
+                name: "env".into(),
+                description: None,
+                connection_mode: None,
+            })
+            .unwrap();
+        let res = db
+            .create_resource(
+                &env.id,
+                &NewResource {
+                    name: "ssh-res".into(),
+                    protocol: "ssh".into(),
+                    host: "192.168.1.1".into(),
+                    port: None,
+                    username: None,
+                    config_json: None,
+                    color: None,
+                    sort_order: None,
+                },
+            )
+            .unwrap();
+
+        // config_json 为空：拒绝（非 SIP 资源不应被误改）。
+        let err = db
+            .set_resource_active_account(&crypto, &env.id, &res.id, "a1")
+            .unwrap_err();
+        assert!(err.to_string().contains("no config_json"));
     }
 
     // --- Agents ---

@@ -29,6 +29,10 @@ pub fn resource_routes() -> axum::Router<AppState> {
                 .put(update_resource)
                 .delete(delete_resource),
         )
+        .route(
+            "/{env_id}/resources/{resource_id}/active-account",
+            axum::routing::post(set_active_account),
+        )
 }
 
 // --- API handlers ---
@@ -174,6 +178,60 @@ async fn update_resource(
     let _ = tokio::task::spawn_blocking(move || {
         audit_db.write_audit_log(&crate::models::NewAuditEntry {
             action: "RESOURCE_UPDATE".into(),
+            target: Some(res_name),
+            environment_id: Some(res_env_id),
+            result: "success".into(),
+            ..Default::default()
+        })
+    })
+    .await;
+
+    Ok(Json(resource))
+}
+
+#[derive(serde::Deserialize)]
+struct SetActiveAccountBody {
+    account_id: String,
+}
+
+// 专用端点：仅切换 SIP 资源的生效账户，前端无需先 get 全量再 update。
+async fn set_active_account(
+    State(state): State<AppState>,
+    Path((env_id, resource_id)): Path<(String, String)>,
+    Json(body): Json<SetActiveAccountBody>,
+) -> ApiResult<Resource> {
+    tracing::info!(
+        action = "RESOURCE_SET_ACTIVE_ACCOUNT",
+        env_id = %env_id,
+        resource_id = %resource_id,
+        account_id = %body.account_id,
+        "switching active sip account"
+    );
+
+    let db = state.db.clone();
+    let crypto = state.crypto.clone();
+    let account_id = body.account_id.clone();
+    let resource = tokio::task::spawn_blocking(move || {
+        db.set_resource_active_account(&crypto, &env_id, &resource_id, &account_id)
+    })
+    .await
+    .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
+    .map_err(|e| {
+        let msg = e.to_string();
+        if msg.contains("not found") {
+            err(StatusCode::NOT_FOUND, &msg)
+        } else {
+            err(StatusCode::BAD_REQUEST, &msg)
+        }
+    })?;
+
+    // 审计日志
+    let audit_db = state.db.clone();
+    let res_name = resource.name.clone();
+    let res_env_id = resource.environment_id.clone();
+    let _ = tokio::task::spawn_blocking(move || {
+        audit_db.write_audit_log(&crate::models::NewAuditEntry {
+            action: "RESOURCE_SET_ACTIVE_ACCOUNT".into(),
             target: Some(res_name),
             environment_id: Some(res_env_id),
             result: "success".into(),

@@ -301,24 +301,8 @@ async function selectAccount(id: string) {
   if (id === activeAccount.value) return
   switchingAccount.value = true
   try {
-    // 重新读取完整资源：update 端点要求全字段（name/protocol/host/port/username），
-    // 仅改写 activeAccount 后写回，避免覆盖其他字段。
-    const res = await resourcesApi.get(props.environmentId, props.resourceId)
-    let cfg: Record<string, unknown>
-    try {
-      cfg = JSON.parse(res.config_json) as Record<string, unknown>
-    } catch (e) {
-      throw new Error(`invalid resource config: ${e instanceof Error ? e.message : String(e)}`)
-    }
-    cfg.activeAccount = id
-    await resourcesApi.update(props.environmentId, props.resourceId, {
-      name: res.name,
-      protocol: res.protocol,
-      host: res.host,
-      port: res.port,
-      username: res.username || undefined,
-      config_json: JSON.stringify(cfg),
-    })
+    // 专用端点仅切换生效账户，后端读全量→改 activeAccount→写回，前端不发多余 GET。
+    await resourcesApi.setActiveAccount(props.environmentId, props.resourceId, id)
     activeAccount.value = id
   } catch (e) {
     registrationFailed.value = e instanceof Error ? e.message : String(e)

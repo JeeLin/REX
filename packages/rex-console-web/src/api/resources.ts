@@ -52,6 +52,10 @@ export const resourcesApi = {
     api.put<Resource>(`/environments/${envId}/resources/${id}`, data),
   delete: (envId: string, id: string) =>
     api.del<{ ok: boolean }>(`/environments/${envId}/resources/${id}`),
+  setActiveAccount: (envId: string, id: string, accountId: string) =>
+    api.post<Resource>(`/environments/${envId}/resources/${id}/active-account`, {
+      account_id: accountId,
+    }),
   testConnection: (data: TestConnectionRequest) =>
     api.post<TestConnectionResult>('/resources/test-connection', data),
 }

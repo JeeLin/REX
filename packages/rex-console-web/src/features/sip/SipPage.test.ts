@@ -96,6 +96,7 @@ vi.mock('@/api/resources', () => ({
       updated_at: '',
     }),
     update: vi.fn().mockResolvedValue({}),
+    setActiveAccount: vi.fn().mockResolvedValue({ id: 'r1' }),
   },
 }))
 
@@ -120,7 +121,7 @@ describe('SipPage multi-account switch', () => {
     expect(select.attributes('value')).toBe('a1')
   })
 
-  it('switching account writes activeAccount back via update', async () => {
+  it('switching account calls setActiveAccount, with no redundant get/update', async () => {
     const wrapper = mount(SipPage, {
       props: { resourceId: 'r1', environmentId: 'env1', name: 'Phone' },
       global: { stubs: ['Dialpad', 'CallState'], plugins: [i18n] },
@@ -135,8 +136,30 @@ describe('SipPage multi-account switch', () => {
 
     const mod = (await import('@/api/resources')) as any
     const resourcesApi = mod.resourcesApi
-    expect(resourcesApi.update).toHaveBeenCalledTimes(1)
-    const cfg = JSON.parse(resourcesApi.update.mock.calls[0]![2].config_json)
-    expect(cfg.activeAccount).toBe('a2')
+    // 专用端点仅切换生效账户：仅 setActiveAccount 被调用。
+    expect(resourcesApi.setActiveAccount).toHaveBeenCalledTimes(1)
+    expect(resourcesApi.setActiveAccount).toHaveBeenCalledWith('env1', 'r1', 'a2')
+    // 切换不再先 get 全量再 update 全字段（0.70.5 #3 消除多余 GET 往返）。
+    // 注意：挂载时会调用一次 get 加载资源（loadSipResource），属正常初始加载，不算冗余往返。
+    expect(resourcesApi.update).not.toHaveBeenCalled()
+    expect(resourcesApi.get).toHaveBeenCalledTimes(1)
+  })
+
+  it('no-op when selecting the already-active account', async () => {
+    const wrapper = mount(SipPage, {
+      props: { resourceId: 'r1', environmentId: 'env1', name: 'Phone' },
+      global: { stubs: ['Dialpad', 'CallState'], plugins: [i18n] },
+    })
+    await flushPromises()
+    await nextTick()
+
+    const select = wrapper.find('.account-select')
+    await select.setValue('a1') // a1 已是生效账户
+    await flushPromises()
+    await nextTick()
+
+    const mod = (await import('@/api/resources')) as any
+    const resourcesApi = mod.resourcesApi
+    expect(resourcesApi.setActiveAccount).not.toHaveBeenCalled()
   })
 })
