@@ -287,6 +287,12 @@ SIP 软电话资源（第 8 种协议）。Hub 侧 baresip UA（UA₁）负责�
 - 信令抓包：UA₁/UA₂ 两侧 SIP 报文捕获导出 pcap，前端回看/下载。
 - 音视频质量监控：丢包率、端到端延迟、抖动可视化。
 
+**资源建模（按名称 + 多账户，0.70.4）：** 一个 SIP 资源 = 一个名称（仅展示分组，不绑定服务器）+
+多个账户，每个账户自带完整 server profile（`server`/`port`/`transport`）+ 凭据（`username`/`password`/`displayName`）。
+同一名称下不同账户可指向不同 SIP 服务器/传输方式，可切换**当前生效账户**；
+生效账户的 server profile 与凭据用于 REGISTER 与拨号。多账户切换在配置解析层完成，不触及 baresip FFI 与隧道帧。
+前端资源向导支持账户增删与「设为生效」，通话面板支持下拉切换生效账户。
+
 **设计要点：** baresip 是 C 库，不能跑在浏览器，必须在 Hub/Agent 服务端；Hub/Agent 版本须一致（无跨版本兼容）。
 
 ### 3.11 Agent 管理

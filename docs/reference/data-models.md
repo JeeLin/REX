@@ -139,3 +139,42 @@ config_json 中只保存密文、nonce、算法标识
   }
 }
 ```
+
+## 资源 config_json 形状
+
+`resources.config_json` 按协议存放各自特有参数（敏感字段先经 `CredentialCrypto` AES-256-GCM 加密再存库）。
+
+### SIP（按名称管理 + 多账户，0.70.4）
+
+名称只做展示分组，取 `Resource.name`，不进 `config_json`；`config_json` 为 `SipProfile` 形状，每个账户自带完整 server profile + 凭据：
+
+```json
+{
+  "accounts": [
+    {
+      "id": "a1",
+      "server": "pbx.example.com",
+      "port": 5060,
+      "transport": "udp",
+      "username": "alice",
+      "password": "secret",
+      "displayName": "Alice"
+    },
+    {
+      "id": "a2",
+      "server": "pbx2.example.com",
+      "port": 5061,
+      "transport": "tls",
+      "username": "bob",
+      "password": "secret2",
+      "displayName": "Bob"
+    }
+  ],
+  "activeAccount": "a1"
+}
+```
+
+- 名称（= `Resource.name`）= 展示分组标签，不绑定服务器，不进 `config_json`。
+- 每个账户自带完整 server profile（`server`/`port`/`transport`，默认 `udp`/5060）与凭据（`username`/`password`/`displayName`）。
+- `activeAccount` = 当前生效账户 id；解析层（`load_sip_conn`）取该账户构造生效的 `SipConfig`，Hub/Agent 仍按单 `SipConfig` 注册/拨号（FFI/隧道帧不变）。
+- 本版本仅支持此形状，不做数据迁移、不做旧形状兼容。
