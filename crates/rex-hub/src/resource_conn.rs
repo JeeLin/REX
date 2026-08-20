@@ -87,15 +87,11 @@ pub fn load_sip_conn(info: &ResourceConnInfo) -> Result<rex_sip::SipConfig, Stri
         .or_else(|| profile.accounts.first())
         .ok_or_else(|| "sip: no account available".to_string())?;
 
-    // server 优先取账户自带；缺省时回退资源顶层 host。
-    let server = if !active.server.is_empty() {
-        active.server.clone()
-    } else {
-        info.host.clone()
-    };
-    if server.is_empty() {
+    // server 完全下沉到账户层，取生效账户自带值；空即报错，不再回退资源顶层 host。
+    if active.server.is_empty() {
         return Err("sip: missing server".to_string());
     }
+    let server = active.server.clone();
     // 端口取账户自带（`SipAccount` serde 默认 5060；字段缺省时生效）。
     // 字段显式传 0 不会被 default 覆盖，故此处显式拒绝非法端口。
     // 资源顶层 port 对 SIP 不生效——server/port 已完全下沉到账户层。
@@ -170,15 +166,11 @@ mod tests {
     }
 
     #[test]
-    fn load_sip_conn_account_server_defaults_to_top_level_host() {
-        // 账户 server 缺省时回退资源顶层 host。
-        let mut info = info_with_config(
-            r#"{"accounts":[{"id":"a1","username":"alice"}],"activeAccount":"a1"}"#,
-        );
-        info.host = "top.example.com".into();
-        let sip = load_sip_conn(&info).unwrap();
-        assert_eq!(sip.server, "top.example.com");
-        assert_eq!(sip.username, "alice");
+    fn load_sip_conn_empty_account_server_is_error() {
+        // 账户 server 完全下沉账户层，空 server 不回退顶层 host，直接报错。
+        let cfg = r#"{"accounts":[{"id":"a1","username":"alice"}],"activeAccount":"a1"}"#;
+        let res = load_sip_conn(&info_with_config(cfg));
+        assert!(res.is_err());
     }
 
     #[test]
