@@ -225,20 +225,19 @@ async fn set_active_account(
         }
     })?;
 
-    // 审计日志
+    // 审计日志：后台异步写入，不阻塞响应返回（fire-and-forget）。
     let audit_db = state.db.clone();
     let res_name = resource.name.clone();
     let res_env_id = resource.environment_id.clone();
-    let _ = tokio::task::spawn_blocking(move || {
-        audit_db.write_audit_log(&crate::models::NewAuditEntry {
+    tokio::task::spawn_blocking(move || {
+        let _ = audit_db.write_audit_log(&crate::models::NewAuditEntry {
             action: "RESOURCE_SET_ACTIVE_ACCOUNT".into(),
             target: Some(res_name),
             environment_id: Some(res_env_id),
             result: "success".into(),
             ..Default::default()
-        })
-    })
-    .await;
+        });
+    });
 
     Ok(Json(resource))
 }
@@ -588,13 +587,15 @@ pub async fn test_connection(
             match &body.config_json {
                 Some(cfg) => match serde_json::from_str::<serde_json::Value>(cfg) {
                     Ok(value) => {
+                        // SIP 的 server/port 完全下沉到账户层，load_sip_conn 不读取顶层
+                        // host/port/username（子任务 #1 已移除回退），故此处仅传 config。
                         let info = crate::resource_conn::ResourceConnInfo {
                             resource_id: String::new(),
                             name: String::new(),
                             protocol: "sip".into(),
-                            host: body.host.clone(),
-                            port: body.port,
-                            username: body.username.clone().unwrap_or_default(),
+                            host: String::new(),
+                            port: None,
+                            username: String::new(),
                             config: value,
                         };
                         match crate::resource_conn::load_sip_conn(&info) {

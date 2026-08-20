@@ -74,7 +74,7 @@ pub fn load_resource_config(
 /// `server`/`port`/`transport` 与登录凭据，直接构造生效的 [`rex_sip::SipConfig`]。
 ///
 /// 资源顶层 `host`/`port` 不再作为 server 来源（server 已下沉到账户层）；
-/// 仅当账户 `server` 缺省时回退资源顶层 `host`（兼容直连场景下的缺省写法）。
+/// 账户 `server` 为空即报错，不回退资源顶层 host。
 /// `password` 已在 `load_resource_config` 中由 crypto 解密，此处直接读取明文。
 pub fn load_sip_conn(info: &ResourceConnInfo) -> Result<rex_sip::SipConfig, String> {
     let cfg = &info.config;
