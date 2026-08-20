@@ -1,0 +1,50 @@
+# 代码精简：0.70.5
+
+## 范围
+
+变更文件（`git diff --name-only milestone-0.70.5-start`，排除 docs 与无关的 `.mise.toml`）：
+
+- `crates/rex-hub/src/db.rs`（`set_resource_active_account`）
+- `crates/rex-hub/src/resource_api.rs`（`set_active_account` handler + 路由）
+- `crates/rex-hub/src/resource_conn.rs`（`load_sip_conn` 移除顶层 host 回退）
+- `packages/rex-console-web/src/api/resources.ts`（`setActiveAccount`）
+- `packages/rex-console-web/src/features/resource/WizardModal.vue`（`resolveActiveAccount` 复用）
+- `packages/rex-console-web/src/features/sip/SipPage.vue`（`selectAccount` 改用端点）
+- `packages/rex-console-web/src/features/sip/types.ts`（新增共享类型/解析）
+
+精简以 4 个角度并行审查（Reuse / Simplification / Efficiency / Altitude）。
+
+## 发现与走向
+
+| # | 角度 | 文件 | 行 | 发现 | 级别 | 走向 |
+|---|------|------|----|------|------|------|
+| 1 | Simplification / Altitude / Efficiency | `WizardModal.vue` | 152–171 / 181–191 | `buildConfig` 与 `resourceHost` 的 sip 分支重复 `filter(a => a.username.trim()).map(...)` → `SipAccountView[]` 变换，且各调用一次、两次重算。 | 🟡（可维护性差） | **既有遗留**（见下），不入本里程碑 Bugs；记入缺陷池 🟢 |
+| 2 | Altitude | `resource_conn.rs` | 76–77 doc | `load_sip_conn` 注释仍描述已删除的顶层 host 回退（与 L90 报错实现矛盾）。 | 🟢 | 缺陷池 |
+| 3 | Altitude | `db.rs` `set_resource_active_account` | 659–678 | 仅按 `config_json` 是否含 `"accounts"` 校验，未校验 `protocol == "sip"`（语义为 SIP-only）。单用户下 inert。 | 🟢 | 缺陷池 |
+| 4 | Efficiency | `db.rs` `set_resource_active_account` | 656 + 686 | 取两次连接池连接（一次 `get_resource`，一次 UPDATE）。单用户负载可忽略。 | 🟢 | 缺陷池 |
+| 5 | Efficiency | `db.rs` `set_resource_active_account` | 656 | `get_resource` 映射全列仅取 `config_json`。 | 🟢 | 缺陷池 |
+| 6 | Efficiency | `resource_api.rs` `test_connection` SIP 分支 | 591–599 | 构造 `ResourceConnInfo` 顶层 host/port，`load_sip_conn` 已不再读取。 | 🟢 | 缺陷池 |
+| 7 | Efficiency | `resource_api.rs` `set_active_account` 审计日志 | 229–241 | 审计 INSERT 在响应返回前串行 await（沿用既有 create/update 模式）。 | 🟢 | 缺陷池 |
+
+## 关键判定：#1 是否引入于本里程碑？
+
+`git show milestone-0.70.5-start:.../WizardModal.vue` 已存在两处 `.filter((a) => a.username.trim())`（L161、L191）；子任务 #2 仅新增 `resolveActiveAccount` 复用于两分支，未改动底层重复变换。
+
+→ **#1 为本里程碑开始前即存在的遗留重复，非 0.70.5 引入**；且本里程碑章程明确为「仅消费缺陷池 3 项 🟢、无新功能、无用户可见变化」，修复该遗留会扩大范围，违反「不做文档外的大功能」。
+
+→ 将 #1 与 #2–#7 一并记入缺陷池 `docs/BUGS.md`（来源=步骤4代码精简），按 🟢 处理，非阻断。
+
+## 未发现
+
+- `set_active_account` / `set_resource_active_account` 未与 `update_resource` 重复：前者为首个服务端部分改写（解密→改→重加密），后者为客户端全量覆盖（加密后整行重写，从不解密）。两者语义不同，无需泛化。✅
+- `types.ts` 共享类型与 `resolveActiveAccount` 抽取干净，与后端 `load_sip_conn`「active 或 first」一致，三处镜像已消除。✅
+- `SipPage.selectAccount` 已正确改用 `setActiveAccount`，旧的 get+update 往返已移除。✅
+- 无 Simplification 角度报告的 🔴（其声称的 buildConfig/resourceHost 派生账户分歧为误报：两分支均 `.filter((a) => a.username.trim())` 完全相同，见 L153、L182）。
+
+## 门禁判断
+
+- 🔴：0 个（无引入于本里程碑的阻断问题）。
+- 🟡：0 个引入于本里程碑（#1 为既有遗留，已说明不入本里程碑 Bugs）。
+- 🟢：7 项，全部记入缺陷池，非阻断。
+
+→ 本里程碑未引入 🔴/🟡，**门禁通过**，勾选步骤4，继续进入步骤5。
