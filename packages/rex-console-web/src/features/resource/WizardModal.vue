@@ -69,10 +69,12 @@ const sipAccounts = ref<SipAccountForm[]>([
   { id: 'a1', server: '', port: null, transport: 'udp', username: '', password: '', displayName: '' },
 ])
 const sipActiveAccount = ref('a1')
+// 单调递增计数器，避免删除账户后再新增时 id 重复（长度派生 id 会碰撞）。
+const sipAccountSeq = ref(1)
 
 function addSipAccount() {
-  const n = sipAccounts.value.length + 1
-  const id = `a${n}`
+  sipAccountSeq.value += 1
+  const id = `a${sipAccountSeq.value}`
   sipAccounts.value.push({
     id,
     server: '',
@@ -197,6 +199,14 @@ function resourceHost(): string {
 async function submit() {
   loading.value = true
   error.value = ''
+  if (
+    selectedProtocol.value === 'sip' &&
+    !sipAccounts.value.some((a) => a.username.trim())
+  ) {
+    error.value = 'sip 资源至少需要一个有效账户（填写用户名）'
+    loading.value = false
+    return
+  }
   try {
     const cfg = buildConfig()
     await store.createResource(props.environmentId, {
