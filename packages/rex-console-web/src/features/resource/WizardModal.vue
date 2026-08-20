@@ -69,6 +69,8 @@ const sipAccounts = ref<SipAccountForm[]>([
   { id: 'a1', server: '', port: null, transport: 'udp', username: '', password: '', displayName: '' },
 ])
 const sipActiveAccount = ref('a1')
+// 生效账户 server（用于资源顶层 host/列表展示），与解析层 active 账户保持一致。
+const sipHost = ref('')
 
 function addSipAccount() {
   const n = sipAccounts.value.length + 1
@@ -169,21 +171,27 @@ function buildConfig(): Record<string, unknown> {
         if (a.displayName.trim()) acc.displayName = a.displayName.trim()
         return acc
       })
-    // 确保 activeAccount 指向被保留的账户（过滤掉空账户后可能失效）。
+    // 确保 activeAccount 指向被保留的账户（过滤掉空账户后可能失效），
+    // 且与 UI 单选框选中项一致——不静默切到别的账户。
     const active = accounts.some((a) => a.id === sipActiveAccount.value)
       ? sipActiveAccount.value
       : (accounts[0]?.id as string | undefined)
     cfg.accounts = accounts
     if (active) cfg.activeAccount = active
+    // 顶层 host 取生效账户的 server（用于列表展示），与解析层 active 账户一致。
+    sipHost.value =
+      (accounts.find((a) => a.id === active)?.server as string | undefined) ??
+      sipAccounts.value[0]?.server ??
+      ''
   }
   return cfg
 }
 
-// 资源顶层 host：sqlite 用 file_path；s3 用 endpoint；sip 取首个账户 server（便于列表展示）。
+// 资源顶层 host：sqlite 用 file_path；s3 用 endpoint；sip 取生效账户 server（便于列表展示）。
 function resourceHost(): string {
   if (selectedProtocol.value === 'sqlite') return filePath.value
   if (selectedProtocol.value === 's3') return s3Endpoint.value
-  if (selectedProtocol.value === 'sip') return sipAccounts.value[0]?.server ?? ''
+  if (selectedProtocol.value === 'sip') return sipHost.value
   return host.value
 }
 
@@ -191,13 +199,15 @@ async function submit() {
   loading.value = true
   error.value = ''
   try {
+    // 先 buildConfig 以刷新生效账户 server（sipHost），再读取 host。
+    const cfg = buildConfig()
     await store.createResource(props.environmentId, {
       name: resName.value.trim(),
       protocol: selectedProtocol.value,
       host: resourceHost(),
       port: port.value,
       username: username.value || undefined,
-      config_json: JSON.stringify(buildConfig()),
+      config_json: JSON.stringify(cfg),
       color: resColor.value || undefined,
     })
     emit('created')
