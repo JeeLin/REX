@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.70.5] - 2026-08-21
+
+### Changed
+- SIP 配置收口：`load_sip_conn` 移除「账户 server 缺省时回退资源顶层 host」逃生舱，账户 server 完全下沉账户层（空即报错）
+- 前端共享 `SipProfile` 类型 + `resolveActiveAccount`（active 或 first）解析规则，消除 `load_sip_conn` / `SipPage` / `WizardModal` 三处镜像
+
+### Removed
+- 切换生效 SIP 账户时多余的全量 GET 往返：新增 `POST /environments/{env_id}/resources/{resource_id}/active-account` 专用端点，前端仅传 `account_id`
+
 ## [0.70.4] - 2026-08-20
 
 ### Added
