@@ -1,0 +1,29 @@
+[Unit]
+Description=REX Agent — lightweight reverse proxy connecting to REX Hub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/rex-agent
+Restart=on-failure
+RestartSec=3
+# Supervisor runs as PID 1, spawns worker child process.
+# Crash restart, exit 10 (follow Hub auto-update), rollback, and health checks
+# are handled by the built-in supervisor.
+
+# Directories — adjust to match your deployment
+WorkingDirectory=/opt/rex-agent
+Environment=DATA_DIR=/opt/rex-agent/data
+Environment=REX_SERVER=https://hub.example.com
+Environment=REX_TOKEN=CHANGE_ME
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/rex-agent/data
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

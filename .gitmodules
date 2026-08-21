@@ -1,0 +1,6 @@
+[submodule "crates/rex-sip/baresip"]
+	path = crates/rex-sip/baresip
+	url = https://github.com/baresip/baresip
+[submodule "crates/rex-sip/re"]
+	path = crates/rex-sip/re
+	url = https://github.com/baresip/re

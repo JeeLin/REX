@@ -1,0 +1,35 @@
+//! REX Hub 共享模块
+
+pub mod agent_api;
+pub mod agent_ws;
+pub mod app;
+pub mod audit_api;
+pub mod auth;
+pub mod cdr_api;
+pub mod crypto;
+pub mod dashboard_api;
+pub mod db;
+pub mod env_api;
+pub mod error;
+pub mod file_api;
+pub mod metrics;
+pub mod middleware;
+pub mod models;
+pub mod redis_api;
+pub mod resource_api;
+pub mod resource_conn;
+pub mod settings_api;
+pub mod sip_capture;
+pub mod sip_capture_api;
+pub mod sip_media;
+pub mod sip_recording;
+pub mod sip_recording_api;
+pub mod sip_ws;
+pub mod sql_api;
+pub mod terminal_ws;
+pub mod tls;
+pub mod tunnel_ws;
+pub mod update_api;
+pub mod update_checker;
+
+pub use app::AppState;

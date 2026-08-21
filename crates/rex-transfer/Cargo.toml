@@ -1,0 +1,12 @@
+[package]
+name = "rex-transfer"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rex-common = { workspace = true }
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
