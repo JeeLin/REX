@@ -42,10 +42,9 @@ fn main() {
 
     // 静态链接原生依赖，使最终二进制可直接运行、不依赖目标机库。
     // 影响 cmake（re/baresip 的 find_package(OpenSSL/ZLIB)）与 bindgen 的 clang。
-    // macOS 例外：Homebrew openssl@3 只有 runner 本机架构的静态库，跨架构
-    // （arm64 runner 编 x86_64）会拿到错误架构的 .a 导致链接失败，故 macOS
-    // 走动态链接（与 baresip 上游 macOS CI 一致）。
-    if target_os != "macos" {
+    // macOS 同样静态：Homebrew openssl@3 自带 arm64 静态库；x86_64 目标由 CI
+    // 源码构建对应架构的静态 openssl 并通过 OPENSSL_ROOT_DIR 指入。
+    if target_os != "windows" {
         std::env::set_var("OPENSSL_STATIC", "1");
         std::env::set_var("ZLIB_STATIC", "1");
     }
@@ -58,7 +57,8 @@ fn main() {
 
     // 1) libre: configure + build static only
     if !re_build.join("libre.a").exists() {
-        run(Command::new("cmake").args([
+        let mut cmd = Command::new("cmake");
+        cmd.args([
             "-S",
             re_src.to_str().unwrap(),
             "-B",
@@ -66,7 +66,11 @@ fn main() {
             "-DLIBRE_BUILD_SHARED=OFF",
             "-DLIBRE_BUILD_STATIC=ON",
             "-DCMAKE_BUILD_TYPE=Release",
-        ]));
+        ]);
+        for a in cmake_cross_args() {
+            cmd.arg(a);
+        }
+        run(&mut cmd);
         run(Command::new("cmake").args([
             "--build",
             re_build.to_str().unwrap(),
@@ -81,7 +85,8 @@ fn main() {
     //    显式指向 re_build，使 find_library(RE_LIBRARY) 能找到 libre.a。
     //    re_DIR 额外锁定 libre 的 CMake 配置（re-config.cmake），供 find_package(re CONFIG)。
     if !baresip_build.join("libbaresip.a").exists() {
-        run(Command::new("cmake").args([
+        let mut cmd = Command::new("cmake");
+        cmd.args([
             "-S",
             baresip_src.to_str().unwrap(),
             "-B",
@@ -91,7 +96,11 @@ fn main() {
             "-DSTATIC=ON",
             "-DCMAKE_BUILD_TYPE=Release",
             &format!("-DMODULES={modules}"),
-        ]));
+        ]);
+        for a in cmake_cross_args() {
+            cmd.arg(a);
+        }
+        run(&mut cmd);
         run(Command::new("cmake").args([
             "--build",
             baresip_build.to_str().unwrap(),
@@ -129,15 +138,15 @@ fn main() {
         }
     } else {
         // macOS/Linux：用 pkg-config 探测并自动 emit 正确的 -L/-I 与 -l。
-        // macOS 走动态链接（openssl@3 静态库仅本机架构，跨架构会链接失败）；
-        // Linux 走静态（OPENSSL_STATIC 已设置，pkg-config 据此 emit -l=static）。
-        let statik = target_os != "macos";
+        // 二者均静态链接（OPENSSL_STATIC/ZLIB_STATIC 已设置，pkg-config 据此
+        // emit -l=static）；macOS 的静态 openssl 由 CI 按目标架构提供
+        // （arm64 用 Homebrew，x86_64 源码构建），并通过 OPENSSL_ROOT_DIR 指入。
         let _ = pkg_config::Config::new()
-            .statik(statik)
+            .statik(true)
             .probe("openssl")
             .map_err(|e| eprintln!("pkg-config openssl: {e} (falling back to bare -l)"));
         let _ = pkg_config::Config::new()
-            .statik(statik)
+            .statik(true)
             .probe("zlib")
             .map_err(|e| eprintln!("pkg-config zlib: {e} (falling back to bare -l)"));
         for lib in ["pthread", "dl", "m"] {
@@ -220,4 +229,46 @@ fn main() {
 fn run(cmd: &mut std::process::Command) {
     let status = cmd.status().expect("failed to spawn build command");
     assert!(status.success(), "build command failed: {:?}", cmd);
+}
+
+/// 为目标架构交叉编译 re/baresip 时，给 cmake 传递对应工具链参数。
+///
+/// 默认情况下 cmake 用主机工具链构建，产出的 `.a` 是主机架构，与 Cargo
+/// target 不一致会导致最终链接 `file in wrong format` / `undefined symbols`。
+/// 本函数根据 `TARGET` 与 `HOST` 的差异，输出让 cmake 产出目标架构静态库的参数：
+/// - Linux 交叉：用 Cargo 配置的 cross 链接器作 `CMAKE_C_COMPILER`，并声明
+///   `CMAKE_SYSTEM_NAME=Linux` 与目标处理器。
+/// - macOS：用 `CMAKE_OSX_ARCHITECTURES` 指定 `arm64`/`x86_64`（clang 支持单命令
+///   交叉，无需单独工具链）。
+/// - Windows：CI 上始终原生构建，无需额外参数。
+///
+/// 主机原生构建（TARGET == HOST）返回空。
+fn cmake_cross_args() -> Vec<String> {
+    let target = std::env::var("TARGET").unwrap_or_default();
+    let host = std::env::var("HOST").unwrap_or_default();
+    if target.is_empty() || target == host {
+        return Vec::new();
+    }
+    let arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+    let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let mut args: Vec<String> = Vec::new();
+
+    if os == "macos" {
+        let apple = match arch.as_str() {
+            "aarch64" => "arm64",
+            other => other,
+        };
+        args.push(format!("-DCMAKE_OSX_ARCHITECTURES={apple}"));
+    } else if os == "linux" {
+        let upper = target.to_uppercase().replace(['-', '.'], "_");
+        if let Ok(cc) = std::env::var(format!("CARGO_TARGET_{upper}_LINKER")) {
+            args.push(format!("-DCMAKE_C_COMPILER={cc}"));
+        }
+        if let Ok(ar) = std::env::var(format!("CARGO_TARGET_{upper}_AR")) {
+            args.push(format!("-DCMAKE_AR={ar}"));
+        }
+        args.push("-DCMAKE_SYSTEM_NAME=Linux".to_string());
+        args.push(format!("-DCMAKE_SYSTEM_PROCESSOR={arch}"));
+    }
+    args
 }

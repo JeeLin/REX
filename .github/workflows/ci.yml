@@ -72,21 +72,45 @@ jobs:
       - name: Install cross-compilation tools
         if: matrix.cross
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-      # Linux/Windows：静态链接 OpenSSL/zlib，使最终二进制自包含、可直接运行。
-      # macOS 不设置（Homebrew openssl@3 仅本机架构静态库，跨架构会链接失败，
-      # 故 macOS 走动态链接，与 baresip 上游 macOS CI 一致）。
-      - name: Static OpenSSL env (non-macOS)
-        if: runner.os != 'macOS'
+      # Linux arm64 交叉：装 arm64 架构的 OpenSSL/zlib 开发库，并让 pkg-config
+      # 指向 arm64 多架构路径（否则会拿到主机的 x86_64 库，架构不匹配）。
+      - name: Install arm64 OpenSSL/zlib (Linux cross)
+        if: matrix.cross
+        run: |
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev:arm64 zlib1g-dev:arm64
+          echo "PKG_CONFIG_SYSROOT_DIR=/" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig" >> "$GITHUB_ENV"
+          echo "OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu" >> "$GITHUB_ENV"
+          echo "OPENSSL_INCLUDE_DIR=/usr/include" >> "$GITHUB_ENV"
+      # 静态链接 OpenSSL/zlib（macOS/Linux/Windows 均静态，使二进制自包含）。
+      - name: Static OpenSSL env
         run: |
           echo "OPENSSL_STATIC=1" >> "$GITHUB_ENV"
           echo "ZLIB_STATIC=1" >> "$GITHUB_ENV"
-      - name: openssl path (macOS)
+      # macOS：arm64 目标用 Homebrew 的静态 openssl@3；x86_64 目标（arm64 runner
+      # 交叉）Homebrew 只有 arm64 瓶，故源码构建 x86_64 静态 openssl 并指入。
+      - name: openssl (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install openssl@3
-          echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
-          echo "OPENSSL_LIB_DIR=$(brew --prefix openssl@3)/lib" >> "$GITHUB_ENV"
-          echo "OPENSSL_INCLUDE_DIR=$(brew --prefix openssl@3)/include" >> "$GITHUB_ENV"
+          if [ "${{ matrix.arch }}" = "mac-amd64" ]; then
+            VER=3.5.6
+            curl -fsSL "https://www.openssl.org/source/openssl-${VER}.tar.gz" -o /tmp/openssl.tgz
+            tar -xzf /tmp/openssl.tgz -C /tmp
+            cd "/tmp/openssl-${VER}"
+            ./Configure darwin64-x86_64-cc --prefix="$HOME/openssl-x86_64" --openssldir="$HOME/openssl-x86_64" no-shared no-tests
+            make -j"$(sysctl -n hw.ncpu)"
+            make install_sw
+            echo "OPENSSL_ROOT_DIR=$HOME/openssl-x86_64" >> "$GITHUB_ENV"
+            echo "OPENSSL_LIB_DIR=$HOME/openssl-x86_64/lib" >> "$GITHUB_ENV"
+            echo "OPENSSL_INCLUDE_DIR=$HOME/openssl-x86_64/include" >> "$GITHUB_ENV"
+          else
+            brew install openssl@3
+            echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
+            echo "OPENSSL_LIB_DIR=$(brew --prefix openssl@3)/lib" >> "$GITHUB_ENV"
+            echo "OPENSSL_INCLUDE_DIR=$(brew --prefix openssl@3)/include" >> "$GITHUB_ENV"
+          fi
       - name: Install OpenSSL (Windows)
         if: runner.os == 'Windows'
         run: choco install --no-progress openssl
