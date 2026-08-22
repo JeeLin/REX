@@ -35,6 +35,7 @@ jobs:
   build-binaries:
     needs: [lint]
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
@@ -56,9 +57,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-      # 静态链接原生依赖（OpenSSL/zlib），使最终二进制自包含、可直接运行。
-      OPENSSL_STATIC: "1"
-      ZLIB_STATIC: "1"
       MACOSX_DEPLOYMENT_TARGET: "10.12"
     steps:
       - uses: actions/checkout@v7
@@ -74,6 +72,14 @@ jobs:
       - name: Install cross-compilation tools
         if: matrix.cross
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      # Linux/Windows：静态链接 OpenSSL/zlib，使最终二进制自包含、可直接运行。
+      # macOS 不设置（Homebrew openssl@3 仅本机架构静态库，跨架构会链接失败，
+      # 故 macOS 走动态链接，与 baresip 上游 macOS CI 一致）。
+      - name: Static OpenSSL env (non-macOS)
+        if: runner.os != 'macOS'
+        run: |
+          echo "OPENSSL_STATIC=1" >> "$GITHUB_ENV"
+          echo "ZLIB_STATIC=1" >> "$GITHUB_ENV"
       - name: openssl path (macOS)
         if: runner.os == 'macOS'
         run: |

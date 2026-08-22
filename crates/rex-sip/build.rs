@@ -42,8 +42,13 @@ fn main() {
 
     // 静态链接原生依赖，使最终二进制可直接运行、不依赖目标机库。
     // 影响 cmake（re/baresip 的 find_package(OpenSSL/ZLIB)）与 bindgen 的 clang。
-    std::env::set_var("OPENSSL_STATIC", "1");
-    std::env::set_var("ZLIB_STATIC", "1");
+    // macOS 例外：Homebrew openssl@3 只有 runner 本机架构的静态库，跨架构
+    // （arm64 runner 编 x86_64）会拿到错误架构的 .a 导致链接失败，故 macOS
+    // 走动态链接（与 baresip 上游 macOS CI 一致）。
+    if target_os != "macos" {
+        std::env::set_var("OPENSSL_STATIC", "1");
+        std::env::set_var("ZLIB_STATIC", "1");
+    }
 
     // REX 实际用到的 baresip 模块（静态构建最小化集，避免拉外部编解码依赖）。
     // dtls_srtp/srtp：媒体加密；ice：NAT 穿透；
@@ -123,13 +128,16 @@ fn main() {
             println!("cargo:rustc-link-lib=static={lib}");
         }
     } else {
-        // macOS 上 Homebrew openssl 不在默认搜索路径，pkg-config 能给出正确 -L/-I。
+        // macOS/Linux：用 pkg-config 探测并自动 emit 正确的 -L/-I 与 -l。
+        // macOS 走动态链接（openssl@3 静态库仅本机架构，跨架构会链接失败）；
+        // Linux 走静态（OPENSSL_STATIC 已设置，pkg-config 据此 emit -l=static）。
+        let statik = target_os != "macos";
         let _ = pkg_config::Config::new()
-            .statik(true)
+            .statik(statik)
             .probe("openssl")
             .map_err(|e| eprintln!("pkg-config openssl: {e} (falling back to bare -l)"));
         let _ = pkg_config::Config::new()
-            .statik(true)
+            .statik(statik)
             .probe("zlib")
             .map_err(|e| eprintln!("pkg-config zlib: {e} (falling back to bare -l)"));
         for lib in ["pthread", "dl", "m"] {
