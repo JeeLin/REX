@@ -6,8 +6,8 @@
 //! 构建链（baresip v4.x 用 CMake）：
 //!   1. 在 `OUT_DIR/re/build` 构建并 install libre 静态库 `libre.a`
 //!      —— 必须放在 `re/build` 而非任意目录：baresip 的 `FindRE.cmake`
-//!         用 `HINTS ../re/build`（相对 baresip 构建目录解析），只有 `re/build`
-//!         能满足该相对路径，否则干净 CI 上 `find_package(RE REQUIRED)` 直接失败。
+//!      用 `HINTS ../re/build`（相对 baresip 构建目录解析），只有 `re/build`
+//!      能满足该相对路径，否则干净 CI 上 `find_package(RE REQUIRED)` 直接失败。
 //!   2. baresip 配置时以 `CMAKE_PREFIX_PATH=<re/build>` 让 `FindRE.cmake` 找到
 //!      libre.a，并以 `-Dre_DIR=<re/cmake>` 定位 libre 的 CMake 配置
 //!      （OUT_DIR 布局下 `../re/build`、`../re/cmake` 相对路径无法落到源码目录）。
