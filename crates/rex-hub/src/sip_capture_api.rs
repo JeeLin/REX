@@ -24,10 +24,10 @@ fn err(status: StatusCode, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
 
 pub fn sip_capture_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/:id/start", axum::routing::post(start_capture))
-        .route("/:id/stop", axum::routing::post(stop_capture))
-        .route("/:id/packets", axum::routing::get(list_packets))
-        .route("/:id/pcap", axum::routing::get(export_pcap))
+        .route("/{id}/start", axum::routing::post(start_capture))
+        .route("/{id}/stop", axum::routing::post(stop_capture))
+        .route("/{id}/packets", axum::routing::get(list_packets))
+        .route("/{id}/pcap", axum::routing::get(export_pcap))
 }
 
 #[derive(serde::Deserialize)]
