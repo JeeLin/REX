@@ -15,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: true
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -30,32 +32,43 @@ jobs:
         run: cargo test --workspace
 
   # ── 构建 Rust 二进制（5 平台矩阵，产物用于 Docker + Release） ──
+  # 各目标架构用「原生 runner」构建（与 baresip 官方 CI 一致，统一用 macos-latest）：
+  #   linux-amd64   → ubuntu-latest (x86_64 原生)
+  #   linux-arm64   → ubuntu-24.04-arm (aarch64 原生，避免交叉编译的 zlib/openssl
+  #                   架构错配)
+  #   mac-amd64     → macos-latest (arm64 runner 上交叉 x86_64：cmake 用
+  #                    CMAKE_OSX_ARCHITECTURES=x86_64，openssl 源码构建 x86_64)
+  #   mac-arm64     → macos-latest (arm64 原生)
+  #   windows-amd64 → windows-latest
+  # 原生构建使最终二进制可直接运行、不依赖目标机安装。
   build-binaries:
     needs: [lint]
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             arch: linux-amd64
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-24.04-arm
             arch: linux-arm64
-            cross: true
           - target: x86_64-apple-darwin
-            os: macos-14
+            os: macos-latest
             arch: mac-amd64
           - target: aarch64-apple-darwin
-            os: macos-14
+            os: macos-latest
             arch: mac-arm64
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             arch: windows-amd64
     runs-on: ${{ matrix.os }}
     env:
-      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+      MACOSX_DEPLOYMENT_TARGET: "10.12"
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: true
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -63,11 +76,118 @@ jobs:
         with:
           shared-key: build-${{ matrix.target }}
           save-if: ${{ github.event_name == 'push' }}
-      - name: Install cross-compilation tools
-        if: matrix.cross
-        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      # Linux：原生安装静态依赖（arm64 runner 上即 arm64 包）。
+      - name: Install static deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev zlib1g-dev pkg-config
+      # macOS：arm64 目标用 Homebrew 的 openssl@3；x86_64 目标（macos-latest 是
+      # arm64 runner，需交叉）Homebrew 只有 arm64 瓶，故源码构建 x86_64 静态
+      # openssl 并指入。两路都以 PKG_CONFIG_PATH 指入 .pc，使 pkg-config 静态探测
+      # libssl/libcrypto（与 baresip 的 OPENSSL_ROOT_DIR 思路一致）。
+      # 注意：macos-latest 默认未装 pkg-config，两个分支都需要显式安装。
+      - name: Install OpenSSL (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install pkg-config
+          if [ "${{ matrix.arch }}" = "mac-amd64" ]; then
+            VER=3.5.6
+            curl -fsSL "https://www.openssl.org/source/openssl-${VER}.tar.gz" -o /tmp/openssl.tgz
+            tar -xzf /tmp/openssl.tgz -C /tmp
+            cd "/tmp/openssl-${VER}"
+            ./Configure darwin64-x86_64-cc --prefix="$HOME/openssl-x86_64" --openssldir="$HOME/openssl-x86_64" no-shared no-tests
+            make -j"$(sysctl -n hw.ncpu)"
+            make install_sw
+            echo "OPENSSL_ROOT_DIR=$HOME/openssl-x86_64" >> "$GITHUB_ENV"
+            echo "OPENSSL_LIB_DIR=$HOME/openssl-x86_64/lib" >> "$GITHUB_ENV"
+            echo "OPENSSL_INCLUDE_DIR=$HOME/openssl-x86_64/include" >> "$GITHUB_ENV"
+            echo "PKG_CONFIG_PATH=$HOME/openssl-x86_64/lib/pkgconfig:$PKG_CONFIG_PATH" >> "$GITHUB_ENV"
+          else
+            brew install openssl@3
+            P=$(brew --prefix openssl@3)
+            echo "OPENSSL_ROOT_DIR=$P" >> "$GITHUB_ENV"
+            echo "OPENSSL_LIB_DIR=$P/lib" >> "$GITHUB_ENV"
+            echo "OPENSSL_INCLUDE_DIR=$P/include" >> "$GITHUB_ENV"
+            echo "PKG_CONFIG_PATH=$P/lib/pkgconfig:$PKG_CONFIG_PATH" >> "$GITHUB_ENV"
+          fi
+      # Windows：choco 提供 OpenSSL（动态导入库 + 静态归档 libssl_static.lib/
+      # libcrypto_static.lib，二者均用 /MD 动态 CRT 编译）。本工程在 build.rs 里
+      # 静态链入 exe，使 rex-hub/rex-agent.exe 自包含——不依赖目标机安装、也无需同
+      # 目录附带 libssl/libcrypto DLL（仅引用 Windows 自身系统 DLL）。故下方探测
+      # OPENSSL_LIB_DIR 时需同时存在静态归档，否则无法产出独立二进制。
+      - name: Install OpenSSL (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install --no-progress openssl
+          # choco/slproweb 把 OpenSSL 装到 Program Files 下，版本不同根目录与导入库
+          # 子路径都不同（3.x 在 OpenSSL-Win64\lib\VC\x64\MD\ssl.lib；4.x 在
+          # OpenSSL\lib\VC\x64\MD\libssl.lib）。不硬编码根目录，动态探测实际安装
+          # 位置与导入库所在目录，确保 OPENSSL_LIB_DIR 非空——为空时 rustc 链接
+          # 177 个 OpenSSL 符号全部 unresolved（LNK2001/2019，二进制无法生成）。
+          $roots = @(
+            "${env:ProgramFiles}\OpenSSL",
+            "${env:ProgramFiles}\OpenSSL-Win64",
+            "${env:ProgramFiles(x86)}\OpenSSL-Win64",
+            "C:\OpenSSL-Win64"
+          )
+          $opensslRoot = $null
+          foreach ($r in $roots) {
+            if (Test-Path "$r\include\openssl\ssl.h") { $opensslRoot = $r; break }
+          }
+          if (-not $opensslRoot) {
+            # 回退：扫描 Program Files 下任意 OpenSSL* 目录
+            $opensslRoot = Get-ChildItem "${env:ProgramFiles}" -Directory -Filter "OpenSSL*" -ErrorAction SilentlyContinue |
+              Where-Object { Test-Path "$($_.FullName)\include\openssl\ssl.h" } |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $opensslRoot) { throw "OpenSSL root not found under Program Files" }
+          # 导入库目录：ssl/libssl 与 crypto/libcrypto 同目录（3.x=ssl.lib/crypto.lib，
+          # 4.x=libssl.lib/libcrypto.lib）。取同时含两者的目录，保证 rustc 链接时
+          # windows_import_lib_name 能按实际文件名选对 stem。
+          $sslLibDir = $null
+          foreach ($sub in @("", "VC\x64\MD", "VC\x64\MT")) {
+            $d = Join-Path $opensslRoot "lib\$sub"
+            if (-not (Test-Path $d)) { continue }
+            $libs = Get-ChildItem $d -Filter "*.lib" -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^(lib)?(ssl|crypto)\.lib$' }
+            $ssl = $libs | Where-Object { $_.Name -match '^(lib)?ssl\.lib$' }
+            $crypto = $libs | Where-Object { $_.Name -match '^(lib)?crypto\.lib$' }
+            if ($ssl -and $crypto) { $sslLibDir = $d; break }
+          }
+          if (-not $sslLibDir) { throw "OpenSSL import libs (ssl/crypto) not found under $opensslRoot\lib" }
+          # 必须存在静态归档 libssl_static.lib / libcrypto_static.lib，否则无法把
+          # OpenSSL 链进 exe、产出独立二进制（只剩 Windows 系统 DLL 依赖）。
+          $staticSsl = Join-Path $sslLibDir "libssl_static.lib"
+          $staticCrypto = Join-Path $sslLibDir "libcrypto_static.lib"
+          if (-not (Test-Path $staticSsl)) { throw "static OpenSSL lib not found: $staticSsl" }
+          if (-not (Test-Path $staticCrypto)) { throw "static OpenSSL lib not found: $staticCrypto" }
+          "OPENSSL_ROOT=$opensslRoot" >> $env:GITHUB_ENV
+          "OPENSSL_LIB_DIR=$sslLibDir" >> $env:GITHUB_ENV
+          "OPENSSL_INCLUDE_DIR=$opensslRoot\include" >> $env:GITHUB_ENV
+      # 静态链接（Linux/macOS 用系统/源码静态 OpenSSL，Windows 用 slproweb 的
+      # /MD 静态归档），使各平台二进制自包含、无需目标机安装 OpenSSL。
+      - name: Static OpenSSL env
+        if: runner.os != 'Windows'
+        run: |
+          echo "OPENSSL_STATIC=1" >> "$GITHUB_ENV"
+          echo "ZLIB_STATIC=1" >> "$GITHUB_ENV"
       - name: Build Agent + Hub
         run: cargo build --release -p rex-agent -p rex-hub --target ${{ matrix.target }}
+      # Windows：验证 exe 真的自包含——dumpbin /dependents 不得出现 libssl/libcrypto。
+      # 出现则说明 OpenSSL 没静态链入，仍依赖 DLL，本构建失败。
+      - name: Verify standalone exe (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vcvars = (Get-ChildItem "${env:ProgramFiles}\Microsoft Visual Studio" -Recurse -Filter vcvars64.bat | Select-Object -First 1).FullName
+          $exe = "target\x86_64-pc-windows-msvc\release\rex-hub.exe"
+          cmd /c "call `"$vcvars`" && dumpbin /dependents $exe > dependents.txt 2>&1"
+          Get-Content dependents.txt
+          if (Select-String -Path dependents.txt -Pattern "libssl|libcrypto") {
+            throw "rex-hub.exe still depends on libssl/libcrypto DLL — NOT standalone!"
+          }
+          Write-Host "OK: rex-hub.exe is standalone (only Windows system DLLs)."
       - uses: actions/upload-artifact@v6
         with:
           name: binaries-${{ matrix.arch }}
@@ -239,6 +359,7 @@ jobs:
             elif [ -f "$dir/rex-hub" ]; then
               cp "$dir/rex-hub" "rex-hub-${arch}"
             fi
+            # Windows 的 OpenSSL 已静态链入 exe，无需也不应再附带 libssl/libcrypto DLL。
           done
           chmod +x rex-agent-* rex-hub-* 2>/dev/null || true
           echo "=== Release files ==="

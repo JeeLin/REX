@@ -19,7 +19,7 @@ fn err(status: StatusCode, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
 pub fn cdr_routes() -> axum::Router<AppState> {
     axum::Router::new()
         .route("/", axum::routing::get(list_cdr))
-        .route("/:id", axum::routing::get(get_cdr))
+        .route("/{id}", axum::routing::get(get_cdr))
 }
 
 #[derive(serde::Deserialize, Default)]

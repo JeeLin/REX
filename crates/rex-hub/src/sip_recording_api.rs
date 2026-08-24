@@ -14,9 +14,9 @@ type ApiResult<T> = Result<Json<T>, (StatusCode, Json<serde_json::Value>)>;
 
 pub fn sip_recording_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/:id/start", axum::routing::post(start_recording))
-        .route("/:id/stop", axum::routing::post(stop_recording))
-        .route("/:id", axum::routing::get(get_recording))
+        .route("/{id}/start", axum::routing::post(start_recording))
+        .route("/{id}/stop", axum::routing::post(stop_recording))
+        .route("/{id}", axum::routing::get(get_recording))
 }
 
 async fn start_recording(
@@ -40,7 +40,7 @@ async fn stop_recording(
     ))
 }
 
-/// `GET /api/sip/recordings/:id.wav` —— 返回该 CDR 的 WAV 录音文件。
+/// `GET /api/sip/recordings/{id}.wav` —— 返回该 CDR 的 WAV 录音文件。
 pub async fn get_recording(
     State(state): State<AppState>,
     Path(id): Path<String>,

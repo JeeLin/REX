@@ -75,7 +75,7 @@ unsafe extern "C" fn sip_trace_cb(
 
 /// 由 `sa_ntop` 拼出 `src -> dst` 端点标签(用于无 Wireshark 时文本回看)。
 unsafe fn endpoint_label(src: *const sa, dst: *const sa) -> String {
-    let mut buf = [0i8; 64];
+    let mut buf = [0 as std::os::raw::c_char; 64];
     let mut s = String::new();
     if !src.is_null() && sa_ntop(src, buf.as_mut_ptr(), buf.len() as i32) > 0 {
         s.push_str(
@@ -85,7 +85,7 @@ unsafe fn endpoint_label(src: *const sa, dst: *const sa) -> String {
         );
     }
     s.push_str(" -> ");
-    let mut buf = [0i8; 64];
+    let mut buf = [0 as std::os::raw::c_char; 64];
     if !dst.is_null() && sa_ntop(dst, buf.as_mut_ptr(), buf.len() as i32) > 0 {
         s.push_str(
             std::ffi::CStr::from_ptr(buf.as_ptr())
