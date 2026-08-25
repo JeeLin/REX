@@ -459,6 +459,31 @@ async fn handle_connect(
         return;
     }
 
+    // SQL 资源：Agent 在私网内用 sqlx 终结协议（v0.70.6 子任务 #4），
+    // 不再由 Hub 直连目标。db_type 优先取 config.db_type，缺省回退 protocol 字段。
+    if matches!(
+        req.protocol.as_str(),
+        "sql" | "mysql" | "postgresql" | "postgres" | "sqlite"
+    ) {
+        let channel_id = AGENT_CHANNEL_SEQ.fetch_add(1, Ordering::SeqCst).to_string();
+        let db_type = req
+            .config
+            .get("db_type")
+            .and_then(|v| v.as_str())
+            .map(String::from)
+            .unwrap_or_else(|| req.protocol.clone());
+        crate::agent_sql::handle_connect_sql(
+            req.request_id.clone(),
+            channel_id,
+            db_type,
+            &req.config,
+            evt_tx,
+            channels,
+        )
+        .await;
+        return;
+    }
+
     // channel_id 必须为数值：隧道二进制帧以「4B u32 channelId」前缀路由，
     // Hub/Agent 两侧均用 `u32::from_be_bytes` 解前缀后 `to_string()` 查表。
     // 若为非数值（如旧 "ch_{uuid}"），`parse::<u32>()` 失败回退为 0，会导致

@@ -7,6 +7,7 @@
 //! 否则 → 运行 supervisor
 
 mod agent_ssh;
+mod agent_sql;
 mod agent_ws;
 mod supervisor;
 mod updater;
