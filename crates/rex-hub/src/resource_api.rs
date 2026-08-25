@@ -597,6 +597,8 @@ pub async fn test_connection(
                             port: None,
                             username: String::new(),
                             config: value,
+                            use_agent: false,
+                            agent_id: None,
                         };
                         match crate::resource_conn::load_sip_conn(&info) {
                             Ok(_) => Ok(()),

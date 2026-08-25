@@ -194,7 +194,7 @@ async fn connect(
         state.file_pool.lock().await.insert(
             session_id.clone(),
             Box::new(crate::agent_proxy::AgentFileProxy::new(
-                state.0.clone(),
+                state.clone(),
                 channel_id,
             )),
         );

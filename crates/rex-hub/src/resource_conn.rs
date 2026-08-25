@@ -161,6 +161,8 @@ mod tests {
             port: None,
             username: String::new(),
             config: serde_json::from_str(config).unwrap(),
+            use_agent: false,
+            agent_id: None,
         }
     }
 
