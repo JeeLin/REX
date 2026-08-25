@@ -6,6 +6,7 @@
 //! REX_WORKER=1 → 运行 worker
 //! 否则 → 运行 supervisor
 
+mod agent_ssh;
 mod agent_ws;
 mod supervisor;
 mod updater;
