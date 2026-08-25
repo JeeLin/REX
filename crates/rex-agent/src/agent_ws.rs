@@ -84,6 +84,8 @@ enum HubMsg {
     Connect { payload: ConnectRequest },
     #[serde(rename = "close")]
     Close { payload: ChannelPayload },
+    #[serde(rename = "resize")]
+    Resize { payload: ResizePayload },
     #[serde(rename = "update")]
     Update {
         payload: rex_common::update::UpdateCommand,
@@ -110,16 +112,23 @@ struct ConnectRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct ChannelPayload {
+pub(crate) struct ChannelPayload {
     #[allow(dead_code)]
+    pub(crate) channel_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ResizePayload {
     channel_id: String,
+    cols: u32,
+    rows: u32,
 }
 
 /// Agent → Hub 消息
 #[derive(Debug, Serialize)]
 #[serde(tag = "type")]
 #[allow(dead_code)]
-enum AgentMsg {
+pub(crate) enum AgentMsg {
     #[serde(rename = "auth")]
     Auth { payload: AuthPayload },
     #[serde(rename = "heartbeat")]
@@ -159,15 +168,15 @@ struct HeartbeatPayload {
 }
 
 #[derive(Debug, Serialize)]
-struct ConnectedPayload {
-    request_id: String,
-    channel_id: String,
+pub(crate) struct ConnectedPayload {
+    pub(crate) request_id: String,
+    pub(crate) channel_id: String,
 }
 
 #[derive(Debug, Serialize)]
-struct ConnectErrorPayload {
-    request_id: String,
-    error: String,
+pub(crate) struct ConnectErrorPayload {
+    pub(crate) request_id: String,
+    pub(crate) error: String,
 }
 
 // ═══════════════════════════════════════
@@ -213,10 +222,12 @@ impl AgentConfig {
 // Channel 管理
 // ═══════════════════════════════════════
 
-struct LocalChannel {
+pub(crate) struct LocalChannel {
     #[allow(dead_code)]
-    channel_id: String,
-    data_tx: mpsc::Sender<Vec<u8>>,
+    pub(crate) channel_id: String,
+    pub(crate) data_tx: mpsc::Sender<Vec<u8>>,
+    /// SSH 会话的 resize 控制通道（仅 ssh 资源占用；其余协议为 None）。
+    pub(crate) resize_tx: Option<mpsc::UnboundedSender<(u32, u32)>>,
 }
 
 // ═══════════════════════════════════════
@@ -369,6 +380,14 @@ async fn connect_and_run(
                                 let _ = ch.data_tx.send(vec![]).await; // signal close
                             }
                         }
+                        HubMsg::Resize { payload } => {
+                            let chs = channels.read().await;
+                            if let Some(ch) = chs.get(&payload.channel_id) {
+                                if let Some(tx) = &ch.resize_tx {
+                                    let _ = tx.send((payload.cols, payload.rows));
+                                }
+                            }
+                        }
                         HubMsg::HeartbeatAck => {
                             tracing::trace!("heartbeat ack");
                         }
@@ -422,6 +441,21 @@ async fn handle_connect(
     // SIP 资源走 Agent 内网 UA₂：不建 TCP，由 UA₂ 直接对内网 SIP server 信令。
     if req.protocol == "sip" {
         handle_connect_sip(req, evt_tx, channels).await;
+        return;
+    }
+
+    // SSH 资源：Agent 在私网内运行 russh 终结协议（v0.70.6 子任务 #3），
+    // 不再做裸 TCP 管道——否则浏览器只看到服务端横幅、进不了 shell。
+    if req.protocol == "ssh" {
+        let channel_id = AGENT_CHANNEL_SEQ.fetch_add(1, Ordering::SeqCst).to_string();
+        crate::agent_ssh::handle_connect_ssh(
+            req.request_id.clone(),
+            &req.config,
+            evt_tx,
+            channels,
+            channel_id,
+        )
+        .await;
         return;
     }
 
@@ -491,6 +525,7 @@ async fn handle_connect(
                     LocalChannel {
                         channel_id: channel_id.clone(),
                         data_tx,
+                        resize_tx: None,
                     },
                 );
             }
@@ -640,6 +675,7 @@ async fn handle_connect_sip(
             LocalChannel {
                 channel_id: channel_id.clone(),
                 data_tx,
+                resize_tx: None,
             },
         );
     }
@@ -891,7 +927,7 @@ fn parse_sip_config(cfg: &serde_json::Value) -> Result<rex_sip::SipConfig, Strin
     })
 }
 
-enum AgentEvent {
+pub(crate) enum AgentEvent {
     Text(String),
     Binary(Vec<u8>),
     #[allow(dead_code)]

@@ -9,7 +9,14 @@ path = "src/rex-agent.rs"
 
 [dependencies]
 rex-common = { workspace = true }
+rex-ssh = { workspace = true }
 rex-sip = { workspace = true }
+rex-mysql = { workspace = true }
+rex-postgresql = { workspace = true }
+rex-sqlite = { workspace = true }
+rex-redis = { workspace = true }
+rex-s3 = { workspace = true }
+bytes = { workspace = true }
 tokio = { workspace = true }
 tokio-tungstenite = { workspace = true }
 futures-util = { workspace = true }
