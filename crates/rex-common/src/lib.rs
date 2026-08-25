@@ -82,6 +82,7 @@ mod tests {
     }
 }
 
+pub mod agent_proto;
 pub mod file_transfer;
 pub mod redis;
 pub mod sip_media;
