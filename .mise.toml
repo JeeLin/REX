@@ -19,9 +19,9 @@ depends = ["install-frontend"]
 run = "cd packages/rex-console-web && bun run build"
 
 [tasks.build]
-description = "Build both frontend and backend (release)"
+description = "Build frontend + backend (rex-hub and rex-agent)"
 depends = ["build-frontend"]
-run = "cargo build -p rex-hub"
+run = "cargo build -p rex-hub -p rex-agent"
 
 [tasks.start]
 description = "Build and run rex-hub"
