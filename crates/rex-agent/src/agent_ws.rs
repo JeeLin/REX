@@ -484,6 +484,20 @@ async fn handle_connect(
         return;
     }
 
+    // Redis 资源：Agent 在私网内用 redis crate 终结协议（v0.70.6 子任务 #5）。
+    if req.protocol == "redis" {
+        let channel_id = AGENT_CHANNEL_SEQ.fetch_add(1, Ordering::SeqCst).to_string();
+        crate::agent_redis::handle_connect_redis(
+            req.request_id.clone(),
+            channel_id,
+            &req.config,
+            evt_tx,
+            channels,
+        )
+        .await;
+        return;
+    }
+
     // channel_id 必须为数值：隧道二进制帧以「4B u32 channelId」前缀路由，
     // Hub/Agent 两侧均用 `u32::from_be_bytes` 解前缀后 `to_string()` 查表。
     // 若为非数值（如旧 "ch_{uuid}"），`parse::<u32>()` 失败回退为 0，会导致

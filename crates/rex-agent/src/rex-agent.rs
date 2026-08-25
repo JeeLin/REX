@@ -8,6 +8,8 @@
 
 mod agent_ssh;
 mod agent_sql;
+mod agent_redis;
+mod agent_file;
 mod agent_ws;
 mod supervisor;
 mod updater;
