@@ -3565,12 +3565,14 @@ dependencies = [
 name = "rex-agent"
 version = "0.70.5"
 dependencies = [
+ "bytes",
  "futures-util",
  "hex",
  "hostname",
  "reqwest",
  "rex-common",
  "rex-sip",
+ "rex-ssh",
  "rustls 0.23.40",
  "serde",
  "serde_json",
