@@ -7,10 +7,9 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use rex_common::file_transfer::{FileConnector, FileEntry, ProgressCallback, UploadResult};
+use rex_common::file_transfer::{FileConnector, FileEntry, UploadResult};
 use rex_common::redis::{DbInfo, KeyInfo, RedisConnector, RedisInfo, RedisValue};
 use rex_common::sql::{ColumnInfo, QueryResult, SqlConnector, TableInfo};
-use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
 
 use crate::agent_ws::agent_session_request;

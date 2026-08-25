@@ -498,6 +498,22 @@ async fn handle_connect(
         return;
     }
 
+    // 文件资源（SFTP / S3）：Agent 在私网内终结协议（v0.70.6 子任务 #6），
+    // 数据不落浏览器（AGENTS.md 硬性约束）。
+    if matches!(req.protocol.as_str(), "sftp" | "s3" | "ssh") {
+        let channel_id = AGENT_CHANNEL_SEQ.fetch_add(1, Ordering::SeqCst).to_string();
+        crate::agent_file::handle_connect_file(
+            req.request_id.clone(),
+            channel_id,
+            req.protocol.clone(),
+            &req.config,
+            evt_tx,
+            channels,
+        )
+        .await;
+        return;
+    }
+
     // channel_id 必须为数值：隧道二进制帧以「4B u32 channelId」前缀路由，
     // Hub/Agent 两侧均用 `u32::from_be_bytes` 解前缀后 `to_string()` 查表。
     // 若为非数值（如旧 "ch_{uuid}"），`parse::<u32>()` 失败回退为 0，会导致

@@ -217,7 +217,7 @@ async fn connect(
         state.redis_pool.lock().await.insert(
             session_id.clone(),
             Box::new(crate::agent_proxy::AgentRedisProxy::new(
-                state.0.clone(),
+                state.clone(),
                 channel_id,
             )),
         );
