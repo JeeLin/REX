@@ -25,7 +25,13 @@ pub async fn handle_connect_file(
     let mut connector: Box<dyn FileConnector> = match build_connector(&protocol, cfg).await {
         Ok(c) => c,
         Err(e) => {
-            send_session_error(&evt_tx, &channel_id, Some(&request_id), &format!("file connection failed: {e}")).await;
+            send_session_error(
+                &evt_tx,
+                &channel_id,
+                Some(&request_id),
+                &format!("file connection failed: {e}"),
+            )
+            .await;
             return;
         }
     };
@@ -59,7 +65,13 @@ pub async fn handle_connect_file(
         let msg: rex_common::agent_proto::SessionRequest = match serde_json::from_slice(&frame) {
             Ok(m) => m,
             Err(e) => {
-                send_session_error(&evt_tx, &channel_id, None, &format!("invalid session_request: {e}")).await;
+                send_session_error(
+                    &evt_tx,
+                    &channel_id,
+                    None,
+                    &format!("invalid session_request: {e}"),
+                )
+                .await;
                 continue;
             }
         };
@@ -77,8 +89,10 @@ pub async fn handle_connect_file(
                 error: Some(e.to_string()),
             },
         };
-        let s = serde_json::to_string(&rex_common::agent_proto::AgentSessionMsg::SessionResponse(resp))
-            .unwrap_or_default();
+        let s = serde_json::to_string(&rex_common::agent_proto::AgentSessionMsg::SessionResponse(
+            resp,
+        ))
+        .unwrap_or_default();
         if evt_tx.send(AgentEvent::Text(s)).await.is_err() {
             break;
         }
@@ -99,13 +113,34 @@ async fn build_connector(
     match protocol {
         "sftp" | "ssh" => {
             let conn = rex_ssh::sftp::SftpConnector::connect_with_config(rex_ssh::SshConfig {
-                host: cfg.get("host").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                host: cfg
+                    .get("host")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
                 port: cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(22) as u16,
-                username: cfg.get("username").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                password: cfg.get("password").and_then(|v| v.as_str()).map(String::from),
-                private_key: cfg.get("privateKey").and_then(|v| v.as_str()).map(String::from)
-                    .or_else(|| cfg.get("private_key").and_then(|v| v.as_str()).map(String::from)),
-                keepalive_interval: cfg.get("keepalive_interval").and_then(|v| v.as_u64()).map(|v| v as u32),
+                username: cfg
+                    .get("username")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                password: cfg
+                    .get("password")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                private_key: cfg
+                    .get("privateKey")
+                    .and_then(|v| v.as_str())
+                    .map(String::from)
+                    .or_else(|| {
+                        cfg.get("private_key")
+                            .and_then(|v| v.as_str())
+                            .map(String::from)
+                    }),
+                keepalive_interval: cfg
+                    .get("keepalive_interval")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32),
                 init_script: None,
             })
             .await?;
@@ -114,7 +149,11 @@ async fn build_connector(
         "s3" => {
             let req = FileConnectRequest {
                 protocol: "s3".to_string(),
-                host: cfg.get("host").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                host: cfg
+                    .get("host")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
                 port: cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(443) as u16,
                 username: None,
                 password: None,
@@ -122,9 +161,18 @@ async fn build_connector(
                 keepalive_interval: None,
                 bucket: cfg.get("bucket").and_then(|v| v.as_str()).map(String::from),
                 region: cfg.get("region").and_then(|v| v.as_str()).map(String::from),
-                endpoint: cfg.get("endpoint").and_then(|v| v.as_str()).map(String::from),
-                access_key: cfg.get("access_key").and_then(|v| v.as_str()).map(String::from),
-                secret_key: cfg.get("secret_key").and_then(|v| v.as_str()).map(String::from),
+                endpoint: cfg
+                    .get("endpoint")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                access_key: cfg
+                    .get("access_key")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                secret_key: cfg
+                    .get("secret_key")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
             };
             let conn = rex_s3::S3Connector::connect_from_request(&req).await?;
             Ok(Box::new(conn))

@@ -21,15 +21,30 @@ use crate::agent_ws::{AgentEvent, LocalChannel};
 
 /// 从 connect config 解析 SSH 配置（对应 Hub 侧 `handle_agent_terminal` 下发的字段约定）。
 pub fn parse_ssh_config(cfg: &Value) -> SshConfig {
-    let host = cfg.get("host").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let host = cfg
+        .get("host")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
     let port = cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(22) as u16;
-    let username = cfg.get("username").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let password = cfg.get("password").and_then(|v| v.as_str()).map(String::from);
+    let username = cfg
+        .get("username")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let password = cfg
+        .get("password")
+        .and_then(|v| v.as_str())
+        .map(String::from);
     let private_key = cfg
         .get("privateKey")
         .and_then(|v| v.as_str())
         .map(String::from)
-        .or_else(|| cfg.get("private_key").and_then(|v| v.as_str()).map(String::from));
+        .or_else(|| {
+            cfg.get("private_key")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        });
     let keepalive_interval = cfg
         .get("keepalive_interval")
         .and_then(|v| v.as_u64())
@@ -261,4 +276,3 @@ mod tests {
         assert!(ssh.private_key.is_none());
     }
 }
-

@@ -23,10 +23,21 @@ pub async fn handle_connect_sql(
     channels: Arc<RwLock<HashMap<String, LocalChannel>>>,
 ) {
     let req = ConnectRequest {
-        host: cfg.get("host").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        host: cfg
+            .get("host")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
         port: cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(0) as u16,
-        username: cfg.get("username").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-        password: cfg.get("password").and_then(|v| v.as_str()).map(String::from),
+        username: cfg
+            .get("username")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        password: cfg
+            .get("password")
+            .and_then(|v| v.as_str())
+            .map(String::from),
         database: cfg
             .get("database")
             .and_then(|v| v.as_str())
@@ -39,7 +50,13 @@ pub async fn handle_connect_sql(
         "postgresql" | "postgres" => DatabaseType::PostgreSQL,
         "sqlite" => DatabaseType::SQLite,
         other => {
-            send_session_error(&evt_tx, &channel_id, Some(&request_id), &format!("unsupported db_type: {other}")).await;
+            send_session_error(
+                &evt_tx,
+                &channel_id,
+                Some(&request_id),
+                &format!("unsupported db_type: {other}"),
+            )
+            .await;
             return;
         }
     };
@@ -47,7 +64,13 @@ pub async fn handle_connect_sql(
     let mut connector: Box<dyn SqlConnector> = match connect_by_type(db_type, &req).await {
         Ok(c) => c,
         Err(e) => {
-            send_session_error(&evt_tx, &channel_id, Some(&request_id), &format!("SQL connection failed: {e}")).await;
+            send_session_error(
+                &evt_tx,
+                &channel_id,
+                Some(&request_id),
+                &format!("SQL connection failed: {e}"),
+            )
+            .await;
             return;
         }
     };
@@ -85,7 +108,13 @@ pub async fn handle_connect_sql(
         let msg: rex_common::agent_proto::SessionRequest = match serde_json::from_slice(&frame) {
             Ok(m) => m,
             Err(e) => {
-                send_session_error(&evt_tx, &channel_id, None, &format!("invalid session_request: {e}")).await;
+                send_session_error(
+                    &evt_tx,
+                    &channel_id,
+                    None,
+                    &format!("invalid session_request: {e}"),
+                )
+                .await;
                 continue;
             }
         };
@@ -103,8 +132,10 @@ pub async fn handle_connect_sql(
                 error: Some(e.to_string()),
             },
         };
-        let s = serde_json::to_string(&rex_common::agent_proto::AgentSessionMsg::SessionResponse(resp))
-            .unwrap_or_default();
+        let s = serde_json::to_string(&rex_common::agent_proto::AgentSessionMsg::SessionResponse(
+            resp,
+        ))
+        .unwrap_or_default();
         if evt_tx.send(AgentEvent::Text(s)).await.is_err() {
             break;
         }
@@ -123,11 +154,15 @@ async fn connect_by_type(
     req: &ConnectRequest,
 ) -> anyhow::Result<Box<dyn SqlConnector>> {
     match db_type {
-        DatabaseType::MySQL => Ok(Box::new(rex_mysql::MySqlConnector::connect(req.clone()).await?)),
-        DatabaseType::PostgreSQL => {
-            Ok(Box::new(rex_postgresql::PostgresConnector::connect(req.clone()).await?))
-        }
-        DatabaseType::SQLite => Ok(Box::new(rex_sqlite::SqliteConnector::connect(req.clone()).await?)),
+        DatabaseType::MySQL => Ok(Box::new(
+            rex_mysql::MySqlConnector::connect(req.clone()).await?,
+        )),
+        DatabaseType::PostgreSQL => Ok(Box::new(
+            rex_postgresql::PostgresConnector::connect(req.clone()).await?,
+        )),
+        DatabaseType::SQLite => Ok(Box::new(
+            rex_sqlite::SqliteConnector::connect(req.clone()).await?,
+        )),
     }
 }
 

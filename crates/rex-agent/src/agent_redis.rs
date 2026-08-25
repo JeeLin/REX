@@ -23,16 +23,29 @@ pub async fn handle_connect_redis(
     channels: Arc<RwLock<HashMap<String, LocalChannel>>>,
 ) {
     let req = RedisConnectRequest {
-        host: cfg.get("host").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        host: cfg
+            .get("host")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
         port: cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(6379) as u16,
-        password: cfg.get("password").and_then(|v| v.as_str()).map(String::from),
+        password: cfg
+            .get("password")
+            .and_then(|v| v.as_str())
+            .map(String::from),
         db: cfg.get("db").and_then(|v| v.as_i64()).map(|v| v as i32),
     };
 
     let mut connector = match rex_redis::RedisConnectorImpl::connect(req).await {
         Ok(c) => c,
         Err(e) => {
-            send_session_error(&evt_tx, &channel_id, Some(&request_id), &format!("Redis connection failed: {e}")).await;
+            send_session_error(
+                &evt_tx,
+                &channel_id,
+                Some(&request_id),
+                &format!("Redis connection failed: {e}"),
+            )
+            .await;
             return;
         }
     };
@@ -66,7 +79,13 @@ pub async fn handle_connect_redis(
         let msg: rex_common::agent_proto::SessionRequest = match serde_json::from_slice(&frame) {
             Ok(m) => m,
             Err(e) => {
-                send_session_error(&evt_tx, &channel_id, None, &format!("invalid session_request: {e}")).await;
+                send_session_error(
+                    &evt_tx,
+                    &channel_id,
+                    None,
+                    &format!("invalid session_request: {e}"),
+                )
+                .await;
                 continue;
             }
         };
@@ -84,8 +103,10 @@ pub async fn handle_connect_redis(
                 error: Some(e.to_string()),
             },
         };
-        let s = serde_json::to_string(&rex_common::agent_proto::AgentSessionMsg::SessionResponse(resp))
-            .unwrap_or_default();
+        let s = serde_json::to_string(&rex_common::agent_proto::AgentSessionMsg::SessionResponse(
+            resp,
+        ))
+        .unwrap_or_default();
         if evt_tx.send(AgentEvent::Text(s)).await.is_err() {
             break;
         }
@@ -119,7 +140,10 @@ async fn dispatch_redis(
             Ok(serde_json::json!({ "ok": true }))
         }
         "scan" => {
-            let pattern = payload.get("pattern").and_then(|v| v.as_str()).unwrap_or("*");
+            let pattern = payload
+                .get("pattern")
+                .and_then(|v| v.as_str())
+                .unwrap_or("*");
             let count = payload.get("count").and_then(|v| v.as_u64()).unwrap_or(100) as u32;
             let keys = conn.scan(pattern, count).await?;
             Ok(serde_json::json!({ "keys": keys }))
@@ -144,7 +168,11 @@ async fn dispatch_redis(
             let keys: Vec<String> = payload
                 .get("keys")
                 .and_then(|v| v.as_array())
-                .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
             let n = conn.del(&keys).await?;
             Ok(serde_json::json!({ "deleted": n }))
@@ -164,7 +192,11 @@ async fn dispatch_redis(
             let args: Vec<String> = payload
                 .get("args")
                 .and_then(|v| v.as_array())
-                .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
             let out = conn.command(&args).await?;
             Ok(serde_json::json!({ "output": out }))
