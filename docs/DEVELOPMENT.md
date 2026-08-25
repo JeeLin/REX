@@ -580,3 +580,11 @@ docs/milestones/
 **版本类型**：patch（无新功能，仅缺陷池 🟢 收口 + 重构）
 **版本号**：0.70.5
 **缺陷池 bug**：移除 load_sip_conn 顶层 host 回退逃生舱（🟢）、抽出共享 SipProfile TS 类型与 active/first 解析规则（🟢）、selectAccount 减少多余 GET 往返（🟢）— 已从 docs/BUGS.md 纳入并在规划时删除对应行
+
+### v0.70.6：统一 Hub↔Agent 隧道架构（Agent 终结协议、Hub 仅作传输隧道） ← 新增（下一步）
+- **核心功能**：把 SSH / SQL / Redis / 文件(S3/SFTP) 的协议终结从 Hub 下沉到 Agent——Agent 成为私网内协议执行引擎，Hub 退化为单条 WebSocket 上的通用传输隧道 + 控制面 + UI。复用既有「单 WS + `channel_id` 多路复用」范式（M82 验证）。修掉 agent 模式 SSH 现仅做裸字节桥接、看到服务端 banner 却进不了 shell 的缺陷；并让 SQL/Redis/文件在 agent 模式下真正经隧道送达 Agent 执行（当前 Hub 直接连目标、agent 模式形同虚设）。同时收敛 connect 消息中 `password`/`privateKey` 的信任边界。
+- **子任务预估**：7 个（隧道契约固化、协议会话消息 schema、Agent SSH 执行层 + 修 banner bug、Agent 终结 SQL、Agent 终结 Redis、Agent 终结 S3/SFTP、Hub 隧道侧重构 + 凭据信任边界）
+- **依赖**：M82f（0.70.5）
+- **版本类型**：minor（向后兼容，前端连接树/工作空间交互无变化，仅 agent 模式资源真正可用）
+- **版本号**：v0.70.6
+- **缺陷池 bug**：无（docs/BUGS.md 为空，属新架构落地而非缺陷修复）
