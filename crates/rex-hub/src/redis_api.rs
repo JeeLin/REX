@@ -181,6 +181,50 @@ async fn connect(
         Err(e) => return error_response("INVALID_RESOURCE", &e).into_response(),
     };
 
+    // v0.70.6 子任务 #7：agent 模式 —— 协议在 Agent 私网内终结，Hub 仅做隧道中转。
+    if res.use_agent {
+        let agent_id = match res.agent_id.clone() {
+            Some(id) => id,
+            None => {
+                return error_response("AGENT_UNAVAILABLE", "no online agent for environment")
+                    .into_response()
+            }
+        };
+        let mut cfg = serde_json::json!({
+            "host": res.host,
+            "port": res.port.unwrap_or(6379),
+        });
+        if let serde_json::Value::Object(m) = res.config.clone() {
+            for (k, v) in m {
+                cfg[k] = v;
+            }
+        }
+        let channel_id = match crate::agent_ws::open_agent_session(
+            &state,
+            &agent_id,
+            &body.resource_id,
+            "redis",
+            cfg,
+        )
+        .await
+        {
+            Ok(c) => c,
+            Err(e) => {
+                return error_response("AGENT_CONNECT_FAILED", &e.to_string()).into_response()
+            }
+        };
+        let session_id = format!("redis_{}", &uuid::Uuid::new_v4().to_string()[..8]);
+        state.redis_pool.lock().await.insert(
+            session_id.clone(),
+            Box::new(crate::agent_proxy::AgentRedisProxy::new(
+                state.0.clone(),
+                channel_id,
+            )),
+        );
+        tracing::info!(action = "REDIS_CONNECT_AGENT", session_id = %session_id, resource_id = %body.resource_id, agent_id = %agent_id, "Redis connected via agent");
+        return (StatusCode::OK, Json(ConnectResponse { session_id })).into_response();
+    }
+
     let req = RedisConnectRequest {
         host: res.host.clone(),
         port: res.port.unwrap_or(6379),

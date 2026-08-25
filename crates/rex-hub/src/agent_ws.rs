@@ -144,6 +144,16 @@ pub struct AgentTunnelState {
     pub pending_requests: RwLock<HashMap<String, oneshot::Sender<ConnectResponse>>>,
     /// channel_id → tunnel data sender（用于二进制帧路由到正确的 tunnel）
     pub tunnel_data: RwLock<HashMap<String, mpsc::Sender<Vec<u8>>>>,
+    /// (channel_id:seq) → session_response sender（v0.70.6 子任务 #7：协议会话请求-响应匹配）
+    pub session_responses: RwLock<HashMap<String, oneshot::Sender<SessionRelay>>>,
+    /// session_request 序号分配器
+    pub session_seq: std::sync::atomic::AtomicU64,
+}
+
+/// 一次协议会话请求（Hub → Agent → Hub）的响应载体。
+pub struct SessionRelay {
+    pub data: serde_json::Value,
+    pub error: Option<String>,
 }
 
 impl AgentTunnelState {
@@ -159,6 +169,141 @@ impl Default for AgentTunnelState {
             channels: RwLock::new(HashMap::new()),
             pending_requests: RwLock::new(HashMap::new()),
             tunnel_data: RwLock::new(HashMap::new()),
+            session_responses: RwLock::new(HashMap::new()),
+            session_seq: std::sync::atomic::AtomicU64::new(1),
+        }
+    }
+}
+
+/// 在 Agent 侧发起一次协议会话（sql/redis/s3/sftp），返回隧道 channel_id。
+///
+/// 复用既有的 `pending_requests` 握手：Hub 下发 `connect`，Agent 回 `SessionOpened`
+/// （v0.70.6 agent 侧已改为回 `session_opened` 完成握手）。
+pub async fn open_agent_session(
+    state: &AppState,
+    agent_id: &str,
+    resource_id: &str,
+    protocol: &str,
+    config: serde_json::Value,
+) -> anyhow::Result<String> {
+    let agent_conn = {
+        let conns = state.agent_tunnel.connections.read().await;
+        conns.get(agent_id).cloned()
+    };
+    let agent_conn = match agent_conn {
+        Some(c) => c,
+        None => anyhow::bail!("agent {agent_id} not connected"),
+    };
+
+    let request_id = format!("req_{}", &uuid::Uuid::new_v4().to_string()[..8]);
+    let (resp_tx, resp_rx) = oneshot::channel();
+    {
+        let mut pending = state.agent_tunnel.pending_requests.write().await;
+        pending.insert(request_id.clone(), resp_tx);
+    }
+
+    let connect_msg = serde_json::json!({
+        "type": "connect",
+        "payload": {
+            "request_id": request_id,
+            "resource_id": resource_id,
+            "protocol": protocol,
+            "config": config,
+        }
+    });
+    if agent_conn
+        .sender
+        .send(AgentEvent::Text(connect_msg.to_string()))
+        .await
+        .is_err()
+    {
+        anyhow::bail!("failed to contact agent");
+    }
+
+    let channel_id = match tokio::time::timeout(std::time::Duration::from_secs(10), resp_rx).await {
+        Ok(Ok(ConnectResponse {
+            channel_id: Some(id),
+            ..
+        })) => id,
+        Ok(Ok(ConnectResponse {
+            channel_id: None,
+            error,
+        })) => anyhow::bail!("agent connect failed: {}", error.unwrap_or_default()),
+        Ok(Err(_)) => anyhow::bail!("agent connect channel dropped"),
+        Err(_) => anyhow::bail!("agent connect timeout"),
+    };
+    Ok(channel_id)
+}
+
+/// 经隧道向 Agent 下发一次协议子请求，并等待其 `session_response` 回传。
+///
+/// 二进制帧结构：`[4B u32 channelId BE][json(SessionRequest 内层结构)]`。
+/// Agent 侧按 channel_id 多路到对应会话处理循环。
+pub async fn agent_session_request(
+    state: &AppState,
+    channel_id: &str,
+    kind: &str,
+    payload: serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
+    let agent_id = {
+        let ch = state.agent_tunnel.channels.read().await;
+        ch.get(channel_id).cloned()
+    };
+    let agent_id = match agent_id {
+        Some(a) => a,
+        None => anyhow::bail!("agent tunnel channel {channel_id} not found"),
+    };
+    let sender = {
+        let conns = state.agent_tunnel.connections.read().await;
+        conns.get(&agent_id).map(|c| c.sender.clone())
+    };
+    let sender = match sender {
+        Some(s) => s,
+        None => anyhow::bail!("agent {agent_id} not connected"),
+    };
+
+    let seq = state
+        .agent_tunnel
+        .session_seq
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let key = format!("{channel_id}:{seq}");
+    let (tx, rx) = oneshot::channel::<SessionRelay>();
+    {
+        let mut m = state.agent_tunnel.session_responses.write().await;
+        m.insert(key.clone(), tx);
+    }
+
+    let req = rex_common::agent_proto::SessionRequest {
+        channel_id: channel_id.to_string(),
+        kind: kind.to_string(),
+        seq,
+        payload,
+    };
+    let bytes = serde_json::to_vec(&req)?;
+    let cid: u32 = channel_id
+        .parse()
+        .map_err(|_| anyhow::anyhow!("invalid numeric channel_id {channel_id}"))?;
+    let mut frame = cid.to_be_bytes().to_vec();
+    frame.extend_from_slice(&bytes);
+
+    if sender.send(AgentEvent::Bytes(frame)).await.is_err() {
+        let mut m = state.agent_tunnel.session_responses.write().await;
+        m.remove(&key);
+        anyhow::bail!("failed to send to agent");
+    }
+
+    match tokio::time::timeout(std::time::Duration::from_secs(30), rx).await {
+        Ok(Ok(r)) => {
+            if let Some(e) = r.error {
+                anyhow::bail!(e);
+            }
+            Ok(r.data)
+        }
+        Ok(Err(_)) => anyhow::bail!("session relay dropped"),
+        Err(_) => {
+            let mut m = state.agent_tunnel.session_responses.write().await;
+            m.remove(&key);
+            anyhow::bail!("session request timeout")
         }
     }
 }
@@ -342,6 +487,12 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
             Ok(Message::Text(text)) => {
                 if let Ok(agent_msg) = serde_json::from_str::<AgentMsg>(&text) {
                     handle_agent_msg(agent_msg, &agent_id, &state_clone).await;
+                } else if let Ok(session_msg) =
+                    serde_json::from_str::<rex_common::agent_proto::AgentSessionMsg>(&text)
+                {
+                    // v0.70.6 子任务 #7：协议会话消息（session_opened / session_response /
+                    // session_error）由 Agent 终结协议后回传。
+                    handle_session_msg(session_msg, &agent_id, &state_clone).await;
                 }
             }
             Ok(Message::Binary(data)) => {
@@ -517,6 +668,72 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
         }
         AgentMsg::Auth { .. } => {
             // 已在握手阶段处理，忽略后续 auth 消息
+        }
+    }
+}
+
+/// 处理 Agent 回传的协议会话消息（v0.70.6 子任务 #7）。
+///
+/// - `session_opened`：完成 connect 握手（等价 `Connected`），并登记 channel→agent 映射。
+/// - `session_response`：按 (channel_id, seq) 路由到等待中的 `session_responses` 接收端。
+/// - `session_error`：connect 级失败写入 `pending_requests`；否则按 (channel_id, seq) 路由。
+async fn handle_session_msg(
+    msg: rex_common::agent_proto::AgentSessionMsg,
+    agent_id: &str,
+    state: &AppState,
+) {
+    match msg {
+        rex_common::agent_proto::AgentSessionMsg::SessionOpened(payload) => {
+            let mut channels = state.agent_tunnel.channels.write().await;
+            channels.insert(payload.channel_id.clone(), agent_id.to_string());
+
+            let mut pending = state.agent_tunnel.pending_requests.write().await;
+            if let Some(tx) = pending.remove(&payload.request_id) {
+                let _ = tx.send(ConnectResponse {
+                    channel_id: Some(payload.channel_id.clone()),
+                    error: None,
+                });
+            }
+            tracing::info!(
+                action = "AGENT_SESSION_OPENED",
+                agent_id,
+                request_id = %payload.request_id,
+                channel_id = %payload.channel_id,
+                "agent protocol session opened"
+            );
+        }
+        rex_common::agent_proto::AgentSessionMsg::SessionResponse(payload) => {
+            let key = format!("{}:{}", payload.channel_id, payload.seq);
+            let mut m = state.agent_tunnel.session_responses.write().await;
+            if let Some(tx) = m.remove(&key) {
+                let _ = tx.send(SessionRelay {
+                    data: payload.data,
+                    error: payload.error,
+                });
+            }
+        }
+        rex_common::agent_proto::AgentSessionMsg::SessionError(payload) => {
+            if let Some(request_id) = payload.request_id {
+                let mut pending = state.agent_tunnel.pending_requests.write().await;
+                if let Some(tx) = pending.remove(&request_id) {
+                    let _ = tx.send(ConnectResponse {
+                        channel_id: None,
+                        error: Some(payload.error.clone()),
+                    });
+                }
+            } else {
+                // 子请求级错误：尝试按最近一次 seq 路由（Agent 在请求失败时通常带 request_id）。
+                tracing::warn!(
+                    action = "AGENT_SESSION_ERROR",
+                    agent_id,
+                    channel_id = %payload.channel_id,
+                    error = %payload.error,
+                    "agent protocol session error"
+                );
+            }
+        }
+        _ => {
+            // session_open / file_chunk 由其它路径处理，此处忽略。
         }
     }
 }
