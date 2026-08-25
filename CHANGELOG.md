@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.70.6] - 2026-08-25
+
+### Added
+- 协议会话消息契约（`AgentSessionMsg`：SessionOpen/SessionOpened/SessionRequest/SessionResponse/SessionError/FileChunk），固化 Hub↔Agent 单 WS 隧道的结构化会话帧。
+
+### Changed
+- SQL / Redis / 文件(S3/SFTP) 在 agent 模式下由 Agent 私网内终结协议（sqlx/redis/sftp·s3），经隧道回传结果，Hub 退化为传输隧道；直连模式行为不变。
+- Hub 三处 connect 统一经 `agent_tunnel` 下发，移除 agent 资源直连目标的支路；明文凭据仅经加密 WS 下发 Agent。
+- Agent 侧 SSH 改用 russh 终结协议（修复 agent 模式仅做裸字节桥接、看到服务端 banner 却进不了 shell 的缺陷）。
+
+### Fixed
+- agent 模式 SSH：不再做裸 TCP 管道，用户在浏览器中进入交互 shell。
+- 文件传输数据不经过浏览器（Agent 直接读写目标，仅分块元数据经隧道）。
+
 ## [0.70.5] - 2026-08-21
 
 ### Changed
