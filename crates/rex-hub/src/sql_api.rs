@@ -153,6 +153,53 @@ async fn connect(
     };
 
     let db_type = body.db_type.clone();
+
+    // v0.70.6 子任务 #7：agent 模式 —— 协议在 Agent 私网内终结，Hub 仅做隧道中转。
+    if res.use_agent {
+        let agent_id = match res.agent_id.clone() {
+            Some(id) => id,
+            None => {
+                return error_response("AGENT_UNAVAILABLE", "no online agent for environment")
+                    .into_response()
+            }
+        };
+        let mut cfg = serde_json::json!({
+            "host": res.host,
+            "port": res.port.unwrap_or(0),
+            "username": res.username,
+            "db_type": db_type,
+        });
+        if let serde_json::Value::Object(m) = res.config.clone() {
+            for (k, v) in m {
+                cfg[k] = v;
+            }
+        }
+        let channel_id = match crate::agent_ws::open_agent_session(
+            &state,
+            &agent_id,
+            &body.resource_id,
+            &db_type,
+            cfg,
+        )
+        .await
+        {
+            Ok(c) => c,
+            Err(e) => {
+                return error_response("AGENT_CONNECT_FAILED", &e.to_string()).into_response()
+            }
+        };
+        let session_id = format!("sql_{}", &uuid::Uuid::new_v4().to_string()[..8]);
+        state.sql_pool.lock().await.insert(
+            session_id.clone(),
+            Box::new(crate::agent_proxy::AgentSqlProxy::new(
+                state.0.clone(),
+                channel_id,
+            )),
+        );
+        tracing::info!(action = "SQL_CONNECT_AGENT", session_id = %session_id, resource_id = %body.resource_id, agent_id = %agent_id, "SQL connected via agent");
+        return (StatusCode::OK, Json(ConnectResponse { session_id })).into_response();
+    }
+
     let req = match db_type.to_lowercase().as_str() {
         "mysql" | "postgresql" | "postgres" => ConnectRequest {
             host: res.host,

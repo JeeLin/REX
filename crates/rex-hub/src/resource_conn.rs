@@ -18,6 +18,9 @@ use crate::app::AppState;
 /// - SFTP: `password`, `private_key`
 /// - SQLite: `file_path`
 /// - S3: `endpoint`, `access_key`, `secret_key`, `bucket`, `region`
+///
+/// `use_agent`/`agent_id` 由资源所属环境的 `connection_mode` 推导（v0.70.6 子任务 #7）：
+/// 环境为 agent 模式时，协议由 Agent 在私网内终结，Hub 仅做隧道中转。
 #[derive(Debug)]
 pub struct ResourceConnInfo {
     pub resource_id: String,
@@ -28,6 +31,10 @@ pub struct ResourceConnInfo {
     pub username: String,
     /// 解密后的 config_json，各协议从中提取特有参数
     pub config: JsonValue,
+    /// 资源所属环境是否为 agent 模式（协议在 Agent 侧终结）
+    pub use_agent: bool,
+    /// agent 模式下选定的在线 Agent（直连模式为 None）
+    pub agent_id: Option<String>,
 }
 
 /// 从 DB 读取资源连接信息（含 config_json 解密）
@@ -56,6 +63,9 @@ pub fn load_resource_config(
         JsonValue::Null
     };
 
+    // v0.70.6 子任务 #7：由环境 connection_mode 推导 agent 模式与在线 Agent。
+    let (use_agent, agent_id) = resolve_agent_for_resource(state, &resource);
+
     Ok(ResourceConnInfo {
         resource_id: resource.id,
         name: resource.name,
@@ -64,7 +74,32 @@ pub fn load_resource_config(
         port: resource.port,
         username: resource.username,
         config,
+        use_agent,
+        agent_id,
     })
+}
+
+/// 若资源所属环境为 agent 模式，返回 (true, 某个在线 Agent 的 id)，否则 (false, None)。
+///
+/// 直连资源（无环境 / 环境为 direct）一律走 Hub 直连，不受此影响。
+fn resolve_agent_for_resource(
+    state: &AppState,
+    resource: &crate::models::Resource,
+) -> (bool, Option<String>) {
+    let env_id = &resource.environment_id;
+    if env_id.is_empty() {
+        return (false, None);
+    }
+    let env = match state.db.get_environment(env_id) {
+        Ok(Some(e)) => e,
+        _ => return (false, None),
+    };
+    if env.connection_mode != "agent" {
+        return (false, None);
+    }
+    let agents = state.db.list_agents_by_env(env_id).unwrap_or_default();
+    let online = agents.iter().find(|a| a.status == "online");
+    (true, online.map(|a| a.id.clone()))
 }
 
 /// 从 `ResourceConnInfo` 解析 SIP 配置。

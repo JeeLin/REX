@@ -1,6 +1,7 @@
 //! REX Hub 共享模块
 
 pub mod agent_api;
+pub mod agent_proxy;
 pub mod agent_ws;
 pub mod app;
 pub mod audit_api;
