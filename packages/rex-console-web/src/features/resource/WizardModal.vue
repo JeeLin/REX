@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
-import { type TestConnectionResult } from '@/api/resources'
+import { type TestConnectionResult, type NewResource } from '@/api/resources'
 import Button from '@/components/ui/Button.vue'
 import Modal from '@/components/ui/Modal.vue'
 import { PROTOCOL_ICONS, PROTOCOL_COLORS } from './protocols'
@@ -25,13 +25,13 @@ const loading = ref(false)
 const error = ref('')
 
 // Step 1: Protocol
+// v0.70.7：mysql/postgresql/sqlite 合并为单一「SQL」资源；创建时可选子类（dialect），
+// 留空则在连接时由后端自动识别（端口预判 → 双线缆握手回退 → SELECT VERSION() 确认）。
 const protocols = [
   { id: 'ssh', descKey: 'wizard.sshDesc' },
   { id: 'sftp', descKey: 'wizard.sftpDesc' },
-  { id: 'mysql', descKey: 'wizard.mysqlDesc' },
-  { id: 'postgresql', descKey: 'wizard.postgresqlDesc' },
+  { id: 'sql', descKey: 'wizard.sqlDesc' },
   { id: 'redis', descKey: 'wizard.redisDesc' },
-  { id: 'sqlite', descKey: 'wizard.sqliteDesc' },
   { id: 's3', descKey: 'wizard.s3Desc' },
   { id: 'sip', descKey: 'wizard.sipDesc' },
 ]
@@ -99,12 +99,27 @@ const defaultPorts: Record<string, number> = {
   ssh: 22, sftp: 22, mysql: 3306, postgresql: 5432, redis: 6379, sip: 5060,
 }
 
+// v0.70.7：SQL 资源可选子类（dialect）。默认空 = 连接时自动识别；选 mysql/postgresql 时预填端口。
+const selectedSubtype = ref('')
+
+// SQL 子类 → 默认端口（仅在未显式选端口时使用）。
+const subtypeDefaultPorts: Record<string, number> = { mysql: 3306, postgresql: 5432 }
+
 function selectProtocol(id: string) {
   selectedProtocol.value = id
+  selectedSubtype.value = ''
   port.value = defaultPorts[id] ?? null
   // Auto-fill name
   if (!resName.value) {
     resName.value = id === 's3' ? 'S3 / MinIO' : id.charAt(0).toUpperCase() + id.slice(1)
+  }
+}
+
+// SQL 子类切换时预填默认端口；用户已手动改过非默认端口则不覆盖。
+function onSqlSubtypeChange() {
+  const dflt = subtypeDefaultPorts[selectedSubtype.value] ?? 3306
+  if (!port.value || port.value === 3306 || port.value === 5432) {
+    port.value = dflt
   }
 }
 
@@ -133,6 +148,14 @@ function buildConfig(): Record<string, unknown> {
     if (password.value) cfg.password = password.value
     if (privateKey.value) cfg.private_key = privateKey.value
     if (initScript.value.trim()) cfg.initScript = initScript.value
+  } else if (selectedProtocol.value === 'sql') {
+    if (selectedSubtype.value === 'sqlite') {
+      cfg.file_path = filePath.value
+    } else {
+      // 显式选 mysql/postgresql 时，凭据随子类保存；自动识别（空子类）也带凭据以加速探测。
+      if (password.value) cfg.password = password.value
+      if (databaseName.value) cfg.database_name = databaseName.value
+    }
   } else if (['mysql', 'postgresql'].includes(selectedProtocol.value)) {
     if (password.value) cfg.password = password.value
     if (databaseName.value) cfg.database_name = databaseName.value
@@ -178,10 +201,11 @@ function toSipAccounts(): SipAccountView[] {
     })
 }
 
-// 资源顶层 host：sqlite 用 file_path；s3 用 endpoint；sip 取生效账户 server（便于列表展示）。
+// 资源顶层 host：sqlite（含 SQL 子类）用 file_path；s3 用 endpoint；sip 取生效账户 server。
 // 直接由账户列表派生，避免维护易过期的 sipHost ref。
 function resourceHost(): string {
   if (selectedProtocol.value === 'sqlite') return filePath.value
+  if (selectedProtocol.value === 'sql' && selectedSubtype.value === 'sqlite') return filePath.value
   if (selectedProtocol.value === 's3') return s3Endpoint.value
   if (selectedProtocol.value === 'sip') {
     const active = resolveActiveAccount(toSipAccounts(), sipActiveAccount.value)
@@ -203,7 +227,7 @@ async function submit() {
   }
   try {
     const cfg = buildConfig()
-    await store.createResource(props.environmentId, {
+    const payload: NewResource = {
       name: resName.value.trim(),
       protocol: selectedProtocol.value,
       host: resourceHost(),
@@ -211,7 +235,12 @@ async function submit() {
       username: username.value || undefined,
       config_json: JSON.stringify(cfg),
       color: resColor.value || undefined,
-    })
+    }
+    // v0.70.7：SQL 资源显式选子类（dialect）时随请求发送，跳过后端自动识别。
+    if (selectedProtocol.value === 'sql' && selectedSubtype.value) {
+      payload.subtype = selectedSubtype.value
+    }
+    await store.createResource(props.environmentId, payload)
     emit('created')
     reset()
   } catch (e: unknown) {
@@ -239,6 +268,7 @@ function reset() {
   s3Bucket.value = ''
   s3Region.value = ''
   redisDb.value = 0
+  selectedSubtype.value = ''
   sipAccounts.value = [
     { id: 'a1', server: '', port: null, transport: 'udp', username: '', password: '', displayName: '' },
   ]
@@ -328,28 +358,48 @@ const colorOptions = [
           </label>
         </template>
 
-        <!-- MySQL / PostgreSQL -->
-        <template v-if="['mysql', 'postgresql'].includes(selectedProtocol)">
+        <!-- SQL (unified MySQL / PostgreSQL / SQLite) -->
+        <template v-if="selectedProtocol === 'sql'">
+          <!-- 子类（dialect）选择：留空 = 连接时自动识别 -->
           <label class="form-label">
-            <span>{{ t('wizard.host') }}</span>
-            <input v-model="host" type="text" class="form-input" placeholder="e.g. 10.0.0.5" />
+            <span>{{ t('wizard.sqlSubtype') }}</span>
+            <select v-model="selectedSubtype" class="form-input" @change="onSqlSubtypeChange">
+              <option value="">{{ t('wizard.autoDetect') }}</option>
+              <option value="mysql">MySQL</option>
+              <option value="postgresql">PostgreSQL</option>
+              <option value="sqlite">SQLite</option>
+            </select>
           </label>
-          <label class="form-label">
-            <span>{{ t('wizard.port') }}</span>
-            <input v-model.number="port" type="number" class="form-input" />
-          </label>
-          <label class="form-label">
-            <span>{{ t('wizard.username') }}</span>
-            <input v-model="username" type="text" class="form-input" placeholder="e.g. root" />
-          </label>
-          <label class="form-label">
-            <span>{{ t('wizard.password') }}</span>
-            <input v-model="password" type="password" class="form-input" />
-          </label>
-          <label class="form-label">
-            <span>{{ t('wizard.database') }}</span>
-            <input v-model="databaseName" type="text" class="form-input" placeholder="(optional)" />
-          </label>
+          <!-- SQLite 子类：本地文件路径 -->
+          <template v-if="selectedSubtype === 'sqlite'">
+            <label class="form-label">
+              <span>{{ t('wizard.filePath') }}</span>
+              <input v-model="filePath" type="text" class="form-input" placeholder="/path/to/database.sqlite" />
+            </label>
+          </template>
+          <!-- 服务端 dialects（MySQL / PostgreSQL / 自动识别）：host/port/username/password/database -->
+          <template v-else>
+            <label class="form-label">
+              <span>{{ t('wizard.host') }}</span>
+              <input v-model="host" type="text" class="form-input" placeholder="e.g. 10.0.0.5" />
+            </label>
+            <label class="form-label">
+              <span>{{ t('wizard.port') }}</span>
+              <input v-model.number="port" type="number" class="form-input" />
+            </label>
+            <label class="form-label">
+              <span>{{ t('wizard.username') }}</span>
+              <input v-model="username" type="text" class="form-input" placeholder="e.g. root" />
+            </label>
+            <label class="form-label">
+              <span>{{ t('wizard.password') }}</span>
+              <input v-model="password" type="password" class="form-input" />
+            </label>
+            <label class="form-label">
+              <span>{{ t('wizard.database') }}</span>
+              <input v-model="databaseName" type="text" class="form-input" placeholder="(optional)" />
+            </label>
+          </template>
         </template>
 
         <!-- Redis -->
@@ -369,14 +419,6 @@ const colorOptions = [
           <label class="form-label">
             <span>{{ t('wizard.redisDb') }}</span>
             <input v-model.number="redisDb" type="number" class="form-input" min="0" max="15" />
-          </label>
-        </template>
-
-        <!-- SQLite -->
-        <template v-if="selectedProtocol === 'sqlite'">
-          <label class="form-label">
-            <span>{{ t('wizard.filePath') }}</span>
-            <input v-model="filePath" type="text" class="form-input" placeholder="/path/to/database.sqlite" />
           </label>
         </template>
 

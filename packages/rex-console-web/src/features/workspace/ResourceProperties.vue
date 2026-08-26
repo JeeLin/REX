@@ -121,7 +121,7 @@ const authMethod = ref('password')
 
 function getDefaultPort(): string {
   const ports: Record<string, string> = {
-    ssh: '22', mysql: '3306', redis: '6379', postgresql: '5432', sftp: '22', sqlite: '', s3: '443',
+    ssh: '22', sql: '3306', mysql: '3306', redis: '6379', postgresql: '5432', sftp: '22', sqlite: '', s3: '443',
   }
   return ports[form.value.protocol] || '22'
 }
@@ -151,6 +151,7 @@ function onSave() {
             <Select
               v-model="form.protocol" :options="[
                 { label: 'SSH', value: 'ssh' },
+                { label: 'SQL', value: 'sql' },
                 { label: 'MySQL', value: 'mysql' },
                 { label: 'PostgreSQL', value: 'postgresql' },
                 { label: 'Redis', value: 'redis' },
@@ -160,8 +161,8 @@ function onSave() {
               ]" size="sm"
             />
           </div>
-          <!-- SSH/SFTP: Host + Port -->
-          <template v-if="['ssh', 'sftp', 'mysql', 'postgresql', 'redis'].includes(form.protocol)">
+          <!-- SSH/SFTP/SQL: Host + Port -->
+          <template v-if="['ssh', 'sftp', 'mysql', 'postgresql', 'redis', 'sql'].includes(form.protocol)">
             <div class="props-row">
               <div class="props-field props-field--grow">
                 <label class="props-label">Host</label>
@@ -198,8 +199,8 @@ function onSave() {
             </div>
           </template>
 
-          <!-- MySQL/PostgreSQL: Database -->
-          <template v-if="['mysql', 'postgresql'].includes(form.protocol)">
+          <!-- MySQL/PostgreSQL/SQL: Database -->
+          <template v-if="['mysql', 'postgresql', 'sql'].includes(form.protocol)">
             <div class="props-field">
               <label class="props-label">Database</label>
               <Input v-model="form.passphrase" size="sm" placeholder="default" />
@@ -252,8 +253,8 @@ function onSave() {
             </template>
           </template>
 
-          <!-- MySQL/PostgreSQL/Redis/SFTP: Username + Password -->
-          <template v-if="['mysql', 'postgresql', 'redis', 'sftp'].includes(form.protocol)">
+          <!-- MySQL/PostgreSQL/SQL/Redis/SFTP: Username + Password -->
+          <template v-if="['mysql', 'postgresql', 'redis', 'sftp', 'sql'].includes(form.protocol)">
             <div class="props-field">
               <label class="props-label">Username</label>
               <Input v-model="form.user" size="sm" placeholder="root" />

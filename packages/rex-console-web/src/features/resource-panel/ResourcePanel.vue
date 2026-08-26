@@ -109,6 +109,7 @@ function handleResourceClick(res: Resource) {
     username: res.username,
     environmentId: res.environment_id,
     color: res.color ?? undefined,
+    subtype: res.subtype ?? undefined,
   })
   favStore.addRecent({ id: res.id, name: res.name, protocol: res.protocol })
   router.push({ name: 'workspace' })

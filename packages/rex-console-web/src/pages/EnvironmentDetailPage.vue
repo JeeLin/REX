@@ -15,7 +15,7 @@ import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import Modal from '@/components/ui/Modal.vue'
 import WizardModal from '@/features/resource/WizardModal.vue'
-import { PROTOCOL_ICONS, PROTOCOL_COLORS } from '@/features/resource/protocols'
+import { PROTOCOL_ICONS, PROTOCOL_COLORS, PROTOCOL_NAMES, SUBTYPE_META } from '@/features/resource/protocols'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -60,6 +60,8 @@ const resEditHost = ref('')
 const resEditPort = ref<string>('')
 const resEditUsername = ref('')
 const resEditProtocol = ref('')
+// v0.70.7：SQL 资源的子类（dialect）。编辑弹窗按此分流字段，避免保存时丢失 file_path / 凭据。
+const resEditSubtype = ref('')
 const resEditError = ref('')
 const resEditLoading = ref(false)
 const resEditTesting = ref(false)
@@ -162,6 +164,32 @@ function closeCtxMenu() {
   ctxMenu.value.show = false
 }
 
+// v0.70.7：SQL 资源合并为单一「SQL」协议，展示时按探测出的子类（dialect）着色 / 命名。
+// 旧 mysql/postgresql/sqlite 资源已在 DB 迁移为 sql+subtype，这里统一按 subtype 解析。
+function resProtoIcon(res: { protocol: string; subtype?: string | null }): string {
+  if (res.protocol === 'sql') return SUBTYPE_META[res.subtype ?? '']?.icon ?? 'dB'
+  return PROTOCOL_ICONS[res.protocol] || '?'
+}
+function resProtoColor(res: { protocol: string; subtype?: string | null }): string {
+  if (res.protocol === 'sql') return SUBTYPE_META[res.subtype ?? '']?.color ?? 'var(--info)'
+  return PROTOCOL_COLORS[res.protocol] || 'var(--text-secondary)'
+}
+function resProtoName(res: { protocol: string; subtype?: string | null }): string {
+  if (res.protocol === 'sql') return SUBTYPE_META[res.subtype ?? '']?.name ?? 'SQL'
+  return PROTOCOL_NAMES[res.protocol] || res.protocol
+}
+function resProtoTone(res: { protocol: string; subtype?: string | null }): 'success' | 'info' | 'purple' | 'danger' | 'warning' | 'accent' {
+  if (res.protocol === 'sql') {
+    const sub = res.subtype ?? ''
+    if (sub === 'postgresql') return 'purple'
+    if (sub === 'sqlite') return 'warning'
+    return 'info'
+  }
+  if (res.protocol === 'redis') return 'danger'
+  if (res.protocol === 'ssh') return 'success'
+  return 'info'
+}
+
 function openInWorkspace() {
   const res = ctxMenu.value.resource
   if (!res) return
@@ -173,6 +201,7 @@ function openInWorkspace() {
     port: res.port ?? undefined,
     username: res.username || undefined,
     environmentId: res.environment_id,
+    subtype: res.subtype ?? undefined,
   })
   router.push('/')
   closeCtxMenu()
@@ -186,6 +215,7 @@ function openResEdit() {
   resEditPort.value = res.port != null ? String(res.port) : ''
   resEditUsername.value = res.username || ''
   resEditProtocol.value = res.protocol
+  resEditSubtype.value = (res.subtype as string) || ''
   resEditError.value = ''
 
   // 解析 config_json，填充协议特定字段
@@ -222,6 +252,14 @@ async function submitResEdit() {
     if (['ssh', 'sftp'].includes(res.protocol)) {
       if (editPassword.value) cfg.password = editPassword.value
       if (editPrivateKey.value) cfg.private_key = editPrivateKey.value
+    } else if (res.protocol === 'sql') {
+      // v0.70.7：SQL 资源按子类（dialect）分流；file_path 仅在 SQLite 子类下保留。
+      if (res.subtype === 'sqlite') {
+        cfg.file_path = editFilePath.value
+      } else {
+        if (editPassword.value) cfg.password = editPassword.value
+        if (editDatabaseName.value) cfg.database_name = editDatabaseName.value
+      }
     } else if (['mysql', 'postgresql'].includes(res.protocol)) {
       if (editPassword.value) cfg.password = editPassword.value
       if (editDatabaseName.value) cfg.database_name = editDatabaseName.value
@@ -271,6 +309,14 @@ async function testResConnection() {
   if (['ssh', 'sftp'].includes(resEditProtocol.value)) {
     if (editPassword.value) cfg.password = editPassword.value
     if (editPrivateKey.value) cfg.private_key = editPrivateKey.value
+  } else if (resEditProtocol.value === 'sql') {
+    // v0.70.7：SQL 资源按子类（dialect）分流；SQLite 子类仅用 file_path 测试连接。
+    if (resEditSubtype.value === 'sqlite') {
+      cfg.file_path = editFilePath.value
+    } else {
+      if (editPassword.value) cfg.password = editPassword.value
+      if (editDatabaseName.value) cfg.database_name = editDatabaseName.value
+    }
   } else if (['mysql', 'postgresql'].includes(resEditProtocol.value)) {
     if (editPassword.value) cfg.password = editPassword.value
     if (editDatabaseName.value) cfg.database_name = editDatabaseName.value
@@ -440,15 +486,15 @@ async function resetToken() {
             <tr v-for="res in resources" :key="res.id" @contextmenu.prevent="onContextMenu($event, res)">
               <td>
                 <span class="res-name">
-                  <span class="res-icon" :style="{ color: PROTOCOL_COLORS[res.protocol] || 'var(--text-secondary)' }">
-                    {{ PROTOCOL_ICONS[res.protocol] || '?' }}
+                  <span class="res-icon" :style="{ color: resProtoColor(res) }">
+                    {{ resProtoIcon(res) }}
                   </span>
                   {{ res.name }}
                 </span>
               </td>
               <td>
-                <Badge :tone="res.protocol === 'redis' ? 'danger' : res.protocol === 'ssh' ? 'success' : 'info'">
-                  {{ res.protocol }}
+                <Badge :tone="resProtoTone(res)">
+                  {{ resProtoName(res) }}
                 </Badge>
               </td>
               <td class="mono">{{ res.host }}</td>
@@ -569,6 +615,24 @@ async function resetToken() {
           <label class="form-label">
             <span>{{ t('wizard.database') }}</span>
             <input v-model="editDatabaseName" type="text" class="form-input" />
+          </label>
+        </template>
+        <!-- SQL (unified) fields：非 SQLite 子类时显示密码 / 数据库 -->
+        <template v-if="resEditProtocol === 'sql' && resEditSubtype !== 'sqlite'">
+          <label class="form-label">
+            <span>{{ t('wizard.password') }}</span>
+            <input v-model="editPassword" type="password" class="form-input" />
+          </label>
+          <label class="form-label">
+            <span>{{ t('wizard.database') }}</span>
+            <input v-model="editDatabaseName" type="text" class="form-input" />
+          </label>
+        </template>
+        <!-- SQL / SQLite 子类：文件路径 -->
+        <template v-if="resEditProtocol === 'sql' && resEditSubtype === 'sqlite'">
+          <label class="form-label">
+            <span>{{ t('wizard.filePath') }}</span>
+            <input v-model="editFilePath" type="text" class="form-input" />
           </label>
         </template>
         <!-- Redis fields -->
