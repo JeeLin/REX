@@ -54,6 +54,7 @@ pub async fn handle_connect_redis(
         rex_common::agent_proto::SessionOpened {
             request_id,
             channel_id: channel_id.clone(),
+            subtype: None,
         },
     ))
     .unwrap_or_default();

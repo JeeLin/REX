@@ -597,6 +597,7 @@ pub async fn test_connection(
                             port: None,
                             username: String::new(),
                             config: value,
+                            subtype: None,
                             use_agent: false,
                             agent_id: None,
                         };

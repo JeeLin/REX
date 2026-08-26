@@ -460,7 +460,7 @@ async fn handle_connect(
     }
 
     // SQL 资源：Agent 在私网内用 sqlx 终结协议（v0.70.6 子任务 #4），
-    // 不再由 Hub 直连目标。db_type 优先取 config.db_type，缺省回退 protocol 字段。
+    // 不再由 Hub 直连目标。subtype 优先取 config.subtype（探测出的方言），缺省回退 protocol 字段。
     if matches!(
         req.protocol.as_str(),
         "sql" | "mysql" | "postgresql" | "postgres" | "sqlite"
@@ -468,7 +468,7 @@ async fn handle_connect(
         let channel_id = AGENT_CHANNEL_SEQ.fetch_add(1, Ordering::SeqCst).to_string();
         let db_type = req
             .config
-            .get("db_type")
+            .get("subtype")
             .and_then(|v| v.as_str())
             .map(String::from)
             .unwrap_or_else(|| req.protocol.clone());
