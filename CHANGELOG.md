@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.70.7] - 2026-08-26
+
+### Added
+- 单一「SQL」资源：MySQL / PostgreSQL / SQLite 三种并列资源合并为单一「SQL」，连接时按端口预判 → 线缆协议握手回退 → `SELECT VERSION()` 确认自动识别 dialect（SQLite 经 host/port 为空判定）。
+- Hub 直连侧与 Agent 隧道侧对称实现 dialect 探测，识别结果经 `SessionOpened.subtype` 回传 Hub 并回写资源 `subtype` 字段，后续连接零额外往返。
+- 前端连接树 / 仪表盘 / 资源编辑 / 创建向导合并为单「SQL」类型，按探测 dialect 着色与命名；创建时可显式选 dialect 或留空由连接时自动识别。
+- 连接相关日志（SQL / FILE / REDIS / SIP / RESOURCE）附带资源名称 `resource_name`，排查更直观。
+
+### Changed
+- 资源模型 `db_type` 收敛为通用 `subtype` 字段（探测 dialect 回写），旧 mysql/postgresql/sqlite 资源 in-place 迁移为 `sql` + `subtype`。
+- 前端 SQL 控制台按实际 dialect 路由连接器，行为对标 Navicat，用户可见交互不变。
+
+### Fixed
+- 资源相关日志仅带 `resource_id` 不便排查，现已在 Hub 侧附带 `resource_name`（Agent 侧隧道负载无名称字段，保留 `resource_id` 以便按 id 关联）。
+
 ## [0.70.6] - 2026-08-25
 
 ### Added
