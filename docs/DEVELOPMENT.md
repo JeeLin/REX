@@ -590,7 +590,7 @@ docs/milestones/
 - **版本号**：v0.70.6
 - **缺陷池 bug**：无（docs/BUGS.md 为空，属新架构落地而非缺陷修复）
 
-### v0.70.7：SQL 资源模型合并（单一 SQL 资源 + 连接时自动识别 dialect） ← 新增（下一步）
+### v0.70.7：SQL 资源模型合并（单一 SQL 资源 + 连接时自动识别 dialect） ✅ 已完成（v0.70.7）
 - **核心功能**：将并列的 MySQL / PostgreSQL / SQLite 三种资源合并为单一「SQL」资源。用户创建时只选「SQL」并填连接信息，**连接时自动识别 dialect**（SQLite：无 host / 有 file_path；MySQL vs PostgreSQL：端口预判 3306/5432 → 双线缆协议握手回退 → `SELECT VERSION()` 确认；识别后回写资源 config，之后直连秒开）。后端 `sql_api` / agent `agent_sql` 已按 db_type 分支，本里程碑仅新增「连接入口 dialect 探测」+ 收敛资源模型 + 前端 + 一次性 in-place 迁移，协议/隧道层零改动（与 v0.70.6 正交）。**当前仅支持 MySQL / PostgreSQL / SQLite 三种；新方言（如 MariaDB/ClickHouse/Oracle/SQL Server）不在本里程碑范围，探测表预留扩展位但本次不实现。**
 - **子任务预估**：6 个（① 资源模型 `db_type: Option` 收敛为单一「SQL」+ 探测结果回写字段；② 连接入口 dialect 探测：Hub 直连侧 + Agent 隧道侧对称实现，含端口预判/握手回退/VERSION() 确认；③ 前端连接树合并 3 类 SQL 为单「SQL」类型、按探测结果着色、创建向导不强制选 subtype；④ 前端 SQL 控制台按实际 dialect 路由连接器（Navicat 对标，行为不变）；⑤ 旧 mysql/postgresql/sqlite 资源 in-place 升级为 `sql`+探测字段；⑥ 回归测试：直连 / agent 模式、三种 dialect 均可用）
 - **依赖**：v0.70.6（隧道/协议下沉已就绪）
