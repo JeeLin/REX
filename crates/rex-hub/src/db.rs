@@ -61,6 +61,11 @@ impl Database {
         let conn = self.conn()?;
         conn.execute_batch(include_str!("migrations.sql"))
             .map_err(|e| RExError::Message(format!("migration failed: {e}")))?;
+        // 幂等补充 v0.70.7 新增列：通用「子类」列（subtype），合并 SQL 资源后回写方言。
+        // CREATE TABLE IF NOT EXISTS 不会为存量库追加列，故单独 ALTER（列已存在时忽略）。
+        let _ = conn.execute_batch("ALTER TABLE resources ADD COLUMN subtype TEXT;");
+        // 幂等合并存量 mysql/postgresql/sqlite 资源为单一 sql 协议（subtype 回写旧协议）。
+        let _ = self.migrate_unified_sql_resources();
         Ok(())
     }
 
@@ -526,7 +531,7 @@ impl Database {
         let conn = self.conn()?;
         let mut stmt = conn
             .prepare(
-                "SELECT id, environment_id, name, protocol, host, port, username, config_json, color, sort_order, created_at, updated_at
+                "SELECT id, environment_id, name, protocol, host, port, username, config_json, subtype, color, sort_order, created_at, updated_at
                  FROM resources WHERE environment_id = ?1 ORDER BY sort_order, name",
             )
             .map_err(|e| RExError::Message(e.to_string()))?;
@@ -541,10 +546,11 @@ impl Database {
                     port: row.get(5)?,
                     username: row.get(6)?,
                     config_json: row.get(7)?,
-                    color: row.get(8)?,
-                    sort_order: row.get(9)?,
-                    created_at: row.get(10)?,
-                    updated_at: row.get(11)?,
+                    subtype: row.get(8)?,
+                    color: row.get(9)?,
+                    sort_order: row.get(10)?,
+                    created_at: row.get(11)?,
+                    updated_at: row.get(12)?,
                 })
             })
             .map_err(|e| RExError::Message(e.to_string()))?;
@@ -559,7 +565,7 @@ impl Database {
         let conn = self.conn()?;
         let mut stmt = conn
             .prepare(
-                "SELECT id, environment_id, name, protocol, host, port, username, config_json, color, sort_order, created_at, updated_at
+                "SELECT id, environment_id, name, protocol, host, port, username, config_json, subtype, color, sort_order, created_at, updated_at
                  FROM resources WHERE id = ?1",
             )
             .map_err(|e| RExError::Message(e.to_string()))?;
@@ -574,10 +580,11 @@ impl Database {
                     port: row.get(5)?,
                     username: row.get(6)?,
                     config_json: row.get(7)?,
-                    color: row.get(8)?,
-                    sort_order: row.get(9)?,
-                    created_at: row.get(10)?,
-                    updated_at: row.get(11)?,
+                    subtype: row.get(8)?,
+                    color: row.get(9)?,
+                    sort_order: row.get(10)?,
+                    created_at: row.get(11)?,
+                    updated_at: row.get(12)?,
                 })
             })
             .map_err(|e| RExError::Message(e.to_string()))?;
@@ -597,10 +604,11 @@ impl Database {
         let sort = res.sort_order.unwrap_or(0);
         let port = res.port.map(|p| p as i64);
         let username = res.username.as_deref().unwrap_or("");
+        let subtype = res.subtype.as_deref();
         conn.execute(
-            "INSERT INTO resources (id, environment_id, name, protocol, host, port, username, config_json, color, sort_order, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-            rusqlite::params![id, env_id, res.name, res.protocol, res.host, port, username, config, color, sort, now, now],
+            "INSERT INTO resources (id, environment_id, name, protocol, host, port, username, config_json, subtype, color, sort_order, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            rusqlite::params![id, env_id, res.name, res.protocol, res.host, port, username, config, subtype, color, sort, now, now],
         )
         .map_err(|e| RExError::Message(e.to_string()))?;
         Ok(Resource {
@@ -612,6 +620,7 @@ impl Database {
             port: res.port,
             username: username.to_string(),
             config_json: config.to_string(),
+            subtype: subtype.map(|s| s.to_string()),
             color: color.map(|s| s.to_string()),
             sort_order: sort,
             created_at: now.clone(),
@@ -633,14 +642,45 @@ impl Database {
             .map(|p| p as i64)
             .or_else(|| existing.port.map(|p| p as i64));
         let username = res.username.as_deref().unwrap_or(&existing.username);
+        let subtype = res.subtype.as_deref().or(existing.subtype.as_deref());
         conn.execute(
-            "UPDATE resources SET name = ?1, protocol = ?2, host = ?3, port = ?4, username = ?5, config_json = ?6, color = ?7, sort_order = ?8, updated_at = ?9
-             WHERE environment_id = ?10 AND id = ?11",
-            rusqlite::params![res.name, res.protocol, res.host, port, username, config, color, sort, now, env_id, id],
+            "UPDATE resources SET name = ?1, protocol = ?2, host = ?3, port = ?4, username = ?5, config_json = ?6, subtype = ?7, color = ?8, sort_order = ?9, updated_at = ?10
+             WHERE environment_id = ?11 AND id = ?12",
+            rusqlite::params![res.name, res.protocol, res.host, port, username, config, subtype, color, sort, now, env_id, id],
         )
         .map_err(|e| RExError::Message(e.to_string()))?;
         self.get_resource(id)?
             .ok_or_else(|| RExError::Message("resource not found after update".into()))
+    }
+
+    /// 仅回写资源的子类（subtype，v0.70.7）。
+    /// 连接入口探测出 SQL 方言后调用此函数写回，避免后续连接重复探测。
+    /// 通用列，任何资源类型的子类回写都可复用。
+    pub fn set_resource_subtype(&self, id: &str, subtype: &str) -> Result<()> {
+        let conn = self.conn()?;
+        conn.execute(
+            "UPDATE resources SET subtype = ?1, updated_at = ?2 WHERE id = ?3",
+            rusqlite::params![subtype, chrono::Utc::now().to_rfc3339(), id],
+        )
+        .map_err(|e| RExError::Message(e.to_string()))?;
+        Ok(())
+    }
+
+    /// v0.70.7 资源模型合并：将存量 mysql/postgresql/sqlite 资源无破坏升级为
+    /// `protocol = 'sql'` + `subtype = <旧 protocol>`，幂等（已迁移过的资源不受影响）。
+    pub fn migrate_unified_sql_resources(&self) -> Result<usize> {
+        let conn = self.conn()?;
+        let mut count = 0usize;
+        for old in ["mysql", "postgresql", "sqlite"] {
+            let n = conn
+                .execute(
+                    "UPDATE resources SET protocol = 'sql', subtype = ?1 WHERE protocol = ?2",
+                    rusqlite::params![old, old],
+                )
+                .map_err(|e| RExError::Message(e.to_string()))?;
+            count += n as usize;
+        }
+        Ok(count)
     }
 
     /// 仅改写 SIP 资源的生效账户（`config_json.activeAccount`），其余字段不动。
@@ -1517,6 +1557,7 @@ mod tests {
                 port: None,
                 username: None,
                 config_json: None,
+                subtype: None,
                 color: None,
                 sort_order: None,
             },
@@ -1547,6 +1588,7 @@ mod tests {
                     port: None,
                     username: None,
                     config_json: None,
+                    subtype: None,
                     color: None,
                     sort_order: None,
                 },
@@ -1577,6 +1619,7 @@ mod tests {
                     port: None,
                     username: None,
                     config_json: None,
+                    subtype: None,
                     color: None,
                     sort_order: None,
                 },
@@ -1625,6 +1668,7 @@ mod tests {
                     port: None,
                     username: None,
                     config_json: Some(encrypted),
+                    subtype: None,
                     color: None,
                     sort_order: None,
                 },
@@ -1684,6 +1728,7 @@ mod tests {
                     port: None,
                     username: None,
                     config_json: None,
+                    subtype: None,
                     color: None,
                     sort_order: None,
                 },
@@ -1707,6 +1752,7 @@ mod tests {
                     port: None,
                     username: None,
                     config_json: None,
+                    subtype: None,
                     color: None,
                     sort_order: None,
                 },

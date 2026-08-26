@@ -77,6 +77,38 @@ pub struct ConnectRequest {
     pub database: Option<String>,
 }
 
+/// 方言探测结果。
+///
+/// v0.70.7 连接入口 dialect 探测：当 `db_type` 缺省时，按端口预判 → 双线缆协议握手
+/// 回退 → `SELECT VERSION()` 确认，最终解析出 [`DatabaseType`] 的 [`String`] 表示
+/// （mysql / postgresql / sqlite）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DetectedDialect {
+    MySQL,
+    PostgreSQL,
+    SQLite,
+}
+
+impl DetectedDialect {
+    /// 解析为协议层使用的 db_type 字符串。
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DetectedDialect::MySQL => "mysql",
+            DetectedDialect::PostgreSQL => "postgresql",
+            DetectedDialect::SQLite => "sqlite",
+        }
+    }
+
+    /// 从连接返回的连接器里读取方言（每个连接器已实现 `database_type()`）。
+    pub fn from_connector(conn: &dyn SqlConnector) -> Option<DetectedDialect> {
+        match conn.database_type() {
+            DatabaseType::MySQL => Some(DetectedDialect::MySQL),
+            DatabaseType::PostgreSQL => Some(DetectedDialect::PostgreSQL),
+            DatabaseType::SQLite => Some(DetectedDialect::SQLite),
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // SqlConnector trait
 // ---------------------------------------------------------------------------
@@ -102,6 +134,9 @@ impl Default for QueryConfig {
 /// SQL 连接器的统一接口，由各数据库 crate 分别实现。
 #[async_trait]
 pub trait SqlConnector: Send {
+    /// 当前连接器对应的数据库类型（v0.70.7：探测后回写 dialect 用）。
+    fn database_type(&self) -> DatabaseType;
+
     /// 执行 SQL 语句并返回结果。
     async fn execute(&mut self, sql: &str) -> anyhow::Result<QueryResult>;
 

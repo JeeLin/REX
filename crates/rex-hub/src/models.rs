@@ -48,6 +48,11 @@ pub struct NewResource {
     pub port: Option<u16>,
     pub username: Option<String>,
     pub config_json: Option<String>,
+    /// 资源子类型（子类）。合并里程碑（v0.70.7）引入：SQL 资源用其存探测出的方言
+    /// （mysql/postgresql/sqlite）；其他资源类型暂未使用，为 None。通用可空列，
+    /// 后续任何资源类型需要细分变体时都可复用，避免「db_type」这类协议专有字段的歧义。
+    #[serde(default)]
+    pub subtype: Option<String>,
     pub color: Option<String>,
     pub sort_order: Option<i64>,
 }
@@ -62,6 +67,10 @@ pub struct Resource {
     pub port: Option<u16>,
     pub username: String,
     pub config_json: String,
+    /// 资源子类型（子类）。合并里程碑（v0.70.7）引入：SQL 资源用其存探测出的方言
+    /// （mysql/postgresql/sqlite）；其他资源类型暂未使用，为 None。通用可空列。
+    #[serde(default)]
+    pub subtype: Option<String>,
     pub color: Option<String>,
     pub sort_order: i64,
     pub created_at: String,

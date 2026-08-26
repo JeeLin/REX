@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS resources (
   port            INTEGER,
   username        TEXT DEFAULT '',
   config_json     TEXT NOT NULL DEFAULT '{}',
+  subtype         TEXT,   -- v0.70.7: 资源子类（通用可空列）。SQL 资源存探测出的方言（mysql/postgresql/sqlite）；其他资源为 NULL
   color           TEXT,
   sort_order      INTEGER DEFAULT 0,
   created_at      TEXT NOT NULL,
