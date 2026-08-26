@@ -9,6 +9,8 @@ export interface Resource {
   port: number | null
   username: string
   config_json: string
+  // v0.70.7：资源子类（通用可空列）。SQL 资源存探测出的方言（mysql/postgresql/sqlite）；其他为 null。
+  subtype?: string | null
   color: string | null
   sort_order: number
   created_at: string
@@ -22,6 +24,8 @@ export interface NewResource {
   port?: number | null
   username?: string
   config_json?: string
+  // v0.70.7：可选子类。SQL 资源显式指定 dialect 以跳过自动识别；缺省由后端连接时探测。
+  subtype?: string | null
   color?: string | null
   sort_order?: number
 }

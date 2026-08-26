@@ -24,6 +24,15 @@ const statusMap = (s: string) =>
 function onStatus(tabId: string, status: string) {
   ctx.onTabStatusChange(tabId, statusMap(status))
 }
+
+// v0.70.7：SQL 控制台方言解析。
+// - 新「SQL」资源：用 tab.subtype（连接后回写的 dialect）；未探测时传 'auto' 触发后端探测。
+// - 旧 mysql/postgresql/sqlite（工作台持久化 tab 的向后兼容）：直接用协议名作为 dialect。
+function sqlDbType(tab: { protocol?: string; subtype?: string } | null): string {
+  if (!tab) return 'mysql'
+  if (tab.protocol === 'sql') return tab.subtype || 'auto'
+  return tab.protocol || 'mysql'
+}
 </script>
 
 <template>
@@ -75,12 +84,12 @@ function onStatus(tabId: string, status: string) {
       </div>
     </div>
 
-    <!-- SQL (MySQL / PostgreSQL / SQLite) -->
+    <!-- SQL (MySQL / PostgreSQL / SQLite / 合并后的 SQL 资源) -->
     <SqlPage
-      v-else-if="['mysql', 'postgresql', 'sqlite'].includes(tabInfo?.protocol || '')"
+      v-else-if="['sql', 'mysql', 'postgresql', 'sqlite'].includes(tabInfo?.protocol || '')"
       :key="tabInfo?.id || ''"
       :resource-id="tabInfo?.resourceId"
-      :db-type="tabInfo?.protocol"
+      :db-type="sqlDbType(tabInfo)"
       @update:status="(s: string) => tabInfo?.id && onStatus(tabInfo.id, s)"
     />
 
