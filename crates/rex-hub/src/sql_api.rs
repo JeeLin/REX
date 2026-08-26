@@ -12,7 +12,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
-use rex_common::sql::{ConnectRequest, SqlConnector};
+use rex_common::sql::{ConnectRequest, DatabaseType, SqlConnector};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
@@ -72,8 +72,8 @@ pub fn sql_routes() -> axum::Router<AppState> {
 
 #[derive(Debug, Deserialize)]
 struct ConnectBody {
-    #[serde(rename = "type")]
-    db_type: String,
+    #[serde(rename = "type", default)]
+    subtype: Option<String>,
     resource_id: String,
 }
 
@@ -152,7 +152,13 @@ async fn connect(
         Err(e) => return error_response("INVALID_RESOURCE", &e).into_response(),
     };
 
-    let db_type = body.db_type.clone();
+    // v0.70.7：SQL 资源合并后，subtype 取自资源探测结果（res.subtype），
+    // 缺省时进入探测分支（直连侧下方 detect_dialect，agent 侧由 Agent 私网内探测）。
+    let db_type = body
+        .subtype
+        .clone()
+        .or_else(|| res.subtype.clone())
+        .unwrap_or_else(|| "auto".to_string());
 
     // v0.70.6 子任务 #7：agent 模式 —— 协议在 Agent 私网内终结，Hub 仅做隧道中转。
     if res.use_agent {
@@ -163,11 +169,16 @@ async fn connect(
                     .into_response()
             }
         };
+        let agent_db_type = if db_type == "auto" {
+            "auto"
+        } else {
+            db_type.as_str()
+        };
         let mut cfg = serde_json::json!({
             "host": res.host,
             "port": res.port.unwrap_or(0),
             "username": res.username,
-            "db_type": db_type,
+            "subtype": agent_db_type,
         });
         if let serde_json::Value::Object(m) = res.config.clone() {
             for (k, v) in m {
@@ -178,7 +189,7 @@ async fn connect(
             &state,
             &agent_id,
             &body.resource_id,
-            &db_type,
+            agent_db_type,
             cfg,
         )
         .await
@@ -188,15 +199,34 @@ async fn connect(
                 return error_response("AGENT_CONNECT_FAILED", &e.to_string()).into_response()
             }
         };
+        // 探测模式下 Agent 会回传 detected dialect（SessionOpened.subtype），在此持久化。
+        let resolved_subtype: Option<String> = if db_type == "auto" {
+            match crate::agent_ws::take_session_subtype(&state, &channel_id).await {
+                Some(detected) => {
+                    let _ = state.db.set_resource_subtype(&body.resource_id, &detected);
+                    Some(detected)
+                }
+                None => None,
+            }
+        } else {
+            None
+        };
         let session_id = format!("sql_{}", &uuid::Uuid::new_v4().to_string()[..8]);
         state.sql_pool.lock().await.insert(
             session_id.clone(),
             Box::new(crate::agent_proxy::AgentSqlProxy::new(
                 state.clone(),
                 channel_id,
+                resolved_subtype.or_else(|| {
+                    if db_type == "auto" {
+                        None
+                    } else {
+                        Some(db_type.clone())
+                    }
+                }),
             )),
         );
-        tracing::info!(action = "SQL_CONNECT_AGENT", session_id = %session_id, resource_id = %body.resource_id, agent_id = %agent_id, "SQL connected via agent");
+        tracing::info!(action = "SQL_CONNECT_AGENT", session_id = %session_id, resource_id = %body.resource_id, agent_id = %agent_id, db_type = %db_type, "SQL connected via agent");
         return (StatusCode::OK, Json(ConnectResponse { session_id })).into_response();
     }
 
@@ -230,6 +260,21 @@ async fn connect(
                 database: None,
             }
         }
+        "auto" => ConnectRequest {
+            host: res.host,
+            port: res.port.unwrap_or(0),
+            username: res.username,
+            password: res
+                .config
+                .get("password")
+                .and_then(|v| v.as_str())
+                .map(String::from),
+            database: res
+                .config
+                .get("database_name")
+                .and_then(|v| v.as_str())
+                .map(String::from),
+        },
         _ => {
             return error_response(
                 "INVALID_DB_TYPE",
@@ -239,6 +284,7 @@ async fn connect(
         }
     };
 
+    // v0.70.7：db_type 缺省（auto）或显式给出都走探测/连接；探测成功回写资源 db_type。
     let conn_result = match db_type.to_lowercase().as_str() {
         "mysql" => rex_mysql::MySqlConnector::connect(req)
             .await
@@ -249,15 +295,27 @@ async fn connect(
         "sqlite" => rex_sqlite::SqliteConnector::connect(req)
             .await
             .map(|c| Box::new(c) as Box<dyn SqlConnector>),
+        "auto" => detect_dialect(req).await,
         _ => unreachable!(),
     };
 
     match conn_result {
         Ok(conn) => {
+            // 探测模式下回写 dialect 到资源（后续连接读缓存，无额外往返）。
+            if db_type == "auto" {
+                if let Some(detected) =
+                    rex_common::sql::DetectedDialect::from_connector(conn.as_ref())
+                {
+                    let _ = state
+                        .db
+                        .set_resource_subtype(&body.resource_id, detected.as_str());
+                }
+            }
             let session_id = format!("sql_{}", &uuid::Uuid::new_v4().to_string()[..8]);
+            let final_db_type = conn.database_type();
             tracing::info!(
                 action = "SQL_CONNECT",
-                db_type = %db_type,
+                db_type = ?final_db_type,
                 resource_id = %body.resource_id,
                 resource_name = %res.name,
                 session_id = %session_id,
@@ -277,6 +335,79 @@ async fn connect(
             );
             error_response("CONNECTION_FAILED", &e.to_string()).into_response()
         }
+    }
+}
+
+/// v0.70.7 dialect 探测：db_type 缺省时，按端口预判 → 双线缆协议握手回退 →
+/// `SELECT VERSION()` 确认，最终解析出 dialect 并连上对应连接器。
+///
+/// 与 Agent 侧 `detect_dialect` 共用同一套规则。
+async fn detect_dialect(req: ConnectRequest) -> anyhow::Result<Box<dyn SqlConnector>> {
+    // SQLite：无 host 或 port 为 0 视为本地文件库。
+    if req.host.is_empty() || req.port == 0 {
+        return Ok(Box::new(
+            rex_sqlite::SqliteConnector::connect(req.clone()).await?,
+        ));
+    }
+
+    let candidates: &[DatabaseType] = match req.port {
+        3306 => &[DatabaseType::MySQL, DatabaseType::PostgreSQL],
+        5432 => &[DatabaseType::PostgreSQL, DatabaseType::MySQL],
+        _ => &[DatabaseType::MySQL, DatabaseType::PostgreSQL],
+    };
+
+    for &dt in candidates {
+        match connect_by_dialect(dt, &req).await {
+            Ok(mut conn) => match conn.execute("SELECT VERSION()").await {
+                Ok(result) => {
+                    let version = result
+                        .rows
+                        .first()
+                        .and_then(|r| r.first())
+                        .map(|v| v.to_string())
+                        .unwrap_or_default();
+                    let confirmed = if version.to_uppercase().contains("POSTGRESQL") {
+                        DatabaseType::PostgreSQL
+                    } else {
+                        dt
+                    };
+                    tracing::info!(
+                        action = "SQL_DETECT",
+                        port = req.port,
+                        version = %version,
+                        dialect = ?confirmed,
+                        "dialect detected"
+                    );
+                    if confirmed == dt {
+                        return Ok(conn);
+                    }
+                    return connect_by_dialect(confirmed, &req).await;
+                }
+                Err(_) => continue,
+            },
+            Err(_) => continue,
+        }
+    }
+
+    Err(anyhow::anyhow!(
+        "无法识别 dialect，请在创建资源时指定 subtype"
+    ))
+}
+
+async fn connect_by_dialect(
+    db_type: DatabaseType,
+    req: &ConnectRequest,
+) -> anyhow::Result<Box<dyn SqlConnector>> {
+    match db_type {
+        DatabaseType::MySQL => Ok(Box::new(
+            rex_mysql::MySqlConnector::connect(req.clone()).await?,
+        )),
+        DatabaseType::PostgreSQL => Ok(Box::new(
+            rex_postgresql::PostgresConnector::connect(req.clone()).await?,
+        )),
+        DatabaseType::SQLite => Ok(Box::new(
+            rex_sqlite::SqliteConnector::connect(req.clone()).await?,
+        )),
     }
 }
 

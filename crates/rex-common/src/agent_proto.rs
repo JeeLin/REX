@@ -42,6 +42,10 @@ pub struct SessionRequest {
 pub struct SessionOpened {
     pub request_id: String,
     pub channel_id: String,
+    /// SQL 会话在 agent 侧探测出的子类（dialect，mysql/postgresql/sqlite）。
+    /// Hub 据此回写资源 subtype 以缓存探测结果；非 SQL 会话或无需探测时为 None。
+    #[serde(default)]
+    pub subtype: Option<String>,
 }
 
 /// Agent → Hub：会话连接失败。

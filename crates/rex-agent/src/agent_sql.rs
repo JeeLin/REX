@@ -17,7 +17,7 @@ use crate::agent_ws::{AgentEvent, LocalChannel};
 pub async fn handle_connect_sql(
     request_id: String,
     channel_id: String,
-    db_type: String,
+    subtype: String,
     cfg: &serde_json::Value,
     evt_tx: mpsc::Sender<AgentEvent>,
     channels: Arc<RwLock<HashMap<String, LocalChannel>>>,
@@ -45,41 +45,53 @@ pub async fn handle_connect_sql(
             .map(String::from),
     };
 
-    let db_type = match db_type.to_lowercase().as_str() {
-        "mysql" | "sql" => DatabaseType::MySQL,
-        "postgresql" | "postgres" => DatabaseType::PostgreSQL,
-        "sqlite" => DatabaseType::SQLite,
+    let db_type = match subtype.to_lowercase().as_str() {
+        "mysql" | "sql" => Some(DatabaseType::MySQL),
+        "postgresql" | "postgres" => Some(DatabaseType::PostgreSQL),
+        "sqlite" => Some(DatabaseType::SQLite),
+        "auto" | "" => None,
         other => {
             send_session_error(
                 &evt_tx,
                 &channel_id,
                 Some(&request_id),
-                &format!("unsupported db_type: {other}"),
+                &format!("unsupported subtype: {other}"),
             )
             .await;
             return;
         }
     };
 
-    let mut connector: Box<dyn SqlConnector> = match connect_by_type(db_type, &req).await {
-        Ok(c) => c,
-        Err(e) => {
-            send_session_error(
-                &evt_tx,
-                &channel_id,
-                Some(&request_id),
-                &format!("SQL connection failed: {e}"),
-            )
-            .await;
-            return;
-        }
+    // v0.70.7：db_type 缺省（auto）时，由 Agent 私网内探测 dialect 后回传 Hub 持久化。
+    let (mut connector, detected): (Box<dyn SqlConnector>, Option<String>) = match db_type {
+        Some(dt) => match connect_by_type(dt, &req).await {
+            Ok(c) => (c, None),
+            Err(e) => {
+                send_session_error(
+                    &evt_tx,
+                    &channel_id,
+                    Some(&request_id),
+                    &format!("SQL connection failed: {e}"),
+                )
+                .await;
+                return;
+            }
+        },
+        None => match detect_dialect(&req).await {
+            Ok((c, detected)) => (c, detected),
+            Err(e) => {
+                send_session_error(&evt_tx, &channel_id, Some(&request_id), &e.to_string()).await;
+                return;
+            }
+        },
     };
 
-    // 通知 Hub 连接成功（协议已在 Agent 终结）。
+    // 通知 Hub 连接成功（协议已在 Agent 终结）。探测模式下回传 detected dialect。
     let ok = serde_json::to_string(&rex_common::agent_proto::AgentSessionMsg::SessionOpened(
         rex_common::agent_proto::SessionOpened {
             request_id,
             channel_id: channel_id.clone(),
+            subtype: detected,
         },
     ))
     .unwrap_or_default();
@@ -163,6 +175,82 @@ async fn connect_by_type(
         DatabaseType::SQLite => Ok(Box::new(
             rex_sqlite::SqliteConnector::connect(req.clone()).await?,
         )),
+    }
+}
+
+/// v0.70.7 dialect 探测：db_type 缺省时，按端口预判 → 双线缆协议握手回退 →
+/// `SELECT VERSION()` 确认，最终解析出 dialect 并连上对应连接器。
+///
+/// 返回探测出的连接器，以及探测 dialect 的 db_type 字符串（mysql/postgresql/sqlite），
+/// 供 `handle_connect_sql` 经 `SessionOpened.db_type` 回传 Hub 持久化。
+/// 与 Hub 直连侧 `detect_dialect` 共用同一套规则（见 rex-hub sql_api.rs）。
+async fn detect_dialect(
+    req: &ConnectRequest,
+) -> anyhow::Result<(Box<dyn SqlConnector>, Option<String>)> {
+    use rex_common::sql::DatabaseType;
+
+    // SQLite：无 host 或 port 为 0 视为本地文件库。
+    if req.host.is_empty() || req.port == 0 {
+        let conn = Box::new(rex_sqlite::SqliteConnector::connect(req.clone()).await?);
+        return Ok((conn, Some("sqlite".to_string())));
+    }
+
+    // 端口预判。
+    let candidates: &[DatabaseType] = match req.port {
+        3306 => &[DatabaseType::MySQL, DatabaseType::PostgreSQL],
+        5432 => &[DatabaseType::PostgreSQL, DatabaseType::MySQL],
+        _ => &[DatabaseType::MySQL, DatabaseType::PostgreSQL],
+    };
+
+    for &dt in candidates {
+        match connect_by_type(dt, req).await {
+            Ok(mut conn) => {
+                // `SELECT VERSION()` 确认 dialect（消除线缆协议握手歧义）。
+                match conn.execute("SELECT VERSION()").await {
+                    Ok(result) => {
+                        let version = result
+                            .rows
+                            .first()
+                            .and_then(|r| r.first())
+                            .map(|v| v.to_string())
+                            .unwrap_or_default();
+                        let confirmed = if version.to_uppercase().contains("POSTGRESQL") {
+                            DatabaseType::PostgreSQL
+                        } else {
+                            dt
+                        };
+                        tracing::info!(
+                            action = "AGENT_SQL_DETECT",
+                            port = req.port,
+                            version = %version,
+                            dialect = ?confirmed,
+                            "dialect detected"
+                        );
+                        // 已连上 confirmed 类型的连接器；若确认结果与握手类型不同，
+                        // 重新以确认类型连接（端口预判 + 握手可能匹配到错误协议）。
+                        let final_conn = if confirmed == dt {
+                            conn
+                        } else {
+                            connect_by_type(confirmed, req).await?
+                        };
+                        return Ok((final_conn, Some(detected_to_str(confirmed))));
+                    }
+                    Err(_) => continue,
+                }
+            }
+            Err(_) => continue,
+        }
+    }
+
+    anyhow::bail!("无法识别 dialect，请在创建资源时指定 subtype")
+}
+
+/// v0.70.7：将探测确认的 [`DatabaseType`] 转成持久化用的 db_type 字符串。
+fn detected_to_str(dt: DatabaseType) -> String {
+    match dt {
+        DatabaseType::MySQL => "mysql".to_string(),
+        DatabaseType::PostgreSQL => "postgresql".to_string(),
+        DatabaseType::SQLite => "sqlite".to_string(),
     }
 }
 

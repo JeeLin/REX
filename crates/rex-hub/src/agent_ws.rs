@@ -128,7 +128,7 @@ pub enum AgentEvent {
 }
 
 /// Agent connect 请求的响应
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ConnectResponse {
     pub channel_id: Option<String>,
     pub error: Option<String>,
@@ -148,6 +148,8 @@ pub struct AgentTunnelState {
     pub session_responses: RwLock<HashMap<String, oneshot::Sender<SessionRelay>>>,
     /// session_request 序号分配器
     pub session_seq: std::sync::atomic::AtomicU64,
+    /// channel_id → 探测出的 subclass（v0.70.7：Agent 侧探测后回传，Hub 据此持久化资源 subtype）
+    pub session_db_type: RwLock<HashMap<String, String>>,
 }
 
 /// 一次协议会话请求（Hub → Agent → Hub）的响应载体。
@@ -171,6 +173,7 @@ impl Default for AgentTunnelState {
             tunnel_data: RwLock::new(HashMap::new()),
             session_responses: RwLock::new(HashMap::new()),
             session_seq: std::sync::atomic::AtomicU64::new(1),
+            session_db_type: RwLock::new(HashMap::new()),
         }
     }
 }
@@ -233,6 +236,19 @@ pub async fn open_agent_session(
         Err(_) => anyhow::bail!("agent connect timeout"),
     };
     Ok(channel_id)
+}
+
+/// v0.70.7：消费 Agent 在 `session_opened` 中回传的探测子类（mysql/postgresql/sqlite）。
+///
+/// Agent 侧探测成功后通过 `SessionOpened.subtype` 上报，Hub 据此回写资源 subtype 缓存。
+/// 取走即删除（一次性语义）。
+pub async fn take_session_subtype(state: &AppState, channel_id: &str) -> Option<String> {
+    state
+        .agent_tunnel
+        .session_db_type
+        .write()
+        .await
+        .remove(channel_id)
 }
 
 /// 经隧道向 Agent 下发一次协议子请求，并等待其 `session_response` 回传。
@@ -701,6 +717,15 @@ async fn handle_session_msg(
                 channel_id = %payload.channel_id,
                 "agent protocol session opened"
             );
+            // v0.70.7：Agent 侧探测出的子类暂存，供 open_agent_session 消费回写资源 subtype。
+            if let Some(dt) = payload.subtype {
+                state
+                    .agent_tunnel
+                    .session_db_type
+                    .write()
+                    .await
+                    .insert(payload.channel_id.clone(), dt);
+            }
         }
         rex_common::agent_proto::AgentSessionMsg::SessionResponse(payload) => {
             let key = format!("{}:{}", payload.channel_id, payload.seq);
