@@ -35,7 +35,7 @@ onMounted(async () => {
 })
 
 const protoTone: Record<string, 'success' | 'info' | 'purple' | 'danger' | 'warning' | 'accent'> = {
-  ssh: 'success', sftp: 'purple', mysql: 'info',
+  ssh: 'success', sftp: 'purple', sql: 'info', mysql: 'info',
   postgresql: 'purple', redis: 'danger', sqlite: 'warning', s3: 'accent',
 }
 
