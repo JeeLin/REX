@@ -64,6 +64,10 @@ impl PostgresConnector {
 
 #[async_trait::async_trait]
 impl SqlConnector for PostgresConnector {
+    fn database_type(&self) -> rex_common::sql::DatabaseType {
+        rex_common::sql::DatabaseType::PostgreSQL
+    }
+
     async fn execute(&mut self, sql: &str) -> Result<QueryResult> {
         let start = std::time::Instant::now();
         let trimmed = sql.trim_start().to_uppercase();

@@ -31,6 +31,9 @@ pub struct ResourceConnInfo {
     pub username: String,
     /// 解密后的 config_json，各协议从中提取特有参数
     pub config: JsonValue,
+    /// 资源子类（v0.70.7）：SQL 资源探测出的方言（mysql/postgresql/sqlite）；
+    /// 非 SQL 资源或待探测时为 None。由资源顶层 `subtype` 字段透传。
+    pub subtype: Option<String>,
     /// 资源所属环境是否为 agent 模式（协议在 Agent 侧终结）
     pub use_agent: bool,
     /// agent 模式下选定的在线 Agent（直连模式为 None）
@@ -74,6 +77,7 @@ pub fn load_resource_config(
         port: resource.port,
         username: resource.username,
         config,
+        subtype: resource.subtype.clone(),
         use_agent,
         agent_id,
     })
@@ -161,6 +165,7 @@ mod tests {
             port: None,
             username: String::new(),
             config: serde_json::from_str(config).unwrap(),
+            subtype: None,
             use_agent: false,
             agent_id: None,
         }

@@ -66,6 +66,10 @@ impl SqliteConnector {
 
 #[async_trait::async_trait]
 impl SqlConnector for SqliteConnector {
+    fn database_type(&self) -> rex_common::sql::DatabaseType {
+        rex_common::sql::DatabaseType::SQLite
+    }
+
     async fn execute(&mut self, sql: &str) -> Result<QueryResult> {
         let start = std::time::Instant::now();
 

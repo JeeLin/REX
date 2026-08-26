@@ -9,7 +9,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use rex_common::file_transfer::{FileConnector, FileEntry, UploadResult};
 use rex_common::redis::{DbInfo, KeyInfo, RedisConnector, RedisInfo, RedisValue};
-use rex_common::sql::{ColumnInfo, QueryResult, SqlConnector, TableInfo};
+use rex_common::sql::{ColumnInfo, DatabaseType, QueryResult, SqlConnector, TableInfo};
 use serde_json::{json, Value};
 
 use crate::agent_ws::agent_session_request;
@@ -44,16 +44,31 @@ fn decode_bytes(data: &Value) -> Result<Vec<u8>> {
 pub struct AgentSqlProxy {
     state: AppState,
     channel_id: String,
+    /// 已确定的子类（mysql/postgresql/sqlite）；agent 模式探测出后由调用方传入。
+    /// 仅用于 `database_type()` 报告，连接持久化走 `take_session_subtype`。
+    subtype: Option<String>,
 }
 
 impl AgentSqlProxy {
-    pub fn new(state: AppState, channel_id: String) -> Self {
-        Self { state, channel_id }
+    pub fn new(state: AppState, channel_id: String, subtype: Option<String>) -> Self {
+        Self {
+            state,
+            channel_id,
+            subtype,
+        }
     }
 }
 
 #[async_trait]
 impl SqlConnector for AgentSqlProxy {
+    fn database_type(&self) -> DatabaseType {
+        match self.subtype.as_deref() {
+            Some("postgresql") | Some("postgres") => DatabaseType::PostgreSQL,
+            Some("sqlite") => DatabaseType::SQLite,
+            _ => DatabaseType::MySQL,
+        }
+    }
+
     async fn execute(&mut self, sql: &str) -> Result<QueryResult> {
         relay(
             &self.state,

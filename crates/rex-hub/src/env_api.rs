@@ -266,6 +266,8 @@ struct ImportResource {
     port: Option<u16>,
     username: Option<String>,
     config_json: Option<String>,
+    #[serde(default)]
+    subtype: Option<String>,
     color: Option<String>,
 }
 
@@ -313,6 +315,7 @@ async fn import_environments(
                 port: imp_res.port,
                 username: imp_res.username.clone(),
                 config_json: imp_res.config_json.clone(),
+                subtype: imp_res.subtype.clone(),
                 color: imp_res.color.clone(),
                 sort_order: None,
             };
