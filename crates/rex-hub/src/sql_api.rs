@@ -226,7 +226,7 @@ async fn connect(
                 }),
             )),
         );
-        tracing::info!(action = "SQL_CONNECT_AGENT", session_id = %session_id, resource_id = %body.resource_id, agent_id = %agent_id, db_type = %db_type, "SQL connected via agent");
+        tracing::info!(action = "SQL_CONNECT_AGENT", session_id = %session_id, resource_id = %body.resource_id, resource_name = %res.name, agent_id = %agent_id, db_type = %db_type, "SQL connected via agent");
         return (StatusCode::OK, Json(ConnectResponse { session_id })).into_response();
     }
 
