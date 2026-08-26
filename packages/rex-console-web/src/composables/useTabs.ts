@@ -1,6 +1,6 @@
 import { ref, computed, type Ref } from 'vue'
 
-export type TabProtocol = 'ssh' | 'mysql' | 'redis' | 'postgresql' | 'sftp' | 'sqlite' | 's3' | 'sip'
+export type TabProtocol = 'ssh' | 'mysql' | 'redis' | 'postgresql' | 'sftp' | 'sqlite' | 's3' | 'sip' | 'sql'
 
 export interface Tab {
   id: string
@@ -14,6 +14,9 @@ export interface Tab {
   color?: string
   renaming?: boolean
   broadcast?: boolean
+  // v0.70.7：SQL 资源的子类（dialect，mysql/postgresql/sqlite）。连接时回写，
+  // 之后经此字段直接路由 SQL 控制台，无需再次探测。
+  subtype?: string
   // Terminal settings
   theme?: string
   fontSize?: number
@@ -29,6 +32,7 @@ export interface ResourceNode {
   name: string
   protocol?: string
   environmentId?: string
+  subtype?: string
 }
 
 export interface UseTabsDeps {
@@ -89,6 +93,7 @@ export function useTabs(deps: UseTabsDeps) {
       protocol,
       resourceId,
       environmentId: node.environmentId,
+      subtype: node.subtype,
       status: 'connecting',
     })
     activeTab.value = id

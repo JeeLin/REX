@@ -10,6 +10,8 @@ export interface ResourceInfo {
   username?: string
   environmentId?: string
   color?: string
+  // v0.70.7：SQL 资源的子类（dialect）。经工作台 tab 透传给 SQL 控制台路由。
+  subtype?: string
 }
 
 export const useWorkspaceStore = defineStore('workspace', () => {

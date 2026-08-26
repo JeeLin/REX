@@ -60,7 +60,7 @@ export function useWorkspacePersistence(opts: {
         tabs.value.push({
           id: t.id,
           label: t.label,
-          protocol: t.protocol as 'ssh' | 'mysql' | 'redis' | 'postgresql' | 'sftp' | 'sqlite' | 's3',
+          protocol: t.protocol as 'ssh' | 'mysql' | 'redis' | 'postgresql' | 'sftp' | 'sqlite' | 's3' | 'sql',
           resourceId: t.resourceId,
           environmentId: t.environmentId,
           status: 'disconnected',
