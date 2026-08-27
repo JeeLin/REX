@@ -138,6 +138,7 @@ rex-agent = 所有 crate（无前端）
 | **M82e** | SIP 资源按名称管理 + 多账户切换 | 软电话 | ✅ 已完成（0.70.4） |
 | **M82f** | 缺陷池清理 + SIP 配置收口（3 🟢 收口） | 软电话/SIP | ✅ 已完成（0.70.5） |
 | **M83** | 统一 Hub↔Agent 隧道架构（Agent 终结协议、Hub 仅作传输隧道） | — | ✅ 已完成（v0.70.6） |
+| **v0.70.8** | Hub/Agent 服务化管理（CLI 子命令 + 开机自启） | — | ← 新增（下一步） |
 
 ### M0：项目骨架重建
 
@@ -597,3 +598,19 @@ docs/milestones/
 - **版本类型**：minor（向后兼容：旧 mysql/postgresql/sqlite 资源 in-place 升级为 `sql`；单用户自托管，迁移脚本无破坏性）
 - **版本号**：v0.70.7
 - **缺陷池 bug**：无（docs/BUGS.md 为空）
+
+### v0.70.8：Hub/Agent 服务化管理（CLI 子命令 + 开机自启） ← 新增（下一步）
+
+**核心功能**：为 Hub / Agent 引入统一的 `clap` CLI 子命令入口（`run`/`version`/`service`），并实现「一键注册为操作系统服务」的开机自启能力（Linux systemd + macOS launchd）。`service install` 把当前相关 env 写入生成的单元文件，使服务以与手工启动一致的方式运行。
+
+**子任务预估**：
+- `rex-common::cli`：共享 CLI 框架（`Cli`/`Commands`/`ServiceCmd` + `dispatch()`）
+- `rex-common::service`：平台检测 + systemd 单元 / launchd plist 生成 + install/uninstall/start/stop/restart/status（生成逻辑可单测）
+- Hub CLI 接入：重构 `crates/rex-hub/src/rex-hub.rs` 的 `main()`，`run` 保留 supervisor/worker 分支
+- Agent CLI 接入：重构 `crates/rex-agent/src/rex-agent.rs` 的 `main()`，复用同一套 CLI
+- 配置注入与文档：`service install` 写入当前相关 env；更新部署文档
+- 测试与收尾：单测（单元内容 / 平台检测 / plist XML / CLI 解析）+ fmt/clippy/test/build 全绿
+
+**依赖**：v0.70.7（进程模型、更新机制已稳定）
+**版本类型**：minor（新增功能，向后兼容；现有 env 配置方式不变）
+**版本号**：v0.70.8
