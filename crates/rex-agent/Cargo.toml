@@ -2,6 +2,7 @@
 name = "rex-agent"
 version.workspace = true
 edition.workspace = true
+build = "build.rs"
 
 [[bin]]
 name = "rex-agent"
@@ -9,6 +10,7 @@ path = "src/rex-agent.rs"
 
 [dependencies]
 rex-common = { workspace = true }
+libc = { version = "0.2" }
 rex-ssh = { workspace = true }
 rex-sip = { workspace = true }
 rex-mysql = { workspace = true }
