@@ -2,6 +2,7 @@
 name = "rex-hub"
 version.workspace = true
 edition.workspace = true
+build = "build.rs"
 
 [lib]
 name = "rex_hub"
@@ -13,6 +14,7 @@ path = "src/rex-hub.rs"
 
 [dependencies]
 tokio = { workspace = true }
+libc = { version = "0.2" }
 async-trait = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }

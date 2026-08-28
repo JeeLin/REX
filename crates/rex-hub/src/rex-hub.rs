@@ -1,5 +1,6 @@
 //! REX Hub 入口 — supervisor + worker 进程模型。
 
+use std::os::unix::io::IntoRawFd;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -29,24 +30,75 @@ use rex_hub::update_api;
 use rex_hub::update_checker;
 use rex_hub::AppState;
 
+use rex_common::cli::{self, RunOpts, ServiceKind};
+
 use axum::routing::get_service;
 use axum::Router;
 use tower_http::services::{ServeDir, ServeFile};
-use tracing_subscriber::EnvFilter;
 
 fn main() {
-    // 初始化日志（supervisor 和 worker 都需要）
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env().add_directive("info".parse().unwrap()))
-        .init();
-
-    if std::env::var("REX_WORKER").is_err() {
-        // Supervisor 模式：监控 worker 子进程
-        supervisor_main();
-    } else {
-        // Worker 模式：运行业务逻辑
-        worker_main();
+    let cli = cli::parse();
+    let kind = ServiceKind::Hub;
+    if let Err(e) = cli::dispatch(cli, kind, run_service) {
+        eprintln!("Error: {e:#}");
+        std::process::exit(1);
     }
+}
+
+/// 启动逻辑：`run` 子命令（及无子命令默认）。
+///
+/// 1. 读取可选配置文件（env 优先）；2. 单实例互斥（pid 文件）；
+/// 3. 把命令行参数写入 env（worker / supervisor 子进程继承）；
+/// 4. `--single` 直接跑 worker（无 supervisor，无法自动更新）；
+/// 5. `--background` 脱离终端后台运行。
+fn run_service(opts: &RunOpts) -> anyhow::Result<()> {
+    // 配置文件（env 优先）— 必须在读任何 env 之前
+    rex_common::config::apply_config_env(ServiceKind::Hub);
+
+    // 单实例互斥：同一 data_dir 只允许一个 Hub
+    rex_common::process::ensure_single_instance(ServiceKind::Hub)?;
+
+    // 命令行参数 > env：把相关字段写回 env，供 worker / supervisor 子进程继承
+    if let Some(port) = opts.port {
+        std::env::set_var("REX_PORT", port.to_string());
+    }
+    if let Some(data_dir) = &opts.data_dir {
+        std::env::set_var("REX_DATA_DIR", data_dir);
+    }
+    if let Some(static_dir) = &opts.static_dir {
+        std::env::set_var("REX_STATIC_DIR", static_dir);
+    }
+
+    // 后台模式：脱离终端（daemonize），日志重定向到数据目录 rex-hub.log
+    if opts.background {
+        let log_path = data_dir_or_default().join("rex-hub.log");
+        redirect_stdio(&log_path)?;
+        rex_common::process::daemonize()?;
+    }
+
+    // 写 pid 文件（前台 / 后台主进程）
+    rex_common::process::write_pid_file(ServiceKind::Hub)?;
+
+    if opts.single {
+        // 单进程：直接 worker，无 supervisor → 无法自动更新
+        tracing::warn!(
+            status = "single-process mode; auto-update is NOT available (no supervisor)"
+        );
+        worker_main();
+    } else {
+        if std::env::var("REX_WORKER").is_err() {
+            supervisor_main();
+        } else {
+            worker_main();
+        }
+    }
+    Ok(())
+}
+
+fn data_dir_or_default() -> PathBuf {
+    std::env::var("REX_DATA_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| default_data_dir())
 }
 
 fn supervisor_main() {
@@ -186,6 +238,25 @@ fn default_data_dir() -> PathBuf {
     std::env::var_os("HOME")
         .map(|h| PathBuf::from(h).join(".rex"))
         .unwrap_or_else(|| PathBuf::from(".rex"))
+}
+
+/// 把 stdout / stderr 重定向到日志文件（后台模式用）。
+#[cfg(unix)]
+fn redirect_stdio(log_path: &std::path::Path) -> anyhow::Result<()> {
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path)
+        .map_err(|e| anyhow::anyhow!("open log file {}: {e}", log_path.display()))?;
+    // into_raw_fd 把文件 fd 的所有权移出 File，关闭 File 不会关闭该 fd；
+    // dup2 把其复制到 stdout/stderr，原 fd 随后必须关闭，避免泄漏。
+    let fd = file.into_raw_fd();
+    unsafe {
+        libc::dup2(fd, libc::STDOUT_FILENO);
+        libc::dup2(fd, libc::STDERR_FILENO);
+        libc::close(fd);
+    }
+    Ok(())
 }
 
 /// GET /api/health — 健康检查端点（供 supervisor 验证 worker 存活）
