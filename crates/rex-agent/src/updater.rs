@@ -125,12 +125,49 @@ pub async fn run_update(
 
 /// 下载二进制（优先 Hub，fallback GitHub）
 async fn download(cmd: &UpdateCommand, report: &ProgressReporter) -> Result<Vec<u8>, UpdateError> {
-    match try_download(&cmd.download_url, report).await {
+    // 读取一次 Hub 基地址（由 REX_HUB_URL 推导），避免在每个 URL 解析处重复读全局 env。
+    let hub_base = hub_http_base(&std::env::var("REX_HUB_URL").unwrap_or_default());
+    let primary = resolve_download_url(&cmd.download_url, hub_base.as_deref());
+    match try_download(&primary, report).await {
         Ok(bytes) => Ok(bytes),
         Err(e) => {
             tracing::warn!("primary download failed: {e}, trying fallback");
-            try_download(&cmd.fallback_url, report).await
+            if cmd.fallback_url.is_empty() {
+                return Err(e);
+            }
+            let fb = resolve_download_url(&cmd.fallback_url, hub_base.as_deref());
+            try_download(&fb, report).await
         }
+    }
+}
+
+/// 解析下载地址：若给定的是相对路径（不含 `://`），则拼接 Hub 基地址
+/// （由 `REX_HUB_URL` 推导：ws/wss → http/https）。这样 Hub 只需下发相对路径，
+/// Agent 用自身连接 Hub 的地址补全为可下载的完整 URL。
+fn resolve_download_url(url: &str, hub_base: Option<&str>) -> String {
+    if url.contains("://") {
+        return url.to_string();
+    }
+    match hub_base {
+        Some(base) => format!("{}{}", base.trim_end_matches('/'), url),
+        None => url.to_string(),
+    }
+}
+
+/// 由 Hub URL 推导 Hub 的 HTTP 下载基地址（ws/wss → http/https）。
+/// Agent 通过 WebSocket 隧道连接 Hub，其下载端点与 WS 监听在同一地址，
+/// 仅协议不同，因此可直接由 Hub URL 推导，无需额外配置。
+fn hub_http_base(hub_url: &str) -> Option<String> {
+    if hub_url.is_empty() {
+        return None;
+    }
+    let base = hub_url
+        .replace("wss://", "https://")
+        .replace("ws://", "http://");
+    if base.contains("://") {
+        Some(base)
+    } else {
+        Some(format!("https://{base}"))
     }
 }
 
@@ -192,6 +229,7 @@ impl std::fmt::Display for UpdateError {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
 
     #[test]
     fn test_sha256_hex() {
@@ -199,6 +237,51 @@ mod tests {
         assert_eq!(
             hash,
             "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        );
+    }
+
+    #[test]
+    fn test_hub_http_base() {
+        assert_eq!(
+            hub_http_base("wss://hub.example.com:8443"),
+            Some("https://hub.example.com:8443".to_string())
+        );
+        assert_eq!(
+            hub_http_base("ws://127.0.0.1:3000"),
+            Some("http://127.0.0.1:3000".to_string())
+        );
+        assert_eq!(
+            hub_http_base("https://hub.local"),
+            Some("https://hub.local".to_string())
+        );
+        // 无 scheme 时回退为 https
+        assert_eq!(
+            hub_http_base("hub.local"),
+            Some("https://hub.local".to_string())
+        );
+        // 空字符串 → None（无 Hub 地址可推导）
+        assert_eq!(hub_http_base(""), None);
+    }
+
+    #[test]
+    fn test_resolve_download_url() {
+        // 相对路径拼接 Hub 基地址
+        assert_eq!(
+            resolve_download_url(
+                "/api/agents/download?os=linux&arch=amd64",
+                Some("https://hub:8443")
+            ),
+            "https://hub:8443/api/agents/download?os=linux&arch=amd64"
+        );
+        // 已是绝对地址则原样返回
+        assert_eq!(
+            resolve_download_url("https://github.com/x/y", Some("https://hub:8443")),
+            "https://github.com/x/y"
+        );
+        // 无 Hub 基地址时相对路径原样返回
+        assert_eq!(
+            resolve_download_url("/api/agents/download", None),
+            "/api/agents/download"
         );
     }
 }
