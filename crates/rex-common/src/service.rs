@@ -6,6 +6,7 @@
 //! 其他平台（如 Windows）直接返回明确的不支持错误与带外指引。
 
 use std::path::{Path, PathBuf};
+#[cfg(unix)]
 use std::process::Command;
 
 use anyhow::{bail, Context, Result};
