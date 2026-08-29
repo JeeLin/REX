@@ -42,9 +42,38 @@ export REX_AGENT_TOKEN="your-agent-token-here"
 ./rex-agent
 ```
 
-### Systemd 服务
+### 注册为系统服务（开机自启，推荐）
 
-创建 `/etc/systemd/system/rex-agent.service`：
+`rex-agent` 内置 `service` 子命令，一条命令即可注册为操作系统服务并开机自启。它会把**当前已设置的 env 变量**写入生成的单元文件，因此运行前先 `export` 好配置即可：
+
+```bash
+export REX_HUB_URL="http://hub.example.com:3000"
+export REX_AGENT_TOKEN="your-agent-token-here"
+
+# 用户级（无需 root，当前用户登录后随会话启动）
+./rex-agent service install
+
+# 系统级（需 root，开机后所有用户可用）
+sudo ./rex-agent service install --system
+```
+
+常用管理命令：
+
+```bash
+./rex-agent service start     # 启动
+./rex-agent service stop      # 停止
+./rex-agent service restart   # 重启
+./rex-agent service status    # 查看状态
+./rex-agent service uninstall # 卸载
+```
+
+- **Linux** 使用 systemd；**macOS** 使用 launchd（`~/Library/LaunchAgents` 或 `/Library/LaunchDaemons`）。
+- 配置文件也可放在数据目录 `~/.rex/agent.yaml`（`hub_url` / `token` 字段），env 变量优先于文件。
+- 其他平台（如 Windows）不支持自动注册，请用 nssm 或任务计划程序手动注册二进制。
+
+### Systemd 服务（手动方式，备用）
+
+也可以手工创建 `/etc/systemd/system/rex-agent.service`：
 
 ```ini
 [Unit]

@@ -489,7 +489,9 @@ Hub 和 Agent 共享协议与传输 crate（workspace 根 `Cargo.toml` `members 
 
 ## 9. 部署
 
-Docker / 二进制 / 配置文件三种方式，自托管。Hub 与 Agent 各自部署，Agent 通过注册令牌归属环境。详见 `docs/agent-readme.md` 与 `docs/UPGRADE.md`。
+Docker / 二进制 / 配置文件三种方式，自托管。Hub 与 Agent 各自部署，Agent 通过注册令牌归属环境。详见 `docs/agent-deploy.md` 与 `docs/UPGRADE.md`。
+
+二进制部署下，Hub / Agent 提供统一 CLI 子命令（`run` / `version` / `service`），`rex-hub service install`（默认用户级，加 `--system` 为系统级）可一键注册为操作系统服务并开机自启（Linux systemd / macOS launchd）。配置以环境变量为主，数据目录下可选 `config.yaml`（Hub）/ `agent.yaml`（Agent）作补充来源，env 变量优先。
 
 ---
 
