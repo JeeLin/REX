@@ -197,7 +197,7 @@ pub fn daemonize() -> Result<()> {
     {
         // Windows：用 CreateProcess 以 DETACHED_PROCESS 重新拉起自己，父进程退出。
         // 简化处理：直接提示用 service；后台 daemon 在 Windows 不强求。
-        bail!("Windows 不支持 --background，请使用 `rex-{kind}` service install 注册为服务");
+        bail!("Windows 不支持 --background，请用 `rex-hub` 或 `rex-agent` 的 `service install` 注册为系统服务");
     }
     #[cfg(not(any(unix, windows)))]
     {
