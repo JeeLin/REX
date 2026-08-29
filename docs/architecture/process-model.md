@@ -149,3 +149,29 @@ rex-supervisor.exe 启动 data/rex-worker.exe（worker 角色）
 仍然是单个命令：`rex-hub.exe` 或 `rex-agent.exe`
 
 首次启动后，用户会看到 data 目录下多了 `rex-supervisor.exe` 和 `rex-worker.exe`。
+
+---
+
+## CLI 子命令与开机自启
+
+v0.70.8 起，`rex-hub` / `rex-agent` 提供统一的 clap 子命令入口，并支持一键注册为操作系统服务实现开机自启。
+
+### 子命令
+
+| 命令 | 作用 |
+|------|------|
+| （无参数 / `run`） | 前台启动 supervisor + worker（默认，等价于直接运行二进制） |
+| `version` | 打印 `rex-hub <版本>` / `rex-agent <版本>` |
+| `service install [--system] [--name X]` | 注册为系统服务并启用开机自启（默认用户级） |
+| `service uninstall` / `start` / `stop` / `restart` / `status` | 服务生命周期管理 |
+
+- **前台 vs 后台**：不加子命令即为前台（非 daemon）模式，日志打到 stdout；只有 `service install` 会转为由 systemd / launchd 托管的后台 daemon。
+- **配置来源**：环境变量优先；数据目录下可选 YAML 文件作为补充（Hub: `config.yaml`，Agent: `agent.yaml`，字段 `port` / `data_dir` / `static_dir` / `hub_url` / `token`）。`service install` 会把当前进程的 env 写入单元文件，与配置文件互不冲突。
+
+### 服务注册实现
+
+- **Linux** → systemd：`install` 生成 `<name>.service`（user 在 `~/.config/systemd/user/`，system 在 `/etc/systemd/system/`），写入当前相关 env，随后 `daemon-reload` → `enable` → `start`。
+- **macOS** → launchd：生成 `com.rex.<hub|agent>.plist`（`RunAtLoad` + `KeepAlive`），写入当前 env，随后 `launchctl load`。
+- **其他平台**（如 Windows）：返回明确的不支持错误与带外指引（nssm / 任务计划程序），不崩溃。
+
+Hub/Agent 共享 `rex-common::cli` 与 `rex-common::service` 模块，二进制本身仍只跑 supervisor + worker，进程模型与退出码语义不变。
