@@ -14,6 +14,7 @@ mod agent_ws;
 mod supervisor;
 mod updater;
 
+#[cfg(unix)]
 use std::os::unix::io::IntoRawFd;
 use std::path::PathBuf;
 
@@ -56,6 +57,7 @@ fn run_service(opts: &RunOpts) -> anyhow::Result<()> {
     }
 
     // 后台模式：脱离终端（daemonize），日志重定向到数据目录 rex-agent.log
+    #[cfg(unix)]
     if opts.background {
         let log_path = data_dir.join("rex-agent.log");
         redirect_stdio(&log_path)?;
@@ -84,11 +86,23 @@ fn run_service(opts: &RunOpts) -> anyhow::Result<()> {
 fn data_dir_or_default() -> PathBuf {
     std::env::var("REX_DATA_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            std::env::var_os("HOME")
-                .map(|h| PathBuf::from(h).join(".rex"))
-                .unwrap_or_else(|| PathBuf::from(".rex"))
-        })
+        .unwrap_or_else(|_| default_data_dir())
+}
+
+/// 默认数据目录（无 REX_DATA_DIR 时）：
+/// - Linux/macOS：`$HOME/.rex`
+/// - Windows：`%LOCALAPPDATA%/rex`（无则当前目录下的 .rex）
+/// - 其他平台：`.rex`
+fn default_data_dir() -> PathBuf {
+    if cfg!(windows) {
+        std::env::var_os("LOCALAPPDATA")
+            .map(|p| PathBuf::from(p).join("rex"))
+            .unwrap_or_else(|| PathBuf::from(".rex"))
+    } else {
+        std::env::var_os("HOME")
+            .map(|h| PathBuf::from(h).join(".rex"))
+            .unwrap_or_else(|| PathBuf::from(".rex"))
+    }
 }
 
 /// 把 stdout / stderr 重定向到日志文件（后台模式用）。
