@@ -14,7 +14,7 @@ path = "src/rex-hub.rs"
 
 [dependencies]
 tokio = { workspace = true }
-libc = { version = "0.2" }
+libc = { workspace = true }
 async-trait = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
