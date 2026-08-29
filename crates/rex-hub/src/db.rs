@@ -678,7 +678,7 @@ impl Database {
                     rusqlite::params![old, old],
                 )
                 .map_err(|e| RExError::Message(e.to_string()))?;
-            count += n as usize;
+            count += n;
         }
         Ok(count)
     }
