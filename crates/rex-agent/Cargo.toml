@@ -10,7 +10,7 @@ path = "src/rex-agent.rs"
 
 [dependencies]
 rex-common = { workspace = true }
-libc = { version = "0.2" }
+libc = { workspace = true }
 rex-ssh = { workspace = true }
 rex-sip = { workspace = true }
 rex-mysql = { workspace = true }
