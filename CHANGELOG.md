@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.70.8] - 2026-08-28
+
+### Added
+- Hub/Agent CLI 子命令：`run`（默认启动，保留 supervisor+worker 进程模型）、`version`、`service install`（注册为 systemd / launchd 系统服务）、`stop`（停止运行中的实例）。
+- 开机自启：`rex-{kind} service install` 生成系统服务单元并启用开机自启，`open-boot` 开关控制；install 时固化 `--data-dir` 确保与手动运行一致。
+- `config.yaml` 支持：Hub/Agent 启动时读取 `config.yaml` 解析 `data_dir` / `hub_url` / `token` / `port` 等，环境变量优先于配置文件。
+- 单实例互斥：同一 `data_dir` 仅允许一个实例，冲突时给出 `rex-{kind} stop` 提示。
+
+### Fixed
+- Agent 自动更新：相对下载 URL 按 `REX_HUB_URL` 推导的 HTTP 基址（ws/wss→http/https）补全，修复相对路径导致 `reqwest` 报 `builder error`、更新通道不可用的问题。
+- 清理 workspace 全量 clippy warning（严格 `-D warnings` 0 warning）。
+- 修复单实例测试在 `cargo test --workspace` 并行下的偶发竞态（`ensure_single_instance` 等改为显式接收 `data_dir`，不再依赖全局 `REX_DATA_DIR`）。
+
 ## [0.70.7] - 2026-08-26
 
 ### Added
