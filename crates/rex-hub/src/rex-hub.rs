@@ -1,5 +1,6 @@
 //! REX Hub 入口 — supervisor + worker 进程模型。
 
+#[cfg(unix)]
 use std::os::unix::io::IntoRawFd;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -73,6 +74,7 @@ fn run_service(opts: &RunOpts) -> anyhow::Result<()> {
     }
 
     // 后台模式：脱离终端（daemonize），日志重定向到数据目录 rex-hub.log
+    #[cfg(unix)]
     if opts.background {
         let log_path = data_dir.join("rex-hub.log");
         redirect_stdio(&log_path)?;
@@ -237,10 +239,20 @@ fn worker_main() {
     });
 }
 
+/// 默认数据目录（无 REX_DATA_DIR 时）：
+/// - Linux/macOS：`$HOME/.rex`
+/// - Windows：`%LOCALAPPDATA%/rex`（无则当前目录下的 .rex）
+/// - 其他平台：`.rex`
 fn default_data_dir() -> PathBuf {
-    std::env::var_os("HOME")
-        .map(|h| PathBuf::from(h).join(".rex"))
-        .unwrap_or_else(|| PathBuf::from(".rex"))
+    if cfg!(windows) {
+        std::env::var_os("LOCALAPPDATA")
+            .map(|p| PathBuf::from(p).join("rex"))
+            .unwrap_or_else(|| PathBuf::from(".rex"))
+    } else {
+        std::env::var_os("HOME")
+            .map(|h| PathBuf::from(h).join(".rex"))
+            .unwrap_or_else(|| PathBuf::from(".rex"))
+    }
 }
 
 /// 把 stdout / stderr 重定向到日志文件（后台模式用）。
