@@ -503,6 +503,51 @@ fn remove_file_if_exists(path: &Path) {
     }
 }
 
+// ───────────────────────────── 非 unix 平台桩实现 ─────────────────────────────
+// 上面「按 detect_platform 分发」的 match 在全部平台都必须可编译；非 unix（如 Windows）
+// 上 detect_platform() 返回 Other，这些分支运行时不会被命中，仍需存在以满足编译。
+// 真实执行仅由上方 #[cfg(unix)] 的实现提供。
+
+#[cfg(not(unix))]
+fn systemd_install(_cfg: &InstallConfig) -> Result<String> {
+    unsupported()
+}
+
+#[cfg(not(unix))]
+fn systemd_uninstall(_name: &str, _scope: ServiceScope) -> Result<String> {
+    unsupported()
+}
+
+#[cfg(not(unix))]
+fn systemd_run(_scope: ServiceScope, _action: &str, _name: &str) -> Result<String> {
+    unsupported()
+}
+
+#[cfg(not(unix))]
+fn systemd_status(_name: &str, _scope: ServiceScope) -> String {
+    "service management is not supported on this platform".to_string()
+}
+
+#[cfg(not(unix))]
+fn launchd_install(_cfg: &InstallConfig) -> Result<String> {
+    unsupported()
+}
+
+#[cfg(not(unix))]
+fn launchd_uninstall(_label: &str, _scope: ServiceScope) -> Result<String> {
+    unsupported()
+}
+
+#[cfg(not(unix))]
+fn launchd_run(_label: &str, _action: &str, _scope: ServiceScope) -> Result<String> {
+    unsupported()
+}
+
+#[cfg(not(unix))]
+fn launchd_status(_label: &str) -> String {
+    "service management is not supported on this platform".to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

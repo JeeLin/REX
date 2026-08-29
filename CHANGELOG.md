@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Agent 自动更新：相对下载 URL 按 `REX_HUB_URL` 推导的 HTTP 基址（ws/wss→http/https）补全，修复相对路径导致 `reqwest` 报 `builder error`、更新通道不可用的问题。
 - 清理 workspace 全量 clippy warning（严格 `-D warnings` 0 warning）。
 - 修复单实例测试在 `cargo test --workspace` 并行下的偶发竞态（`ensure_single_instance` 等改为显式接收 `data_dir`，不再依赖全局 `REX_DATA_DIR`）。
+- 修复 Windows 平台构建失败：`service.rs` 的「按平台分发」match 引用了仅 `#[cfg(unix)]` 存在的 `systemd_*`/`launchd_*` 函数，非 unix（Windows）编译报 `E0425`；新增非 unix 桩实现使全平台可编译（运行时 `detect_platform()` 返回 `Other`，桩不被命中）。
 
 ## [0.70.7] - 2026-08-26
 
