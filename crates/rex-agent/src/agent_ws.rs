@@ -93,12 +93,12 @@ enum HubMsg {
 }
 
 #[derive(Debug, Deserialize)]
-struct AuthOkPayload {
+pub(crate) struct AuthOkPayload {
     agent_id: String,
 }
 
 #[derive(Debug, Deserialize)]
-struct AuthFailPayload {
+pub(crate) struct AuthFailPayload {
     reason: String,
 }
 
@@ -118,7 +118,7 @@ pub(crate) struct ChannelPayload {
 }
 
 #[derive(Debug, Deserialize)]
-struct ResizePayload {
+pub(crate) struct ResizePayload {
     channel_id: String,
     cols: u32,
     rows: u32,
@@ -144,7 +144,7 @@ pub(crate) enum AgentMsg {
 }
 
 #[derive(Debug, Serialize)]
-struct UpdateProgressPayload {
+pub(crate) struct UpdateProgressPayload {
     phase: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     progress: Option<f64>,
@@ -153,14 +153,14 @@ struct UpdateProgressPayload {
 }
 
 #[derive(Debug, Serialize)]
-struct AuthPayload {
+pub(crate) struct AuthPayload {
     token: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     name: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
-struct HeartbeatPayload {
+pub(crate) struct HeartbeatPayload {
     version: String,
     os: String,
     arch: String,

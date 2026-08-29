@@ -38,8 +38,11 @@ fn run_service(opts: &RunOpts) -> anyhow::Result<()> {
     // 配置文件（env 优先）— 必须在读任何 env 之前
     rex_common::config::apply_config_env(ServiceKind::Agent);
 
+    // 解析 data_dir（可能被配置文件设置），供单实例/pid 逻辑与后续复用
+    let data_dir = data_dir_or_default();
+
     // 单实例互斥：同一 data_dir 只允许一个 Agent（一个环境只能有一个 agent）
-    rex_common::process::ensure_single_instance(ServiceKind::Agent)?;
+    rex_common::process::ensure_single_instance(ServiceKind::Agent, &data_dir)?;
 
     // 命令行参数 > env：把相关字段写回 env，供 worker / supervisor 子进程继承
     if let Some(hub_url) = &opts.hub_url {
@@ -54,13 +57,13 @@ fn run_service(opts: &RunOpts) -> anyhow::Result<()> {
 
     // 后台模式：脱离终端（daemonize），日志重定向到数据目录 rex-agent.log
     if opts.background {
-        let log_path = data_dir_or_default().join("rex-agent.log");
+        let log_path = data_dir.join("rex-agent.log");
         redirect_stdio(&log_path)?;
         rex_common::process::daemonize()?;
     }
 
     // 写 pid 文件（前台 / 后台主进程）
-    rex_common::process::write_pid_file(ServiceKind::Agent)?;
+    rex_common::process::write_pid_file(ServiceKind::Agent, &data_dir)?;
 
     // 单进程模式：直接 worker，无 supervisor → 无法自动更新，禁用更新检查
     if opts.single {

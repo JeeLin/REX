@@ -15,17 +15,10 @@ use anyhow::{bail, Context, Result};
 static ALIVE: OnceLock<AtomicBool> = OnceLock::new();
 
 /// pidfile 路径：`<data_dir>/rex-<hub|agent>.pid`
-pub fn pid_path(kind: ServiceKind) -> PathBuf {
-    let data_dir = std::env::var("REX_DATA_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| default_data_dir());
+/// `data_dir` 由调用方显式传入（启动时已解析 REX_DATA_DIR / 默认值），
+/// 避免函数内部读取全局 env，便于测试且行为可预测。
+pub fn pid_path(kind: ServiceKind, data_dir: &Path) -> PathBuf {
     data_dir.join(format!("rex-{}.pid", kind.as_str()))
-}
-
-fn default_data_dir() -> PathBuf {
-    std::env::var_os("HOME")
-        .map(|h| PathBuf::from(h).join(".rex"))
-        .unwrap_or_else(|| PathBuf::from(".rex"))
 }
 
 /// 读取 pidfile 中的 PID（文件不存在或解析失败返回 None）。
@@ -61,8 +54,8 @@ pub fn is_process_alive(pid: u32) -> bool {
 }
 
 /// 单实例检查：若已有存活实例则拒绝启动。返回错误信息已含停止提示。
-pub fn ensure_single_instance(kind: ServiceKind) -> Result<()> {
-    let path = pid_path(kind);
+pub fn ensure_single_instance(kind: ServiceKind, data_dir: &Path) -> Result<()> {
+    let path = pid_path(kind, data_dir);
     if let Some(pid) = read_pid_file(&path) {
         if is_process_alive(pid) {
             bail!(
@@ -79,8 +72,8 @@ pub fn ensure_single_instance(kind: ServiceKind) -> Result<()> {
 }
 
 /// 写入 pidfile 并注册退出时清理（仅在当前进程是前台/后台主进程时调用）。
-pub fn write_pid_file(kind: ServiceKind) -> Result<PathBuf> {
-    let path = pid_path(kind);
+pub fn write_pid_file(kind: ServiceKind, data_dir: &Path) -> Result<PathBuf> {
+    let path = pid_path(kind, data_dir);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).ok();
     }
@@ -106,8 +99,8 @@ pub fn write_pid_file(kind: ServiceKind) -> Result<PathBuf> {
 }
 
 /// 停止：读 pidfile → 发终止信号 → 清理。返回已停止的 pid 或「未运行」。
-pub fn stop(kind: ServiceKind) -> String {
-    let path = pid_path(kind);
+pub fn stop(kind: ServiceKind, data_dir: &Path) -> String {
+    let path = pid_path(kind, data_dir);
     match read_pid_file(&path) {
         None => format!("rex-{} 未在运行（无 pid 文件）", kind.as_str()),
         Some(pid) => {
@@ -248,41 +241,36 @@ mod tests {
 
     #[test]
     fn test_pid_path_contains_kind() {
-        assert!(pid_path(ServiceKind::Hub)
+        let dir = std::env::temp_dir();
+        assert!(pid_path(ServiceKind::Hub, &dir)
             .to_string_lossy()
             .contains("rex-hub.pid"));
-        assert!(pid_path(ServiceKind::Agent)
+        assert!(pid_path(ServiceKind::Agent, &dir)
             .to_string_lossy()
             .contains("rex-agent.pid"));
     }
 
     #[test]
     fn test_ensure_single_instance_self() {
-        // ensure_single_instance 在 write_pid_file 之前调用，不会遇到自身 pid；
-        // 这里校验三种真实场景：全新启动（无 pidfile）/ 陈旧 pidfile（进程已死）/ 存活实例（冲突）。
+        // 校验三种真实场景：全新启动（无 pidfile）/ 陈旧 pidfile（进程已死）/ 存活实例（冲突）。
+        // data_dir 显式传入，不依赖全局 REX_DATA_DIR，避免与并行测试相互踩踏。
         let dir = std::env::temp_dir().join(format!("rex-test-single-{}", std::process::id()));
         std::fs::create_dir_all(&dir).ok();
-        let saved = std::env::var("REX_DATA_DIR").ok();
-        std::env::set_var("REX_DATA_DIR", &dir);
 
         let p = dir.join("rex-agent.pid");
         let _ = std::fs::remove_file(&p);
         // 无 pidfile：全新启动，正常通过
-        assert!(ensure_single_instance(ServiceKind::Agent).is_ok());
+        assert!(ensure_single_instance(ServiceKind::Agent, &dir).is_ok());
 
         // 陈旧 pidfile（已死进程）：应自动清理并正常通过
         std::fs::write(&p, "999999").unwrap();
-        assert!(ensure_single_instance(ServiceKind::Agent).is_ok());
+        assert!(ensure_single_instance(ServiceKind::Agent, &dir).is_ok());
         assert!(!p.exists(), "stale pidfile should be removed");
 
         // 存活实例的 pid：应报冲突（Err）
         std::fs::write(&p, std::process::id().to_string()).unwrap();
-        assert!(ensure_single_instance(ServiceKind::Agent).is_err());
+        assert!(ensure_single_instance(ServiceKind::Agent, &dir).is_err());
 
         let _ = std::fs::remove_file(&p);
-        std::env::remove_var("REX_DATA_DIR");
-        if let Some(s) = saved {
-            std::env::set_var("REX_DATA_DIR", s);
-        }
     }
 }

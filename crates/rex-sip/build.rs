@@ -400,6 +400,7 @@ fn link_name(archive: &Path, target_os: &str) -> String {
 /// `rustc-link-lib=static=<name>` 的库名 stem。slproweb 同时提供：
 /// - 静态（`/MD` 编译）：libssl_static.lib / libcrypto_static.lib；
 /// - 动态导入：ssl.lib / crypto.lib（3.x）或 libssl.lib / libcrypto.lib（4.x）。
+///
 /// 优先返回静态 variant，使 OpenSSL 被链进 exe、二进制自包含、不依赖 DLL。
 fn windows_import_lib_name(openssl_lib_dir: &str, base: &str) -> String {
     let dir = Path::new(openssl_lib_dir);
@@ -411,7 +412,7 @@ fn windows_import_lib_name(openssl_lib_dir: &str, base: &str) -> String {
     if with_lib.exists() {
         return format!("lib{base}");
     }
-    format!("{base}")
+    base.to_string()
 }
 
 /// 为目标架构交叉编译 re/baresip 时，给 cmake 传递对应工具链参数。

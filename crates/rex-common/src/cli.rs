@@ -4,6 +4,7 @@
 //! 即可复用 `run` / `stop` / `version` / `service` 全部子命令。
 
 use clap::{Args, Parser, Subcommand};
+use std::path::PathBuf;
 
 use crate::service::ServiceCmd;
 pub use crate::service::ServiceKind;
@@ -86,7 +87,10 @@ pub fn dispatch(
         None => run(&RunOpts::default()),
         Some(Commands::Run(ref opts)) => run(opts),
         Some(Commands::Stop) => {
-            println!("{}", crate::process::stop(kind));
+            let data_dir = std::env::var("REX_DATA_DIR")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| PathBuf::from(".rex"));
+            println!("{}", crate::process::stop(kind, &data_dir));
             Ok(())
         }
         Some(Commands::Version) => {
@@ -113,7 +117,7 @@ mod tests {
     #[test]
     fn test_cli_default_is_run() {
         let cli = Cli::try_parse_from(["rex-hub"]).unwrap();
-        assert!(matches!(cli.command, None));
+        assert!(cli.command.is_none());
     }
 
     #[test]
