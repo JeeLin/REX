@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>REX · Audit log</title>
+<link rel="stylesheet" href="assets/tokens.css"/>
+<link rel="stylesheet" href="assets/shell.css"/>
+<link rel="stylesheet" href="assets/common.css"/>
+<style>
+  .field{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 12px;border-radius:7px;border:1px solid var(--border-strong);background:var(--bg-surface);font-family:var(--font-mono);font-size:12.5px;color:var(--text)}
+  .field .ph{color:var(--text-dim)}
+
+  /* stat cards */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+  .stat{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px}
+  .stat .k{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);font-family:var(--font-mono)}
+  .stat .v{font-family:var(--font-mono);font-size:26px;font-weight:700;margin-top:6px}
+  .stat.green .v{color:var(--success)} .stat.red .v{color:var(--danger)} .stat.brand .v{color:var(--brand)}
+
+  /* table */
+  .tbl{width:100%;border-collapse:collapse;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+  .tbl thead th{text-align:left;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);font-family:var(--font-mono);padding:10px 14px;border-bottom:1px solid var(--border-strong);background:var(--bg-elevated)}
+  .tbl tbody td{padding:11px 14px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:top}
+  .tbl tbody tr:last-child td{border-bottom:0}
+  .tbl tbody tr{cursor:pointer}
+  .tbl tbody tr:hover{background:var(--bg-hover)}
+  .tbl tbody tr.open{background:var(--brand-soft)}
+  .tbl .time{font-family:var(--font-mono);color:var(--text-muted);white-space:nowrap}
+  .tbl .user{font-family:var(--font-mono)}
+  .otag{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:6px;font-size:11px;font-weight:600;font-family:var(--font-mono)}
+  .otag.ssh{background:var(--brand-soft);color:var(--brand)}
+  .otag.sql{background:rgba(88,166,255,.14);color:var(--info)}
+  .otag.redis{background:rgba(139,92,246,.16);color:var(--purple)}
+  .otag.file{background:rgba(139,92,246,.16);color:var(--purple)}
+  .otag.env{background:var(--bg-elevated);color:var(--text-muted)}
+  .otag.agent{background:rgba(45,212,191,.14);color:var(--teal)}
+  .rc{font-family:var(--font-mono);font-weight:700}
+  .rc.ok{color:var(--success)} .rc.fail{color:var(--danger)}
+  .detail{display:none;background:var(--bg-terminal)}
+  tr.open + tr .detail{display:table-cell}
+  .detail pre{margin:0;padding:16px 18px;font-family:var(--font-mono);font-size:12.5px;line-height:1.6;color:var(--text);white-space:pre-wrap}
+  .kv{display:grid;grid-template-columns:120px 1fr;gap:4px 14px;padding:14px 18px;font-size:12.5px}
+  .kv dt{color:var(--text-dim);font-family:var(--font-mono)}
+  .kv dd{margin:0;font-family:var(--font-mono);color:var(--text)}
+  .cm{color:var(--text-dim)}
+  .ctxmenu{position:fixed;z-index:50;background:var(--bg-elevated);border:1px solid var(--border-strong);border-radius:8px;padding:4px;min-width:180px;box-shadow:0 8px 28px rgba(0,0,0,.5)}
+  .ctxmenu button{display:block;width:100%;text-align:left;background:transparent;border:0;color:var(--text);font-size:12.5px;padding:7px 10px;border-radius:6px}
+  .ctxmenu button:hover{background:var(--bg-hover);color:var(--brand)}
+  .ctxmenu .sep{height:1px;background:var(--border);margin:4px 0}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="side-head"><div class="brand"><span class="glyph">R</span><span class="name">RE<b>X</b></span></div>
+      <div class="side-tools"><button class="icon-btn" title="Theme" data-rex-action="theme"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg></button><button class="icon-btn" title="Language" data-rex-action="lang">中</button></div></div>
+        <nav class="nav">
+      <a href="02-workspace.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Workspace</a>
+      <a href="01-dashboard.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13h8V3H3zM13 21h8V3h-8zM3 21h8v-6H3z"/></svg>Dashboard</a>
+      <a href="07-environments.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Environments</a>
+      <a class="active" href="10-audit.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2 4 14h7l-1 8 10-12h-7z"/></svg>Audit log</a>
+      <a href="12-design-preview.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Design</a>
+    </nav>
+    <!-- 环境列表（所有页面共用的侧栏组件）：每个环境名右侧「+」新建资源 -->
+    <div class="side-envs">
+      <div class="side-env" data-env="Aliyun Prod"><span class="nm">Aliyun Prod</span><button class="env-add" title="为 Aliyun Prod 新建资源">＋</button></div>
+      <div class="side-env" data-env="Home LAN"><span class="nm">Home LAN</span><button class="env-add" title="为 Home LAN 新建资源">＋</button></div>
+      <div class="side-env" data-env="Lab VPN"><span class="nm">Lab VPN</span><button class="env-add" title="为 Lab VPN 新建资源">＋</button></div>
+      <div class="side-env" data-env="Object Storage"><span class="nm">Object Storage</span><button class="env-add" title="为 Object Storage 新建资源">＋</button></div>
+    </div>
+    <div class="side-foot">
+      <button class="res-new-btn btn btn-ghost" data-rex-action="new-res" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px"><span style="color:var(--brand);font-size:14px;line-height:1">＋</span> 新建资源</button>
+      <button class="btn btn-ghost" style="flex:1" data-rex-action="new-env"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> New environment</button>
+      <a class="btn btn-ghost btn-sm" style="flex:1" href="09-settings.html">⚙ 设置</a>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumbs">REX <span class="dim">/</span> <b>Audit log</b></div>
+      <div class="spacer"></div>
+      
+      <div class="avatar" style="width:30px;height:30px;border-radius:50%;background:linear-gradient(140deg,var(--info),var(--info-deep));display:grid;place-items:center;color:var(--info-on);font-weight:700;font-size:12px;font-family:var(--font-mono)">AD</div>
+    </div>
+
+    <div class="content">
+      <h1 class="page-title">Audit log</h1>
+      <p class="page-sub">Every operation performed in the console, queryable by time range, environment or operation type. Expand a row for the structured detail and the captured command / SQL; export the filtered set to CSV.</p>
+
+      <div class="toolbar">
+        <span class="field" id="f-env" style="cursor:pointer"><span class="ph">Env</span> all ▾</span>
+        <span class="field" id="f-type" style="cursor:pointer"><span class="ph">Type</span> all ▾</span>
+        <div class="spacer"></div>
+        <button class="tbtn" id="clear">Clear filters</button>
+        <button class="tbtn primary"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> Export CSV</button>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="k">Total</div><div class="v">1,284</div></div>
+        <div class="stat green"><div class="k">Success</div><div class="v">1,201</div></div>
+        <div class="stat red"><div class="k">Failed</div><div class="v">83</div></div>
+        <div class="stat brand"><div class="k">Active users</div><div class="v">1</div></div>
+      </div>
+
+      <table class="tbl">
+        <thead><tr><th>Time</th><th>User</th><th>Environment</th><th>Operation</th><th>Summary</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="time">08-23 14:22:08</td>
+            <td class="user">admin</td>
+            <td>prod</td>
+            <td><span class="otag ssh">SSH</span></td>
+            <td>Connected to web-prod-01 (root@47.98.x.x:22)</td>
+            <td><span class="rc ok">success</span></td>
+          </tr>
+          <tr><td colspan="6" class="detail">
+            <dl class="kv">
+              <dt>session</dt><dd>#a91f · 96d uptime · load 0.18</dd>
+              <dt>client</dt><dd>127.0.0.1 · rex-console-web 1.0.3</dd>
+              <dt>commands</dt><dd>uptime · df -h /data · systemctl status nginx</dd>
+            </dl>
+            <pre><span class="cm"># captured terminal transcript</span>
+root@web-prod-01:~$ systemctl status nginx | head -3
+● nginx.service - A high performance web server
+   Active: active (running) since Mon 09:11 UTC; 2 weeks ago</pre>
+          </td></tr>
+
+          <tr>
+            <td class="time">08-23 13:10:52</td>
+            <td class="user">admin</td>
+            <td>prod</td>
+            <td><span class="otag sql">SQL</span></td>
+            <td>Query orders-db · SELECT on orders</td>
+            <td><span class="rc ok">success</span></td>
+          </tr>
+          <tr><td colspan="6" class="detail">
+            <dl class="kv">
+              <dt>db</dt><dd>orders-db (MySQL 8.0) · schema shop</dd>
+              <dt>rows</dt><dd>1,204 returned · 12ms</dd>
+            </dl>
+            <pre><span class="cm">-- executed statement</span>
+SELECT id, status, total
+FROM   orders
+WHERE  created_at &gt;= '2025-08-01'
+ORDER  BY created_at DESC
+LIMIT  50;</pre>
+          </td></tr>
+
+          <tr>
+            <td class="time">08-23 11:20:14</td>
+            <td class="user">admin</td>
+            <td>prod</td>
+            <td><span class="otag file">SFTP</span></td>
+            <td>Upload deploy.sh → nas.local:/srv/www</td>
+            <td><span class="rc ok">success</span></td>
+          </tr>
+          <tr><td colspan="6" class="detail">
+            <dl class="kv">
+              <dt>transfer</dt><dd>deploy.sh · 4.2 KB ↑ · 3.3 MB/s</dd>
+              <dt>path</dt><dd>local ~/projects/rex-deploy → remote /srv/www</dd>
+            </dl>
+            <pre><span class="cm"># transfer handled by backend (data never touches the browser)</span>
+PUT sftp://nas.local/srv/www/deploy.sh  (4.2 KB)  ✓ 100%</pre>
+          </td></tr>
+
+          <tr>
+            <td class="time">08-23 09:51:03</td>
+            <td class="user">admin</td>
+            <td>prod</td>
+            <td><span class="otag redis">Redis</span></td>
+            <td>HSET cache-prod · session:user:42</td>
+            <td><span class="rc fail">failed</span></td>
+          </tr>
+          <tr><td colspan="6" class="detail">
+            <dl class="kv">
+              <dt>error</dt><dd>NOAUTH Authentication required</dd>
+              <dt>key</dt><dd>session:user:42 (TTL 3600)</dd>
+            </dl>
+            <pre><span class="cm"># rejected</span>
+HSET session:user:42 tz Asia/Shanghai
+(error) NOAUTH Authentication required.
+<span class="cm"># fix: set REDIS_PASSWORD in the environment's auth profile</span></pre>
+          </td></tr>
+
+          <tr>
+            <td class="time">08-22 22:08:41</td>
+            <td class="user">admin</td>
+            <td>staging</td>
+            <td><span class="otag env">ENV</span></td>
+            <td>Edited environment "staging" connection mode</td>
+            <td><span class="rc ok">success</span></td>
+          </tr>
+          <tr><td colspan="6" class="detail">
+            <dl class="kv">
+              <dt>change</dt><dd>connection_mode: direct → agent (agent-7f3a)</dd>
+              <dt>actor</dt><dd>admin · 2FA ok</dd>
+            </dl>
+          </td></tr>
+
+          <tr>
+            <td class="time">08-22 18:33:09</td>
+            <td class="user">admin</td>
+            <td>prod</td>
+            <td><span class="otag agent">AGENT</span></td>
+            <td>Agent web-agent-01 went offline</td>
+            <td><span class="rc fail">failed</span></td>
+          </tr>
+          <tr><td colspan="6" class="detail">
+            <dl class="kv">
+              <dt>agent</dt><dd>web-agent-01 · last heartbeat 18:31:55</dd>
+              <dt>reason</dt><dd>connection to hub lost (ws close 1006)</dd>
+            </dl>
+            <pre><span class="cm"># tunnel dropped, retries paused after 5 attempts</span>
+[agent] hub ws closed code=1006; will retry on next probe</pre>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+  <script src="assets/common.js"></script>
+  <script>
+  // expand / collapse row detail
+  var rows = Array.prototype.slice.call(document.querySelectorAll('.tbl tbody tr'));
+  var dataRows = rows.filter(function(tr){ return !tr.querySelector('.detail'); });
+  dataRows.forEach(function(tr){ tr.addEventListener('click', function(){ tr.classList.toggle('open'); }); });
+
+  // CSV export of the (demo) table
+  function exportCSV(){
+    var head = ['Time','User','Environment','Operation','Summary','Result'];
+    var lines = [head.join(',')];
+    dataRows.forEach(function(tr){
+      var c = tr.children;
+      lines.push([c[0].textContent, c[1].textContent, c[2].textContent, c[3].textContent, c[4].textContent, c[5].textContent].map(function(s){ return '"'+String(s).replace(/"/g,'""')+'"'; }).join(','));
+    });
+    var blob = new Blob([lines.join('\n')], {type:'text/csv'});
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'rex-audit.csv'; a.click();
+    REX.toast('已导出 '+dataRows.length+' 条记录','ok');
+  }
+  // filter by an operation type / environment label
+  function setFilter(id, key, val){
+    var el = document.getElementById(id);
+    filt[key] = val;
+    el.querySelector('.ph').nextSibling.textContent = ' ' + val + ' ▾';
+    applyFilters();
+    REX.toast('已按 ' + (id === 'f-env' ? '环境' : '类型') + '「' + val + '」筛选', 'info');
+  }
+  function refresh(){ REX.toast('日志已刷新（演示）','ok'); }
+
+  // cycling chip filters (Env / Type) — apply both, live
+  var ENV_OPTS = ['all', 'prod', 'staging'];
+  var TYPE_OPTS = ['all', 'SSH', 'SQL', 'SFTP', 'Redis', 'ENV', 'AGENT'];
+  var filt = { env: 'all', type: 'all' };
+  function applyFilters(){
+    dataRows.forEach(function(tr){
+      var env = tr.children[2].textContent.trim().toLowerCase();
+      var type = tr.children[3].textContent.trim();
+      var okEnv = filt.env === 'all' || env === filt.env;
+      var okType = filt.type === 'all' || type === filt.type;
+      tr.style.display = (okEnv && okType) ? '' : 'none';
+      if (tr.style.display === 'none') tr.classList.remove('open');
+    });
+  }
+  function cycleChip(id, opts, key){
+    var el = document.getElementById(id);
+    var cur = opts.indexOf(filt[key]);
+    if (cur < 0) cur = 0;
+    filt[key] = opts[(cur + 1) % opts.length];
+    el.querySelector('.ph').nextSibling.textContent = ' ' + filt[key] + ' ▾';
+    applyFilters();
+    REX.toast('已按 ' + (id === 'f-env' ? '环境' : '类型') + '「' + filt[key] + '」筛选', 'info');
+  }
+  document.getElementById('f-env').addEventListener('click', function(){ cycleChip('f-env', ENV_OPTS, 'env'); });
+  document.getElementById('f-type').addEventListener('click', function(){ cycleChip('f-type', TYPE_OPTS, 'type'); });
+  function clearFilters(){ filt.env='all'; filt.type='all';
+    document.getElementById('f-env').querySelector('.ph').nextSibling.textContent=' all ▾';
+    document.getElementById('f-type').querySelector('.ph').nextSibling.textContent=' all ▾';
+    dataRows.forEach(function(tr){ tr.style.display=''; }); REX.toast('已清除筛选','info'); }
+  document.getElementById('clear').addEventListener('click', clearFilters);
+
+  // toolbar
+  document.querySelector('.tbtn.primary').addEventListener('click', exportCSV);
+
+  // right-click context menu
+  var menu = null;
+  function closeMenu(){ if(menu){ menu.remove(); menu=null; } }
+  document.addEventListener('click', closeMenu);
+  dataRows.forEach(function(tr){
+    tr.addEventListener('contextmenu', function(e){
+      e.preventDefault(); tr.classList.add('open'); closeMenu();
+      var type = tr.children[3].textContent.trim(), env = tr.children[2].textContent.trim();
+      menu = document.createElement('div'); menu.className='ctxmenu';
+      menu.innerHTML = '<button data-a="view">View details</button>' +
+        '<button data-a="copy">Copy row</button>' +
+        '<div class="sep"></div>' +
+        '<button data-a="type">Filter by type ('+type+')</button>' +
+        '<button data-a="env">Filter by environment ('+env+')</button>' +
+        '<div class="sep"></div>' +
+        '<button data-a="refresh">Refresh</button>' +
+        '<button data-a="export">Export CSV</button>' +
+        '<button data-a="clear">Clear filters</button>';
+      document.body.appendChild(menu);
+      menu.style.left = e.clientX+'px'; menu.style.top = e.clientY+'px';
+      menu.addEventListener('click', function(ev){
+        var a = ev.target.dataset.a; if(!a) return closeMenu();
+        if(a==='view') tr.classList.add('open');
+        else if(a==='copy'){ REX.toast('已复制该行','ok'); }
+        else if(a==='type') setFilter('f-type', 'type', type);
+        else if(a==='env') setFilter('f-env', 'env', env);
+        else if(a==='refresh') refresh();
+        else if(a==='export') exportCSV();
+        else if(a==='clear') clearFilters();
+        closeMenu();
+      });
+    });
+  });
+  </script>
+</body>
+</html>

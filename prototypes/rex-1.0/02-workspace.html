@@ -1,0 +1,978 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>REX · Workspace</title>
+<link rel="stylesheet" href="assets/tokens.css"/>
+<link rel="stylesheet" href="assets/shell.css"/>
+<link rel="stylesheet" href="assets/common.css"/>
+<style>
+
+  /* main work area */
+  .work{display:flex;flex-direction:column;min-width:0;min-height:0}
+
+  /* ── recursive free split (every pane can split L/R or U/D) ── */
+  .split{display:flex;flex:1;min-width:0;min-height:0;overflow:hidden}
+  .split.row{flex-direction:row}
+  .split.col{flex-direction:column}
+  .leaf{display:flex;flex-direction:column;flex:1 1 0;min-width:0;min-height:0;overflow:hidden;background:var(--bg-terminal)}
+  .leaf-head{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border-bottom:1px solid var(--border);background:var(--bg-surface);font-size:12px;flex:none}
+  .leaf-head .ttl{font-family:var(--font-mono);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .leaf-head .ttl b{color:var(--brand)}
+  .leaf-head .spacer{flex:1}
+  .leaf-head .acts{display:flex;gap:3px;flex:none}
+  .leaf-body{flex:1;min-height:0;overflow:auto;background:var(--bg-terminal)}
+  /* divider */
+  .divider{flex:none;background:var(--border);position:relative;z-index:6}
+  .split.row > .divider{width:6px;cursor:col-resize}
+  .split.col > .divider{height:6px;cursor:row-resize}
+  .divider::after{content:"";position:absolute;inset:0;margin:auto}
+  .split.row > .divider::after{width:2px;height:34%;border-radius:2px;background:var(--scrollbar)}
+  .split.col > .divider::after{height:2px;width:34%;border-radius:2px;background:var(--scrollbar)}
+  .divider:hover::after,.divider.drag::after{background:var(--brand)}
+  .leaf-head .tag{font-family:var(--font-mono);font-size:10.5px;padding:1px 7px;border-radius:999px;background:var(--brand-soft);color:var(--brand)}
+
+  /* terminal */
+  .term{padding:12px 14px;font-family:var(--font-mono);font-size:12.5px;line-height:1.55;color:#c9d4df}
+  .term .pr{color:var(--success)} .term .pa{color:var(--brand)} .term .cm{color:var(--text-dim)} .term .err{color:var(--danger)} .term .ok{color:var(--success)}
+  .term .cur{display:inline-block;width:8px;height:14px;background:var(--brand);vertical-align:-2px;animation:p 1s steps(1) infinite}
+  @keyframes p{50%{opacity:0}}
+  /* visible layout bar (free-split controls) */
+  .layout-bar{display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-bottom:1px solid var(--border);background:var(--bg-elevated)}
+  .layout-bar .lbl{font-size:11px;color:var(--text-dim);font-family:var(--font-mono);margin-right:2px}
+  .lay{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 11px;border-radius:6px;border:1px solid transparent;background:transparent;color:var(--text-muted);font-size:11.5px;cursor:pointer}
+  .lay:hover{background:var(--bg-hover);color:var(--text)}
+  .lay.primary{background:var(--bg-surface);color:var(--text);border-color:var(--border-strong)}
+
+  /* mini file browser inside pane */
+  .fb{padding:8px 0;font-size:12.5px}
+  .fb .path{display:flex;align-items:center;gap:6px;padding:6px 12px;border-bottom:1px solid var(--border);font-family:var(--font-mono);color:var(--text-muted);font-size:12px}
+  .fb .row{display:flex;align-items:center;gap:9px;padding:5px 12px;color:var(--text-muted)}
+  .fb .row:hover{background:var(--bg-hover);color:var(--text)}
+  .fb .row .ic{width:16px;text-align:center}
+  .fb .row.dir{color:var(--info)} .fb .row .sz{margin-left:auto;font-family:var(--font-mono);color:var(--text-dim);font-size:11.5px}
+
+  /* status bar */
+  .statusbar{height:var(--status-h);display:flex;align-items:center;gap:0;background:var(--bg-elevated);border-top:1px solid var(--border);font-family:var(--font-mono);font-size:11px;color:var(--text-muted)}
+  .statusbar .seg{display:flex;align-items:center;gap:6px;padding:0 12px;height:100%;border-right:1px solid var(--border)}
+  .statusbar .seg.brand{background:var(--brand-soft);color:var(--brand)}
+  .statusbar .seg.spacer{flex:1;border-right:0}
+  .statusbar .seg .dot{width:7px;height:7px;border-radius:50%;background:var(--success)}
+  /* ===== workspace: JS-driven multi-group, per-cell resource + free split ===== */
+  .views{display:flex;flex:1;min-height:0;flex-direction:column}
+  /* group tab bar */
+  .grouptab{cursor:pointer;display:flex;align-items:center;gap:8px;padding:0 14px;height:34px;border-right:1px solid var(--border);background:var(--bg-elevated);color:var(--text-muted);font-size:12.5px;white-space:nowrap;border-top:2px solid transparent}
+  .grouptab .pdot{width:8px;height:8px;border-radius:50%;background:var(--brand)}
+  .grouptab.active{background:var(--bg-app);color:var(--text);border-top-color:var(--brand)}
+  .grouptab .x{margin-left:4px;opacity:.5;font-size:13px}
+  .grouptab .x:hover{color:var(--danger);opacity:1}
+  .grouptab.add{color:var(--text-dim)}
+  /* resource picker shown inside an empty cell */
+  .picker{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;height:100%;background:var(--bg-app);color:var(--text-dim);font-family:var(--font-mono);font-size:12px}
+  .picker .picker-h{font-family:var(--font-mono);font-size:12px;color:var(--text-muted);max-width:360px;text-align:center;line-height:1.5}
+  .picker .picker-sec{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);font-family:var(--font-mono);margin:18px 0 2px}
+  .picker .grid{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+  .picker .pc{width:84px;height:84px;border-radius:14px;border:1px solid var(--border-strong);background:var(--bg-surface);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;cursor:pointer;color:var(--text);font-size:11px;font-weight:600;transition:border-color .15s,transform .08s}
+  .picker .pc:hover{border-color:var(--brand);transform:translateY(-2px)}
+  .picker .pc .pic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-family:var(--font-mono);font-weight:700;color:var(--on-ink);font-size:13px}
+  /* on narrow screens, keep row splits side-by-side (left/right stays left/right);
+     only column splits keep stacking. Give leaves a floor height so a stacked
+     console (e.g. SQL/DB) never collapses to zero. */
+  @media(max-width:760px){
+    .split.row{flex-direction:row}
+    .leaf{min-height:280px}
+  }
+
+  /* SQL view: schema tree + editor/results */
+  .sqltree{width:240px;flex:none;display:flex;flex-direction:column;background:var(--bg-sidebar);border-right:1px solid var(--border);min-height:0}
+  .sqltree .st-head{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--border);font-size:12.5px}
+  .sqltree .st-body{flex:1;overflow:auto;padding:4px 8px;font-size:12.5px}
+  .node{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:6px;color:var(--text-muted);cursor:pointer}
+  .node:hover{background:var(--bg-hover);color:var(--text)}
+  .node .chev{color:var(--text-dim);width:12px}
+  .node.sel{background:var(--brand-soft);color:var(--brand)}
+  .node .ic{width:15px;text-align:center;opacity:.85}
+  .node.tbl .ic{color:var(--info)} .node.view .ic{color:var(--purple)} .node.fn .ic{color:var(--warning)}
+  .node .badge{margin-left:auto;font-family:var(--font-mono);font-size:9.5px;background:var(--bg-elevated);color:var(--text-dim);border-radius:4px;padding:0 5px}
+  .sqleditor{flex:1;display:flex;flex-direction:column;min-height:0}
+  .tbl{color:var(--teal)}
+  .result-head{display:flex;align-items:center;gap:10px;padding:7px 12px;background:var(--bg-elevated);border-top:1px solid var(--border);border-bottom:1px solid var(--border);font-size:12px}
+  .result-head .chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;color:var(--text-muted)}
+  .result-head .chip b{color:var(--text)} .result-head .spacer{flex:1}
+  .grid-scroll{flex:1;overflow:auto;min-height:0}
+  /* SQL console: schema tree | editor | results, laid out inside a leaf */
+  .sqleditor{display:flex;flex-direction:column;min-height:0;width:100%}
+  .sqledit{flex:1;display:flex;flex-direction:column;min-height:0;background:var(--bg-terminal);border-top:1px solid var(--border)}
+  .sqledit .ed-bar{display:flex;align-items:center;gap:8px;padding:6px 10px;font-family:var(--font-mono);font-size:11px;color:var(--text-dim);border-bottom:1px solid var(--border);background:var(--bg-terminal)}
+  .sqledit .ed-bar .spacer{flex:1}
+  .sqledit .tbtn{height:26px;padding:0 10px;font-size:11.5px;border:1px solid var(--border-strong);background:var(--bg-elevated);color:var(--text);border-radius:6px;display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+  .sqledit .tbtn:hover{background:var(--bg-hover)}
+  .sqledit .tbtn.primary{background:var(--brand);color:var(--on-brand);border-color:var(--brand);font-weight:600}
+  .sqledit .tbtn.primary:hover{background:var(--brand-strong)}
+  .sqledit .editor{margin:0;padding:12px 14px;flex:1;overflow:auto;font-family:var(--font-mono);font-size:12.5px;line-height:1.65;color:#c9d4df;white-space:pre-wrap;word-break:break-word;outline:none}
+  .sqledit-result{height:42%;min-height:140px;display:flex;flex-direction:column;background:var(--bg-app);border-top:1px solid var(--border)}
+  .sqledit-result .result-head{display:flex;align-items:center;gap:10px;padding:7px 12px;background:var(--bg-elevated);border-bottom:1px solid var(--border);font-size:12px}
+  .sqledit-result .result-head .chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;color:var(--text-muted)}
+  .sqledit-result .result-head .chip b{color:var(--text)}
+  .sqledit-result .result-head .spacer{flex:1}
+  .sqledit-result .sq-status{font-family:var(--font-mono);font-size:11px}
+  table.grid{width:100%;border-collapse:collapse;font-size:12.5px;font-family:var(--font-mono)}
+  table.grid th{position:sticky;top:0;background:var(--bg-elevated);text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);color:var(--text-muted);font-weight:600;font-size:11px;white-space:nowrap}
+  table.grid td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text);white-space:nowrap}
+  table.grid tbody tr:hover{background:var(--bg-hover)}
+  table.grid .num{text-align:right;color:var(--info)}
+  table.grid .pk{color:var(--brand);font-weight:600}
+
+  /* Redis view: key tree + value viewer */
+  .keytree{flex:1;overflow:auto;padding:0 6px;font-family:var(--font-mono);font-size:12px}
+  .kt{display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;color:var(--text-muted);cursor:pointer}
+  .kt:hover{background:var(--bg-hover);color:var(--text)}
+  .kt .ns{color:var(--text)} .kt .cnt{margin-left:auto;font-size:10px;background:var(--bg-elevated);color:var(--text-dim);border-radius:4px;padding:0 5px}
+  .kt.key .ic{color:var(--danger)} .kt.sel{background:var(--brand-soft);color:var(--brand)}
+  .card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+  .card-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg-elevated);font-size:12px}
+  .card-bar .spacer{flex:1}
+  table.ht{width:100%;border-collapse:collapse;font-size:12.5px;font-family:var(--font-mono)}
+  table.ht th{text-align:left;padding:8px 14px;border-bottom:1px solid var(--border);color:var(--text-dim);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em}
+  table.ht td{padding:7px 14px;border-bottom:1px solid var(--border);color:var(--text)}
+  table.ht tbody tr:hover{background:var(--bg-hover)}
+  table.ht .fld{color:var(--info)} table.ht .val{color:var(--success)}
+  .json{font-family:var(--font-mono);font-size:12.5px;line-height:1.7;padding:14px;color:#c9d4df;white-space:pre-wrap}
+  .json .k{color:var(--info)} .json .s{color:var(--success)} .json .n{color:var(--brand)} .json .b{color:var(--purple)}
+
+  /* Files / S3: dual-panel + transfer queue */
+  .panel{display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid var(--border)}
+  .panel-head{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;background:var(--bg-surface);border-bottom:1px solid var(--border);font-size:12px}
+  .panel-head .tag{font-family:var(--font-mono);font-size:10.5px;padding:1px 7px;border-radius:999px;background:var(--brand-soft);color:var(--brand)}
+  .panel-head .spacer{flex:1}
+  .panel-head .acts{display:flex;gap:3px}
+  .pathbar{display:flex;align-items:center;gap:6px;height:32px;padding:0 10px;border-bottom:1px solid var(--border);background:var(--bg-app);font-family:var(--font-mono);font-size:12px;color:var(--text-muted)}
+  .pathbar .crumb{color:var(--text)} .pathbar .crumb.cur{color:var(--brand)}
+  .filelist{flex:1;overflow:auto;min-height:0}
+  table.fl{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.fl th{position:sticky;top:0;text-align:left;padding:7px 12px;border-bottom:1px solid var(--border);background:var(--bg-elevated);color:var(--text-dim);font-weight:500;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-family:var(--font-mono)}
+  table.fl td{padding:6px 12px;border-bottom:1px solid var(--border);color:var(--text-muted)}
+  table.fl tbody tr{cursor:pointer} table.fl tbody tr:hover{background:var(--bg-hover)}
+  table.fl tbody tr.sel{background:var(--brand-soft);color:var(--text)}
+  table.fl .nm{display:flex;align-items:center;gap:8px;color:var(--text)} table.fl .nm .ic{width:16px;text-align:center}
+  table.fl .dir .nm{color:var(--info)} table.fl .sz{text-align:right;font-family:var(--font-mono);color:var(--text-dim)}
+  table.fl .perm{font-family:var(--font-mono);color:var(--text-dim);font-size:11.5px}
+  .queue{border-top:1px solid var(--border);background:var(--bg-elevated)}
+  .queue-head{display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;font-size:12.5px;cursor:pointer}
+  .queue-head .spacer{flex:1} .queue-head .through{font-family:var(--font-mono);color:var(--success);font-size:11.5px}
+  .queue-body{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border-top:1px solid var(--border)}
+  .qcol{background:var(--bg-elevated);padding:6px 0;max-height:150px;overflow:auto}
+
+  /* ── SIP softphone ── */
+  .sip{display:flex;flex-direction:column;height:100%;background:var(--bg-app)}
+  .sip-bar{display:flex;align-items:center;gap:8px;height:34px;padding:0 12px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:13px}
+  /* SIP account switcher: one compact selector; popover scrolls + filters for many accounts */
+  .sip-acct-wrap{position:relative;display:inline-flex}
+  .sip-acct-sel{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 10px;border-radius:7px;border:1px solid var(--border-strong);background:var(--bg-surface);color:var(--text);font-size:12px;cursor:pointer}
+  .sip-acct-sel:hover{border-color:var(--teal)}
+  .sip-acct-sel .dot{width:7px;height:7px;border-radius:50%;background:var(--teal);flex:none}
+  .sip-acct-sel .caret{color:var(--text-dim);font-size:10px;margin-left:2px}
+  .sip-acct-pop{position:absolute;top:calc(100% + 6px);left:0;z-index:20;width:248px;background:var(--bg-elevated);border:1px solid var(--border-strong);border-radius:9px;padding:6px;box-shadow:0 12px 34px rgba(0,0,0,.5)}
+  .sip-acct-pop[hidden]{display:none}
+  .sip-acct-pop .sip-acct-filter{width:100%;height:30px;padding:0 9px;margin-bottom:6px;border-radius:6px;border:1px solid var(--border-strong);background:var(--bg-app);color:var(--text);font:inherit;font-size:12px;box-sizing:border-box}
+  .sip-acct-list{max-height:220px;overflow:auto;margin-top:2px}
+  .sip-acct-opt{display:flex;align-items:center;gap:7px;width:100%;text-align:left;background:transparent;border:0;color:var(--text);font:inherit;font-size:12px;padding:7px 9px;border-radius:6px;cursor:pointer}
+  .sip-acct-opt:hover{background:var(--bg-hover);color:var(--brand)}
+  .sip-acct-opt .dot{width:7px;height:7px;border-radius:50%;background:var(--teal);flex:none}
+  .sip-acct-opt.on{color:var(--teal)}
+  .sip-acct-opt.on .dot{box-shadow:0 0 0 3px rgba(45,212,191,.22)}
+  .sip-dial{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:16px}
+  .sip-dial .num{font-family:var(--font-mono);font-size:26px;letter-spacing:.08em;color:var(--text);min-height:34px}
+  .sip-dial .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:240px;width:100%}
+  .sip-dial .dk{height:42px;border-radius:10px;border:1px solid var(--border-strong);background:var(--bg-surface);color:var(--text);font-family:var(--font-mono);font-size:16px;cursor:pointer}
+  .sip-dial .dk:hover{background:var(--bg-hover);border-color:var(--teal)}
+  .sip-acts{display:flex;gap:10px}
+  .sip-acts .call{height:38px;padding:0 22px;border-radius:9px;border:1px solid transparent;background:var(--success);color:#06210f;font-weight:700;font-size:14px}
+  .sip-acts .hang{height:38px;padding:0 22px;border-radius:9px;border:1px solid var(--border-strong);background:transparent;color:var(--danger);font-weight:600}
+  .sip-log{padding:10px 14px;border-top:1px solid var(--border);font-size:12px;font-family:var(--font-mono)}
+   /* SIP call state machine */
+   .sip-state{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 10px;border-radius:7px;background:var(--bg-surface);border:1px solid var(--border-strong);font-size:12px;font-family:var(--font-mono)}
+   .sip-state .dot{width:8px;height:8px;border-radius:50%;background:var(--text-dim);flex:none}
+   .sip-state.ringing .dot{background:var(--warning);box-shadow:0 0 0 3px rgba(210,153,34,.18);animation:p 1s steps(1) infinite}
+   .sip-state.active .dot{background:var(--success);box-shadow:0 0 0 3px rgba(63,185,80,.18)}
+   .sip-state.ended .dot{background:var(--text-dim)}
+   .sip-timer{font-family:var(--font-mono);font-size:14px;color:var(--text);min-height:20px;letter-spacing:.06em}
+   .panel-head .sync-btn{cursor:pointer}
+  .qrow{display:flex;align-items:center;gap:8px;padding:6px 12px;font-size:12px}
+  .qrow .dirn{width:14px} .qrow .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .qrow .bar{width:90px;height:5px;border-radius:3px;background:var(--bg-app);overflow:hidden;flex:none}
+  .qrow .bar i{display:block;height:100%;background:var(--brand)}
+  .qrow .pct{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);width:34px;text-align:right}
+  .qrow .st{font-size:10.5px;font-family:var(--font-mono);color:var(--success)}
+  .qrow .st.done{color:var(--text-dim)} .qrow .st.err{color:var(--danger)}
+  /* tab bar gets a fixed height + scroll; keep it from eating the views */
+  .tabbar{height:var(--tabbar-h);background:var(--bg-elevated);border-bottom:1px solid var(--border);overflow-x:auto;display:flex;align-items:stretch}
+  .tab{display:flex;align-items:center;gap:8px;padding:0 12px 0 14px;border-right:1px solid var(--border);color:var(--text-muted);font-size:12.5px;white-space:nowrap;border-top:2px solid transparent}
+  .tab:hover{background:var(--bg-hover);color:var(--text)}
+  .tab .pico{width:16px;height:16px;border-radius:4px;display:grid;place-items:center;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--on-ink)}
+  .tab .st{width:7px;height:7px} .tab .x{color:var(--text-dim);border-radius:4px;width:18px;height:18px;display:grid;place-items:center}
+  .tab .x:hover{background:var(--bg-surface);color:var(--text)}
+
+  @media(max-width:980px){.panes{grid-template-columns:1fr}.sqltree{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- SIDEBAR (consistent with other pages) -->
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand"><span class="glyph">R</span><span class="name">RE<b>X</b></span></div>
+      <div class="side-tools">
+        <button class="icon-btn" title="Theme" data-rex-action="theme"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg></button>
+        <button class="icon-btn" title="Language" data-rex-action="lang">中</button>
+      </div>
+    </div>
+    <div class="search">
+      <div class="box">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
+        Search resources <span class="kbd">Ctrl K</span>
+      </div>
+    </div>
+        <nav class="nav">
+      <a class="active" href="02-workspace.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Workspace</a>
+      <a href="01-dashboard.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13h8V3H3zM13 21h8V3h-8zM3 21h8v-6H3z"/></svg>Dashboard</a>
+      <a href="07-environments.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Environments</a>
+      <a href="10-audit.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2 4 14h7l-1 8 10-12h-7z"/></svg>Audit log</a>
+      <a href="12-design-preview.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Design</a>
+    </nav>
+    <div class="side-section">
+      <button class="res-new-btn" data-rex-action="new-res" style="display:flex;align-items:center;gap:6px;width:100%;height:28px;padding:0 8px;border-radius:7px;border:1px solid var(--border-strong);background:var(--bg-surface);color:var(--text);font-size:12px;font-weight:600;cursor:pointer">
+        <span style="color:var(--brand);font-size:14px;line-height:1">＋</span> 新建资源
+      </button>
+    </div>
+    <div class="tree-body">
+      <div class="grp fav" data-group="收藏" data-fav="1"><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="color:var(--brand)"><path d="m9 6 6 6-6 6"/></svg>
+        <span class="ico">⭐</span> 收藏 <span class="badge gray fav-cnt">0</span></div>
+      <div class="grp open" data-group="Aliyun Prod" data-env="Aliyun Prod"><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m9 6 6 6-6 6"/></svg>
+        <span class="pico p-mysql" style="width:13px;height:13px;border-radius:3px"></span> Aliyun Prod <span class="badge gray">6</span><button class="add env-add" data-env="Aliyun Prod" title="为 Aliyun Prod 新建资源">＋</button></div>
+      <div class="res cur" data-kind="ssh" data-name="web-prod-01"><span class="pico p-ssh">$</span> web-prod-01 <span class="st on"></span><span class="star" title="收藏">☆</span></div>
+      <div class="res" data-kind="sql" data-name="orders-db"><span class="pico p-mysql">dB</span> orders-db <span class="st on"></span><span class="star" title="收藏">☆</span></div>
+      <div class="res" data-kind="redis" data-name="cache-prod"><span class="pico p-redis">R</span> cache-prod <span class="st on"></span><span class="star" title="收藏">☆</span></div>
+      <div class="res" data-kind="s3" data-name="assets-bucket"><span class="pico p-s3">☁</span> assets-bucket <span class="st off"></span><span class="star" title="收藏">☆</span></div>
+      <div class="grp" data-group="Home LAN" data-env="Home LAN" style="margin-top:4px"><svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m9 6 6 6-6 6"/></svg>
+        <span class="pico p-sftp" style="width:13px;height:13px;border-radius:3px"></span> Home LAN <span class="badge gray">4</span><button class="add env-add" data-env="Home LAN" title="为 Home LAN 新建资源">＋</button></div>
+      <div class="res" data-kind="files" data-name="nas.local"><span class="pico p-sftp">↻</span> nas.local <span class="st warn"></span><span class="star" title="收藏">☆</span></div>
+      <div class="res" data-kind="sip" data-name="desk-phone"><span class="pico p-sip">☎</span> desk-phone <span class="st on"></span><span class="star" title="收藏">☆</span></div>
+    </div>
+    <div class="side-foot">
+      <button class="btn btn-ghost btn-sm" style="flex:1" data-rex-action="new-env">+ New environment</button>
+      <a class="btn btn-ghost btn-sm" style="flex:1" href="09-settings.html">⚙ 设置</a>
+    </div>
+  </aside>
+
+  <!-- WORK AREA: one page, all resource types as tabs -->
+  <div class="work">
+    <!-- workspace groups (each group = one saved layout of arbitrary cells) -->
+    <div class="tabbar" id="groupbar">
+      <span class="grouptab active" data-g="main"><span class="pdot"></span> 主用 <span class="x" title="Close group">✕</span></span>
+      <span class="grouptab" data-g="trouble"><span class="pdot"></span> 排障 <span class="x" title="Close group">✕</span></span>
+      <span class="grouptab add" id="add-group">＋ 新工作区</span>
+    </div>
+
+    <!-- the canvas is rendered by JS from the saved layout -->
+    <div class="views" id="canvas"></div>
+
+    <!-- status bar -->
+    <div class="statusbar">
+      <div class="seg brand"><span class="dot"></span> workspace</div>
+      <div class="seg" id="rescount">5 resources open</div>
+      <div class="seg">UTF-8</div>
+      <div class="seg spacer"></div>
+      <div class="seg agent">⟡ agent: edge-gw · 12 ms</div>
+      <div class="seg" style="color:var(--brand)">⤢ broadcast off</div>
+      <div class="seg" id="f1help" style="cursor:pointer">F1 help</div>
+      <div class="seg" id="cmdpal" style="cursor:pointer" title="命令面板 (Ctrl K)">⌘ 命令面板</div>
+    </div>
+  </div>
+</div>
+<script>
+  // Workspace model (B): multiple saved groups; each group is a layout tree of
+  // cells. A cell holds ANY resource (ssh/sql/redis/files/s3); empty cells show a
+  // resource picker. Layout is persisted to localStorage and survives reload.
+  (function(){
+    var STORE = 'rex.workspace.v1';
+    var SVG = {
+      r:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="7" height="16" rx="1"/><rect x="14" y="4" width="7" height="16" rx="1"/></svg>',
+      b:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="7" rx="1"/><rect x="4" y="14" width="16" height="7" rx="1"/></svg>',
+      x:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+      sw:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10 4 13l3 3M4 13h11M17 14l3-3-3-3M20 11H9"/></svg>'
+    };
+    // 每个环境恰好一个 agent（演示数据）：环境 → agent 名称/延迟/状态
+    var ENV_AGENTS = {
+      'Aliyun Prod': {n:'edge-gw', ms:'12 ms', st:'on'},
+      'Home LAN':    {n:'home-relay', ms:'3 ms', st:'warn'},
+      'Lab VPN':     {n:'lab-tunnel', ms:'28 ms', st:'on'}
+    };
+    function updateAgentStatus(env){
+      var seg = document.querySelector('.statusbar .seg.agent');
+      if(!seg) return;
+      var a = ENV_AGENTS[env];
+      seg.innerHTML = a ? '⟡ agent: ' + a.n + ' · ' + a.ms : '⟡ 直连 · 无 agent';
+    }
+    // resource catalog: how each kind is rendered once picked
+    var RES = {
+      ssh:  {label:'SSH Terminal',  cls:'p-ssh',  icon:'$',  body:sshBody},
+      sql:  {label:'SQL Console',  cls:'p-mysql',icon:'dB', body:sqlBody},
+      redis:{label:'Redis',        cls:'p-redis',icon:'R',  body:redisBody},
+      files:{label:'SFTP Files',    cls:'p-sftp', icon:'↻', body:filesBody},
+      s3:   {label:'Object Storage',cls:'p-s3',  icon:'☁', body:s3Body},
+      sip:  {label:'SIP Softphone', cls:'p-sip',  icon:'☎', body:sipBody}
+    };
+    // SIP accounts available on a single connection (switch identity without switching connection)
+    var SIP_ACCOUNTS = [
+      {id:'1001', name:'客服坐席',   line:'Line 1'},
+      {id:'1002', name:'销售坐席',   line:'Line 2'},
+      {id:'1003', name:'值班坐席',   line:'Line 3'},
+      {id:'1004', name:'技术支撑',   line:'Line 1'},
+      {id:'1005', name:'售后回访',   line:'Line 2'},
+      {id:'1006', name:'外呼营销',   line:'Line 3'},
+      {id:'1007', name:'财务专线',   line:'Line 4'},
+      {id:'1008', name:'人事热线',   line:'Line 4'},
+      {id:'1009', name:'总裁办',     line:'Line 5'},
+      {id:'1010', name:'IT 服务台',  line:'Line 5'},
+      {id:'1011', name:'投诉处理',   line:'Line 6'},
+      {id:'1012', name:'媒体联络',   line:'Line 6'}
+    ];
+
+    function sshBody(k){ return '<div class="term">'+
+      '<span class="pr">root@web-prod-01</span>:<span class="pa">~</span>$ uptime\n'+
+      ' 14:22:08 up 96 days,  3:11,  1 user,  load average: 0.18, 0.22, 0.19\n'+
+      '<span class="pr">root@web-prod-01</span>:<span class="pa">~</span>$ df -h /data\n'+
+      'Filesystem      Size  Used Avail Use% Mounted on\n/dev/nvme0n1p1  220G  141G   68G  68% /data\n'+
+      '<span class="pr">root@web-prod-01</span>:<span class="pa">~</span>$ <span class="cur"></span></div>'; }
+    function sqlBody(k){
+      var treeNodes =
+        '<div class="node sel" data-obj="schema"><span class="chev">▾</span><span class="ic" style="color:var(--info)">▣</span> shop</div>'+
+        '<div class="node tbl" data-obj="table" data-name="orders"><span class="chev" style="visibility:hidden">▾</span><span class="ic">▤</span> orders <span class="badge">1.2M</span></div>'+
+        '<div class="node tbl" data-obj="table" data-name="customers"><span class="chev" style="visibility:hidden">▾</span><span class="ic">▤</span> customers <span class="badge">84k</span></div>'+
+        '<div class="node tbl" data-obj="table" data-name="products"><span class="chev" style="visibility:hidden">▾</span><span class="ic">▤</span> products <span class="badge">3.1k</span></div>'+
+        '<div class="node view" data-obj="view" data-name="v_active_orders"><span class="chev" style="visibility:hidden">▾</span><span class="ic">◰</span> v_active_orders</div>';
+      var q = "SELECT id, status, total\nFROM   orders\nWHERE  created_at >= '2025-08-01'\nORDER  BY created_at DESC\nLIMIT  50;";
+      return '<div class="sqleditor">'+
+        '<div class="sqltree" style="width:auto"><div class="st-head"><span class="pico p-mysql" style="width:18px;height:18px;border-radius:5px;display:grid;place-items:center;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--on-ink);background:var(--info)">dB</span> orders-db <span class="muted" style="font-size:11px">mysql 8.0</span></div>'+
+          '<div class="st-body">'+treeNodes+'</div></div>'+
+        '<div class="sqledit">'+
+          '<div class="ed-bar"><span>orders-db · shop</span><span class="spacer"></span>'+
+          '<button class="tbtn sqltool" data-sqltool="designer" title="表设计器">表设计</button>'+
+          '<button class="tbtn sqltool" data-sqltool="import" title="导入数据">导入</button>'+
+          '<button class="tbtn sqltool" data-sqltool="export" title="导出数据">导出</button>'+
+          '<button class="tbtn sqltool" data-sqltool="saved" title="已存查询">查询</button>'+
+          '<button class="tbtn sqltool" data-sqltool="global" title="跨库全局查询">全局</button>'+
+          '<button class="tbtn sqlexplain" title="查看执行计划">EXPLAIN</button><button class="tbtn primary sqlexec" title="执行 (Ctrl+Enter)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 3l14 9-14 9z"/></svg> 运行</button></div>'+
+          '<div class="editor" contenteditable="true" spellcheck="false">'+q+'</div>'+
+        '</div>'+
+        '<div class="sqledit-result">'+
+          '<div class="result-head"><span class="chip">结果 <b class="sq-rows">0</b> 行</span><span class="chip">耗时 <b class="sq-ms">0</b> ms</span><span class="spacer"></span><span class="sq-status muted">未执行</span></div>'+
+          '<div class="grid-scroll"><table class="grid sq-result"><thead></thead><tbody></tbody></table></div>'+
+        '</div>'+
+      '</div>';
+    }
+    // run the SQL editor: fake a deterministic result set from the editor text
+    function sqlExec(leaf){
+      var ed = leaf.querySelector('.editor');
+      if(!ed) return;
+      var sql = (ed.textContent || '').trim();
+      var tbody = leaf.querySelector('.sq-result tbody');
+      var thead = leaf.querySelector('.sq-result thead');
+      var status = leaf.querySelector('.sq-status');
+      if(!sql){ REX.toast('编辑器为空', 'err'); return; }
+      // demo result set for orders-style queries
+      var cols = ['id','status','total','created_at'];
+      var stat = ['paid','pending','refunded','shipped'];
+      var rows = [];
+      for(var i=0;i<12;i++){
+        var id = 1000 + i*7;
+        rows.push([id, stat[i%stat.length], (Math.random()*500+30).toFixed(2), '2025-08-'+(10+(i%18))+' 1'+(i%9)+':2'+i%9]);
+      }
+      var th = '<tr>'+cols.map(function(c){ return '<th>'+c+'</th>'; }).join('')+'</tr>';
+      var tb = rows.map(function(r){
+        return '<tr>'+r.map(function(v,i){ return '<td'+(i===0?' class="pk"':'')+'>'+v+'</td>'; }).join('')+'</tr>';
+      }).join('');
+      thead.innerHTML = th; tbody.innerHTML = tb;
+      leaf.querySelector('.sq-rows').textContent = rows.length;
+      var ms = (8 + Math.floor(Math.random()*40));
+      leaf.querySelector('.sq-ms').textContent = ms;
+      status.textContent = '已执行 · ' + sql.split(/\s+/)[0].toUpperCase();
+      status.style.color = 'var(--success)';
+      REX.toast('查询完成 · '+rows.length+' 行 / '+ms+'ms', 'ok');
+    }
+    function redisBody(k){ return '<div class="sqltree" style="width:auto"><div class="st-head"><span class="pico p-redis" style="width:18px;height:18px;border-radius:5px;display:grid;place-items:center;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--on-ink);background:var(--danger)">R</span> cache-prod <span class="muted" style="font-size:11px">DB0 · 128k</span></div>'+
+      '<div class="st-body"><div class="node sel"><span class="chev">▾</span><span class="ic" style="color:var(--danger)">•</span> session:u_8821:token</div><div class="node"><span class="chev" style="visibility:hidden">▾</span><span class="ic" style="color:var(--danger)">•</span> session:u_1042:token</div><div class="node"><span class="chev">▾</span><span class="ic" style="color:var(--info)">▣</span> cache <span class="badge">31k</span></div><div class="node"><span class="chev">▾</span><span class="ic" style="color:var(--info)">▣</span> queue <span class="badge">9k</span></div></div></div>'+
+      '<div style="padding:14px 16px;color:var(--text-dim);font-family:var(--font-mono);font-size:12px">HASH viewer…</div>'; }
+    function filesBody(k){ return '<div class="panel-head"><span class="tag">SFTP</span> /srv/www <span class="spacer"></span><span class="sync-btn icon-btn" data-files-sync title="文件夹同步">🔄</span></div>'+
+      '<div class="pathbar"><span class="crumb">/srv/</span><span class="crumb cur">www/</span></div>'+
+      '<div class="filelist"><table class="fl"><thead><tr><th>Name</th><th class="sz">Size</th><th>Modified</th><th class="perm">Perm</th></tr></thead><tbody>'+
+      '<tr class="dir"><td><span class="nm"><span class="ic">📁</span> app/</span></td><td class="sz">—</td><td>Aug 23 13:11</td><td class="perm">drwxr-xr-x</td></tr>'+
+      '<tr class="dir"><td><span class="nm"><span class="ic">📁</span> public/</span></td><td class="sz">—</td><td>Aug 23 13:11</td><td class="perm">drwxr-xr-x</td></tr>'+
+      '<tr class="sel" data-file="server.js"><td><span class="nm"><span class="ic">📄</span> server.js</span></td><td class="sz">18.6 KB</td><td>Aug 23 13:10</td><td class="perm">-rw-r--r--</td></tr>'+
+      '<tr data-file="package.json"><td><span class="nm"><span class="ic">📄</span> package.json</span></td><td class="sz">1.1 KB</td><td>Aug 22 10:02</td><td class="perm">-rw-r--r--</td></tr>'+
+      '</tbody></table></div>'; }
+    function s3Body(k){ return '<div class="panel-head"><span class="tag">S3</span> assets-bucket <span class="spacer"></span><span class="sync-btn icon-btn" data-files-sync title="文件夹同步">🔄</span></div>'+
+      '<div class="pathbar"><span class="crumb cur">assets-bucket/</span><span class="crumb">images/</span></div>'+
+      '<div class="filelist"><table class="fl"><thead><tr><th>Name</th><th class="sz">Size</th><th>Modified</th><th>Storage class</th></tr></thead><tbody>'+
+      '<tr class="dir"><td><span class="nm"><span class="ic">📁</span> images/</span></td><td class="sz">—</td><td>Aug 23 10:02</td><td>STANDARD</td></tr>'+
+      '<tr class="sel" data-file="logo.png"><td><span class="nm"><span class="ic">📄</span> logo.png</span></td><td class="sz">42 KB</td><td>Aug 21 17:30</td><td>STANDARD</td></tr>'+
+      '</tbody></table></div>'; }
+    // SIP softphone: one connection, switchable accounts (identity), not connection
+    function sipBody(kind, name, acct){
+      acct = acct || SIP_ACCOUNTS[0].id;
+      var acc = SIP_ACCOUNTS.filter(function(a){return a.id===acct;})[0] || SIP_ACCOUNTS[0];
+      var opts = SIP_ACCOUNTS.map(function(a){
+        return '<button class="sip-acct-opt'+(a.id===acc.id?' on':'')+'" data-acct="'+a.id+'"><span class="dot"></span><b>'+a.id+'</b> · '+a.name+' <span class="muted">'+a.line+'</span></button>';
+      }).join('');
+      return '<div class="sip">'+
+        '<div class="sip-bar"><span class="pico p-sip" style="width:16px;height:16px;border-radius:4px;display:grid;place-items:center;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--on-ink);background:var(--teal)">☎</span> '+name+' <span class="muted" style="font-size:11px">· 注册账户</span>'+
+          '<span class="sip-acct-wrap"><button class="sip-acct-sel" title="切换注册账户"><span class="dot"></span>'+acc.id+' · '+acc.name+' <span class="muted">'+acc.line+'</span><span class="caret">▾</span></button>'+
+          '<div class="sip-acct-pop" hidden><input class="sip-acct-filter" placeholder="筛选账号…"><div class="sip-acct-list">'+opts+'</div></div></span>'+
+          '<span class="sip-state ended" data-sip-state><span class="dot"></span>空闲</span>'+
+          '<button class="icon-btn sip-cdr" title="通话记录 (CDR)" style="margin-left:6px">☰</button>'+
+          '<span class="badge green" style="margin-left:auto">已注册</span></div>'+
+        '<div class="sip-dial"><div class="num" data-num>'+acc.id+'</div>'+
+          '<div class="sip-timer" data-sip-timer style="min-height:18px"></div>'+
+          '<div class="pad">'+['1','2','3','4','5','6','7','8','9','*','0','#'].map(function(n){return '<button class="dk" data-d="'+n+'">'+n+'</button>';}).join('')+'</div>'+
+          '<div class="sip-acts"><button class="call">呼叫</button><button class="hang" hidden>挂断</button></div>'+
+        '</div>'+
+        '<div class="sip-log muted">通话记录 · '+acc.name+'（'+acc.line+'）— 暂无</div>'+
+        '</div>';
+    }
+    // drive the SIP call state machine for one leaf
+    function sipSetState(leaf, state){
+      if(!leaf) return;
+      clearTimeout(leaf._sipRing);
+      if(leaf._sipTick){ clearInterval(leaf._sipTick); leaf._sipTick=null; }
+      var st=leaf.querySelector('[data-sip-state]');
+      var timer=leaf.querySelector('[data-sip-timer]');
+      var call=leaf.querySelector('.sip .call');
+      var hang=leaf.querySelector('.sip .hang');
+      st.className='sip-state '+state; st.setAttribute('data-state',state);
+      var label={idle:'空闲',ringing:'振铃中…',active:'通话中',ended:'已结束'}[state]||state;
+      st.innerHTML='<span class="dot"></span>'+label;
+      if(state==='ringing'){ call.hidden=false; call.textContent='接听'; if(hang) hang.hidden=true; }
+      else if(state==='active'){
+        call.hidden=true; if(hang) hang.hidden=false;
+        var sec=0;
+        leaf._sipTick=setInterval(function(){
+          sec++; var m=Math.floor(sec/60), s=sec%60;
+          if(timer) timer.textContent='⏱ '+(m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+        },1000);
+      } else { // idle / ended
+        call.hidden=false; call.textContent='呼叫'; if(hang) hang.hidden=true;
+        if(timer) timer.textContent='';
+      }
+    }
+
+    // ---- layout data model ----
+    // node: {dir:'row'|'col', children:[leaf|split], sizes?:[..]}
+    // leaf: {cell:true, kind:'ssh'|...|null}
+    var uid = 0; function nid(){ return 'c'+(++uid); }
+    function leaf(kind, name){ return {id:nid(), cell:true, kind:kind||null, name:name||null}; }
+    function split(dir, a, b){ return {id:nid(), dir:dir, children:[a,b], sizes:[null,null]}; }
+    function rootLeaf(kind, name){ return split('row', leaf(kind, name), leaf(null)); }
+
+    function defaultState(){
+      return {
+        active:'main',
+        groups:{
+          main:   rootLeaf('ssh','web-prod-01'),          // [web-prod-01 | empty picker]
+          trouble: split('col', leaf('ssh','web-prod-01'), leaf('sql','orders-db')) // triage: ssh over sql
+        },
+        order:['main','trouble']
+      };
+    }
+
+    var state = load() || defaultState();
+    save(); // ensure ids persist
+
+    function load(){ try{ var s=JSON.parse(localStorage.getItem(STORE)); if(s&&s.groups) return s; }catch(e){} return null; }
+    function save(){ try{ localStorage.setItem(STORE, JSON.stringify(state)); }catch(e){} }
+
+    // ---- DOM builders ----
+    // all named connections available to switch into (sidebar tree + user-created)
+    function listResources(){
+      var out = [];
+      document.querySelectorAll('.tree-body .res[data-kind][data-name]').forEach(function(r){
+        var k=r.dataset.kind, n=r.dataset.name; if(k && n && RES[k]) out.push({kind:k, name:n});
+      });
+      try { connStore.get().forEach(function(c){ if(c && c.kind && c.name && RES[c.kind]) out.push({kind:c.kind, name:c.name}); }); } catch(e){}
+      var seen = {}, uniq = [];
+      out.forEach(function(x){ var key = x.kind+'|'+x.name; if(!seen[key]){ seen[key]=1; uniq.push(x); } });
+      return uniq;
+    }
+    // switching=true → opened by title-click / right-click; lists only real connections
+    function pickerHTML(switching){
+      var res = listResources();
+      var resTiles = res.map(function(x){
+        var r=RES[x.kind];
+        return '<div class="pc" data-pick-res data-kind="'+x.kind+'" data-name="'+x.name+'"><span class="pic '+r.cls+'">'+r.icon+'</span>'+x.name+'</div>';
+      }).join('');
+      var cancel = switching ? '<div class="pc" data-pick-cancel style="border-style:dashed"><span class="pic" style="background:var(--bg-elevated);color:var(--text-muted)">↩</span>返回当前</div>' : '';
+      var head = switching ? '切换当前面板的资源 — 选择一个已有连接'
+                        : (res.length ? '此面板空闲 — 选择一个已有连接，或点左侧"Connections"直接打开'
+                                       : '还没有连接 — 点左侧 ＋ 新建资源');
+      var html = '<div class="picker"><div class="picker-h">'+head+'</div>';
+      if(resTiles){ html += '<div class="picker-sec">我的资源</div><div class="grid">'+resTiles+cancel+'</div>'; }
+      html += '</div>';
+      return html;
+    }
+    function headHTML(kind, name){
+      var t = name || (kind ? (RES[kind]?RES[kind].label:'') : '未选择资源');
+      return '<div class="leaf-head"><span class="ttl" title="点击切换本面板资源">'+t+'</span>'+
+        '<span class="spacer"></span>'+
+        '<div class="acts">'+
+        '<button class="icon-btn btn-rsplit" title="左右分栏">'+SVG.r+'</button>'+
+        '<button class="icon-btn btn-bsplit" title="上下分栏">'+SVG.b+'</button>'+
+        '<button class="icon-btn btn-close" title="关闭此面板">'+SVG.x+'</button>'+
+        '</div></div>';
+    }
+    function leafEl(node){
+      var el = document.createElement('div'); el.className='leaf'; el.dataset.id=node.id;
+      var body = (node.switching && node.kind) ? pickerHTML(true)
+               : (node.kind ? RES[node.kind].body(node.kind, node.name, node.acct) : pickerHTML(false));
+      el.innerHTML = headHTML(node.kind, node.name) + '<div class="leaf-body">'+body+'</div>';
+      if(node.kind === 'sql' && el.querySelector('.editor')){ sqlExec(el); }
+      return el;
+    }
+    function splitEl(node){
+      var el = document.createElement('div'); el.className='split '+node.dir; el.dataset.id=node.id;
+      node.children.forEach(function(ch, i){
+        var ce = renderNode(ch);
+        if(node.sizes && node.sizes[i] != null) ce.style.flex = '0 0 ' + (node.sizes[i]*100).toFixed(1) + '%';
+        el.appendChild(ce);
+        if(i < node.children.length-1) el.appendChild(divider());
+      });
+      return el;
+    }
+    function divider(){ var d=document.createElement('div'); d.className='divider'; return d; }
+    function renderNode(node){ return node.cell ? leafEl(node) : splitEl(node); }
+
+    // ---- render ----
+    var canvas = document.getElementById('canvas');
+    var groupbar = document.getElementById('groupbar');
+    function render(){
+      // group tabs
+      groupbar.querySelectorAll('.grouptab:not(.add)').forEach(function(n){ n.remove(); });
+      state.order.forEach(function(g){
+        var t=document.createElement('span'); t.className='grouptab'+(g===state.active?' active':'');
+        t.dataset.g=g; t.innerHTML='<span class="pdot"></span> '+g+' <span class="x" title="Close group">✕</span>';
+        groupbar.insertBefore(t, document.getElementById('add-group'));
+      });
+      // canvas
+      canvas.innerHTML='';
+      var root = state.groups[state.active];
+      canvas.appendChild(renderNode(root));
+    }
+
+    // ---- mutations ----
+    function findParent(list, id){ // returns {arr, idx}
+      for(var i=0;i<list.length;i++){
+        var n=list[i];
+        if(n.id===id) return {arr:list, idx:i};
+        if(!n.cell) { var f=findParent(n.children, id); if(f) return f; }
+      }
+      return null;
+    }
+    function nodeById(id){ return findParent(state.order.map(function(g){return state.groups[g];}), id); }
+
+    function splitLeaf(el, dir){
+      var id = el.dataset.id; var loc = findParent([state.groups[state.active]], id);
+      if(!loc) return;
+      var node = loc.arr[loc.idx];
+      if(!node.cell) return;
+      var nl = leaf(node.kind); // clone kind into new cell (empty if null)
+      var wrap = split(dir, node, nl);
+      // replace node in place with wrap
+      loc.arr[loc.idx] = wrap;
+      save(); render();
+    }
+    function closeLeaf(el){
+      var id = el.dataset.id; var loc = findParent([state.groups[state.active]], id);
+      if(!loc) return;
+      if(loc.arr.length<=1 && loc.arr[0]===loc.arr[loc.idx]){
+        // last leaf: reset to empty picker
+        loc.arr[loc.idx] = leaf(null); save(); render(); return;
+      }
+      loc.arr.splice(loc.idx,1);
+      // if parent now has a single child, collapse (handled by re-render keeping tree)
+      collapseSingles(state.groups[state.active]);
+      save(); render();
+    }
+    function collapseSingles(n){
+      if(n.cell) return;
+      n.children.forEach(collapseSingles);
+      if(n.children.length===1 && !n.children[0].cell){
+        var only=n.children[0]; n.dir=only.dir; n.children=only.children;
+        collapseSingles(n);
+      }
+    }
+    function pick(el, kind, name){
+      var id = el.dataset.id; var loc = findParent([state.groups[state.active]], id);
+      if(!loc) return;
+      var nl = leaf(kind, name); nl.switching = false;
+      loc.arr[loc.idx] = nl; save(); render();
+    }
+    // 切换: open the switcher in-place — keep the current resource until a choice is made
+    function swapCell(el){
+      var id = el.dataset.id; var loc = findParent([state.groups[state.active]], id);
+      if(!loc) return;
+      loc.arr[loc.idx].switching = true; save(); render();
+    }
+    // find first empty cell in the active group (DFS), to receive a sidebar-open
+    function findFirstEmpty(node){
+      if(node.cell) return node.kind ? null : node;
+      for(var i=0;i<node.children.length;i++){ var f=findFirstEmpty(node.children[i]); if(f) return f; }
+      return null;
+    }
+    // open a specific saved connection (from the sidebar) into the workspace
+    function openConnection(kind, name){
+      var root = state.groups[state.active];
+      var cell = findFirstEmpty(root);
+      if(!cell){ // no free cell: drop an empty cell next to the root's first leaf
+        var nl = leaf(null); var wrap = split(root.dir||'row', root, nl);
+        state.groups[state.active] = wrap; cell = nl;
+      }
+      cell.kind = kind; cell.name = name; save(); render();
+    }
+
+    // ---- events ----
+    document.addEventListener('click', function(e){
+      var rs=e.target.closest('.btn-rsplit'); if(rs){ splitLeaf(rs.closest('.leaf'),'row'); return; }
+      var bs=e.target.closest('.btn-bsplit'); if(bs){ splitLeaf(bs.closest('.leaf'),'col'); return; }
+      var cx=e.target.closest('.btn-close'); if(cx){ closeLeaf(cx.closest('.leaf')); return; }
+      var ttl=e.target.closest('.leaf-head .ttl'); if(ttl){ swapCell(ttl.closest('.leaf')); return; }
+      var pc=e.target.closest('.pc'); if(pc){
+        if(pc.dataset.pickCancel){ // cancel switch → keep current resource, exit picker
+          var cl = pc.closest('.leaf'); var loc = findParent([state.groups[state.active]], cl.dataset.id);
+          if(loc){ loc.arr[loc.idx].switching = false; save(); render(); }
+          return;
+        }
+        if(pc.dataset.pickRes){ pick(pc.closest('.leaf'), pc.dataset.kind, pc.dataset.name); return; }
+      }
+      // star toggle (before the generic .res click that opens the connection)
+      var star=e.target.closest('.res .star'); if(star){ var sr=star.closest('.res'); if(sr&&sr.dataset.kind){ toggleFav(sr.dataset.kind, sr.dataset.name); return; } }
+      var res=e.target.closest('.res[data-kind]'); if(res){ var k=res.dataset.kind; if(RES[k]){ var g=res.closest('.grp'); if(g) updateAgentStatus(g.getAttribute('data-env')||g.getAttribute('data-group')); openConnection(k, res.dataset.name||RES[k].label); } return; }
+      var exec=e.target.closest('.sqlexec'); if(exec){ sqlExec(exec.closest('.leaf')); return; }
+      var expl=e.target.closest('.sqlexplain'); if(expl){ REX.toast('EXPLAIN 已生成（演示）','info'); return; }
+      var tool=e.target.closest('.sqltool'); if(tool){
+        var t=tool.dataset.sqltool;
+        if(t==='designer') return REX.sqlTableDesigner();
+        if(t==='import') return REX.sqlImport();
+        if(t==='export') return REX.sqlExport();
+        if(t==='saved') return REX.savedQueries();
+        if(t==='global') return REX.globalQuery();
+        return;
+      }
+      var tbl=e.target.closest('.sqltree .node.tbl'); if(tbl && tbl.dataset.name){ // clicking a table name inserts it into the editor
+        var ed = tbl.closest('.leaf').querySelector('.editor');
+        if(ed && document.activeElement !== ed){ ed.textContent = "SELECT *\nFROM   "+tbl.dataset.name+"\nLIMIT  100;"; }
+        return;
+      }
+      var sel=e.target.closest('.sip-acct-sel');
+      if(sel){ var pop=sel.closest('.sip-acct-wrap').querySelector('.sip-acct-pop'); pop.hidden=!pop.hidden; return; }
+      var opt=e.target.closest('.sip-acct-opt');
+      if(opt){ // switch account WITHIN the same connection
+        var leaf=opt.closest('.leaf'); var loc=findParent([state.groups[state.active]], leaf.dataset.id);
+        if(loc){ loc.arr[loc.idx].acct = opt.dataset.acct; save(); render(); return; }
+      }
+      var dk=e.target.closest('.dk'); if(dk){ // dialer pad: append to the number (prototype-only)
+        var num=e.target.closest('.sip-dial').querySelector('[data-num]');
+        num.textContent = (num.textContent + dk.dataset.d).slice(0,16); return;
+      }
+      // SIP call state machine: idle/ended → ringing → active(timer) → ended
+      var callBtn=e.target.closest('.sip .call');
+      if(callBtn){
+        var dial=callBtn.closest('.sip-dial');
+        var leaf=callBtn.closest('.leaf');
+        var st=leaf.querySelector('[data-sip-state]');
+        var state=(st.getAttribute('data-state')||'ended');
+        var num=(dial.querySelector('[data-num]').textContent||'').trim();
+        if(state==='idle'||state==='ended'){
+          if(!num){ REX.toast('请先拨号','err'); return; }
+          sipSetState(leaf,'ringing');
+          leaf._sipRing=setTimeout(function(){ sipSetState(leaf,'active'); }, 1500);
+          return;
+        }
+        if(state==='ringing'){ // re-click while ringing = answer
+          clearTimeout(leaf._sipRing); sipSetState(leaf,'active'); return;
+        }
+        return;
+      }
+      var hangBtn=e.target.closest('.sip .hang');
+      if(hangBtn){ var lf=hangBtn.closest('.leaf'); sipSetState(lf,'ended'); return; }
+      var cdrBtn=e.target.closest('.sip-cdr'); if(cdrBtn){ REX.cdrDrawer(); return; }
+      // file row double-click → inline editor
+      var frow=e.target.closest('.filelist tr[data-file]');
+      if(frow && e.detail===2){ REX.fileEditor(frow.dataset.file); return; }
+      var sync=e.target.closest('[data-files-sync]'); if(sync){ REX.folderSync(); return; }
+      var gt=e.target.closest('.grouptab:not(.add)'); if(gt){ state.active=gt.dataset.g; save(); render(); return; }
+      var gx=e.target.closest('.grouptab .x'); if(gx){ e.stopPropagation();
+        var g=gx.closest('.grouptab').dataset.g;
+        delete state.groups[g]; state.order=state.order.filter(function(x){return x!==g;});
+        if(state.active===g) state.active=state.order[0];
+        if(state.order.length===0){ state.order=['main']; state.groups['main']=rootLeaf('ssh'); state.active='main'; }
+        save(); render(); return;
+      }
+    });
+    // right-click a panel (leaf) → split / switch / close — mirrors the leaf-head buttons
+    document.addEventListener('contextmenu', function(e){
+      var leaf = e.target.closest('.leaf');
+      if(!leaf) return;
+      e.preventDefault();
+      REX.contextMenu([
+        {label:'左右分栏', onClick:function(){ splitLeaf(leaf, 'row'); }},
+        {label:'上下分栏', onClick:function(){ splitLeaf(leaf, 'col'); }},
+        {label:'切换资源', onClick:function(){ swapCell(leaf); }},
+        {sep:true},
+        {label:'关闭面板', danger:true, onClick:function(){ closeLeaf(leaf); }}
+      ], e.clientX, e.clientY);
+    });
+    document.getElementById('add-group').addEventListener('click', function(){
+      var n='ws'+(state.order.length+1); while(state.groups[n]) n='ws'+(parseInt(n.slice(2))+1);
+      state.groups[n]=leaf(null); state.order.push(n); state.active=n; save(); render();
+    });
+    // command palette entry + F1 help via status bar
+    var cmdpal=document.getElementById('cmdpal');
+    if(cmdpal) cmdpal.addEventListener('click', function(){ REX.commandPalette(); });
+    var f1help=document.getElementById('f1help');
+    if(f1help) f1help.addEventListener('click', showHelp);
+    // draggable dividers (size persisted in model)
+    function findSplitById(node, id){
+      if(!node) return null;
+      if(node.id===id && !node.cell) return node;
+      if(!node.cell){ for(var i=0;i<node.children.length;i++){ var f=findSplitById(node.children[i], id); if(f) return f; } }
+      return null;
+    }
+    document.addEventListener('pointerdown', function(e){
+      var div=e.target.closest('.divider'); if(!div) return; e.preventDefault();
+      var parent=div.parentElement, row=parent.classList.contains('row');
+      var prev=div.previousElementSibling;
+      var rect=parent.getBoundingClientRect();
+      function move(ev){
+        var p = row ? (ev.clientX-rect.left)/rect.width : (ev.clientY-rect.top)/rect.height;
+        p=Math.min(.85,Math.max(.15,p));
+        prev.style.flex='0 0 '+(p*100).toFixed(1)+'%';
+        // persist: prev is the k-th pane before this divider
+        var sp = findSplitById(state.groups[state.active], div.parentElement.dataset.id);
+        if(sp){
+          var k=0, sib=div.previousElementSibling;
+          while(sib){ if(sib.classList.contains('leaf')||sib.classList.contains('split')) k++; sib=sib.previousElementSibling; }
+          if(sp.sizes) sp.sizes[k]=p;
+        }
+      }
+      function up(){
+        save();
+        document.removeEventListener('pointermove',move); document.removeEventListener('pointerup',up);
+      }
+      document.addEventListener('pointermove',move); document.addEventListener('pointerup',up);
+    });
+
+    // SIP account popover: close on outside click; filter list without re-rendering
+    document.addEventListener('click', function(e){
+      if(e.target.closest('.sip-acct-wrap')) return;
+      document.querySelectorAll('.sip-acct-pop:not([hidden])').forEach(function(p){ p.hidden = true; });
+    });
+    document.addEventListener('input', function(e){
+      var f = e.target.closest('.sip-acct-filter'); if(!f) return;
+      var q = f.value.trim().toLowerCase();
+      f.closest('.sip-acct-pop').querySelectorAll('.sip-acct-opt').forEach(function(o){
+        var t = o.textContent.toLowerCase();
+        o.style.display = (!q || t.indexOf(q) >= 0) ? '' : 'none';
+      });
+    });
+    // SQL editor: Ctrl/Cmd+Enter runs; node-level highlight on render
+    document.addEventListener('keydown', function(e){
+      if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='enter'){
+        var ed = e.target.closest && e.target.closest('.editor');
+        if(ed){ e.preventDefault(); sqlExec(ed.closest('.leaf')); }
+      }
+    });
+
+    // ---- user-created connections (persisted) + sidebar tree sync ----
+    var connStore = REX.store('rex.connections.v1', function(){ return []; });
+    function groupElFor(env){
+      var known = {'Aliyun Prod':'Aliyun Prod', 'Home LAN':'Home LAN'};
+      var key = known[env] || '我的资源';
+      var g = document.querySelector('.tree-body .grp[data-group="'+key+'"]');
+      if(g) return g;
+      var fb = document.querySelector('.tree-body');
+      var el = document.createElement('div'); el.className='grp'; el.dataset.group=key;
+      el.innerHTML='<svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m9 6 6 6-6 6"/></svg>'+
+        ' <span class="pico p-s3" style="width:13px;height:13px;border-radius:3px"></span> '+key+' <span class="badge gray cnt">0</span>';
+      fb.appendChild(el);
+      return el;
+    }
+    function injectRes(kind, name, env){
+      var g = groupElFor(env);
+      var r = RES[kind];
+      var el = document.createElement('div');
+      el.className='res'; el.dataset.kind=kind; el.dataset.name=name;
+      el.innerHTML='<span class="pico '+r.cls+'">'+r.icon+'</span> '+name+' <span class="st on"></span>';
+      g.insertAdjacentElement('afterend', el);
+      var cnt = g.querySelector('.badge.cnt'); if(cnt) cnt.textContent = (parseInt(cnt.textContent,10)||0)+1;
+      return el;
+    }
+    function replayConnections(){ connStore.get().forEach(function(c){ injectRes(c.kind, c.name, c.env); }); }
+
+    // ---- favorites (sidebar ⭐ group + per-resource star toggle) ----
+    var favStore = REX.store('rex.favorites.v1', function(){ return []; });
+    function favId(kind, name){ return kind + '|' + name; }
+    function isFav(kind, name){ return favStore.get().indexOf(favId(kind, name)) >= 0; }
+    function syncStars(){
+      document.querySelectorAll('.tree-body .res[data-kind]').forEach(function(r){
+        if(r.classList.contains('favrow')) return; // favorites list rows stay plain
+        var star = r.querySelector('.star'); if(!star) return;
+        star.classList.toggle('on', isFav(r.dataset.kind, r.dataset.name));
+        star.textContent = isFav(r.dataset.kind, r.dataset.name) ? '★' : '☆';
+      });
+    }
+    function renderFavorites(){
+      var g = document.querySelector('.tree-body .grp.fav'); if(!g) return;
+      // remove prior favorite rows
+      g.parentElement.querySelectorAll('.res.favrow').forEach(function(r){ r.remove(); });
+      var list = favStore.get();
+      var cnt = g.querySelector('.fav-cnt'); if(cnt) cnt.textContent = list.length;
+      if(!list.length){
+        var empty = document.createElement('div');
+        empty.className='res favrow muted';
+        empty.style.cssText='padding-left:28px;font-size:12px;color:var(--text-dim);cursor:default';
+        empty.textContent='暂无收藏';
+        g.insertAdjacentElement('afterend', empty);
+        return;
+      }
+      list.forEach(function(id){
+        var parts = id.split('|'), kind = parts[0], name = parts.slice(1).join('|');
+        var r = RES[kind]; if(!r) return;
+        var el = document.createElement('div');
+        el.className='res favrow'; el.dataset.kind=kind; el.dataset.name=name;
+        el.innerHTML='<span class="pico '+r.cls+'">'+r.icon+'</span> '+name+' <span class="st" style="margin-left:auto"></span>';
+        g.insertAdjacentElement('afterend', el);
+      });
+    }
+    function toggleFav(kind, name){
+      var l = favStore.get(), id = favId(kind, name), i = l.indexOf(id);
+      if(i>=0){ l.splice(i,1); } else { l.push(id); }
+      favStore.set(l);
+      syncStars(); renderFavorites();
+      REX.toast(i>=0 ? '已取消收藏' : '已收藏', i>=0 ? 'info' : 'ok');
+    }
+    syncStars(); renderFavorites();
+
+
+    // ---- open-cell tracking: which (kind,name) are live in the active group ----
+    function openCells(node, out){
+      if(!node) return;
+      if(node.cell){ if(node.kind && node.name) out[node.kind+'|'+node.name]=1; }
+      else node.children.forEach(function(c){ openCells(c, out); });
+    }
+    function syncTreeCur(){
+      var set={}; openCells(state.groups[state.active], set);
+      document.querySelectorAll('.tree-body .res[data-kind]').forEach(function(r){
+        r.classList.toggle('cur', !!set[r.dataset.kind+'|'+r.dataset.name]);
+      });
+    }
+    function updateStatus(){
+      var set={}; openCells(state.groups[state.active], set);
+      var n = Object.keys(set).length;
+      var c = document.getElementById('rescount'); if(c) c.textContent = n+' resource'+(n===1?'':'s')+' open';
+    }
+
+    // ---- shortcut / help surface (status bar "F1 help") ----
+    function showHelp(){
+      REX.modal({ title:'快捷键 · Shortcuts', width:'420px', okText:'关闭',
+        body:'<div style="font-family:var(--font-mono);font-size:12px;line-height:2;color:var(--text-muted)">'+
+          '<div><span class="kbd">F1</span> / 点击状态栏 — 打开本帮助</div>'+
+          '<div><span class="kbd">＋</span> 新建工作区 — 新增一个布局分组</div>'+
+          '<div><span class="kbd">▣</span> / <span class="kbd">▭</span> — 左右 / 上下分屏</div>'+
+          '<div><span class="kbd">点标题</span> / <span class="kbd">右键面板</span> — 切换本面板资源</div>'+
+          '<div><span class="kbd">右键面板</span> — 分屏 / 切换 / 关闭</div>'+
+          '<div><span class="kbd">右键资源</span> — 打开 / 复制 / 断开</div>'+
+          '<div><span class="kbd">Esc</span> — 关闭弹窗</div>'+
+          '</div>' });
+    }
+
+    // ---- sidebar "New resource" dialog (弹窗) — type-specific fields, then inject + open ----
+    // Per-type connection fields so each resource kind shows its own create form.
+    function openResourceModal(){
+      var m = REX.modal({
+        title:'新建资源', width:'520px', okText:'创建',
+        body:'<div class="rex-field"><label>资源名称</label><input data-field="name" placeholder="如 db-replica"></div>'+
+             '<div class="rex-field"><label>类型</label><select class="res-kind-select" data-field="kind"><option value="ssh">SSH</option><option value="sql">SQL</option><option value="redis">Redis</option><option value="files">SFTP</option><option value="s3">Object Storage</option><option value="sip">SIP</option></select></div>'+
+             '<div class="res-fields"></div>'+
+             '<div class="rex-field"><label>所属环境</label><select data-field="env"><option>Aliyun Prod</option><option>Home LAN</option><option>Lab VPN</option></select></div>',
+        onOk:function(v){
+          if(!v.name){ REX.toast('请填写资源名称','err'); return false; }
+          var addr = v.c_addr || v.c_endpoint;
+          if(!addr){ REX.toast('请填写主机 / 地址','err'); return false; }
+          var params = {};
+          ['c_addr','c_port','c_user','c_auth','c_db','c_path','c_endpoint','c_bucket','c_region','c_ak','c_ext','c_pass']
+            .forEach(function(k){ if(v[k] != null && String(v[k]).trim() !== '') params[k] = v[k]; });
+          var list = connStore.get(); list.push({kind:v.kind, name:v.name, env:v.env, params:params}); connStore.set(list);
+          injectRes(v.kind, v.name, v.env);
+          openConnection(v.kind, v.name);
+          REX.toast('资源「'+v.name+'」已创建并打开','ok');
+          return true;
+        }
+      });
+      var fieldsEl = m.querySelector('.res-fields');
+      function fillFields(kind){ fieldsEl.innerHTML = REX.RES_CREATE[kind] || ''; }
+      fillFields('ssh');
+      m.querySelector('.res-kind-select').addEventListener('change', function(){ fillFields(this.value); });
+    }
+    // wire the visible "新建资源" button (and any future trigger)
+    var newResBtn = document.querySelector('.res-new-btn');
+    if (newResBtn) newResBtn.addEventListener('click', openResourceModal);
+
+    // ---- right-click a connection in the tree → context menu ----
+    document.addEventListener('contextmenu', function(e){
+      var res = e.target.closest('.tree-body .res[data-kind]');
+      if(!res) return;
+      e.preventDefault();
+      REX.contextMenu([
+        {label:'打开', onClick:function(){ openConnection(res.dataset.kind, res.dataset.name); }},
+        {label:'复制连接信息', onClick:function(){ REX.toast('已复制 '+res.dataset.name+' 的连接信息','ok'); }},
+        {sep:true},
+        {label:'断开', danger:true, onClick:function(){ REX.toast('已断开 '+res.dataset.name,'info'); }}
+      ], e.clientX, e.clientY);
+    });
+
+    render();
+
+    // consume an open-intent left by another page (dashboard quick-connect → {kind,name}; environments Open → {env})
+    (function(){
+      try {
+        var raw = localStorage.getItem('rex.open-intent');
+        if (!raw) return;
+        localStorage.removeItem('rex.open-intent');
+        var o = JSON.parse(raw);
+        if (o && o.kind && o.name && RES[o.kind]) { openConnection(o.kind, o.name); return; }
+        if (o && o.env) {
+          var tb = document.querySelector('.tree-body');
+          var g = tb.querySelector('.grp[data-group="'+o.env+'"]');
+          if (!g) { // env with no resources yet — still show where it lives
+            g = document.createElement('div'); g.className='grp'; g.dataset.group=o.env; g.style.marginTop='4px';
+            g.innerHTML='<svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m9 6 6 6-6 6"/></svg>'+
+              ' <span class="pico p-s3" style="width:13px;height:13px;border-radius:3px"></span> '+o.env+' <span class="badge gray cnt">0</span>';
+            tb.appendChild(g);
+          }
+          document.querySelectorAll('.tree-body .grp').forEach(function(x){ x.classList.toggle('open', x === g); });
+          var tr = tb.getBoundingClientRect(), gr = g.getBoundingClientRect();
+          tb.scrollTo({ left: 0, top: tb.scrollTop + (gr.top - tr.top) - 24, behavior: 'smooth' });
+          var n = g.nextElementSibling, first = null;
+          while (n && !n.classList.contains('grp')) {
+            if (n.classList.contains('res') && n.dataset.kind && RES[n.dataset.kind]) { first = n; break; }
+            n = n.nextElementSibling;
+          }
+          if (first) openConnection(first.dataset.kind, first.dataset.name);
+          else REX.toast('环境「'+o.env+'」暂无资源 — 点左侧 ＋ 新建资源','info');
+        }
+      } catch (e) {}
+    })();
+  })();
+</script>
+</body>
+</html>
