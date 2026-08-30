@@ -3,8 +3,6 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { auditApi, type AuditEntry, type AuditStats } from '@/api/audit'
 import { useEnvironmentsStore } from '@/stores/environments'
-import Card from '@/components/ui/Card.vue'
-import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
 import ContextMenu from '@/components/ui/ContextMenu.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -265,6 +263,26 @@ function isJsonDetail(detail: string | null): boolean {
   }
 }
 
+function formatTime(time: string): string {
+  const d = new Date(time)
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const h = String(d.getHours()).padStart(2, '0')
+  const min = String(d.getMinutes()).padStart(2, '0')
+  const s = String(d.getSeconds()).padStart(2, '0')
+  return `${m}-${day} ${h}:${min}:${s}`
+}
+
+function opTagClass(action: string): string {
+  if (action.includes('SSH')) return 'ssh'
+  if (action.includes('SQL')) return 'sql'
+  if (action.includes('REDIS')) return 'redis'
+  if (action.includes('FILE')) return 'file'
+  if (action.includes('ENV')) return 'env'
+  if (action.includes('AGENT')) return 'agent'
+  return 'env'
+}
+
 const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / pageSize.value)))
 
 const gotoPage = ref(1)
@@ -305,61 +323,83 @@ onMounted(async () => {
     <header class="page-header">
       <div class="page-header-left">
         <h1 class="page-title mono">{{ t('auditLog.title') }}</h1>
-        <span class="page-subtitle">{{ t('auditLog.subtitle', 'System activity log') }}</span>
-      </div>
-      <div class="page-header-actions">
-        <Button variant="ghost" size="sm" @click="refreshAll">↻ {{ t('common.refresh') }}</Button>
-        <Button variant="ghost" size="sm" @click="exportCsv">↓ {{ t('auditLog.exportCsv') }}</Button>
       </div>
     </header>
 
+    <p class="page-desc">{{ t('auditLog.subtitle', 'System activity log') }}</p>
+
+    <!-- Toolbar: filters + actions -->
+    <div class="toolbar">
+      <div class="field">
+        <span class="field-label">{{ t('auditLog.allEnvironments') }}</span>
+        <Select
+          v-model="environmentFilter"
+          :options="[
+            { label: t('auditLog.allEnvironments'), value: '' },
+            ...store.environments.map(e => ({ label: e.name, value: e.id })),
+          ]"
+          size="sm"
+        />
+      </div>
+      <div class="field">
+        <span class="field-label">{{ t('auditLog.allResults') }}</span>
+        <Select
+          v-model="actionFilter"
+          :options="actionOptions.map(o => ({ label: o.value ? o.value : t(o.label), value: o.value }))"
+          size="sm"
+        />
+      </div>
+      <div class="field">
+        <span class="field-label">{{ t('auditLog.time', 'Time') }}</span>
+        <Select
+          v-model="timeRange"
+          :options="timeRangeOptions.map(o => ({ label: t(o.label), value: o.value }))"
+          size="sm"
+        />
+      </div>
+      <div class="field">
+        <span class="field-label">{{ t('auditLog.result') }}</span>
+        <Select
+          v-model="resultFilter"
+          :options="[
+            { label: t('auditLog.allResults'), value: '' },
+            { label: t('auditLog.success'), value: 'success' },
+            { label: t('auditLog.failure'), value: 'failure' },
+          ]"
+          size="sm"
+        />
+      </div>
+      <span class="spacer"></span>
+      <Button variant="ghost" size="sm" @click="actionFilter = ''; resultFilter = ''; environmentFilter = ''; timeRange = 'all'">
+        {{ t('auditLog.clearFilters') }}
+      </Button>
+      <Button variant="primary" size="sm" @click="exportCsv">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        {{ t('auditLog.exportCsv') }}
+      </Button>
+    </div>
+
     <!-- Stats cards -->
-    <div class="stats-row">
-      <Card class="stat-card">
-        <div class="stat-value" :class="{ loading }">{{ loading ? '—' : stats.total }}</div>
-        <div class="stat-label muted">{{ t('auditLog.statTotal') }}</div>
-      </Card>
-      <Card class="stat-card stat-card--success">
-        <div class="stat-value stat-value--success" :class="{ loading }">{{ loading ? '—' : stats.success_count }}</div>
-        <div class="stat-label muted">{{ t('auditLog.statSuccess') }}</div>
-      </Card>
-      <Card class="stat-card stat-card--failure">
-        <div class="stat-value stat-value--failure" :class="{ loading }">{{ loading ? '—' : stats.failure_count }}</div>
-        <div class="stat-label muted">{{ t('auditLog.statFailure') }}</div>
-      </Card>
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-key">{{ t('auditLog.statTotal') }}</div>
+        <div class="stat-value" :class="{ loading }">{{ loading ? '—' : stats.total.toLocaleString() }}</div>
+      </div>
+      <div class="stat green">
+        <div class="stat-key">{{ t('auditLog.statSuccess') }}</div>
+        <div class="stat-value" :class="{ loading }">{{ loading ? '—' : stats.success_count.toLocaleString() }}</div>
+      </div>
+      <div class="stat red">
+        <div class="stat-key">{{ t('auditLog.statFailure') }}</div>
+        <div class="stat-value" :class="{ loading }">{{ loading ? '—' : stats.failure_count.toLocaleString() }}</div>
+      </div>
+      <div class="stat brand">
+        <div class="stat-key">{{ t('auditLog.activeUsers', 'Active users') }}</div>
+        <div class="stat-value" :class="{ loading }">{{ loading ? '—' : 1 }}</div>
+      </div>
     </div>
 
-    <!-- Filters -->
-    <div class="filters">
-      <Select
-        v-model="actionFilter"
-        :options="actionOptions.map(o => ({ label: o.value ? o.value : t(o.label), value: o.value }))"
-        size="sm"
-      />
-      <Select
-        v-model="resultFilter"
-        :options="[
-          { label: t('auditLog.allResults'), value: '' },
-          { label: t('auditLog.success'), value: 'success' },
-          { label: t('auditLog.failure'), value: 'failure' },
-        ]"
-        size="sm"
-      />
-      <Select
-        v-model="environmentFilter"
-        :options="[
-          { label: t('auditLog.allEnvironments'), value: '' },
-          ...store.environments.map(e => ({ label: e.name, value: e.id })),
-        ]"
-        size="sm"
-      />
-      <Select
-        v-model="timeRange"
-        :options="timeRangeOptions.map(o => ({ label: t(o.label), value: o.value }))"
-        size="sm"
-      />
-    </div>
-
+    <!-- Empty state -->
     <EmptyState
       v-if="!loading && entries.length === 0"
       icon="📋"
@@ -367,74 +407,77 @@ onMounted(async () => {
       :description="t('auditLog.emptyDesc')"
     />
 
-    <Card v-else class="log-card">
+    <!-- Data table -->
+    <div v-else class="table-wrap">
       <div v-if="loading" class="loading muted">{{ t('common.loadingEllipsis') }}</div>
       <ResponsiveTable v-else>
-        <table class="log-table">
+        <table class="tbl">
           <thead>
             <tr>
-              <th></th>
               <th>{{ t('auditLog.time') }}</th>
+              <th>{{ t('auditLog.user', 'User') }}</th>
+              <th>{{ t('auditLog.environment') }}</th>
               <th>{{ t('auditLog.action') }}</th>
               <th>{{ t('auditLog.target') }}</th>
-              <th>{{ t('auditLog.environment') }}</th>
               <th>{{ t('auditLog.result') }}</th>
             </tr>
           </thead>
           <tbody>
             <template v-for="entry in entries" :key="entry.id">
-              <tr class="log-row" @click="toggleExpand(entry.id)" @contextmenu.prevent="onContextMenu($event, entry)">
-                <td class="expand-icon">{{ expandedId === entry.id ? '▾' : '▸' }}</td>
-                <td class="mono">{{ timeAgo(entry.time) }}</td>
+              <tr
+                class="tbl-row"
+                :class="{ open: expandedId === entry.id }"
+                @click="toggleExpand(entry.id)"
+                @contextmenu.prevent="onContextMenu($event, entry)"
+              >
+                <td class="time">{{ formatTime(entry.time) }}</td>
+                <td class="user">admin</td>
+                <td>{{ envName(entry.environment_id) }}</td>
                 <td>
-                  <Badge :tone="entry.action.includes('DELETE') ? 'danger' : entry.action.includes('CREATE') ? 'success' : entry.action.includes('ONLINE') ? 'success' : entry.action.includes('OFFLINE') ? 'danger' : 'info'">
-                    {{ entry.action }}
-                  </Badge>
+                  <span class="otag" :class="opTagClass(entry.action)">
+                    {{ entry.action.replace(/_/g, ' ') }}
+                  </span>
                 </td>
                 <td>{{ entry.target || '—' }}</td>
-                <td>{{ envName(entry.environment_id) }}</td>
-                <td><Badge :tone="resultBadge(entry.result)">{{ entry.result }}</Badge></td>
+                <td>
+                  <span class="rc" :class="entry.result === 'success' ? 'ok' : 'fail'">
+                    {{ entry.result }}
+                  </span>
+                </td>
               </tr>
               <tr v-if="expandedId === entry.id" class="detail-row">
-                <td colspan="7">
+                <td colspan="6">
                   <div class="detail-content">
-                    <div class="detail-field">
-                      <span class="detail-label muted">ID:</span>
-                      <span class="mono">{{ entry.id }}</span>
-                    </div>
-                    <div class="detail-field">
-                      <span class="detail-label muted">{{ t('auditLog.time', 'Time') }}:</span>
-                      <span>{{ entry.time }}</span>
-                    </div>
-                    <div class="detail-field">
-                      <span class="detail-label muted">{{ t('auditLog.action', 'Action') }}:</span>
-                      <Badge :tone="actionBadge(entry.action)">{{ entry.action }}</Badge>
-                    </div>
-                    <div v-if="entry.target" class="detail-field">
-                      <span class="detail-label muted">{{ t('auditLog.target', 'Target') }}:</span>
-                      <span>{{ entry.target }}</span>
-                    </div>
-                    <div v-if="entry.environment_id" class="detail-field">
-                      <span class="detail-label muted">{{ t('auditLog.environment', 'Environment') }}:</span>
-                      <span>{{ envName(entry.environment_id) }}</span>
-                    </div>
-                    <div v-if="entry.agent_id" class="detail-field">
-                      <span class="detail-label muted">Agent ID:</span>
-                      <span class="mono">{{ entry.agent_id }}</span>
-                    </div>
-                    <div v-if="entry.resource_id" class="detail-field">
-                      <span class="detail-label muted">{{ t('auditLog.resource') }}:</span>
-                      <span>{{ resourceName(entry.resource_id) }}</span>
-                    </div>
-                    <div class="detail-field">
-                      <span class="detail-label muted">{{ t('auditLog.result', 'Result') }}:</span>
-                      <Badge :tone="resultBadge(entry.result)">{{ entry.result }}</Badge>
-                    </div>
-                    <div v-if="entry.detail" class="detail-field">
-                      <span class="detail-label muted">Detail:</span>
-                      <pre v-if="isJsonDetail(entry.detail)" class="detail-code mono">{{ formatDetail(entry.detail) }}</pre>
-                      <span v-else>{{ entry.detail }}</span>
-                    </div>
+                    <dl class="kv">
+                      <dt>ID</dt>
+                      <dd class="mono">{{ entry.id }}</dd>
+                      <dt>{{ t('auditLog.time', 'Time') }}</dt>
+                      <dd class="mono">{{ entry.time }}</dd>
+                      <dt>{{ t('auditLog.action', 'Action') }}</dt>
+                      <dd class="mono">{{ entry.action }}</dd>
+                      <dt>{{ t('auditLog.result', 'Result') }}</dt>
+                      <dd>
+                        <span class="rc" :class="entry.result === 'success' ? 'ok' : 'fail'">{{ entry.result }}</span>
+                      </dd>
+                      <template v-if="entry.target">
+                        <dt>{{ t('auditLog.target', 'Target') }}</dt>
+                        <dd>{{ entry.target }}</dd>
+                      </template>
+                      <template v-if="entry.environment_id">
+                        <dt>{{ t('auditLog.environment', 'Environment') }}</dt>
+                        <dd>{{ envName(entry.environment_id) }}</dd>
+                      </template>
+                      <template v-if="entry.agent_id">
+                        <dt>Agent ID</dt>
+                        <dd class="mono">{{ entry.agent_id }}</dd>
+                      </template>
+                      <template v-if="entry.resource_id">
+                        <dt>{{ t('auditLog.resource', 'Resource') }}</dt>
+                        <dd>{{ resourceName(entry.resource_id) }}</dd>
+                      </template>
+                    </dl>
+                    <pre v-if="entry.detail" class="detail-code mono"><span class="cm">{{ t('auditLog.detail', 'Detail') }}</span>
+{{ formatDetail(entry.detail) }}</pre>
                   </div>
                 </td>
               </tr>
@@ -442,19 +485,23 @@ onMounted(async () => {
           </tbody>
         </table>
       </ResponsiveTable>
-    </Card>
+    </div>
 
     <!-- Pagination -->
     <div class="pagination">
-      <span class="page-total muted">{{ t('auditLog.totalCount', { n: totalCount }) }}</span>
+      <span class="page-total muted">{{ totalCount.toLocaleString() }} {{ t('auditLog.totalCount', 'total') }}</span>
       <Select
         v-model="pageSize"
         :options="pageSizeOptions"
         size="sm"
       />
-      <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--">← {{ t('common.prev', 'Prev') }}</button>
+      <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
       <span class="page-info mono">{{ currentPage }} / {{ totalPages }}</span>
-      <button class="page-btn" :disabled="currentPage >= totalPages" @click="currentPage++">{{ t('common.next', 'Next') }} →</button>
+      <button class="page-btn" :disabled="currentPage >= totalPages" @click="currentPage++">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
       <span class="page-goto">
         <span class="muted">{{ t('auditLog.gotoPage') }}</span>
         <input
@@ -491,60 +538,345 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.audit-page { height: 100%; overflow-y: auto; }
-.page-header-actions { display: flex; gap: var(--space-2); }
-.stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); margin-bottom: var(--space-4); }
-.stat-card { text-align: center; padding: var(--space-3); }
-.stat-value { font-size: var(--text-xl); font-weight: 700; color: var(--text-primary); }
-.stat-value--success { color: var(--success); }
-.stat-value--failure { color: var(--danger); }
-.stat-label { font-size: var(--text-xs); margin-top: var(--space-1); }
-.filters { display: flex; gap: var(--space-2); align-items: center; margin-bottom: var(--space-4); flex-wrap: wrap; }
-.log-card { overflow-x: auto; }
-.loading { padding: var(--space-6); text-align: center; }
-.log-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
-.log-table th { text-align: left; padding: var(--space-2) var(--space-3); color: var(--text-muted); font-weight: 500; border-bottom: 1px solid var(--border); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.5px; }
-.log-table td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border); color: var(--text-secondary); }
-.log-row { cursor: pointer; }
-.log-row:hover td { background: var(--bg-hover); }
-.expand-icon { width: 24px; text-align: center; color: var(--text-muted); font-size: var(--text-xs); }
-.detail-row td { background: var(--bg-deep); }
-.detail-content { padding: var(--space-3) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
-.detail-field { display: flex; gap: var(--space-2); font-size: var(--text-sm); align-items: baseline; }
-.detail-label { font-size: var(--text-xs); min-width: 100px; flex-shrink: 0; }
-.detail-code { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px; padding: var(--space-2); font-size: var(--text-xs); margin: 0; overflow-x: auto; white-space: pre-wrap; }
-.muted { color: var(--text-muted); }
-.mono { font-family: var(--font-mono); }
+.audit-page {
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--space-6);
+}
+
+.page-header {
+  margin-bottom: var(--space-1);
+}
+
+.page-desc {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-bottom: var(--space-4);
+  line-height: 1.5;
+}
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 34px;
+  padding: 0 var(--space-3);
+  border-radius: 7px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-surface);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.field-label {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* Stats */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.stat {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+}
+
+.stat-key {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 700;
+  margin-top: 6px;
+  color: var(--text-primary);
+}
+
+.stat-value.loading {
+  opacity: 0.4;
+}
+
+.stat.green .stat-value {
+  color: var(--success);
+}
+
+.stat.red .stat-value {
+  color: var(--danger);
+}
+
+.stat.brand .stat-value {
+  color: var(--accent);
+}
+
+/* Table */
+.table-wrap {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.loading {
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tbl thead th {
+  text-align: left;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+}
+
+.tbl tbody td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-base);
+  vertical-align: top;
+}
+
+.tbl tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.tbl-row {
+  cursor: pointer;
+}
+
+.tbl-row:hover td {
+  background: var(--bg-hover);
+}
+
+.tbl-row.open td {
+  background: var(--accent-soft);
+}
+
+.tbl .time {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.tbl .user {
+  font-family: var(--font-mono);
+}
+
+/* Operation tags */
+.otag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.otag.ssh {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.otag.sql {
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.otag.redis {
+  background: var(--purple-soft);
+  color: var(--purple);
+}
+
+.otag.file {
+  background: var(--purple-soft);
+  color: var(--purple);
+}
+
+.otag.env {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+}
+
+.otag.agent {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+/* Result codes */
+.rc {
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.rc.ok {
+  color: var(--success);
+}
+
+.rc.fail {
+  color: var(--danger);
+}
+
+/* Detail row */
+.detail-row td {
+  background: var(--bg-deep);
+  padding: 0;
+}
+
+.detail-content {
+  padding: var(--space-4);
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 4px 14px;
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.kv dt {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.kv dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
+.detail-code {
+  margin: var(--space-3) 0 0 0;
+  padding: var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+}
+
+.cm {
+  color: var(--text-muted);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+/* Context menu */
 .ctx-item {
   padding: var(--space-2) var(--space-3);
   font-size: var(--text-sm);
   cursor: pointer;
   color: var(--text-primary);
 }
-.ctx-item:hover { background: var(--bg-hover); }
+
+.ctx-item:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+
 .ctx-divider {
-  height: 1px; background: var(--border);
+  height: 1px;
+  background: var(--border);
   margin: var(--space-1) 0;
 }
 
 /* Pagination */
 .pagination {
-  display: flex; align-items: center; justify-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-wrap: wrap;
-  gap: var(--space-3); padding: var(--space-4) 0;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
 }
-.page-total { font-size: var(--text-xs); }
+
+.page-total {
+  font-size: var(--text-xs);
+}
+
 .page-btn {
-  padding: var(--space-1) var(--space-3);
-  background: var(--bg-surface); border: 1px solid var(--border);
-  border-radius: var(--radius); color: var(--text-secondary);
-  font-size: var(--text-sm); cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  cursor: pointer;
   transition: border-color var(--transition), color var(--transition);
 }
-.page-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--text-primary); }
-.page-btn:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
-.page-info { font-size: var(--text-xs); color: var(--text-muted); }
-.page-goto { display: flex; align-items: center; gap: var(--space-1); font-size: var(--text-xs); }
+
+.page-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.page-btn:disabled {
+  opacity: var(--disabled-opacity);
+  cursor: not-allowed;
+}
+
+.page-info {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.page-goto {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+}
+
 .page-goto-input {
   width: 56px;
   background: var(--bg-deep);
@@ -555,5 +887,8 @@ onMounted(async () => {
   font-size: var(--text-sm);
   outline: none;
 }
-.page-goto-input:focus { border-color: var(--accent); }
+
+.page-goto-input:focus {
+  border-color: var(--accent);
+}
 </style>

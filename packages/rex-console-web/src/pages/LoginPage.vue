@@ -55,231 +55,290 @@ async function handleLogin() {
 
 <template>
   <div class="login">
-    <!-- CRT 效果层 -->
-    <div class="crt-scanlines" />
-    <div class="crt-flicker" />
-    <div class="bg-grid" />
-    <div class="bg-glow" />
+    <!-- 终端启动序列覆盖层 -->
+    <Transition name="boot-fade">
+      <div v-if="!bootDone" class="boot-overlay">
+        <div class="boot-terminal mono">
+          <div v-for="(line, i) in bootLines" :key="i" class="boot-line">{{ line }}</div>
+          <span class="boot-cursor">█</span>
+        </div>
+      </div>
+    </Transition>
 
-    <!-- 主内容区 -->
-    <div class="login-wrapper" :class="{ 'login-wrapper--visible': bootDone }">
-      <!-- 终端启动序列 -->
-      <div v-if="!bootDone" class="boot-terminal mono">
-        <div v-for="(line, i) in bootLines" :key="i" class="boot-line">{{ line }}</div>
-        <span class="boot-cursor">█</span>
+    <!-- LEFT: 品牌面板 -->
+    <aside class="login-aside">
+      <div class="scan" />
+      <div class="brand">
+        <span class="glyph">R</span>
+        <span class="name">RE<b>X</b> Hub</span>
       </div>
 
-      <!-- 登录卡片 -->
-      <Transition name="card-reveal">
-        <div v-if="bootDone" class="login-card">
-          <!-- 品牌区 -->
-          <div class="brand">
-            <div class="brand-icon">
-              <span class="brand-bracket">[</span>
-              <span class="brand-name mono">REX</span>
-              <span class="brand-bracket">]</span>
-            </div>
-            <div class="brand-tagline">{{ t('login.subtitle') }}</div>
+      <div class="aside-points">
+        <div class="aside-point">
+          <div class="ico">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h10M4 17h13" /></svg>
           </div>
-
-          <!-- 表单区 -->
-          <form class="login-form" @submit.prevent="handleLogin">
-            <div class="field">
-              <label class="field-label mono">PASSWORD</label>
-              <Input
-                v-model="password"
-                type="password"
-                size="lg"
-                placeholder="••••••••"
-                autocomplete="current-password"
-                autofocus
-              >
-                <template #prefix>
-                  <span class="field-prompt mono">$</span>
-                </template>
-              </Input>
-            </div>
-
-            <div class="login-options">
-              <Checkbox v-model="remember" :label="t('login.rememberMe')" />
-            </div>
-
-            <Transition name="error-slide">
-              <div v-if="errorMsg" class="error-box">
-                <span class="error-icon">✗</span>
-                <span>{{ errorMsg }}</span>
-              </div>
-            </Transition>
-
-            <Button
-              variant="primary"
-              size="lg"
-              :disabled="auth.loading || !password"
-              class="login-btn"
-            >
-              <span v-if="auth.loading" class="btn-spinner" />
-              {{ auth.loading ? t('login.signingIn') : t('login.signIn') }}
-            </Button>
-          </form>
-
-          <!-- 底部状态栏 -->
-          <div class="status-bar mono">
-            <span class="status-item">
-              <span class="status-dot status-dot--online" />
-              SECURE
-            </span>
-            <span class="status-sep">|</span>
-            <span class="status-item">v{{ appVersion }}</span>
-            <span class="status-sep">|</span>
-            <span class="status-item">self-hosted</span>
+          <div>
+            <h4>{{ t('login.pitch1Title') }}</h4>
+            <p>{{ t('login.pitch1Desc') }}</p>
           </div>
         </div>
-      </Transition>
-    </div>
+        <div class="aside-point">
+          <div class="ico">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z" /></svg>
+          </div>
+          <div>
+            <h4>{{ t('login.pitch2Title') }}</h4>
+            <p>{{ t('login.pitch2Desc') }}</p>
+          </div>
+        </div>
+        <div class="aside-point">
+          <div class="ico">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+          </div>
+          <div>
+            <h4>{{ t('login.pitch3Title') }}</h4>
+            <p>{{ t('login.pitch3Desc') }}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="aside-foot">// remote exchange · v{{ appVersion }} · self-hosted</div>
+    </aside>
+
+    <!-- RIGHT: 登录表单 -->
+    <main class="login-main">
+      <div class="login-card">
+        <div class="top">
+          <div class="brand brand--sm">
+            <span class="glyph">R</span>
+            <span class="name">RE<b>X</b></span>
+          </div>
+          <button class="lang-btn mono">{{ t('login.langSwitch') }}</button>
+        </div>
+
+        <h1>{{ t('login.title') }}</h1>
+        <p class="sub">{{ t('login.subtitle') }}</p>
+
+        <form class="login-form" @submit.prevent="handleLogin">
+          <div class="field">
+            <label class="field-label mono">{{ t('login.password') }}</label>
+            <Input
+              v-model="password"
+              type="password"
+              size="lg"
+              placeholder="••••••••"
+              autocomplete="current-password"
+              autofocus
+            >
+              <template #prefix>
+                <span class="field-prompt mono">$</span>
+              </template>
+            </Input>
+          </div>
+
+          <div class="login-options">
+            <Checkbox v-model="remember" :label="t('login.rememberMe')" />
+          </div>
+
+          <Transition name="error-slide">
+            <div v-if="errorMsg" class="error-box">
+              <span class="error-icon">✗</span>
+              <span>{{ errorMsg }}</span>
+            </div>
+          </Transition>
+
+          <Button
+            variant="primary"
+            size="lg"
+            :disabled="auth.loading || !password"
+            class="login-btn"
+          >
+            <span v-if="auth.loading" class="btn-spinner" />
+            {{ auth.loading ? t('login.signingIn') : t('login.signIn') }}
+          </Button>
+        </form>
+
+        <p class="login-hint">
+          {{ t('login.lockedOutHint') }}
+        </p>
+
+        <div class="login-foot">
+          REX Hub · build {{ appVersion }} · © 2026
+        </div>
+      </div>
+    </main>
   </div>
 </template>
 
 <style scoped>
-/* ========== 基础布局 ========== */
+/* ========== 基础布局（左右分栏） ========== */
 .login {
-  height: 100%;
+  min-height: 100%;
   display: grid;
-  place-items: center;
-  background: var(--bg-deep);
+  grid-template-columns: 1.05fr .95fr;
+}
+
+/* ========== 左侧品牌面板 ========== */
+.login-aside {
   position: relative;
   overflow: hidden;
-}
-
-/* ========== CRT 效果 ========== */
-.crt-scanlines {
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0, 0, 0, 0.15) 2px,
-    rgba(0, 0, 0, 0.15) 4px
-  );
-  pointer-events: none;
-  z-index: 10;
-}
-.crt-flicker {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    ellipse at center,
-    transparent 60%,
-    rgba(0, 0, 0, 0.4) 100%
-  );
-  pointer-events: none;
-  z-index: 11;
-}
-
-/* ========== 背景装饰 ========== */
-.bg-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(232, 145, 45, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(232, 145, 45, 0.04) 1px, transparent 1px);
-  background-size: 48px 48px;
-  pointer-events: none;
-  z-index: 0;
-}
-.bg-glow {
-  position: absolute;
-  width: 500px;
-  height: 500px;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(circle, rgba(232, 145, 45, 0.06) 0%, transparent 70%);
-  pointer-events: none;
-  z-index: 0;
-  animation: glow-pulse 4s ease-in-out infinite;
-}
-
-/* ========== 启动终端 ========== */
-.boot-terminal {
-  position: absolute;
-  top: 20%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 400px;
-  padding: var(--space-6);
-  background: rgba(13, 17, 23, 0.9);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  z-index: 5;
-}
-.boot-line {
-  font-size: var(--text-sm);
-  color: var(--success);
-  line-height: 1.8;
-  opacity: 0;
-  animation: boot-fade-in 0.3s ease forwards;
-}
-.boot-cursor {
-  color: var(--accent);
-  animation: blink 1s step-end infinite;
-  font-size: var(--text-sm);
-}
-
-/* ========== 主内容区 ========== */
-.login-wrapper {
-  position: relative;
-  z-index: 5;
-  opacity: 0;
-  transition: opacity 0.5s ease;
-}
-.login-wrapper--visible {
-  opacity: 1;
-}
-
-/* ========== 登录卡片 ========== */
-.login-card {
-  width: 400px;
-  padding: var(--space-8) var(--space-8) var(--space-6);
-  background: rgba(28, 33, 40, 0.8);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow:
-    var(--shadow-lg),
-    0 0 60px rgba(232, 145, 45, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-
-/* ========== 品牌区 ========== */
-.brand {
-  text-align: center;
-  margin-bottom: var(--space-6);
-}
-.brand-icon {
+  padding: var(--space-8);
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(232, 145, 45, 0.12), transparent 55%),
+    radial-gradient(120% 120% at 100% 100%, rgba(88, 166, 255, 0.08), transparent 50%),
+    var(--bg-sidebar);
+  border-right: 1px solid var(--border);
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  margin-bottom: var(--space-2);
+  flex-direction: column;
+  justify-content: space-between;
 }
-.brand-bracket {
-  font-size: 36px;
-  font-weight: 300;
+
+.scan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: .35;
+  background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, .025) 0 1px, transparent 1px 3px);
+  mix-blend-mode: overlay;
+}
+
+/* ========== 品牌标识 ========== */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.brand .glyph {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(140deg, var(--accent), var(--brand-deep));
+  color: var(--on-brand);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 16px;
+  box-shadow: 0 0 0 1px rgba(232, 145, 45, 0.4), 0 4px 14px rgba(232, 145, 45, 0.25);
+}
+.brand .name {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: .02em;
+  font-size: 17px;
+  color: var(--text-primary);
+}
+.brand .name b {
+  color: var(--accent);
+}
+
+/* 小号品牌（右侧卡片内） */
+.brand--sm .glyph {
+  width: 26px;
+  height: 26px;
+  font-size: 14px;
+}
+.brand--sm .name {
+  font-size: 15px;
+}
+
+/* ========== 左侧卖点 ========== */
+.aside-points {
+  display: grid;
+  gap: var(--space-5);
+  max-width: 380px;
+  position: relative;
+  z-index: 1;
+}
+.aside-point {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.aside-point .ico {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--accent);
+}
+.aside-point h4 {
+  margin: 2px 0 3px;
+  font-size: 14.5px;
+  color: var(--text-primary);
+}
+.aside-point p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.aside-foot {
+  position: relative;
+  z-index: 1;
   color: var(--text-muted);
   font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  opacity: 0.6;
 }
-.brand-name {
-  font-size: 36px;
-  font-weight: 700;
-  color: var(--accent);
-  letter-spacing: 4px;
-  text-shadow: 0 0 20px rgba(232, 145, 45, 0.3);
+
+/* ========== 右侧登录面板 ========== */
+.login-main {
+  display: grid;
+  place-items: center;
+  padding: 40px;
+  background: var(--bg-app, var(--bg-page));
 }
-.brand-tagline {
-  font-size: var(--text-sm);
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+}
+
+.login-card .top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 30px;
+}
+
+.login-card h1 {
+  font-size: 23px;
+  margin: 0 0 6px;
+  letter-spacing: -.02em;
+  color: var(--text-primary);
+}
+
+.login-card .sub {
   color: var(--text-muted);
-  letter-spacing: 1px;
+  font-size: 13.5px;
+  margin: 0 0 26px;
+}
+
+/* ========== 语言切换按钮 ========== */
+.lang-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+.lang-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
 }
 
 /* ========== 表单 ========== */
@@ -288,28 +347,34 @@ async function handleLogin() {
   flex-direction: column;
   gap: var(--space-4);
 }
+
 .field {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 7px;
 }
+
 .field-label {
-  font-size: var(--text-xs);
+  font-size: 12px;
   color: var(--text-muted);
-  letter-spacing: 1.5px;
+  font-weight: 500;
 }
+
 .field-prompt {
   color: var(--accent);
   font-weight: 600;
 }
+
 .login-options {
   display: flex;
   align-items: center;
 }
+
 .login-btn {
   width: 100%;
   margin-top: var(--space-1);
 }
+
 .btn-spinner {
   display: inline-block;
   width: 14px;
@@ -340,35 +405,54 @@ async function handleLogin() {
   flex-shrink: 0;
 }
 
-/* ========== 底部状态栏 ========== */
-.status-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  margin-top: var(--space-6);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--border-subtle);
-  font-size: var(--text-xs);
+/* ========== 底部提示 ========== */
+.login-hint {
+  font-size: 12px;
+  margin: 20px 0 0;
+  text-align: center;
+  line-height: 1.5;
   color: var(--text-muted);
 }
-.status-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
+
+.login-foot {
+  text-align: center;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  margin-top: 26px;
+  opacity: 0.5;
 }
-.status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-muted);
+
+/* ========== 启动终端覆盖层 ========== */
+.boot-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: var(--bg-deep);
 }
-.status-dot--online {
-  background: var(--success);
-  box-shadow: 0 0 6px var(--success);
+
+.boot-terminal {
+  width: 400px;
+  padding: var(--space-6);
+  background: rgba(13, 17, 23, 0.9);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
-.status-sep {
-  opacity: 0.3;
+
+.boot-line {
+  font-size: var(--text-sm);
+  color: var(--success);
+  line-height: 1.8;
+  opacity: 0;
+  animation: boot-fade-in 0.3s ease forwards;
+}
+
+.boot-cursor {
+  color: var(--accent);
+  animation: blink 1s step-end infinite;
+  font-size: var(--text-sm);
 }
 
 /* ========== 动画 ========== */
@@ -382,19 +466,15 @@ async function handleLogin() {
   from { opacity: 0; transform: translateY(2px); }
   to { opacity: 1; transform: translateY(0); }
 }
-@keyframes glow-pulse {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
-}
 
 /* ========== 过渡 ========== */
-.card-reveal-enter-active {
-  transition: opacity 0.6s ease, transform 0.6s ease;
+.boot-fade-leave-active {
+  transition: opacity 0.4s ease;
 }
-.card-reveal-enter-from {
+.boot-fade-leave-to {
   opacity: 0;
-  transform: translateY(12px) scale(0.98);
 }
+
 .error-slide-enter-active {
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
@@ -407,5 +487,15 @@ async function handleLogin() {
 }
 .error-slide-leave-to {
   opacity: 0;
+}
+
+/* ========== 响应式 ========== */
+@media (max-width: 880px) {
+  .login {
+    grid-template-columns: 1fr;
+  }
+  .login-aside {
+    display: none;
+  }
 }
 </style>

@@ -35,10 +35,14 @@ async function handleSetup() {
 <template>
   <div class="setup">
     <div class="setup-card">
-      <div class="setup-brand mono">
-        REX<span class="accent">Hub</span>
+      <!-- 品牌标识 -->
+      <div class="setup-brand">
+        <span class="glyph">R</span>
+        <span class="brand-name">RE<b>X</b> Hub</span>
       </div>
-      <div class="setup-subtitle">{{ t('setup.subtitle') }}</div>
+
+      <h1>{{ t('setup.subtitle') }}</h1>
+      <p class="setup-sub">{{ t('setup.hint') }}</p>
 
       <form class="setup-form" @submit.prevent="handleSetup">
         <div class="field">
@@ -62,95 +66,177 @@ async function handleSetup() {
             autocomplete="new-password"
           />
         </div>
-        <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
+
+        <Transition name="error-slide">
+          <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
+        </Transition>
+
         <Button
           variant="primary"
           size="lg"
           :disabled="auth.loading || !password || !confirmPassword"
-          style="width: 100%; margin-top: var(--space-4)"
+          class="setup-btn"
         >
           {{ auth.loading ? t('setup.setting') : t('setup.setPassword') }}
         </Button>
       </form>
 
-      <div class="setup-hint muted">
-        {{ t('setup.hint') }}
+      <div class="setup-foot">
+        REX Hub · self-hosted
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+/* ========== 整体布局 ========== */
 .setup {
-  height: 100%;
+  min-height: 100%;
   display: grid;
   place-items: center;
-  background: var(--bg-deep);
+  padding: 40px;
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(232, 145, 45, 0.10), transparent 55%),
+    var(--bg-page);
 }
+
+/* ========== 设置卡片 ========== */
 .setup-card {
-  width: 360px;
+  width: 100%;
+  max-width: 380px;
   padding: var(--space-8);
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
 }
+
+/* ========== 品牌标识 ========== */
 .setup-brand {
-  font-size: var(--text-2xl);
-  font-weight: 700;
-  text-align: center;
-  margin-bottom: var(--space-1);
-}
-.accent {
-  color: var(--accent);
-}
-.setup-subtitle {
-  text-align: center;
-  font-size: var(--text-sm);
-  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin-bottom: var(--space-6);
 }
+
+.setup-brand .glyph {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(140deg, var(--accent), var(--brand-deep));
+  color: var(--on-brand);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 16px;
+  box-shadow: 0 0 0 1px rgba(232, 145, 45, 0.4), 0 4px 14px rgba(232, 145, 45, 0.25);
+}
+
+.brand-name {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: .02em;
+  color: var(--text-primary);
+}
+.brand-name b {
+  color: var(--accent);
+}
+
+/* ========== 标题与描述 ========== */
+.setup-card h1 {
+  font-size: 20px;
+  margin: 0 0 6px;
+  letter-spacing: -.02em;
+  color: var(--text-primary);
+}
+
+.setup-sub {
+  color: var(--text-muted);
+  font-size: 13.5px;
+  margin: 0 0 24px;
+  line-height: 1.5;
+}
+
+/* ========== 表单 ========== */
 .setup-form {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
 }
+
 .field {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 6px;
 }
+
 .field-label {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
 }
+
 .field-input {
-  height: 40px;
-  padding: 0 var(--space-3);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  width: 100%;
+  height: 42px;
+  padding: 0 13px;
   border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-page);
   color: var(--text-primary);
-  font-size: var(--text-base);
-  outline: none;
-  transition: border-color var(--transition);
+  font: inherit;
+  font-size: var(--text-md);
+  transition: border-color var(--transition), box-shadow var(--transition);
 }
 .field-input::placeholder {
   color: var(--text-muted);
+  opacity: 0.6;
 }
 .field-input:focus {
+  outline: none;
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
+
+/* ========== 错误提示 ========== */
 .error-msg {
   color: var(--danger);
   font-size: var(--text-sm);
   text-align: center;
+  min-height: 16px;
+  font-family: var(--font-mono);
 }
-.setup-hint {
+
+/* ========== 设置按钮 ========== */
+.setup-btn {
+  width: 100%;
+  margin-top: var(--space-2);
+}
+
+/* ========== 底部 ========== */
+.setup-foot {
   text-align: center;
-  margin-top: var(--space-6);
-  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  margin-top: 22px;
+  opacity: 0.5;
+}
+
+/* ========== 过渡 ========== */
+.error-slide-enter-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.error-slide-leave-active {
+  transition: opacity 0.15s ease;
+}
+.error-slide-enter-from {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.error-slide-leave-to {
+  opacity: 0;
 }
 </style>

@@ -393,73 +393,110 @@ async function resetToken() {
   <div class="env-detail">
     <!-- Breadcrumb -->
     <div class="breadcrumb">
-      <router-link to="/environments" class="breadcrumb-link">{{ t('nav.environments') }}</router-link>
-      <span class="breadcrumb-sep">›</span>
+      <router-link to="/environments" class="breadcrumb-link">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        Environments
+      </router-link>
+      <svg class="breadcrumb-sep" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
       <span class="breadcrumb-current">{{ env?.name || '...' }}</span>
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loadingEllipsis') }}</div>
 
     <template v-else-if="env">
-      <!-- Header -->
-      <div class="env-header">
-        <div class="env-header-info">
-          <h1 class="page-title">{{ env.name }}</h1>
-          <p class="env-description muted">{{ env.description || t('common.noDescription') }}</p>
+      <!-- Detail Head -->
+      <div class="detail-head">
+        <div class="detail-head-icon" :class="`detail-head-icon--${env.connection_mode}`">
+          {{ env.connection_mode === 'agent' ? '⬡' : '◉' }}
         </div>
-        <div class="env-header-actions">
-          <Button variant="secondary" size="sm" @click="openEdit">{{ t('common.edit') }}</Button>
-          <Button variant="danger" size="sm" :aria-label="t('common.delete')" @click="deleteConfirmId = env.id ?? ''">{{ t('common.delete') }}</Button>
+        <div class="detail-head-text">
+          <div class="detail-head-name">{{ env.name }}</div>
+          <div class="detail-head-sub">{{ env.description || t('common.noDescription') }}</div>
         </div>
+        <div class="detail-head-spacer"></div>
+        <Button variant="ghost" size="sm" @click="openEdit">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Edit
+        </Button>
+        <Button variant="ghost" size="sm" style="color: var(--danger);" @click="deleteConfirmId = env.id ?? ''">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          Delete
+        </Button>
       </div>
 
-      <!-- Meta info -->
-      <div class="env-meta">
+      <!-- Meta -->
+      <div class="detail-meta">
         <Badge :tone="env.connection_mode === 'agent' ? 'warning' : 'info'">
-          {{ env.connection_mode }}
+          {{ env.connection_mode === 'agent' ? 'Agent Tunnel' : 'Direct' }}
         </Badge>
-        <Badge tone="accent">{{ env.resource_count }} {{ t('common.resources') }}</Badge>
-        <span class="muted" style="font-size: var(--text-xs)">
-          {{ t('environmentDetail.created', { date: new Date(env.created_at).toLocaleDateString() }) }}
+        <Badge :tone="env.agent_status === 'online' ? 'success' : 'warning'">
+          {{ env.agent_status || 'no agent' }}
+        </Badge>
+        <Badge>{{ env.resource_count }} resources</Badge>
+        <span class="detail-meta-updated">
+          Updated {{ new Date(env.updated_at).toLocaleDateString() }}
         </span>
       </div>
 
-      <!-- Agent Panel (仅 Agent 模式显示) -->
-      <Card v-if="env.connection_mode === 'agent'" class="section-card">
-        <h2 class="section-title">{{ t('environmentDetail.agentSection') }}</h2>
-        <div v-if="env.agent_status" class="agent-info">
-          <StatusDot :status="agentStatus(env.agent_status)" />
-          <span>{{ t('environments.agentStatus', { status: env.agent_status }) }}</span>
+      <!-- Agents Section -->
+      <div class="section">
+        <div class="section-head">
+          <h2 class="section-title">Agents</h2>
+          <span class="section-head-spacer"></span>
+          <Badge>{{ env.agent_status === 'online' ? '1 online' : '0 online' }}</Badge>
         </div>
-        <div v-else class="agent-empty muted">
-          {{ t('environmentDetail.noAgent') }}
+        <div class="section-body">
+          <div v-if="env.agent_status" class="agent-row">
+            <span class="agent-icon">⟡</span>
+            <div class="agent-info">
+              <span class="agent-name">{{ env.agent_status }}</span>
+              <span class="agent-meta">Registered agent</span>
+            </div>
+            <span class="agent-version mono">1.0.0</span>
+            <StatusDot :status="agentStatus(env.agent_status)" />
+          </div>
+          <div v-else class="agent-empty">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            No agents registered for this environment.
+          </div>
         </div>
-        <!-- Registration Token (仅 Agent 模式显示) -->
+        <!-- Registration Token -->
         <div v-if="env.connection_mode === 'agent'" class="agent-token-section">
           <label class="form-label" style="margin-bottom: var(--space-2)">
             <span>{{ t('environments.agentToken') }}</span>
           </label>
           <div v-if="env.registration_token" class="agent-token-row">
             <code class="agent-token-value mono">{{ env.registration_token }}</code>
-            <Button variant="secondary" size="sm" :aria-label="t('common.copy')" @click="copyToken">{{ t('common.copy') }}</Button>
-            <Button variant="secondary" size="sm" :aria-label="t('common.reset')" @click="resetToken">{{ t('common.reset') }}</Button>
+            <Button variant="ghost" size="sm" :aria-label="t('common.copy')" @click="copyToken">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              {{ t('common.copy') }}
+            </Button>
+            <Button variant="ghost" size="sm" :aria-label="t('common.reset')" @click="resetToken">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              {{ t('common.reset') }}
+            </Button>
           </div>
           <div v-else class="agent-token-empty muted" style="font-size: var(--text-sm)">
             {{ t('environmentDetail.noAgentToken') }}
           </div>
         </div>
         <div style="margin-top: var(--space-3); font-size: var(--text-sm);">
-          <router-link to="/agents" style="color: var(--accent); text-decoration: none;">
-            {{ t('environmentDetail.viewDeployGuide') }} →
+          <router-link to="/agents" class="section-link">
+            {{ t('environmentDetail.viewDeployGuide') }}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           </router-link>
         </div>
-      </Card>
+      </div>
 
-      <!-- Resources Table -->
-      <Card class="section-card">
-        <div class="section-header">
-          <h2 class="section-title">{{ t('environmentDetail.resourcesSection') }}</h2>
-          <Button variant="primary" size="sm" @click="showWizard = true">+ {{ t('environmentDetail.addResource') }}</Button>
+      <!-- Resources Section -->
+      <div class="section">
+        <div class="section-head">
+          <h2 class="section-title">Resources</h2>
+          <span class="section-head-spacer"></span>
+          <Button variant="primary" size="sm" @click="showWizard = true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            Add Resource
+          </Button>
         </div>
 
         <EmptyState
@@ -501,12 +538,14 @@ async function resetToken() {
               <td class="mono">{{ res.port || '—' }}</td>
               <td>{{ res.username || '—' }}</td>
               <td>
-                <button class="icon-btn danger" :title="t('common.delete')" @click="resourceDeleteId = res.id">✕</button>
+                <button class="icon-btn danger" :title="t('common.delete')" @click="resourceDeleteId = res.id">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
               </td>
             </tr>
           </tbody>
         </table>
-      </Card>
+      </div>
     </template>
 
     <!-- Resource Creation Wizard -->
@@ -538,7 +577,7 @@ async function resetToken() {
         </label>
         <div v-if="editError" class="form-error">{{ editError }}</div>
         <div class="form-actions">
-          <Button type="button" variant="secondary" @click="editModal = false">{{ t('common.cancel') }}</Button>
+          <Button type="button" variant="ghost" @click="editModal = false">{{ t('common.cancel') }}</Button>
           <Button type="submit" variant="primary" :loading="editLoading">{{ t('common.save') }}</Button>
         </div>
       </form>
@@ -551,7 +590,7 @@ async function resetToken() {
         {{ t('environments.deleteConfirm') }}
       </p>
       <div class="form-actions">
-        <Button variant="secondary" @click="deleteConfirmId = ''">{{ t('common.cancel') }}</Button>
+        <Button variant="ghost" @click="deleteConfirmId = ''">{{ t('common.cancel') }}</Button>
         <Button variant="danger" :loading="false" @click="deleteEnvironment">{{ t('common.delete') }}</Button>
       </div>
     </Modal>
@@ -570,7 +609,7 @@ async function resetToken() {
         {{ t('environments.deleteConfirm') }}
       </p>
       <div class="form-actions">
-        <Button variant="secondary" @click="resourceDeleteId = null">{{ t('common.cancel') }}</Button>
+        <Button variant="ghost" @click="resourceDeleteId = null">{{ t('common.cancel') }}</Button>
         <Button variant="danger" @click="confirmDeleteResource">{{ t('common.delete') }}</Button>
       </div>
     </Modal>
@@ -678,8 +717,8 @@ async function resetToken() {
         </template>
         <div v-if="resEditError" class="form-error">{{ resEditError }}</div>
         <div class="form-actions">
-          <Button type="button" variant="secondary" :loading="resEditTesting" @click="testResConnection">{{ t('wizard.testConnection') }}</Button>
-          <Button type="button" variant="secondary" @click="resEditModal = false">{{ t('common.cancel') }}</Button>
+          <Button type="button" variant="ghost" :loading="resEditTesting" @click="testResConnection">{{ t('wizard.testConnection') }}</Button>
+          <Button type="button" variant="ghost" @click="resEditModal = false">{{ t('common.cancel') }}</Button>
           <Button type="submit" variant="primary" :loading="resEditLoading">{{ t('common.save') }}</Button>
         </div>
         <div v-if="resEditTestResult" class="form-error" :style="{ color: resEditTestResult.ok ? 'var(--success)' : 'var(--danger)' }">
@@ -691,107 +730,262 @@ async function resetToken() {
 </template>
 
 <style scoped>
+/* ========== Page Layout ========== */
 .env-detail {
+  padding: var(--space-6);
 }
+
+/* ========== Breadcrumb ========== */
 .breadcrumb {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-6);
   font-size: var(--text-sm);
 }
+
 .breadcrumb-link {
-  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted);
   text-decoration: none;
+  transition: color var(--transition);
 }
+
 .breadcrumb-link:hover {
   color: var(--accent);
 }
+
 .breadcrumb-sep {
   color: var(--text-muted);
+  flex-shrink: 0;
 }
+
 .breadcrumb-current {
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: 600;
 }
+
+/* ========== Loading ========== */
 .loading {
   color: var(--text-muted);
   padding: var(--space-8) 0;
   text-align: center;
 }
-.env-header {
+
+/* ========== Detail Head ========== */
+.detail-head {
   display: flex;
-  justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: var(--space-4);
+  gap: 14px;
+  margin-bottom: 8px;
 }
-.page-title {
+
+.detail-head-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--on-ink);
+  flex-shrink: 0;
+}
+
+.detail-head-icon--direct {
+  background: linear-gradient(140deg, var(--info), #2a6cb8);
+}
+
+.detail-head-icon--agent {
+  background: linear-gradient(140deg, var(--accent), var(--brand-deep));
+}
+
+.detail-head-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.detail-head-name {
   font-size: var(--text-xl);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
-  margin: 0;
+  line-height: 1.3;
 }
-.env-description {
-  margin-top: var(--space-1);
+
+.detail-head-sub {
+  font-family: var(--font-mono);
   font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-top: 2px;
 }
-.env-meta {
+
+.detail-head-spacer {
+  flex: 1;
+}
+
+/* ========== Meta ========== */
+.detail-meta {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin-bottom: var(--space-6);
+  margin: 6px 0 22px;
+  flex-wrap: wrap;
 }
-.section-card {
+
+.detail-meta-updated {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-left: var(--space-2);
+}
+
+/* ========== Section ========== */
+.section {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
   margin-bottom: var(--space-4);
 }
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-3);
+
+.section-head-spacer {
+  flex: 1;
 }
+
 .section-title {
-  font-size: var(--text-md);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin: 0;
+  font-weight: 500;
+}
+
+.section-body {
+  /* body wrapper */
+}
+
+.section-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  transition: color var(--transition);
+}
+
+.section-link:hover {
+  color: var(--accent-hover);
+}
+
+/* ========== Agent Row ========== */
+.agent-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.agent-row + .agent-row {
+  border-top: 1px dashed var(--border);
+}
+
+.agent-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(140deg, var(--accent), var(--brand-deep));
+  color: var(--on-brand);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.agent-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-name {
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0;
 }
-.agent-info {
+
+.agent-meta {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.agent-version {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.agent-empty {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 8px;
+  color: var(--text-muted);
   font-size: var(--text-sm);
-  color: var(--text-secondary);
+  padding: var(--space-3) 0;
 }
-.agent-empty {
-  font-size: var(--text-sm);
-  padding: var(--space-4) 0;
-}
+
+/* ========== Agent Token ========== */
 .agent-token-section {
   margin-top: var(--space-4);
   padding-top: var(--space-4);
   border-top: 1px solid var(--border);
 }
+
 .agent-token-row {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  flex-wrap: wrap;
 }
+
 .agent-token-value {
   flex: 1;
+  min-width: 200px;
   font-size: var(--text-xs);
-  background: var(--bg-deep);
+  background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: var(--space-2);
   word-break: break-all;
-  color: var(--text-secondary);
+  color: var(--text-muted);
+  display: inline-block;
 }
+
+.agent-token-empty {
+  color: var(--text-muted);
+}
+
+/* ========== Resource Table ========== */
 .resource-table {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--text-sm);
 }
+
 .resource-table th {
   text-align: left;
   padding: var(--space-2) var(--space-3);
@@ -802,14 +996,17 @@ async function resetToken() {
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+
 .resource-table td {
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border);
   color: var(--text-secondary);
 }
+
 .resource-table tr:hover td {
   background: var(--bg-hover);
 }
+
 .res-name {
   display: flex;
   align-items: center;
@@ -817,18 +1014,16 @@ async function resetToken() {
   color: var(--text-primary);
   font-weight: 500;
 }
+
 .res-icon {
   font-family: var(--font-mono);
   font-size: 14px;
   width: 20px;
   text-align: center;
+  flex-shrink: 0;
 }
-.mono {
-  font-family: var(--font-mono);
-}
-.muted {
-  color: var(--text-muted);
-}
+
+/* ========== Icon Button ========== */
 .icon-btn {
   width: 28px;
   height: 28px;
@@ -836,23 +1031,28 @@ async function resetToken() {
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  border-radius: 4px;
-  font-size: 14px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background var(--transition), color var(--transition);
 }
+
 .icon-btn:hover {
   background: var(--bg-hover);
 }
+
 .icon-btn.danger:hover {
   color: var(--danger);
 }
+
+/* ========== Form ========== */
 .env-form {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
 }
+
 .form-label {
   display: flex;
   flex-direction: column;
@@ -860,6 +1060,7 @@ async function resetToken() {
   font-size: var(--text-sm);
   color: var(--text-secondary);
 }
+
 .form-input {
   background: var(--bg-deep);
   border: 1px solid var(--border);
@@ -868,26 +1069,32 @@ async function resetToken() {
   color: var(--text-primary);
   font-size: var(--text-sm);
   outline: none;
+  transition: border-color var(--transition);
 }
+
 .form-input:focus {
   border-color: var(--accent);
 }
+
 .form-error {
   color: var(--danger);
   font-size: var(--text-sm);
 }
+
 .form-actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);
   margin-top: var(--space-4);
 }
-/* ---- context menu ---- */
+
+/* ========== Context Menu ========== */
 .ctx-overlay {
   position: fixed;
   inset: 0;
   z-index: 200;
 }
+
 .res-ctx-menu {
   position: fixed;
   z-index: 210;
@@ -898,17 +1105,29 @@ async function resetToken() {
   box-shadow: var(--shadow);
   padding: var(--space-1) 0;
 }
+
 .ctx-item {
   padding: var(--space-2) var(--space-3);
   font-size: var(--text-sm);
   cursor: pointer;
   color: var(--text-primary);
+  transition: background var(--transition);
 }
+
 .ctx-item:hover {
   background: var(--bg-hover);
 }
+
 .ctx-item--danger {
   color: var(--danger);
 }
 
+/* ========== Utilities ========== */
+.mono {
+  font-family: var(--font-mono);
+}
+
+.muted {
+  color: var(--text-muted);
+}
 </style>

@@ -305,13 +305,21 @@
     "write": "Write"
   },
   "login": {
-    "footer": "Single-user · Self-hosted",
+    "langSwitch": "中文",
+    "lockedOutHint": "Single-admin console. Locked out? Reset the password on the host (env / CLI).",
     "loginFailed": "Login failed",
     "password": "Password",
+    "pitch1Desc": "SSH, databases, Redis, files, object storage and SIP — one dark, keyboard-driven surface.",
+    "pitch1Title": "One console for every remote",
+    "pitch2Desc": "Deploy an agent behind the firewall; access it from anywhere with no VPN or port forwarding.",
+    "pitch2Title": "Reach the internal network",
+    "pitch3Desc": "Self-hosted, single-user. Credentials encrypted at rest; data never leaves your infrastructure.",
+    "pitch3Title": "Yours, and only yours",
     "rememberMe": "Remember me",
     "signIn": "Sign in",
     "signingIn": "Signing in...",
-    "subtitle": "Remote Resource Management"
+    "subtitle": "Manage every remote resource from one console.",
+    "title": "Sign in to REX Hub"
   },
   "nav": {
     "agents": "Agents",

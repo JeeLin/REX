@@ -149,26 +149,40 @@ async function handleImport(event: Event) {
 </script>
 
 <template>
-  <div class="page-container env-page">
-    <!-- Header -->
-    <header class="page-header">
-      <div class="page-header-left">
-        <h1 class="page-title mono">{{ t('environments.title') }}</h1>
-        <span class="page-subtitle">{{ t('environments.subtitle', 'Manage connection targets') }}</span>
+  <div class="env-page">
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="page-header-text">
+        <h1 class="page-title">Environments</h1>
+        <p class="page-sub">Logical groupings of resources by network or purpose. Each owns its connection mode, agents and resources — agents are managed inside their environment. Switch to <b>Topology</b> to see how everything is wired.</p>
       </div>
-      <div class="page-header-actions">
-        <Button variant="ghost" size="sm" @click="exportConfig">
-          <span class="action-icon">↓</span> {{ t('environments.export') }}
-        </Button>
-        <Button variant="ghost" size="sm" :loading="importLoading" @click="triggerImport">
-          <span class="action-icon">↑</span> {{ t('environments.import') }}
-        </Button>
-        <input ref="importFileInput" type="file" accept=".json" style="display:none" @change="handleImport" />
-        <Button variant="primary" size="sm" @click="openCreate">
-          <span class="action-icon">+</span> {{ t('environments.newEnvironment') }}
-        </Button>
-      </div>
-    </header>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <span class="badge-item">
+        <Badge>{{ store.environments.length }} environments</Badge>
+      </span>
+      <span class="badge-item">
+        <Badge tone="success">{{ store.environments.filter(e => e.agent_status === 'online').length }} agents online</Badge>
+      </span>
+      <span class="badge-item">
+        <Badge>{{ store.environments.reduce((sum, e) => sum + e.resource_count, 0) }} resources</Badge>
+      </span>
+      <div class="toolbar-spacer"></div>
+      <Button variant="ghost" size="sm" :loading="importLoading" @click="triggerImport">Import</Button>
+      <input ref="importFileInput" type="file" accept=".json" style="display:none" @change="handleImport" />
+      <Button variant="primary" size="sm" @click="openCreate">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        New environment
+      </Button>
+    </div>
+
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <div class="tab active">List</div>
+      <div class="tab">Topology</div>
+    </div>
 
     <!-- Empty State -->
     <EmptyState
@@ -185,40 +199,68 @@ async function handleImport(event: Event) {
       <div
         v-for="env in store.environments"
         :key="env.id"
-        class="env-tile"
+        class="env-card"
         role="button"
         tabindex="0"
         @click="router.push(`/environments/${env.id}`)"
         @keydown.enter="router.push(`/environments/${env.id}`)"
         @contextmenu.prevent="onContextMenu($event, env)"
       >
-        <div class="env-tile-top">
-          <div class="env-tile-icon" :class="`env-tile-icon--${env.connection_mode}`">
+        <!-- Card Header -->
+        <div class="env-card-header">
+          <div class="env-card-icon" :class="`env-card-icon--${env.connection_mode}`">
             {{ envIcon(env.connection_mode) }}
           </div>
-          <div class="env-tile-actions" @click.stop>
-            <button class="env-tile-action" :title="t('common.edit')" @click="openEdit(env)">✎</button>
-            <button class="env-tile-action env-tile-action--danger" :title="t('common.delete')" @click="deleteConfirmId = env.id">✕</button>
+          <div class="env-card-header-text">
+            <span class="env-card-name">{{ env.name }}</span>
+            <span class="env-card-mode">{{ env.connection_mode }}</span>
+          </div>
+          <StatusDot v-if="env.agent_status" :status="agentStatus(env.agent_status)" />
+        </div>
+
+        <!-- Card Body -->
+        <div class="env-card-body">
+          <div class="env-card-desc">{{ env.description || t('common.noDescription') }}</div>
+
+          <div class="env-card-chips">
+            <span class="chip">
+              <span class="chip-dot" :class="env.agent_status === 'online' ? 'chip-dot--success' : 'chip-dot--warning'"></span>
+              {{ env.resource_count }} resources
+            </span>
           </div>
         </div>
-        <div class="env-tile-body">
-          <span class="env-tile-name mono">{{ env.name }}</span>
-          <span class="env-tile-desc muted">{{ env.description || t('common.noDescription') }}</span>
-        </div>
-        <div class="env-tile-agent">
-          <template v-if="env.agent_status">
+
+        <!-- Agents Section -->
+        <div v-if="env.connection_mode === 'agent'" class="env-card-agents">
+          <div class="env-card-agents-header">
+            Agents
+            <div class="env-card-agents-spacer"></div>
+            <span v-if="env.agent_status" class="badge-sm badge-green">1 online</span>
+          </div>
+          <div v-if="env.agent_status" class="env-card-agent-row">
+            <span class="env-card-agent-icon">⟡</span>
+            <div class="env-card-agent-info">
+              <span class="env-card-agent-name">{{ env.agent_status }}</span>
+            </div>
             <StatusDot :status="agentStatus(env.agent_status)" />
-            <span class="mono env-tile-agent-text">Agent {{ env.agent_status }}</span>
-          </template>
-          <template v-else>
-            <span class="muted env-tile-agent-text">{{ t('dashboard.noAgent') }}</span>
-          </template>
+          </div>
+          <div v-else class="env-card-no-agent">No agents registered</div>
         </div>
-        <div class="env-tile-footer">
-          <Badge tone="accent" size="sm">{{ env.resource_count }} {{ t('common.resources') }}</Badge>
-          <Badge :tone="env.connection_mode === 'agent' ? 'warning' : 'info'" size="sm">
-            {{ env.connection_mode }}
-          </Badge>
+
+        <!-- Card Footer Actions -->
+        <div class="env-card-actions">
+          <button class="env-card-action" @click.stop="router.push(`/environments/${env.id}`)">Open</button>
+          <button class="env-card-action env-card-action--primary" @click.stop="router.push(`/environments/${env.id}?action=newResource`)">Add Resource</button>
+          <button class="env-card-action" @click.stop="openEdit(env)">Edit</button>
+          <button class="env-card-action env-card-action--danger" @click.stop="deleteConfirmId = env.id">Delete</button>
+        </div>
+      </div>
+
+      <!-- New Environment Card -->
+      <div class="env-card env-card--new" @click="openCreate">
+        <div class="env-card-new-content">
+          <div class="env-card-new-icon">+</div>
+          <div class="env-card-new-text">New environment</div>
         </div>
       </div>
     </div>
@@ -283,76 +325,425 @@ async function handleImport(event: Event) {
 </template>
 
 <style scoped>
-/* ========== Layout ========== */
-.env-page {}
-.page-header-actions { display: flex; gap: var(--space-2); align-items: center; }
-.action-icon { font-size: var(--text-sm); }
+/* ========== Page Layout ========== */
+.env-page {
+  padding: var(--space-6);
+}
+
+.page-header {
+  margin-bottom: var(--space-4);
+}
+
+.page-header-text {
+  max-width: 720px;
+}
+
+.page-title {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.page-sub {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.page-sub b {
+  color: var(--text-secondary);
+}
+
+/* ========== Toolbar ========== */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: var(--space-4);
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+.badge-item {
+  display: inline-flex;
+}
+
+/* ========== Tab Bar ========== */
+.tab-bar {
+  display: flex;
+  gap: 2px;
+  margin-bottom: var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  padding: 9px 18px;
+  font-size: var(--text-base);
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-weight: 500;
+  transition: color var(--transition);
+}
+
+.tab:hover {
+  color: var(--text-primary);
+}
+
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
 
 /* ========== Environment Grid ========== */
-.env-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-3); }
-
-.env-tile {
-  display: flex; flex-direction: column; gap: var(--space-3);
-  padding: var(--space-4);
-  background: var(--bg-surface); border: 1px solid var(--border);
-  border-radius: var(--radius-lg); cursor: pointer; text-align: left;
-  transition: border-color var(--transition), transform var(--transition);
+.env-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 16px;
 }
-.env-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
 
-.env-tile-top { display: flex; align-items: flex-start; justify-content: space-between; }
-.env-tile-icon {
-  width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
-  border-radius: var(--radius); font-size: 18px; flex-shrink: 0;
+/* ========== Environment Card ========== */
+.env-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color 0.15s, transform 0.08s;
+  display: flex;
+  flex-direction: column;
 }
-.env-tile-icon--direct { color: var(--info); background: var(--info-soft); }
-.env-tile-icon--agent { color: var(--accent); background: var(--accent-soft); }
 
-.env-tile-actions { display: flex; gap: 2px; opacity: 0; transition: opacity var(--transition); }
-.env-tile:hover .env-tile-actions { opacity: 1; }
-.env-tile-action {
-  width: 26px; height: 26px; border: none; background: transparent;
-  color: var(--text-muted); cursor: pointer; border-radius: var(--radius-sm);
-  font-size: 13px; display: flex; align-items: center; justify-content: center;
-  transition: background var(--transition), color var(--transition);
+.env-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
 }
-.env-tile-action:hover { background: var(--bg-hover); color: var(--text-primary); }
-.env-tile-action--danger:hover { color: var(--danger); }
 
-.env-tile-body { display: flex; flex-direction: column; gap: var(--space-1); }
-.env-tile-name { font-size: var(--text-md); font-weight: 600; color: var(--text-primary); }
-.env-tile-desc { font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-.env-tile-agent {
-  display: flex; align-items: center; gap: var(--space-2);
-  padding-top: var(--space-2); border-top: 1px solid var(--border-subtle);
-  font-size: var(--text-xs);
+.env-card[role="button"] {
+  cursor: pointer;
 }
-.env-tile-agent-text { color: var(--text-secondary); }
 
-.env-tile-footer { display: flex; gap: var(--space-2); justify-content: flex-end; }
+/* Card Header */
+.env-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.env-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--on-ink);
+  flex-shrink: 0;
+}
+
+.env-card-icon--direct {
+  background: linear-gradient(140deg, var(--info), #2a6cb8);
+}
+
+.env-card-icon--agent {
+  background: linear-gradient(140deg, var(--accent), var(--brand-deep));
+}
+
+.env-card-header-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.env-card-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.env-card-mode {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+/* Card Body */
+.env-card-body {
+  padding: 14px 16px;
+}
+
+.env-card-desc {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  min-height: 32px;
+  margin-bottom: 14px;
+  line-height: 1.4;
+}
+
+.env-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 3px 9px;
+}
+
+.chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.chip-dot--success {
+  background: var(--success);
+}
+
+.chip-dot--warning {
+  background: var(--warning);
+}
+
+/* Agents Section */
+.env-card-agents {
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+  background: var(--bg-page);
+}
+
+.env-card-agents-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.env-card-agents-spacer {
+  flex: 1;
+}
+
+.badge-sm {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+}
+
+.badge-green {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.env-card-agent-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.env-card-agent-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(140deg, var(--accent), var(--brand-deep));
+  color: var(--on-brand);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.env-card-agent-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.env-card-agent-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.env-card-no-agent {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  padding: 4px 0;
+}
+
+/* Card Actions */
+.env-card-actions {
+  display: flex;
+  gap: 6px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.env-card-action {
+  flex: 1;
+  height: 30px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: background var(--transition);
+}
+
+.env-card-action:hover {
+  background: var(--bg-hover);
+}
+
+.env-card-action--primary {
+  background: var(--accent);
+  color: var(--on-brand);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.env-card-action--primary:hover {
+  background: var(--accent-hover);
+}
+
+.env-card-action--danger {
+  color: var(--danger);
+}
+
+.env-card-action--danger:hover {
+  background: var(--danger-soft);
+}
+
+/* New Environment Card */
+.env-card--new {
+  border: 1px dashed var(--border-strong);
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  min-height: 220px;
+}
+
+.env-card--new:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.env-card--new:hover {
+  transform: none;
+}
+
+.env-card-new-content {
+  text-align: center;
+}
+
+.env-card-new-icon {
+  font-size: 28px;
+}
+
+.env-card-new-text {
+  font-size: 13px;
+  margin-top: 6px;
+}
 
 /* ========== Form ========== */
-.env-form { display: flex; flex-direction: column; gap: var(--space-4); }
-.form-label { display: flex; flex-direction: column; gap: var(--space-1); }
-.form-label-text { font-size: var(--text-sm); color: var(--text-secondary); }
-.form-error { color: var(--danger); font-size: var(--text-sm); }
-.form-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
-.delete-msg { color: var(--text-secondary); margin-bottom: var(--space-4); font-size: var(--text-sm); }
+.env-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.form-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.form-label-text {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.form-error {
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.delete-msg {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-4);
+  font-size: var(--text-sm);
+}
 
 /* ========== Context Menu ========== */
 .ctx-item {
-  padding: var(--space-2) var(--space-3); font-size: var(--text-sm);
-  cursor: pointer; color: var(--text-primary);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  color: var(--text-primary);
 }
-.ctx-item:hover { background: var(--bg-hover); }
-.ctx-item--danger { color: var(--danger); }
+
+.ctx-item:hover {
+  background: var(--bg-hover);
+}
+
+.ctx-item--danger {
+  color: var(--danger);
+}
 
 /* ========== Responsive ========== */
-@media (max-width: 768px) {
-  .env-page { padding: var(--space-4); }
-  .env-header { flex-direction: column; align-items: flex-start; gap: var(--space-3); }
-  .env-header-actions { width: 100%; justify-content: flex-end; }
-  .env-grid { grid-template-columns: 1fr; }
+@media (max-width: 1100px) {
+  .env-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .env-page {
+    padding: var(--space-4);
+  }
+  .env-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
