@@ -304,7 +304,7 @@ const timeAgo = (dateStr: string): string => {
 .stat-icon--brand { background: var(--accent-soft); color: var(--accent); }
 .stat-icon--green { background: var(--success-soft); color: var(--success); }
 .stat-icon--blue { background: var(--info-soft); color: var(--info); }
-.stat-icon--teal { background: rgba(45, 212, 191, 0.14); color: #2dd4bf; }
+.stat-icon--teal { background: rgba(45, 212, 191, 0.14); color: var(--teal); }
 .stat-value {
   font-family: var(--font-mono);
   font-size: 30px;
