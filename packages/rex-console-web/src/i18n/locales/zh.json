@@ -304,12 +304,21 @@
   },
   "login": {
     "footer": "单用户 · 自托管",
+    "langSwitch": "English",
+    "lockedOutHint": "单管理员控制台。被锁定了？在宿主机上重置密码（环境变量 / CLI）。",
     "loginFailed": "登录失败",
     "password": "密码",
+    "pitch1Desc": "SSH、数据库、Redis、文件、对象存储和 SIP — 一个深色、键盘驱动的统一界面。",
+    "pitch1Title": "一个控制台管理所有远程资源",
+    "pitch2Desc": "在防火墙内部署 Agent；无需 VPN 或端口转发即可从任何地方访问。",
+    "pitch2Title": "打通内网",
+    "pitch3Desc": "自托管、单用户。凭证加密存储；数据永远不会离开你的基础设施。",
+    "pitch3Title": "只属于你",
     "rememberMe": "记住我",
     "signIn": "登录",
     "signingIn": "登录中...",
-    "subtitle": "远程资源管理"
+    "subtitle": "从一个控制台管理所有远程资源。",
+    "title": "登录 REX Hub"
   },
   "nav": {
     "agents": "Agent",

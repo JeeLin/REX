@@ -14,7 +14,7 @@ import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
 import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
 import CommandPalette from '@/features/workspace/CommandPalette.vue'
 import PaneNode from '@/features/workspace/PaneNode.vue'
-import { PROTOCOL_COLORS } from '@/features/resource/protocols'
+import { PROTOCOL_COLORS, PROTOCOL_ICONS } from '@/features/resource/protocols'
 import { PANE_CTX, type PaneCtx } from '@/features/workspace/paneContext'
 import { useWorkspaceStore } from '@/stores/workspace'
 
@@ -278,6 +278,15 @@ function splitHorizontal(paneId?: string) {
 }
 function splitVertical(paneId?: string) {
   splitPane(paneId || lastFocusedPaneId.value || activePaneId.value, 'down')
+splitPane(paneId || lastFocusedPaneId.value || activePaneId.value, 'down')
+}
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen()
+  } else {
+    document.exitFullscreen()
+  }
 }
 
 // 快捷键面板
@@ -365,8 +374,10 @@ useKeyboardShortcuts([
         @drop="onTabDrop($event, tab.id)"
         @dragend="onTabDragEnd"
       >
-        <span v-if="tab.color" class="ws-tab-color" :style="{ background: tab.color }" />
-        <span class="ws-tab-dot" :style="{ background: PROTOCOL_COLORS[tab.protocol] || 'var(--text-muted)' }" />
+        <span
+          class="ws-tab-pico"
+          :style="{ background: PROTOCOL_COLORS[tab.protocol] || 'var(--text-muted)' }"
+        >{{ PROTOCOL_ICONS[tab.protocol] || '?' }}</span>
         <input
           v-if="tab.renaming"
           class="ws-tab-rename-input mono"
@@ -379,8 +390,10 @@ useKeyboardShortcuts([
         />
         <span v-else>{{ tab.label }}</span>
         <span v-if="tab.broadcast" class="ws-tab-broadcast" title="Broadcast mode active">📡</span>
-        <StatusDot :status="statusColor(tab.status)" style="margin-left: 4px" />
-        <button class="ws-tab-close" @click.stop="closeTab(tab.id)">×</button>
+        <StatusDot :status="statusColor(tab.status)" style="margin-left: auto" />
+        <button class="ws-tab-close" @click.stop="closeTab(tab.id)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
       </div>
     </div>
 
@@ -444,21 +457,31 @@ useKeyboardShortcuts([
 
     <!-- Status bar -->
     <div class="ws-statusbar mono">
-      <span class="ws-status-item">
-        <StatusDot :status="activeTabInfo ? statusColor(activeTabInfo.status) : 'offline'" />
-        {{ activeTabInfo ? formatConnection(activeTabInfo) : t('workspace.noConnection') }}
+      <span class="ws-seg ws-seg--brand">
+        <span class="ws-seg-dot" />
+        workspace
       </span>
-      <span v-if="activeTabInfo?.protocol === 'ssh' && terminalSize" class="ws-status-item">
-        {{ terminalSize.cols }}×{{ terminalSize.rows }}
+      <span class="ws-seg">{{ tabs.length }} resource{{ tabs.length === 1 ? '' : 's' }} open</span>
+      <span v-if="activeTabInfo?.protocol === 'ssh' && terminalSize" class="ws-seg">{{ terminalSize.cols }}×{{ terminalSize.rows }}</span>
+      <span v-if="activeTabInfo?.protocol === 'ssh'" class="ws-seg">{{ activeTabInfo.encoding || 'UTF-8' }}</span>
+      <span v-if="activeTabInfo?.broadcast" class="ws-seg ws-broadcast-indicator">📡 {{ t('workspace.broadcastIndicator') }}</span>
+      <span class="ws-seg ws-seg--spacer" />
+      <span class="ws-seg ws-seg--agent">⟡ agent: edge-gw · 12 ms</span>
+      <span class="ws-seg ws-seg--actions">
+        <button class="ws-action-btn" title="Split horizontal" @click="() => splitHorizontal()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="7" height="16" rx="1"/><rect x="14" y="4" width="7" height="16" rx="1"/></svg>
+        </button>
+        <button class="ws-action-btn" title="Split vertical" @click="() => splitVertical()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="7" rx="1"/><rect x="4" y="14" width="16" height="7" rx="1"/></svg>
+        </button>
       </span>
-      <span v-if="activeTabInfo?.protocol === 'ssh'" class="ws-status-item">{{ activeTabInfo.encoding || 'UTF-8' }}</span>
-      <span v-if="activeTabInfo?.broadcast" class="ws-status-item ws-broadcast-indicator">📡 {{ t('workspace.broadcastIndicator') }}</span>
-      <span class="ws-status-spacer" />
-      <span class="ws-status-item ws-quick-actions">
-        <button class="ws-action-btn" title="Split horizontal" @click="() => splitHorizontal()">⬌</button>
-        <button class="ws-action-btn" title="Split vertical" @click="() => splitVertical()">⬍</button>
+      <span class="ws-seg ws-seg--actions">
+        <button class="ws-action-btn" title="Fullscreen" @click="toggleFullscreen">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10 4 13l3 3M4 13h11M17 14l3-3-3-3M20 11H9"/></svg>
+        </button>
       </span>
-      <span class="ws-status-item">{{ now }}</span>
+      <span class="ws-seg ws-seg--help" title="F1 help" @click="showShortcuts = !showShortcuts">F1 help</span>
+      <span class="ws-seg ws-seg--help" title="Command palette (Ctrl+K)" @click="showCommandPalette = !showCommandPalette">⌘ 命令面板</span>
     </div>
 
     <!-- Shortcut panel -->
@@ -502,7 +525,7 @@ useKeyboardShortcuts([
   height: var(--tabbar-height);
   display: flex;
   align-items: stretch;
-  background: var(--bg-surface);
+  background: var(--bg-elevated);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
   scrollbar-width: none;
@@ -512,34 +535,42 @@ useKeyboardShortcuts([
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 0 var(--space-3);
-  font-size: var(--text-sm);
+  padding: 0 var(--space-3) 0 var(--space-2);
+  font-size: 12.5px;
   color: var(--text-muted);
   border-right: 1px solid var(--border);
   cursor: pointer;
   white-space: nowrap;
+  border-top: 2px solid transparent;
   transition: color var(--transition), background var(--transition);
 }
 .ws-tab:hover {
-  color: var(--text-secondary);
   background: var(--bg-hover);
+  color: var(--text);
 }
 .ws-tab--active {
   color: var(--text-primary);
-  background: var(--bg-deep);
-  border-bottom: 2px solid var(--accent);
+  background: var(--bg-surface);
+  border-top-color: var(--accent);
 }
-.ws-tab-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.ws-tab-color {
-  width: 4px;
+.ws-tab-pico {
+  width: 16px;
   height: 16px;
-  border-radius: 2px;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--on-ink);
   flex-shrink: 0;
+  line-height: 1;
+}
+.ws-tab-label {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .ws-tab-rename-input {
   background: var(--bg-deep);
@@ -555,17 +586,22 @@ useKeyboardShortcuts([
 .ws-tab-close {
   background: none;
   border: none;
-  color: var(--text-muted);
-  font-size: var(--text-md);
+  color: var(--text-dim, var(--text-muted));
   cursor: pointer;
-  padding: 0 2px;
+  padding: 2px;
   line-height: 1;
   border-radius: var(--radius-sm);
-  transition: color var(--transition), background var(--transition);
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  opacity: 0.5;
+  transition: color var(--transition), background var(--transition), opacity var(--transition);
 }
 .ws-tab-close:hover {
-  color: var(--danger);
-  background: rgba(248, 81, 73, 0.15);
+  color: var(--text);
+  background: var(--bg-surface);
+  opacity: 1;
 }
 .ws-tab-broadcast {
   font-size: 10px;
@@ -686,33 +722,63 @@ useKeyboardShortcuts([
   height: var(--statusbar-height);
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  padding: 0 var(--space-3);
+  gap: 0;
   background: var(--bg-elevated);
   border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--text-muted);
 }
-.ws-status-item {
+.ws-seg {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: 6px;
+  padding: 0 12px;
+  height: 100%;
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
 }
-.ws-status-spacer {
+.ws-seg:last-child {
+  border-right: none;
+}
+.ws-seg--brand {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.ws-seg--spacer {
   flex: 1;
+  border-right: 0;
 }
-.ws-quick-actions {
-  display: flex;
-  gap: var(--space-1);
+.ws-seg-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  flex-shrink: 0;
+}
+.ws-seg--agent {
+  color: var(--text-muted);
+}
+.ws-seg--help {
+  cursor: pointer;
+}
+.ws-seg--help:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.ws-seg--actions {
+  padding: 0 4px;
 }
 .ws-action-btn {
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: var(--text-xs);
   cursor: pointer;
   padding: 2px 4px;
   border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: color var(--transition), background var(--transition);
 }
 .ws-action-btn:hover {
@@ -726,9 +792,8 @@ useKeyboardShortcuts([
 
 /* 手机端适配 */
 @media (max-width: 768px) {
-  .ws-statusbar .ws-status-item:nth-child(n+2) { display: none; }
-  .ws-statusbar .ws-status-item:last-child { display: flex; }
-  .ws-quick-actions { display: flex !important; }
+  .ws-seg:nth-child(n+4) { display: none; }
+  .ws-seg--actions { display: inline-flex !important; }
 }
 
 /* Tab 右键菜单 */
