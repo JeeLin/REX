@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.71.0] - 2026-08-28
+
+### Changed
+- 全站 UI/UX 重设计，对齐 REX 1.0 原型（`prototypes/rex-1.0/`）
+- 侧栏重设计：glyph 品牌标识 + 工具按钮、⌘K 搜索框、SVG 导航图标、底部操作按钮
+- 顶栏重设计：面包屑导航 + 用户头像
+- Dashboard：统计卡片 + 快速连接 + 环境卡片网格
+- Environments：卡片网格 + 详情页 Agent 面板 + 资源表格
+- Settings：左侧导航 + 右侧内容面板
+- Audit Log：统计行 + 筛选工具栏 + 可展开表格
+- Login：双面板布局（品牌展示 + 登录表单）
+- Setup：居中卡片布局
+- Workspace：协议图标徽章 + 分段状态栏
+- 全局 token 对齐：新增 `--bg-sidebar`、`--brand-deep`、`--on-brand`、`--st-off`、`--on-ink`、`--teal`
+- 导航项调整：移除 Agents 独立导航，Audit log 加入主导航
+
+### Removed
+- Agents 独立导航项（Agent 管理保留在环境详情页内）
+
 ## [0.70.8] - 2026-08-28
 
 ### Added
