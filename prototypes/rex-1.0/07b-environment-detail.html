@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>REX · Environment</title>
+<link rel="stylesheet" href="assets/tokens.css"/>
+<link rel="stylesheet" href="assets/shell.css"/>
+<link rel="stylesheet" href="assets/common.css"/>
+<style>
+  /* detail layout */
+  .detail-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:8px}
+  .detail-head .nm{font-size:22px;font-weight:700}
+  .detail-head .sub{font-family:var(--font-mono);font-size:12px;color:var(--text-muted);margin-top:2px}
+  .detail-head .spacer{flex:1}
+  .meta{display:flex;align-items:center;gap:8px;margin:6px 0 22px;flex-wrap:wrap}
+  .section{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 18px;margin-bottom:18px}
+  .section h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);font-family:var(--font-mono);margin:0 0 14px}
+  .section-head{display:flex;align-items:center;margin-bottom:14px}
+  .section-head h2{margin:0}
+  .section-head .spacer{flex:1}
+  .tline{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--border);font-family:var(--font-mono);font-size:12.5px}
+  .tline:first-of-type{border-top:none}
+  .tline .nm{color:var(--text);font-weight:600;font-family:var(--font-sans)}
+  .tline .proto{width:20px;height:20px;border-radius:5px;display:grid;place-items:center;font-size:9px;font-weight:700;color:var(--on-ink)}
+  .tline .host{color:var(--text-muted)}
+  .tline .spacer{flex:1}
+  .agent-box{background:var(--bg-app);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-top:10px}
+  .agent-row{display:flex;align-items:center;gap:10px;padding:8px 0}
+  .agent-row + .agent-row{border-top:1px dashed var(--border)}
+  .agent-row .ai{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;background:linear-gradient(140deg,var(--brand),var(--brand-deep));color:var(--on-brand);font-family:var(--font-mono);font-weight:700;font-size:11px;flex:none}
+  .agent-row .an{font-size:13px;font-weight:600}
+  .agent-row .am{font-family:var(--font-mono);font-size:11px;color:var(--text-dim)}
+  .agent-row .st{margin-left:auto}
+  .agent-row .atok{font-size:11px;color:var(--text-dim);border:1px solid var(--border-strong);border-radius:6px;padding:3px 8px;background:transparent;cursor:pointer}
+  .agent-row .atok:hover{background:var(--bg-hover);color:var(--text)}
+  .token{font-family:var(--font-mono);font-size:12px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text-muted);word-break:break-all;display:flex;align-items:center;gap:8px}
+  .token .spacer{flex:1}
+  .empty{color:var(--text-dim);font-size:13px;text-align:center;padding:24px 0;font-family:var(--font-mono)}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="side-head"><div class="brand"><span class="glyph">R</span><span class="name">RE<b>X</b></span></div>
+      <div class="side-tools"><button class="icon-btn" title="Theme" data-rex-action="theme"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg></button><button class="icon-btn" title="Language" data-rex-action="lang">中</button></div></div>
+        <nav class="nav">
+      <a href="02-workspace.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Workspace</a>
+      <a href="01-dashboard.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13h8V3H3zM13 21h8V3h-8zM3 21h8v-6H3z"/></svg>Dashboard</a>
+      <a class="active" href="07-environments.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Environments</a>
+      <a href="10-audit.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2 4 14h7l-1 8 10-12h-7z"/></svg>Audit log</a>
+      <a href="12-design-preview.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Design</a>
+    </nav>
+    <div class="side-envs">
+      <div class="side-env" data-env="Aliyun Prod"><span class="nm">Aliyun Prod</span><button class="env-add" title="为 Aliyun Prod 新建资源">＋</button></div>
+      <div class="side-env" data-env="Home LAN"><span class="nm">Home LAN</span><button class="env-add" title="为 Home LAN 新建资源">＋</button></div>
+      <div class="side-env" data-env="Lab VPN"><span class="nm">Lab VPN</span><button class="env-add" title="为 Lab VPN 新建资源">＋</button></div>
+      <div class="side-env" data-env="Object Storage"><span class="nm">Object Storage</span><button class="env-add" title="为 Object Storage 新建资源">＋</button></div>
+    </div>
+    <div class="side-foot">
+      <button class="btn btn-ghost" data-rex-action="new-res" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px"><span style="color:var(--brand);font-size:14px;line-height:1">＋</span> 新建资源</button>
+      <a class="btn btn-ghost btn-sm" style="flex:1" href="09-settings.html">⚙ 设置</a>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumbs">REX <span class="dim">/</span> <a href="07-environments.html">Environments</a> <span class="dim">/</span> <b id="crumb-name">…</b></div>
+      <div class="spacer"></div>
+      
+      <div class="avatar" style="width:30px;height:30px;border-radius:50%;background:linear-gradient(140deg,var(--info),var(--info-deep));display:grid;place-items:center;color:var(--info-on);font-weight:700;font-size:12px;font-family:var(--font-mono)">AD</div>
+    </div>
+
+    <div class="content">
+      <div class="detail-head">
+        <div class="ico" id="env-ico">☁</div>
+        <div><div class="nm" id="env-name">…</div><div class="sub" id="env-sub">—</div></div>
+        <div class="spacer"></div>
+        <button class="tbtn" id="edit-env">Edit</button>
+        <button class="tbtn" id="del-env" style="color:var(--danger)">Delete</button>
+      </div>
+      <div class="meta">
+        <span class="badge" id="env-mode">—</span>
+        <span class="badge" id="env-status">—</span>
+        <span class="badge gray" id="env-count">0 resources</span>
+        <span class="muted" id="env-updated" style="font-family:var(--font-mono);font-size:11.5px"></span>
+      </div>
+
+      <!-- Agents -->
+      <div class="section" id="agents-section">
+        <div class="section-head"><h2>Agents</h2><span class="spacer"></span><span class="badge gray" id="agent-count">0 online</span><button class="env-add" id="agent-add" title="Register agent" style="opacity:1;margin-left:8px">＋</button></div>
+        <div id="agents-list"></div>
+      </div>
+
+      <!-- Resources -->
+      <div class="section">
+        <div class="section-head"><h2>Resources</h2><span class="spacer"></span><button class="tbtn primary" id="new-res"><span style="color:var(--on-brand);font-size:14px;line-height:1">＋</span> 新增资源</button></div>
+        <div id="res-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="assets/common.js"></script>
+<script>
+  // ---- environment fixture data (mirrors 07 list) ----
+  var ENVS = {
+    'Aliyun Prod': {
+      ico:'☁', cls:'p-mysql', sub:'public · direct', mode:'直连', status:'online',
+      desc:'Public-facing services and the primary order database, reached directly over the internet.',
+      agents:[{n:'edge-gw',m:'linux/amd64 · 12 ms',v:'1.0.0',st:'on'}],
+      resources:[
+        {p:'p-ssh',k:'$',n:'web-prod-01',h:'47.98.12.10:22',u:'root'},
+        {p:'p-mysql',k:'dB',n:'orders-db',h:'47.98.12.20:3306',u:'shop'},
+        {p:'p-redis',k:'R',n:'cache-prod',h:'47.98.12.21:6379',u:'—'},
+        {p:'p-s3',k:'☁',n:'assets-bucket',h:'oss-cn-hz.aliyuncs.com',u:'AKIA…'}
+      ]
+    },
+    'Home LAN': {
+      ico:'↻', cls:'p-sftp', sub:'internal · agent', mode:'经 Agent 隧道', status:'degraded',
+      desc:'Internal NAS, desktop and SIP PBX behind the router, reached via the home-relay agent.',
+      agents:[{n:'home-relay',m:'linux/arm64 · 3 ms',v:'0.9.3',st:'warn'}],
+      resources:[
+        {p:'p-ssh',k:'$',n:'nas.local',h:'192.168.1.20:22',u:'admin'},
+        {p:'p-sftp',k:'↻',n:'nas-files',h:'192.168.1.20:22',u:'admin'},
+        {p:'p-sip',k:'☎',n:'desk-phone',h:'192.168.1.30:5060',u:'1001'}
+      ]
+    },
+    'Lab VPN': {
+      ico:'$', cls:'p-ssh', sub:'isolated · agent', mode:'经 Agent 隧道', status:'online',
+      desc:'Isolated lab network reached through the lab-tunnel agent for experiments.',
+      agents:[{n:'lab-tunnel',m:'linux/amd64 · 28 ms',v:'1.0.0',st:'on'}],
+      resources:[
+        {p:'p-ssh',k:'$',n:'lab-node-01',h:'10.0.0.11:22',u:'researcher'},
+        {p:'p-pg',k:'pg',n:'lab-pg',h:'10.0.0.12:5432',u:'postgres'},
+        {p:'p-sqlite',k:'S',n:'edge-cache',h:'/var/lib/cache.sqlite',u:'—'}
+      ]
+    },
+    'Object Storage': {
+      ico:'☁', cls:'p-s3', sub:'multi · direct', mode:'直连', status:'online',
+      desc:'MinIO and S3-compatible buckets used for backups and asset delivery.',
+      agents:[],
+      resources:[
+        {p:'p-s3',k:'☁',n:'backups-bucket',h:'minio.internal:9000',u:'AKIA…'},
+        {p:'p-s3',k:'☁',n:'asset-cdn',h:'s3.cn-east-1.amazonaws.com',u:'AKIA…'}
+      ]
+    }
+  };
+
+  function getEnv(){
+    var name = new URLSearchParams(location.search).get('env');
+    if(!name || !ENVS[name]) name = 'Aliyun Prod';
+    return { name: name, d: ENVS[name] };
+  }
+
+  function render(){
+    var g = getEnv(), d = g.d;
+    document.title = 'REX · ' + g.name;
+    document.getElementById('crumb-name').textContent = g.name;
+    document.getElementById('env-name').textContent = g.name;
+    document.getElementById('env-sub').textContent = d.desc;
+    var ico = document.getElementById('env-ico');
+    ico.className = 'ico ' + d.cls; ico.textContent = d.ico;
+    document.getElementById('env-mode').textContent = d.mode;
+    var stb = document.getElementById('env-status');
+    stb.textContent = d.status; stb.className = 'badge ' + (d.status==='online'?'green':d.status==='degraded'?'warn':'gray');
+    document.getElementById('env-count').textContent = d.resources.length + ' resources';
+
+    // agents
+    var al = document.getElementById('agents-list'); al.innerHTML='';
+    var sec = document.getElementById('agents-section');
+    if(!d.agents.length){ sec.style.display='none'; }
+    else {
+      sec.style.display='';
+      document.getElementById('agent-count').textContent = d.agents.filter(function(a){return a.st==='on';}).length + ' online';
+      d.agents.forEach(function(a){
+        var row=document.createElement('div'); row.className='agent-row';
+        row.innerHTML='<span class="ai">⟡</span><div><div class="an">'+a.n+'</div><div class="am">'+a.m+'</div></div><span class="av" style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim)">'+a.v+'</span><span class="st '+a.st+'"></span><button class="atok">reset</button>';
+        row.querySelector('.atok').addEventListener('click', function(){ REX.toast('已重置 Agent：'+a.n,'info'); });
+        al.appendChild(row);
+      });
+    }
+
+    // resources
+    var rl = document.getElementById('res-list'); rl.innerHTML='';
+    if(!d.resources.length){
+      rl.innerHTML='<div class="empty">该环境还没有资源 — 点右上角「新增资源」</div>';
+    } else {
+      d.resources.forEach(function(r){
+        var row=document.createElement('div'); row.className='tline';
+        row.innerHTML='<span class="proto '+r.p+'">'+r.k+'</span><span class="nm">'+r.n+'</span><span class="host">'+r.h+'</span><span class="spacer"></span><span class="muted">'+r.u+'</span>';
+        rl.appendChild(row);
+      });
+    }
+  }
+
+  // actions
+  document.getElementById('new-res').addEventListener('click', function(){ REX.newResource(getEnv().name); });
+  document.getElementById('edit-env').addEventListener('click', function(){
+    var n=getEnv().name;
+    REX.modal({ title:'编辑环境 · '+n, width:'480px', okText:'保存',
+      body:'<div class="rex-field"><label>环境名称</label><input data-field="name" value="'+n+'"></div>'+
+           '<div class="rex-field"><label>描述</label><textarea data-field="desc" rows="2">'+getEnv().d.desc+'</textarea></div>'+
+           '<div class="rex-field"><label>连接方式</label><select data-field="mode"><option'+(getEnv().d.mode==='直连'?' selected':'')+'>直连</option><option'+(getEnv().d.mode==='经 Agent 隧道'?' selected':'')+'>经 Agent 隧道</option></select></div>',
+      onOk:function(v){ if(!v.name){REX.toast('请填写名称','err');return false;} REX.toast('已保存 '+v.name,'ok'); return true; }
+    });
+  });
+  document.getElementById('del-env').addEventListener('click', function(){
+    var n=getEnv().name;
+    REX.confirm({title:'删除环境',message:'确认删除「'+n+'」及其下所有资源与代理配置？',okText:'删除',danger:true},
+      function(){ REX.toast('已删除 '+n,'ok'); location.href='07-environments.html'; });
+  });
+  document.getElementById('agent-add').addEventListener('click', function(){
+    REX.modal({ title:'注册 Agent', width:'420px', okText:'生成命令',
+      body:'<div class="rex-field"><label>Agent 名称</label><input data-field="an" placeholder="如 edge-gw"></div>'+
+           '<div class="rex-field"><label>环境</label><select data-field="env"><option>'+getEnv().name+'</option></select></div>',
+      onOk:function(v){ if(!v.an){REX.toast('请填写名称','err');return false;} REX.toast('在目标主机执行：rex-agent register --token <…>','ok'); return true; }
+    });
+  });
+  render();
+</script>
+</body>
+</html>

@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>REX · Dashboard</title>
+<link rel="stylesheet" href="assets/tokens.css"/>
+<link rel="stylesheet" href="assets/shell.css"/>
+<link rel="stylesheet" href="assets/common.css"/>
+<style>
+
+  .tree{padding:0 8px;overflow:auto;flex:1;min-height:0}
+  .tree .grp{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;font-size:13px;color:var(--text);cursor:pointer}
+  .tree .grp:hover{background:var(--bg-hover)}
+  .tree .grp .chev{color:var(--text-dim);transition:transform .12s}
+  .tree .grp.open .chev{transform:rotate(90deg)}
+  .tree .grp .tag{margin-left:auto}
+  .tree .res{display:flex;align-items:center;gap:9px;padding:6px 8px 6px 30px;border-radius:7px;font-size:13px;color:var(--text-muted);cursor:pointer}
+  .tree .res:hover{background:var(--bg-hover);color:var(--text)}
+  .tree .res .pico{width:18px;height:18px;border-radius:5px;display:grid;place-items:center;font-family:var(--font-mono);font-size:10px;font-weight:700;color:#0c0f14}
+  .tree .res .st{margin-left:auto}
+
+  .grid{display:grid;gap:16px}
+  .stats{grid-template-columns:repeat(4,1fr);margin-bottom:18px}
+  .stat{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 18px}
+  .stat .lab{display:flex;align-items:center;gap:8px;color:var(--text-muted);font-size:12px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em}
+  .stat .num{font-family:var(--font-mono);font-size:30px;font-weight:600;letter-spacing:-.02em;margin-top:10px}
+  .stat .trend{font-size:12px;margin-top:4px}
+  .stat .ico{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;margin-left:auto}
+  .stat .ico.brand{background:var(--brand-soft);color:var(--brand)}
+  .stat .ico.green{background:rgba(63,185,80,.14);color:var(--success)}
+  .stat .ico.blue{background:rgba(88,166,255,.14);color:var(--info)}
+  .stat .ico.teal{background:rgba(45,212,191,.14);color:var(--teal)}
+
+  .panel{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+  .panel-head{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--border)}
+  .panel-head h3{margin:0;font-size:14px;font-weight:600}
+  .panel-head .more{margin-left:auto;color:var(--text-dim)}
+  .two-col{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
+  .quick{display:flex;gap:10px;flex-wrap:wrap;padding:16px}
+  .qc{display:flex;align-items:center;gap:10px;padding:10px 13px;border:1px solid var(--border);border-radius:10px;background:var(--bg-elevated);min-width:170px}
+  .qc:hover{border-color:var(--border-strong);background:var(--bg-hover)}
+  .qc .pico{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;font-family:var(--font-mono);font-size:11px;font-weight:700;color:#0c0f14;flex:none}
+  .qc .meta b{display:block;font-size:13px}
+  .qc .meta span{font-size:11.5px;color:var(--text-dim);font-family:var(--font-mono)}
+
+  table.t{width:100%;border-collapse:collapse;font-size:13px}
+  table.t th{text-align:left;color:var(--text-dim);font-weight:500;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-family:var(--font-mono);padding:10px 16px;border-bottom:1px solid var(--border)}
+  table.t td{padding:11px 16px;border-bottom:1px solid var(--border);color:var(--text-muted)}
+  table.t tbody tr:last-child td{border-bottom:0}
+  table.t tbody tr:hover{background:var(--bg-hover)}
+  table.t b{color:var(--text)}
+  .env-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-top:18px}
+  .env{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;transition:border-color .15s,transform .08s}
+  .env:hover{border-color:var(--border-strong);transform:translateY(-2px)}
+  .env .h{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .env .h .nm{font-weight:600;font-size:14.5px}
+  .env .h .st{margin-left:auto}
+  .env .ds{color:var(--text-muted);font-size:12.5px;min-height:34px;margin-bottom:12px}
+  .env .foot{display:flex;align-items:center;gap:14px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;color:var(--text-dim);font-family:var(--font-mono)}
+  .env .foot .chip{display:inline-flex;align-items:center;gap:5px}
+  @media(max-width:1100px){.stats{grid-template-columns:repeat(2,1fr)}.two-col{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand"><span class="glyph">R</span><span class="name">RE<b>X</b></span></div>
+      <div class="side-tools">
+        <button class="icon-btn" title="Theme" data-rex-action="theme"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg></button>
+        <button class="icon-btn" title="Language" data-rex-action="lang">中</button>
+      </div>
+    </div>
+    <div class="search">
+      <div class="box">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
+        Search resources <span class="kbd">Ctrl K</span>
+      </div>
+    </div>
+        <nav class="nav">
+      <a href="02-workspace.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Workspace</a>
+      <a class="active" href="01-dashboard.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13h8V3H3zM13 21h8V3h-8zM3 21h8v-6H3z"/></svg>Dashboard</a>
+      <a href="07-environments.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Environments</a>
+      <a href="10-audit.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2 4 14h7l-1 8 10-12h-7z"/></svg>Audit log</a>
+      <a href="12-design-preview.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Design</a>
+    </nav>
+    <div class="side-section">
+      <button class="res-new-btn" data-rex-action="new-res" style="display:flex;align-items:center;gap:6px;width:100%;height:28px;padding:0 8px;border-radius:7px;border:1px solid var(--border-strong);background:var(--bg-surface);color:var(--text);font-size:12px;font-weight:600;cursor:pointer">
+        <span style="color:var(--brand);font-size:14px;line-height:1">＋</span> 新建资源
+      </button>
+    </div>
+    <div class="tree">
+      <div class="grp open" data-env="Aliyun Prod"><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m9 6 6 6-6 6"/></svg>
+        <span class="pico p-mysql" style="width:14px;height:14px;border-radius:4px"></span> Aliyun Prod
+        <span class="badge gray">6</span><button class="add env-add" data-env="Aliyun Prod" title="为 Aliyun Prod 新建资源">＋</button></div>
+      <div class="res"><span class="pico p-ssh">$</span> web-prod-01 <span class="st on"></span></div>
+      <div class="res"><span class="pico p-mysql">dB</span> orders-db <span class="st on"></span></div>
+      <div class="res"><span class="pico p-redis">R</span> cache-prod <span class="st on"></span></div>
+      <div class="res"><span class="pico p-s3">☁</span> assets-bucket <span class="st off"></span></div>
+      <div class="grp" data-env="Home LAN" style="margin-top:4px"><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m9 6 6 6-6 6"/></svg>
+        <span class="pico p-sftp" style="width:14px;height:14px;border-radius:4px"></span> Home LAN
+        <span class="badge gray">4</span><button class="add env-add" data-env="Home LAN" title="为 Home LAN 新建资源">＋</button></div>
+      <div class="res"><span class="pico p-ssh">$</span> nas.local <span class="st warn"></span></div>
+      <div class="res"><span class="pico p-sip">☎</span> desk-phone <span class="st on"></span></div>
+    </div>
+    <div class="side-foot">
+      <button class="btn btn-ghost btn-sm" style="flex:1" data-rex-action="new-env">+ New environment</button>
+      <a class="btn btn-ghost btn-sm" style="flex:1" href="09-settings.html">⚙ 设置</a>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div class="crumbs">REX <span class="dim">/</span> <b>Dashboard</b></div>
+      <div class="spacer"></div>
+      <div class="search-inline">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
+        Quick connect… <span class="kbd">Ctrl N</span>
+      </div>
+      <button class="icon-btn" title="Notifications"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></button>
+      <button class="icon-btn" id="refresh" title="Refresh data (R)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
+      <div class="avatar">AD</div>
+    </div>
+
+    <div class="content">
+      <h1 class="page-title">Dashboard</h1>
+      <p class="page-sub">System overview across all environments and agents.</p>
+
+      <div class="grid stats">
+        <div class="stat">
+          <div class="lab"><span class="ico brand"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span> Environments</div>
+          <div class="num">5</div>
+          <div class="trend muted">2 via agent tunnel</div>
+        </div>
+        <div class="stat">
+          <div class="lab"><span class="ico green"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span> Resources</div>
+          <div class="num">38</div>
+          <div class="trend muted">8 protocols</div>
+        </div>
+        <div class="stat">
+          <div class="lab"><span class="ico blue"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Agents online</div>
+          <div class="num">3<span style="color:var(--text-dim);font-size:18px">/3</span></div>
+          <div class="trend muted">all environments covered</div>
+        </div>
+        <div class="stat">
+          <div class="lab"><span class="ico teal"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg></span> Operations today</div>
+          <div class="num">1,204</div>
+          <div class="trend" style="color:var(--success)">▲ 12% vs yesterday</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-head"><h3>Quick connect</h3><span class="more muted mono" style="margin-left:auto;font-size:12px">recent · 6</span></div>
+          <div class="quick">
+            <div class="qc" data-kind="ssh"><span class="pico p-ssh">$</span><div class="meta"><b>web-prod-01</b><span>ssh · 47.98.x.x · root</span></div></div>
+            <div class="qc" data-kind="sql"><span class="pico p-mysql">dB</span><div class="meta"><b>orders-db</b><span>mysql · 10.0.4.12 · 3306</span></div></div>
+            <div class="qc" data-kind="redis"><span class="pico p-redis">R</span><div class="meta"><b>cache-prod</b><span>redis · 10.0.4.13 · 6379</span></div></div>
+            <div class="qc" data-kind="s3"><span class="pico p-s3">☁</span><div class="meta"><b>assets-bucket</b><span>s3 · minio.internal</span></div></div>
+            <div class="qc" data-kind="files"><span class="pico p-sftp">↻</span><div class="meta"><b>nas.local</b><span>sftp · 192.168.1.20</span></div></div>
+            <div class="qc" data-kind="sip"><span class="pico p-sip">☎</span><div class="meta"><b>desk-phone</b><span>sip · pbx.local · 5060</span></div></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Agent health</h3><span class="more" style="margin-left:auto"><span class="st on"></span></span></div>
+          <table class="t">
+            <thead><tr><th>Agent</th><th>Env</th><th>Latency</th><th>State</th></tr></thead>
+            <tbody>
+              <tr><td><b>edge-gw</b></td><td>Aliyun Prod</td><td class="mono">12 ms</td><td><span class="badge green">online</span></td></tr>
+              <tr><td><b>home-relay</b></td><td>Home LAN</td><td class="mono">3 ms</td><td><span class="badge green">online</span></td></tr>
+              <tr><td><b>lab-tunnel</b></td><td>Lab VPN</td><td class="mono">28 ms</td><td><span class="badge green">online</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <h3 style="font-size:14px;margin:24px 0 2px">Environments</h3>
+      <div class="env-grid">
+        <div class="env">
+          <div class="h"><span class="pico p-mysql" style="width:22px;height:22px;border-radius:6px"></span><span class="nm">Aliyun Prod</span><span class="st on"></span></div>
+          <div class="ds">Public-facing services and the primary order database.</div>
+          <div class="foot"><span class="chip"><span class="st on"></span> 6 res</span><span class="chip">⟡ 1 agent</span><span class="chip">2h ago</span></div>
+        </div>
+        <div class="env">
+          <div class="h"><span class="pico p-sftp" style="width:22px;height:22px;border-radius:6px"></span><span class="nm">Home LAN</span><span class="st warn"></span></div>
+          <div class="ds">Internal NAS, desktop and SIP PBX behind the router.</div>
+          <div class="foot"><span class="chip"><span class="st warn"></span> 4 res</span><span class="chip">⟡ 1 agent</span><span class="chip">12m ago</span></div>
+        </div>
+        <div class="env">
+          <div class="h"><span class="pico p-ssh" style="width:22px;height:22px;border-radius:6px"></span><span class="nm">Lab VPN</span><span class="st on"></span></div>
+          <div class="ds">Isolated lab network reached via agent tunnel.</div>
+          <div class="foot"><span class="chip"><span class="st on"></span> 9 res</span><span class="chip">⟡ 1 agent</span><span class="chip">5m ago</span></div>
+        </div>
+        <div class="env" id="new-env" style="border-style:dashed;display:grid;place-items:center;color:var(--text-dim);cursor:pointer">
+          <div style="text-align:center"><div style="font-size:26px">+</div><div style="font-size:13px">New environment</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="assets/common.js"></script>
+<script>
+  // sidebar connection groups collapse
+  document.querySelectorAll('.tree .grp').forEach(function(g){
+    g.addEventListener('click', function(){ g.classList.toggle('open'); });
+  });
+  // quick-connect tiles / sidebar resources → open in workspace (prototype: navigate)
+  function openResource(name, kind){
+    if (kind) { try { localStorage.setItem('rex.open-intent', JSON.stringify({ kind: kind, name: name })); } catch (e) {} }
+    REX.toast('打开资源：' + name, 'info');
+    location.href = '02-workspace.html';
+  }
+  document.querySelectorAll('.qc').forEach(function(q){ q.addEventListener('click', function(){ openResource(q.querySelector('b').textContent, q.dataset.kind); }); });
+  document.querySelectorAll('.tree .res').forEach(function(r){ r.addEventListener('click', function(){ openResource(r.childNodes[1] ? r.textContent.trim().split('  ')[0] : r.textContent.trim()); }); });
+  // environment cards → environments page (or open)
+  document.querySelectorAll('.env:not(#new-env)').forEach(function(c){
+    c.addEventListener('click', function(){ REX.toast('查看环境：' + c.querySelector('.nm').textContent, 'info'); location.href='07-environments.html'; });
+  });
+  // refresh: re-randomize the live stats for demo
+  function refresh(){
+    var nums = document.querySelectorAll('.stat .num');
+    nums.forEach(function(n, i){
+      if (i === 2) return; // agents online/offline ratio is fixed set
+      if (i === 0) n.textContent = String(4 + Math.floor(Math.random() * 4)); // 4–7 environments
+      else if (i === 1) n.textContent = String(32 + Math.floor(Math.random() * 12)); // 32–43 resources
+      else if (i === 3) n.textContent = (1100 + Math.floor(Math.random() * 220)).toLocaleString(); // ops today
+    });
+    REX.toast('已刷新（演示数据）', 'ok');
+  }
+  document.getElementById('refresh').addEventListener('click', refresh);
+  document.querySelector('.avatar') && document.addEventListener('keydown', function(e){
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='n'){ e.preventDefault(); openResource('web-prod-01','ssh'); }
+    else if(!e.ctrlKey && !e.metaKey && e.key.toLowerCase()==='r' && document.activeElement.tagName !== 'INPUT'){ e.preventDefault(); refresh(); }
+  });
+  // new environment modal
+  document.getElementById('new-env').addEventListener('click', function(){
+    REX.modal({
+      title:'新建环境', width:'460px', okText:'创建',
+      body:'<div class="rex-field"><label>环境名称</label><input data-field="name" placeholder="如 Aliyun Prod"></div>'+
+           '<div class="rex-field"><label>描述</label><textarea data-field="desc" rows="2" placeholder="可选"></textarea></div>'+
+           '<div class="rex-field"><label>连接方式</label><select data-field="mode"><option>直连</option><option>经 Agent 隧道</option></select></div>',
+      onOk:function(v){ if(!v.name){ REX.toast('请填写名称','err'); return false; } REX.toast('环境「'+v.name+'」已创建','ok'); return true; }
+    });
+  });
+</script>
+</body>
+</html>

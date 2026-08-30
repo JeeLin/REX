@@ -1,0 +1,60 @@
+/* REX 1.0 — unified design tokens (:root)
+ * Every page must <link> this file. Edit tokens here ONLY. */
+:root {
+  /* ── surfaces ── */
+  --bg-app:       #0E1116;
+  --bg-sidebar:   #0A0D12;
+  --bg-surface:   #161B22;
+  --bg-elevated:  #1C2128;
+  --bg-hover:     #21262D;
+  --bg-terminal:  #0D1117;
+
+  /* ── borders ── */
+  --border:       #232A33;
+  --border-strong:#30363D;
+
+  /* ── text ── */
+  --text:         #E6EDF3;
+  --text-muted:   #8B949E;
+  --text-dim:     #6E7681;
+
+  /* ── brand accent (orange) ── */
+  --brand:        #E8912D;
+  --brand-strong: #F2A33D;
+  --brand-soft:   rgba(232,145,45,.14);
+  --brand-deep:   #b86d18;
+  --on-brand:     #1a1206;
+
+  /* ── semantic ── */
+  --success:      #3FB950;
+  --danger:       #F85149;
+  --info:         #58A6FF;
+  --info-deep:    #3a7fd0;
+  --info-on:      #06121f;
+  --purple:       #8B5CF6;
+  --warning:      #D29922;
+  --teal:         #2DD4BF;
+
+  /* ── status ── */
+  --st-off:       #484f58;
+
+  /* ── scrollbar ── */
+  --scrollbar:       #2b333d;
+  --scrollbar-hover: #3a444f;
+
+  /* ── icons / pico text ── */
+  --on-ink:       #0c0f14;
+
+  /* ── typography ── */
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, 'Cascadia Code', 'WenQuanYi Zen Hei Mono', monospace;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'WenQuanYi Zen Hei', sans-serif;
+
+  /* ── geometry ── */
+  --r:        8px;
+  --r-lg:     12px;
+  --sidebar-w:256px;
+
+  /* ── shadows ── */
+  --shadow:    0 8px 30px rgba(0,0,0,.45);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,.35);
+}
