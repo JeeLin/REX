@@ -28,16 +28,14 @@ function sessionLogout() {
 const route = useRoute()
 
 const mainNav = [
-  { to: '/workspace', key: 'nav.workspace', icon: '▤' },
-  { to: '/dashboard', key: 'nav.dashboard', icon: '◧' },
-  { to: '/environments', key: 'nav.environments', icon: '⛁' },
-  { to: '/agents', key: 'nav.agents', icon: '⬡' },
+  { to: '/workspace', key: 'nav.workspace', icon: 'grid' },
+  { to: '/dashboard', key: 'nav.dashboard', icon: 'chart' },
+  { to: '/environments', key: 'nav.environments', icon: 'list' },
+  { to: '/audit-log', key: 'nav.auditLog', icon: 'bolt' },
 ]
 
 const bottomNav = [
-  { to: '/audit-log', key: 'nav.auditLog', icon: '☰' },
-  { to: '/sip/cdr', key: 'nav.cdr', icon: '📞' },
-  { to: '/settings', key: 'nav.settings', icon: '⚙' },
+  { to: '/settings', key: 'nav.settings', icon: 'gear' },
 ]
 
 const fullscreen = ref(false)
@@ -71,6 +69,14 @@ const currentTitle = computed(() => {
   const match = [...mainNav, ...bottomNav].find((n) => route.path.startsWith(n.to))
   return match ? t(match.key) : 'REX Hub'
 })
+const currentUser = computed(() => 'R')
+
+function toggleTheme() {
+  const current = localStorage.getItem('rex-theme') || 'dark'
+  const next = current === 'dark' ? 'light' : 'dark'
+  localStorage.setItem('rex-theme', next)
+  document.documentElement.dataset.theme = next === 'dark' ? undefined : next
+}
 </script>
 
 <template>
@@ -80,19 +86,45 @@ const currentTitle = computed(() => {
 
     <!-- 侧栏：工作区全屏时隐藏，移动端为抽屉 -->
     <aside v-if="!(fullscreen && isWorkspace)" class="sidebar" :class="{ 'sidebar--mobile-open': mobileMenuOpen }">
-      <div class="sidebar-brand mono">
-        REX<span class="accent">Hub</span>
+      <!-- Brand 区 -->
+      <div class="sidebar-brand">
+        <div class="brand-left">
+          <div class="brand-glyph">R</div>
+          <span class="brand-name mono">RE<span class="brand-accent">X</span></span>
+        </div>
+        <div class="brand-actions">
+          <button class="brand-btn" :aria-label="t('theme.toggle', 'Toggle theme')" @click="toggleTheme">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>
+            </svg>
+          </button>
+          <button class="brand-btn" :aria-label="t('language.toggle', 'Language')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+          </button>
+        </div>
       </div>
+
+      <!-- 搜索框 -->
       <div class="sidebar-search">
-        <input
-          v-model="searchQuery"
-          type="text"
-          class="sidebar-search-input mono"
-          :aria-label="t('common.search', 'Search')"
-          :placeholder="t('common.search', 'Search…')"
-        />
-        <span class="sidebar-search-icon">⌕</span>
+        <div class="search-box" @click="($refs.searchInput as HTMLInputElement)?.focus()">
+          <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+          </svg>
+          <input
+            ref="searchInput"
+            v-model="searchQuery"
+            type="text"
+            class="search-input mono"
+            :aria-label="t('common.search', 'Search')"
+            :placeholder="t('sidebar.searchPlaceholder', 'Search resources…')"
+          />
+          <kbd class="search-kbd">⌘K</kbd>
+        </div>
       </div>
+
+      <!-- 主导航 -->
       <nav class="sidebar-nav">
         <RouterLink
           v-for="item in mainNav"
@@ -101,44 +133,76 @@ const currentTitle = computed(() => {
           class="nav-item"
           @click="mobileMenuOpen = false"
         >
-          <span class="nav-icon">{{ item.icon }}</span>
+          <!-- Grid icon (Workspace) -->
+          <svg v-if="item.icon === 'grid'" class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+          </svg>
+          <!-- Chart icon (Dashboard) -->
+          <svg v-else-if="item.icon === 'chart'" class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+          </svg>
+          <!-- List icon (Environments) -->
+          <svg v-else-if="item.icon === 'list'" class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+          </svg>
+          <!-- Bolt icon (Audit log) -->
+          <svg v-else-if="item.icon === 'bolt'" class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
           <span class="nav-label">{{ t(item.key) }}</span>
         </RouterLink>
       </nav>
 
-      <!-- 资源栏：嵌入侧栏，agents 和 audit-log 之间 -->
+      <!-- 资源栏 -->
       <ResourcePanel v-if="!(fullscreen && isWorkspace)" class="sidebar-resource" @resource-properties="onResourceProperties" />
 
-      <nav class="sidebar-nav sidebar-bottom">
-        <RouterLink
-          v-for="item in bottomNav"
-          :key="item.to"
-          :to="item.to"
-          class="nav-item"
-          @click="mobileMenuOpen = false"
-        >
-          <span class="nav-icon">{{ item.icon }}</span>
-          <span class="nav-label">{{ t(item.key) }}</span>
-        </RouterLink>
-      </nav>
+      <!-- 底部按钮 -->
+      <div class="sidebar-bottom">
+        <div class="sidebar-bottom-buttons">
+          <button class="sidebar-action-btn" @click="router.push('/environments?create=true')">
+            <span class="sidebar-action-plus">+</span>
+            {{ t('sidebar.newEnvironment', 'New env') }}
+          </button>
+          <RouterLink to="/settings" class="sidebar-action-btn sidebar-action-settings" @click="mobileMenuOpen = false">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            {{ t('nav.settings', 'Settings') }}
+          </RouterLink>
+        </div>
+      </div>
     </aside>
 
     <div ref="mainRef" class="main">
+      <!-- 顶栏 -->
       <header v-if="!(fullscreen && isWorkspace)" class="topbar">
         <!-- 移动端汉堡按钮 -->
-        <button class="hamburger-btn" :aria-label="t('common.menu', 'Menu')" @click="mobileMenuOpen = !mobileMenuOpen">☰</button>
-        <span class="topbar-title mono">{{ currentTitle }}</span>
+        <button class="hamburger-btn" :aria-label="t('common.menu', 'Menu')" @click="mobileMenuOpen = !mobileMenuOpen">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+
+        <!-- 面包屑 -->
+        <div class="topbar-breadcrumb">
+          <span class="breadcrumb-root">REX Hub</span>
+          <span class="breadcrumb-sep">/</span>
+          <span class="breadcrumb-current">{{ currentTitle }}</span>
+        </div>
+
+        <div class="topbar-spacer" />
+
+        <!-- 右侧搜索 + 头像 -->
         <div class="topbar-actions">
-          <button v-if="isWorkspace" class="fullscreen-btn mono" :aria-label="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" :title="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" @click="fullscreen = !fullscreen">
-            {{ fullscreen ? '⊟' : '⊞' }}
-          </button>
-          <button class="logout-btn" :aria-label="t('common.logout', 'Logout')" title="退出登录" @click="sessionLogout">
+          <button v-if="isWorkspace" class="topbar-icon-btn" :aria-label="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" :title="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" @click="fullscreen = !fullscreen">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
+              <polyline v-if="!fullscreen" points="15 3 21 3 21 9"/><polyline v-if="!fullscreen" points="9 21 3 21 3 15"/><line v-if="!fullscreen" x1="21" y1="3" x2="14" y2="10"/><line v-if="!fullscreen" x1="3" y1="21" x2="10" y2="14"/>
+              <polyline v-if="fullscreen" points="4 14 10 14 10 20"/><polyline v-if="fullscreen" points="20 10 14 10 14 4"/><line v-if="fullscreen" x1="14" y1="10" x2="21" y2="3"/><line v-if="fullscreen" x1="3" y1="21" x2="10" y2="14"/>
             </svg>
           </button>
+          <div class="topbar-avatar" :title="currentUser">
+            {{ currentUser.charAt(0).toUpperCase() }}
+          </div>
         </div>
       </header>
       <!-- 全屏时工作区的退出按钮 -->
@@ -170,22 +234,32 @@ const currentTitle = computed(() => {
     <!-- 移动端底部导航（键盘弹出时隐藏） -->
     <nav v-show="!isKeyboardVisible" class="bottom-nav">
       <RouterLink to="/dashboard" class="bottom-nav-item">
-        <span class="bottom-nav-icon">◧</span>
+        <svg class="bottom-nav-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+        </svg>
         <span class="bottom-nav-label">{{ t('nav.dashboard') }}</span>
       </RouterLink>
       <RouterLink to="/environments" class="bottom-nav-item">
-        <span class="bottom-nav-icon">⛁</span>
+        <svg class="bottom-nav-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+        </svg>
         <span class="bottom-nav-label">{{ t('nav.environments') }}</span>
       </RouterLink>
       <button class="bottom-nav-item bottom-nav-fab" @click="mobileMenuOpen = !mobileMenuOpen">
-        <span class="bottom-nav-icon">☰</span>
+        <svg class="bottom-nav-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
       </button>
-      <RouterLink to="/agents" class="bottom-nav-item">
-        <span class="bottom-nav-icon">⬡</span>
-        <span class="bottom-nav-label">{{ t('nav.agents') }}</span>
+      <RouterLink to="/audit-log" class="bottom-nav-item">
+        <svg class="bottom-nav-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </svg>
+        <span class="bottom-nav-label">{{ t('nav.auditLog') }}</span>
       </RouterLink>
       <RouterLink to="/settings" class="bottom-nav-item">
-        <span class="bottom-nav-icon">⚙</span>
+        <svg class="bottom-nav-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
         <span class="bottom-nav-label">{{ t('nav.settings') }}</span>
       </RouterLink>
     </nav>
@@ -218,70 +292,129 @@ const currentTitle = computed(() => {
   position: relative;
 }
 
-/* Sidebar */
+/* ═══════════ Sidebar ═══════════ */
 .sidebar {
   width: var(--sidebar-width);
   flex-shrink: 0;
-  background: var(--bg-surface);
+  background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
 }
+
+/* ── Brand ── */
 .sidebar-brand {
   height: var(--topbar-height);
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 0 var(--space-4);
-  font-size: var(--text-lg);
-  font-weight: 700;
+  justify-content: space-between;
+  padding: 0 var(--space-3) 0 var(--space-4);
   border-bottom: 1px solid var(--border);
-  overflow: hidden;
-  white-space: nowrap;
 }
-.sidebar-search {
-  position: relative;
-  padding: var(--space-2) var(--space-3);
+.brand-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
-.sidebar-search-input {
-  width: 100%;
-  height: 32px;
-  padding: 0 var(--space-3) 0 var(--space-6);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+.brand-glyph {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: linear-gradient(140deg, var(--accent), var(--brand-deep));
+  color: var(--on-brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+.brand-name {
+  font-size: 16px;
+  font-weight: 700;
   color: var(--text-primary);
-  font-size: var(--text-sm);
-  outline: none;
-  transition: border-color var(--transition);
+  letter-spacing: 0.5px;
 }
-.sidebar-search-input:focus {
-  border-color: var(--accent);
-}
-.sidebar-search-input::placeholder {
-  color: var(--text-muted);
-}
-.sidebar-search-icon {
-  position: absolute;
-  left: calc(var(--space-3) + var(--space-2));
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  pointer-events: none;
-}
-.accent {
+.brand-accent {
   color: var(--accent);
 }
+.brand-actions {
+  display: flex;
+  gap: var(--space-1);
+}
+.brand-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition);
+}
+.brand-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+/* ── Search ── */
+.sidebar-search {
+  padding: var(--space-2) var(--space-3);
+}
+.search-box {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 var(--space-2) 0 var(--space-3);
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  cursor: text;
+  transition: border-color var(--transition);
+}
+.search-box:focus-within {
+  border-color: var(--accent);
+}
+.search-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  margin-right: var(--space-2);
+}
+.search-input {
+  flex: 1;
+  height: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 12.5px;
+}
+.search-input::placeholder {
+  color: var(--text-muted);
+}
+.search-kbd {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  line-height: 1.4;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+/* ── Nav ── */
 .sidebar-nav {
-  padding: var(--space-3) var(--space-2);
+  padding: var(--space-2) var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: 2px;
-}
-.sidebar-bottom {
-  padding-bottom: var(--space-4);
-  border-top: 1px solid var(--border);
+  gap: 1px;
 }
 .nav-item {
   display: flex;
@@ -290,7 +423,7 @@ const currentTitle = computed(() => {
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius);
   color: var(--text-secondary);
-  font-size: var(--text-base);
+  font-size: 13.5px;
   text-decoration: none;
   border: none;
   background: none;
@@ -307,14 +440,54 @@ const currentTitle = computed(() => {
   background: var(--accent-soft);
   color: var(--accent);
 }
-.nav-icon {
-  font-size: var(--text-md);
-  width: 18px;
-  text-align: center;
+.nav-svg {
   flex-shrink: 0;
 }
 
-/* Main */
+/* ── Resource panel ── */
+.sidebar-resource {
+  border-top: 1px solid var(--border);
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Bottom buttons ── */
+.sidebar-bottom {
+  padding: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+.sidebar-bottom-buttons {
+  display: flex;
+  gap: var(--space-2);
+}
+.sidebar-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  height: 30px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color var(--transition), background var(--transition), border-color var(--transition);
+}
+.sidebar-action-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  border-color: var(--text-muted);
+  text-decoration: none;
+}
+.sidebar-action-plus {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* ═══════════ Main ═══════════ */
 .main {
   flex: 1;
   min-width: 0;
@@ -322,58 +495,97 @@ const currentTitle = computed(() => {
   display: flex;
   flex-direction: column;
 }
+
+/* ── Topbar ── */
 .topbar {
   height: var(--topbar-height);
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 0 var(--space-4);
   background: var(--bg-page);
 }
-.topbar-title {
-  font-size: var(--text-base);
-  color: var(--text-secondary);
+.topbar-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+.breadcrumb-root {
+  color: var(--text-muted);
+}
+.breadcrumb-sep {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+.breadcrumb-current {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.topbar-spacer {
+  flex: 1;
 }
 .topbar-actions {
   display: flex;
-  gap: var(--space-2);
+  align-items: center;
+  gap: var(--space-3);
 }
-.fullscreen-btn {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
+.topbar-icon-btn {
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: transparent;
   color: var(--text-secondary);
-  width: 28px;
-  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: var(--text-sm);
-  transition: color var(--transition);
-}
-.fullscreen-btn:hover {
-  color: var(--accent);
-}
-.logout-btn {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: var(--text-base);
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius);
   transition: color var(--transition), background var(--transition);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
-.logout-btn:hover {
-  color: var(--danger);
+.topbar-icon-btn:hover {
+  color: var(--accent);
   background: var(--bg-hover);
 }
+.topbar-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.content {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Hamburger (mobile) ── */
+.hamburger-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2) var(--space-1) 0;
+  margin-right: var(--space-2);
+}
+.mobile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 998;
+}
+
 .exit-fullscreen-btn {
   position: absolute;
   top: var(--space-2);
@@ -394,35 +606,8 @@ const currentTitle = computed(() => {
 .exit-fullscreen-btn:hover {
   color: var(--accent);
 }
-.content {
-  width: 100%;
-  flex: 1;
-  min-height: 0;
-}
 
-/* 移动端适配 */
-.hamburger-btn {
-  display: none;
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  font-size: var(--text-lg);
-  cursor: pointer;
-  padding: 0 var(--space-2) 0 0;
-}
-.mobile-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 998;
-}
-.sidebar-resource {
-  border-top: 1px solid var(--border);
-  flex: 1;
-  min-height: 0;
-}
-
-/* 移动端浮动快捷按钮 */
+/* ═══════════ Mobile FAB ═══════════ */
 .mobile-fab {
   display: none;
   position: fixed;
@@ -451,41 +636,7 @@ const currentTitle = computed(() => {
   transform: scale(0.92);
 }
 
-@media (max-width: 768px) {
-  .sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: var(--sidebar-width);
-    z-index: 999;
-    transform: translateX(-100%);
-    transition: transform var(--transition);
-  }
-  .sidebar--mobile-open {
-    transform: translateX(0);
-  }
-  .hamburger-btn {
-    display: block;
-  }
-  .content {
-    padding: var(--space-3);
-  }
-  .mobile-fab {
-    display: flex;
-  }
-  .bottom-nav {
-    display: flex;
-  }
-  .content {
-    padding-bottom: 64px;
-  }
-  .content--keyboard-open {
-    padding-bottom: var(--space-3);
-  }
-}
-
-/* Bottom nav (mobile only) */
+/* ═══════════ Bottom nav (mobile) ═══════════ */
 .bottom-nav {
   display: none;
   position: fixed;
@@ -507,7 +658,7 @@ const currentTitle = computed(() => {
   gap: 2px;
   text-decoration: none;
   color: var(--text-muted);
-  font-size: var(--text-xs);
+  font-size: 10px;
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius);
   transition: color var(--transition);
@@ -519,16 +670,16 @@ const currentTitle = computed(() => {
 .bottom-nav-item.bottom-nav-fab {
   color: var(--accent);
 }
-.bottom-nav-icon {
-  font-size: 18px;
-  line-height: 1;
+.bottom-nav-svg {
+  width: 18px;
+  height: 18px;
 }
 .bottom-nav-label {
   font-size: 10px;
   line-height: 1;
 }
 
-/* Session timeout warning */
+/* ═══════════ Session warning ═══════════ */
 .session-warning-message {
   margin: 0;
   font-size: var(--text-sm);
@@ -540,5 +691,38 @@ const currentTitle = computed(() => {
   gap: var(--space-3);
   justify-content: flex-end;
   width: 100%;
+}
+
+/* ═══════════ Responsive ═══════════ */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--sidebar-width);
+    z-index: 999;
+    transform: translateX(-100%);
+    transition: transform var(--transition);
+  }
+  .sidebar--mobile-open {
+    transform: translateX(0);
+  }
+  .hamburger-btn {
+    display: block;
+  }
+  .content {
+    padding: var(--space-3);
+    padding-bottom: 64px;
+  }
+  .mobile-fab {
+    display: flex;
+  }
+  .bottom-nav {
+    display: flex;
+  }
+  .content--keyboard-open {
+    padding-bottom: var(--space-3);
+  }
 }
 </style>
