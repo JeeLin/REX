@@ -55,6 +55,10 @@ pub fn is_process_alive(pid: u32) -> bool {
 
 /// 单实例检查：若已有存活实例则拒绝启动。返回错误信息已含停止提示。
 pub fn ensure_single_instance(kind: ServiceKind, data_dir: &Path) -> Result<()> {
+    // supervisor 子进程（worker）跳过单实例检查：pid 文件属于 supervisor 本身
+    if std::env::var("REX_WORKER").is_ok() {
+        return Ok(());
+    }
     let path = pid_path(kind, data_dir);
     if let Some(pid) = read_pid_file(&path) {
         if is_process_alive(pid) {
