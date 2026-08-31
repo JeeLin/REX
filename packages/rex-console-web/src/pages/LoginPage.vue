@@ -129,10 +129,13 @@ async function handleLogin() {
               size="lg"
               placeholder="••••••••"
               autocomplete="current-password"
+              class="login-input"
               autofocus
             >
               <template #prefix>
-                <span class="field-prompt mono">$</span>
+                <svg class="field-lock-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
               </template>
             </Input>
           </div>
@@ -141,13 +144,10 @@ async function handleLogin() {
             <Checkbox v-model="remember" :label="t('login.rememberMe')" />
           </div>
 
-          <Transition name="error-slide">
-            <div v-if="errorMsg" class="error-box">
-              <span class="error-icon">✗</span>
-              <span>{{ errorMsg }}</span>
-            </div>
-          </Transition>
-
+          <p v-if="errorMsg" class="error-box">
+            <span class="error-icon">✗</span>
+            <span>{{ errorMsg }}</span>
+          </p>
           <Button
             variant="primary"
             size="lg"
@@ -174,7 +174,7 @@ async function handleLogin() {
 <style scoped>
 /* ========== 基础布局（左右分栏） ========== */
 .login {
-  min-height: 100%;
+  min-height: 100vh;
   display: grid;
   grid-template-columns: 1.05fr .95fr;
 }
@@ -235,8 +235,8 @@ async function handleLogin() {
 
 /* 小号品牌（右侧卡片内） */
 .brand--sm .glyph {
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   font-size: 14px;
 }
 .brand--sm .name {
@@ -360,11 +360,10 @@ async function handleLogin() {
   font-weight: 500;
 }
 
-.field-prompt {
-  color: var(--accent);
-  font-weight: 600;
+.field-lock-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
 }
-
 .login-options {
   display: flex;
   align-items: center;
