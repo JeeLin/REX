@@ -34,8 +34,20 @@ function onContextMenu(e: MouseEvent, env: Environment) {
   ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, env }
 }
 
-onMounted(() => {
-  store.fetchEnvironments()
+onMounted(async () => {
+  await store.fetchEnvironments()
+  for (const env of store.environments) {
+    await store.fetchResources(env.id)
+  }
+})
+
+const envProtocols = computed(() => {
+  const map = new Map<string, string[]>()
+  for (const env of store.environments) {
+    const resources = store.envResources.get(env.id) || []
+    map.set(env.id, [...new Set(resources.map((r: { protocol: string }) => r.protocol))])
+  }
+  return map
 })
 
 const hasEnvironments = computed(() => store.environments.length > 0)
@@ -97,6 +109,9 @@ async function confirmDelete() {
   deleteConfirmId.value = null
 }
 
+const protoIcon: Record<string, string> = {
+  postgresql: 'pg', redis: 'R', sqlite: '◇', s3: '☁', sip: '☎',
+}
 function envIcon(mode: string): string {
   return mode === 'agent' ? '⬡' : '◉'
 }
@@ -230,6 +245,15 @@ async function handleImport(event: Event) {
           </div>
         </div>
 
+        <!-- Protocol Icons -->
+        <div v-if="envProtocols.get(env.id)?.length" class="env-card-protocols">
+          <span
+            v-for="proto in envProtocols.get(env.id)"
+            :key="proto"
+            class="env-proto-pico"
+            :class="`pico--${proto}`"
+          >{{ protoIcon[proto] || '?' }}</span>
+        </div>
         <!-- Agents Section -->
         <div v-if="env.connection_mode === 'agent'" class="env-card-agents">
           <div class="env-card-agents-header">
@@ -522,6 +546,33 @@ async function handleImport(event: Event) {
 .chip-dot--warning {
   background: var(--warning);
 }
+
+.env-card-protocols {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.env-proto-pico {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--on-ink);
+  background: var(--bg-elevated);
+}
+.env-proto-pico.pico--ssh { background: var(--success); }
+.env-proto-pico.pico--sftp { background: var(--purple); }
+.env-proto-pico.pico--sql,
+.env-proto-pico.pico--mysql { background: var(--info); }
+.env-proto-pico.pico--postgresql { background: var(--purple); }
+.env-proto-pico.pico--redis { background: var(--danger); }
+.env-proto-pico.pico--sqlite { background: var(--warning); }
+.env-proto-pico.pico--s3 { background: var(--brand); }
+.env-proto-pico.pico--sip { background: var(--teal); }
 
 /* Agents Section */
 .env-card-agents {
