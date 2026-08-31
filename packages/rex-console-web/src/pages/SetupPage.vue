@@ -13,6 +13,8 @@ const password = ref('')
 const confirmPassword = ref('')
 const errorMsg = ref('')
 
+declare const __APP_VERSION__: string
+const appVersion = __APP_VERSION__
 async function handleSetup() {
   errorMsg.value = ''
   if (password.value.length < 6) {
@@ -37,7 +39,6 @@ async function handleSetup() {
     <div class="setup-card">
       <!-- 品牌标识 -->
       <div class="setup-brand">
-        <span class="glyph">R</span>
         <span class="brand-name">RE<b>X</b> Hub</span>
       </div>
 
@@ -66,11 +67,7 @@ async function handleSetup() {
             autocomplete="new-password"
           />
         </div>
-
-        <Transition name="error-slide">
-          <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
-        </Transition>
-
+        <p v-if="errorMsg" class="error-msg">{{ errorMsg }}</p>
         <Button
           variant="primary"
           size="lg"
@@ -82,7 +79,7 @@ async function handleSetup() {
       </form>
 
       <div class="setup-foot">
-        REX Hub · self-hosted
+        REX Hub · build {{ appVersion }} · © 2026
       </div>
     </div>
   </div>
@@ -105,10 +102,6 @@ async function handleSetup() {
   width: 100%;
   max-width: 380px;
   padding: var(--space-8);
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
 }
 
 /* ========== 品牌标识 ========== */
@@ -117,31 +110,6 @@ async function handleSetup() {
   align-items: center;
   gap: 10px;
   margin-bottom: var(--space-6);
-}
-
-.setup-brand .glyph {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(140deg, var(--accent), var(--brand-deep));
-  color: var(--on-brand);
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 16px;
-  box-shadow: 0 0 0 1px rgba(232, 145, 45, 0.4), 0 4px 14px rgba(232, 145, 45, 0.25);
-}
-
-.brand-name {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 22px;
-  letter-spacing: .02em;
-  color: var(--text-primary);
-}
-.brand-name b {
-  color: var(--accent);
 }
 
 /* ========== 标题与描述 ========== */
