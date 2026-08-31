@@ -217,16 +217,35 @@ async function saveSettings() {
               <b>Theme</b>
               <span>Dark is recommended for long ops sessions.</span>
             </div>
-            <Select
-              v-model="settings.theme"
-              :options="[
-                { label: t('settings.dark'), value: 'dark' },
-                { label: t('settings.light'), value: 'light' },
-                { label: t('settings.highContrast'), value: 'high-contrast' },
-              ]"
-              class="field-select"
-            />
-          </div>
+            <div class="theme-swatches">
+              <button
+                class="swatch"
+                :class="{ 'swatch--on': settings.theme === 'dark' }"
+                title="Dark"
+                @click="settings.theme = 'dark'"
+              >
+                <div class="swatch-surface" style="background:#0E1116"></div>
+              </button>
+              <button
+                class="swatch"
+                :class="{ 'swatch--on': settings.theme === 'light' }"
+                title="Light"
+                @click="settings.theme = 'light'"
+              >
+                <div class="swatch-surface" style="background:#F8F9FA"></div>
+              </button>
+              <button
+                class="swatch"
+                :class="{ 'swatch--on': settings.theme === 'system' }"
+                title="System"
+                @click="settings.theme = 'system'"
+              >
+                <div class="swatch-surface swatch-sys">
+                  <div style="width:50%;height:100%;background:#0E1116"></div>
+                  <div style="width:50%;height:100%;background:#F8F9FA"></div>
+                </div>
+              </button>
+            </div>
           <div class="field">
             <div class="field-label">
               <b>Accent</b>
@@ -616,6 +635,33 @@ async function saveSettings() {
   min-width: 220px;
 }
 
+.theme-swatches {
+  display: flex;
+  gap: 10px;
+}
+.swatch {
+  width: 44px;
+  height: 36px;
+  border-radius: 8px;
+  border: 2px solid var(--border);
+  background: transparent;
+  padding: 2px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color var(--transition);
+}
+.swatch--on {
+  border-color: var(--accent);
+}
+.swatch-surface {
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+}
+.swatch-sys {
+  display: flex;
+  overflow: hidden;
+}
 .field-actions {
   display: flex;
   align-items: center;
