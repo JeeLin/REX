@@ -32,6 +32,7 @@ const mainNav = [
   { to: '/dashboard', key: 'nav.dashboard', icon: 'chart' },
   { to: '/environments', key: 'nav.environments', icon: 'list' },
   { to: '/audit-log', key: 'nav.auditLog', icon: 'bolt' },
+  { to: '/design-preview', key: 'nav.design', icon: 'design' },
 ]
 
 const bottomNav = [
@@ -67,7 +68,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleGlobalKeydow
 
 const currentTitle = computed(() => {
   const match = [...mainNav, ...bottomNav].find((n) => route.path.startsWith(n.to))
-  return match ? t(match.key) : 'REX Hub'
+  return match ? t(match.key) : 'REX'
 })
 const currentUser = computed(() => 'R')
 
@@ -95,13 +96,11 @@ function toggleTheme() {
         <div class="brand-actions">
           <button class="brand-btn" :aria-label="t('theme.toggle', 'Toggle theme')" @click="toggleTheme">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>
+              <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>
             </svg>
           </button>
           <button class="brand-btn" :aria-label="t('language.toggle', 'Language')">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-            </svg>
+            中
           </button>
         </div>
       </div>
@@ -120,7 +119,7 @@ function toggleTheme() {
             :aria-label="t('common.search', 'Search')"
             :placeholder="t('sidebar.searchPlaceholder', 'Search resources…')"
           />
-          <kbd class="search-kbd">⌘K</kbd>
+          <kbd class="search-kbd">Ctrl K</kbd>
         </div>
       </div>
 
@@ -149,10 +148,21 @@ function toggleTheme() {
           <svg v-else-if="item.icon === 'bolt'" class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
           </svg>
+          <!-- Grid icon (Design) -->
+          <svg v-else-if="item.icon === 'design'" class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+          </svg>
           <span class="nav-label">{{ t(item.key) }}</span>
         </RouterLink>
       </nav>
 
+      <!-- 新建资源按钮 -->
+      <div class="sidebar-new-resource">
+        <button class="new-resource-btn">
+          <span class="new-resource-plus">＋</span>
+          {{ t('sidebar.newResource', '新建资源') }}
+        </button>
+      </div>
       <!-- 资源栏 -->
       <ResourcePanel v-if="!(fullscreen && isWorkspace)" class="sidebar-resource" @resource-properties="onResourceProperties" />
 
@@ -185,15 +195,34 @@ function toggleTheme() {
 
         <!-- 面包屑 -->
         <div class="topbar-breadcrumb">
-          <span class="breadcrumb-root">REX Hub</span>
+          <span class="breadcrumb-root">REX</span>
           <span class="breadcrumb-sep">/</span>
           <span class="breadcrumb-current">{{ currentTitle }}</span>
         </div>
 
         <div class="topbar-spacer" />
 
-        <!-- 右侧搜索 + 头像 -->
+        <!-- Quick connect search -->
+        <div class="topbar-search-inline">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/>
+          </svg>
+          <span>{{ t('topbar.quickConnect', 'Quick connect…') }}</span>
+          <kbd class="topbar-search-kbd">Ctrl N</kbd>
+        </div>
+
+        <!-- 右侧按钮 + 头像 -->
         <div class="topbar-actions">
+          <button class="topbar-icon-btn" :aria-label="t('topbar.notifications', 'Notifications')" :title="t('topbar.notifications', 'Notifications')">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>
+            </svg>
+          </button>
+          <button class="topbar-icon-btn" :aria-label="t('topbar.refresh', 'Refresh data')" :title="t('topbar.refresh', 'Refresh data (R)')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>
+            </svg>
+          </button>
           <button v-if="isWorkspace" class="topbar-icon-btn" :aria-label="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" :title="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" @click="fullscreen = !fullscreen">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline v-if="!fullscreen" points="15 3 21 3 21 9"/><polyline v-if="!fullscreen" points="9 21 3 21 3 15"/><line v-if="!fullscreen" x1="21" y1="3" x2="14" y2="10"/><line v-if="!fullscreen" x1="3" y1="21" x2="10" y2="14"/>
@@ -329,6 +358,7 @@ function toggleTheme() {
   font-weight: 800;
   font-size: 15px;
   flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(232,145,45,.4), 0 4px 14px rgba(232,145,45,.25);
 }
 .brand-name {
   font-size: 16px;
@@ -444,6 +474,36 @@ function toggleTheme() {
   flex-shrink: 0;
 }
 
+/* ── New resource button ── */
+.sidebar-new-resource {
+  padding: var(--space-2) var(--space-3);
+}
+.new-resource-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 7px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+.new-resource-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-muted);
+}
+.new-resource-plus {
+  color: var(--accent);
+  font-size: 14px;
+  line-height: 1;
+}
+
 /* ── Resource panel ── */
 .sidebar-resource {
   border-top: 1px solid var(--border);
@@ -525,6 +585,36 @@ function toggleTheme() {
 }
 .topbar-spacer {
   flex: 1;
+}
+.topbar-search-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  width: 260px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-dim);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+.topbar-search-inline:hover {
+  border-color: var(--border-strong);
+}
+.topbar-search-kbd {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  line-height: 1.4;
+  margin-left: auto;
+  pointer-events: none;
 }
 .topbar-actions {
   display: flex;
