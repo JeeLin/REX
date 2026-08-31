@@ -508,44 +508,25 @@ async function resetToken() {
           <Button variant="primary" size="sm" @click="showWizard = true">{{ t('environmentDetail.addResource') }}</Button>
         </EmptyState>
 
-        <table v-else class="resource-table">
-          <thead>
-            <tr>
-              <th>{{ t('common.name') }}</th>
-              <th>{{ t('wizard.protocol') }}</th>
-              <th>{{ t('wizard.host') }}</th>
-              <th>{{ t('wizard.port') }}</th>
-              <th>{{ t('wizard.username') }}</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="res in resources" :key="res.id" @contextmenu.prevent="onContextMenu($event, res)">
-              <td>
-                <span class="res-name">
-                  <span class="res-icon" :style="{ color: resProtoColor(res) }">
-                    {{ resProtoIcon(res) }}
-                  </span>
-                  {{ res.name }}
-                </span>
-              </td>
-              <td>
-                <Badge :tone="resProtoTone(res)">
-                  {{ resProtoName(res) }}
-                </Badge>
-              </td>
-              <td class="mono">{{ res.host }}</td>
-              <td class="mono">{{ res.port || '—' }}</td>
-              <td>{{ res.username || '—' }}</td>
-              <td>
-                <button class="icon-btn danger" :title="t('common.delete')" @click="resourceDeleteId = res.id">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        <div v-else class="resource-tline-list">
+          <div
+            v-for="res in resources"
+            :key="res.id"
+            class="resource-tline"
+            @contextmenu.prevent="onContextMenu($event, res)"
+          >
+            <span class="resource-tline-pico" :class="`pico--${res.protocol}`">
+              {{ resProtoIcon(res) }}
+            </span>
+            <span class="resource-tline-name">{{ res.name }}</span>
+            <span class="resource-tline-host mono">{{ res.host }}{{ res.port ? ':' + res.port : '' }}</span>
+            <span class="resource-tline-spacer"></span>
+            <span class="resource-tline-user muted">{{ res.username || '—' }}</span>
+            <button class="resource-tline-del" :title="t('common.delete')" @click="resourceDeleteId = res.id">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
     </template>
 
     <!-- Resource Creation Wizard -->
@@ -979,33 +960,72 @@ async function resetToken() {
   color: var(--text-muted);
 }
 
-/* ========== Resource Table ========== */
-.resource-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-sm);
+/* ========== Resource TLine List ========== */
+.resource-tline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
-
-.resource-table th {
-  text-align: left;
-  padding: var(--space-2) var(--space-3);
+.resource-tline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 7px;
+  font-size: 13px;
   color: var(--text-muted);
-  font-weight: 500;
-  border-bottom: 1px solid var(--border);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: background var(--transition);
 }
-
-.resource-table td {
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--border);
-  color: var(--text-secondary);
-}
-
-.resource-table tr:hover td {
+.resource-tline:hover {
   background: var(--bg-hover);
+  color: var(--text);
 }
+.resource-tline-pico {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--on-ink);
+  background: var(--bg-elevated);
+  flex: none;
+}
+.resource-tline-pico.pico--ssh { background: var(--success); }
+.resource-tline-pico.pico--sftp { background: var(--purple); }
+.resource-tline-pico.pico--sql,
+.resource-tline-pico.pico--mysql { background: var(--info); }
+.resource-tline-pico.pico--postgresql { background: var(--purple); }
+.resource-tline-pico.pico--redis { background: var(--danger); }
+.resource-tline-pico.pico--sqlite { background: var(--warning); }
+.resource-tline-pico.pico--s3 { background: var(--brand); }
+.resource-tline-pico.pico--sip { background: var(--teal); }
+.resource-tline-name {
+  font-weight: 600;
+  color: var(--text);
+}
+.resource-tline-host {
+  font-size: 12px;
+}
+.resource-tline-spacer { flex: 1; }
+.resource-tline-user {
+  font-size: 12px;
+}
+.resource-tline-del {
+  opacity: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  transition: opacity var(--transition), color var(--transition);
+}
+.resource-tline:hover .resource-tline-del { opacity: 1; }
+.resource-tline-del:hover { color: var(--danger); }
 
 .res-name {
   display: flex;
