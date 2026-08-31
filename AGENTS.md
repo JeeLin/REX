@@ -7,7 +7,7 @@ REX Hub 是个人自托管远程资源统一管理平台。单用户、自托管
 - 产品文档：`docs/PRODUCT.md`
 - 开发文档：`docs/DEVELOPMENT.md`
 - 架构文档：`docs/architecture/`
-- 里程碑：`docs/milestones/`
+- 里程碑：`.dev-flow/milestones/`
 
 ## 硬性约束
 
