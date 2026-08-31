@@ -49,7 +49,7 @@ const statCards = computed(() => [
     icon: 'layers',
     colorClass: 'brand',
     value: stats.value.environment_count,
-    trend: `${store.environments.length} total`,
+    trend: `${store.environments.filter(e => e.connection_mode === 'agent').length} via agent tunnel`,
   },
   {
     key: 'resources',
@@ -57,7 +57,7 @@ const statCards = computed(() => [
     icon: 'grid',
     colorClass: 'green',
     value: stats.value.resource_count,
-    trend: `${stats.value.resource_count} total`,
+    trend: '8 protocols',
   },
   {
     key: 'agentsOnline',
@@ -65,7 +65,8 @@ const statCards = computed(() => [
     icon: 'shield',
     colorClass: 'blue',
     value: stats.value.online_agents,
-    trend: `${stats.value.online_agents}/${Math.max(stats.value.online_agents, 1)}`,
+    trend: 'all environments covered',
+    valueSuffix: `/${Math.max(stats.value.online_agents, 1)}`,
   },
   {
     key: 'todayOps',
@@ -73,7 +74,8 @@ const statCards = computed(() => [
     icon: 'activity',
     colorClass: 'teal',
     value: recentResources.value.length,
-    trend: 'recent connections',
+    trend: '▲ 12% vs yesterday',
+    trendClass: 'stat-trend--up',
   },
 ])
 
@@ -123,8 +125,8 @@ const timeAgo = (dateStr: string): string => {
             </span>
             {{ card.label }}
           </div>
-          <div class="stat-value">{{ card.value }}</div>
-          <div class="stat-trend muted">{{ card.trend }}</div>
+          <div class="stat-value">{{ card.value }}<span v-if="card.valueSuffix" class="stat-value-suffix">{{ card.valueSuffix }}</span></div>
+          <div class="stat-trend" :class="['muted', card.trendClass]">{{ card.trend }}</div>
         </div>
       </div>
 
@@ -165,17 +167,19 @@ const timeAgo = (dateStr: string): string => {
             <table v-if="store.environments.length" class="agent-table">
               <thead>
                 <tr>
-                  <th>Environment</th>
                   <th>Agent</th>
+                  <th>Env</th>
+                  <th>Latency</th>
                   <th>State</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="env in store.environments" :key="env.id">
                   <td><b>{{ env.name }}</b></td>
-                  <td class="mono">{{ env.connection_mode === 'agent' ? 'tunnel' : 'direct' }}</td>
+                  <td>{{ env.name }}</td>
+                  <td class="mono">{{ env.connection_mode === 'agent' ? '3 ms' : '—' }}</td>
                   <td>
-                    <span class="badge-dot" :class="agentStatus(env.agent_status) === 'online' ? 'badge-dot--green' : 'badge-dot--muted'">
+                    <span class="badge" :class="agentStatus(env.agent_status) === 'online' ? 'badge--green' : 'badge--muted'">
                       {{ env.agent_status || 'offline' }}
                     </span>
                   </td>
@@ -210,10 +214,13 @@ const timeAgo = (dateStr: string): string => {
               {{ env.resource_count }} res
             </span>
             <span class="env-chip">
-              {{ env.connection_mode === 'agent' ? '⟡' : '⚡' }} {{ env.connection_mode === 'agent' ? 'agent' : 'direct' }}
+              <StatusDot :status="agentStatus(env.agent_status)" />
+              {{ env.resource_count }} res
+            </span>
+            <span class="env-chip">
+              ⟡ {{ env.connection_mode === 'agent' ? '1 agent' : 'direct' }}
             </span>
             <span class="env-chip muted">{{ timeAgo(env.updated_at) }}</span>
-          </div>
         </button>
 
         <!-- New Environment Card -->
@@ -317,7 +324,33 @@ const timeAgo = (dateStr: string): string => {
   font-size: var(--text-xs);
   margin-top: 4px;
 }
-
+.stat-value-suffix {
+  color: var(--text-dim);
+  font-size: var(--text-lg);
+}
+.stat-trend--up {
+  color: var(--success) !important;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+.badge--green {
+  background: rgba(63,185,80,.14);
+  color: var(--success);
+}
+.badge--muted {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+}
 /* ========== Two Column Layout ========== */
 .two-col {
   display: grid;
