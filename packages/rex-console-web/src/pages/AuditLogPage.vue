@@ -329,45 +329,37 @@ onMounted(async () => {
     <p class="page-desc">{{ t('auditLog.subtitle', 'System activity log') }}</p>
 
     <!-- Toolbar: filters + actions -->
+    <!-- Toolbar: chip filters + actions -->
     <div class="toolbar">
-      <div class="field">
-        <span class="field-label">{{ t('auditLog.allEnvironments') }}</span>
-        <Select
-          v-model="environmentFilter"
-          :options="[
-            { label: t('auditLog.allEnvironments'), value: '' },
-            ...store.environments.map(e => ({ label: e.name, value: e.id })),
-          ]"
-          size="sm"
-        />
+      <div class="filter-chips">
+        <span class="filter-chips-label">{{ t('auditLog.env', 'Env') }}</span>
+        <button
+          class="filter-chip"
+          :class="{ 'filter-chip--on': !environmentFilter }"
+          @click="environmentFilter = ''"
+        >{{ t('auditLog.allEnvironments') }}</button>
+        <button
+          v-for="env in store.environments"
+          :key="env.id"
+          class="filter-chip"
+          :class="{ 'filter-chip--on': environmentFilter === env.id }"
+          @click="environmentFilter = env.id"
+        >{{ env.name }}</button>
       </div>
-      <div class="field">
-        <span class="field-label">{{ t('auditLog.allResults') }}</span>
-        <Select
-          v-model="actionFilter"
-          :options="actionOptions.map(o => ({ label: o.value ? o.value : t(o.label), value: o.value }))"
-          size="sm"
-        />
-      </div>
-      <div class="field">
-        <span class="field-label">{{ t('auditLog.time', 'Time') }}</span>
-        <Select
-          v-model="timeRange"
-          :options="timeRangeOptions.map(o => ({ label: t(o.label), value: o.value }))"
-          size="sm"
-        />
-      </div>
-      <div class="field">
-        <span class="field-label">{{ t('auditLog.result') }}</span>
-        <Select
-          v-model="resultFilter"
-          :options="[
-            { label: t('auditLog.allResults'), value: '' },
-            { label: t('auditLog.success'), value: 'success' },
-            { label: t('auditLog.failure'), value: 'failure' },
-          ]"
-          size="sm"
-        />
+      <div class="filter-chips">
+        <span class="filter-chips-label">{{ t('auditLog.type', 'Type') }}</span>
+        <button
+          class="filter-chip"
+          :class="{ 'filter-chip--on': !actionFilter }"
+          @click="actionFilter = ''"
+        >{{ t('auditLog.allResults') }}</button>
+        <button
+          v-for="opt in actionOptions.filter(o => o.value)"
+          :key="opt.value"
+          class="filter-chip"
+          :class="{ 'filter-chip--on': actionFilter === opt.value }"
+          @click="actionFilter = opt.value"
+        >{{ opt.value }}</button>
       </div>
       <span class="spacer"></span>
       <Button variant="ghost" size="sm" @click="actionFilter = ''; resultFilter = ''; environmentFilter = ''; timeRange = 'all'">
@@ -378,7 +370,6 @@ onMounted(async () => {
         {{ t('auditLog.exportCsv') }}
       </Button>
     </div>
-
     <!-- Stats cards -->
     <div class="stats">
       <div class="stat">
@@ -487,33 +478,12 @@ onMounted(async () => {
       </ResponsiveTable>
     </div>
 
-    <!-- Pagination -->
-    <div class="pagination">
+    <!-- No pagination per prototype - show all rows -->
+    <div class="audit-table-footer">
       <span class="page-total muted">{{ totalCount.toLocaleString() }} {{ t('auditLog.totalCount', 'total') }}</span>
-      <Select
-        v-model="pageSize"
-        :options="pageSizeOptions"
-        size="sm"
-      />
-      <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-      </button>
-      <span class="page-info mono">{{ currentPage }} / {{ totalPages }}</span>
-      <button class="page-btn" :disabled="currentPage >= totalPages" @click="currentPage++">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-      </button>
-      <span class="page-goto">
-        <span class="muted">{{ t('auditLog.gotoPage') }}</span>
-        <input
-          v-model.number="gotoPage"
-          class="page-goto-input mono"
-          type="number"
-          min="1"
-          :max="totalPages"
-          @keyup.enter="applyGoto"
-        />
-      </span>
     </div>
+
+    <!-- Context menu -->
 
     <!-- Context menu -->
     <ContextMenu
@@ -736,8 +706,8 @@ onMounted(async () => {
 }
 
 .otag.agent {
-  background: var(--success-soft);
-  color: var(--success);
+  background: rgba(45, 212, 191, .14);
+  color: var(--teal);
 }
 
 /* Result codes */
@@ -828,20 +798,53 @@ onMounted(async () => {
   margin: var(--space-1) 0;
 }
 
-/* Pagination */
-.pagination {
+/* Filter Chips */
+.filter-chips {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
   flex-wrap: wrap;
-  gap: var(--space-3);
-  padding: var(--space-4) 0;
+}
+.filter-chips-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-right: 2px;
+}
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+}
+.filter-chip:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.filter-chip--on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
+.audit-table-footer {
+  padding: var(--space-4) 0;
+  text-align: center;
+}
 .page-total {
   font-size: var(--text-xs);
 }
-
 .page-btn {
   display: inline-flex;
   align-items: center;
