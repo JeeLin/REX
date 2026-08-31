@@ -328,7 +328,7 @@
     "dashboard": "Dashboard",
     "environments": "Environments",
     "settings": "Settings",
-    "workspace": "Workspace"
+    "design": "Design"
   },
   "protocol": {
     "mysql": "MySQL",
@@ -533,7 +533,10 @@
     "openResource": "Open in Workspace",
     "properties": "Properties",
     "recent": "Recent",
-    "search": "Search resources..."
+    "search": "Search resources...",
+    "searchPlaceholder": "Search resources…",
+    "newResource": "New resource",
+    "newEnvironment": "New env"
   },
   "sql": {
     "addColumn": "Add Column",
@@ -789,5 +792,10 @@
       "cancel": "Logout",
       "refreshing": "Refreshing..."
     }
+  },
+  "topbar": {
+    "quickConnect": "Quick connect…",
+    "notifications": "Notifications",
+    "refresh": "Refresh data (R)"
   }
 }

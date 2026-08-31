@@ -327,7 +327,7 @@
     "dashboard": "仪表盘",
     "environments": "环境",
     "settings": "设置",
-    "workspace": "工作区"
+    "design": "设计"
   },
   "protocol": {
     "mysql": "MySQL",
@@ -532,7 +532,10 @@
     "openResource": "在工作区打开",
     "properties": "属性",
     "recent": "最近使用",
-    "search": "搜索资源..."
+    "search": "搜索资源...",
+    "searchPlaceholder": "搜索资源…",
+    "newResource": "新建资源",
+    "newEnvironment": "新建环境"
   },
   "sql": {
     "addColumn": "添加列",
@@ -788,5 +791,10 @@
       "cancel": "退出登录",
       "refreshing": "刷新中..."
     }
+  },
+  "topbar": {
+    "quickConnect": "快速连接…",
+    "notifications": "通知",
+    "refresh": "刷新数据 (R)"
   }
 }
