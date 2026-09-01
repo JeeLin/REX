@@ -749,7 +749,8 @@
     "testSuccess": "Connection successful",
     "testing": "Testing...",
     "username": "Username",
-    "welcome": "Welcome to REX Hub"
+    "welcome": "Welcome to REX Hub",
+    "sipAccountRequired": "SIP resource requires at least one valid account (provide a username)"
   },
   "workspace": {
     "broadcastIndicator": "Broadcast",
