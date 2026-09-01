@@ -35,6 +35,13 @@ watch(autoUpdate, (val) => {
   settingsApi.update({ auto_update: val })
 })
 
+const accent = ref('orange')
+const sidebarDensity = ref('comfortable')
+const cursorBlink = ref(true)
+const keepalive = ref(true)
+const encryptSecrets = ref(true)
+const auditLogging = ref(true)
+
 const tabs = [
   { key: 'appearance', icon: '🎨', labelKey: 'settings.appearance' },
   { key: 'terminal', icon: '⌨', labelKey: 'settings.terminal' },
@@ -277,9 +284,9 @@ async function saveSettings() {
               <span>Primary action and selection color.</span>
             </div>
             <div class="seg">
-              <button class="on">Orange</button>
-              <button>Blue</button>
-              <button>Green</button>
+              <button :class="{ on: accent === 'orange' }" @click="accent = 'orange'">Orange</button>
+              <button :class="{ on: accent === 'blue' }" @click="accent = 'blue'">Blue</button>
+              <button :class="{ on: accent === 'green' }" @click="accent = 'green'">Green</button>
             </div>
           </div>
           <div class="field">
@@ -288,8 +295,8 @@ async function saveSettings() {
               <span>Compact shows more rows.</span>
             </div>
             <div class="seg">
-              <button class="on">Comfortable</button>
-              <button>Compact</button>
+              <button :class="{ on: sidebarDensity === 'comfortable' }" @click="sidebarDensity = 'comfortable'">Comfortable</button>
+              <button :class="{ on: sidebarDensity === 'compact' }" @click="sidebarDensity = 'compact'">Compact</button>
             </div>
           </div>
         </div>
@@ -349,14 +356,14 @@ async function saveSettings() {
               <b>Cursor blink</b>
               <span>Animate the terminal cursor.</span>
             </div>
-            <div class="switch on"><i></i></div>
+            <Switch v-model="cursorBlink" />
           </div>
           <div class="field">
             <div class="field-label">
               <b>Keep-alive</b>
               <span>Send heartbeat every 30s.</span>
             </div>
-            <div class="switch on"><i></i></div>
+            <Switch v-model="keepalive" />
           </div>
         </div>
       </div>
@@ -387,14 +394,14 @@ async function saveSettings() {
               <b>Encrypt stored secrets</b>
               <span>Resource passwords &amp; keys.</span>
             </div>
-            <div class="switch on"><i></i></div>
+            <Switch v-model="encryptSecrets" />
           </div>
           <div class="field">
             <div class="field-label">
               <b>Audit logging</b>
               <span>Record every operation.</span>
             </div>
-            <div class="switch on"><i></i></div>
+            <Switch v-model="auditLogging" />
           </div>
         </div>
 
@@ -737,40 +744,7 @@ async function saveSettings() {
   font-weight: 600;
 }
 
-/* Toggle switch */
-.switch {
-  width: 42px;
-  height: 24px;
-  border-radius: var(--radius-pill);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
-  position: relative;
-  cursor: pointer;
-  flex: none;
-  transition: background var(--transition);
-}
-
-.switch i {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  transition: transform var(--transition), background var(--transition);
-  display: block;
-}
-
-.switch.on {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-}
-
-.switch.on i {
-  transform: translateX(18px);
-  background: var(--accent);
-}
+/* Toggle switch styles moved to Switch.vue component */
 
 /* Save bar */
 .save-bar {
