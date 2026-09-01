@@ -221,6 +221,7 @@ const timeAgo = (dateStr: string): string => {
               ⟡ {{ env.connection_mode === 'agent' ? '1 agent' : 'direct' }}
             </span>
             <span class="env-chip muted">{{ timeAgo(env.updated_at) }}</span>
+          </div>
         </button>
 
         <!-- New Environment Card -->
@@ -344,7 +345,7 @@ const timeAgo = (dateStr: string): string => {
   letter-spacing: .02em;
 }
 .badge--green {
-  background: rgba(63,185,80,.14);
+  background: var(--success-soft);
   color: var(--success);
 }
 .badge--muted {
