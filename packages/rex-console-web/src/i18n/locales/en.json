@@ -328,7 +328,8 @@
     "dashboard": "Dashboard",
     "environments": "Environments",
     "settings": "Settings",
-    "design": "Design"
+    "design": "Design",
+    "workspace": "Workspace"
   },
   "protocol": {
     "mysql": "MySQL",
