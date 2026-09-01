@@ -143,6 +143,26 @@ onMounted(async () => {
   }
 })
 
+// Listen for env changes from other pages
+import { onBeforeUnmount } from 'vue'
+
+async function onEnvChanged() {
+  await store.fetchEnvironments()
+  for (const env of store.environments) {
+    try {
+      await store.fetchResources(env.id)
+    } catch {
+      // ignore
+    }
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('rex:env-changed', onEnvChanged)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('rex:env-changed', onEnvChanged)
+})
 const filteredEnvs = computed(() => {
   let envs = store.environments
   if (searchQuery.value) {
