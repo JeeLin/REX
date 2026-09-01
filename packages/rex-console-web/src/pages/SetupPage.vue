@@ -13,7 +13,6 @@ const password = ref('')
 const confirmPassword = ref('')
 const errorMsg = ref('')
 
-declare const __APP_VERSION__: string
 const appVersion = __APP_VERSION__
 async function handleSetup() {
   errorMsg.value = ''
