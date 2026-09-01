@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { onClickOutside } from '@vueuse/core'
@@ -144,7 +144,6 @@ onMounted(async () => {
 })
 
 // Listen for env changes from other pages
-import { onBeforeUnmount } from 'vue'
 
 async function onEnvChanged() {
   await store.fetchEnvironments()

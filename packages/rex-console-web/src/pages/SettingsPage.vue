@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { settingsApi, type Settings } from '@/api/settings'
 import { useUpdateStore } from '@/stores/update'
@@ -50,8 +50,6 @@ function scrollToSection(key: string) {
   }
 }
 
-// Scroll spy: update activeTab based on scroll position
-import { onBeforeUnmount } from 'vue'
 
 const sectionIds = ['profile', 'appearance', 'terminal', 'security', 'update']
 
