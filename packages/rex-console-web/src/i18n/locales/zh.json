@@ -748,7 +748,8 @@
     "testSuccess": "连接成功",
     "testing": "测试中...",
     "username": "用户名",
-    "welcome": "欢迎使用 REX Hub"
+    "welcome": "欢迎使用 REX Hub",
+    "sipAccountRequired": "sip 资源至少需要一个有效账户（填写用户名）"
   },
   "workspace": {
     "broadcastIndicator": "广播",
