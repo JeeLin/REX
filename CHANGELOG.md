@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
+## [0.71.1] - 2026-07-18
+
+### Fixed
+- AppLayout：侧栏添加新建资源按钮、搜索框改为 Ctrl K、面包屑改为 "REX"、通知/刷新按钮、月亮主题图标、中文语言切换、brand glyph 琥珀光环
+- Dashboard：badge 背景色改用 CSS token（--success-soft）
+- Environments：添加协议图标徽章（ssh/sftp/sql/mysql/pgsql/redis/sqlite/s3/sip）
+- Environment Detail：资源列表改为文本行格式对齐原型
+- Settings：主题选择器改为可视化色块（Dark/Light/System）
+- Audit Log：筛选改为 chip 格式、移除分页、agent 标签改为 teal
+- Login：密码输入锁图标、静态错误消息、100vh 高度、品牌标记 30px
+- Setup：去掉品牌 glyph、footer 显示 build 版本
+- 新增 --teal-soft CSS token
+
 
 ## [0.71.0] - 2026-08-28
 
