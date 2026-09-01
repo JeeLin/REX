@@ -799,5 +799,18 @@
     "quickConnect": "Go to workspace…",
     "notifications": "Notifications",
     "refresh": "Refresh data (R)"
+  },
+  "filesDrawer": {
+    "goUp": "Go up",
+    "refresh": "Refresh",
+    "upload": "Upload",
+    "empty": "Empty",
+    "connecting": "Connecting...",
+    "rename": "Rename",
+    "download": "Download",
+    "delete": "Delete",
+    "newFolder": "New Folder",
+    "uploadHere": "Upload Here",
+    "copyPath": "Copy Path"
   }
 }

@@ -798,5 +798,18 @@
     "quickConnect": "前往工作区…",
     "notifications": "通知",
     "refresh": "刷新数据 (R)"
+  },
+  "filesDrawer": {
+    "goUp": "上一级",
+    "refresh": "刷新",
+    "upload": "上传",
+    "empty": "空目录",
+    "connecting": "连接中…",
+    "rename": "重命名",
+    "download": "下载",
+    "delete": "删除",
+    "newFolder": "新建文件夹",
+    "uploadHere": "上传到此处",
+    "copyPath": "复制路径"
   }
 }
