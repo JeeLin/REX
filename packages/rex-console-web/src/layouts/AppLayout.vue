@@ -487,7 +487,7 @@ function openUserMenu() {
   flex-shrink: 0;
 }
 
-/* ── New resource button ── */
+/* ── Resource panel ── */
 .sidebar-resource {
   border-top: 1px solid var(--border);
   flex: 1;
