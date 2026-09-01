@@ -3,6 +3,25 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
+## [0.71.2] - 2026-07-16
+
+### Fixed
+- AppLayout：添加登出按钮（顶栏头像旁红色图标）
+- AppLayout：语言切换按钮绑定事件，显示中/EN 切换
+- AppLayout：Quick connect 区域可点击，导航至工作区
+- AppLayout：刷新按钮绑定事件（页面刷新）
+- AppLayout：用户头像点击导航至设置页
+- AppLayout：新建资源按钮绑定事件
+- AppLayout：全屏退出图标修正为标准收缩图标
+- AppLayout：移除侧栏 Design 导航项
+- Environments：Topology tab 切换逻辑修复（添加 activeView 状态 + 占位视图）
+- Environments：协议图标添加 padding 避免贴着竖线
+- Environments：新建环境后触发侧栏数据刷新（CustomEvent）
+- Settings：改为全部设置项同时展示，左侧导航滚动定位（scroll spy）
+- Workspace：Ctrl+N 快捷键改为 Ctrl+Shift+N 避免与浏览器冲突
+- i18n：补充 nav.workspace 翻译键（中/英）
+- ResourcePanel：监听 rex:env-changed 事件自动刷新
+
 ## [0.71.1] - 2026-07-18
 
 ### Fixed
