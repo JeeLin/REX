@@ -12,7 +12,7 @@ import { useRouter } from 'vue-router'
 import { useSwipeGesture } from '@/composables/useSwipeGesture'
 import { useVirtualKeyboard } from '@/composables/useVirtualKeyboard'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { showWarning, remainingSeconds, extendSession } = useSessionTimeout()
 const authStore = useAuthStore()
 const router = useRouter()
@@ -32,7 +32,6 @@ const mainNav = [
   { to: '/dashboard', key: 'nav.dashboard', icon: 'chart' },
   { to: '/environments', key: 'nav.environments', icon: 'list' },
   { to: '/audit-log', key: 'nav.auditLog', icon: 'bolt' },
-  { to: '/design-preview', key: 'nav.design', icon: 'design' },
 ]
 
 const bottomNav = [
@@ -78,6 +77,25 @@ function toggleTheme() {
   localStorage.setItem('rex-theme', next)
   document.documentElement.dataset.theme = next === 'dark' ? undefined : next
 }
+function toggleLanguage() {
+  locale.value = locale.value === 'zh' ? 'en' : 'zh'
+  localStorage.setItem('rex-lang', locale.value)
+}
+
+function openQuickConnect() {
+  router.push('/workspace')
+}
+function refreshAllData() {
+  window.location.reload()
+}
+
+function openUserMenu() {
+  router.push('/settings')
+}
+
+function openNewResource() {
+  router.push('/environments?create=true')
+}
 </script>
 
 <template>
@@ -99,8 +117,8 @@ function toggleTheme() {
               <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>
             </svg>
           </button>
-          <button class="brand-btn" :aria-label="t('language.toggle', 'Language')">
-            中
+          <button class="brand-btn" :aria-label="t('language.toggle', 'Language')" @click="toggleLanguage">
+            {{ locale === 'zh' ? '中' : 'EN' }}
           </button>
         </div>
       </div>
@@ -158,7 +176,7 @@ function toggleTheme() {
 
       <!-- 新建资源按钮 -->
       <div class="sidebar-new-resource">
-        <button class="new-resource-btn">
+        <button class="new-resource-btn" @click="openNewResource">
           <span class="new-resource-plus">＋</span>
           {{ t('sidebar.newResource', '新建资源') }}
         </button>
@@ -203,12 +221,12 @@ function toggleTheme() {
         <div class="topbar-spacer" />
 
         <!-- Quick connect search -->
-        <div class="topbar-search-inline">
+        <div class="topbar-search-inline" @click="openQuickConnect">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/>
           </svg>
           <span>{{ t('topbar.quickConnect', 'Quick connect…') }}</span>
-          <kbd class="topbar-search-kbd">Ctrl N</kbd>
+          <kbd class="topbar-search-kbd">Ctrl K</kbd>
         </div>
 
         <!-- 右侧按钮 + 头像 -->
@@ -218,7 +236,7 @@ function toggleTheme() {
               <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>
             </svg>
           </button>
-          <button class="topbar-icon-btn" :aria-label="t('topbar.refresh', 'Refresh data')" :title="t('topbar.refresh', 'Refresh data (R)')">
+          <button class="topbar-icon-btn" :aria-label="t('topbar.refresh', 'Refresh data')" :title="t('topbar.refresh', 'Refresh data (R)')" @click="refreshAllData">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>
             </svg>
@@ -226,12 +244,17 @@ function toggleTheme() {
           <button v-if="isWorkspace" class="topbar-icon-btn" :aria-label="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" :title="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" @click="fullscreen = !fullscreen">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline v-if="!fullscreen" points="15 3 21 3 21 9"/><polyline v-if="!fullscreen" points="9 21 3 21 3 15"/><line v-if="!fullscreen" x1="21" y1="3" x2="14" y2="10"/><line v-if="!fullscreen" x1="3" y1="21" x2="10" y2="14"/>
-              <polyline v-if="fullscreen" points="4 14 10 14 10 20"/><polyline v-if="fullscreen" points="20 10 14 10 14 4"/><line v-if="fullscreen" x1="14" y1="10" x2="21" y2="3"/><line v-if="fullscreen" x1="3" y1="21" x2="10" y2="14"/>
+              <polyline v-if="fullscreen" points="14 14 4 14 4 4"/><polyline v-if="fullscreen" points="10 10 20 10 20 20"/><line v-if="fullscreen" x1="4" y1="14" x2="10" y2="10"/><line v-if="fullscreen" x1="20" y1="10" x2="14" y2="14"/>
             </svg>
           </button>
-          <div class="topbar-avatar" :title="currentUser">
+          <div class="topbar-avatar" :title="currentUser" @click="openUserMenu" style="cursor:pointer">
             {{ currentUser.charAt(0).toUpperCase() }}
           </div>
+          <button class="topbar-icon-btn" :aria-label="t('session.logout', 'Logout')" :title="t('session.logout', 'Logout')" @click="sessionLogout" style="color:var(--danger)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
         </div>
       </header>
       <!-- 全屏时工作区的退出按钮 -->

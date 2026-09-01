@@ -327,7 +327,8 @@
     "dashboard": "仪表盘",
     "environments": "环境",
     "settings": "设置",
-    "design": "设计"
+    "design": "设计",
+    "workspace": "工作区"
   },
   "protocol": {
     "mysql": "MySQL",

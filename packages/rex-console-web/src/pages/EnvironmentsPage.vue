@@ -29,6 +29,8 @@ const formLoading = ref(false)
 const deleteConfirmId = ref<string | null>(null)
 const ctxMenu = ref<{ show: boolean; x: number; y: number; env: Environment | null }>({ show: false, x: 0, y: 0, env: null })
 
+const activeView = ref<'list' | 'topology'>('list')
+
 function onContextMenu(e: MouseEvent, env: Environment) {
   e.preventDefault()
   ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, env }
@@ -92,6 +94,8 @@ async function submitForm() {
       })
     }
     showCreateModal.value = false
+    // Signal sidebar to refresh
+    window.dispatchEvent(new CustomEvent('rex:env-changed'))
   } catch (e: unknown) {
     formError.value = e instanceof Error ? e.message : String(e)
   } finally {
@@ -195,8 +199,8 @@ async function handleImport(event: Event) {
 
     <!-- Tab Bar -->
     <div class="tab-bar">
-      <div class="tab active">List</div>
-      <div class="tab">Topology</div>
+      <div class="tab" :class="{ active: activeView === 'list' }" @click="activeView = 'list'">List</div>
+      <div class="tab" :class="{ active: activeView === 'topology' }" @click="activeView = 'topology'">Topology</div>
     </div>
 
     <!-- Empty State -->
@@ -210,7 +214,7 @@ async function handleImport(event: Event) {
     </EmptyState>
 
     <!-- Environment Grid -->
-    <div v-else class="env-grid">
+    <div v-else-if="activeView === 'list'" class="env-grid">
       <div
         v-for="env in store.environments"
         :key="env.id"
@@ -285,6 +289,17 @@ async function handleImport(event: Event) {
         <div class="env-card-new-content">
           <div class="env-card-new-icon">+</div>
           <div class="env-card-new-text">New environment</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Topology placeholder -->
+    <div v-else-if="activeView === 'topology'" class="env-grid">
+      <div class="env-card" style="grid-column: 1 / -1; min-height: 200px; display: flex; align-items: center; justify-content: center;">
+        <div style="text-align: center; color: var(--text-muted);">
+          <div style="font-size: 32px; margin-bottom: 12px;">⛁</div>
+          <div style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">Topology View</div>
+          <div style="font-size: 12px;">Coming soon — network topology visualization</div>
         </div>
       </div>
     </div>
@@ -551,6 +566,7 @@ async function handleImport(event: Event) {
   display: flex;
   gap: 6px;
   margin-top: 8px;
+  padding: 0 16px;
 }
 .env-proto-pico {
   width: 18px;
