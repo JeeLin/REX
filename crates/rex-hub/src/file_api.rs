@@ -202,6 +202,11 @@ async fn connect(
         return (StatusCode::OK, Json(ConnectResponse { session_id })).into_response();
     }
 
+    tracing::info!(action = "FILE_CONNECT", resource_id = %body.resource_id, resource_name = %res.name, protocol = %res.protocol, use_agent = res.use_agent, "file connect request");
+    if !res.config.is_null() {
+        tracing::debug!(action = "FILE_CONNECT", resource_id = %body.resource_id, has_password = res.config.get("password").is_some(), has_private_key = res.config.get("private_key").is_some(), "resource config loaded");
+    }
+
     let conn: Box<dyn FileConnector> = match res.protocol.as_str() {
         "sftp" | "ssh" => {
             let conn = rex_ssh::sftp::SftpConnector::connect_with_config(rex_ssh::SshConfig {
@@ -234,7 +239,8 @@ async fn connect(
             match conn {
                 Ok(c) => Box::new(c),
                 Err(e) => {
-                    return error_response("CONNECTION_FAILED", &e.to_string()).into_response()
+                    tracing::error!(action = "FILE_CONNECT", resource_id = %body.resource_id, resource_name = %res.name, protocol = %res.protocol, error = %e, "SFTP connection failed");
+                    return error_response("CONNECTION_FAILED", &e.to_string()).into_response();
                 }
             }
         }
