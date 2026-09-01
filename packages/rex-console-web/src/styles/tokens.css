@@ -41,6 +41,7 @@
   --warning-soft: rgba(210, 153, 34, 0.14);
 
   --teal: #2DD4BF;            /* 青色 / SIP */
+  --teal-soft: rgba(45, 212, 191, 0.14);
   /* 状态 */
   --st-off: #484f58;         /* 离线/关闭状态 */
 
