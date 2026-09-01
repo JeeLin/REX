@@ -50,6 +50,32 @@ function scrollToSection(key: string) {
   }
 }
 
+// Scroll spy: update activeTab based on scroll position
+import { onBeforeUnmount } from 'vue'
+
+const sectionIds = ['profile', 'appearance', 'terminal', 'security', 'update']
+
+function handleScroll() {
+  const container = contentRef.value
+  if (!container) return
+  const scrollTop = container.scrollTop
+  for (let i = sectionIds.length - 1; i >= 0; i--) {
+    const el = document.getElementById(`settings-${sectionIds[i]}`)
+    if (el && el.offsetTop - 80 <= scrollTop) {
+      activeTab.value = sectionIds[i]!
+      return
+    }
+  }
+  activeTab.value = 'profile'
+}
+
+onMounted(() => {
+  contentRef.value?.addEventListener('scroll', handleScroll, { passive: true })
+})
+onBeforeUnmount(() => {
+  contentRef.value?.removeEventListener('scroll', handleScroll)
+})
+
 // Password change
 const currentPassword = ref('')
 const newPassword = ref('')
@@ -148,7 +174,7 @@ async function saveSettings() {
       <button
         class="settings-nav-item"
         :class="{ active: activeTab === 'profile' }"
-        @click="activeTab = 'profile'"
+        @click="scrollToSection('profile')"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         <span>Profile</span>
@@ -158,7 +184,7 @@ async function saveSettings() {
         :key="tab.key"
         class="settings-nav-item"
         :class="{ 'active': activeTab === tab.key }"
-        @click="activeTab = tab.key"
+        @click="scrollToSection(tab.key)"
       >
         <svg v-if="tab.key === 'appearance'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
         <svg v-else-if="tab.key === 'terminal'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
@@ -171,7 +197,7 @@ async function saveSettings() {
     <!-- Right content area -->
     <div ref="contentRef" class="settings-content">
       <!-- Profile -->
-      <div v-show="activeTab === 'profile'" class="settings-section">
+      <div id="settings-profile" class="settings-section">
         <div class="panel">
           <h3>Profile</h3>
           <p class="panel-desc">Your local operator identity. REX is single-user — this is you.</p>
@@ -208,7 +234,7 @@ async function saveSettings() {
       </div>
 
       <!-- Appearance -->
-      <div v-show="activeTab === 'appearance'" class="settings-section">
+      <div id="settings-appearance" class="settings-section">
         <div class="panel">
           <h3>Appearance</h3>
           <p class="panel-desc">Dark-first, geek aesthetic. Tune the surface to your taste.</p>
@@ -246,6 +272,7 @@ async function saveSettings() {
                 </div>
               </button>
             </div>
+          </div>
           <div class="field">
             <div class="field-label">
               <b>Accent</b>
@@ -271,7 +298,7 @@ async function saveSettings() {
       </div>
 
       <!-- Terminal -->
-      <div v-show="activeTab === 'terminal'" class="settings-section">
+      <div id="settings-terminal" class="settings-section">
         <div class="panel">
           <h3>Terminal</h3>
           <p class="panel-desc">Defaults applied to every new SSH session.</p>
@@ -337,7 +364,7 @@ async function saveSettings() {
       </div>
 
       <!-- Security -->
-      <div v-show="activeTab === 'security'" class="settings-section">
+      <div id="settings-security" class="settings-section">
         <div class="panel">
           <h3>Security</h3>
           <p class="panel-desc">Self-hosted, single-user. Credentials are encrypted at rest with AES-256.</p>
@@ -415,7 +442,7 @@ async function saveSettings() {
       </div>
 
       <!-- Updates -->
-      <div v-show="activeTab === 'update'" class="settings-section">
+      <div id="settings-update" class="settings-section">
         <div class="panel">
           <h3>Updates</h3>
           <p class="panel-desc">Hub and Agent versions must match — no cross-version compatibility.</p>

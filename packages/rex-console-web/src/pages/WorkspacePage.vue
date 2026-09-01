@@ -345,8 +345,8 @@ useKeyboardShortcuts([
   { key: 'B', ctrl: true, shift: true, handler: () => {
     if (activeTab.value) toggleBroadcast(activeTab.value)
   } },
-  // Ctrl+N: 新建连接
-  { key: 'n', ctrl: true, handler: () => { router.push('/resource-new') } },
+  // Ctrl+Shift+N: 新建连接
+  { key: 'n', ctrl: true, shift: true, handler: () => { router.push('/resource-new') } },
   // Alt+6-9: 跳转到第 6-9 个标签
   { key: '6', alt: true, handler: () => { if (tabs.value[5]) { activeTab.value = tabs.value[5].id; setPaneTab(activePaneId.value, tabs.value[5].id) } } },
   { key: '7', alt: true, handler: () => { if (tabs.value[6]) { activeTab.value = tabs.value[6].id; setPaneTab(activePaneId.value, tabs.value[6].id) } } },
