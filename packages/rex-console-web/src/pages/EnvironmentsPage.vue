@@ -566,7 +566,7 @@ async function handleImport(event: Event) {
   display: flex;
   gap: 6px;
   margin-top: 8px;
-  padding: 0 16px;
+  padding: 8px 16px 12px;
 }
 .env-proto-pico {
   width: 18px;
