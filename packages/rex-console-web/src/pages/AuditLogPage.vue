@@ -483,7 +483,6 @@ onMounted(async () => {
       <span class="page-total muted">{{ totalCount.toLocaleString() }} {{ t('auditLog.totalCount', 'total') }}</span>
     </div>
 
-    <!-- Context menu -->
 
     <!-- Context menu -->
     <ContextMenu
@@ -706,7 +705,7 @@ onMounted(async () => {
 }
 
 .otag.agent {
-  background: rgba(45, 212, 191, .14);
+  background: var(--teal-soft);
   color: var(--teal);
 }
 

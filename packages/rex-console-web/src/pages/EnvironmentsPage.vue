@@ -110,7 +110,7 @@ async function confirmDelete() {
 }
 
 const protoIcon: Record<string, string> = {
-  postgresql: 'pg', redis: 'R', sqlite: '◇', s3: '☁', sip: '☎',
+  ssh: '$', sftp: '📁', sql: 'dB', mysql: 'dB', postgresql: 'pg', redis: 'R', sqlite: '◇', s3: '☁', sip: '☎',
 }
 function envIcon(mode: string): string {
   return mode === 'agent' ? '⬡' : '◉'
