@@ -578,7 +578,7 @@ function ctxToggleFavorite() {
   cursor: pointer;
   padding: 0 4px;
   line-height: 1;
-  opacity: 0;
+  opacity: 0.3;
   transition: opacity var(--transition);
 }
 .rp-group:hover .rp-add-btn {
