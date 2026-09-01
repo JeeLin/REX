@@ -93,9 +93,6 @@ function openUserMenu() {
   router.push('/settings')
 }
 
-function openNewResource() {
-  router.push('/environments?create=true')
-}
 </script>
 
 <template>
@@ -174,13 +171,6 @@ function openNewResource() {
         </RouterLink>
       </nav>
 
-      <!-- 新建资源按钮 -->
-      <div class="sidebar-new-resource">
-        <button class="new-resource-btn" @click="openNewResource">
-          <span class="new-resource-plus">＋</span>
-          {{ t('sidebar.newResource', '新建资源') }}
-        </button>
-      </div>
       <!-- 资源栏 -->
       <ResourcePanel v-if="!(fullscreen && isWorkspace)" class="sidebar-resource" @resource-properties="onResourceProperties" />
 
@@ -498,36 +488,6 @@ function openNewResource() {
 }
 
 /* ── New resource button ── */
-.sidebar-new-resource {
-  padding: var(--space-2) var(--space-3);
-}
-.new-resource-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  height: 28px;
-  padding: 0 8px;
-  border-radius: 7px;
-  border: 1px solid var(--border-strong);
-  background: var(--bg-surface);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--transition), border-color var(--transition);
-}
-.new-resource-btn:hover {
-  background: var(--bg-hover);
-  border-color: var(--text-muted);
-}
-.new-resource-plus {
-  color: var(--accent);
-  font-size: 14px;
-  line-height: 1;
-}
-
-/* ── Resource panel ── */
 .sidebar-resource {
   border-top: 1px solid var(--border);
   flex: 1;
