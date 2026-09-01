@@ -796,7 +796,7 @@
     }
   },
   "topbar": {
-    "quickConnect": "Quick connect…",
+    "quickConnect": "Go to workspace…",
     "notifications": "Notifications",
     "refresh": "Refresh data (R)"
   }
