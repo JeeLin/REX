@@ -3,7 +3,17 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
+## [0.72.0] - 2026-09-03
+
+### Added
+- **环境拓扑视图**：在 Environments 页面新增 Topology 标签页，使用 vue-flow 渲染网络拓扑图，展示环境、Agent、资源之间的连接关系
+- **拓扑 API**：新增 `GET /api/environments/topology` 端点，返回图节点（环境/Agent/资源）与边数据
+- **拓扑交互**：节点点击跳转、30 秒自动刷新、缩放/平移/拖拽、图例、迷你地图
+- **拓扑响应式**：桌面/平板/移动端适配
+- **拓扑 i18n**：中英文拓扑相关文案补全
+
 ## [0.71.3] - 2026-09-02
+
 
 ### Fixed
 - **tokens.css**：全局背景色调深（bg-deep #111820, bg-page #1a2233, bg-surface #1e2636, bg-elevated #243040, bg-hover #2a3545, bg-sidebar #141c28, text-muted #808b96）
