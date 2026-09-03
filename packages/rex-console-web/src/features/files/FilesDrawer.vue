@@ -247,7 +247,7 @@ onBeforeUnmount(async () => {
         <Button variant="ghost" size="sm" icon :title="t('filesDrawer.goUp', 'Go up')" @click="goUp">↑</Button>
         <Button variant="ghost" size="sm" icon :title="t('filesDrawer.refresh', 'Refresh')" @click="loadDir">↻</Button>
         <Button variant="ghost" size="sm" icon :title="t('filesDrawer.upload', 'Upload')" @click="upload">⬆</Button>
-        <span class="fd-count muted">{{ entries.length }} items<template v-if="selected.size"> · {{ selected.size }} sel</template></span>
+        <span class="fd-count muted">{{ entries.length }} {{ t('filesDrawer.items', 'items') }}<template v-if="selected.size"> · {{ selected.size }} {{ t('filesDrawer.selected', 'sel') }}</template></span>
       </div>
     </div>
 
@@ -255,7 +255,7 @@ onBeforeUnmount(async () => {
     <div class="fd-list">
       <div v-if="error" class="fd-error">{{ error }}</div>
       <div v-else-if="!connected && loading" class="fd-status muted">{{ t('filesDrawer.connecting', 'Connecting...') }}</div>
-      <div v-else-if="loading" class="fd-status muted">Loading...</div>
+      <div v-else-if="loading" class="fd-status muted">{{ t('filesDrawer.loading', 'Loading...') }}</div>
       <template v-else>
         <div
           v-for="entry in entries" :key="entry.name"
@@ -314,7 +314,7 @@ onBeforeUnmount(async () => {
       <div v-if="ctx.show" class="fd-ctx-overlay" @click="ctx.show = false" @contextmenu.prevent="ctx.show = false" />
       <div v-if="ctx.show" ref="ctxRef" class="fd-ctx" :style="{ top: ctx.y + 'px', left: ctx.x + 'px' }">
         <template v-if="ctx.name">
-          <div class="fd-ctx-item" @click="() => { const e = entries.find(x => x.name === ctx.name); if (e) navigate(e) }">Open</div>
+          <div class="fd-ctx-item" @click="() => { const e = entries.find(x => x.name === ctx.name); if (e) navigate(e) }">{{ t('filesDrawer.open', 'Open') }}</div>
           <div class="fd-ctx-item" @click="ctxRename">{{ t('filesDrawer.rename', 'Rename') }}</div>
           <div v-if="!ctx.isDir" class="fd-ctx-item" @click="() => { const e = entries.find(x => x.name === ctx.name); if (e) download(e); ctx.show = false }">{{ t('filesDrawer.download', 'Download') }}</div>
           <div class="fd-ctx-item" @click="ctxDelete">{{ t('filesDrawer.delete', 'Delete') }}</div>

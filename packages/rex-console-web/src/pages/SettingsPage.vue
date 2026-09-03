@@ -22,6 +22,7 @@ const settings = ref<Settings>({
   terminal_bg_image: 'none',
   session_timeout: 30,
   auto_update: true,
+  audit_logging: true,
 })
 const loading = ref(true)
 const saving = ref(false)
@@ -34,13 +35,33 @@ watch(autoUpdate, (val) => {
   if (!autoUpdateSynced.value) return
   settingsApi.update({ auto_update: val })
 })
-
+const auditLogging = ref(true)
+const auditLoggingSynced = ref(false)
+watch(auditLogging, (val) => {
+  if (!auditLoggingSynced.value) return
+  settingsApi.update({ audit_logging: val })
+})
+// Apply theme to DOM and persist to localStorage
+watch(() => settings.value.theme, (newTheme) => {
+  const root = document.documentElement
+  if (newTheme === 'dark') {
+    delete root.dataset.theme
+  } else if (newTheme === 'system') {
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    if (prefersDark) {
+      delete root.dataset.theme
+    } else {
+      root.dataset.theme = 'light'
+    }
+  } else {
+    root.dataset.theme = newTheme
+  }
+  localStorage.setItem('rex-theme', newTheme)
+})
 const accent = ref('orange')
 const sidebarDensity = ref('comfortable')
 const cursorBlink = ref(true)
 const keepalive = ref(true)
-const encryptSecrets = ref(true)
-const auditLogging = ref(true)
 
 const tabs = [
   { key: 'appearance', icon: '🎨', labelKey: 'settings.appearance' },
@@ -132,6 +153,9 @@ onMounted(async () => {
     // Load auto_update from backend
     autoUpdate.value = remote.auto_update !== false
     autoUpdateSynced.value = true
+    // Load audit_logging from backend
+    auditLogging.value = remote.audit_logging !== false
+    auditLoggingSynced.value = true
     // Check for updates on mount
     await updateStore.checkForUpdate()
   } catch {
@@ -182,7 +206,7 @@ async function saveSettings() {
         @click="scrollToSection('profile')"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        <span>Profile</span>
+        <span>{{ t('settings.profile') }}</span>
       </button>
       <button
         v-for="tab in tabs"
@@ -204,26 +228,26 @@ async function saveSettings() {
       <!-- Profile -->
       <div id="settings-profile" class="settings-section">
         <div class="panel">
-          <h3>Profile</h3>
-          <p class="panel-desc">Your local operator identity. REX is single-user — this is you.</p>
+          <h3>{{ t('settings.profile') }}</h3>
+          <p class="panel-desc">{{ t('settings.profileDesc') }}</p>
           <div class="field">
             <div class="field-label">
-              <b>Display name</b>
-              <span>Shown in the top bar and audit log.</span>
+              <b>{{ t('settings.displayName') }}</b>
+              <span>{{ t('settings.displayNameDesc') }}</span>
             </div>
             <input class="field-input" value="admin" />
           </div>
           <div class="field">
             <div class="field-label">
-              <b>Email</b>
-              <span>Used for deployment notifications.</span>
+              <b>{{ t('settings.email') }}</b>
+              <span>{{ t('settings.emailDesc') }}</span>
             </div>
             <input class="field-input" value="admin@rex.local" />
           </div>
           <div class="field">
             <div class="field-label">
-              <b>Language</b>
-              <span>Interface language.</span>
+              <b>{{ t('settings.language') }}</b>
+              <span>{{ t('settings.languageDesc') }}</span>
             </div>
             <Select
               v-model="settings.language"
@@ -241,18 +265,18 @@ async function saveSettings() {
       <!-- Appearance -->
       <div id="settings-appearance" class="settings-section">
         <div class="panel">
-          <h3>Appearance</h3>
-          <p class="panel-desc">Dark-first, geek aesthetic. Tune the surface to your taste.</p>
+          <h3>{{ t('settings.appearance') }}</h3>
+          <p class="panel-desc">{{ t('settings.appearanceDesc') }}</p>
           <div class="field">
             <div class="field-label">
-              <b>Theme</b>
-              <span>Dark is recommended for long ops sessions.</span>
+              <b>{{ t('settings.theme') }}</b>
+              <span>{{ t('settings.themeDesc') }}</span>
             </div>
             <div class="theme-swatches">
               <button
                 class="swatch"
                 :class="{ 'swatch--on': settings.theme === 'dark' }"
-                title="Dark"
+                :title="t('settings.dark')"
                 @click="settings.theme = 'dark'"
               >
                 <div class="swatch-surface" style="background:#0E1116"></div>
@@ -260,7 +284,7 @@ async function saveSettings() {
               <button
                 class="swatch"
                 :class="{ 'swatch--on': settings.theme === 'light' }"
-                title="Light"
+                :title="t('settings.light')"
                 @click="settings.theme = 'light'"
               >
                 <div class="swatch-surface" style="background:#F8F9FA"></div>
@@ -268,7 +292,7 @@ async function saveSettings() {
               <button
                 class="swatch"
                 :class="{ 'swatch--on': settings.theme === 'system' }"
-                title="System"
+                :title="t('settings.themeSystem')"
                 @click="settings.theme = 'system'"
               >
                 <div class="swatch-surface swatch-sys">
@@ -280,23 +304,23 @@ async function saveSettings() {
           </div>
           <div class="field">
             <div class="field-label">
-              <b>Accent</b>
-              <span>Primary action and selection color.</span>
+              <b>{{ t('settings.accent') }}</b>
+              <span>{{ t('settings.accentDesc') }}</span>
             </div>
-            <div class="seg">
-              <button :class="{ on: accent === 'orange' }" @click="accent = 'orange'">Orange</button>
-              <button :class="{ on: accent === 'blue' }" @click="accent = 'blue'">Blue</button>
-              <button :class="{ on: accent === 'green' }" @click="accent = 'green'">Green</button>
+            <div class="seg" style="opacity:0.5;pointer-events:none" :title="t('settings.comingSoon', 'Coming in a future release')">
+              <button :class="{ on: accent === 'orange' }">{{ t('settings.accentOrange') }}</button>
+              <button :class="{ on: accent === 'blue' }">{{ t('settings.accentBlue') }}</button>
+              <button :class="{ on: accent === 'green' }">{{ t('settings.accentGreen') }}</button>
             </div>
           </div>
           <div class="field">
             <div class="field-label">
-              <b>Sidebar density</b>
-              <span>Compact shows more rows.</span>
+              <b>{{ t('settings.sidebarDensity') }}</b>
+              <span>{{ t('settings.sidebarDensityDesc') }}</span>
             </div>
-            <div class="seg">
-              <button :class="{ on: sidebarDensity === 'comfortable' }" @click="sidebarDensity = 'comfortable'">Comfortable</button>
-              <button :class="{ on: sidebarDensity === 'compact' }" @click="sidebarDensity = 'compact'">Compact</button>
+            <div class="seg" style="opacity:0.5;pointer-events:none" :title="t('settings.comingSoon', 'Coming in a future release')">
+              <button :class="{ on: sidebarDensity === 'comfortable' }">{{ t('settings.sidebarComfortable') }}</button>
+              <button :class="{ on: sidebarDensity === 'compact' }">{{ t('settings.sidebarCompact') }}</button>
             </div>
           </div>
         </div>
@@ -305,12 +329,12 @@ async function saveSettings() {
       <!-- Terminal -->
       <div id="settings-terminal" class="settings-section">
         <div class="panel">
-          <h3>Terminal</h3>
-          <p class="panel-desc">Defaults applied to every new SSH session.</p>
+          <h3>{{ t('settings.terminal') }}</h3>
+          <p class="panel-desc">{{ t('settings.terminalDesc') }}</p>
           <div class="field">
             <div class="field-label">
-              <b>Font</b>
-              <span>Monospace family for the terminal.</span>
+              <b>{{ t('settings.font') }}</b>
+              <span>{{ t('settings.fontDesc') }}</span>
             </div>
             <Select
               v-model="settings.terminal_font"
@@ -324,15 +348,15 @@ async function saveSettings() {
           </div>
           <div class="field">
             <div class="field-label">
-              <b>Font size</b>
-              <span>Size in pixels for the terminal text.</span>
+              <b>{{ t('settings.fontSize') }}</b>
+              <span>{{ t('settings.fontSizeDesc') }}</span>
             </div>
             <input class="field-input" style="min-width:100px" :value="settings.terminal_font_size" @input="settings.terminal_font_size = ($event.target as HTMLInputElement).value" type="number" />
           </div>
           <div class="field">
             <div class="field-label">
-              <b>Terminal theme</b>
-              <span>Color scheme for the terminal emulator.</span>
+              <b>{{ t('settings.terminalTheme') }}</b>
+              <span>{{ t('settings.terminalThemeDesc') }}</span>
             </div>
             <Select
               v-model="settings.terminal_theme"
@@ -346,24 +370,24 @@ async function saveSettings() {
           </div>
           <div class="field">
             <div class="field-label">
-              <b>Background opacity</b>
-              <span>Transparency of the terminal background.</span>
+              <b>{{ t('settings.bgOpacityLabel') }}</b>
+              <span>{{ t('settings.bgOpacityDesc') }}</span>
             </div>
             <input class="field-input" style="min-width:100px" :value="settings.terminal_opacity" @input="settings.terminal_opacity = Number(($event.target as HTMLInputElement).value)" type="number" />
           </div>
-          <div class="field">
+          <div class="field" style="opacity:0.5;pointer-events:none" :title="t('settings.comingSoon', 'Coming in a future release')">
             <div class="field-label">
-              <b>Cursor blink</b>
-              <span>Animate the terminal cursor.</span>
+              <b>{{ t('settings.cursorBlink') }}</b>
+              <span>{{ t('settings.cursorBlinkDesc') }}</span>
             </div>
-            <Switch v-model="cursorBlink" />
+            <Switch :model-value="cursorBlink" disabled />
           </div>
-          <div class="field">
+          <div class="field" style="opacity:0.5;pointer-events:none" :title="t('settings.comingSoon', 'Coming in a future release')">
             <div class="field-label">
-              <b>Keep-alive</b>
-              <span>Send heartbeat every 30s.</span>
+              <b>{{ t('settings.keepAlive') }}</b>
+              <span>{{ t('settings.keepAliveDesc') }}</span>
             </div>
-            <Switch v-model="keepalive" />
+            <Switch :model-value="keepalive" disabled />
           </div>
         </div>
       </div>
@@ -371,44 +395,43 @@ async function saveSettings() {
       <!-- Security -->
       <div id="settings-security" class="settings-section">
         <div class="panel">
-          <h3>Security</h3>
-          <p class="panel-desc">Self-hosted, single-user. Credentials are encrypted at rest with AES-256.</p>
+          <h3>{{ t('settings.security') }}</h3>
+          <p class="panel-desc">{{ t('settings.securityDesc') }}</p>
           <div class="field">
             <div class="field-label">
-              <b>Session timeout</b>
-              <span>Auto-lock after inactivity.</span>
+              <b>{{ t('settings.sessionTimeout') }}</b>
+              <span>{{ t('settings.sessionTimeoutDesc') }}</span>
             </div>
             <Select
               v-model.number="settings.session_timeout"
               :options="[
-                { label: `15 ${t('settings.minutes')}`, value: 15 },
-                { label: `30 ${t('settings.minutes')}`, value: 30 },
-                { label: `60 ${t('settings.minutes')}`, value: 60 },
-                { label: `120 ${t('settings.minutes')}`, value: 120 },
+                { label: `30 min`, value: 30 },
+                { label: `1 h`, value: 60 },
+                { label: `Never`, value: 0 },
               ]"
               class="field-select"
             />
           </div>
           <div class="field">
             <div class="field-label">
-              <b>Encrypt stored secrets</b>
-              <span>Resource passwords &amp; keys.</span>
+              <b>{{ t('settings.encryptSecrets') }}</b>
+              <span>{{ t('settings.encryptSecretsDesc') }}</span>
             </div>
-            <Switch v-model="encryptSecrets" />
+            <Badge tone="success"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;vertical-align:-2px"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>{{ t('settings.alwaysOn') }}</Badge>
           </div>
           <div class="field">
             <div class="field-label">
-              <b>Audit logging</b>
-              <span>Record every operation.</span>
+              <b>{{ t('settings.auditLogging') }}</b>
+              <span>{{ t('settings.auditLoggingDesc') }}</span>
             </div>
-            <Switch v-model="auditLogging" />
+            <Switch v-model="auditLogging" size="sm" />
           </div>
         </div>
 
         <!-- Password Change -->
         <div class="panel">
-          <h3>Password</h3>
-          <p class="panel-desc">Change the local admin password. Requires current password.</p>
+          <h3>{{ t('settings.password') }}</h3>
+          <p class="panel-desc">{{ t('settings.passwordDesc') }}</p>
           <div class="field">
             <div class="field-label">
               <b>{{ t('settings.currentPassword') }}</b>
@@ -449,26 +472,26 @@ async function saveSettings() {
       <!-- Updates -->
       <div id="settings-update" class="settings-section">
         <div class="panel">
-          <h3>Updates</h3>
-          <p class="panel-desc">Hub and Agent versions must match — no cross-version compatibility.</p>
+          <h3>{{ t('settings.updates') }}</h3>
+          <p class="panel-desc">{{ t('settings.updatesDesc') }}</p>
           <div class="field">
             <div class="field-label">
-              <b>Hub auto-check</b>
-              <span>Notify on new Hub releases.</span>
+              <b>{{ t('settings.hubAutoCheck') }}</b>
+              <span>{{ t('settings.hubAutoCheckDesc') }}</span>
             </div>
             <Switch v-model="autoUpdate" size="sm" />
           </div>
           <div class="field">
             <div class="field-label">
-              <b>Current version</b>
+              <b>{{ t('settings.currentVersion') }}</b>
               <span>rex-hub {{ updateStore.currentVersion }}</span>
             </div>
-            <Badge v-if="!updateStore.hasUpdate" tone="success">up to date</Badge>
-            <Badge v-else tone="warning">update available</Badge>
+            <Badge v-if="!updateStore.hasUpdate" tone="success">{{ t('settings.upToDate') }}</Badge>
+            <Badge v-else tone="warning">{{ t('settings.updateAvailable') }}</Badge>
           </div>
           <div v-if="updateStore.updateLoading" class="field">
             <div class="field-label">
-              <b>Checking</b>
+              <b>{{ t('settings.checking') }}</b>
               <span>{{ updateStore.updateStatusText }}</span>
             </div>
             <div class="update-progress">
@@ -479,7 +502,7 @@ async function saveSettings() {
           </div>
           <div v-if="updateStore.hasUpdate" class="field">
             <div class="field-label">
-              <b>Latest version</b>
+              <b>{{ t('settings.latestVersion') }}</b>
               <span>{{ updateStore.latestVersion }}</span>
             </div>
             <Button
@@ -493,7 +516,7 @@ async function saveSettings() {
           </div>
           <div v-if="updateStore.updateError" class="field">
             <div class="field-label">
-              <b>Error</b>
+              <b>{{ t('settings.error') }}</b>
               <span>{{ updateStore.updateError }}</span>
             </div>
             <Button variant="secondary" size="sm" @click="updateStore.rollbackUpdate">
@@ -502,8 +525,8 @@ async function saveSettings() {
           </div>
           <div class="field">
             <div class="field-label">
-              <b>Check now</b>
-              <span>Manually check for Hub / Agent updates.</span>
+              <b>{{ t('settings.checkNow') }}</b>
+              <span>{{ t('settings.checkNowDesc') }}</span>
             </div>
             <Button
               variant="primary"
@@ -511,7 +534,7 @@ async function saveSettings() {
               :loading="updateStore.updateLoading"
               @click="updateStore.checkForUpdate()"
             >
-              Check for updates
+              {{ t('settings.checkForUpdates') }}
             </Button>
           </div>
         </div>
@@ -582,7 +605,7 @@ async function saveSettings() {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  padding: var(--space-5);
+  padding: 0;
   overflow-y: auto;
 }
 
@@ -650,7 +673,7 @@ async function saveSettings() {
   padding: 0 12px;
   border-radius: 7px;
   border: 1px solid var(--border-strong);
-  background: var(--bg-deep);
+  background: var(--bg-surface);
   color: var(--text-primary);
   font: inherit;
   font-size: 13px;
@@ -667,13 +690,25 @@ async function saveSettings() {
   min-width: 220px;
 }
 
+/* Right-side controls alignment */
+.field > :deep(.field-select),
+.field > :deep(.field-input),
+.field > :deep(.switch),
+.field > .seg,
+.field > .theme-swatches,
+.field > .field-actions,
+.field > .update-progress,
+.field > .badge {
+  margin-left: auto;
+}
+
 .theme-swatches {
   display: flex;
   gap: 10px;
 }
 .swatch {
-  width: 44px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   border-radius: 8px;
   border: 2px solid var(--border);
   background: transparent;
@@ -749,16 +784,6 @@ async function saveSettings() {
 /* Save bar */
 .save-bar {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-  padding: var(--space-4);
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  position: sticky;
-  bottom: 0;
 }
 
 .save-message {

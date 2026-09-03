@@ -40,7 +40,6 @@ const bottomNav = [
 
 const fullscreen = ref(false)
 const mobileMenuOpen = ref(false)
-const searchQuery = ref('')
 
 
 const isWorkspace = computed(() => route.path === '/workspace')
@@ -69,7 +68,6 @@ const currentTitle = computed(() => {
   const match = [...mainNav, ...bottomNav].find((n) => route.path.startsWith(n.to))
   return match ? t(match.key) : 'REX'
 })
-const currentUser = computed(() => 'R')
 
 function toggleTheme() {
   const current = localStorage.getItem('rex-theme') || 'dark'
@@ -84,13 +82,6 @@ function toggleLanguage() {
 
 function openQuickConnect() {
   router.push('/workspace')
-}
-function refreshAllData() {
-  window.location.reload()
-}
-
-function openUserMenu() {
-  router.push('/settings')
 }
 
 </script>
@@ -117,24 +108,6 @@ function openUserMenu() {
           <button class="brand-btn" :aria-label="t('language.toggle', 'Language')" @click="toggleLanguage">
             {{ locale === 'zh' ? '中' : 'EN' }}
           </button>
-        </div>
-      </div>
-
-      <!-- 搜索框 -->
-      <div class="sidebar-search">
-        <div class="search-box" @click="($refs.searchInput as HTMLInputElement)?.focus()">
-          <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
-          </svg>
-          <input
-            ref="searchInput"
-            v-model="searchQuery"
-            type="text"
-            class="search-input mono"
-            :aria-label="t('common.search', 'Search')"
-            :placeholder="t('sidebar.searchPlaceholder', 'Search resources…')"
-          />
-          <kbd class="search-kbd">Ctrl K</kbd>
         </div>
       </div>
 
@@ -221,25 +194,12 @@ function openUserMenu() {
 
         <!-- 右侧按钮 + 头像 -->
         <div class="topbar-actions">
-          <button class="topbar-icon-btn" :aria-label="t('topbar.notifications', 'Notifications')" :title="t('topbar.notifications', 'Notifications')">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>
-            </svg>
-          </button>
-          <button class="topbar-icon-btn" :aria-label="t('topbar.refresh', 'Refresh data')" :title="t('topbar.refresh', 'Refresh data (R)')" @click="refreshAllData">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>
-            </svg>
-          </button>
           <button v-if="isWorkspace" class="topbar-icon-btn" :aria-label="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" :title="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" @click="fullscreen = !fullscreen">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline v-if="!fullscreen" points="15 3 21 3 21 9"/><polyline v-if="!fullscreen" points="9 21 3 21 3 15"/><line v-if="!fullscreen" x1="21" y1="3" x2="14" y2="10"/><line v-if="!fullscreen" x1="3" y1="21" x2="10" y2="14"/>
               <polyline v-if="fullscreen" points="14 14 4 14 4 4"/><polyline v-if="fullscreen" points="10 10 20 10 20 20"/><line v-if="fullscreen" x1="4" y1="14" x2="10" y2="10"/><line v-if="fullscreen" x1="20" y1="10" x2="14" y2="14"/>
             </svg>
           </button>
-          <div class="topbar-avatar" :title="currentUser" @click="openUserMenu" style="cursor:pointer">
-            {{ currentUser.charAt(0).toUpperCase() }}
-          </div>
           <button class="topbar-icon-btn" :aria-label="t('session.logout', 'Logout')" :title="t('session.logout', 'Logout')" @click="sessionLogout" style="color:var(--danger)">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
@@ -405,53 +365,6 @@ function openUserMenu() {
 }
 
 /* ── Search ── */
-.sidebar-search {
-  padding: var(--space-2) var(--space-3);
-}
-.search-box {
-  display: flex;
-  align-items: center;
-  height: 34px;
-  padding: 0 var(--space-2) 0 var(--space-3);
-  background: var(--bg-page);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  cursor: text;
-  transition: border-color var(--transition);
-}
-.search-box:focus-within {
-  border-color: var(--accent);
-}
-.search-icon {
-  color: var(--text-muted);
-  flex-shrink: 0;
-  margin-right: var(--space-2);
-}
-.search-input {
-  flex: 1;
-  height: 100%;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: var(--text-primary);
-  font-size: 12.5px;
-}
-.search-input::placeholder {
-  color: var(--text-muted);
-}
-.search-kbd {
-  font-size: 10px;
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 1px 5px;
-  line-height: 1.4;
-  flex-shrink: 0;
-  pointer-events: none;
-}
-
 /* ── Nav ── */
 .sidebar-nav {
   padding: var(--space-2) var(--space-3);
@@ -462,7 +375,7 @@ function openUserMenu() {
 .nav-item {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 10px;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius);
   color: var(--text-secondary);
@@ -553,7 +466,7 @@ function openUserMenu() {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: var(--text-sm);
+  font-size: 13.5px;
 }
 .breadcrumb-root {
   color: var(--text-muted);
@@ -608,7 +521,6 @@ function openUserMenu() {
   width: 32px;
   height: 32px;
   border-radius: var(--radius);
-  border: 1px solid var(--border);
   background: transparent;
   color: var(--text-secondary);
   display: flex;
@@ -620,20 +532,6 @@ function openUserMenu() {
 .topbar-icon-btn:hover {
   color: var(--accent);
   background: var(--bg-hover);
-}
-.topbar-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  flex-shrink: 0;
 }
 
 .content {

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { dashboardApi, type DashboardStats } from '@/api/dashboard'
 import { useEnvironmentsStore } from '@/stores/environments'
+import { useWorkspaceStore } from '@/stores/workspace'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { Resource } from '@/api/resources'
 import { agentStatus } from '@/utils/status'
@@ -11,6 +12,7 @@ import { agentStatus } from '@/utils/status'
 const { t } = useI18n()
 const router = useRouter()
 const store = useEnvironmentsStore()
+const wsStore = useWorkspaceStore()
 
 const stats = ref<DashboardStats>({ environment_count: 0, resource_count: 0, online_agents: 0 })
 const recentResources = ref<Resource[]>([])
@@ -25,11 +27,28 @@ onMounted(async () => {
     ])
     stats.value = s
     recentResources.value = recent.slice(0, 6)
+    // Fetch resources for each env to populate protocol icons
+    // Fetch resources for each env to populate protocol icons (wait for all)
+    await Promise.all(store.environments.map(env => store.fetchResources(env.id).catch(() => {})))
   } catch {
     // ignore
   } finally {
     loading.value = false
   }
+})
+
+interface ProtoCount { proto: string; count: number }
+const envProtocols = computed(() => {
+  const map = new Map<string, ProtoCount[]>()
+  for (const env of store.environments) {
+    const resources = store.envResources.get(env.id) || []
+    const counts = new Map<string, number>()
+    for (const r of resources) {
+      counts.set(r.protocol, (counts.get(r.protocol) || 0) + 1)
+    }
+    map.set(env.id, [...counts.entries()].map(([proto, count]) => ({ proto, count })))
+  }
+  return map
 })
 
 const protoIcon: Record<string, string> = {
@@ -45,36 +64,36 @@ const protoLabel: Record<string, string> = {
 const statCards = computed(() => [
   {
     key: 'environments',
-    label: 'Environments',
+    label: t('dashboard.environments', 'Environments'),
     icon: 'layers',
     colorClass: 'brand',
     value: stats.value.environment_count,
-    trend: `${store.environments.filter(e => e.connection_mode === 'agent').length} via agent tunnel`,
+    trend: t('dashboard.statViaAgentTunnel', { count: store.environments.filter(e => e.connection_mode === 'agent').length }),
   },
   {
     key: 'resources',
-    label: 'Resources',
+    label: t('dashboard.resources', 'Resources'),
     icon: 'grid',
     colorClass: 'green',
     value: stats.value.resource_count,
-    trend: '8 protocols',
+    trend: t('dashboard.statProtocols', '8 protocols'),
   },
   {
     key: 'agentsOnline',
-    label: 'Agents online',
+    label: t('dashboard.agentsOnline', 'Agents online'),
     icon: 'shield',
     colorClass: 'blue',
     value: stats.value.online_agents,
-    trend: 'all environments covered',
+    trend: t('dashboard.statAllCovered', 'all environments covered'),
     valueSuffix: `/${Math.max(stats.value.online_agents, 1)}`,
   },
   {
     key: 'todayOps',
-    label: 'Operations today',
+    label: t('dashboard.statOperationsToday', 'Operations today'),
     icon: 'activity',
     colorClass: 'teal',
     value: recentResources.value.length,
-    trend: '▲ 12% vs yesterday',
+    trend: t('dashboard.statTrendUp', '▲ 12% vs yesterday'),
     trendClass: 'stat-trend--up',
   },
 ])
@@ -82,11 +101,11 @@ const statCards = computed(() => [
 const timeAgo = (dateStr: string): string => {
   const diff = Date.now() - new Date(dateStr).getTime()
   const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
+  if (mins < 1) return t('dashboard.timeJustNow')
+  if (mins < 60) return t('dashboard.timeMinutesAgo', { n: mins })
   const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  return `${Math.floor(hrs / 24)}d ago`
+  if (hrs < 24) return t('dashboard.timeHoursAgo', { n: hrs })
+  return t('dashboard.timeDaysAgo', { n: Math.floor(hrs / 24) })
 }
 </script>
 
@@ -94,8 +113,8 @@ const timeAgo = (dateStr: string): string => {
   <div class="dashboard">
     <!-- Header -->
     <header class="page-header">
-      <h1 class="page-title">Dashboard</h1>
-      <p class="page-sub">System overview across all environments and agents.</p>
+      <h1 class="page-title">{{ t('dashboard.title', 'Dashboard') }}</h1>
+      <p class="page-sub">{{ t('dashboard.subtitle', 'System overview across all environments and agents.') }}</p>
     </header>
 
     <!-- Loading -->
@@ -135,15 +154,15 @@ const timeAgo = (dateStr: string): string => {
         <!-- Quick Connect Panel -->
         <div class="panel">
           <div class="panel-head">
-            <h3>Quick connect</h3>
-            <span class="panel-count muted">recent · {{ recentResources.length }}</span>
+            <h3>{{ t('dashboard.quickConnect', 'Quick connect') }}</h3>
+            <span class="panel-count muted">{{ t('dashboard.recentCount', { count: recentResources.length }) }}</span>
           </div>
           <div v-if="recentResources.length" class="quick-grid">
             <button
               v-for="res in recentResources"
               :key="res.id"
               class="quick-card"
-              @click="router.push(`/workspace?resource=${res.id}`)"
+              @click="wsStore.openResource({ id: res.id, name: res.name, protocol: res.protocol, environmentId: res.environment_id || '' }); router.push('/workspace')"
             >
               <span class="quick-pico" :class="`pico--${res.protocol}`">
                 {{ protoIcon[res.protocol] || '?' }}
@@ -154,23 +173,23 @@ const timeAgo = (dateStr: string): string => {
               </div>
             </button>
           </div>
-          <div v-else class="panel-empty muted">No recent connections</div>
+          <div v-else class="panel-empty muted">{{ t('dashboard.noRecentConnections', 'No recent connections') }}</div>
         </div>
 
         <!-- Agent Health Panel -->
         <div class="panel">
           <div class="panel-head">
-            <h3>Agent health</h3>
+            <h3>{{ t('dashboard.agentHealth', 'Agent health') }}</h3>
             <StatusDot :status="store.environments.some(e => e.agent_status === 'online') ? 'online' : 'offline'" />
           </div>
           <div class="agent-table-wrap">
             <table v-if="store.environments.length" class="agent-table">
               <thead>
                 <tr>
-                  <th>Agent</th>
-                  <th>Env</th>
-                  <th>Latency</th>
-                  <th>State</th>
+                  <th>{{ t('dashboard.tableAgent', 'Agent') }}</th>
+                  <th>{{ t('dashboard.tableEnv', 'Env') }}</th>
+                  <th>{{ t('dashboard.tableLatency', 'Latency') }}</th>
+                  <th>{{ t('dashboard.tableState', 'State') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -186,13 +205,13 @@ const timeAgo = (dateStr: string): string => {
                 </tr>
               </tbody>
             </table>
-            <div v-else class="panel-empty muted">No environments</div>
+            <div v-else class="panel-empty muted">{{ t('dashboard.noEnvironments', 'No environments') }}</div>
           </div>
         </div>
       </div>
 
       <!-- Environments Section -->
-      <h3 class="section-heading">Environments</h3>
+      <h3 class="section-heading">{{ t('dashboard.environmentsSection', 'Environments') }}</h3>
       <div class="env-grid">
         <button
           v-for="env in store.environments"
@@ -211,16 +230,20 @@ const timeAgo = (dateStr: string): string => {
           <div class="env-footer">
             <span class="env-chip">
               <StatusDot :status="agentStatus(env.agent_status)" />
-              {{ env.resource_count }} res
+              {{ t('dashboard.resCount', { count: env.resource_count }) }}
             </span>
             <span class="env-chip">
-              <StatusDot :status="agentStatus(env.agent_status)" />
-              {{ env.resource_count }} res
-            </span>
-            <span class="env-chip">
-              ⟡ {{ env.connection_mode === 'agent' ? '1 agent' : 'direct' }}
+              ⟡ {{ env.connection_mode === 'agent' ? t('dashboard.agentMode', '1 agent') : t('dashboard.directMode', 'direct') }}
             </span>
             <span class="env-chip muted">{{ timeAgo(env.updated_at) }}</span>
+          </div>
+          <div v-if="envProtocols.get(env.id)?.length" class="env-card-protocols">
+            <span
+              v-for="item in envProtocols.get(env.id)"
+              :key="item.proto"
+              class="env-proto-pico"
+              :class="`pico--${item.proto}`"
+            >{{ protoIcon[item.proto] || '?' }}<span v-if="item.count > 1" class="env-proto-count">×{{ item.count }}</span></span>
           </div>
         </button>
 
@@ -228,7 +251,7 @@ const timeAgo = (dateStr: string): string => {
         <button class="env-card env-card--new" @click="router.push('/environments')">
           <div class="env-card-new-inner">
             <div class="env-new-plus">+</div>
-            <div>New environment</div>
+            <div>{{ t('dashboard.newEnvironment', 'New environment') }}</div>
           </div>
         </button>
       </div>
@@ -249,7 +272,7 @@ const timeAgo = (dateStr: string): string => {
   margin-bottom: var(--space-6);
 }
 .page-title {
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text-primary);
@@ -312,7 +335,7 @@ const timeAgo = (dateStr: string): string => {
 .stat-icon--brand { background: var(--accent-soft); color: var(--accent); }
 .stat-icon--green { background: var(--success-soft); color: var(--success); }
 .stat-icon--blue { background: var(--info-soft); color: var(--info); }
-.stat-icon--teal { background: rgba(45, 212, 191, 0.14); color: var(--teal); }
+.stat-icon--teal { background: rgba(45, 212, 191, 1); color: var(--teal); }
 .stat-value {
   font-family: var(--font-mono);
   font-size: 30px;
@@ -428,13 +451,13 @@ const timeAgo = (dateStr: string): string => {
   flex: none;
   background: var(--bg-hover);
 }
-.pico--ssh { background: var(--success-soft); color: var(--proto-ssh); }
-.pico--sftp { background: var(--purple-soft); color: var(--proto-sftp); }
-.pico--mysql, .pico--sql { background: var(--info-soft); color: var(--proto-mysql); }
-.pico--postgresql { background: var(--purple-soft); color: var(--proto-postgresql); }
-.pico--redis { background: var(--danger-soft); color: var(--proto-redis); }
-.pico--sqlite { background: var(--warning-soft); color: var(--proto-sqlite); }
-.pico--s3 { background: var(--accent-soft); color: var(--proto-s3); }
+.pico--ssh { background: var(--success-soft); color: var(--success); }
+.pico--sftp { background: rgba(139, 92, 246, 0.15); color: var(--purple); }
+.pico--mysql, .pico--sql { background: var(--info-soft); color: var(--info); }
+.pico--postgresql { background: rgba(139, 92, 246, 0.15); color: var(--purple); }
+.pico--redis { background: var(--danger-soft); color: var(--danger); }
+.pico--sqlite { background: var(--warning-soft); color: var(--warning); }
+.pico--s3 { background: var(--accent-soft); color: var(--accent); }
 .quick-meta b {
   display: block;
   font-size: var(--text-base);
@@ -469,7 +492,7 @@ const timeAgo = (dateStr: string): string => {
 .agent-table td {
   padding: 11px 16px;
   border-bottom: 1px solid var(--border);
-  color: var(--text-secondary);
+  color: var(--text-muted);
 }
 .agent-table tbody tr:last-child td {
   border-bottom: 0;
@@ -568,9 +591,6 @@ const timeAgo = (dateStr: string): string => {
   font-size: 12.5px;
   min-height: 34px;
   margin-bottom: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .env-footer {
   display: flex;
@@ -580,6 +600,7 @@ const timeAgo = (dateStr: string): string => {
   border-top: 1px solid var(--border);
   font-size: var(--text-xs);
   color: var(--text-muted);
+  opacity: 0.7;
   font-family: var(--font-mono);
 }
 .env-chip {
@@ -588,6 +609,34 @@ const timeAgo = (dateStr: string): string => {
   gap: 5px;
 }
 
+.env-card-protocols {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.env-proto-pico {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--on-ink);
+  background: var(--bg-elevated);
+}
+.env-proto-pico.pico--ssh { background: var(--success); }
+.env-proto-pico.pico--sftp { background: var(--purple); }
+.env-proto-count { font-size: 10px; margin-left: 2px; opacity: 0.9; font-weight: 500; }
+.env-proto-pico.pico--sql,
+.env-proto-pico.pico--mysql { background: var(--info); }
+.env-proto-pico.pico--postgresql { background: var(--purple); }
+.env-proto-pico.pico--redis { background: var(--danger); }
+.env-proto-pico.pico--sqlite { background: var(--warning); }
+.env-proto-pico.pico--s3 { background: var(--brand); }
 /* ========== New Environment Card ========== */
 .env-card--new {
   border-style: dashed;

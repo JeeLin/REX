@@ -12,10 +12,12 @@ const stored = localStorage.getItem('rex-theme') || 'dark'
 document.documentElement.dataset.theme = stored === 'dark' ? undefined : stored
 
 onMounted(async () => {
-  // 从后端同步最新设置（覆盖 localStorage）
+  // 从后端同步最新设置（仅作为 localStorage 缺失时的回退，不覆盖用户前端偏好）
   // 仅在已登录时同步，避免 401 触发弹窗
   const hasToken = localStorage.getItem('rex-token') || sessionStorage.getItem('rex-token')
   if (!hasToken) return
+  // 如果 localStorage 已有主题设置，信任前端偏好，不再覆盖
+  if (localStorage.getItem('rex-theme')) return
   try {
     const { settingsApi } = await import('@/api/settings')
     const settings = await settingsApi.get()

@@ -10,6 +10,7 @@ export interface Settings {
   terminal_bg_image: string
   session_timeout: number
   auto_update: boolean
+  audit_logging: boolean
 }
 
 export interface UpdateInfo {
@@ -36,6 +37,9 @@ export const settingsApi = {
     }
     if ('auto_update' in apiData && typeof apiData.auto_update === 'boolean') {
       apiData.auto_update = String(apiData.auto_update)
+    }
+    if ('audit_logging' in apiData && typeof apiData.audit_logging === 'boolean') {
+      apiData.audit_logging = String(apiData.audit_logging)
     }
     if ('terminal_font_size' in apiData && typeof apiData.terminal_font_size === 'number') {
       apiData.terminal_font_size = String(apiData.terminal_font_size)
