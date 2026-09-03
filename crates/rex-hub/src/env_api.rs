@@ -4,7 +4,9 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
 
-use crate::models::{EnvironmentDetail, NewEnvironment, TopoEdge, TopoNode, Topology, UpdateEnvironment};
+use crate::models::{
+    EnvironmentDetail, NewEnvironment, TopoEdge, TopoNode, Topology, UpdateEnvironment,
+};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 
@@ -365,7 +367,10 @@ async fn get_topology(State(state): State<AppState>) -> ApiResult<Topology> {
                 id: format!("env-{}", env_id),
                 node_type: "environment".into(),
                 label: env_detail.environment.name.clone(),
-                status: env_detail.agent_status.clone().unwrap_or_else(|| "offline".into()),
+                status: env_detail
+                    .agent_status
+                    .clone()
+                    .unwrap_or_else(|| "offline".into()),
                 protocol: None,
                 metadata: Some(serde_json::json!({
                     "connection_mode": env_detail.environment.connection_mode,
