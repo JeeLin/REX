@@ -50,4 +50,5 @@ export const environmentsApi = {
   delete: (id: string) => api.del<{ ok: boolean }>(`/environments/${id}`),
   export: () => api.get<ExportData>('/environments/export'),
   import: (data: ExportData) => api.post<ImportResult>('/environments/import', data),
+  topology: () => api.get<{ nodes: any[]; edges: any[] }>('/environments/topology'),
 }
