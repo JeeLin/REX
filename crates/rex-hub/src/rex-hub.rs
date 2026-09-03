@@ -35,7 +35,7 @@ use rex_common::cli::{self, RunOpts, ServiceKind};
 
 use axum::routing::get_service;
 use axum::Router;
-use tower_http::services::{ServeDir, ServeFile};
+use rex_hub::static_embed::EmbeddedStatic;
 
 fn main() {
     let cli = cli::parse();
@@ -148,8 +148,6 @@ fn worker_main() {
             .parse()
             .expect("REX_PORT must be a valid u16");
 
-        let static_dir = resolve_static_dir();
-
         let data_dir = std::env::var("REX_DATA_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|_| default_data_dir());
@@ -186,10 +184,10 @@ fn worker_main() {
             data_dir: data_dir.clone(),
         };
 
-        tracing::info!("serving frontend from: {}", static_dir.display());
+        tracing::info!(name = "REX Hub", status = "serving embedded frontend");
 
         let tls_config = rex_hub::tls::TlsConfig::from_env();
-        let app = build_router(state, static_dir);
+        let app = build_router(state);
         let addr = format!("0.0.0.0:{port}");
         let listener = tokio::net::TcpListener::bind(&addr)
             .await
@@ -286,9 +284,8 @@ async fn health_check() -> axum::Json<serde_json::Value> {
     }))
 }
 
-fn build_router(state: AppState, static_dir: PathBuf) -> Router {
-    let index_path = static_dir.join("index.html");
-    let serve_dir = ServeDir::new(&static_dir).not_found_service(ServeFile::new(index_path));
+fn build_router(state: AppState) -> Router {
+    let embedded = EmbeddedStatic::new("/");
 
     let public_routes = Router::new()
         .route("/api/health", axum::routing::get(health_check))
@@ -370,39 +367,13 @@ fn build_router(state: AppState, static_dir: PathBuf) -> Router {
         .with_state(state)
         .layer(axum::middleware::from_fn(middleware::security_headers))
         .layer(axum::middleware::from_fn(middleware::csrf_protection))
-        .fallback(get_service(serve_dir).handle_error(|err| async move {
-            tracing::error!(error = %err, "static file serve error");
-            (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal Server Error",
-            )
-        }))
-}
-
-fn resolve_static_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("REX_STATIC_DIR") {
-        return PathBuf::from(dir);
-    }
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(exe_dir) = exe.parent() {
-            let candidate = exe_dir.join("static");
-            if candidate.exists() {
-                return candidate;
-            }
-        }
-    }
-    let dev_dist = std::env::current_dir()
-        .ok()
-        .map(|cwd| {
-            if cwd.ends_with("crates/rex-hub") {
-                cwd.join("../../packages/rex-console-web/dist")
-            } else {
-                cwd.join("packages/rex-console-web/dist")
-            }
-        })
-        .unwrap_or_else(|| PathBuf::from("packages/rex-console-web/dist"));
-    if dev_dist.exists() {
-        return dev_dist;
-    }
-    PathBuf::from("dist")
+        .fallback(
+            get_service(embedded).handle_error(|err: std::convert::Infallible| async move {
+                tracing::error!(error = %err, "static file serve error");
+                (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal Server Error",
+                )
+            }),
+        )
 }
