@@ -143,6 +143,7 @@ rex-agent = 所有 crate（无前端）
 | **v0.71.1** | 原型对齐修复（patch，修复 v0.71.0 遗留偏差） | — | ✅ 已完成（v0.71.1） |
 | **v0.71.2** | Bugfix & UX 修复（patch，修复 14 个功能缺失和 UX 问题） | — | ✅ 已完成（v0.71.2） |
 | **v0.71.3** | Bugfix & i18n 补全（patch，修复 56 个 bug + 全站 i18n） | — | ✅ 已完成（v0.71.3） |
+| **v0.72.0** | Environments Topology View（minor，vue-flow 拓扑图可视化） | — | ✅ 已完成（v0.72.0） |
 ### M0：项目骨架重建
 
 **核心功能**：清空 `packages/rex-console-web` 与 `crates/*` 源码，按新设计系统重建最小可运行骨架。
@@ -643,7 +644,7 @@ docs/milestones/
 - 🟢 new-resource-btn 没意义 / 环境下加号看不清
 （从 `.dev-flow/BUGS.md` 全部纳入，已在规划时从缺陷池删除）
 
-### v0.72.0：Environments Topology View（新功能）← 新增（下一步）
+### v0.72.0：Environments Topology View（新功能）✅ 已完成（v0.72.0）
 
 **核心功能**：在 Environments 页面的 Topology 标签下，实现网络拓扑可视化视图——以图形化方式展示所有环境、资源、Agent 之间的连接关系，取代当前的 "Coming soon" 占位符。
 
