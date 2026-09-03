@@ -397,7 +397,7 @@ async function resetToken() {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
         Environments
       </router-link>
-      <svg class="breadcrumb-sep" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+      <span class="breadcrumb-sep">/</span>
       <span class="breadcrumb-current">{{ env?.name || '...' }}</span>
     </div>
 
@@ -439,7 +439,7 @@ async function resetToken() {
       </div>
 
       <!-- Agents Section -->
-      <div class="section">
+      <div v-if="env.connection_mode === 'agent'" class="section">
         <div class="section-head">
           <h2 class="section-title">Agents</h2>
           <span class="section-head-spacer"></span>
@@ -527,6 +527,7 @@ async function resetToken() {
             </button>
           </div>
         </div>
+      </div>
     </template>
 
     <!-- Resource Creation Wizard -->
@@ -790,7 +791,7 @@ async function resetToken() {
 }
 
 .detail-head-name {
-  font-size: var(--text-xl);
+  font-size: 22px;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1.3;
@@ -978,7 +979,6 @@ async function resetToken() {
   transition: background var(--transition);
 }
 .resource-tline:hover {
-  background: var(--bg-hover);
   color: var(--text);
 }
 .resource-tline-pico {

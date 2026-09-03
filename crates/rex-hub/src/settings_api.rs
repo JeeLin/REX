@@ -27,9 +27,9 @@ fn default_settings() -> std::collections::HashMap<&'static str, &'static str> {
     m.insert("terminal_font", "JetBrains Mono");
     m.insert("terminal_font_size", "14");
     m.insert("auto_update", "true");
+    m.insert("audit_logging", "true");
     m
 }
-
 // 不应通过 API 暴露的敏感 key
 const SENSITIVE_KEYS: &[&str] = &["jwt_secret", "password_hash"];
 
@@ -42,7 +42,7 @@ async fn get_settings(State(state): State<AppState>) -> ApiResult<serde_json::Va
         for (key, default_val) in &defaults {
             let val = stored.get(*key).map(|s| s.as_str()).unwrap_or(default_val);
             // auto_update 存为 "true"/"false" 字符串，返回为 bool
-            if *key == "auto_update" {
+            if *key == "auto_update" || *key == "audit_logging" {
                 map.insert(key.to_string(), serde_json::Value::Bool(val == "true"));
             } else {
                 map.insert(key.to_string(), serde_json::Value::String(val.to_string()));

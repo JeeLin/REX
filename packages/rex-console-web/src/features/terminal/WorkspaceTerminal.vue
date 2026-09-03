@@ -16,7 +16,7 @@ import { clipboard } from '@/utils/clipboard'
 
 const { t } = useI18n()
 const toast = ref<InstanceType<typeof Toast>>()
-
+let themeObserver: MutationObserver | null = null
 const props = defineProps<{
   tabId: string
   resourceId: string
@@ -508,10 +508,15 @@ onMounted(async () => {
   connectSession()
 
   window.addEventListener('terminal-settings-changed', onTerminalSettingsChanged)
+  // 监听全局主题切换（AppLayout 修改 document.documentElement.dataset.theme）
+  themeObserver = new MutationObserver(() => { applyTheme() })
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
   document.addEventListener('click', hideContextMenu)
 })
 
 onBeforeUnmount(() => {
+  // 清理全局主题观察者
+  if (themeObserver) { themeObserver.disconnect(); themeObserver = null }
   inputBuffer = ''
   stopPing()
   if (reconnectTimer) {

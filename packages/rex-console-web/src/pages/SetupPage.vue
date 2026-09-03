@@ -87,7 +87,7 @@ async function handleSetup() {
 <style scoped>
 /* ========== 整体布局 ========== */
 .setup {
-  min-height: 100%;
+  min-height: 100vh;
   display: grid;
   place-items: center;
   padding: 40px;
@@ -100,7 +100,7 @@ async function handleSetup() {
 .setup-card {
   width: 100%;
   max-width: 380px;
-  padding: var(--space-8);
+  padding: 0;
 }
 
 /* ========== 品牌标识 ========== */
@@ -130,13 +130,14 @@ async function handleSetup() {
 .setup-form {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: 0;
 }
 
 .field {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin-bottom: 14px;
 }
 
 .field-label {
@@ -151,7 +152,7 @@ async function handleSetup() {
   padding: 0 13px;
   border-radius: var(--radius);
   border: 1px solid var(--border-strong);
-  background: var(--bg-page);
+  background: var(--bg-app);
   color: var(--text-primary);
   font: inherit;
   font-size: var(--text-md);

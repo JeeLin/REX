@@ -459,14 +459,13 @@ useKeyboardShortcuts([
     <div class="ws-statusbar mono">
       <span class="ws-seg ws-seg--brand">
         <span class="ws-seg-dot" />
-        workspace
+        {{ t('workspace.statusbar.workspace', 'workspace') }}
       </span>
-      <span class="ws-seg">{{ tabs.length }} resource{{ tabs.length === 1 ? '' : 's' }} open</span>
+      <span class="ws-seg">{{ tabs.length }} {{ t('workspace.statusbar.resourcesOpen', 'resource(s) open') }}</span>
       <span v-if="activeTabInfo?.protocol === 'ssh' && terminalSize" class="ws-seg">{{ terminalSize.cols }}×{{ terminalSize.rows }}</span>
       <span v-if="activeTabInfo?.protocol === 'ssh'" class="ws-seg">{{ activeTabInfo.encoding || 'UTF-8' }}</span>
       <span v-if="activeTabInfo?.broadcast" class="ws-seg ws-broadcast-indicator">📡 {{ t('workspace.broadcastIndicator') }}</span>
       <span class="ws-seg ws-seg--spacer" />
-      <span class="ws-seg ws-seg--agent">⟡ agent: edge-gw · 12 ms</span>
       <span class="ws-seg ws-seg--actions">
         <button class="ws-action-btn" title="Split horizontal" @click="() => splitHorizontal()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="7" height="16" rx="1"/><rect x="14" y="4" width="7" height="16" rx="1"/></svg>
@@ -480,8 +479,8 @@ useKeyboardShortcuts([
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10 4 13l3 3M4 13h11M17 14l3-3-3-3M20 11H9"/></svg>
         </button>
       </span>
-      <span class="ws-seg ws-seg--help" title="F1 help" @click="showShortcuts = !showShortcuts">F1 help</span>
-      <span class="ws-seg ws-seg--help" title="Command palette (Ctrl+K)" @click="showCommandPalette = !showCommandPalette">⌘ 命令面板</span>
+      <span class="ws-seg ws-seg--help" :title="t('workspace.statusbar.f1Help', 'F1 help')" @click="showShortcuts = !showShortcuts">{{ t('workspace.statusbar.f1Help', 'F1 help') }}</span>
+      <span class="ws-seg ws-seg--help" title="Command palette (Ctrl+K)" @click="showCommandPalette = !showCommandPalette">⌘ {{ t('workspace.commandPalette', 'Command palette') }}</span>
     </div>
 
     <!-- Shortcut panel -->
@@ -629,8 +628,8 @@ useKeyboardShortcuts([
 }
 :deep(.splitpanes__splitter) {
   background-color: var(--border);
-  min-width: 3px;
-  min-height: 3px;
+  width: 6px;
+  min-height: 6px;
 }
 :deep(.splitpanes__splitter:hover) {
   background-color: var(--accent);
@@ -648,7 +647,7 @@ useKeyboardShortcuts([
   outline-offset: -2px;
 }
 .ws-pane-header {
-  height: 28px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: space-between;

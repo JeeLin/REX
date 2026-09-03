@@ -2,6 +2,15 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { agentsApi, type Agent, type AuditEntry } from '@/api/agents'
+
+/** Extended agent fields for display (optional, may come from runtime) */
+interface AgentDisplay extends Agent {
+  latency?: number | null
+  uptime?: string | null
+  proxied?: boolean | null
+  update_available?: boolean | null
+  port?: number | null
+}
 import { useEnvironmentsStore } from '@/stores/environments'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
@@ -18,7 +27,7 @@ import { agentStatus } from '@/utils/status'
 const { t } = useI18n()
 const store = useEnvironmentsStore()
 const toast = ref<InstanceType<typeof Toast> | null>(null)
-const agents = ref<Agent[]>([])
+const agents = ref<AgentDisplay[]>([])
 const loading = ref(true)
 const resetModal = ref(false)
 const resetAgentId = ref('')
@@ -57,7 +66,7 @@ async function fetchAgents() {
   loading.value = true
   await store.fetchEnvironments()
   const results = await Promise.allSettled(
-    store.environments.map(env => agentsApi.listByEnv(env.id))
+    store.environments.filter(env => env.connection_mode === 'agent').map(env => agentsApi.listByEnv(env.id))
   )
   agents.value = results
     .filter((r): r is PromiseFulfilledResult<Agent[]> => r.status === 'fulfilled')
@@ -318,7 +327,12 @@ const filteredLogs = computed(() => {
     <!-- Agent 列表 -->
     <div v-if="hasAgents" class="agent-grid">
       <Card v-for="agent in agents" :key="agent.id" class="agent-card">
-        <div class="agent-card-header">
+        <!-- AG1: Header section (agent-h) -->
+        <div class="agent-h">
+          <!-- AG2: Square block agent icon with gradient -->
+          <div class="agent-icon">
+            <span class="agent-icon-letter">{{ (agent.name || '?')[0] }}</span>
+          </div>
           <div class="agent-info">
             <div class="agent-name">
               <StatusDot :status="agentStatus(agent.status)" />
@@ -332,24 +346,49 @@ const filteredLogs = computed(() => {
             {{ agent.status }}
           </Badge>
         </div>
-        <div class="agent-details">
-          <div class="agent-detail">
-            <span class="muted">{{ t('agents.version') }}</span>
-            <span class="mono">{{ agent.version || '—' }}</span>
-          </div>
-          <div class="agent-detail">
-            <span class="muted">{{ t('agents.os') }}</span>
-            <span>{{ agent.os || '—' }}/{{ agent.arch }}</span>
-          </div>
-          <div class="agent-detail">
-            <span class="muted">{{ t('agents.lastSeen') }}</span>
-            <span>{{ agent.last_seen_at ? new Date(agent.last_seen_at).toLocaleString() : '—' }}</span>
+
+        <!-- AG4: Update bar -->
+        <div v-if="agent.update_available" class="agent-update-bar">
+          <span class="agent-update-icon">⬆</span>
+          <span>{{ t('agents.updateAvailable', 'Update available') }}</span>
+        </div>
+
+        <!-- AG1: Body section (agent-b) — AG3: 2×2 metric grid -->
+        <div class="agent-b">
+          <div class="agent-metrics">
+            <div class="agent-metric">
+              <span class="agent-metric-label muted">{{ t('agents.version') }}</span>
+              <span class="agent-metric-value mono">{{ agent.version || '—' }}</span>
+            </div>
+            <div class="agent-metric">
+              <span class="agent-metric-label muted">{{ t('agents.latency', 'Latency') }}</span>
+              <span class="agent-metric-value mono">{{ agent.latency != null ? agent.latency + ' ms' : '—' }}</span>
+            </div>
+            <div class="agent-metric">
+              <span class="agent-metric-label muted">{{ t('agents.uptime', 'Uptime') }}</span>
+              <span class="agent-metric-value mono">{{ agent.uptime || '—' }}</span>
+            </div>
+            <div class="agent-metric">
+              <span class="agent-metric-label muted">{{ t('agents.proxied', 'Proxied') }}</span>
+              <span class="agent-metric-value mono">{{ agent.proxied ? t('common.yes', 'Yes') : agent.proxied === false ? t('common.no', 'No') : '—' }}</span>
+            </div>
           </div>
         </div>
-        <div class="agent-footer">
-          <Button variant="ghost" size="sm" @click="openConfig(agent)">{{ t('agents.config') }}</Button>
-          <Button variant="ghost" size="sm" @click="openLogs(agent)">{{ t('agents.logs') }}</Button>
-          <Button variant="ghost" size="sm" @click="openResetToken(agent.id)">{{ t('agents.resetToken') }}</Button>
+
+        <!-- AG1: Footer section (agent-f) — AG6: Connection info -->
+        <div class="agent-f">
+          <div class="agent-conn-info muted">
+            <span>{{ agent.hostname || agent.ip || '—' }}{{ agent.port ? ':' + agent.port : '' }}</span>
+            <span class="agent-conn-sep">·</span>
+            <span>{{ agent.os || '—' }}/{{ agent.arch }}</span>
+            <span class="agent-conn-sep">·</span>
+            <span>{{ t('agents.lastSeen') }} {{ agent.last_seen_at ? new Date(agent.last_seen_at).toLocaleString() : '—' }}</span>
+          </div>
+          <div class="agent-actions">
+            <Button variant="ghost" size="sm" @click="openConfig(agent)">{{ t('agents.config') }}</Button>
+            <Button variant="ghost" size="sm" @click="openLogs(agent)">{{ t('agents.logs') }}</Button>
+            <Button variant="ghost" size="sm" @click="openResetToken(agent.id)">{{ t('agents.resetToken') }}</Button>
+          </div>
         </div>
       </Card>
     </div>
@@ -456,7 +495,7 @@ const filteredLogs = computed(() => {
 .agents-page {}
 .agent-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: var(--space-4);
 }
 .agent-card {
@@ -464,13 +503,34 @@ const filteredLogs = computed(() => {
   flex-direction: column;
   gap: var(--space-3);
 }
-.agent-card-header {
+/* AG1: Header section */
+.agent-h {
   display: flex;
-  justify-content: space-between;
   align-items: flex-start;
+  gap: var(--space-3);
+}
+/* AG2: Square block agent icon with gradient */
+.agent-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--accent), var(--brand-deep));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--on-brand);
+  font-weight: 700;
+  font-size: var(--text-lg);
+  line-height: 1;
+}
+.agent-icon-letter {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
 }
 .agent-info {
   flex: 1;
+  min-width: 0;
 }
 .agent-name {
   display: flex;
@@ -484,24 +544,68 @@ const filteredLogs = computed(() => {
   font-size: var(--text-sm);
   margin-top: var(--space-1);
 }
-.agent-details {
+/* AG4: Update bar */
+.agent-update-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-top: var(--space-2);
+  background: var(--info-soft);
+  border: 1px solid rgba(88, 166, 255, 0.25);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--info);
+}
+.agent-update-icon {
+  font-size: var(--text-xs);
+}
+/* AG1: Body section — AG3: 2×2 metric grid */
+.agent-b {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+.agent-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3) var(--space-4);
+}
+.agent-metric {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 2px;
+}
+.agent-metric-label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.agent-metric-value {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+/* AG1: Footer section — AG6: Connection info */
+.agent-f {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
   padding-top: var(--space-2);
   border-top: 1px solid var(--border);
 }
-.agent-detail {
+.agent-conn-info {
   display: flex;
-  justify-content: space-between;
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: var(--text-xs);
 }
-.agent-footer {
+.agent-conn-sep {
+  opacity: 0.4;
+}
+.agent-actions {
   display: flex;
   justify-content: flex-end;
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--border);
+  gap: var(--space-1);
 }
 .empty-hint {
   font-size: var(--text-sm);

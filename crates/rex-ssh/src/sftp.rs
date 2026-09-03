@@ -35,9 +35,14 @@ impl SftpConnector {
         } else {
             format!("{}:{}", config.host, config.port)
         };
+        tracing::info!(action = "SFTP_CONNECT", host = %config.host, port = config.port, username = %config.username, has_password = config.password.is_some(), has_key = config.private_key.is_some(), "SFTP: opening new SSH connection");
         let mut handle = client::connect(ssh_config, &addr, handler)
             .await
-            .context("SSH connection failed for SFTP")?;
+            .map_err(|e| {
+                tracing::error!(action = "SFTP_CONNECT", host = %config.host, port = config.port, error = %e, "SFTP: SSH connection failed");
+                anyhow::anyhow!("SSH connection failed for SFTP: {e}")
+            })?;
+        tracing::info!(action = "SFTP_CONNECT", host = %config.host, "SFTP: SSH connected, authenticating");
 
         if let Some(ref key_pem) = config.private_key {
             let private_key = russh::keys::decode_secret_key(key_pem, config.password.as_deref())
@@ -60,10 +65,16 @@ impl SftpConnector {
                 .context("SSH auth failed")?;
         }
 
+        tracing::info!(action = "SFTP_CONNECT", host = %config.host, "SFTP: auth ok, opening session channel");
+
         let channel = handle
             .channel_open_session()
             .await
-            .context("failed to open session")?;
+            .map_err(|e| {
+                tracing::error!(action = "SFTP_CONNECT", host = %config.host, error = %e, "SFTP: channel_open_session failed — server may reject concurrent sessions or SFTP subsystem");
+                anyhow::anyhow!("failed to open session: {e}. The SSH server may not support concurrent sessions or the SFTP subsystem.")
+            })?;
+        tracing::info!(action = "SFTP_CONNECT", host = %config.host, "SFTP: session channel opened, creating SFTP session");
 
         Self::connect(channel).await
     }

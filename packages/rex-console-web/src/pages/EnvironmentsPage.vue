@@ -43,11 +43,16 @@ onMounted(async () => {
   }
 })
 
+interface EnvProtoCount { proto: string; count: number }
 const envProtocols = computed(() => {
-  const map = new Map<string, string[]>()
+  const map = new Map<string, EnvProtoCount[]>()
   for (const env of store.environments) {
     const resources = store.envResources.get(env.id) || []
-    map.set(env.id, [...new Set(resources.map((r: { protocol: string }) => r.protocol))])
+    const counts = new Map<string, number>()
+    for (const r of resources) {
+      counts.set(r.protocol, (counts.get(r.protocol) || 0) + 1)
+    }
+    map.set(env.id, [...counts.entries()].map(([proto, count]) => ({ proto, count })))
   }
   return map
 })
@@ -172,35 +177,36 @@ async function handleImport(event: Event) {
     <!-- Page Header -->
     <div class="page-header">
       <div class="page-header-text">
-        <h1 class="page-title">Environments</h1>
-        <p class="page-sub">Logical groupings of resources by network or purpose. Each owns its connection mode, agents and resources — agents are managed inside their environment. Switch to <b>Topology</b> to see how everything is wired.</p>
+        <h1 class="page-title">{{ t('environments.pageTitle') }}</h1>
+        <p class="page-sub">{{ t('environments.description') }}</p>
       </div>
     </div>
 
     <!-- Toolbar -->
     <div class="toolbar">
       <span class="badge-item">
-        <Badge>{{ store.environments.length }} environments</Badge>
+        <Badge>{{ store.environments.length }} {{ t('environments.count') }}</Badge>
       </span>
       <span class="badge-item">
-        <Badge tone="success">{{ store.environments.filter(e => e.agent_status === 'online').length }} agents online</Badge>
+        <Badge tone="success">{{ store.environments.filter(e => e.agent_status === 'online').length }} {{ t('environments.agentsOnline') }}</Badge>
       </span>
       <span class="badge-item">
-        <Badge>{{ store.environments.reduce((sum, e) => sum + e.resource_count, 0) }} resources</Badge>
+        <Badge>{{ store.environments.reduce((sum, e) => sum + e.resource_count, 0) }} {{ t('environments.resourcesCount') }}</Badge>
       </span>
       <div class="toolbar-spacer"></div>
-      <Button variant="ghost" size="sm" :loading="importLoading" @click="triggerImport">Import</Button>
+      <Button variant="ghost" size="sm" @click="exportConfig">{{ t('environments.export') }}</Button>
+      <Button variant="ghost" size="sm" :loading="importLoading" @click="triggerImport">{{ t('environments.import') }}</Button>
       <input ref="importFileInput" type="file" accept=".json" style="display:none" @change="handleImport" />
       <Button variant="primary" size="sm" @click="openCreate">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-        New environment
+        {{ t('environments.newEnvironment') }}
       </Button>
     </div>
 
     <!-- Tab Bar -->
     <div class="tab-bar">
-      <div class="tab" :class="{ active: activeView === 'list' }" @click="activeView = 'list'">List</div>
-      <div class="tab" :class="{ active: activeView === 'topology' }" @click="activeView = 'topology'">Topology</div>
+      <div class="tab" :class="{ active: activeView === 'list' }" @click="activeView = 'list'">{{ t('environments.list') }}</div>
+      <div class="tab" :class="{ active: activeView === 'topology' }" @click="activeView = 'topology'">{{ t('environments.topology') }}</div>
     </div>
 
     <!-- Empty State -->
@@ -244,7 +250,7 @@ async function handleImport(event: Event) {
           <div class="env-card-chips">
             <span class="chip">
               <span class="chip-dot" :class="env.agent_status === 'online' ? 'chip-dot--success' : 'chip-dot--warning'"></span>
-              {{ env.resource_count }} resources
+              {{ env.resource_count }} {{ t('common.resources') }}
             </span>
           </div>
         </div>
@@ -252,18 +258,18 @@ async function handleImport(event: Event) {
         <!-- Protocol Icons -->
         <div v-if="envProtocols.get(env.id)?.length" class="env-card-protocols">
           <span
-            v-for="proto in envProtocols.get(env.id)"
-            :key="proto"
+            v-for="item in envProtocols.get(env.id)"
+            :key="item.proto"
             class="env-proto-pico"
-            :class="`pico--${proto}`"
-          >{{ protoIcon[proto] || '?' }}</span>
+            :class="`pico--${item.proto}`"
+          >{{ protoIcon[item.proto] || '?' }}<span v-if="item.count > 1" class="env-proto-count">×{{ item.count }}</span></span>
         </div>
         <!-- Agents Section -->
         <div v-if="env.connection_mode === 'agent'" class="env-card-agents">
           <div class="env-card-agents-header">
-            Agents
+            {{ t('environments.agentsSection') }}
             <div class="env-card-agents-spacer"></div>
-            <span v-if="env.agent_status" class="badge-sm badge-green">1 online</span>
+            <span v-if="env.agent_status" class="badge-sm badge-green">1 {{ t('environments.agentsOnline') }}</span>
           </div>
           <div v-if="env.agent_status" class="env-card-agent-row">
             <span class="env-card-agent-icon">⟡</span>
@@ -272,15 +278,15 @@ async function handleImport(event: Event) {
             </div>
             <StatusDot :status="agentStatus(env.agent_status)" />
           </div>
-          <div v-else class="env-card-no-agent">No agents registered</div>
+          <div v-else class="env-card-no-agent">{{ t('environments.noAgentsRegistered') }}</div>
         </div>
 
         <!-- Card Footer Actions -->
         <div class="env-card-actions">
-          <button class="env-card-action" @click.stop="router.push(`/environments/${env.id}`)">Open</button>
-          <button class="env-card-action env-card-action--primary" @click.stop="router.push(`/environments/${env.id}?action=newResource`)">Add Resource</button>
-          <button class="env-card-action" @click.stop="openEdit(env)">Edit</button>
-          <button class="env-card-action env-card-action--danger" @click.stop="deleteConfirmId = env.id">Delete</button>
+          <button class="env-card-action" @click.stop="router.push(`/environments/${env.id}`)">{{ t('environments.open') }}</button>
+          <button class="env-card-action env-card-action--primary" @click.stop="router.push(`/environments/${env.id}?action=newResource`)">{{ t('environments.newResource') }}</button>
+          <button class="env-card-action" @click.stop="openEdit(env)">{{ t('environments.edit') }}</button>
+          <button class="env-card-action env-card-action--danger" @click.stop="deleteConfirmId = env.id">{{ t('environments.delete') }}</button>
         </div>
       </div>
 
@@ -288,7 +294,7 @@ async function handleImport(event: Event) {
       <div class="env-card env-card--new" @click="openCreate">
         <div class="env-card-new-content">
           <div class="env-card-new-icon">+</div>
-          <div class="env-card-new-text">New environment</div>
+          <div class="env-card-new-text">{{ t('environments.newEnvironment') }}</div>
         </div>
       </div>
     </div>
@@ -298,8 +304,8 @@ async function handleImport(event: Event) {
       <div class="env-card" style="grid-column: 1 / -1; min-height: 200px; display: flex; align-items: center; justify-content: center;">
         <div style="text-align: center; color: var(--text-muted);">
           <div style="font-size: 32px; margin-bottom: 12px;">⛁</div>
-          <div style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">Topology View</div>
-          <div style="font-size: 12px;">Coming soon — network topology visualization</div>
+          <div style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">{{ t('environments.topologyTitle') }}</div>
+          <div style="font-size: 12px;">{{ t('environments.topologyComingSoon') }}</div>
         </div>
       </div>
     </div>
@@ -421,7 +427,7 @@ async function handleImport(event: Event) {
 
 .tab {
   padding: 9px 18px;
-  font-size: var(--text-base);
+  font-size: calc(var(--text-base) + 0.5px);
   color: var(--text-muted);
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -479,7 +485,7 @@ async function handleImport(event: Event) {
 .env-card-icon {
   width: 40px;
   height: 40px;
-  border-radius: 10px;
+  border-radius: 4px;
   display: grid;
   place-items: center;
   font-family: var(--font-mono);
@@ -582,6 +588,7 @@ async function handleImport(event: Event) {
 }
 .env-proto-pico.pico--ssh { background: var(--success); }
 .env-proto-pico.pico--sftp { background: var(--purple); }
+.env-proto-count { font-size: 10px; margin-left: 2px; opacity: 0.9; font-weight: 500; }
 .env-proto-pico.pico--sql,
 .env-proto-pico.pico--mysql { background: var(--info); }
 .env-proto-pico.pico--postgresql { background: var(--purple); }
