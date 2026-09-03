@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -19,6 +20,7 @@ const props = defineProps<{
   envId?: string
 }>()
 
+const { t } = useI18n()
 const router = useRouter()
 const { nodes: topoNodes, edges: topoEdges, loading, error, refresh } = useTopology()
 const { fitView, onNodeClick } = useVueFlow()
@@ -135,8 +137,8 @@ watch(
     <div class="topo-header">
       <TopologyLegend />
       <div class="topo-header-spacer" />
-      <span v-if="loading" class="topo-loading">Loading...</span>
-      <span v-if="error" class="topo-error">{{ error }}</span>
+      <span v-if="loading" class="topo-loading">{{ t('environments.topoLoading') }}</span>
+      <span v-if="error" class="topo-error">{{ t('environments.topoError') }}: {{ error }}</span>
     </div>
 
     <!-- Flow canvas -->
@@ -167,8 +169,8 @@ watch(
       <!-- Empty state -->
       <div v-if="!loading && vfNodes.length === 0" class="topo-empty">
         <div class="topo-empty-icon">⛁</div>
-        <div class="topo-empty-text">No topology data</div>
-        <div class="topo-empty-sub">Environments, agents, and resources will appear here.</div>
+        <div class="topo-empty-text">{{ t('environments.topoEmpty') }}</div>
+        <div class="topo-empty-sub">{{ t('environments.topoEmptySub') }}</div>
       </div>
     </div>
   </div>
@@ -242,5 +244,20 @@ watch(
   font-size: 12px;
   color: var(--text-muted);
   opacity: 0.6;
+}
+
+@media (max-width: 760px) {
+  .topo-view {
+    min-height: 300px;
+  }
+
+  .topo-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .topo-canvas {
+    border-radius: var(--radius-lg);
+  }
 }
 </style>
