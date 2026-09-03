@@ -14,7 +14,7 @@ import Modal from '@/components/ui/Modal.vue'
 import Input from '@/components/ui/Input.vue'
 import Select from '@/components/ui/Select.vue'
 import { agentStatus } from '@/utils/status'
-
+import TopologyView from '@/features/topology/TopologyView.vue'
 const { t } = useI18n()
 const router = useRouter()
 const store = useEnvironmentsStore()
@@ -299,17 +299,12 @@ async function handleImport(event: Event) {
       </div>
     </div>
 
-    <!-- Topology placeholder -->
-    <div v-else-if="activeView === 'topology'" class="env-grid">
-      <div class="env-card" style="grid-column: 1 / -1; min-height: 200px; display: flex; align-items: center; justify-content: center;">
-        <div style="text-align: center; color: var(--text-muted);">
-          <div style="font-size: 32px; margin-bottom: 12px;">⛁</div>
-          <div style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">{{ t('environments.topologyTitle') }}</div>
-          <div style="font-size: 12px;">{{ t('environments.topologyComingSoon') }}</div>
-        </div>
+    <!-- Topology -->
+    <div v-else-if="activeView === 'topology'" class="env-grid topology-grid">
+      <div style="grid-column: 1 / -1; height: 500px;">
+        <TopologyView />
       </div>
     </div>
-
     <!-- Create / Edit Modal -->
     <Modal v-model="showCreateModal">
       <template #title>{{ editingEnv ? t('environments.editEnvironment') : t('environments.newEnvironment') }}</template>
