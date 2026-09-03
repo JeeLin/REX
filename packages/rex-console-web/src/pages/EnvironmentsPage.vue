@@ -575,16 +575,19 @@ async function handleImport(event: Event) {
   padding: 8px 16px 12px;
 }
 .env-proto-pico {
-  width: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 18px;
   height: 18px;
+  padding: 0 4px;
   border-radius: 4px;
-  display: grid;
-  place-items: center;
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
   color: var(--on-ink);
   background: var(--bg-elevated);
+  white-space: nowrap;
 }
 .env-proto-pico.pico--ssh { background: var(--success); }
 .env-proto-pico.pico--sftp { background: var(--purple); }

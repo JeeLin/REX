@@ -880,6 +880,7 @@
     }
   },
   "topbar": {
+    "goToWorkspace": "工作区",
     "quickConnect": "前往工作区…",
     "notifications": "通知",
     "refresh": "刷新数据 (R)"
