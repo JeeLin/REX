@@ -578,6 +578,7 @@
     "findTerminal": "在终端中查找",
     "formatSQL": "格式化 SQL",
     "fullscreen": "切换全屏",
+    "exitFullscreen": "退出全屏",
     "globalQuery": "全局查询",
     "globalSearch": "全局搜索",
     "groupFile": "文件管理器",
