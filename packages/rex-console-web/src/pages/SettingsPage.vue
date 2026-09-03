@@ -602,11 +602,7 @@ async function saveSettings() {
 .settings-content {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
   padding: 0;
-  overflow-y: auto;
 }
 
 .settings-section {
