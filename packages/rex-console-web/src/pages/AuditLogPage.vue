@@ -568,7 +568,7 @@ onMounted(async () => {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: var(--space-3) var(--space-4);
+  padding: 14px var(--space-4);
 }
 
 .stat-key {
@@ -799,7 +799,7 @@ onMounted(async () => {
 
 /* Filter Chips */
 .filter-chips {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;

@@ -7,7 +7,7 @@ import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import Checkbox from '@/components/ui/Checkbox.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
@@ -50,6 +50,11 @@ async function handleLogin() {
   } catch (e: unknown) {
     errorMsg.value = e instanceof Error ? e.message : t('login.loginFailed')
   }
+}
+
+function toggleLang() {
+  locale.value = locale.value === 'zh' ? 'en' : 'zh'
+  localStorage.setItem('rex-lang', locale.value)
 }
 </script>
 
@@ -114,7 +119,7 @@ async function handleLogin() {
             <span class="glyph">R</span>
             <span class="name">RE<b>X</b></span>
           </div>
-          <button class="lang-btn mono">{{ t('login.langSwitch') }}</button>
+          <button class="lang-btn mono" @click="toggleLang">{{ locale === 'zh' ? '中文' : 'EN' }}</button>
         </div>
 
         <h1>{{ t('login.title') }}</h1>
@@ -240,7 +245,7 @@ async function handleLogin() {
   font-size: 14px;
 }
 .brand--sm .name {
-  font-size: 15px;
+  font-size: 17px;
 }
 
 /* ========== 左侧卖点 ========== */
@@ -284,7 +289,6 @@ async function handleLogin() {
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
-  opacity: 0.6;
 }
 
 /* ========== 右侧登录面板 ========== */
@@ -292,7 +296,7 @@ async function handleLogin() {
   display: grid;
   place-items: center;
   padding: 40px;
-  background: var(--bg-app, var(--bg-page));
+  background: transparent;
 }
 
 .login-card {
@@ -419,7 +423,6 @@ async function handleLogin() {
   font-family: var(--font-mono);
   font-size: 11.5px;
   margin-top: 26px;
-  opacity: 0.5;
 }
 
 /* ========== 启动终端覆盖层 ========== */

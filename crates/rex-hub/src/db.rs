@@ -175,7 +175,19 @@ impl Database {
 
     // --- Audit Log ---
 
+    /// Check whether audit logging is enabled via the `audit_logging` setting (default: true).
+    pub fn is_audit_logging_enabled(&self) -> bool {
+        self.get_setting("audit_logging")
+            .ok()
+            .flatten()
+            .map(|v| v != "false")
+            .unwrap_or(true)
+    }
+
     pub fn write_audit_log(&self, entry: &NewAuditEntry) -> Result<()> {
+        if !self.is_audit_logging_enabled() {
+            return Ok(());
+        }
         let conn = self.conn()?;
         let id = uuid::Uuid::new_v4().to_string();
         let time = chrono::Utc::now().to_rfc3339();
@@ -297,10 +309,12 @@ impl Database {
         if let Some(ref env) = filter.environment_id {
             sql.push_str(&format!(" AND environment_id = ?{idx}"));
             params.push(Box::new(env.clone()));
+            idx += 1;
         }
         if let Some(ref r) = filter.result {
             sql.push_str(&format!(" AND result = ?{idx}"));
             params.push(Box::new(r.clone()));
+            idx += 1;
         }
 
         let param_refs: Vec<&dyn rusqlite::types::ToSql> =
@@ -1201,6 +1215,53 @@ mod tests {
         assert_eq!(db.get_setting("key1").unwrap(), Some("value1".into()));
         db.set_setting("key1", "value2").unwrap();
         assert_eq!(db.get_setting("key1").unwrap(), Some("value2".into()));
+    }
+
+    #[test]
+    fn test_is_audit_logging_enabled_default() {
+        let (_dir, db) = test_db();
+        // Default should be true (no setting stored)
+        assert!(db.is_audit_logging_enabled());
+    }
+
+    #[test]
+    fn test_is_audit_logging_enabled_disabled() {
+        let (_dir, db) = test_db();
+        db.set_setting("audit_logging", "false").unwrap();
+        assert!(!db.is_audit_logging_enabled());
+    }
+
+    #[test]
+    fn test_is_audit_logging_enabled_enabled() {
+        let (_dir, db) = test_db();
+        db.set_setting("audit_logging", "true").unwrap();
+        assert!(db.is_audit_logging_enabled());
+    }
+
+    #[test]
+    fn test_write_audit_log_respects_setting() {
+        let (_dir, db) = test_db();
+        // Disabled: write should be a no-op
+        db.set_setting("audit_logging", "false").unwrap();
+        db.write_audit_log(&NewAuditEntry {
+            action: "TEST_SKIPPED".into(),
+            result: "success".into(),
+            ..Default::default()
+        })
+        .unwrap();
+        let entries = db.query_audit_log(&AuditFilter::default()).unwrap();
+        assert!(entries.is_empty());
+        // Re-enable: write should succeed
+        db.set_setting("audit_logging", "true").unwrap();
+        db.write_audit_log(&NewAuditEntry {
+            action: "TEST_WRITTEN".into(),
+            result: "success".into(),
+            ..Default::default()
+        })
+        .unwrap();
+        let entries = db.query_audit_log(&AuditFilter::default()).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].action, "TEST_WRITTEN");
     }
 
     // --- Saved SQL Queries ---
