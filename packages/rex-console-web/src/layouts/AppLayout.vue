@@ -183,15 +183,13 @@ function openQuickConnect() {
 
         <div class="topbar-spacer" />
 
-        <!-- Quick connect (topbar search placeholder until v0.72.0 command palette) -->
-        <div class="topbar-search-inline" @click="openQuickConnect">
+        <!-- Quick connect navigation button -->
+        <button class="topbar-nav-btn" @click="openQuickConnect" :title="t('topbar.goToWorkspace', 'Go to workspace')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="9 10 4 15 9 20"/><path d="M20 4v7H4"/>
           </svg>
-          <span>{{ t('topbar.quickConnect', 'Go to workspace…') }}</span>
-          <kbd class="topbar-search-kbd">Ctrl K</kbd>
-        </div>
-
+          <span>{{ t('topbar.goToWorkspace', 'Workspace') }}</span>
+        </button>
         <!-- 右侧按钮 + 头像 -->
         <div class="topbar-actions">
           <button v-if="isWorkspace" class="topbar-icon-btn" :aria-label="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" :title="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" @click="fullscreen = !fullscreen">
@@ -482,35 +480,24 @@ function openQuickConnect() {
 .topbar-spacer {
   flex: 1;
 }
-.topbar-search-inline {
-  display: flex;
+.topbar-nav-btn {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 34px;
-  width: 260px;
-  padding: 0 12px;
-  border-radius: 8px;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg-surface);
-  color: var(--text-dim);
+  color: var(--text-muted);
   font-size: 12.5px;
   cursor: pointer;
-  transition: border-color var(--transition);
+  transition: border-color var(--transition), color var(--transition);
+  flex-shrink: 0;
 }
-.topbar-search-inline:hover {
+.topbar-nav-btn:hover {
   border-color: var(--border-strong);
-}
-.topbar-search-kbd {
-  font-size: 10px;
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 1px 5px;
-  line-height: 1.4;
-  margin-left: auto;
-  pointer-events: none;
+  color: var(--text-primary);
 }
 .topbar-actions {
   display: flex;

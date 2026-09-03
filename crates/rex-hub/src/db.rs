@@ -314,7 +314,6 @@ impl Database {
         if let Some(ref r) = filter.result {
             sql.push_str(&format!(" AND result = ?{idx}"));
             params.push(Box::new(r.clone()));
-            idx += 1;
         }
 
         let param_refs: Vec<&dyn rusqlite::types::ToSql> =

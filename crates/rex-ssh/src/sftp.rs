@@ -71,8 +71,8 @@ impl SftpConnector {
             .channel_open_session()
             .await
             .map_err(|e| {
-                tracing::error!(action = "SFTP_CONNECT", host = %config.host, error = %e, "SFTP: channel_open_session failed — server may reject concurrent sessions or SFTP subsystem");
-                anyhow::anyhow!("failed to open session: {e}. The SSH server may not support concurrent sessions or the SFTP subsystem.")
+                tracing::error!(action = "SFTP_CONNECT", host = %config.host, error = %e, "SFTP: channel_open_session failed — server may reject concurrent sessions");
+                anyhow::anyhow!("failed to open session: {e}. The SSH server may not support concurrent sessions. Try: (1) set MaxSessions ≥2 in sshd_config, or (2) disconnect the terminal first and retry SFTP.")
             })?;
         tracing::info!(action = "SFTP_CONNECT", host = %config.host, "SFTP: session channel opened, creating SFTP session");
 

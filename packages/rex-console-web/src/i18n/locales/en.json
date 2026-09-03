@@ -880,6 +880,7 @@
     }
   },
   "topbar": {
+    "goToWorkspace": "Workspace",
     "quickConnect": "Go to workspace…",
     "notifications": "Notifications",
     "refresh": "Refresh data (R)"

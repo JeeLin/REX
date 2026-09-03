@@ -537,7 +537,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="workspace-terminal">
     <!-- Toolbar -->
-    <div class="wt-toolbar" @contextmenu.prevent="handleToolbarContextMenu">
+    <div class="wt-toolbar" @contextmenu.prevent.stop="handleToolbarContextMenu">
       <div class="wt-info">
         <span class="wt-status-dot" :class="statusDotClass">●</span>
         <span class="wt-resource-name">{{ name || host || resourceId }}</span>
@@ -561,7 +561,7 @@ onBeforeUnmount(() => {
       ref="containerRef"
       class="wt-container"
       :style="containerStyle"
-      @contextmenu.prevent="handleContextMenu"
+      @contextmenu.prevent.stop="handleContextMenu"
     >
       <TerminalSearch
         :visible="showSearch"
