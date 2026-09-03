@@ -27,6 +27,7 @@ pub mod sip_recording;
 pub mod sip_recording_api;
 pub mod sip_ws;
 pub mod sql_api;
+pub mod static_embed;
 pub mod terminal_ws;
 pub mod tls;
 pub mod tunnel_ws;
