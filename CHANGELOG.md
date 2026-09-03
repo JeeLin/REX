@@ -3,7 +3,27 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
+## [0.71.3] - 2026-09-02
+
+### Fixed
+- **tokens.css**：全局背景色调深（bg-deep #111820, bg-page #1a2233, bg-surface #1e2636, bg-elevated #243040, bg-hover #2a3545, bg-sidebar #141c28, text-muted #808b96）
+- **AppLayout**：移除顶栏头像、通知/刷新按钮、侧栏搜索框；移除冗余「新建资源」按钮
+- **AgentsPage**：Agent 卡片重构（agent-h/b/f 分层、40×40 渐变图标、2×2 指标网格、minmax 360、footer）
+- **DashboardPage**：stat-icon/pico 对比度修复（-soft 变体）；envProtocols Set→ProtoCount[] 计数；await Promise.all 修复 N+1 fetch
+- **EnvironmentsPage**：envProtocols 与 DashboardPage 统一为 ProtoCount[]；i18n 补全 15 个缺失键
+- **EnvironmentDetailPage**：detail-head-icon 恢复 48×48 显式尺寸
+- **SettingsPage**：save-bar display:none→display:flex；dead refs 禁用；audit_logging Switch；encrypt Badge
+- **AuditLogPage**：filter-chips 布局修复
+- **FilesDrawer**：硬编码 Loading/Open/items/sel 改为 t() 调用
+- **WorkspacePage**：statusbar resourcesOpen/F1 help 改为 t() 调用
+- **LoginPage**：语言切换修复；登录提示文案清理
+- **db.rs**：is_audit_logging_enabled() 自动覆盖所有 write_audit_log 调用
+- **settings_api.rs**：audit_logging 布尔转换；encrypt Badge
+- **sftp.rs**：SFTP 连接改进错误处理
+- **i18n**：zh.json/en.json 补全 environments 15 键 + filesDrawer 12 键 + common.exitFullscreen
+
 ## [0.71.2] - 2026-07-16
+
 
 ### Fixed
 - AppLayout：添加登出按钮（顶栏头像旁红色图标）
