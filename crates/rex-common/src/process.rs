@@ -61,6 +61,12 @@ pub fn ensure_single_instance(kind: ServiceKind, data_dir: &Path) -> Result<()> 
     }
     let path = pid_path(kind, data_dir);
     if let Some(pid) = read_pid_file(&path) {
+        // Docker 容器重启后新进程仍是 PID 1，与残留 pidfile 中的 PID 相同
+        // 但实际是不同进程实例——跳过检查并清理旧 pidfile
+        if pid == std::process::id() {
+            let _ = std::fs::remove_file(&path);
+            return Ok(());
+        }
         if is_process_alive(pid) {
             bail!(
                 "rex-{} 已在运行 (pid {}).\n请先停止：rex-{} stop",
@@ -271,9 +277,13 @@ mod tests {
         assert!(ensure_single_instance(ServiceKind::Agent, &dir).is_ok());
         assert!(!p.exists(), "stale pidfile should be removed");
 
-        // 存活实例的 pid：应报冲突（Err）
+        // 当前进程自己的 pid：Docker 重启场景（新旧容器都是 PID 1），应跳过并清理
         std::fs::write(&p, std::process::id().to_string()).unwrap();
-        assert!(ensure_single_instance(ServiceKind::Agent, &dir).is_err());
+        assert!(
+            ensure_single_instance(ServiceKind::Agent, &dir).is_ok(),
+            "same-pid (Docker restart) should be treated as stale and cleaned up"
+        );
+        assert!(!p.exists(), "same-pid pidfile should be removed");
 
         let _ = std::fs::remove_file(&p);
     }
