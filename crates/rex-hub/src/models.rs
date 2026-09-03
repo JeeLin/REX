@@ -135,6 +135,39 @@ pub struct AuditFilter {
     pub offset: Option<u64>,
 }
 
+// --- Topology ---
+
+/// 拓扑图节点（环境 / Agent / 资源）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TopoNode {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub node_type: String,
+    pub label: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub protocol: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
+}
+
+/// 拓扑图边（环境→Agent / 环境→资源）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TopoEdge {
+    pub id: String,
+    pub source: String,
+    pub target: String,
+    #[serde(rename = "type")]
+    pub edge_type: String,
+}
+
+/// 完整拓扑图响应
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Topology {
+    pub nodes: Vec<TopoNode>,
+    pub edges: Vec<TopoEdge>,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AuditStats {
     pub total: i64,

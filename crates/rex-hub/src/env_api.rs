@@ -4,7 +4,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
 
-use crate::models::{EnvironmentDetail, NewEnvironment, UpdateEnvironment};
+use crate::models::{EnvironmentDetail, NewEnvironment, TopoEdge, TopoNode, Topology, UpdateEnvironment};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 
@@ -24,6 +24,7 @@ pub fn env_routes() -> axum::Router<AppState> {
                 .put(update_environment)
                 .delete(delete_environment),
         )
+        .route("/topology", axum::routing::get(get_topology))
 }
 
 fn err(status: StatusCode, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
@@ -350,4 +351,80 @@ async fn import_environments(
     Ok(Json(
         serde_json::json!({ "imported": imported, "skipped": skipped }),
     ))
+}
+
+async fn get_topology(State(state): State<AppState>) -> ApiResult<Topology> {
+    let topo = tokio::task::spawn_blocking(move || {
+        let envs = state.db.list_environments_with_stats()?;
+        let mut nodes = Vec::new();
+        let mut edges = Vec::new();
+
+        for env_detail in &envs {
+            let env_id = env_detail.environment.id.clone();
+            nodes.push(TopoNode {
+                id: format!("env-{}", env_id),
+                node_type: "environment".into(),
+                label: env_detail.environment.name.clone(),
+                status: env_detail.agent_status.clone().unwrap_or_else(|| "offline".into()),
+                protocol: None,
+                metadata: Some(serde_json::json!({
+                    "connection_mode": env_detail.environment.connection_mode,
+                    "resource_count": env_detail.resource_count,
+                })),
+            });
+
+            let agents = state.db.list_agents_by_env(&env_id)?;
+            for agent in &agents {
+                nodes.push(TopoNode {
+                    id: format!("agent-{}", agent.id),
+                    node_type: "agent".into(),
+                    label: agent.name.clone(),
+                    status: agent.status.clone(),
+                    protocol: None,
+                    metadata: Some(serde_json::json!({
+                        "hostname": agent.hostname,
+                        "ip": agent.ip,
+                        "version": agent.version,
+                        "os": agent.os,
+                        "arch": agent.arch,
+                    })),
+                });
+                edges.push(TopoEdge {
+                    id: format!("e-env-{}-agent-{}", env_id, agent.id),
+                    source: format!("env-{}", env_id),
+                    target: format!("agent-{}", agent.id),
+                    edge_type: "has_agent".into(),
+                });
+            }
+
+            let resources = state.db.list_resources_by_env(&env_id)?;
+            for res in &resources {
+                nodes.push(TopoNode {
+                    id: format!("resource-{}", res.id),
+                    node_type: "resource".into(),
+                    label: res.name.clone(),
+                    status: "connected".into(),
+                    protocol: Some(res.protocol.clone()),
+                    metadata: Some(serde_json::json!({
+                        "host": res.host,
+                        "port": res.port,
+                        "subtype": res.subtype,
+                    })),
+                });
+                edges.push(TopoEdge {
+                    id: format!("e-env-{}-res-{}", env_id, res.id),
+                    source: format!("env-{}", env_id),
+                    target: format!("resource-{}", res.id),
+                    edge_type: "has_resource".into(),
+                });
+            }
+        }
+
+        Ok::<Topology, anyhow::Error>(Topology { nodes, edges })
+    })
+    .await
+    .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
+    .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
+
+    Ok(Json(topo))
 }
