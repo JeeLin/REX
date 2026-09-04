@@ -37,6 +37,9 @@ const emit = defineEmits<{
   'toggle-sftp': []
   'encoding-change': [encoding: string]
   'update:status': [status: string]
+  'split-horizontal': []
+  'split-vertical': []
+  'close-pane': []
 }>()
 
 // ── Refs ──────────────────────────────────────────────────
@@ -461,6 +464,10 @@ function handleContextMenu(event: MouseEvent) {
     { label: t('terminal.ctx.reconnect', 'Reconnect'), action: handleReconnect },
     { label: t('terminal.ctx.copyAddress', 'Copy Address'), action: handleCopyAddress },
     { label: t('terminal.ctx.openSftp', 'Open SFTP'), action: () => emit('toggle-sftp') },
+    { separator: true, label: '', action: () => {} },
+    { label: t('workspace.splitH'), action: () => emit('split-horizontal') },
+    { label: t('workspace.splitV'), action: () => emit('split-vertical') },
+    { label: t('workspace.closePane'), action: () => emit('close-pane'), danger: true },
     { separator: true, label: '', action: () => {} },
     { label: t('terminal.ctx.disconnect', 'Disconnect'), action: () => { showDisconnectDialog.value = true }, danger: true },
   ])

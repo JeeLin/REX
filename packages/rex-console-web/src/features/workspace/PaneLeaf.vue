@@ -43,7 +43,6 @@ function sqlDbType(tab: { protocol?: string; subtype?: string } | null): string 
     @focusin="leaf?.id && ctx.focusPane(leaf.id)"
     @pointerdown="leaf?.id && ctx.focusPane(leaf.id)"
     @click="leaf?.id && ctx.focusPane(leaf.id)"
-    @contextmenu="leaf?.id && ctx.onPaneContextMenu($event, leaf.id)"
     @dragover.prevent="leaf?.id && ctx.onPaneDragEnter(leaf.id)"
     @dragleave="leaf?.id && ctx.onPaneDragLeave(leaf.id)"
     @drop="leaf?.id && ctx.onPaneDrop($event, leaf.id)"
@@ -76,6 +75,9 @@ function sqlDbType(tab: { protocol?: string; subtype?: string } | null): string 
           @terminal-resize="ctx.onTerminalResize"
           @encoding-change="ctx.onEncodingChange"
           @toggle-sftp="ctx.toggleSftpDrawer"
+          @split-horizontal="leaf?.id && ctx.splitHorizontal(leaf.id)"
+          @split-vertical="leaf?.id && ctx.splitVertical(leaf.id)"
+          @close-pane="leaf?.id && ctx.closePane(leaf.id)"
         />
       </KeepAlive>
       <div v-if="ctx.showSftpDrawer.value" class="ws-sftp-drawer" :style="{ height: ctx.sftpDrawerHeight.value + 'px' }">
