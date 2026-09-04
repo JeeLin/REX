@@ -200,6 +200,11 @@ impl SshSession {
         Ok(())
     }
 
+    /// 拆分会话为写半区和事件接收器，用于并发读写（避免 Mutex 死锁）
+    pub fn split(self) -> (ChannelWriteHalf<client::Msg>, mpsc::Receiver<TerminalEvent>) {
+        (self.write_half, self.events)
+    }
+
     /// 接收下一个终端事件（阻塞直到有数据或断开）
     pub async fn recv(&mut self) -> Option<TerminalEvent> {
         self.events.recv().await

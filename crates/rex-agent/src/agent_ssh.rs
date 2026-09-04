@@ -84,7 +84,12 @@ pub async fn run_ssh_session(
     mut data_rx: mpsc::Receiver<Vec<u8>>,
 ) {
     let ch_id_num = channel_id.parse::<u32>().unwrap_or(0);
-    let session = Arc::new(tokio::sync::Mutex::new(session));
+
+    // 拆分会话为独立的写半区和事件接收器，避免 Mutex 死锁。
+    // 此前 out_task 持有 Arc<Mutex<SshSession>> 调用 recv()（&mut self），
+    // 导致 in_task 无法获取锁调用 send_data()（&self），造成死锁。
+    let (write_half, mut events) = session.split();
+    let write_half = Arc::new(write_half);
 
     // SSH resize 控制通道：Hub 经隧道下发 resize 帧 → 本通道 → russh window_change。
     let (resize_tx, mut resize_rx) = mpsc::unbounded_channel::<(u32, u32)>();
@@ -96,13 +101,12 @@ pub async fn run_ssh_session(
     }
 
     // 终端输出（russh 事件）→ 隧道帧（带 channelId 前缀）。
+    // events 独立拥有事件接收器，无需锁。
     let evt_tx_out = evt_tx.clone();
-    let ssh_out = session.clone();
     let cid_out = channel_id.clone();
     let out_task = tokio::spawn(async move {
-        let mut session = ssh_out.lock().await;
         loop {
-            match session.recv().await {
+            match events.recv().await {
                 Some(TerminalEvent::Data(data)) => {
                     let mut frame = Vec::with_capacity(4 + data.len());
                     frame.extend_from_slice(&ch_id_num.to_be_bytes());
@@ -127,7 +131,7 @@ pub async fn run_ssh_session(
     });
 
     // 隧道输入（浏览器键入）→ russh send_data；resize 帧 → russh window_change。
-    let session_in = session.clone();
+    // write_half 通过 Arc 共享，send_data/resize 仅需 &self，无锁竞争。
     let in_task = tokio::spawn(async move {
         loop {
             tokio::select! {
@@ -137,11 +141,10 @@ pub async fn run_ssh_session(
                             if data.is_empty() {
                                 break; // 关闭信号
                             }
-                            let session = session_in.clone();
+                            let wh = write_half.clone();
                             let bytes = bytes::Bytes::copy_from_slice(&data);
                             tokio::spawn(async move {
-                                let session = session.lock().await;
-                                let _ = session.send_data(bytes).await;
+                                let _ = wh.data_bytes(bytes).await;
                             });
                         }
                         None => break,
@@ -150,10 +153,9 @@ pub async fn run_ssh_session(
                 resize = resize_rx.recv() => {
                     match resize {
                         Some((cols, rows)) => {
-                            let session = session_in.clone();
+                            let wh = write_half.clone();
                             tokio::spawn(async move {
-                                let session = session.lock().await;
-                                let _ = session.resize(cols, rows).await;
+                                let _ = wh.window_change(cols, rows, 0, 0).await;
                             });
                         }
                         None => break,
