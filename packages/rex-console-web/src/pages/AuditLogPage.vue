@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { auditApi, type AuditEntry, type AuditStats } from '@/api/audit'
+import { agentsApi, type Agent } from '@/api/agents'
 import { useEnvironmentsStore } from '@/stores/environments'
 import Button from '@/components/ui/Button.vue'
 import ContextMenu from '@/components/ui/ContextMenu.vue'
@@ -24,6 +25,7 @@ const pageSizeOptions = [
   { label: '100', value: 100 },
 ]
 const totalCount = ref(0)
+const agentsMap = ref<Map<string, Agent>>(new Map())
 
 // Context menu
 const ctxMenu = ref({ show: false, x: 0, y: 0, entry: null as AuditEntry | null })
@@ -225,6 +227,11 @@ function envName(id: string | null): string {
   if (!id) return '—'
   return store.environments.find(e => e.id === id)?.name || id
 }
+function agentName(agentId: string | null): string {
+  if (!agentId) return '—'
+  const agent = agentsMap.value.get(agentId)
+  return agent?.name || agentId.slice(0, 8) + '…'
+}
 function resourceName(resId: string): string {
   for (const resources of store.envResources.values()) {
     const r = resources.find(r => r.id === resId)
@@ -313,7 +320,15 @@ watch(currentPage, () => {
 onMounted(async () => {
   await store.fetchEnvironments()
   // Load resources for all environments to enable name resolution
-  await Promise.all(store.environments.map(e => store.fetchResources(e.id)))
+  await Promise.all(store.environments.map(async (e) => {
+    await store.fetchResources(e.id)
+    try {
+      const agents = await agentsApi.listByEnv(e.id)
+      for (const agent of agents) {
+        agentsMap.value.set(agent.id, agent)
+      }
+    } catch { /* ignore */ }
+  }))
   refreshAll()
 })
 </script>
@@ -429,7 +444,7 @@ onMounted(async () => {
                     {{ entry.action.replace(/_/g, ' ') }}
                   </span>
                 </td>
-                <td>{{ entry.target || '—' }}</td>
+                <td>{{ entry.action.startsWith('AGENT_') ? agentName(entry.target) : (entry.target || '—') }}</td>
                 <td>
                   <span class="rc" :class="entry.result === 'success' ? 'ok' : 'fail'">
                     {{ entry.result }}
@@ -459,9 +474,8 @@ onMounted(async () => {
                         <dd>{{ envName(entry.environment_id) }}</dd>
                       </template>
                       <template v-if="entry.agent_id">
-                        <dt>Agent ID</dt>
-                        <dd class="mono">{{ entry.agent_id }}</dd>
-                      </template>
+                        <dt>{{ t('auditLog.agent', 'Agent') }}</dt>
+                        <dd><span>{{ agentName(entry.agent_id) }}</span> <span v-if="agentsMap.get(entry.agent_id!)" class="muted" style="font-size:0.85em">({{ entry.agent_id }})</span></dd>
                       <template v-if="entry.resource_id">
                         <dt>{{ t('auditLog.resource', 'Resource') }}</dt>
                         <dd>{{ resourceName(entry.resource_id) }}</dd>
