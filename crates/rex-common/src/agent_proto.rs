@@ -170,4 +170,138 @@ mod tests {
             _ => panic!("unexpected"),
         }
     }
+    #[test]
+    fn session_request_round_trip() {
+        let msg = AgentSessionMsg::SessionRequest(SessionRequest {
+            channel_id: "3".into(),
+            kind: "query".into(),
+            seq: 1,
+            payload: serde_json::json!({"sql": "SELECT 1"}),
+        });
+        let s = serde_json::to_string(&msg).unwrap();
+        let back: AgentSessionMsg = serde_json::from_str(&s).unwrap();
+        match back {
+            AgentSessionMsg::SessionRequest(r) => {
+                assert_eq!(r.kind, "query");
+                assert_eq!(r.seq, 1);
+                assert_eq!(r.payload["sql"], "SELECT 1");
+            }
+            _ => panic!("unexpected"),
+        }
+    }
+
+    #[test]
+    fn session_opened_round_trip() {
+        let msg = AgentSessionMsg::SessionOpened(SessionOpened {
+            request_id: "req_2".into(),
+            channel_id: "5".into(),
+            subtype: Some("mysql".into()),
+        });
+        let s = serde_json::to_string(&msg).unwrap();
+        let back: AgentSessionMsg = serde_json::from_str(&s).unwrap();
+        match back {
+            AgentSessionMsg::SessionOpened(o) => {
+                assert_eq!(o.subtype.unwrap(), "mysql");
+                assert_eq!(o.channel_id, "5");
+            }
+            _ => panic!("unexpected"),
+        }
+    }
+
+    #[test]
+    fn session_error_round_trip() {
+        let msg = AgentSessionMsg::SessionError(SessionError {
+            channel_id: "5".into(),
+            request_id: Some("req_2".into()),
+            error: "connection refused".into(),
+        });
+        let s = serde_json::to_string(&msg).unwrap();
+        let back: AgentSessionMsg = serde_json::from_str(&s).unwrap();
+        match back {
+            AgentSessionMsg::SessionError(e) => {
+                assert_eq!(e.error, "connection refused");
+                assert_eq!(e.request_id.unwrap(), "req_2");
+            }
+            _ => panic!("unexpected"),
+        }
+    }
+
+    #[test]
+    fn session_error_without_request_id() {
+        let msg = AgentSessionMsg::SessionError(SessionError {
+            channel_id: "1".into(),
+            request_id: None,
+            error: "timeout".into(),
+        });
+        let s = serde_json::to_string(&msg).unwrap();
+        let back: AgentSessionMsg = serde_json::from_str(&s).unwrap();
+        match back {
+            AgentSessionMsg::SessionError(e) => {
+                assert!(e.request_id.is_none());
+                assert_eq!(e.error, "timeout");
+            }
+            _ => panic!("unexpected"),
+        }
+    }
+
+    #[test]
+    fn session_response_with_error() {
+        let msg = AgentSessionMsg::SessionResponse(SessionResponse {
+            channel_id: "4".into(),
+            seq: 2,
+            data: serde_json::json!({}),
+            error: Some("table not found".into()),
+        });
+        let s = serde_json::to_string(&msg).unwrap();
+        let back: AgentSessionMsg = serde_json::from_str(&s).unwrap();
+        match back {
+            AgentSessionMsg::SessionResponse(r) => {
+                assert_eq!(r.error.unwrap(), "table not found");
+            }
+            _ => panic!("unexpected"),
+        }
+    }
+
+    #[test]
+    fn session_opened_without_subtype() {
+        let msg = AgentSessionMsg::SessionOpened(SessionOpened {
+            request_id: "req_3".into(),
+            channel_id: "10".into(),
+            subtype: None,
+        });
+        let s = serde_json::to_string(&msg).unwrap();
+        // serde_json serializes None as null (not skipped unless #[serde(skip_serializing_if)])
+        assert!(s.contains("subtype"));
+        assert!(s.contains("null"));
+        let back: AgentSessionMsg = serde_json::from_str(&s).unwrap();
+        match back {
+            AgentSessionMsg::SessionOpened(o) => {
+                assert!(o.subtype.is_none());
+            }
+            _ => panic!("unexpected"),
+        }
+    }
+
+    #[test]
+    fn file_chunk_eof_round_trip() {
+        let msg = AgentSessionMsg::FileChunk(FileChunk {
+            channel_id: "9".into(),
+            seq: 5,
+            path: "/data/export.csv".into(),
+            offset: 1024,
+            eof: true,
+            kind: "data".into(),
+            len: 512,
+        });
+        let s = serde_json::to_string(&msg).unwrap();
+        let back: AgentSessionMsg = serde_json::from_str(&s).unwrap();
+        match back {
+            AgentSessionMsg::FileChunk(c) => {
+                assert!(c.eof);
+                assert_eq!(c.offset, 1024);
+                assert_eq!(c.len, 512);
+            }
+            _ => panic!("unexpected"),
+        }
+    }
 }
