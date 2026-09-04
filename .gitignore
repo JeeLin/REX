@@ -51,6 +51,7 @@ frontend/vite.config.js
 
 # Local analysis documents
 local/
+.mnemon/
 
 # Legacy source backup (reference only, not tracked)
 bak/

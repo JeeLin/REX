@@ -71,8 +71,8 @@ describe('RedisStatus', () => {
     expect(w.find('.ks-table').exists()).toBe(true)
     const rows = w.findAll('.ks-table tbody tr')
     expect(rows).toHaveLength(2)
-    expect(rows[0].text()).toContain('db0')
-    expect(rows[1].text()).toContain('db1')
+    expect(rows[0]!.text()).toContain('db0')
+    expect(rows[1]!.text()).toContain('db1')
   })
 
   it('shows no-data text when info is null and not loading', async () => {
