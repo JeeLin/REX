@@ -12,6 +12,7 @@ env:
 jobs:
   # ── 检查（平台无关，只需一次） ──────────────
   lint:
+    needs: [build-frontend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -24,13 +25,17 @@ jobs:
         with:
           shared-key: lint
           save-if: ${{ github.event_name == 'push' }}
+      - name: Download frontend dist
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend
+          path: packages/rex-console-web/dist/
       - name: Check format
         run: cargo fmt --check
       - name: Clippy
         run: cargo clippy --workspace
       - name: Test
         run: cargo test --workspace
-
   # ── 构建 Rust 二进制（5 平台矩阵，产物用于 Docker + Release） ──
   # 各目标架构用「原生 runner」构建（与 baresip 官方 CI 一致，统一用 macos-latest）：
   #   linux-amd64   → ubuntu-latest (x86_64 原生)
@@ -172,6 +177,11 @@ jobs:
         run: |
           echo "OPENSSL_STATIC=1" >> "$GITHUB_ENV"
           echo "ZLIB_STATIC=1" >> "$GITHUB_ENV"
+      - name: Download frontend dist
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend
+          path: packages/rex-console-web/dist/
       - name: Build Agent + Hub
         run: cargo build --release -p rex-agent -p rex-hub --target ${{ matrix.target }}
       # Windows：验证 exe 真的自包含——dumpbin /dependents 不得出现 libssl/libcrypto。
