@@ -476,6 +476,7 @@ onMounted(async () => {
                       <template v-if="entry.agent_id">
                         <dt>{{ t('auditLog.agent', 'Agent') }}</dt>
                         <dd><span>{{ agentName(entry.agent_id) }}</span> <span v-if="agentsMap.get(entry.agent_id!)" class="muted" style="font-size:0.85em">({{ entry.agent_id }})</span></dd>
+                      </template>
                       <template v-if="entry.resource_id">
                         <dt>{{ t('auditLog.resource', 'Resource') }}</dt>
                         <dd>{{ resourceName(entry.resource_id) }}</dd>
