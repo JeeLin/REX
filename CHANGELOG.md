@@ -2,7 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/).
+## [0.73.0] - 2025-07-16
+
+### Added
+- **前端测试覆盖补全**：Files（FilesPage/FileEditorDialog/FolderSyncDialog）、Redis（FormatViewer/RedisCli/RedisStatus）、Workspace（CommandPalette/PaneLeaf/ResourceProperties）共 9 个测试文件，235 个测试用例
+- **后端协议测试补全**：agent_proto 7 个 round-trip 序列化/反序列化测试（SessionRequest/SessionOpened/SessionError/SessionResponse/FileChunk）
+
+### Fixed
+- **AuditLogPage**：修复缺失的 `</template>` 闭合标签导致构建失败
+- **AuditLogPage**：审计日志「目标」列显示 Agent 名称而非 UUID
+- **Rollup 构建警告**：升级 @vueuse/core 14.3.0→14.4.0 修复 #__PURE__ 注释解析警告
 ## [0.72.0] - 2026-09-03
 
 ### Added
