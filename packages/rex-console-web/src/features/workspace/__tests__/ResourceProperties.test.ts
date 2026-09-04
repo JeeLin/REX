@@ -74,7 +74,7 @@ describe('ResourceProperties', () => {
     // More robust: the component sets form.name from the prop.
     // Verify the name input has the correct value.
     const nameInput = w.findAll('.input-stub').at(0)
-    expect(nameInput!.element.value).toBe('Dev Redis')
+    expect((nameInput!.element as HTMLInputElement).value).toBe('Dev Redis')
   })
 
   it('emits update:show with false when Cancel is clicked', async () => {

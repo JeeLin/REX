@@ -144,6 +144,7 @@ rex-agent = 所有 crate（无前端）
 | **v0.71.2** | Bugfix & UX 修复（patch，修复 14 个功能缺失和 UX 问题） | — | ✅ 已完成（v0.71.2） |
 | **v0.71.3** | Bugfix & i18n 补全（patch，修复 56 个 bug + 全站 i18n） | — | ✅ 已完成（v0.71.3） |
 | **v0.72.0** | Environments Topology View（minor，vue-flow 拓扑图可视化） | — | ✅ 已完成（v0.72.0） |
+| **v0.73.0** | 测试覆盖补全 + 质量门禁（minor，前端/后端测试补全 + Rollup 警告修复） | — | 🔄 当前 |
 ### M0：项目骨架重建
 
 **核心功能**：清空 `packages/rex-console-web` 与 `crates/*` 源码，按新设计系统重建最小可运行骨架。
@@ -358,7 +359,7 @@ rex-agent = 所有 crate（无前端）
 每个里程碑的详细设计和实现记录：
 
 ```text
-docs/milestones/
+.dev-flow/milestones/
 ├── M0-project-skeleton.md
 ├── M1-hub-management.md
 ├── M2-agent-connection.md
@@ -657,3 +658,18 @@ docs/milestones/
 **依赖**：v0.71.3（Bugfix 里程碑完成后继续）
 **版本类型**：minor（新功能）
 **版本号**：v0.72.0
+
+### v0.73.0：测试覆盖补全 + 质量门禁 🔄 当前（v0.73.0）
+
+**核心功能**：补全前端（Files/Redis/Workspace）与后端（隧道/协议）测试覆盖，修复 Rollup 编译警告，确保质量门禁全绿。
+
+**子任务预估**：4 个
+1. **前端测试覆盖补全**：Files 双面板 + 传输队列 + Redis 键树/值查看器 + Workspace 面板布局组件测试
+2. **Rollup 编译警告修复**：@vueuse/core #__PURE__ 注释警告（升级依赖或配置 Rollup 忽略）
+3. **后端集成测试补全**：WebSocket 隧道 + 协议连接器集成测试
+4. **测试收尾 + 质量门禁**：全量运行 fmt/clippy/test/type-check/lint/build，确保全绿
+
+**依赖**：v0.72.0
+**版本类型**：minor
+**版本号**：v0.73.0
+**缺陷池 bug**：Rollup 编译警告 @vueuse/core #__PURE__ 注释（🟢）（从 docs/BUGS.md 纳入，已在规划时从缺陷池删除）
