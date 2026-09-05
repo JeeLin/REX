@@ -117,7 +117,9 @@ pub async fn download_agent_binary(
     let github_repo = std::env::var("REX_UPDATE_GITHUB_REPO").unwrap_or_else(|_| "REX".into());
 
     let ext = if os == "windows" { ".exe" } else { "" };
-    let binary_name = format!("rex-agent-{os}-{arch}{ext}");
+    // darwin → mac（Release 资源命名用 mac，不是 darwin）
+    let os_name = if os == "darwin" { "mac" } else { os };
+    let binary_name = format!("rex-agent-{os_name}-{arch}{ext}");
     let download_url = format!(
         "https://github.com/{github_owner}/{github_repo}/releases/download/v{version}/{binary_name}"
     );
