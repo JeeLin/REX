@@ -145,7 +145,7 @@ rex-agent = 所有 crate（无前端）
 | **v0.71.3** | Bugfix & i18n 补全（patch，修复 56 个 bug + 全站 i18n） | — | ✅ 已完成（v0.71.3） |
 | **v0.72.0** | Environments Topology View（minor，vue-flow 拓扑图可视化） | — | ✅ 已完成（v0.72.0） |
 | **v0.73.0** | 测试覆盖补全 + 质量门禁（minor，前端/后端测试补全 + Rollup 警告修复） | — | ✅ 已完成（v0.73.0） |
-| **v0.73.1** | Agent SSH 连接修复（patch，修复 Agent 模式 SSH 连接失败 + 后续连接全部报错） | — | ← 新增（下一步） |
+| **v0.73.1** | Agent SSH 连接修复（patch，修复 Agent 模式 SSH 连接失败 + 后续连接全部报错） | — | ✅ 已完成（v0.73.1） |
 ### M0：项目骨架重建
 
 **核心功能**：清空 `packages/rex-console-web` 与 `crates/*` 源码，按新设计系统重建最小可运行骨架。
@@ -675,7 +675,7 @@ rex-agent = 所有 crate（无前端）
 **版本号**：v0.73.0
 **缺陷池 bug**：Rollup 编译警告 @vueuse/core #__PURE__ 注释（🟢）（从 docs/BUGS.md 纳入，已在规划时从缺陷池删除）
 
-### v0.73.1：Agent SSH 连接修复 🔄 当前（v0.73.1）
+### v0.73.1：Agent SSH 连接修复 ✅ 已完成（v0.73.1）
 
 **核心功能**：修复 Agent 模式下 SSH 连接后无法输入命令、后续连接全部失败的阻断性 bug。
 

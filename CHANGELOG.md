@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.73.1] - 2026-07-05
+
+### Fixed
+- **Agent SSH 连接修复**：修复 Agent 模式下 SSH 连接后无法输入命令、后续连接全部失败的阻断性 bug。根因是 `Arc<Mutex<SshSession>>` 导致 out_task/in_task 死锁，通过 `split()` 拆分会话为写半区+事件接收器解决
+
 ## [0.73.0] - 2025-07-16
 
 ### Added
