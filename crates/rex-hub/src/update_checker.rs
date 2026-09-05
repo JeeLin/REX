@@ -79,7 +79,9 @@ impl UpdateChecker {
         }
 
         // 查找当前平台的二进制和 SHA256
-        let (os, arch) = get_platform();
+        let (os_raw, arch) = get_platform();
+        // darwin → mac（Release 资源命名用 mac，不是 darwin）
+        let os = if os_raw == "darwin" { "mac" } else { os_raw };
         let binary_name = format!("rex-hub-{os}-{arch}");
         let sha256_name = "rex-hub-SHA256SUMS".to_string();
 
