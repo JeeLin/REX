@@ -4,3 +4,4 @@
 | v0.73.1 | 🟡 | 设置页保存按钮需要滚动到底部才能看到 | 用户反馈 | 设置页内容较多，保存按钮固定在页面最底部，用户需要滚动到最下面才能点击保存。应在页面顶部或固定位置显示保存按钮，或改为 sticky 底部栏 |
 | v0.73.1 | 🟡 | Docker 启动没有日志输出 | 用户反馈 | 使用 Docker 启动 Hub/Agent 时控制台没有日志输出，排查问题困难。需要确保 Docker 模式下日志能正常输出到 stdout/stderr |
 | v0.73.1 | 🔴 | Agent 启动时触发两次更新检查 | 用户反馈 | Agent 启动后日志显示两次 `update started version=0.73.1`（间隔约 30 秒）。根因：Hub 在每次心跳时检测版本不匹配都会推送更新命令，Agent 每次收到都触发 `handle_update`，没有防重入机制。需要在 Agent 侧加锁或状态标记，避免重复下载/更新竞争 |
+| v0.73.1 | 🟡 | 页面 subtitle i18n key 缺失 | 用户反馈 | `agents.subtitle` 和 `auditLog.subtitle` 在 zh.json/en.json 中未定义，页面显示 fallback 英文文本 |
