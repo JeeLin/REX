@@ -499,6 +499,65 @@ pub async fn test_connection(
                 Err(_) => Err("connection timed out".into()),
             }
         }
+        "sql" => {
+            // v0.73.2：统一 SQL 协议迁移后，protocol='sql' + subtype 携带方言。
+            // 从 config_json 读取 subtype 路由到对应的直连检测分支。
+            let subtype = body
+                .config_json
+                .as_ref()
+                .and_then(|c| serde_json::from_str::<serde_json::Value>(c).ok())
+                .and_then(|v| v.get("subtype").and_then(|s| s.as_str()).map(String::from))
+                .or_else(|| {
+                    body.config_json.as_ref().and_then(|c| {
+                        let v: serde_json::Value = serde_json::from_str(c).ok()?;
+                        v.get("database_type")
+                            .and_then(|s| s.as_str())
+                            .map(String::from)
+                    })
+                })
+                .unwrap_or_else(|| "mysql".to_string());
+            match subtype.as_str() {
+                "sqlite" => {
+                    let path = body
+                        .config_json
+                        .as_ref()
+                        .and_then(|c| serde_json::from_str::<serde_json::Value>(c).ok())
+                        .and_then(|v| v.get("file_path")?.as_str().map(String::from))
+                        .unwrap_or_else(|| ":memory:".into());
+                    match rusqlite::Connection::open(&path) {
+                        Ok(conn) => {
+                            if conn.execute_batch("SELECT 1").is_ok() {
+                                Ok(())
+                            } else {
+                                Err("SQLite query failed".into())
+                            }
+                        }
+                        Err(e) => Err(format!("SQLite open failed: {e}")),
+                    }
+                }
+                _ => {
+                    let host = body.host.clone();
+                    let port = body
+                        .port
+                        .unwrap_or(if subtype == "mysql" { 3306 } else { 5432 });
+                    let addr = if host.contains(':') {
+                        format!("[{host}]:{port}")
+                    } else {
+                        format!("{host}:{port}")
+                    };
+                    match tokio::time::timeout(
+                        std::time::Duration::from_secs(5),
+                        tokio::net::TcpStream::connect(&addr),
+                    )
+                    .await
+                    {
+                        Ok(Ok(_)) => Ok(()),
+                        Ok(Err(e)) => Err(format!("TCP connect failed: {e}")),
+                        Err(_) => Err("connection timed out".into()),
+                    }
+                }
+            }
+        }
         "sqlite" => {
             let path = body
                 .config_json

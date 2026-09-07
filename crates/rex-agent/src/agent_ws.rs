@@ -463,7 +463,7 @@ async fn handle_connect(
     // 不再由 Hub 直连目标。subtype 优先取 config.subtype（探测出的方言），缺省回退 protocol 字段。
     if matches!(
         req.protocol.as_str(),
-        "sql" | "mysql" | "postgresql" | "postgres" | "sqlite"
+        "auto" | "sql" | "mysql" | "postgresql" | "postgres" | "sqlite"
     ) {
         let channel_id = AGENT_CHANNEL_SEQ.fetch_add(1, Ordering::SeqCst).to_string();
         let db_type = req

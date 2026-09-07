@@ -36,16 +36,7 @@ pub async fn handle_connect_file(
         }
     };
 
-    let ok = serde_json::to_string(&rex_common::agent_proto::AgentSessionMsg::SessionOpened(
-        rex_common::agent_proto::SessionOpened {
-            request_id,
-            channel_id: channel_id.clone(),
-            subtype: None,
-        },
-    ))
-    .unwrap_or_default();
-    let _ = evt_tx.send(AgentEvent::Text(ok)).await;
-
+    // 注册 channel（必须在 SessionOpened 之前，否则 Hub 立即下发查询帧导致丢帧）。
     let (data_tx, mut data_rx) = mpsc::channel::<Vec<u8>>(512);
     {
         let mut chs = channels.write().await;
@@ -58,6 +49,16 @@ pub async fn handle_connect_file(
             },
         );
     }
+
+    let ok = serde_json::to_string(&rex_common::agent_proto::AgentSessionMsg::SessionOpened(
+        rex_common::agent_proto::SessionOpened {
+            request_id,
+            channel_id: channel_id.clone(),
+            subtype: None,
+        },
+    ))
+    .unwrap_or_default();
+    let _ = evt_tx.send(AgentEvent::Text(ok)).await;
 
     while let Some(frame) = data_rx.recv().await {
         if frame.is_empty() {
