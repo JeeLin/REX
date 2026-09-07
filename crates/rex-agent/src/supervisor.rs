@@ -24,13 +24,26 @@ pub fn run_supervisor() {
         .init();
 
     let current_exe = std::env::current_exe().expect("failed to get current exe path");
+
+    // Windows: 清理上次更新遗留的 .old 文件
+    #[cfg(target_os = "windows")]
+    {
+        let old_path = current_exe.with_extension("old");
+        if old_path.exists() {
+            if let Err(e) = std::fs::remove_file(&old_path) {
+                tracing::warn!(error = %e, "failed to remove old binary");
+            } else {
+                tracing::info!("cleaned up old binary from previous update");
+            }
+        }
+    }
+
     tracing::info!(
         name = "REX Agent",
         version = env!("CARGO_PKG_VERSION"),
         exe = %current_exe.display(),
         status = "supervisor starting"
     );
-
     let mut restart_count: u32 = 0;
 
     loop {
@@ -137,6 +150,17 @@ fn apply_update(current_exe: &Path) -> Result<String, String> {
     }
 
     // rename staged → current（原子操作）
+    // Windows 不允许 rename 正在运行的可执行文件（os error 5）。
+    // 先 rename current → .old，再 rename staged → current。
+    // .old 文件在下次启动时清理。
+    #[cfg(target_os = "windows")]
+    {
+        let old_path = current_exe.with_extension("old");
+        // 如果存在旧的 .old 文件，先清理
+        let _ = std::fs::remove_file(&old_path);
+        std::fs::rename(current_exe, &old_path)
+            .map_err(|e| format!("rename current to .old: {e}"))?;
+    }
     std::fs::rename(&staged_path, current_exe)
         .map_err(|e| format!("rename staged to current: {e}"))?;
 
