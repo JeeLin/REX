@@ -8,6 +8,4 @@
 | v0.73.1 | 🟡 | 页面 subtitle i18n key 缺失 | 用户反馈 | `agents.subtitle` 和 `auditLog.subtitle` 在 zh.json/en.json 中未定义，页面显示 fallback 英文文本 |
 | v0.73.1 | 🟡 | Windows service install 不支持 | 用户反馈 | `rex-agent.exe service install` 输出 `automatic service management is not supported on this platform`，提示用 nssm 或 Task Scheduler。应支持 Windows 原生服务注册（sc create / NSSM / WinSW） |
 | v0.73.1 | 🟡 | version 子命令不显示 git hash | 用户反馈 | `rex-agent.exe version` 输出 `rex-agent 0.72.0` 而非 `rex-agent 0.73.1 (a1b2c3d)`。build.rs 通过 `REX_GIT_HASH` 注入 hash，但 `option_env!` 在 CI 构建时可能为空。需检查 CI workflow 是否设置 `GITHUB_SHA` 或 `cargo:rustc-env` |
-| v0.73.1 | 🔴 | Agent 模式 SQL 连接测试报 unsupported protocol | 用户反馈 | 通过 Agent 连接的 SQL 资源，测试连接时返回 `{"ok":false,"latency_ms":0,"error":"unsupported protocol: sql"}`。Agent 侧未实现 `sql` 协议的 connect/tunnel 处理，v0.70.6 隧道架构下沉时遗漏 |
 | v0.73.1 | 🟡 | Agent 启动瞬间页面重连导致重复 SSH 连接 | 用户反馈 | Agent 启动后页面 WebSocket 重试机制触发两次连接请求，日志显示两个不同 request_id/channel_id 的 SSH 会话在 300ms 内相继建立。需在前端或 Hub 侧去重，避免重复连接 |
-| v0.73.1 | 🔴 | Agent 模式 SQL 查询超时（session request timeout） | 用户反馈 | `/api/sql/connect` 通过 Agent 连接 SQL 成功返回 session_id，但 `/api/sql/databases?session_id=xxx` 返回 `session request timeout`，Agent 侧无任何日志。说明 Hub 的 SQL session 未正确关联到 Agent tunnel，查询请求无法转发到 Agent |
