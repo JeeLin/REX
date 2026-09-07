@@ -149,7 +149,10 @@ pub struct AgentTunnelState {
     /// session_request 序号分配器
     pub session_seq: std::sync::atomic::AtomicU64,
     /// channel_id → 探测出的 subclass（v0.70.7：Agent 侧探测后回传，Hub 据此持久化资源 subtype）
+    /// channel_id → 探测出的 subclass（v0.70.7：Agent 侧探测后回传，Hub 据此持久化资源 subtype）
     pub session_db_type: RwLock<HashMap<String, String>>,
+    /// v0.73.2：已通知更新的 agent_id 集合，防止每次心跳重复推送 update 命令
+    pub update_notified: RwLock<std::collections::HashSet<String>>,
 }
 
 /// 一次协议会话请求（Hub → Agent → Hub）的响应载体。
@@ -174,6 +177,7 @@ impl Default for AgentTunnelState {
             session_responses: RwLock::new(HashMap::new()),
             session_seq: std::sync::atomic::AtomicU64::new(1),
             session_db_type: RwLock::new(HashMap::new()),
+            update_notified: RwLock::new(std::collections::HashSet::new()),
         }
     }
 }
@@ -581,44 +585,60 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
                     let _ = conn.sender.send(AgentEvent::Text(ack)).await;
                 }
 
-                // 版本对比 — Hub 版本 ≠ Agent 版本时推送更新
+                // 版本对比 — Hub 版本 ≠ Agent 版本时推送更新（仅首次，避免每次心跳重复推送）
                 let hub_version = env!("CARGO_PKG_VERSION");
                 if !payload.version.is_empty() && payload.version != hub_version {
-                    tracing::info!(
-                        action = "AGENT_VERSION_MISMATCH",
-                        agent_id = %agent_id,
-                        agent_version = %payload.version,
-                        hub_version = hub_version,
-                        "version mismatch detected, pushing update"
-                    );
-                    // 构造 Agent 下载 URL（Hub 提供二进制）
-                    // 验证 os/arch 值，防止恶意数据
-                    let valid_os = ["linux", "windows", "macos"];
-                    let valid_arch = ["amd64", "arm64"];
-                    let os = if valid_os.contains(&payload.os.as_str()) {
-                        payload.os.clone()
+                    let already_notified = state
+                        .agent_tunnel
+                        .update_notified
+                        .read()
+                        .await
+                        .contains(agent_id);
+                    if already_notified {
+                        tracing::debug!(agent_id = %agent_id, "update already notified, skipping");
                     } else {
-                        "linux".into()
-                    };
-                    let arch = if valid_arch.contains(&payload.arch.as_str()) {
-                        payload.arch.clone()
-                    } else {
-                        "amd64".into()
-                    };
-                    let download_url = format!("/api/agents/download?os={os}&arch={arch}");
+                        state
+                            .agent_tunnel
+                            .update_notified
+                            .write()
+                            .await
+                            .insert(agent_id.to_string());
+                        tracing::info!(
+                            action = "AGENT_VERSION_MISMATCH",
+                            agent_id = %agent_id,
+                            agent_version = %payload.version,
+                            hub_version = hub_version,
+                            "version mismatch detected, pushing update"
+                        );
+                        // 构造 Agent 下载 URL（Hub 提供二进制）
+                        // 验证 os/arch 值，防止恶意数据
+                        let valid_os = ["linux", "windows", "macos"];
+                        let valid_arch = ["amd64", "arm64"];
+                        let os = if valid_os.contains(&payload.os.as_str()) {
+                            payload.os.clone()
+                        } else {
+                            "linux".into()
+                        };
+                        let arch = if valid_arch.contains(&payload.arch.as_str()) {
+                            payload.arch.clone()
+                        } else {
+                            "amd64".into()
+                        };
+                        let download_url = format!("/api/agents/download?os={os}&arch={arch}");
 
-                    let update_cmd = rex_common::update::UpdateCommand {
-                        version: hub_version.to_string(),
-                        download_url,
-                        fallback_url: String::new(),
-                        sha256: String::new(),
-                    };
-                    let msg = serde_json::to_string(&serde_json::json!({
-                        "type": "update",
-                        "payload": update_cmd
-                    }))
-                    .unwrap();
-                    let _ = conn.sender.send(AgentEvent::Text(msg)).await;
+                        let update_cmd = rex_common::update::UpdateCommand {
+                            version: hub_version.to_string(),
+                            download_url,
+                            fallback_url: String::new(),
+                            sha256: String::new(),
+                        };
+                        let msg = serde_json::to_string(&serde_json::json!({
+                            "type": "update",
+                            "payload": update_cmd
+                        }))
+                        .unwrap();
+                        let _ = conn.sender.send(AgentEvent::Text(msg)).await;
+                    } // end !already_notified
                 }
             }
         }
