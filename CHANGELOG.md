@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.73.3] - 2026-09-07
+
+### Fixed
+- **Docker 日志输出修复**：Hub supervisor 和 worker 进程均未初始化 tracing_subscriber，导致所有 tracing::info! 调用静默，Docker 容器无日志输出
+
 ## [0.73.2] - 2026-09-07
 
 ### Fixed
