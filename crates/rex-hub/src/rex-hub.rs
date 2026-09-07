@@ -107,6 +107,13 @@ fn data_dir_or_default() -> PathBuf {
 }
 
 fn supervisor_main() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive("info".parse().unwrap()),
+        )
+        .init();
+
     tracing::info!(
         name = "REX Hub",
         version = env!("CARGO_PKG_VERSION"),
@@ -135,6 +142,13 @@ fn supervisor_main() {
 }
 
 fn worker_main() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive("info".parse().unwrap()),
+        )
+        .init();
+
     tracing::info!(
         name = "REX Hub",
         version = env!("CARGO_PKG_VERSION"),
