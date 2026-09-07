@@ -86,18 +86,9 @@ pub async fn handle_connect_sql(
         },
     };
 
-    // 通知 Hub 连接成功（协议已在 Agent 终结）。探测模式下回传 detected dialect。
-    let ok = serde_json::to_string(&rex_common::agent_proto::AgentSessionMsg::SessionOpened(
-        rex_common::agent_proto::SessionOpened {
-            request_id,
-            channel_id: channel_id.clone(),
-            subtype: detected,
-        },
-    ))
-    .unwrap_or_default();
-    let _ = evt_tx.send(AgentEvent::Text(ok)).await;
-
     // 注册 channel（接收 Hub 经隧道下发的 session_request 帧字节）。
+    // 必须在 SessionOpened 之前注册，否则 Hub 收到 SessionOpened 后立即下发查询帧，
+    // Agent 端 channel 尚未注册导致帧被丢弃（session request timeout）。
     let (data_tx, mut data_rx) = mpsc::channel::<Vec<u8>>(512);
     {
         let mut chs = channels.write().await;
@@ -110,6 +101,17 @@ pub async fn handle_connect_sql(
             },
         );
     }
+
+    // 通知 Hub 连接成功（协议已在 Agent 终结）。探测模式下回传 detected dialect。
+    let ok = serde_json::to_string(&rex_common::agent_proto::AgentSessionMsg::SessionOpened(
+        rex_common::agent_proto::SessionOpened {
+            request_id,
+            channel_id: channel_id.clone(),
+            subtype: detected,
+        },
+    ))
+    .unwrap_or_default();
+    let _ = evt_tx.send(AgentEvent::Text(ok)).await;
 
     // 隧道帧（Hub 经 `[4B channelId][json]` 下发）即 session_request JSON；
     // 主循环持有 connector，逐帧处理并按 seq 回传 session_response。
