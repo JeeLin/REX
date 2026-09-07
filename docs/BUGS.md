@@ -6,3 +6,4 @@
 | v0.73.1 | 🔴 | Agent 启动时持续重复触发更新检查 | 用户反馈 | Agent 启动后每 30 秒触发一次 `update started`（日志显示 7 次以上），直到更新完成。根因：Hub 每次心跳检测版本不匹配都推送更新命令，Agent 无防重入机制，每次都 spawn 新的 update task。需要加锁或状态标记，仅允许一个 update task 运行 |
 | v0.73.1 | 🔴 | Windows Agent 更新失败：无法 rename 正在运行的 exe | 用户反馈 | Windows 下 supervisor 尝试 rename staged binary 替换当前 exe 时报 `拒绝访问 (os error 5)`。Windows 不允许 rename/delete 正在运行的可执行文件，需要先 rename 当前 exe 为 .old 再 rename staged 为当前，或用 `MoveFileEx` + `MOVEFILE_REPLACE_EXISTING` + `MOVEFILE_DELAY_UNTIL_REBOOT` |
 | v0.73.1 | 🟡 | 页面 subtitle i18n key 缺失 | 用户反馈 | `agents.subtitle` 和 `auditLog.subtitle` 在 zh.json/en.json 中未定义，页面显示 fallback 英文文本 |
+| v0.73.1 | 🟡 | Windows service install 不支持 | 用户反馈 | `rex-agent.exe service install` 输出 `automatic service management is not supported on this platform`，提示用 nssm 或 Task Scheduler。应支持 Windows 原生服务注册（sc create / NSSM / WinSW） |
