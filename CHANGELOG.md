@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.73.2] - 2026-09-07
+
+### Fixed
+- **Agent SQL 协议支持**：修复 Agent 模式下 SQL 连接测试报 `unsupported protocol: sql`（DB 迁移后 protocol 统一为 `sql` 但 test-connect 未匹配）和 SQL 查询超时（`SessionOpened` 在 channel 注册前发送导致竞态丢帧）
+- **Windows 更新修复**：修复 Windows 下 supervisor 替换正在运行的 exe 时报 `拒绝访问 (os error 5)`，改为先 rename 当前 exe 为 `.old` 再替换
+- **Agent 更新去重**：Hub 心跳检测版本不匹配时仅首次推送 update 命令，避免每次心跳重复触发导致 worker 反复 spawn update task
+- **Agent 隧道 channel 注册竞态**：SQL/Redis/File 三个协议的 channel 注册统一移到 `SessionOpened` 发送之前
+- **darwin→mac 下载映射**：修复 Release 资源命名用 `mac` 但代码传 `darwin` 导致 404
+
 ## [0.73.1] - 2026-07-05
 
 ### Fixed
