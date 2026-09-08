@@ -244,7 +244,7 @@ async fn detect_dialect(
         }
     }
 
-    anyhow::bail!("无法识别 dialect，请在创建资源时指定 subtype")
+    anyhow::bail!("unrecognized dialect, please specify subtype when creating the resource")
 }
 
 /// v0.70.7：将探测确认的 [`DatabaseType`] 转成持久化用的 db_type 字符串。

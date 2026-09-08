@@ -780,6 +780,11 @@ async function saveSettings() {
 /* Save bar */
 .save-bar {
   display: flex;
+  position: sticky;
+  bottom: 0;
+  padding: var(--space-4) 0;
+  background: var(--bg-primary, #1a1a1a);
+  z-index: 10;
 }
 
 .save-message {

@@ -390,7 +390,7 @@ async fn detect_dialect(req: ConnectRequest) -> anyhow::Result<Box<dyn SqlConnec
     }
 
     Err(anyhow::anyhow!(
-        "无法识别 dialect，请在创建资源时指定 subtype"
+        "unrecognized dialect, please specify subtype when creating the resource"
     ))
 }
 
