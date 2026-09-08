@@ -53,7 +53,8 @@
     "resetToken": "Reset Token",
     "resetTokenConfirm": "Are you sure you want to reset the Agent Token? The old token will become invalid.",
     "title": "Agents",
-    "version": "Version"
+    "version": "Version",
+    "subtitle": "Registered agent nodes"
   },
   "app": {
     "name": "REX Hub"
@@ -95,7 +96,8 @@
     "totalCount": "Total {n} entries",
     "gotoPage": "Go to page",
     "pageUnit": "Page",
-    "viewDetail": "View Details"
+    "viewDetail": "View Details",
+    "subtitle": "System activity log"
   },
   "cdr": {
     "title": "Call Records",
