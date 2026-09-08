@@ -9,3 +9,4 @@
 | v0.73.3 | 🟡 | 访问 /workspace 路径触发文件下载而非目录浏览 | 用户反馈 | 浏览器访问 /workspace 资源时触发文件下载，预期应显示目录列表/文件浏览页面。可能是文件下载 API 缺少目录判断，或前端路由未正确处理 workspace 类型资源 |
 | v0.73.3 | 🔴 | Agent 模式 SQL 连接失败：无法识别 dialect | 用户反馈 | agent 在线时通过 agent 连接 SQL 资源，返回 `无法识别 dialect，请在创建资源时指定 subtype`。auto-detect 尝试 MySQL 和 PostgreSQL 均失败，需改进错误信息或确保 subtype 正确传递 |
 | v0.73.3 | 🔴 | Agent 模式 SSH 测试连接失败 | 用户反馈 | Agent SSH 资源实际可正常访问，但调用 `/api/resources/test-connection` 返回 `SSH connection failed: failed to open session`。test-connection 通过 agent tunnel 测试 SSH 时建立会话失败，可能是 test 流程未正确传递凭证或超时太短 |
+| v0.73.3 | 🟡 | API 错误信息包含中文 | 用户反馈 | Agent 侧返回的错误信息混入中文（如 `无法识别 dialect`、`拒绝访问`），API 响应应统一使用英文，避免前端 i18n 不一致 |
