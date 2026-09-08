@@ -455,8 +455,29 @@ async fn download(
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
     };
+    // If the path is a directory, return a directory listing instead of
+    // triggering a download.  This prevents browsers from downloading
+    // directories when a user navigates into a workspace resource path.
+    if let Ok(entry) = conn.stat(&params.path).await {
+        if entry.is_dir {
+            match conn.list(&params.path).await {
+                Ok(entries) => {
+                    tracing::info!(
+                        action = "FILE_OP",
+                        op = "download_dir_listing",
+                        session_id = %params.session_id,
+                        path = %params.path,
+                        "directory listing returned instead of download"
+                    );
+                    return (StatusCode::OK, Json(entries)).into_response();
+                }
+                Err(e) => return error_response("LIST_FAILED", &e.to_string()).into_response(),
+            }
+        }
+    }
 
     // Check for Range header
+
     let range = headers.get("range").and_then(|v| v.to_str().ok());
 
     if let Some(range_str) = range {
