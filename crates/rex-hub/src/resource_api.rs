@@ -385,16 +385,29 @@ pub async fn test_connection(
                                         state.agent_tunnel.pending_requests.write().await;
                                     pending.insert(request_id.clone(), resp_tx);
                                 }
+                                let mut connect_config = serde_json::json!({
+                                    "host": host,
+                                    "port": port,
+                                });
+                                // 合并 config_json（含 password/private_key 等凭证）
+                                if let Some(ref cfg_str) = body.config_json {
+                                    if let Ok(cfg_val) =
+                                        serde_json::from_str::<serde_json::Value>(cfg_str)
+                                    {
+                                        if let serde_json::Value::Object(m) = cfg_val {
+                                            for (k, v) in m {
+                                                connect_config[k] = v;
+                                            }
+                                        }
+                                    }
+                                }
                                 let connect_msg = serde_json::json!({
                                     "type": "connect",
                                     "payload": {
                                         "request_id": request_id,
                                         "resource_id": "test",
                                         "protocol": body.protocol,
-                                        "config": {
-                                            "host": host,
-                                            "port": port,
-                                        }
+                                        "config": connect_config,
                                     }
                                 });
                                 if conn
