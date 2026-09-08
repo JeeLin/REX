@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.74.1] - 2026-09-07
+
+### Fixed
+- **Agent 二进制查找路径修复**：支持 Rust target triple 路径（如 ），解决 Docker 部署时 agent 下载慢的问题
+- **SSH 测试连接凭证传递**：test-connection 通过 agent tunnel 时正确传递 password/private_key
+- **错误信息国际化**：API 错误信息统一使用英文，避免中文混入
+- **Docker 日志输出**：修复 tracing_subscriber 未初始化导致容器无日志
+- **i18n 键缺失**：添加 agents.subtitle、auditLog.subtitle
+- **设置页保存按钮**：改为 sticky 固定底部，无需滚动
+- **CI git hash 注入**：确保 GITHUB_SHA 在构建时可用
+
 ## [0.73.3] - 2026-09-07
 
 ### Fixed
