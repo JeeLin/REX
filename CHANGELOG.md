@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.74.1] - 2026-09-07
+## [0.73.4] - 2026-09-07
 
 ### Fixed
 - **Agent 二进制查找路径修复**：支持 Rust target triple 路径（如 ），解决 Docker 部署时 agent 下载慢的问题
