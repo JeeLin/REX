@@ -45,8 +45,18 @@ impl AgentBinaries {
 
     /// 查找 Agent 二进制文件（按 os/arch）
     pub fn find(&self, os: &str, arch: &str) -> Option<PathBuf> {
-        let subdir = format!("{os}/{arch}");
+        // os/arch 格式（如 linux/amd64）与 Rust target triple（如 x86_64-unknown-linux-gnu）的映射
+        let target_triple = match (os, arch) {
+            ("linux", "amd64") => "x86_64-unknown-linux-gnu",
+            ("linux", "arm64") => "aarch64-unknown-linux-gnu",
+            ("mac", "amd64") => "x86_64-apple-darwin",
+            ("mac", "arm64") => "aarch64-apple-darwin",
+            _ => "",
+        };
+
         for dir in &self.dirs {
+            // 尝试 os/arch 格式（如 linux/amd64）
+            let subdir = format!("{os}/{arch}");
             let path = dir.join(&subdir).join("rex-agent");
             if path.exists() {
                 return Some(path);
@@ -55,6 +65,20 @@ impl AgentBinaries {
             if path_exe.exists() {
                 return Some(path_exe);
             }
+            // 尝试 Rust target triple 格式（如 x86_64-unknown-linux-gnu）
+            if !target_triple.is_empty() {
+                let path = dir.join(target_triple).join("rex-agent");
+                if path.exists() {
+                    return Some(path);
+                }
+                let path_exe = dir.join(target_triple).join("rex-agent.exe");
+                if path_exe.exists() {
+                    return Some(path_exe);
+                }
+            }
+        }
+        None
+    }
         }
         None
     }

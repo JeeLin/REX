@@ -53,7 +53,8 @@
     "resetToken": "重置 Token",
     "resetTokenConfirm": "确定要重置 Agent Token 吗？重置后旧 Token 将失效。",
     "title": "Agent",
-    "version": "版本"
+    "version": "版本",
+    "subtitle": "已注册的 Agent 节点"
   },
   "app": {
     "name": "REX Hub"
@@ -95,7 +96,8 @@
     "totalCount": "共 {n} 条",
     "gotoPage": "跳转到第几页",
     "pageUnit": "页",
-    "viewDetail": "查看详情"
+    "viewDetail": "查看详情",
+    "subtitle": "系统活动日志"
   },
   "cdr": {
     "title": "通话记录",
