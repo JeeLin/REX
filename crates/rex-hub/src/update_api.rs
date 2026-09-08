@@ -79,9 +79,6 @@ impl AgentBinaries {
         }
         None
     }
-        }
-        None
-    }
 }
 
 impl Default for AgentBinaries {
