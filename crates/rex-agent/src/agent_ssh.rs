@@ -205,6 +205,24 @@ pub async fn handle_connect_ssh(
 ) {
     let ssh_cfg = parse_ssh_config(cfg);
 
+    let auth_method = if ssh_cfg.private_key.is_some() {
+        "key"
+    } else if ssh_cfg.password.is_some() {
+        "password"
+    } else {
+        "none"
+    };
+    tracing::info!(
+        action = "AGENT_SSH_CONNECT",
+        request_id = %request_id,
+        host = %ssh_cfg.host,
+        port = ssh_cfg.port,
+        username = %ssh_cfg.username,
+        auth_method = auth_method,
+        has_init_script = ssh_cfg.init_script.is_some(),
+        "SSH connection initiated"
+    );
+
     let (handle, session) = match SshSession::connect_with_handle(ssh_cfg.clone()).await {
         Ok(s) => s,
         Err(e) => {
