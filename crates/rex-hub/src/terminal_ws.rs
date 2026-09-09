@@ -565,6 +565,7 @@ async fn handle_agent_terminal(
             }
         }
     });
+    tracing::debug!(action = "SSH_AGENT_CONFIG", session_id = %session_id, resource_id = %resource_id, host = %conn.host, port = conn.port, username = %conn.username, has_password = conn.password.is_some(), has_private_key = conn.private_key.is_some(), has_init_script = conn.init_script.is_some(), "SSH config forwarded to agent");
 
     tracing::debug!(
         action = "SSH_AGENT_SEND_FAILED",

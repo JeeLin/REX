@@ -22,6 +22,7 @@ pub async fn handle_connect_redis(
     evt_tx: mpsc::Sender<AgentEvent>,
     channels: Arc<RwLock<HashMap<String, LocalChannel>>>,
 ) {
+    tracing::info!(action = "AGENT_REDIS_CONNECT", request_id = %request_id, host = %cfg.get("host").and_then(|v| v.as_str()).unwrap_or(""), port = %cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(6379), has_password = cfg.get("password").and_then(|v| v.as_str()).is_some(), db = %cfg.get("db").and_then(|v| v.as_u64()).unwrap_or(0), "Redis connection initiated");
     let req = RedisConnectRequest {
         host: cfg
             .get("host")

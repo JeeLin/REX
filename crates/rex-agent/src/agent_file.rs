@@ -24,6 +24,17 @@ pub async fn handle_connect_file(
     channels: Arc<RwLock<HashMap<String, LocalChannel>>>,
     ssh_handles: SshHandlePool,
 ) {
+    tracing::info!(
+        action = "AGENT_FILE_CONNECT",
+        request_id = %request_id,
+        protocol = %protocol,
+        host = %cfg.get("host").and_then(|v| v.as_str()).unwrap_or(""),
+        port = %cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(0),
+        has_password = cfg.get("password").and_then(|v| v.as_str()).is_some(),
+        bucket = %cfg.get("bucket").and_then(|v| v.as_str()).unwrap_or(""),
+        "file connection initiated"
+    );
+
     let mut connector: Box<dyn FileConnector> =
         match build_connector(&protocol, cfg, ssh_handles).await {
             Ok(c) => c,

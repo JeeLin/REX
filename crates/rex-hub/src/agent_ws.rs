@@ -720,6 +720,12 @@ async fn handle_session_msg(
 ) {
     match msg {
         rex_common::agent_proto::AgentSessionMsg::SessionOpened(payload) => {
+            tracing::info!(
+                action = "AGENT_SESSION_OPENED",
+                channel_id = %payload.channel_id,
+                subtype = payload.subtype.as_deref().unwrap_or(""),
+                "agent session opened"
+            );
             let mut channels = state.agent_tunnel.channels.write().await;
             channels.insert(payload.channel_id.clone(), agent_id.to_string());
 
@@ -758,6 +764,13 @@ async fn handle_session_msg(
             }
         }
         rex_common::agent_proto::AgentSessionMsg::SessionError(payload) => {
+            tracing::warn!(
+                action = "AGENT_SESSION_ERROR",
+                channel_id = %payload.channel_id,
+                request_id = payload.request_id.as_deref().unwrap_or(""),
+                error = %payload.error,
+                "agent session error"
+            );
             if let Some(request_id) = payload.request_id {
                 let mut pending = state.agent_tunnel.pending_requests.write().await;
                 if let Some(tx) = pending.remove(&request_id) {
