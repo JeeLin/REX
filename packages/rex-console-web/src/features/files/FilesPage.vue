@@ -8,6 +8,7 @@ import FolderSyncDialog from './FolderSyncDialog.vue'
 import MobileFilesBar from './MobileFilesBar.vue'
 import FileEditorDialog from './FileEditorDialog.vue'
 import Button from '@/components/ui/Button.vue'
+import { clipboard } from '@/utils/clipboard'
 
 const { t } = useI18n()
 
@@ -275,12 +276,12 @@ const ctxRef = ref<HTMLElement | null>(null)
 onClickOutside(ctxRef, () => { ctx.value.show = false })
 function onCtx(e: MouseEvent, entry: FileEntry) { e.preventDefault(); ctx.value = { show: true, x: e.clientX, y: e.clientY, path: entry.path, name: entry.name } }
 async function ctxDelete() { confirmCtxDelete(); ctx.value.show = false }
-function ctxCopy() { navigator.clipboard?.writeText(ctx.value.path); ctx.value.show = false }
+function ctxCopy() { clipboard.writeText(ctx.value.path); ctx.value.show = false }
 async function ctxPresignedUrl() {
   if (!sessionId.value) return
   try {
     const url = await filesApi.presignedUrl(sessionId.value, ctx.value.path)
-    navigator.clipboard?.writeText(url)
+    clipboard.writeText(url)
     // TODO: show toast "Presigned URL copied to clipboard"
   } catch (e) {
     console.error('Failed to generate presigned URL:', e)
@@ -320,7 +321,7 @@ function mfbCopyPath() {
   const sel = Array.from(panels[side].selected)
   if (sel.length !== 1) return
   const entry = panels[side].entries.find(e => e.name === sel[0])
-  if (entry) navigator.clipboard?.writeText(entry.path)
+  if (entry) clipboard.writeText(entry.path)
 }
 const mfbSelectedCount = computed(() => panels[mobileActiveSide.value].selected.size)
 const isS3 = computed(() => connProtocol.value === 's3')
