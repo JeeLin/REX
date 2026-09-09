@@ -65,6 +65,16 @@ impl AgentBinaries {
             if path_exe.exists() {
                 return Some(path_exe);
             }
+            // 尝试 os-arch 格式（如 linux-amd64），CI/Docker 目录组织方式
+            let subdir_hyphen = format!("{os}-{arch}");
+            let path = dir.join(&subdir_hyphen).join("rex-agent");
+            if path.exists() {
+                return Some(path);
+            }
+            let path_exe = dir.join(&subdir_hyphen).join("rex-agent.exe");
+            if path_exe.exists() {
+                return Some(path_exe);
+            }
             // 尝试 Rust target triple 格式（如 x86_64-unknown-linux-gnu）
             if !target_triple.is_empty() {
                 let path = dir.join(target_triple).join("rex-agent");
