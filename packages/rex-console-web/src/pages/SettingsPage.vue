@@ -3,6 +3,7 @@ import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { settingsApi, type Settings } from '@/api/settings'
 import { useUpdateStore } from '@/stores/update'
+import { useNotificationStore } from '@/stores/notification'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
@@ -28,6 +29,8 @@ const loading = ref(true)
 const saving = ref(false)
 const saveMessage = ref('')
 const activeTab = ref('appearance')
+const displayName = ref('admin')
+const profileEmail = ref('admin@rex.local')
 const contentRef = ref<HTMLElement>()
 const autoUpdate = ref(true)
 const autoUpdateSynced = ref(false)
@@ -136,6 +139,9 @@ async function changePassword() {
 }
 
 onMounted(async () => {
+  // Load profile from localStorage
+  displayName.value = localStorage.getItem('rex-display-name') || 'admin'
+  profileEmail.value = localStorage.getItem('rex-profile-email') || 'admin@rex.local'
   try {
     const remote = await settingsApi.get()
     // Merge remote settings, preserving frontend-only fields
@@ -186,6 +192,8 @@ async function saveSettings() {
     localStorage.setItem('rex-terminal-settings', JSON.stringify(terminalSettings))
     window.dispatchEvent(new CustomEvent('terminal-settings-changed', { detail: terminalSettings }))
     localStorage.setItem('rex-session-timeout', String(settings.value.session_timeout))
+    localStorage.setItem('rex-display-name', displayName.value)
+    localStorage.setItem('rex-profile-email', profileEmail.value)
     saveMessage.value = t('settings.saved')
     setTimeout(() => saveMessage.value = '', 2000)
   } catch (e: unknown) {
@@ -235,14 +243,14 @@ async function saveSettings() {
               <b>{{ t('settings.displayName') }}</b>
               <span>{{ t('settings.displayNameDesc') }}</span>
             </div>
-            <input class="field-input" value="admin" />
+            <input class="field-input" v-model="displayName" />
           </div>
           <div class="field">
             <div class="field-label">
               <b>{{ t('settings.email') }}</b>
               <span>{{ t('settings.emailDesc') }}</span>
             </div>
-            <input class="field-input" value="admin@rex.local" />
+            <input class="field-input" v-model="profileEmail" />
           </div>
           <div class="field">
             <div class="field-label">
