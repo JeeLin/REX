@@ -48,32 +48,60 @@ const vfEdges = computed(() => {
   }))
 })
 
-// Simple hierarchical layout: environments in center row, agents below, resources below agents
+// Radial layout: Hub/Environment at center, agents in inner ring, resources in outer ring
 function computeLayout(nodes: TopoNode[], envId?: string): Record<string, { x: number; y: number }> {
   const pos: Record<string, { x: number; y: number }> = {}
-  const envs = nodes.filter((n) => n.type === 'environment')
-  const agents = nodes.filter((n) => n.type === 'agent')
-  const resources = nodes.filter((n) => n.type === 'resource')
+  const cx = 500, cy = 350 // center
 
-  // If filtering to one environment, arrange tightly
-  const hSpacing = 220
-  const vSpacing = 160
-  const startX = 80
+  if (envId) {
+    // Single environment view: env at center, agents around it, resources further out
+    const envs = nodes.filter((n) => n.type === 'environment')
+    const agents = nodes.filter((n) => n.type === 'agent')
+    const resources = nodes.filter((n) => n.type === 'resource')
 
-  // Environments row (y=0)
-  envs.forEach((n, i) => {
-    pos[n.id] = { x: startX + i * hSpacing, y: 0 }
-  })
+    envs.forEach((n) => { pos[n.id] = { x: cx, y: cy } })
 
-  // Agents row (y=vSpacing)
-  agents.forEach((n, i) => {
-    pos[n.id] = { x: startX + i * hSpacing, y: vSpacing }
-  })
+    const agentR = 200
+    agents.forEach((n, i) => {
+      const angle = (2 * Math.PI * i) / Math.max(agents.length, 1) - Math.PI / 2
+      pos[n.id] = { x: cx + agentR * Math.cos(angle), y: cy + agentR * Math.sin(angle) }
+    })
 
-  // Resources row (y=2*vSpacing)
-  resources.forEach((n, i) => {
-    pos[n.id] = { x: startX + i * hSpacing, y: 2 * vSpacing }
-  })
+    const resR = 380
+    resources.forEach((n, i) => {
+      const angle = (2 * Math.PI * i) / Math.max(resources.length, 1) - Math.PI / 2
+      pos[n.id] = { x: cx + resR * Math.cos(angle), y: cy + resR * Math.sin(angle) }
+    })
+  } else {
+    // Full topology: environments in center ring, agents in middle, resources outer
+    const envs = nodes.filter((n) => n.type === 'environment')
+    const agents = nodes.filter((n) => n.type === 'agent')
+    const resources = nodes.filter((n) => n.type === 'resource')
+
+    // Environments at center (if single, at center; if multiple, small ring)
+    if (envs.length === 1) {
+      if (envs[0]) pos[envs[0].id] = { x: cx, y: cy }
+    } else {
+      envs.forEach((n, i) => {
+        const angle = (2 * Math.PI * i) / envs.length - Math.PI / 2
+        pos[n.id] = { x: cx + 60 * Math.cos(angle), y: cy + 60 * Math.sin(angle) }
+      })
+    }
+
+    // Agents in middle ring
+    const agentR = 240
+    agents.forEach((n, i) => {
+      const angle = (2 * Math.PI * i) / Math.max(agents.length, 1) - Math.PI / 2
+      pos[n.id] = { x: cx + agentR * Math.cos(angle), y: cy + agentR * Math.sin(angle) }
+    })
+
+    // Resources in outer ring
+    const resR = 420
+    resources.forEach((n, i) => {
+      const angle = (2 * Math.PI * i) / Math.max(resources.length, 1) - Math.PI / 2
+      pos[n.id] = { x: cx + resR * Math.cos(angle), y: cy + resR * Math.sin(angle) }
+    })
+  }
 
   return pos
 }
