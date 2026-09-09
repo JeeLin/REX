@@ -78,6 +78,7 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 const MAX_RECONNECT_ATTEMPTS = 5
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000]
 let manualDisconnect = false
+let connecting = false  // Prevent duplicate connection attempts
 
 // ── Context menu state ────────────────────────────────────
 const ctxMenuVisible = ref(false)
@@ -311,6 +312,10 @@ function stopPing() {
 
 // ── Connection ────────────────────────────────────────────
 function connectSession() {
+  // Prevent duplicate connection attempts
+  if (connecting) return
+  connecting = true
+  
   connectionStatus.value = 'connecting'
   manualDisconnect = false
   emit('update:status', 'connecting')
@@ -321,6 +326,7 @@ function connectSession() {
   ws = new WebSocket(wsUrl)
 
   ws.onopen = () => {
+    connecting = false
     connectionStatus.value = 'connected'
     emit('update:status', 'online')
     terminal?.focus()
@@ -367,6 +373,7 @@ function connectSession() {
   }
 
   ws.onclose = () => {
+    connecting = false
     stopPing()
     connectionStatus.value = 'disconnected'
     emit('update:status', 'offline')
@@ -385,6 +392,7 @@ function connectSession() {
   }
 
   ws.onerror = () => {
+    connecting = false
     stopPing()
   }
 }
