@@ -509,3 +509,131 @@ Docker / 二进制 / 配置文件三种方式，自托管。Hub 与 Agent 各自
 | SIP 电话 | 拨号盘/通话状态、DTMF/保持、浏览器实时双向音频（Web Audio + getUserMedia）、（可选）实时视频、CDR、录音回放、信令抓包 pcap、质量监控 |
 
 不可引入：多用户、RBAC、企业协作（AGENTS.md 硬性约束）。
+
+---
+
+## 11. UI/UX 优化路线图（参考 DBX）
+
+> 基于对 DBX（开源数据库管理工具）的深度分析，提炼可借鉴的操作模式与交互逻辑。所有优化均需符合 REX Hub 的产品定位（单用户、自托管、深色优先），不引入多用户/RBAC 概念。
+
+### 11.1 键盘快捷系统（P0）
+
+| 优化项 | 现状 | 目标 | 参考来源 |
+|--------|------|------|----------|
+| 集中注册表 | 硬编码在组件内 | 所有快捷键在一个地方定义，支持用户自定义 | DBX shortcutRegistry |
+| 平台感知 | 无 | macOS 用 Cmd，Windows/Linux 用 Ctrl | DBX platform detection |
+| 输入框智能跳过 | 简单判断 | 输入框内自动跳过，但保留 Ctrl+Enter 等执行类快捷键 | DBX keyboard shortcuts |
+| 全局搜索 | CommandPalette 基础实现 | Cmd+K Quick Open，搜索连接/资源/表/命令 | DBX Quick Open |
+| 禅模式 | 无 | F11 全屏隐藏侧栏/状态栏 | DBX Zen Mode |
+
+### 11.2 右键菜单上下文感知（P0）
+
+| 优化项 | 现状 | 目标 | 参考来源 |
+|--------|------|------|----------|
+| 动态菜单项 | 固定菜单项 | 按节点类型动态生成（连接/数据库/表/文件/Redis键） | DBX buildContextMenu |
+| 快捷键提示 | 无 | 菜单项右侧显示快捷键 | DBX menu descriptors |
+| 子菜单 | 无 | 分组折叠（如"导出→CSV/JSON/XLSX"） | DBX context menu |
+| 危险标记 | 无 | 删除等操作显示红色 + 二次确认 | DBX destructive variant |
+| 禁用状态 | 无 | 只读资源不可编辑时灰显 | DBX disabled state |
+
+### 11.3 连接树交互增强（P1）
+
+| 优化项 | 现状 | 目标 | 参考来源 |
+|--------|------|------|----------|
+| 单击/双击模式 | 单击打开 | 可配置单击/双击激活（减少误触） | DBX activation setting |
+| 连接状态显示 | 基础状态点 | 实时显示在线/离线/连接中/错误 | DBX ConnectionErrorIndicator |
+| 搜索增强 | 基础搜索 | 类型前缀过滤（"sql:" "ssh:" "redis:"）+ 正则切换 | DBX sidebar search |
+| 多选操作 | 无 | Ctrl/Shift 多选 → 批量连接/断开/删除 | DBX connectionMultiSelect |
+| 拖拽排序 | 无 | 连接节点拖拽到分组 → 移动 | DBX drag sort |
+| 复制粘贴 | 无 | Cmd+C/V 复制/粘贴连接配置 | DBX sidebar copy/paste |
+| 收藏/最近 | 基础收藏 | 收藏 Tab + 最近使用 Tab | DBX pinned items |
+
+### 11.4 数据网格增强（P1）
+
+| 优化项 | 现状 | 目标 | 参考来源 |
+|--------|------|------|----------|
+| 列头排序 | 基础排序 | 点击排序（升序→降序→取消）+ 多列排序 | DBX DataGrid |
+| 列级过滤 | 无 | 列头筛选图标 → =, !=, LIKE, >, < | DBX column filter |
+| 内联编辑预览 | 基础内联编辑 | 编辑后显示将执行的 SQL（Preview → 确认） | DBX SQL preview |
+| 多选行 | 无 | Shift/Ctrl 多选 → 批量导出/删除 | DBX row selection |
+| 单元格详情 | 无 | 大文本/JSON/二进制预览面板 | DBX cell detail |
+| 条件编辑器 | 无 | 可视化构建 WHERE 条件 | DBX filter builder |
+| 转置视图 | 无 | 行→列翻转（适合宽表） | DBX transpose |
+
+### 11.5 搜索系统升级（P1）
+
+| 优化项 | 现状 | 目标 | 参考来源 |
+|--------|------|------|----------|
+| Quick Open | CommandPalette | Cmd+K 搜索连接名/资源名/表名/命令，模糊匹配 + 高亮 | DBX Quick Open |
+| 侧栏搜索 | 基础过滤 | 正则切换 + 类型前缀 + 搜索结果高亮定位 | DBX sidebar search |
+| SQL 全局搜索 | 无 | Cmd+Shift+F 跨所有查询 Tab 搜索 | DBX global search |
+| 历史搜索 | 无 | 查询历史支持关键词搜索 | DBX history search |
+
+### 11.6 Tab 管理增强（P1）
+
+| 优化项 | 现状 | 目标 | 参考来源 |
+|--------|------|------|----------|
+| Tab 历史导航 | 无 | Cmd+←/→ 前进/后退 | DBX tab history |
+| 关闭 Tab 恢复 | 无 | Cmd+Shift+T 重新打开关闭的 Tab | DBX reopen tab |
+| Tab Pin | 无 | 固定常驻 Tab（不被自动关闭） | DBX pinned tabs |
+| Tab 拖拽排序 | 基础拖拽 | 拖动 Tab 位置 + 拖到编辑器边缘分屏 | DBX tab drag |
+| Tab 关闭确认 | 无 | 有未保存更改时弹窗确认 | DBX close confirm |
+| Tab 上下文菜单 | 基础菜单 | 关闭其他/关闭右侧/复制/移动到窗口 | DBX tab context menu |
+
+### 11.7 文件管理交互（P2）
+
+| 优化项 | 现状 | 目标 | 参考来源 |
+|--------|------|------|----------|
+| 拖拽上传 | 无 | 拖文件到面板 → 上传 | DBX drag upload |
+| 拖拽移动 | 无 | 拖文件到另一面板 → 移动/复制 | DBX drag move |
+| 内联重命名 | F2 弹窗 | F2 → 直接编辑名称（inline） | DBX inline rename |
+| 批量选择 | 基础多选 | Shift+点击范围选择 + Ctrl+点击多选 | DBX multi select |
+| 文件预览 | 无 | 双击图片/文本 → 预览弹窗 | DBX file preview |
+| 传输进度 | 基础进度条 | 底部抽屉显示上传/下载进度 + 吞吐量 | DBX transfer progress |
+
+### 11.8 SSH 终端增强（P2）
+
+| 优化项 | 现状 | 目标 | 参考来源 |
+|--------|------|------|----------|
+| 右键菜单增强 | 基础菜单 | 复制/粘贴/清屏/搜索/编码/重连 | DBX terminal context menu |
+| 终端内搜索 | 无 | Ctrl+F 终端内搜索 | DBX terminal search |
+| 多路复用 | 无 | 终端内 Split（水平/垂直）+ Alt+←/→ 切换 | DBX terminal split |
+| 保活检测 | 无 | 连接状态指示 + 自动重连 | DBX keepalive |
+
+### 11.9 AI 助手集成（P2）
+
+| 优化项 | 现状 | 目标 | 参考来源 |
+|--------|------|------|----------|
+| 选中文本→AI | 无 | 选中 SQL + 右键"发送到 AI" | DBX sendSelectionToAi |
+| AI 生成 SQL | 基础对话 | 自然语言描述 → 生成 SQL → 一键插入编辑器 | DBX AI assistant |
+| AI 解释查询 | 无 | 选中 SQL + 快捷键 → 解释查询逻辑 | DBX explain query |
+| AI 优化建议 | 无 | 实时分析当前查询 → 优化建议 | DBX AI optimize |
+| 上下文感知 | 无 | 自动携带当前表结构到 AI 上下文 | DBX AI context |
+
+### 11.10 页面级优化（P1）
+
+| 优化项 | 现状 | 目标 | 参考来源 |
+|--------|------|------|----------|
+| Tab 状态持久化 | 部分恢复 | 刷新后完整恢复所有 Tab（编辑器内容、滚动位置、选中状态） | DBX state persistence |
+| 欢迎页 | 无 | 统计卡片 + 最近连接 + SQL 历史 + 快捷操作入口 | DBX WelcomeScreen |
+| 工具栏可配置 | 固定布局 | 用户选择显示/隐藏哪些按钮 | DBX toolbar items |
+| 多窗口 | 无 | 拖 Tab 到新窗口 | DBX detached tab |
+| 批量操作 | 无 | 多选资源后批量导出/备份 | DBX batch operations |
+
+### 11.11 实施优先级
+
+| 阶段 | 内容 | 预估工时 |
+|------|------|----------|
+| **P0** | 键盘快捷系统 + Quick Open + 右键菜单上下文感知 | 4-5 天 |
+| **P1** | 连接树增强 + 数据网格排序/过滤 + Tab 管理 + 搜索升级 + 页面级优化 | 8-10 天 |
+| **P2** | 文件管理交互 + SSH 终端增强 + AI 助手集成 | 6-8 天 |
+
+### 11.12 设计约束
+
+所有优化必须遵守：
+1. **单用户** — 不引入多用户、RBAC、团队协作概念
+2. **自托管** — 不依赖外部 SaaS 服务
+3. **深色优先** — 保持极客美学、高信息密度
+4. **键盘驱动** — 快捷键是一等公民，鼠标操作是补充
+5. **一致性** — 统一的交互范式贯穿全站
+6. **渐进披露** — 复杂功能隐藏在右键菜单/快捷键中，界面保持简洁
