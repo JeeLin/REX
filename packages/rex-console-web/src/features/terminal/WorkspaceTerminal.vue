@@ -214,7 +214,8 @@ function initTerminal() {
       return false
     }
     // Ctrl+V → paste from clipboard
-    if (ctrl && event.key === 'v') {
+    // Ctrl+V → paste from clipboard
+    if (ctrl && (event.key === 'v' || event.key === 'V')) {
       event.preventDefault()
       void doPaste()
       return false
