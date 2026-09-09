@@ -448,6 +448,18 @@ async fn handle_connect(
     channels: Arc<RwLock<HashMap<String, LocalChannel>>>,
     ssh_handles: SshHandlePool,
 ) {
+    tracing::info!(
+        action = "AGENT_HANDLE_CONNECT",
+        request_id = %req.request_id,
+        resource_id = %req.resource_id,
+        protocol = %req.protocol,
+        host = %req.config.get("host").and_then(|v| v.as_str()).unwrap_or(""),
+        port = %req.config.get("port").and_then(|v| v.as_u64()).unwrap_or(0),
+        username = %req.config.get("username").and_then(|v| v.as_str()).unwrap_or(""),
+        has_password = req.config.get("password").and_then(|v| v.as_str()).is_some(),
+        "agent handling connect request"
+    );
+
     // SIP 资源走 Agent 内网 UA₂：不建 TCP，由 UA₂ 直接对内网 SIP server 信令。
     if req.protocol == "sip" {
         handle_connect_sip(req, evt_tx, channels).await;

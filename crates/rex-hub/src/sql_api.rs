@@ -185,6 +185,7 @@ async fn connect(
                 cfg[k] = v;
             }
         }
+        tracing::debug!(action = "SQL_AGENT_CONFIG", resource_id = %body.resource_id, host = %res.host, port = %res.port.unwrap_or(0), subtype = %agent_db_type, has_password = res.config.get("password").and_then(|v| v.as_str()).is_some(), has_database = res.config.get("database").and_then(|v| v.as_str()).is_some(), "SQL agent config forwarded to agent");
         let channel_id = match crate::agent_ws::open_agent_session(
             &state,
             &agent_id,

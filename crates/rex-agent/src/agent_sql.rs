@@ -22,6 +22,18 @@ pub async fn handle_connect_sql(
     evt_tx: mpsc::Sender<AgentEvent>,
     channels: Arc<RwLock<HashMap<String, LocalChannel>>>,
 ) {
+    tracing::info!(
+        action = "AGENT_SQL_CONNECT",
+        request_id = %request_id,
+        host = %cfg.get("host").and_then(|v| v.as_str()).unwrap_or(""),
+        port = %cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(0),
+        username = %cfg.get("username").and_then(|v| v.as_str()).unwrap_or(""),
+        subtype = %subtype,
+        has_password = cfg.get("password").and_then(|v| v.as_str()).is_some(),
+        has_database = cfg.get("database").and_then(|v| v.as_str()).or_else(|| cfg.get("database_name").and_then(|v| v.as_str())).is_some(),
+        "SQL connection initiated"
+    );
+
     let req = ConnectRequest {
         host: cfg
             .get("host")
@@ -193,9 +205,12 @@ async fn detect_dialect(
 
     // SQLite：无 host 或 port 为 0 视为本地文件库。
     if req.host.is_empty() || req.port == 0 {
+        tracing::info!(action = "AGENT_SQL_DETECT", host = %req.host, port = req.port, "dialect: SQLite (empty host or port 0)");
         let conn = Box::new(rex_sqlite::SqliteConnector::connect(req.clone()).await?);
         return Ok((conn, Some("sqlite".to_string())));
     }
+
+    tracing::info!(action = "AGENT_SQL_DETECT", host = %req.host, port = req.port, "starting dialect auto-detection");
 
     // 端口预判。
     let candidates: &[DatabaseType] = match req.port {
@@ -207,6 +222,7 @@ async fn detect_dialect(
     for &dt in candidates {
         match connect_by_type(dt, req).await {
             Ok(mut conn) => {
+                tracing::debug!(action = "AGENT_SQL_DETECT", dialect = ?dt, "protocol handshake succeeded, trying SELECT VERSION()");
                 // `SELECT VERSION()` 确认 dialect（消除线缆协议握手歧义）。
                 match conn.execute("SELECT VERSION()").await {
                     Ok(result) => {
