@@ -1,10 +1,17 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.74.0] - 2026-09-09
 
-## [0.73.3] - 2026-09-07
+### Added
+- **键盘快捷系统**：集中式快捷键注册表，支持平台感知（macOS 用 Cmd，Windows/Linux 用 Ctrl）
+- **Quick Open**：Cmd+K / Ctrl+K 全局搜索，支持页面导航和快捷键搜索
+- **右键菜单上下文感知**：按节点类型动态生成菜单，显示快捷键提示，危险操作标记
 
 ### Fixed
+- **Windows 服务注册**：支持 Windows 原生服务注册（sc create），替代之前的不支持错误
+- **Agent 连接去重**：防止 Agent 启动时页面 WebSocket 重试机制触发多次连接请求
+
 - **Docker 日志输出修复**：Hub supervisor 和 worker 进程均未初始化 tracing_subscriber，导致所有 tracing::info! 调用静默，Docker 容器无日志输出
 
 ## [0.73.2] - 2026-09-07
