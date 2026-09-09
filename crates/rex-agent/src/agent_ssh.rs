@@ -12,6 +12,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::agent_ws::SshHandlePool;
 use tokio::sync::{mpsc, RwLock};
 
 use rex_ssh::{SshConfig, SshSession, TerminalEvent};
@@ -82,6 +83,8 @@ pub async fn run_ssh_session(
     evt_tx: mpsc::Sender<AgentEvent>,
     channels: Arc<RwLock<HashMap<String, LocalChannel>>>,
     mut data_rx: mpsc::Receiver<Vec<u8>>,
+    ssh_handles: SshHandlePool,
+    pool_key: String,
 ) {
     let ch_id_num = channel_id.parse::<u32>().unwrap_or(0);
 
@@ -176,6 +179,19 @@ pub async fn run_ssh_session(
         chs.remove(&channel_id);
     }
     tracing::info!(action = "AGENT_SSH_END", channel_id = %channel_id, "agent SSH session ended");
+
+    // 从连接池中移除 SSH Handle（SSH 会话已断开，Handle 不可复用）
+    {
+        let mut handles = ssh_handles.write().await;
+        if handles.remove(&pool_key).is_some() {
+            tracing::info!(
+                action = "AGENT_SSH_POOL_REMOVED",
+                pool_key = %pool_key,
+                remaining = handles.len(),
+                "SSH handle removed from pool (session ended)"
+            );
+        }
+    }
 }
 
 /// 由 `handle_connect` 的 ssh 分支调用：在 Agent 内建立 russh 会话并接管隧道帧。
@@ -185,10 +201,11 @@ pub async fn handle_connect_ssh(
     evt_tx: mpsc::Sender<AgentEvent>,
     channels: Arc<RwLock<HashMap<String, LocalChannel>>>,
     channel_id: String,
+    ssh_handles: SshHandlePool,
 ) {
     let ssh_cfg = parse_ssh_config(cfg);
 
-    let session = match SshSession::connect(ssh_cfg).await {
+    let (handle, session) = match SshSession::connect_with_handle(ssh_cfg.clone()).await {
         Ok(s) => s,
         Err(e) => {
             tracing::warn!(
@@ -208,6 +225,21 @@ pub async fn handle_connect_ssh(
             return;
         }
     };
+
+    // 将 handle 存入连接池，供 SFTP 复用
+    let pool_key = format!("{}:{}", ssh_cfg.host, ssh_cfg.port);
+    {
+        let mut handles = ssh_handles.write().await;
+        handles.insert(pool_key.clone(), Arc::new(tokio::sync::Mutex::new(handle)));
+        tracing::info!(
+            action = "AGENT_SSH_POOL_STORED",
+            host = %ssh_cfg.host,
+            port = ssh_cfg.port,
+            pool_key = %pool_key,
+            pool_size = handles.len(),
+            "SSH handle stored in pool for SFTP reuse"
+        );
+    }
 
     tracing::info!(
         action = "AGENT_SSH_CONNECTED",
@@ -240,7 +272,16 @@ pub async fn handle_connect_ssh(
         );
     }
 
-    run_ssh_session(session, channel_id, evt_tx, channels, data_rx).await;
+    run_ssh_session(
+        session,
+        channel_id,
+        evt_tx,
+        channels,
+        data_rx,
+        ssh_handles,
+        pool_key,
+    )
+    .await;
 }
 
 #[cfg(test)]

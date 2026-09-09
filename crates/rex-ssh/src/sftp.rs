@@ -21,6 +21,24 @@ impl SftpConnector {
         Ok(Self { session })
     }
 
+    /// 从已有的 SSH Handle 打开新 session channel 建立 SFTP 连接
+    /// 用于复用已有的 SSH 连接（避免并发会话限制）
+    pub async fn connect_from_handle(
+        handle: &russh::client::Handle<crate::SshHandler>,
+        host: &str,
+    ) -> Result<Self> {
+        tracing::info!(action = "SFTP_CONNECT", host = %host, "SFTP: opening session channel from existing SSH handle");
+        let channel = handle
+            .channel_open_session()
+            .await
+            .map_err(|e| {
+                tracing::error!(action = "SFTP_CONNECT", host = %host, error = %e, "SFTP: channel_open_session failed from existing handle");
+                anyhow::anyhow!("failed to open session from existing handle: {e}")
+            })?;
+        tracing::info!(action = "SFTP_CONNECT", host = %host, "SFTP: session channel opened from existing handle, creating SFTP session");
+        Self::connect(channel).await
+    }
+
     /// 从 SSH 配置直接建立 SFTP 连接
     pub async fn connect_with_config(config: crate::SshConfig) -> Result<Self> {
         use russh::client;
