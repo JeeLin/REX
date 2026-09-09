@@ -7,6 +7,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::agent_ws::SshHandlePool;
 use tokio::sync::{mpsc, RwLock};
 
 use rex_common::file_transfer::{FileConnectRequest, FileConnector};
@@ -21,20 +22,22 @@ pub async fn handle_connect_file(
     cfg: &serde_json::Value,
     evt_tx: mpsc::Sender<AgentEvent>,
     channels: Arc<RwLock<HashMap<String, LocalChannel>>>,
+    ssh_handles: SshHandlePool,
 ) {
-    let mut connector: Box<dyn FileConnector> = match build_connector(&protocol, cfg).await {
-        Ok(c) => c,
-        Err(e) => {
-            send_session_error(
-                &evt_tx,
-                &channel_id,
-                Some(&request_id),
-                &format!("file connection failed: {e}"),
-            )
-            .await;
-            return;
-        }
-    };
+    let mut connector: Box<dyn FileConnector> =
+        match build_connector(&protocol, cfg, ssh_handles).await {
+            Ok(c) => c,
+            Err(e) => {
+                send_session_error(
+                    &evt_tx,
+                    &channel_id,
+                    Some(&request_id),
+                    &format!("file connection failed: {e}"),
+                )
+                .await;
+                return;
+            }
+        };
 
     // 注册 channel（必须在 SessionOpened 之前，否则 Hub 立即下发查询帧导致丢帧）。
     let (data_tx, mut data_rx) = mpsc::channel::<Vec<u8>>(512);
@@ -111,41 +114,70 @@ pub async fn handle_connect_file(
 async fn build_connector(
     protocol: &str,
     cfg: &serde_json::Value,
+    ssh_handles: SshHandlePool,
 ) -> anyhow::Result<Box<dyn FileConnector>> {
     match protocol {
         "sftp" | "ssh" => {
-            let conn = rex_ssh::sftp::SftpConnector::connect_with_config(rex_ssh::SshConfig {
-                host: cfg
-                    .get("host")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string(),
-                port: cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(22) as u16,
-                username: cfg
-                    .get("username")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string(),
-                password: cfg
-                    .get("password")
-                    .and_then(|v| v.as_str())
-                    .map(String::from),
-                private_key: cfg
-                    .get("privateKey")
-                    .and_then(|v| v.as_str())
-                    .map(String::from)
-                    .or_else(|| {
-                        cfg.get("private_key")
+            let host = cfg
+                .get("host")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let port = cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(22) as u16;
+            let pool_key = format!("{}:{}", host, port);
+
+            // 检查连接池：优先复用已有的 SSH Handle
+            let conn = {
+                let handles = ssh_handles.read().await;
+                if let Some(handle_arc) = handles.get(&pool_key) {
+                    tracing::info!(
+                        action = "SFTP_CONNECT",
+                        host = %host,
+                        port = port,
+                        pool_key = %pool_key,
+                        "SFTP: reusing existing SSH handle from pool"
+                    );
+                    let handle = handle_arc.lock().await;
+                    rex_ssh::sftp::SftpConnector::connect_from_handle(&handle, &host).await?
+                } else {
+                    // 池中无可用 Handle，创建新连接
+                    drop(handles);
+                    tracing::info!(
+                        action = "SFTP_CONNECT",
+                        host = %host,
+                        port = port,
+                        "SFTP: no existing handle in pool, creating new SSH connection"
+                    );
+                    rex_ssh::sftp::SftpConnector::connect_with_config(rex_ssh::SshConfig {
+                        host: host.clone(),
+                        port,
+                        username: cfg
+                            .get("username")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        password: cfg
+                            .get("password")
+                            .and_then(|v| v.as_str())
+                            .map(String::from),
+                        private_key: cfg
+                            .get("privateKey")
                             .and_then(|v| v.as_str())
                             .map(String::from)
-                    }),
-                keepalive_interval: cfg
-                    .get("keepalive_interval")
-                    .and_then(|v| v.as_u64())
-                    .map(|v| v as u32),
-                init_script: None,
-            })
-            .await?;
+                            .or_else(|| {
+                                cfg.get("private_key")
+                                    .and_then(|v| v.as_str())
+                                    .map(String::from)
+                            }),
+                        keepalive_interval: cfg
+                            .get("keepalive_interval")
+                            .and_then(|v| v.as_u64())
+                            .map(|v| v as u32),
+                        init_script: None,
+                    })
+                    .await?
+                }
+            };
             Ok(Box::new(conn))
         }
         "s3" => {

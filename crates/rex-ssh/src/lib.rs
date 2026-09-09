@@ -42,6 +42,9 @@ pub struct SshSession {
     events: mpsc::Receiver<TerminalEvent>,
 }
 
+/// SSH Handle 类型别名（用于在 Agent 侧共享连接）
+pub type SshHandle = client::Handle<SshHandler>;
+
 /// 将初始化脚本按行拆分，跳过空行并去除行尾空白。
 /// 纯逻辑，便于单元测试。
 fn split_init_script(script: &str) -> Vec<String> {
@@ -65,6 +68,15 @@ fn format_ssh_addr(host: &str, port: u16) -> String {
 impl SshSession {
     /// 建立 SSH 连接、分配 PTY、启动 shell，返回会话
     pub async fn connect(config: SshConfig) -> Result<Self> {
+        let (_handle, session) = Self::connect_with_handle(config).await?;
+        Ok(session)
+    }
+
+    /// 建立 SSH 连接、分配 PTY、启动 shell，返回 (Handle, 会话)
+    /// Handle 可用于在同一连接上打开额外的 channel（如 SFTP）
+    pub async fn connect_with_handle(
+        config: SshConfig,
+    ) -> Result<(client::Handle<SshHandler>, Self)> {
         let addr = format_ssh_addr(&config.host, config.port);
 
         // SSH 客户端配置
@@ -170,10 +182,13 @@ impl SshSession {
             }
         });
 
-        Ok(Self {
-            write_half,
-            events: event_rx,
-        })
+        Ok((
+            handle,
+            Self {
+                write_half,
+                events: event_rx,
+            },
+        ))
     }
 
     /// 向 SSH 发送终端输入
