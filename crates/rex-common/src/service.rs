@@ -57,6 +57,7 @@ pub enum ServiceScope {
 pub enum ServicePlatform {
     Linux,
     Macos,
+    Windows,
     Other,
 }
 
@@ -65,6 +66,8 @@ pub fn detect_platform() -> ServicePlatform {
         ServicePlatform::Linux
     } else if cfg!(target_os = "macos") {
         ServicePlatform::Macos
+    } else if cfg!(target_os = "windows") {
+        ServicePlatform::Windows
     } else {
         ServicePlatform::Other
     }
@@ -291,6 +294,7 @@ pub fn install(cfg: &InstallConfig) -> Result<String> {
     match detect_platform() {
         ServicePlatform::Linux => systemd_install(cfg),
         ServicePlatform::Macos => launchd_install(cfg),
+        ServicePlatform::Windows => windows_install(cfg),
         ServicePlatform::Other => unsupported(),
     }
 }
@@ -299,6 +303,7 @@ pub fn uninstall(kind: ServiceKind, name: &str, scope: ServiceScope) -> Result<S
     match detect_platform() {
         ServicePlatform::Linux => systemd_uninstall(name, scope),
         ServicePlatform::Macos => launchd_uninstall(&kind.launchd_label(), scope),
+        ServicePlatform::Windows => windows_uninstall(name),
         ServicePlatform::Other => unsupported(),
     }
 }
@@ -307,6 +312,7 @@ pub fn start(kind: ServiceKind, name: &str, scope: ServiceScope) -> Result<Strin
     match detect_platform() {
         ServicePlatform::Linux => systemd_run(scope, "start", name),
         ServicePlatform::Macos => launchd_run(&kind.launchd_label(), "start", scope),
+        ServicePlatform::Windows => windows_run("start", name),
         ServicePlatform::Other => unsupported(),
     }
 }
@@ -315,6 +321,7 @@ pub fn stop(kind: ServiceKind, name: &str, scope: ServiceScope) -> Result<String
     match detect_platform() {
         ServicePlatform::Linux => systemd_run(scope, "stop", name),
         ServicePlatform::Macos => launchd_run(&kind.launchd_label(), "stop", scope),
+        ServicePlatform::Windows => windows_run("stop", name),
         ServicePlatform::Other => unsupported(),
     }
 }
@@ -323,6 +330,7 @@ pub fn restart(kind: ServiceKind, name: &str, scope: ServiceScope) -> Result<Str
     match detect_platform() {
         ServicePlatform::Linux => systemd_run(scope, "restart", name),
         ServicePlatform::Macos => launchd_run(&kind.launchd_label(), "restart", scope),
+        ServicePlatform::Windows => windows_run("restart", name),
         ServicePlatform::Other => unsupported(),
     }
 }
@@ -332,6 +340,7 @@ pub fn status(kind: ServiceKind, name: &str, scope: ServiceScope) -> String {
     match detect_platform() {
         ServicePlatform::Linux => systemd_status(name, scope),
         ServicePlatform::Macos => launchd_status(&kind.launchd_label()),
+        ServicePlatform::Windows => windows_status(name),
         ServicePlatform::Other => {
             "service management is not supported on this platform".to_string()
         }
@@ -502,6 +511,108 @@ fn remove_file_if_exists(path: &Path) {
     if path.exists() {
         let _ = std::fs::remove_file(path);
     }
+}
+
+// ───────────────────────────── Windows 平台实现 ─────────────────────────────
+
+#[cfg(target_os = "windows")]
+fn windows_install(cfg: &InstallConfig) -> Result<String> {
+    use std::process::Command;
+
+    // 构建 sc create 命令
+    let mut cmd = Command::new("sc");
+    cmd.arg("create");
+    cmd.arg(&cfg.name);
+    cmd.arg(format!("binPath=\"{}\"", cfg.exe.display()));
+    cmd.arg("start=");
+    cmd.arg("auto");
+
+    let status = cmd.status().context("failed to run sc create")?;
+    if !status.success() {
+        bail!("sc create failed for service {}", cfg.name);
+    }
+
+    Ok(format!("installed Windows service: {}", cfg.name))
+}
+
+#[cfg(target_os = "windows")]
+fn windows_uninstall(name: &str) -> Result<String> {
+    use std::process::Command;
+
+    // 先停止服务
+    let _ = Command::new("sc").arg("stop").arg(name).status();
+
+    // 再删除服务
+    let status = Command::new("sc")
+        .arg("delete")
+        .arg(name)
+        .status()
+        .context("failed to run sc delete")?;
+
+    if !status.success() {
+        bail!("sc delete failed for service {}", name);
+    }
+
+    Ok(format!("uninstalled Windows service: {}", name))
+}
+
+#[cfg(target_os = "windows")]
+fn windows_run(action: &str, name: &str) -> Result<String> {
+    use std::process::Command;
+
+    let status = Command::new("sc")
+        .arg(action)
+        .arg(name)
+        .status()
+        .context(format!("failed to run sc {}", action))?;
+
+    if !status.success() {
+        bail!("sc {} failed for service {}", action, name);
+    }
+
+    Ok(format!("service {} {}", name, action))
+}
+
+#[cfg(target_os = "windows")]
+fn windows_status(name: &str) -> String {
+    use std::process::Command;
+
+    let output = Command::new("sc").arg("query").arg(name).output();
+
+    match output {
+        Ok(out) => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            if stdout.contains("RUNNING") {
+                "running".to_string()
+            } else if stdout.contains("STOPPED") {
+                "stopped".to_string()
+            } else {
+                "unknown".to_string()
+            }
+        }
+        Err(_) => "failed to query service status".to_string(),
+    }
+}
+
+// 非 Windows 平台的桩实现
+#[cfg(not(target_os = "windows"))]
+fn windows_install(_cfg: &InstallConfig) -> Result<String> {
+    unsupported()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn windows_uninstall(_name: &str) -> Result<String> {
+    unsupported()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn windows_run(_action: &str, _name: &str) -> Result<String> {
+    unsupported()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn windows_status(_name: &str) -> String {
+    "service management is not supported on this platform".to_string()
 }
 
 // ───────────────────────────── 非 unix 平台桩实现 ─────────────────────────────
