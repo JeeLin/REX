@@ -26,7 +26,7 @@ impl RedisConnectorImpl {
         };
 
         let client = redis::Client::open(url.as_str())
-            .with_context(|| format!("failed to create Redis client for {url}"))?;
+            .with_context(|| format!("failed to create Redis client for {}:{}", host, port))?;
 
         let mut conn = client
             .get_connection_manager()
