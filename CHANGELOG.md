@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.74.1] - 2026-09-09
+
+### Fixed
+- **SSH/SFTP 并发会话**：SFTP 复用已有 SSH 连接池，解决 concurrent sessions 错误
+- **Docker Agent 二进制路径**：对齐 CI/Docker os-arch 目录格式
+- **设置页个人资料持久化**：保存按钮正确调用 API 并持久化
+- **设置页 UI**：toast 样式统一 + 保存按钮对齐
+- **拓扑图布局**：Hub 为中心节点星型布局
+- **工作区复制粘贴**：统一 Ctrl+C/V 操作
+- **Agent 连接生命周期日志**：SSH/SQL/Redis/File 连接入口 tracing
+
+### Changed
+- SSH jump server / vim 兼容性 / SQL dialect 推迟至 v0.75.x
+
 All notable changes to this project will be documented in this file.
 ## [0.74.0] - 2026-09-09
 
