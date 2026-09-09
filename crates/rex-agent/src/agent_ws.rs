@@ -6,12 +6,17 @@ use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
 use rex_sip::SipUaTrait;
+use rex_ssh::SshHandle;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::{mpsc, RwLock};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use url::Url;
+
+/// SSH 连接池 — 按 host:port 复用已认证的 SSH Handle
+/// 避免同一服务器的 SSH 和 SFTP 各建独立连接导致 MaxSessions=1 时 SFTP 失败
+pub type SshHandlePool = Arc<RwLock<HashMap<String, Arc<tokio::sync::Mutex<SshHandle>>>>>;
 
 // ═══════════════════════════════════════
 // TLS Insecure 模式（自签名证书跳过验证）
@@ -238,13 +243,15 @@ pub async fn run_agent(config: AgentConfig) {
     let channels: Arc<RwLock<HashMap<String, LocalChannel>>> =
         Arc::new(RwLock::new(HashMap::new()));
 
+    // SSH 连接池：按 host:port 复用已认证的 SSH Handle
+    let ssh_handles: SshHandlePool = Arc::new(RwLock::new(HashMap::new()));
     let mut backoff = 1u64; // 初始退避 1 秒
     const MAX_BACKOFF: u64 = 30;
 
     loop {
         tracing::info!(hub_url = %config.hub_url, "connecting to hub");
 
-        match connect_and_run(&config, channels.clone()).await {
+        match connect_and_run(&config, channels.clone(), ssh_handles.clone()).await {
             Ok(()) => {
                 tracing::info!("connection closed cleanly");
                 backoff = 1; // 正常关闭，重置退避
@@ -264,6 +271,7 @@ pub async fn run_agent(config: AgentConfig) {
 async fn connect_and_run(
     config: &AgentConfig,
     channels: Arc<RwLock<HashMap<String, LocalChannel>>>,
+    ssh_handles: SshHandlePool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // 构建 WebSocket URL
     let ws_url = build_ws_url(&config.hub_url, &config.agent_token)?;
@@ -370,8 +378,9 @@ async fn connect_and_run(
                         HubMsg::Connect { payload } => {
                             let evt_tx2 = evt_tx.clone();
                             let channels = channels.clone();
+                            let ssh_handles = ssh_handles.clone();
                             tokio::spawn(async move {
-                                handle_connect(payload, evt_tx2, channels).await;
+                                handle_connect(payload, evt_tx2, channels, ssh_handles).await;
                             });
                         }
                         HubMsg::Close { payload } => {
@@ -437,6 +446,7 @@ async fn handle_connect(
     req: ConnectRequest,
     evt_tx: mpsc::Sender<AgentEvent>,
     channels: Arc<RwLock<HashMap<String, LocalChannel>>>,
+    ssh_handles: SshHandlePool,
 ) {
     // SIP 资源走 Agent 内网 UA₂：不建 TCP，由 UA₂ 直接对内网 SIP server 信令。
     if req.protocol == "sip" {
@@ -454,6 +464,7 @@ async fn handle_connect(
             evt_tx,
             channels,
             channel_id,
+            ssh_handles,
         )
         .await;
         return;
@@ -509,6 +520,7 @@ async fn handle_connect(
             &req.config,
             evt_tx,
             channels,
+            ssh_handles,
         )
         .await;
         return;
