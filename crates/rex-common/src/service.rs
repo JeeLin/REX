@@ -350,7 +350,7 @@ pub fn status(kind: ServiceKind, name: &str, scope: ServiceScope) -> String {
 fn unsupported() -> Result<String> {
     bail!(
         "automatic service management is not supported on this platform.\n\
-         On Windows, register the binary with nssm or Task Scheduler.\n\
+         On Linux, use systemctl. On macOS, use launchctl. On Windows, use sc.exe.\n\
          The binary runs supervisor + worker when started directly."
     )
 }
