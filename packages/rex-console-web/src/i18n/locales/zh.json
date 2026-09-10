@@ -871,7 +871,32 @@
     "splitHint": "双击标签进入分屏",
     "splitV": "垂直分屏",
     "stopBroadcast": "停止广播",
-    "dragHint": "拖拽标签到其他面板"
+    "dragHint": "拖拽标签到其他面板",
+    "openInNewWindow": "在新窗口中打开",
+    "exportWorkspace": "导出工作区",
+    "importWorkspace": "导入工作区",
+    "exportSuccess": "工作区导出成功",
+    "exportFailed": "导出工作区失败",
+    "importSuccess": "工作区导入成功",
+    "importFailed": "导入工作区失败",
+    "importInvalid": "无效的工作区文件",
+    "importConfirmTitle": "导入工作区",
+    "importConfirm": "导入将替换当前工作区。是否继续？",
+    "statusbar": {
+      "workspace": "工作区",
+      "resourcesOpen": "个资源已打开",
+      "f1Help": "F1 帮助",
+      "commandPalette": "命令面板"
+    },
+    "toolbarSettings": {
+      "title": "工具栏设置",
+      "splitH": "水平分屏",
+      "splitV": "垂直分屏",
+      "fullscreen": "全屏",
+      "f1Help": "F1 帮助",
+      "commandPalette": "命令面板",
+      "resetToDefault": "恢复默认"
+    }
   },
   "errorBoundary": {
     "title": "出了点问题",
