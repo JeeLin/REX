@@ -60,6 +60,17 @@ pub fn parse_ssh_config(cfg: &Value) -> SshConfig {
                 .and_then(|v| v.as_str())
                 .filter(|s| !s.trim().is_empty())
                 .map(String::from)
+    });
+    let proxy_jump = cfg
+        .get("proxyJump")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .map(String::from)
+        .or_else(|| {
+            cfg.get("proxy_jump")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.trim().is_empty())
+                .map(String::from)
         });
 
     SshConfig {
@@ -70,6 +81,7 @@ pub fn parse_ssh_config(cfg: &Value) -> SshConfig {
         private_key,
         keepalive_interval,
         init_script,
+        proxy_jump,
     }
 }
 
@@ -368,5 +380,21 @@ mod tests {
         assert_eq!(ssh.port, 22);
         assert!(ssh.password.is_none());
         assert!(ssh.private_key.is_none());
+        assert!(ssh.proxy_jump.is_none());
+    }
+
+    #[test]
+    fn parse_ssh_config_proxy_jump() {
+        let cfg = serde_json::json!({
+            "host": "10.0.0.5",
+            "port": 22,
+            "username": "ops",
+            "proxyJump": "jump1.example.com, jump2.example.com:2222"
+        });
+        let ssh = parse_ssh_config(&cfg);
+        assert_eq!(
+            ssh.proxy_jump.as_deref(),
+            Some("jump1.example.com, jump2.example.com:2222")
+        );
     }
 }
