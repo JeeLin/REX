@@ -69,9 +69,6 @@ fn run_service(opts: &RunOpts) -> anyhow::Result<()> {
     if let Some(data_dir) = &opts.data_dir {
         std::env::set_var("REX_DATA_DIR", data_dir);
     }
-    if let Some(static_dir) = &opts.static_dir {
-        std::env::set_var("REX_STATIC_DIR", static_dir);
-    }
 
     // 后台模式：脱离终端（daemonize），日志重定向到数据目录 rex-hub.log
     #[cfg(unix)]

@@ -17,7 +17,6 @@ use crate::service::ServiceKind;
 pub struct FileConfig {
     pub port: Option<u16>,
     pub data_dir: Option<PathBuf>,
-    pub static_dir: Option<PathBuf>,
     pub hub_url: Option<String>,
     pub token: Option<String>,
 }
@@ -56,10 +55,6 @@ pub fn apply_config_env(kind: ServiceKind) {
     set_if_unset(
         "REX_DATA_DIR",
         cfg.data_dir.as_ref().map(|p| p.display().to_string()),
-    );
-    set_if_unset(
-        "REX_STATIC_DIR",
-        cfg.static_dir.as_ref().map(|p| p.display().to_string()),
     );
     set_if_unset("REX_HUB_URL", cfg.hub_url);
     set_if_unset("REX_AGENT_TOKEN", cfg.token);
