@@ -60,7 +60,7 @@ pub fn parse_ssh_config(cfg: &Value) -> SshConfig {
                 .and_then(|v| v.as_str())
                 .filter(|s| !s.trim().is_empty())
                 .map(String::from)
-    });
+        });
     let proxy_jump = cfg
         .get("proxyJump")
         .and_then(|v| v.as_str())

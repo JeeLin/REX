@@ -185,16 +185,10 @@ async fn try_resolve_with_preference(host: &str, port: u16) -> Result<Vec<Socket
     }
 
     // 按 IPv4 优先排序
-    let mut ipv4_addrs: Vec<SocketAddr> = all_addrs
-        .iter()
-        .filter(|a| a.is_ipv4())
-        .copied()
-        .collect();
-    let mut ipv6_addrs: Vec<SocketAddr> = all_addrs
-        .iter()
-        .filter(|a| a.is_ipv6())
-        .copied()
-        .collect();
+    let mut ipv4_addrs: Vec<SocketAddr> =
+        all_addrs.iter().filter(|a| a.is_ipv4()).copied().collect();
+    let mut ipv6_addrs: Vec<SocketAddr> =
+        all_addrs.iter().filter(|a| a.is_ipv6()).copied().collect();
 
     ipv4_addrs.append(&mut ipv6_addrs);
     Ok(ipv4_addrs)
@@ -216,8 +210,7 @@ impl SshSession {
         let mut ssh_config = client::Config::default();
         let keepalive = config.keepalive_interval.unwrap_or(60);
         if keepalive > 0 {
-            ssh_config.keepalive_interval =
-                Some(std::time::Duration::from_secs(keepalive as u64));
+            ssh_config.keepalive_interval = Some(std::time::Duration::from_secs(keepalive as u64));
         }
         let ssh_config = Arc::new(ssh_config);
 
@@ -290,10 +283,7 @@ impl SshSession {
         // 会话建立后执行初始化脚本（逐行发送，失败仅记录不阻断）
         if let Some(ref script) = config.init_script {
             for line in split_init_script(script) {
-                if let Err(e) = write_half
-                    .data(format!("{}\n", line).as_bytes())
-                    .await
-                {
+                if let Err(e) = write_half.data(format!("{}\n", line).as_bytes()).await {
                     tracing::warn!("init_script line failed: {e}");
                     break;
                 }
@@ -451,7 +441,8 @@ impl SshSession {
                 .context("SSH connection through jump channel failed")?;
 
             // 认证下一个跳板机
-            Self::authenticate_handle(&mut current_handle, &next_user, password, private_key).await?;
+            Self::authenticate_handle(&mut current_handle, &next_user, password, private_key)
+                .await?;
             tracing::info!(
                 jump = %jump_str,
                 "authenticated to intermediate jump host"
@@ -501,8 +492,8 @@ impl SshSession {
         } else {
             handle
                 .authenticate_none(username)
-            .await
-            .context("jump host none authentication failed")?;
+                .await
+                .context("jump host none authentication failed")?;
         }
         Ok(())
     }
@@ -584,19 +575,13 @@ mod tests {
 
     #[test]
     fn test_parse_proxy_jump() {
-        assert_eq!(
-            parse_proxy_jump("j1.example.com"),
-            vec!["j1.example.com"]
-        );
+        assert_eq!(parse_proxy_jump("j1.example.com"), vec!["j1.example.com"]);
         assert_eq!(
             parse_proxy_jump("j1.example.com, j2.example.com"),
             vec!["j1.example.com", "j2.example.com"]
         );
         assert_eq!(parse_proxy_jump(""), Vec::<String>::new());
-        assert_eq!(
-            parse_proxy_jump(" j1 , j2 , j3 "),
-            vec!["j1", "j2", "j3"]
-        );
+        assert_eq!(parse_proxy_jump(" j1 , j2 , j3 "), vec!["j1", "j2", "j3"]);
     }
 
     #[test]
