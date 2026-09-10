@@ -1,6 +1,16 @@
 # Changelog
 
 ## [0.74.1] - 2026-09-09
+## [0.77.0] - 2026-09-10
+
+### Added
+- **文件内联重命名**：选中文件后按 F2 直接编辑文件名
+
+### Fixed
+- **刷新页面下载弹窗修复**：SPA fallback 路径 MIME 类型错误改为 text/html
+- **重复SSH连接修复**：WebSocket 竞态条件 + stale handler 防护 + try-catch 保护
+
+
 ## [0.76.0] - 2026-09-10
 
 ### Added
