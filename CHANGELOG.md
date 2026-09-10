@@ -1,16 +1,5 @@
 # Changelog
 
-## [0.79.0] - 2026-09-10
-## [0.81.1] - 2026-09-10
-
-### Changed
-- 移除未使用的 REX_STATIC_DIR 环境变量和前端目录复制，前端已通过 include_dir! 嵌入二进制
-
-### Fixed
-- Docker Hub 镜像不再复制冗余前端目录
-- CI Docker 构建不再下载前端 artifact
-
-
 ## [0.81.2] - 2026-09-10
 
 ### Fixed
@@ -21,12 +10,25 @@
 ### Docs
 - 使 README 双语（中文/英文），提升国际用户可读性
 
+
+## [0.81.1] - 2026-09-10
+
+### Changed
+- 移除未使用的 REX_STATIC_DIR 环境变量和前端目录复制，前端已通过 include_dir! 嵌入二进制
+
+### Fixed
+- Docker Hub 镜像不再复制冗余前端目录
+- CI Docker 构建不再下载前端 artifact
+
+
+
 ## [0.81.0] - 2026-09-10
 
 ### Added
 - **SSH Docker 集成**：终端工具栏新增 🐳 Docker 按钮，支持容器列表、启停、日志、进入容器（docker exec）
 - **Docker 菜单**：下拉菜单提供常用 Docker 操作，仅 SSH 类型 Tab 可见
 - **自定义 Docker 命令**：支持输入任意 Docker 命令在当前 SSH 会话执行
+
 
 
 ## [0.80.0] - 2026-09-10
@@ -45,6 +47,9 @@
 - **SSH ProxyJump**：支持跳板机连接（proxyJump 配置解析 + 链式隧道）
 - **IPv6 双栈**：DNS 双栈解析，IPv4 优先回退 IPv6
 
+
+## [0.79.0] - 2026-09-10
+
 ## [0.78.0] - 2026-09-10
 
 ### Added
@@ -57,6 +62,7 @@
 - **Windows service 错误消息**：更新为准确描述支持的平台
 
 
+
 ## [0.77.0] - 2026-09-10
 
 ### Added
@@ -65,6 +71,7 @@
 ### Fixed
 - **刷新页面下载弹窗修复**：SPA fallback 路径 MIME 类型错误改为 text/html
 - **重复SSH连接修复**：WebSocket 竞态条件 + stale handler 防护 + try-catch 保护
+
 
 
 ## [0.76.0] - 2026-09-10
@@ -80,6 +87,7 @@
 
 ### Fixed
 - Redis 错误消息修复：使用 req.port 替代未定义的 port 变量
+
 
 
 ## [0.75.0] - 2026-09-10
@@ -112,6 +120,7 @@
 - SSH jump server / vim 兼容性 / SQL dialect 推迟至 v0.75.x
 
 All notable changes to this project will be documented in this file.
+
 ## [0.74.0] - 2026-09-09
 
 ### Added
@@ -125,6 +134,7 @@ All notable changes to this project will be documented in this file.
 
 - **Docker 日志输出修复**：Hub supervisor 和 worker 进程均未初始化 tracing_subscriber，导致所有 tracing::info! 调用静默，Docker 容器无日志输出
 
+
 ## [0.73.2] - 2026-09-07
 
 ### Fixed
@@ -134,10 +144,12 @@ All notable changes to this project will be documented in this file.
 - **Agent 隧道 channel 注册竞态**：SQL/Redis/File 三个协议的 channel 注册统一移到 `SessionOpened` 发送之前
 - **darwin→mac 下载映射**：修复 Release 资源命名用 `mac` 但代码传 `darwin` 导致 404
 
+
 ## [0.73.1] - 2026-07-05
 
 ### Fixed
 - **Agent SSH 连接修复**：修复 Agent 模式下 SSH 连接后无法输入命令、后续连接全部失败的阻断性 bug。根因是 `Arc<Mutex<SshSession>>` 导致 out_task/in_task 死锁，通过 `split()` 拆分会话为写半区+事件接收器解决
+
 
 ## [0.73.0] - 2025-07-16
 
@@ -149,6 +161,7 @@ All notable changes to this project will be documented in this file.
 - **AuditLogPage**：修复缺失的 `</template>` 闭合标签导致构建失败
 - **AuditLogPage**：审计日志「目标」列显示 Agent 名称而非 UUID
 - **Rollup 构建警告**：升级 @vueuse/core 14.3.0→14.4.0 修复 #__PURE__ 注释解析警告
+
 ## [0.72.0] - 2026-09-03
 
 ### Added
@@ -157,6 +170,7 @@ All notable changes to this project will be documented in this file.
 - **拓扑交互**：节点点击跳转、30 秒自动刷新、缩放/平移/拖拽、图例、迷你地图
 - **拓扑响应式**：桌面/平板/移动端适配
 - **拓扑 i18n**：中英文拓扑相关文案补全
+
 
 ## [0.71.3] - 2026-09-02
 
@@ -178,6 +192,7 @@ All notable changes to this project will be documented in this file.
 - **sftp.rs**：SFTP 连接改进错误处理
 - **i18n**：zh.json/en.json 补全 environments 15 键 + filesDrawer 12 键 + common.exitFullscreen
 
+
 ## [0.71.2] - 2026-07-16
 
 
@@ -198,6 +213,7 @@ All notable changes to this project will be documented in this file.
 - i18n：补充 nav.workspace 翻译键（中/英）
 - ResourcePanel：监听 rex:env-changed 事件自动刷新
 
+
 ## [0.71.1] - 2026-07-18
 
 ### Fixed
@@ -210,6 +226,7 @@ All notable changes to this project will be documented in this file.
 - Login：密码输入锁图标、静态错误消息、100vh 高度、品牌标记 30px
 - Setup：去掉品牌 glyph、footer 显示 build 版本
 - 新增 --teal-soft CSS token
+
 
 
 ## [0.71.0] - 2026-08-28
@@ -231,6 +248,7 @@ All notable changes to this project will be documented in this file.
 ### Removed
 - Agents 独立导航项（Agent 管理保留在环境详情页内）
 
+
 ## [0.70.8] - 2026-08-28
 
 ### Added
@@ -244,6 +262,7 @@ All notable changes to this project will be documented in this file.
 - 清理 workspace 全量 clippy warning（严格 `-D warnings` 0 warning）。
 - 修复单实例测试在 `cargo test --workspace` 并行下的偶发竞态（`ensure_single_instance` 等改为显式接收 `data_dir`，不再依赖全局 `REX_DATA_DIR`）。
 - 修复 Windows 平台构建失败：`service.rs` 的「按平台分发」match 引用了仅 `#[cfg(unix)]` 存在的 `systemd_*`/`launchd_*` 函数，非 unix（Windows）编译报 `E0425`；新增非 unix 桩实现使全平台可编译（运行时 `detect_platform()` 返回 `Other`，桩不被命中）。
+
 
 ## [0.70.7] - 2026-08-26
 
@@ -260,6 +279,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - 资源相关日志仅带 `resource_id` 不便排查，现已在 Hub 侧附带 `resource_name`（Agent 侧隧道负载无名称字段，保留 `resource_id` 以便按 id 关联）。
 
+
 ## [0.70.6] - 2026-08-25
 
 ### Added
@@ -274,6 +294,7 @@ All notable changes to this project will be documented in this file.
 - agent 模式 SSH：不再做裸 TCP 管道，用户在浏览器中进入交互 shell。
 - 文件传输数据不经过浏览器（Agent 直接读写目标，仅分块元数据经隧道）。
 
+
 ## [0.70.5] - 2026-08-21
 
 ### Changed
@@ -282,6 +303,7 @@ All notable changes to this project will be documented in this file.
 
 ### Removed
 - 切换生效 SIP 账户时多余的全量 GET 往返：新增 `POST /environments/{env_id}/resources/{resource_id}/active-account` 专用端点，前端仅传 `account_id`
+
 
 ## [0.70.4] - 2026-08-20
 
@@ -298,6 +320,7 @@ All notable changes to this project will be documented in this file.
 - SIP 账户 id 碰撞（删除后再新增复用旧 id）
 - SIP 提交未校验至少 1 个有效账户（前端先校验）
 - `load_sip_conn` 未拒绝 port 0（显式传 0 绕过 serde default 5060）
+
 
 ## [0.70.3] - 2026-08-19
 
@@ -316,6 +339,7 @@ All notable changes to this project will be documented in this file.
 ### Performance
 - 媒体通道压测：PCM 2.28M frames/s、视频 1280x720 1869 fps、隧道 35.5M frames/s、8 路并发 6.77M frames/s，验证 raw-media-over-WebSocket 设计对单用户自托管可行
 
+
 ## [0.70.2] - 2026-08-18
 
 ### Added
@@ -329,6 +353,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - 媒体通道：在 M82b 音频帧（kind=1, S16LE PCM）基础上扩展视频媒体类型（kind=2, RGBA 像素），复用同一 `[kind][payload]` 解复用结构；不改音频契约、不破坏 Hub/Agent 版本一致模型
 
+
 ## [0.70.1] - 2026-08-18
 
 ### Added
@@ -340,6 +365,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - 媒体格式：经用户确认，本阶段**不引入 opus 等线上编码**——媒体帧直接携带原始 S16LE i16 LE PCM（单用户自托管局域网场景带宽足够、延迟更低、无额外依赖）；后续若支持视频再按需引入多种音频编码
+
 
 ## [0.70.0] - 2026-08-17
 
@@ -356,6 +382,7 @@ All notable changes to this project will be documented in this file.
 - Agent 链式回传：统一数值 `AGENT_CHANNEL_SEQ` 生成所有 protocol 的 channel_id，修复非 SIP 通道回传帧被丢弃（隧道二进制帧 `[4B u32]` 前缀 parse 失败回退 0 落空）
 - SIP 事件回传：Hub 侧 `handle_agent_sip` 不再重复剥 4 字节 channelId，修复 Agent 回传的来电/通话状态永远到不了前端
 - rex-sip 线程安全：单例化 baresip 运行时（避免重复 init / 多 `re_main` 争抢）、`mqueue` 主线程序列化控制 API（消除跨线程竞争）、`bevent_cb` 去除递归锁（消除首个来电死锁）、`calls` map 在 CALL_CLOSED 立即移除（消除 UAF）
+
 
 ## [0.69.0] - 2026-08-15
 
@@ -374,6 +401,7 @@ All notable changes to this project will be documented in this file.
 - 后端日志：补全 SSH 相关语句的 `resource_name`，`RESOURCE_DELETE` 写入已算出的名称
 - Hub 启动崩溃：saved-queries DELETE 路由改用 axum 0.8 的 `{id}` 语法，修复 worker 启动 panic
 
+
 ## [0.68.0] - 2026-08-14
 
 ### Changed
@@ -386,6 +414,7 @@ All notable changes to this project will be documented in this file.
 - 界面：右下角新增快捷键速查指南快捷开关
 - 手机端：SQL 全局查询框回车执行而非插入换行
 - 文档：修正 Agent 部署文档，移除实际未使用的 `REX_AGENT_ID` 环境变量，校准认证失败提示（仅 `REX_HUB_URL` 与 `REX_AGENT_TOKEN` 为必填，Agent ID 由 Hub 依令牌自动分配）
+
 
 ## [0.67.0] - 2026-08-13
 
@@ -403,6 +432,7 @@ All notable changes to this project will be documented in this file.
 - 设置：更新选项 i18n 缺失（补充 autoUpdate/currentVersion/latestVersion 翻译）
 - 后端：SSH/SQL/Redis 连接日志增加 resource_name 便于识别
 - Agent：部署引导文档 env 名错误（REX_SERVER/REX_TOKEN 改为 REX_HUB_URL/REX_AGENT_TOKEN），移除不生效的 auto_update 开关（Agent 本就默认自动更新、仅读环境变量）
+
 
 ## [0.66.0] - 2026-08-11
 
@@ -439,6 +469,7 @@ All notable changes to this project will be documented in this file.
 - 部署指南：始终可访问，不再仅在无 Agent 时显示
 
 
+
 ## [0.65.4] - 2026-08-10
 
 ### Fixed
@@ -455,6 +486,7 @@ All notable changes to this project will be documented in this file.
 - 代码质量：修复 clippy 警告（needless return、useless format、if-same-then-else）
 
 
+
 ## [0.65.3] - 2026-08-04
 
 ### Fixed
@@ -464,6 +496,7 @@ All notable changes to this project will be documented in this file.
 - SSH 终端：修复连接失败后无限重连（仅手动重连时重置计数器）
 - Docker：分离 agent 二进制与用户数据目录，新增 REX_AGENT_BINARIES_DIR 环境变量
 - 工作区：添加 KeepAlive 防止切换页面后 SSH 终端重连
+
 
 ## [0.65.2] - 2026-08-04
 
@@ -484,12 +517,14 @@ All notable changes to this project will be documented in this file.
 - 设置页面改为滑动式布局 + 自动更新开关（后端配置持久化）
 - 设置 API 重构为动态读取（get_all_settings，新增配置无需改代码）
 
+
 ## [0.65.1] - 2026-07-31
 
 ### Added
 - 工作区保活：切换页面后返回恢复 tab 状态（24h 有效期）
 - xterm-helpers 修复：完全移除隐藏代码，让 xterm.js 自行管理 DOM
 - CSS 修复：TerminalView 多余闭合括号
+
 
 ## [0.65.0] - 2026-07-31
 
@@ -511,6 +546,7 @@ All notable changes to this project will be documented in this file.
 - xterm-helpers 遮挡修复
 - 所有 🔴 级别 bug 已修复
 
+
 ## [0.64.1] - 2026-07-31
 
 ### Fixed
@@ -525,6 +561,7 @@ All notable changes to this project will be documented in this file.
 - 直连环境：不再显示 Agent 相关内容
 - Session timeout：从 30 分钟延长到 2 小时
 
+
 ## [0.64.0] - 2026-07-30
 
 ### Added
@@ -532,6 +569,7 @@ All notable changes to this project will be documented in this file.
 - 前端 client/useSwipeGesture/useVirtualKeyboard 单元测试
 - API 集成测试（auth 端点）
 - CI coverage 报告支持
+
 
 ## [0.63.0] - 2026-07-30
 
@@ -544,6 +582,7 @@ All notable changes to this project will be documented in this file.
 - cache_headers 中间件 borrow 错误修复
 - Dockerfile/Docker Compose 环境变量统一为 REX_ 前缀
 
+
 ## [0.62.0] - 2026-07-30
 
 ### Added
@@ -554,12 +593,14 @@ All notable changes to this project will be documented in this file.
 - 移除未使用的导入和变量
 - 添加缺失的默认 props
 
+
 ## [0.61.0] - 2026-07-30
 
 ### Added
 - 审计日志 CSV/JSON 导出
 - 环境配置导出/导入（不含敏感字段）
 - 数据库备份 API（创建/列表/恢复）
+
 
 ## [0.60.0] - 2026-07-30
 
@@ -569,6 +610,7 @@ All notable changes to this project will be documented in this file.
 - 后端日志增强：请求/响应体大小、慢请求警告
 - 错误消息国际化：API/网络/表单错误的中英文翻译
 
+
 ## [0.59.0] - 2026-07-30
 
 ### Added
@@ -577,6 +619,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - 构建优化：生产环境移除 console.log
 - 静态资源缓存策略：js/css/字体文件 1 年缓存，API 响应 no-store
+
 
 ## [0.58.0] - 2026-07-30
 
@@ -589,12 +632,14 @@ All notable changes to this project will be documented in this file.
 - CSP 安全头增强：添加 frame-ancestors、base-uri、form-action 策略
 - Dockerfile 环境变量修正：`DATA_DIR` → `REX_DATA_DIR`
 
+
 ## [0.57.0] - 2026-07-30
 
 ### Added
 - 移动端底部导航 safe-area 适配
 - 触摸手势：从左边缘右滑打开侧栏，左滑关闭
 - 虚拟键盘适配：键盘弹出时隐藏底部导航
+
 
 ## [0.56.0] - 2026-07-30
 
@@ -607,11 +652,13 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Token 过期：弹出密码输入 Modal 替代跳转登录页，输入密码后自动更新 Token
 
+
 ## [0.55.1] - 2026-07-29
 
 ### Fixed
 - 右键菜单图标大小统一
 - 资源创建向导协议图标添加圆形背景
+
 
 ## [0.55.0] - 2026-07-29
 
@@ -621,6 +668,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - CI 构建优化：合并 build-hub 和 build-agent 为单一 job，避免重复编译共享 crate
+
 
 ## [0.54.0] - 2026-07-29
 
@@ -637,17 +685,20 @@ All notable changes to this project will be documented in this file.
 - SSH 连接空用户名时默认使用 root
 - SFTP 文件列表返回修改时间（之前硬编码为 None）
 
+
 ## [0.53.0] - 2026-07-29
 
 ### Added
 - Prometheus 指标端点：暴露 /metrics 端点，包含 uptime、requests、agent connections
 - Agent 重连优化：指数退避重连（1s → 2s → 4s → ... → 最大 30s）
 
+
 ## [0.52.0] - 2026-07-29
 
 ### Added
 - 高对比度模式：新增高对比度主题选项，提升可访问性
 - 通知系统：统一通知组件，支持成功/错误/警告/信息类型，自动消失
+
 
 ## [0.51.0] - 2026-07-29
 
@@ -656,12 +707,14 @@ All notable changes to this project will be documented in this file.
 - 审计日志：CSV 导出已支持当前筛选条件
 - 资源搜索：已使用 Vue computed 缓存优化
 
+
 ## [0.50.0] - 2026-07-29
 
 ### Added
 - 优雅关闭：Hub 收到 SIGTERM/SIGINT 时优雅关闭
 - 健康检查：返回版本号和启动时间
 - API 集成测试：认证和环境管理端点测试（5 个测试用例）
+
 
 ## [0.49.0] - 2026-07-29
 
@@ -672,6 +725,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - 提交规范：CLAUDE.md 强制要求提交前执行 `cargo fmt`
 
+
 ## [0.48.0] - 2026-07-29
 
 ### Added
@@ -679,10 +733,12 @@ All notable changes to this project will be documented in this file.
 - 响应式表格：审计日志表格在小屏设备水平滚动
 - CSP 安全头：Content-Security-Policy 限制资源加载来源
 
+
 ## [0.47.1] - 2026-07-29
 
 ### Changed
 - Agent 部署指南：二进制下载改为直接下载按钮 + 架构选择器（Linux/macOS/Windows）
+
 
 ## [0.47.0] - 2026-07-29
 
@@ -694,12 +750,14 @@ All notable changes to this project will be documented in this file.
 - Agent 认证：改用环境级注册令牌（environments.registration_token），每个环境独立
 - 数据库：移除 agents 表未使用的 agent_token 列，token_hash 列不再使用
 
+
 ## [0.46.1] - 2026-07-29
 
 ### Fixed
 - 登录页面：修复首次运行时不会跳转密码设置页的问题
 - 资源创建向导：修复步骤2错误提示"主机地址为必填项"（验证条件与渲染步骤不匹配）
 - 环境详情页：无 Agent 注册时隐藏无效的复制/重置按钮，显示提示信息
+
 
 ## [0.46.0] - 2026-07-29
 
@@ -710,6 +768,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - 隐藏 xterm.js char-measure-element 测量元素（CSS 强制隐藏）
+
 
 ## [0.45.0] - 2026-07-28
 
@@ -727,6 +786,7 @@ All notable changes to this project will be documented in this file.
 - SSH 终端切换标签不再重连
 - SSH 终端底部行裁剪问题
 
+
 ## [0.44.0] - 2026-07-28
 
 ### Added
@@ -736,6 +796,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - 终端生命周期：合并重复 onMounted，修复 settings listener 潜在内存泄漏
+
 
 ## [0.43.0] - 2026-07-28
 
@@ -748,6 +809,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - 收藏功能：右键菜单添加收藏/取消收藏入口
 - 环境详情页：展示 Agent 注册令牌并支持复制
+
 
 ## [0.42.0] - 2026-07-28
 
@@ -771,6 +833,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Agent 部署操作指南：可折叠指南组件 + i18n 支持
 
+
 ## [0.41.0] - 2026-07-27
 
 ### Added
@@ -785,6 +848,7 @@ All notable changes to this project will be documented in this file.
 - 代码审查：修复 onPaneDrop 拖拽 Tab 时未清除源 Pane 的 critical bug
 - 收藏按钮 title 属性：区分收藏/取消收藏提示文案
 
+
 ## [0.40.0] - 2026-07-25
 
 ### Changed
@@ -793,6 +857,7 @@ All notable changes to this project will be documented in this file.
 - SQL 控制台模块：SqlPage、ExportWizard、TableDesigner、GlobalQueryModal、AiAssistantDrawer、SqlResultGrid、ColumnEditor 全部接入 i18n
 - Redis 模块：RedisStatus 接入 i18n
 - AiAssistantDrawer：actions 数组从静态硬编码改为 computed 动态生成
+
 
 ## [0.39.2] - 2026-07-25
 
@@ -808,6 +873,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - SSH 终端 resize：连接建立后立即发送实际终端尺寸，修复 SSH 默认80x24 导致 vim 卡死和显示不完整
+
 
 ## [0.39.1] - 2026-07-25
 
@@ -829,6 +895,7 @@ All notable changes to this project will be documented in this file.
 - Settings API：`SettingsUpdate` struct 替换为 `HashMap<String, String>`，支持任意 key
 - Agent 页面：直连模式下隐藏快速开始按钮，显示隧道模式说明
 
+
 ## [0.39.0] - 2026-07-25
 
 ### Added
@@ -845,6 +912,7 @@ All notable changes to this project will be documented in this file.
 - agent_ws.rs：6 个 tracing 调用添加 AGENT_* action 字段
 - file_api.rs：8 个 tracing 调用添加 FILE_* action 字段
 - tunnel_ws.rs：3 个 tracing 调用添加 TUNNEL_* action 字段
+
 
 
 ## [0.38.2] - 2026-07-24
@@ -865,6 +933,7 @@ All notable changes to this project will be documented in this file.
 - 终端 SSH 连接：host/port/username 改为从 Resource 顶层字段读取（而非 config_json）
 - SSH 连接日志增强：每个步骤添加详细 tracing（资源加载、认证方式、连接尝试、Agent 隧道）
 
+
 ## [0.38.1] - 2026-07-24
 
 ### Changed
@@ -874,6 +943,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - 移除 rex-hub 中未使用的 `async-trait` 依赖
+
 
 ## [0.38.0] - 2026-07-24
 
@@ -885,6 +955,7 @@ All notable changes to this project will be documented in this file.
 - 审计日志 CSV 导出：导出当前筛选条件下的所有记录
 - 审计日志行展开详情：结构化展示 target、detail、agent_id
 - 后端审计统计 API：GET /api/audit-log/stats
+
 
 ## [0.37.0] - 2026-07-23
 
@@ -899,6 +970,7 @@ All notable changes to this project will be documented in this file.
 - os/arch 输入验证：Agent 心跳上报的 os/arch 值增加白名单校验
 - AuditQuery 补全 environment_id 参数传递
 - 日志搜索：Agents 页面日志过滤改为大小写不敏感
+
 
 ## [0.36.0] - 2026-07-23
 
@@ -918,6 +990,7 @@ All notable changes to this project will be documented in this file.
 - CommandPalette 全局 keydown 泄漏：面板隐藏时不监听键盘事件
 - session_timeout 加载：从后端读取设置时不覆盖 localStorage 值
 
+
 ## [0.35.1] - 2026-07-23
 
 ### Added
@@ -926,6 +999,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - 前端 lint：修复 138 个 vue/attributes-order warnings（138 → 0）
+
 
 ## [0.35.0] - 2026-07-23
 
@@ -941,6 +1015,7 @@ All notable changes to this project will be documented in this file.
 - 路由守卫：已登录用户访问 /setup 页面时正确重定向到 /workspace
 - ClientMsg Ping 变体：后端正确处理客户端心跳消息
 
+
 ## [0.34.0] - 2026-07-23
 
 ### Added
@@ -954,6 +1029,7 @@ All notable changes to this project will be documented in this file.
 - Axum 路由顺序：resource_routes 注册在 env_routes 之前，防止 /{id} 拦截子路由
 - 编码硬编码：Properties 对话框使用 tab.encoding 而非固定 UTF-8
 
+
 ## [0.33.0] - 2026-07-22
 
 ### Added
@@ -961,6 +1037,7 @@ All notable changes to this project will be documented in this file.
 - 文件编辑器前端：CodeMirror 编辑对话框，语法高亮、Ctrl+S 保存
 - 连接配置导入/导出 API（JSON 格式，环境+资源批量管理）
 - SSH 连接保活：keepalive_interval 配置防止长连接断开
+
 
 ## [0.32.0] - 2026-07-22
 
@@ -977,6 +1054,7 @@ All notable changes to this project will be documented in this file.
 - download_range limit 类型修复：改为 Option<u64>，None 表示到文件末尾
 - Range header 解析：使用 splitn(2, '-') 正确处理无 end 的 Range 格式
 
+
 ## [0.31.0] - 2026-07-21
 
 ### Added
@@ -988,6 +1066,7 @@ All notable changes to this project will be documented in this file.
 - FileEntry 新增 acl 字段（前后端一致）
 - 重构：移除死代码（SessionQuery、AclQuery），统一 auth header 构造
 
+
 ## [0.30.0] - 2026-07-21
 
 ### Added
@@ -996,6 +1075,7 @@ All notable changes to this project will be documented in this file.
 - S3 Presigned URL：右键菜单生成临时访问链接并复制到剪贴板
 - S3 Multipart 断点续传：后端支持 list/resume/abort multipart uploads API
 
+
 ## [0.29.0] - 2026-07-21
 
 ### Added
@@ -1003,6 +1083,7 @@ All notable changes to this project will be documented in this file.
 - MobileFilesBar：底部浮动工具栏（Upload/Download/New Folder/Refresh/More 菜单）
 - 响应式对话框：Chmod/删除确认/FolderSync 对话框移动端适配
 - 列隐藏：移动端文件列表隐藏 Modified 列，只显示 Name + Size
+
 
 ## [0.28.0] - 2026-07-21
 
@@ -1013,6 +1094,7 @@ All notable changes to this project will be documented in this file.
 - 全局设置页终端主题控件：Terminal Theme / Background Opacity / Background Image 下拉
 - 全局终端设置缓存：SettingsPage 保存时写入 localStorage，TerminalView 读取作为 fallback
 
+
 ## [0.27.0] - 2026-07-21
 
 ### Added
@@ -1020,6 +1102,7 @@ All notable changes to this project will be documented in this file.
 - Redis 压缩格式检测：zlib / gzip / zstd 压缩数据自动解压并递归检测内部格式
 - 后端 redis-codec 模块：rex-common 新增格式检测引擎，get_value 返回格式元数据
 - 前端 FormatViewer 扩展：动态格式标签（Msgpack蓝/PHP紫/Java橙/Pickle绿/Compressed红）+ 解码结果展示
+
 
 ## [0.26.1] - 2026-07-20
 
@@ -1030,6 +1113,7 @@ All notable changes to this project will be documented in this file.
 - Redis：selectDb 检查 res.ok，切换 DB 失败时显示错误提示
 - SFTP：删除文件前弹出确认对话框，防止误删
 - SFTP：拖拽文件夹时自动过滤（目录不参与拖拽传输）
+
 
 ## [0.26.0] - 2026-07-20
 
@@ -1044,6 +1128,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - CommandPalette.vue：移除未使用变量，修复 lint error
 
+
 ## [0.25.1] - 2026-07-20
 
 ### Fixed
@@ -1053,6 +1138,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - 全局搜索：Ctrl+K 打开命令面板，搜索资源/命令/设置
 
+
 ## [0.25.0] - 2026-07-20
 
 ### Added
@@ -1060,12 +1146,14 @@ All notable changes to this project will be documented in this file.
 - SFTP chmod 权限管理：复选框矩阵设置文件权限
 - SFTP 编辑功能：临时下载文件进行编辑
 
+
 ## [0.24.0] - 2026-07-20
 
 ### Added
 - Redis 批量操作：批量删除、批量 TTL、导入导出（JSON 格式）
 - Redis 值查看器：支持「在新标签打开」，Tab 栏管理多个键值
 - Redis 连接管理：编辑、删除、复制连接功能
+
 
 ## [0.23.0] - 2026-07-20
 
@@ -1076,6 +1164,7 @@ All notable changes to this project will be documented in this file.
 - SQL 结果网格内联编辑：双击单元格编辑，变更追踪，Apply/Discard 按钮
 - SQL 表单视图：网格/表单切换，一次一条记录编辑
 
+
 ## [0.22.0] - 2026-07-20
 
 ### Added
@@ -1085,12 +1174,14 @@ All notable changes to this project will be documented in this file.
 - SQL 导出向导：查询结果导出为 CSV/JSON/SQL 文件（前端生成）
 - 后端 SQL API：新增 indexes/foreign_keys/ddl 三个端点，支持 MySQL/PostgreSQL/SQLite 三引擎
 
+
 ## [0.21.0] - 2026-07-20
 
 ### Added
 - Tab 广播模式：「发送到全部」开关，输入同步到所有 SSH Tab，状态栏广播指示器，Ctrl+Shift+B 快捷键
 - 深度资源属性对话框：连接/认证/终端/外观/保活 5 个分类 Tab，per-session 配置
 - Quick Connect 增强：协议切换自动补全端口、密码字段、连接历史下拉（最近 10 条）
+
 
 ## [0.20.0] - 2026-07-20
 
@@ -1103,12 +1194,14 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - SFTP 同时支持独立 Tab 和 SSH Tab 抽屉两种模式
 
+
 ## [0.19.0] - 2026-07-20
 
 ### Added
 - 工作区状态栏增强：显示协议+主机+端口、终端尺寸（cols×rows）、连接状态
 - Tab 拖拽排序（HTML5 drag-and-drop）
 - Tab 右键菜单：关闭左侧、关闭全部、复制标签
+
 
 ## [0.18.0] - 2026-07-17
 
@@ -1120,6 +1213,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - TLS serve 实际监听待实现（hyper 1.x 集成复杂），当前所有 TLS 模式回退到 HTTP 并输出警告
+
 
 ## [0.17.0] - 2026-07-17
 
@@ -1137,6 +1231,7 @@ All notable changes to this project will be documented in this file.
 - 版本检查通过 WebSocket 心跳完成（Agent 上报 version → Hub 对比 → 推送 update）
 - Agent 更新通过 WebSocket 指令触发，不暴露 REST API
 
+
 ## [0.16.0] - 2026-07-17
 
 ### Added
@@ -1153,6 +1248,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - 全项目 0 clippy warnings（修复 rex-s3/rex-mysql/rex-postgresql/rex-hub 所有预存 warning）
 
+
 ## [0.15.0] - 2026-07-17
 
 ### Added
@@ -1166,6 +1262,7 @@ All notable changes to this project will be documented in this file.
 - Auth middleware：修复 state 注入方式，从 extensions 获取改为 from_extractor_with_state
 - Auth 错误消息：中文硬编码 → 英文
 
+
 ## [0.14.0] - 2026-07-16
 
 ### Added
@@ -1173,16 +1270,19 @@ All notable changes to this project will be documented in this file.
 - 审计日志：查询 API（时间/操作/结果筛选）+ 页面重写
 - 设置：设置 API + 页面重写，主题/语言/终端配置持久化
 
+
 ## [0.13.0] - 2026-07-16
 
 ### Added
 - Agent 管理：注册 API（POST /api/agents/register）+ 心跳 API（POST /api/agents/:id/heartbeat）
 - Agent 管理页：重写为真实 API 数据，支持令牌重置
 
+
 ## [0.12.0] - 2026-07-16
 
 ### Fixed
 - SQL 控制台：修复 SqlConnectorFactory 断路，连接分发到 MySQL/PostgreSQL/SQLite 真实 connector
+
 
 ## [0.11.0] - 2026-07-16
 
@@ -1195,6 +1295,7 @@ All notable changes to this project will be documented in this file.
 - Quick Connect 降级为临时连接模式（不保存为资源）
 - 状态栏显示当前 Tab 真实资源信息
 
+
 ## [0.10.0] - 2026-07-16
 
 ### Added
@@ -1205,6 +1306,7 @@ All notable changes to this project will be documented in this file.
 - 侧栏连接树：从 API 读取环境→资源数据，替代硬编码假数据
 - 前端 API 层：environments.ts + resources.ts + environments Pinia store
 - 共享协议常量：PROTOCOL_ICONS / PROTOCOL_COLORS / PROTOCOL_NAMES
+
 
 ## [0.9.0] - 2026-07-15
 
@@ -1222,6 +1324,7 @@ All notable changes to this project will be documented in this file.
 - 现有 API 模块（SQL/Redis/Files）注入 auth header，支持认证后正常工作
 - WebSocket 终端支持 token query param 认证
 
+
 ## [0.8.0] - 2026-07-15
 
 ### Added
@@ -1231,6 +1334,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - 所有管理页面统一使用 Card/Badge/Button/StatusDot/Table 等 REX 设计系统组件
 
+
 ## [0.7.0] - 2026-07-15
 
 ### Added
@@ -1238,6 +1342,7 @@ All notable changes to this project will be documented in this file.
 - 文件管理：后端 S3 连接器（基于 AWS SDK，支持 multipart 上传）
 - 文件管理：文件传输 REST API（connect/list/stat/upload/download/delete/rename/mkdir）
 - 文件管理：前端双面板文件浏览器（SFTP/S3 支持、活动面板模型、路径栏、面包屑、右键菜单）
+
 
 ## [0.6.0] - 2026-07-15
 
@@ -1248,6 +1353,7 @@ All notable changes to this project will be documented in this file.
 - Redis 控制台：CLI（命令输入 + 历史 + 结果日志）
 - Redis 控制台：Server Status 卡片仪表盘（版本/内存/统计/键空间）
 
+
 ## [0.5.0] - 2026-07-15
 
 ### Added
@@ -1256,6 +1362,7 @@ All notable changes to this project will be documented in this file.
 - SQL 控制台：CodeMirror 6 查询编辑器（多 Tab、SQL 语法高亮、`.` 补全、代码折叠、查找替换）
 - SQL 控制台：结果网格（表格视图、状态栏、行数/耗时显示）
 - SQL 控制台：执行模式工具栏（Run All / Run Current / Run Selected）
+
 
 ## [0.4.0] - 2026-07-15
 
@@ -1266,6 +1373,7 @@ All notable changes to this project will be documented in this file.
 - SSH 终端：右键菜单（复制/粘贴/全选/清屏/查找/编码子菜单/重连/断开）
 - SSH 终端：3 套主题预设（REX Default / Ubuntu / Solarized Dark）
 - SSH 终端：移动端浮动工具栏（方向键、Tab、Ctrl+C/L、粘贴、字体缩放）
+
 
 ## [0.3.0] - 2026-07-15
 
@@ -1278,6 +1386,7 @@ All notable changes to this project will be documented in this file.
 - 资源属性对话框（连接/认证/终端/笔记 4 个分类 Tab）
 - UI 组件：Input、Select、Checkbox、Switch、Avatar、Alert、ToggleGroup、Scrollbar
 
+
 ## [0.2.0] - 2026-07-14
 
 ### Added
@@ -1285,6 +1394,7 @@ All notable changes to this project will be documented in this file.
 - 组件增强：Button (loading/block)、Input (clearable/error)、Select、Badge (size/dot)、Card (hoverable/footer)、Table (striped/compact/empty)、Modal (ESC/scroll lock)、Drawer (width)
 - 新增组件：Checkbox、Switch、Avatar、Alert、ToggleGroup、Scrollbar
 - 设计预览页更新（全部组件变体展示）
+
 
 ## [0.1.0] - 2026-07-14
 
