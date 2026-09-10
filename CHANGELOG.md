@@ -11,6 +11,16 @@
 - CI Docker 构建不再下载前端 artifact
 
 
+## [0.81.2] - 2026-09-10
+
+### Fixed
+- 修复 CI workflow 中损坏的 Download frontend 步骤
+- 移除重复的前端下载任务，使 docker-hub job 能正常运行
+
+
+### Docs
+- 使 README 双语（中文/英文），提升国际用户可读性
+
 ## [0.81.0] - 2026-09-10
 
 ### Added
