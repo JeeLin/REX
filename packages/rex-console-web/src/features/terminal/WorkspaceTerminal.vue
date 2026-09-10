@@ -324,9 +324,21 @@ function connectSession() {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
   const token = localStorage.getItem('rex-token') || ''
   const wsUrl = `${protocol}//${location.host}/ws/terminal?resourceId=${encodeURIComponent(props.resourceId)}&token=${encodeURIComponent(token)}`
-  ws = new WebSocket(wsUrl)
+  // Capture reference to guard against stale handlers after reconnect
+  let currentWs: WebSocket
+  try {
+    currentWs = new WebSocket(wsUrl)
+  } catch {
+    connecting = false
+    connectionStatus.value = 'error'
+    emit('update:status', 'error')
+    terminal?.write('\r\n\x1b[31m[Failed to create WebSocket connection]\x1b[0m')
+    return
+  }
+  ws = currentWs
 
   ws.onopen = () => {
+    if (ws !== currentWs) return // Stale handler, ignore
     connecting = false
     connectionStatus.value = 'connected'
     emit('update:status', 'online')
@@ -343,6 +355,7 @@ function connectSession() {
   }
 
   ws.onmessage = (event: MessageEvent) => {
+    if (ws !== currentWs) return // Stale handler, ignore
     try {
       const msg = JSON.parse(event.data as string)
       switch (msg.type) {
@@ -374,6 +387,7 @@ function connectSession() {
   }
 
   ws.onclose = () => {
+    if (ws !== currentWs) return // Stale handler from a replaced connection
     connecting = false
     stopPing()
     connectionStatus.value = 'disconnected'
@@ -393,6 +407,7 @@ function connectSession() {
   }
 
   ws.onerror = () => {
+    if (ws !== currentWs) return // Stale handler, ignore
     connecting = false
     stopPing()
   }
@@ -422,8 +437,14 @@ function handleReconnect() {
     reconnectTimer = null
   }
   reconnectAttempts = 0
-  ws?.close()
+  // Prevent stale onclose from auto-reconnecting or clearing the new connection's flag
+  const oldWs = ws
   ws = null
+  manualDisconnect = true
+  if (oldWs) {
+    oldWs.close()
+  }
+
   connectSession()
 }
 

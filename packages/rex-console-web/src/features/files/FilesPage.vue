@@ -28,8 +28,13 @@ const connProtocol = ref(props.protocol || 'sftp')
 const connError = ref('')
 const connLoading = ref(false)
 
+// Inline rename
+const renamingId = ref<string | null>(null)
+const renameValue = ref('')
+
 // Auto-connect on mount if props provided
 onMounted(async () => {
+  document.addEventListener('keydown', onKeyDown)
   if (props.resourceId) {
     await doConnect()
   }
@@ -137,7 +142,49 @@ async function executeDelete() {
   showDeleteConfirm.value = false; pendingDelete.value = null
 }
 function cancelDelete() { showDeleteConfirm.value = false; pendingDelete.value = null }
-function confirmCtxDelete() { pendingCtxDelete.value = true; showDeleteConfirm.value = true; pendingDelete.value = { side: 'left', names: [ctx.value.name] } }
+function confirmCtxDelete() { pendingCtxDelete.value = true; showDeleteConfirm.value = true; pendingDelete.value = { side: ctx.value.side, names: [ctx.value.name] } }
+async function ctxDelete() { confirmCtxDelete(); ctx.value.show = false }
+
+// Inline rename
+function startRename(side: Side, entry: FileEntry) {
+  renamingId.value = `${side}:${entry.name}`
+  renameValue.value = entry.name
+  ctx.value.show = false
+}
+
+async function submitRename(side: Side) {
+  if (!sessionId.value || !renamingId.value) return
+  const entry = panels[side].entries.find(e => `${side}:${e.name}` === renamingId.value)
+  if (!entry) { renamingId.value = null; return }
+  const newName = renameValue.value.trim()
+  if (newName && newName !== entry.name) {
+    try {
+      await filesApi.renameFile(sessionId.value, panels[side].path + entry.name, panels[side].path + newName)
+    } catch (e) {
+      console.error('Rename failed:', e)
+    }
+  }
+  renamingId.value = null
+  await loadPanel(side)
+}
+
+function cancelRename() { renamingId.value = null }
+
+function isRenaming(side: Side, name: string) { return renamingId.value === `${side}:${name}` }
+
+// Keyboard
+function onKeyDown(e: KeyboardEvent) {
+  if (renamingId.value) return
+  if (e.key === 'F2') {
+    e.preventDefault()
+    const side: Side = panels.left.active ? 'left' : 'right'
+    const sel = Array.from(panels[side].selected)
+    if (sel.length === 1) {
+      const entry = panels[side].entries.find(en => en.name === sel[0])
+      if (entry) startRename(side, entry)
+    }
+  }
+}
 
 async function downloadSelected(side: Side) {
   if (!sessionId.value || panels[side].selected.size !== 1) return
@@ -271,11 +318,10 @@ function dismissCompleted() {
 }
 
 // Context menu
-const ctx = ref({ show: false, x: 0, y: 0, path: '', name: '' })
+const ctx = ref({ show: false, x: 0, y: 0, path: '', name: '', side: 'left' as Side })
 const ctxRef = ref<HTMLElement | null>(null)
 onClickOutside(ctxRef, () => { ctx.value.show = false })
-function onCtx(e: MouseEvent, entry: FileEntry) { e.preventDefault(); ctx.value = { show: true, x: e.clientX, y: e.clientY, path: entry.path, name: entry.name } }
-async function ctxDelete() { confirmCtxDelete(); ctx.value.show = false }
+function onCtx(e: MouseEvent, entry: FileEntry, side: Side) { e.preventDefault(); ctx.value = { show: true, x: e.clientX, y: e.clientY, path: entry.path, name: entry.name, side } }
 function ctxCopy() { clipboard.writeText(ctx.value.path); ctx.value.show = false }
 async function ctxPresignedUrl() {
   if (!sessionId.value) return
@@ -406,6 +452,7 @@ function onDS(e: MouseEvent) { dragging.value = true; sx = e.clientX; sw = leftW
 function onDM(e: MouseEvent) { leftW.value = Math.min(800, Math.max(250, sw + (e.clientX - sx))) }
 function onDE() { dragging.value = false; document.removeEventListener('mousemove', onDM); document.removeEventListener('mouseup', onDE); document.body.style.cursor = ''; document.body.style.userSelect = '' }
 onBeforeUnmount(async () => {
+  document.removeEventListener('keydown', onKeyDown)
   document.removeEventListener('mousemove', onDM)
   document.removeEventListener('mouseup', onDE)
   if (sessionId.value) {
@@ -541,8 +588,9 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
         </div>
         <div class="pf">
           <div class="fr fh"><span class="cn">{{ t('files.name') }}</span><span class="cs">{{ t('files.size') }}</span><span class="cm">{{ t('files.modified') }}</span><span v-if="isS3" class="csc">{{ t('files.storageClass') }}</span><span v-if="isS3" class="csc">{{ t('files.acl') }}</span></div>
-          <div v-for="e in panels[side].entries" :key="e.name" class="fr" :class="{ 'fr--sel': panels[side].selected.has(e.name) }" draggable="true" @dragstart="onDragStart($event, side, e.name)" @dragend="onDragEnd" @click="toggleSelect(side, e.name, $event)" @dblclick="navigate(side, e)" @contextmenu="onCtx($event, e)">
-            <span class="cn"><span class="fi">{{ e.is_dir ? '📁' : '📄' }}</span> {{ e.name }}</span>
+          <div v-for="e in panels[side].entries" :key="e.name" class="fr" :class="{ 'fr--sel': panels[side].selected.has(e.name) }" draggable="true" @dragstart="onDragStart($event, side, e.name)" @dragend="onDragEnd" @click="toggleSelect(side, e.name, $event)" @dblclick="!renamingId && navigate(side, e)" @contextmenu="onCtx($event, e, side)">
+            <span v-if="!isRenaming(side, e.name)" class="cn"><span class="fi">{{ e.is_dir ? '📁' : '📄' }}</span> {{ e.name }}</span>
+            <input v-else v-model="renameValue" class="fp-rename-input" autofocus @blur="cancelRename" @keydown.enter="submitRename(side)" @keydown.escape="cancelRename" @click.stop @keydown.stop />
             <span class="cs mu">{{ e.is_dir ? '-' : fmtSize(e.size) }}</span>
             <span class="cm mu">{{ e.modified || '-' }}</span>
             <span v-if="isS3" class="csc mu">{{ e.storage_class || '-' }}</span>
@@ -557,6 +605,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
 
     <div v-if="ctx.show" ref="ctxRef" class="fctx" :style="{top:ctx.y+'px',left:ctx.x+'px'}">
       <div class="ci" @click="editFile(ctx.path)">{{ t('files.edit') }}</div>
+      <div class="ci" @click="() => { const entry = panels[ctx.side].entries.find(e => e.name === ctx.name); if (entry) startRename(ctx.side, entry) }">{{ t('files.rename') }}</div>
       <div class="ci" @click="ctxCopy">{{ t('files.copyPath') }}</div>
       <div v-if="isS3" class="ci" @click="ctxPresignedUrl">{{ t('files.copyPresignedUrl') }}</div>
       <div class="ci" @click="isS3 ? openAclDialog(ctx.path) : openChmod(ctx.path)">{{ t('files.permissions') }}</div>
@@ -771,6 +820,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
 .chmod-row span{font-size:var(--text-sm);color:var(--text-primary)}
 .chmod-row input[type="checkbox"]{margin:0 auto;accent-color:var(--accent)}
 .chmod-octal{text-align:center;font-family:var(--font-mono);font-size:var(--text-lg);color:var(--accent);margin:var(--space-3) 0}
+.fp-rename-input{flex:1;background:var(--bg-deep);border:1px solid var(--accent);border-radius:2px;color:var(--text-primary);font-size:var(--text-sm);padding:0 4px;outline:none;min-width:0}
 .fp-switcher{display:none}
 @media(max-width:768px){
   .fp{flex-direction:column}
