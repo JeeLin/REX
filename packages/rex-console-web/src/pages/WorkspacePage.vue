@@ -275,6 +275,17 @@ provide<PaneCtx>(PANE_CTX, {
   sftpDrawerHeight,
   toggleSftpDrawer,
   startSftpDrag,
+  createTab: (protocol: string, label: string) => {
+    const id = nextTabId()
+    tabs.value.push({
+      id,
+      label,
+      protocol: protocol as 'ssh' | 'mysql' | 'redis' | 'postgresql' | 'sqlite' | 's3' | 'sftp' | 'sip' | 'sql',
+      status: 'connecting',
+    })
+    activeTab.value = id
+    return id
+  }
 })
 
 // Tab 右键菜单相关本地 UI 状态

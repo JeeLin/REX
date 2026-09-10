@@ -78,6 +78,7 @@ function sqlDbType(tab: { protocol?: string; subtype?: string } | null): string 
           @split-horizontal="leaf?.id && ctx.splitHorizontal(leaf.id)"
           @split-vertical="leaf?.id && ctx.splitVertical(leaf.id)"
           @close-pane="leaf?.id && ctx.closePane(leaf.id)"
+          @create-new-tab="(cmd: string, label: string) => { const newId = ctx.createTab('ssh', label); ctx.setPaneTab(leaf?.id || ctx.activePaneId.value, newId) }"
         />
       </KeepAlive>
       <div v-if="ctx.showSftpDrawer.value" class="ws-sftp-drawer" :style="{ height: ctx.sftpDrawerHeight.value + 'px' }">

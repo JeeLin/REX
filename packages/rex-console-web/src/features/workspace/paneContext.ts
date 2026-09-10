@@ -32,6 +32,8 @@ export interface PaneCtx {
   sftpDrawerHeight: Ref<number>
   toggleSftpDrawer: () => void
   startSftpDrag: (e: MouseEvent) => void
+  // Create a new tab (for docker exec etc.)
+  createTab: (protocol: string, label: string) => string
 }
 
 export const PANE_CTX = Symbol('paneCtx')
