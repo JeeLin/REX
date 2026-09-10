@@ -7,6 +7,7 @@ import type { FileEntry } from '@/api/files'
 import FolderSyncDialog from './FolderSyncDialog.vue'
 import MobileFilesBar from './MobileFilesBar.vue'
 import FileEditorDialog from './FileEditorDialog.vue'
+import FilePreview from './FilePreview.vue'
 import Button from '@/components/ui/Button.vue'
 import { clipboard } from '@/utils/clipboard'
 
@@ -446,6 +447,24 @@ function onEditorSaved() {
   loadPanel('left'); loadPanel('right')
 }
 
+// File preview
+const previewVisible = ref(false)
+const previewFile = ref<{ name: string; path: string; mime?: string } | null>(null)
+
+const IMAGE_EXTS = /\.(png|jpe?g|gif|webp|bmp|svg|ico)(\?|$)/i
+const TEXT_EXTS = /\.(txt|md|json|js|ts|tsx|jsx|vue|css|scss|less|html|xml|yaml|yml|toml|ini|cfg|conf|sh|bash|zsh|py|rb|go|rs|java|c|cpp|h|hpp|sql|log|csv|env|makefile|dockerfile|docker-compose)(\?|$)/i
+
+function isPreviewable(entry: FileEntry): boolean {
+  if (entry.is_dir) return false
+  return IMAGE_EXTS.test(entry.name) || TEXT_EXTS.test(entry.name)
+}
+
+function openPreview(entry: FileEntry) {
+  if (!isPreviewable(entry)) return
+  previewFile.value = { name: entry.name, path: entry.path }
+  previewVisible.value = true
+}
+
 // Resize
 const leftW = ref(400); const dragging = ref(false); let sx = 0, sw = 0
 function onDS(e: MouseEvent) { dragging.value = true; sx = e.clientX; sw = leftW.value; document.addEventListener('mousemove', onDM); document.addEventListener('mouseup', onDE); document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none' }
@@ -588,7 +607,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
         </div>
         <div class="pf">
           <div class="fr fh"><span class="cn">{{ t('files.name') }}</span><span class="cs">{{ t('files.size') }}</span><span class="cm">{{ t('files.modified') }}</span><span v-if="isS3" class="csc">{{ t('files.storageClass') }}</span><span v-if="isS3" class="csc">{{ t('files.acl') }}</span></div>
-          <div v-for="e in panels[side].entries" :key="e.name" class="fr" :class="{ 'fr--sel': panels[side].selected.has(e.name) }" draggable="true" @dragstart="onDragStart($event, side, e.name)" @dragend="onDragEnd" @click="toggleSelect(side, e.name, $event)" @dblclick="!renamingId && navigate(side, e)" @contextmenu="onCtx($event, e, side)">
+          <div v-for="e in panels[side].entries" :key="e.name" class="fr" :class="{ 'fr--sel': panels[side].selected.has(e.name) }" draggable="true" @dragstart="onDragStart($event, side, e.name)" @dragend="onDragEnd" @click="toggleSelect(side, e.name, $event)" @dblclick="!renamingId && (isPreviewable(e) ? openPreview(e) : navigate(side, e))" @contextmenu="onCtx($event, e, side)">
             <span v-if="!isRenaming(side, e.name)" class="cn"><span class="fi">{{ e.is_dir ? '📁' : '📄' }}</span> {{ e.name }}</span>
             <input v-else v-model="renameValue" class="fp-rename-input" autofocus @blur="cancelRename" @keydown.enter="submitRename(side)" @keydown.escape="cancelRename" @click.stop @keydown.stop />
             <span class="cs mu">{{ e.is_dir ? '-' : fmtSize(e.size) }}</span>
@@ -690,6 +709,13 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
       :protocol="connProtocol"
       @close="editorVisible = false"
       @saved="onEditorSaved"
+    />
+
+    <FilePreview
+      :show="previewVisible"
+      :file="previewFile"
+      :session-id="sessionId || ''"
+      @close="previewVisible = false"
     />
 
     <!-- Delete Confirmation -->
