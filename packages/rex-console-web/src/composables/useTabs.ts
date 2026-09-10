@@ -251,7 +251,107 @@ export function useTabs(deps: UseTabsDeps) {
     activeTab.value = tab.id
   }
 
-  // ===== 右键菜单 =====
+  // ===== Workspace Export / Import =====
+  function exportWorkspace(): string {
+    const data = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      tabs: tabs.value.map(t => ({
+        id: t.id,
+        label: t.label,
+        protocol: t.protocol,
+        resourceId: t.resourceId,
+        environmentId: t.environmentId,
+        subtype: t.subtype,
+        theme: t.theme,
+        fontSize: t.fontSize,
+        opacity: t.opacity,
+        cursorStyle: t.cursorStyle,
+        cursorBlink: t.cursorBlink,
+        backgroundImage: t.backgroundImage,
+        encoding: t.encoding,
+        color: t.color,
+        pinned: t.pinned,
+      })),
+      activeTab: activeTab.value,
+      activePaneId: activePaneId.value,
+    }
+    return JSON.stringify(data, null, 2)
+  }
+
+  interface WorkspaceSnapshot {
+    version: number
+    exportedAt: string
+    tabs: Array<{
+      id: string
+      label: string
+      protocol: Tab['protocol']
+      resourceId?: string
+      environmentId?: string
+      subtype?: string
+      theme?: string
+      fontSize?: number
+      opacity?: number
+      cursorStyle?: string
+      cursorBlink?: boolean
+      backgroundImage?: string
+      encoding?: string
+      color?: string
+      pinned?: boolean
+    }>
+    activeTab?: string
+    activePaneId?: string
+  }
+
+  function importWorkspace(data: string): void {
+    const parsed = JSON.parse(data) as WorkspaceSnapshot
+    if (!parsed.tabs || !Array.isArray(parsed.tabs)) {
+      throw new Error('Invalid workspace file: missing tabs array')
+    }
+
+    // Clear existing tabs
+    tabs.value = []
+
+    // Recreate each tab by calling openResource for tabs with resourceId
+    for (const saved of parsed.tabs) {
+      if (saved.resourceId) {
+        openResource({
+          id: saved.resourceId,
+          name: saved.label,
+          protocol: saved.protocol,
+          environmentId: saved.environmentId,
+          subtype: saved.subtype,
+        })
+      } else {
+        // Manually recreate tabs without a resource (e.g. new tabs)
+        const id = nextTabId()
+        tabs.value.push({
+          id,
+          label: saved.label,
+          protocol: saved.protocol,
+          status: 'connecting',
+          theme: saved.theme,
+          fontSize: saved.fontSize,
+          opacity: saved.opacity,
+          cursorStyle: saved.cursorStyle,
+          cursorBlink: saved.cursorBlink,
+          backgroundImage: saved.backgroundImage,
+          encoding: saved.encoding,
+          color: saved.color,
+          pinned: saved.pinned,
+        })
+      }
+    }
+
+    // Restore active tab
+    if (parsed.activeTab && tabs.value.find(t => t.id === parsed.activeTab)) {
+      activeTab.value = parsed.activeTab
+    } else if (tabs.value.length > 0) {
+      activeTab.value = tabs.value[0]!.id
+    }
+  }
+
+  // ===== Tab context menu =====
   function onTabContextMenu(e: MouseEvent, tabId: string) {
     e.preventDefault()
     tabContextMenu.value = { show: true, x: e.clientX, y: e.clientY, tabId }
@@ -342,5 +442,8 @@ export function useTabs(deps: UseTabsDeps) {
     goForward,
     reopenClosedTab,
     togglePinTab,
+    // workspace export / import
+    exportWorkspace,
+    importWorkspace,
   }
 }

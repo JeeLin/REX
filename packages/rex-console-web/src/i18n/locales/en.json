@@ -871,7 +871,32 @@
     "splitHint": "Double-click tab to split",
     "splitV": "Split vertical",
     "stopBroadcast": "Stop Broadcast",
-    "dragHint": "Drag tab to another pane"
+    "dragHint": "Drag tab to another pane",
+    "openInNewWindow": "Open in New Window",
+    "exportWorkspace": "Export Workspace",
+    "importWorkspace": "Import Workspace",
+    "exportSuccess": "Workspace exported successfully",
+    "exportFailed": "Failed to export workspace",
+    "importSuccess": "Workspace imported successfully",
+    "importFailed": "Failed to import workspace",
+    "importInvalid": "Invalid workspace file",
+    "importConfirmTitle": "Import Workspace",
+    "importConfirm": "Importing will replace the current workspace. Continue?",
+    "statusbar": {
+      "workspace": "workspace",
+      "resourcesOpen": "resource(s) open",
+      "f1Help": "F1 help",
+      "commandPalette": "Command palette"
+    },
+    "toolbarSettings": {
+      "title": "Toolbar Settings",
+      "splitH": "Split Horizontal",
+      "splitV": "Split Vertical",
+      "fullscreen": "Fullscreen",
+      "f1Help": "F1 Help",
+      "commandPalette": "Command Palette",
+      "resetToDefault": "Reset to Default"
+    }
   },
   "errorBoundary": {
     "title": "Something went wrong",
