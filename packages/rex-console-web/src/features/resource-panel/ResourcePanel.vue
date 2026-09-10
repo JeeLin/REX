@@ -98,6 +98,37 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+/* ---- activation mode ---- */
+type ActivationMode = 'click' | 'dblclick'
+const resourceActivation = ref<ActivationMode>((localStorage.getItem('rex-resource-activation') as ActivationMode) || 'click')
+
+function toggleActivationMode() {
+  resourceActivation.value = resourceActivation.value === 'click' ? 'dblclick' : 'click'
+  localStorage.setItem('rex-resource-activation', resourceActivation.value)
+}
+
+function agentStatusColor(envId: string): string {
+  const env = store.environments.find(e => e.id === envId)
+  if (!env?.agent_status) return 'transparent'
+  switch (env.agent_status) {
+    case 'online': return '#22c55e'
+    case 'offline': return '#ef4444'
+    case 'connecting': return '#eab308'
+    default: return 'var(--text-muted)'
+  }
+}
+
+function resourceClickEvent(res: Resource) {
+  if (resourceActivation.value === 'click') {
+    handleResourceClick(res)
+  }
+}
+function resourceDblClickEvent(res: Resource) {
+  if (resourceActivation.value === 'dblclick') {
+    handleResourceClick(res)
+  }
+}
+
 /* ---- resource click (shared) ---- */
 function handleResourceClick(res: Resource) {
   wsStore.openResource({
@@ -286,6 +317,17 @@ function ctxToggleFavorite() {
       </div>
     </div>
 
+    <!-- Activation mode toggle -->
+    <div v-if="!showGlobalResults" class="rp-activation-toggle">
+      <button
+        class="rp-activation-btn"
+        :title="resourceActivation === 'click' ? 'Single-click activation (current)' : 'Double-click activation (current)'"
+        @click="toggleActivationMode"
+      >
+        {{ resourceActivation === 'click' ? '👆' : '👆👆' }}
+      </button>
+    </div>
+
     <!-- Tabs (hidden when search active) -->
     <div v-if="!showGlobalResults" class="rp-header">
       <div class="rp-tabs">
@@ -326,7 +368,8 @@ function ctxToggleFavorite() {
           v-for="item in items"
           :key="item.resource.id"
           class="rp-item"
-          @click="handleResourceClick(item.resource)"
+          @click="resourceClickEvent(item.resource)"
+          @dblclick="resourceDblClickEvent(item.resource)"
         >
           <span class="rp-item-icon" :style="{ color: item.resource.color || PROTOCOL_COLORS[item.resource.protocol] || 'var(--text-secondary)' }">
             {{ PROTOCOL_ICONS[item.resource.protocol] || '?' }}
@@ -366,9 +409,11 @@ function ctxToggleFavorite() {
             v-for="res in getResources(env.id)"
             :key="res.id"
             class="rp-item"
-            @click="handleResourceClick(res)"
+            @click="resourceClickEvent(res)"
+            @dblclick="resourceDblClickEvent(res)"
             @contextmenu.prevent="onContextMenu($event, res)"
           >
+            <span class="rp-agent-dot" :style="{ backgroundColor: agentStatusColor(res.environment_id) }"></span>
             <span class="rp-item-icon" :style="{ color: res.color || PROTOCOL_COLORS[res.protocol] || 'var(--text-secondary)' }">
               {{ PROTOCOL_ICONS[res.protocol] || '?' }}
             </span>
@@ -399,9 +444,11 @@ function ctxToggleFavorite() {
         v-for="res in favoriteResources"
         :key="res.id"
         class="rp-item"
-        @click="handleResourceClick(res)"
+        @click="resourceClickEvent(res)"
+        @dblclick="resourceDblClickEvent(res)"
         @contextmenu.prevent="onContextMenu($event, res)"
       >
+        <span class="rp-agent-dot" :style="{ backgroundColor: agentStatusColor(res.environment_id) }"></span>
         <span class="rp-item-icon" :style="{ color: res.color || PROTOCOL_COLORS[res.protocol] || 'var(--text-secondary)' }">
           {{ PROTOCOL_ICONS[res.protocol] || '?' }}
         </span>
@@ -427,6 +474,7 @@ function ctxToggleFavorite() {
         :key="item.id"
         class="rp-item"
         @click="openRecentItem(item)"
+        @dblclick="openRecentItem(item)"
       >
         <span class="rp-item-icon" :style="{ color: PROTOCOL_COLORS[item.protocol] || 'var(--text-secondary)' }">
           {{ PROTOCOL_ICONS[item.protocol] || '?' }}
@@ -600,6 +648,33 @@ function ctxToggleFavorite() {
 }
 .rp-item:hover {
   background: var(--bg-hover);
+}
+.rp-activation-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+.rp-activation-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  color: var(--text-muted);
+  transition: color var(--transition), border-color var(--transition);
+}
+.rp-activation-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+.rp-agent-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 .rp-item-icon {
   font-family: var(--font-mono);
