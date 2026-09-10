@@ -1,6 +1,21 @@
 # Changelog
 
 ## [0.74.1] - 2026-09-09
+## [0.76.0] - 2026-09-10
+
+### Added
+- **Quick Open 模糊匹配增强**：支持模糊匹配和高亮显示（Cmd+K）
+- **SQL 全局搜索**：Cmd+Shift+F 跨所有查询 Tab 搜索（新增 GlobalSearchModal）
+- **Tab 历史导航**：Ctrl+←/→ 前进/后退 Tab 历史
+- **Tab 关闭恢复**：Ctrl+Shift+T 重新打开最近关闭的 Tab
+- **Tab Pin 固定**：右键菜单固定 Tab，Pin 的 Tab 不会被自动关闭
+- **Tab 关闭确认**：有未保存更改的 Tab 关闭时弹出确认对话框
+- **欢迎页**：工作空间无 Tab 时显示欢迎页（快速入口、快捷键提示）
+
+### Fixed
+- Redis 错误消息修复：使用 req.port 替代未定义的 port 变量
+
+
 ## [0.75.0] - 2026-09-10
 
 ### Added
