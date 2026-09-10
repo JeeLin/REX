@@ -62,17 +62,74 @@ const allItems = computed<SearchResult[]>(() => {
   return items
 })
 
+// ── 模糊匹配 ─────────────────────────────────────────────
+interface HighlightSegment {
+  text: string
+  highlight: boolean
+}
+
+/**
+ * Fuzzy match: each char of query must appear in order in target.
+ * e.g. "sq" matches "SQL Editor" (S…Q…).
+ */
+function fuzzyMatch(query: string, target: string): boolean {
+  if (!query) return true
+  const q = query.toLowerCase()
+  const t = target.toLowerCase()
+  let qi = 0
+  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
+    if (t[ti] === q[qi]) qi++
+  }
+  return qi === q.length
+}
+
+/** Return the indices in `text` that were matched by the fuzzy query. */
+function fuzzyMatchIndices(query: string, text: string): number[] {
+  if (!query) return []
+  const q = query.toLowerCase()
+  const t = text.toLowerCase()
+  const indices: number[] = []
+  let qi = 0
+  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
+    if (t[ti] === q[qi]) {
+      indices.push(ti)
+      qi++
+    }
+  }
+  return indices
+}
+
+/** Build segments for template rendering with <mark> highlighting. */
+function highlightSegments(query: string, text: string): HighlightSegment[] {
+  if (!query) return [{ text, highlight: false }]
+  const matched = new Set(fuzzyMatchIndices(query, text))
+  const segments: HighlightSegment[] = []
+  let buf = ''
+  let bufHL = false
+  for (let i = 0; i < text.length; i++) {
+    const hl = matched.has(i)
+    if (hl !== bufHL) {
+      if (buf) segments.push({ text: buf, highlight: bufHL })
+      buf = text.charAt(i)
+      bufHL = hl
+    } else {
+      buf += text.charAt(i)
+    }
+  }
+  if (buf) segments.push({ text: buf, highlight: bufHL })
+  return segments
+}
+
 // ── 过滤结果 ──────────────────────────────────────────────
 const results = computed(() => {
   if (!query.value.trim()) return allItems.value.slice(0, 10)
 
-  const q = query.value.toLowerCase()
+  const q = query.value
   return allItems.value.filter(item =>
-    item.label.toLowerCase().includes(q) ||
-    item.description?.toLowerCase().includes(q)
+    fuzzyMatch(q, item.label) ||
+    (item.description ? fuzzyMatch(q, item.description) : false)
   ).slice(0, 20)
 })
-
 // ── 分组 ──────────────────────────────────────────────────
 const groupedResults = computed(() => {
   const groups = new Map<string, SearchResult[]>()
@@ -180,8 +237,8 @@ watch(query, () => {
                 @mouseenter="selectedIndex = results.indexOf(item)"
               >
                 <span class="qo-item-icon">{{ item.icon || '📄' }}</span>
-                <span class="qo-item-label">{{ item.label }}</span>
-                <span v-if="item.description" class="qo-item-desc">{{ item.description }}</span>
+                <span class="qo-item-label"><template v-for="(seg, i) in highlightSegments(query, item.label)" :key="i"><mark v-if="seg.highlight">{{ seg.text }}</mark><template v-else>{{ seg.text }}</template></template></span>
+                <span v-if="item.description" class="qo-item-desc"><template v-for="(seg, i) in highlightSegments(query, item.description ?? '')" :key="i"><mark v-if="seg.highlight">{{ seg.text }}</mark><template v-else>{{ seg.text }}</template></template></span>
               </div>
             </template>
           </div>
@@ -301,6 +358,14 @@ watch(query, () => {
   font-size: 12px;
   color: var(--color-text-muted, #888);
   font-family: monospace;
+}
+
+.qo-item-label mark,
+.qo-item-desc mark {
+  background: rgba(232, 145, 45, 0.3);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
 }
 
 .qo-empty {

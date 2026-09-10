@@ -14,6 +14,8 @@ export interface Tab {
   color?: string
   renaming?: boolean
   broadcast?: boolean
+  pinned?: boolean
+  dirty?: boolean
   // v0.70.7：SQL 资源的子类（dialect，mysql/postgresql/sqlite）。连接时回写，
   // 之后经此字段直接路由 SQL 控制台，无需再次探测。
   subtype?: string
@@ -25,6 +27,8 @@ export interface Tab {
   cursorBlink?: boolean
   backgroundImage?: string
   encoding?: string
+  // Snapshot of saved content for dirty detection (e.g. SQL query text)
+  savedContent?: string
 }
 
 export interface ResourceNode {
@@ -100,10 +104,11 @@ export function useTabs(deps: UseTabsDeps) {
     setPaneTab(activePaneId.value, id)
   }
 
-  // ===== 关闭 =====
   function closeTab(id: string) {
     const idx = tabs.value.findIndex((t) => t.id === id)
     if (idx < 0) return
+    const tab = tabs.value[idx]!
+    trackClosedTab(tab)
     tabs.value.splice(idx, 1)
     if (tabs.value.length === 0) {
       activeTab.value = ''
@@ -136,8 +141,15 @@ export function useTabs(deps: UseTabsDeps) {
   }
 
   function closeAllTabs() {
-    tabs.value = []
-    activeTab.value = ''
+    tabs.value = tabs.value.filter(t => t.pinned)
+    activeTab.value = tabs.value.length > 0 ? tabs.value[0]!.id : ''
+  }
+
+  // ===== Pin =====
+  function togglePinTab(tabId: string) {
+    const tab = findTab(tabId)
+    if (tab) tab.pinned = !tab.pinned
+    tabContextMenu.value.show = false
   }
 
   function duplicateTab(id: string) {
@@ -184,6 +196,61 @@ export function useTabs(deps: UseTabsDeps) {
     if (tab) tab.status = status
   }
 
+  // ===== Tab history =====
+  const tabHistory = ref<string[]>([])
+  const tabHistoryIndex = ref(-1)
+  const MAX_HISTORY = 50
+
+  function pushHistory(tabId: string) {
+    // Trim forward history when navigating to a new position
+    if (tabHistoryIndex.value < tabHistory.value.length - 1) {
+      tabHistory.value = tabHistory.value.slice(0, tabHistoryIndex.value + 1)
+    }
+    // Avoid duplicate consecutive entries
+    if (tabHistory.value.length > 0 && tabHistory.value[tabHistory.value.length - 1] === tabId) return
+    tabHistory.value.push(tabId)
+    if (tabHistory.value.length > MAX_HISTORY) {
+      tabHistory.value = tabHistory.value.slice(tabHistory.value.length - MAX_HISTORY)
+    }
+    tabHistoryIndex.value = tabHistory.value.length - 1
+  }
+
+  // ===== Closed tabs =====
+  const closedTabs = ref<Tab[]>([])
+  const MAX_CLOSED = 10
+
+  function trackClosedTab(tab: Tab) {
+    closedTabs.value.push({ ...tab })
+    if (closedTabs.value.length > MAX_CLOSED) {
+      closedTabs.value = closedTabs.value.slice(closedTabs.value.length - MAX_CLOSED)
+    }
+  }
+
+  function goBack() {
+    if (tabHistoryIndex.value <= 0) return
+    tabHistoryIndex.value--
+    const id = tabHistory.value[tabHistoryIndex.value]
+    if (id && tabs.value.find(t => t.id === id)) {
+      activeTab.value = id
+    }
+  }
+
+  function goForward() {
+    if (tabHistoryIndex.value >= tabHistory.value.length - 1) return
+    tabHistoryIndex.value++
+    const id = tabHistory.value[tabHistoryIndex.value]
+    if (id && tabs.value.find(t => t.id === id)) {
+      activeTab.value = id
+    }
+  }
+
+  function reopenClosedTab() {
+    if (closedTabs.value.length === 0) return
+    const tab = closedTabs.value.pop()!
+    tabs.value.push({ ...tab, status: 'connecting' })
+    activeTab.value = tab.id
+  }
+
   // ===== 右键菜单 =====
   function onTabContextMenu(e: MouseEvent, tabId: string) {
     e.preventDefault()
@@ -202,6 +269,7 @@ export function useTabs(deps: UseTabsDeps) {
       case 'closeLeft': closeTabsLeft(id); break
       case 'closeRight': closeTabsRight(id); break
       case 'closeAll': closeAllTabs(); break
+      case 'pin': togglePinTab(id); break
     }
     tabContextMenu.value.show = false
   }
@@ -265,5 +333,14 @@ export function useTabs(deps: UseTabsDeps) {
     onTabDragOver,
     onTabDrop,
     onTabDragEnd,
+    // history & pin
+    tabHistory,
+    tabHistoryIndex,
+    closedTabs,
+    pushHistory,
+    goBack,
+    goForward,
+    reopenClosedTab,
+    togglePinTab,
   }
 }
