@@ -1,6 +1,16 @@
 # Changelog
 
 ## [0.79.0] - 2026-09-10
+## [0.81.1] - 2026-09-10
+
+### Changed
+- 移除未使用的 REX_STATIC_DIR 环境变量和前端目录复制，前端已通过 include_dir! 嵌入二进制
+
+### Fixed
+- Docker Hub 镜像不再复制冗余前端目录
+- CI Docker 构建不再下载前端 artifact
+
+
 ## [0.81.0] - 2026-09-10
 
 ### Added
