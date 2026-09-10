@@ -765,3 +765,11 @@ rex-agent = 所有 crate（无前端）
 - **版本号**：v0.78.0
 - **缺陷池 bug**：SSH终端vim卡死（🔴）、Agent连接SQL报unrecognized dialect（🔴）、通过Agent连接jump server失败（🔴）、Windows service install 不支持（🟡）、无法访问IPv6服务（🟡）（从 docs/BUGS.md 纳入，已在规划时从缺陷池删除）
 
+
+### v0.79.0：高级功能 + 质量收尾 ← 新增（下一步）
+- **核心功能**：SSH ProxyJump 实现、IPv6 双栈支持、AI 助手集成（选中文本→AI、AI 生成 SQL）
+- **子任务预估**：5 个（ProxyJump、IPv6、AI 助手核心、AI 上下文感知、质量门禁）
+- **依赖**：v0.78.0
+- **版本类型**：minor
+- **版本号**：v0.79.0
+
