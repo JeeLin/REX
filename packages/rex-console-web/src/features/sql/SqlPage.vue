@@ -13,6 +13,8 @@ import AiAssistantDrawer from './AiAssistantDrawer.vue'
 import ImportWizard from './ImportWizard.vue'
 import SqlFormView from './SqlFormView.vue'
 import SavedQueryList from './SavedQueryList.vue'
+import GlobalSearchModal from './GlobalSearchModal.vue'
+import type { SearchTab } from './GlobalSearchModal.vue'
 import Modal from '@/components/ui/Modal.vue'
 import Input from '@/components/ui/Input.vue'
 import Button from '@/components/ui/Button.vue'
@@ -385,6 +387,24 @@ function openAiAssistant() {
   showAiAssistant.value = true
 }
 
+// Global search modal state
+const showGlobalSearch = ref(false)
+
+const searchTabs = computed<SearchTab[]>(() =>
+  tabs.value.map(t => ({
+    id: t.id,
+    title: t.title,
+    ...(isQueryTab(t) ? { sql: t.sql } : {}),
+  }))
+)
+
+function openGlobalSearch() {
+  showGlobalSearch.value = true
+}
+
+function onGlobalSearchNavigate(tabId: number, _lineNumber: number) {
+  activeTabId.value = tabId
+}
 // Import wizard state
 const showImport = ref(false)
 const importTarget = ref<{ db: string; table: string }>({ db: '', table: '' })
@@ -446,6 +466,11 @@ function handleKeydown(e: KeyboardEvent) {
   if (e.ctrlKey && e.shiftKey && e.key === 'A') {
     e.preventDefault()
     openAiAssistant()
+  }
+  // Cmd/Ctrl+Shift+F: Global Search
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'F') {
+    e.preventDefault()
+    openGlobalSearch()
   }
 }
 
@@ -656,6 +681,14 @@ onBeforeUnmount(() => {
         :databases="databases.map(db => db.name)"
         @close="showGlobalQuery = false"
         @execute="onGlobalQueryExecute"
+      />
+
+      <!-- Global Search Modal -->
+      <GlobalSearchModal
+        :visible="showGlobalSearch"
+        :tabs="searchTabs"
+        @close="showGlobalSearch = false"
+        @navigate="onGlobalSearchNavigate"
       />
 
       <!-- AI Assistant Drawer -->
