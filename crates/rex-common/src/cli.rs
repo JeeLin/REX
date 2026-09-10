@@ -64,8 +64,6 @@ pub struct RunOpts {
     pub data_dir: Option<std::path::PathBuf>,
     /// 前端静态资源目录（Hub）
     #[arg(long)]
-    pub static_dir: Option<std::path::PathBuf>,
-
     // ── Agent 相关 ──
     /// Hub 的访问地址，如 http://hub.example.com:3000（Agent）
     #[arg(long)]
