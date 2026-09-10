@@ -297,6 +297,7 @@ onBeforeUnmount(async () => {
         <div v-for="t in transfers" :key="t.id" class="fd-transfer-item">
           <span class="fd-transfer-dir">{{ t.direction === 'upload' ? '⬆' : '⬇' }}</span>
           <span class="fd-transfer-name">{{ t.fileName }}</span>
+          <span v-if="t.totalSize" class="fd-transfer-size mono muted">{{ fmtSize(t.transferred) }} / {{ fmtSize(t.totalSize) }}</span>
           <div v-if="t.status === 'transferring'" class="fd-transfer-bar">
             <div v-if="t.progress >= 0" class="fd-transfer-fill" :style="{ width: t.progress + '%' }" />
             <div v-else class="fd-transfer-fill fd-transfer-fill--indeterminate" />
@@ -380,6 +381,7 @@ onBeforeUnmount(async () => {
 }
 .fd-transfer-dir { width: 16px; text-align: center; flex-shrink: 0; }
 .fd-transfer-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); }
+.fd-transfer-size { font-size: 10px; flex-shrink: 0; white-space: nowrap; }
 .fd-transfer-bar { width: 80px; height: 4px; background: var(--bg-deep); border-radius: 2px; overflow: hidden; flex-shrink: 0; }
 .fd-transfer-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s; }
 .fd-transfer-fill--indeterminate { width: 40%; animation: fd-slide 1.5s infinite; }
