@@ -16,6 +16,7 @@ import CommandPalette from '@/features/workspace/CommandPalette.vue'
 import PaneNode from '@/features/workspace/PaneNode.vue'
 import { PROTOCOL_COLORS, PROTOCOL_ICONS } from '@/features/resource/protocols'
 import { PANE_CTX, type PaneCtx } from '@/features/workspace/paneContext'
+import WelcomePage from '@/features/workspace/WelcomePage.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 
 defineOptions({ name: 'WorkspacePage' })
@@ -63,6 +64,15 @@ const {
   onTabDragOver,
   onTabDrop,
   onTabDragEnd,
+  // history & pin
+  tabHistory,
+  tabHistoryIndex,
+  closedTabs,
+  pushHistory,
+  goBack,
+  goForward,
+  reopenClosedTab,
+  togglePinTab,
 } = useTabs({ activePaneId, setPaneTab })
 
 watch(() => wsStore.pendingResource, (resource) => {
@@ -70,6 +80,37 @@ watch(() => wsStore.pendingResource, (resource) => {
   openResource(resource)
   wsStore.consumePending()
 }, { immediate: true })
+
+// Track tab switches for history navigation
+watch(activeTab, (newTabId) => {
+  if (newTabId) pushHistory(newTabId)
+})
+
+// Close confirmation for unsaved changes
+const showConfirmClose = ref(false)
+const pendingCloseTabId = ref('')
+
+function requestCloseTab(tabId: string) {
+  const tab = findTab(tabId)
+  if (tab?.dirty) {
+    pendingCloseTabId.value = tabId
+    showConfirmClose.value = true
+  } else {
+    closeTab(tabId)
+  }
+}
+
+function confirmCloseTab() {
+  const id = pendingCloseTabId.value
+  showConfirmClose.value = false
+  pendingCloseTabId.value = ''
+  if (id) closeTab(id)
+}
+
+function cancelCloseTab() {
+  showConfirmClose.value = false
+  pendingCloseTabId.value = ''
+}
 
 // Command palette
 const showCommandPalette = ref(false)
@@ -189,8 +230,9 @@ function localHandleTabCtxAction(action: string) {
     case 'new': showQuickConnect.value = true; break
     case 'props': openProperties(id); break
     case 'disconnect': disconnectTab(id); break
+    case 'close': requestCloseTab(id); break
     default:
-      // rename/duplicate/broadcast/close/closeOthers/closeLeft/closeRight/closeAll
+      // rename/duplicate/broadcast/closeOthers/closeLeft/closeRight/closeAll
       handleTabCtxAction(action)
   }
   tabContextMenu.value.show = false
@@ -352,6 +394,12 @@ useKeyboardShortcuts([
   { key: '7', alt: true, handler: () => { if (tabs.value[6]) { activeTab.value = tabs.value[6].id; setPaneTab(activePaneId.value, tabs.value[6].id) } } },
   { key: '8', alt: true, handler: () => { if (tabs.value[7]) { activeTab.value = tabs.value[7].id; setPaneTab(activePaneId.value, tabs.value[7].id) } } },
   { key: '9', alt: true, handler: () => { if (tabs.value[8]) { activeTab.value = tabs.value[8].id; setPaneTab(activePaneId.value, tabs.value[8].id) } } },
+  // Cmd/Ctrl+← : go back in tab history
+  { key: 'ArrowLeft', ctrl: true, handler: goBack },
+  // Cmd/Ctrl+→ : go forward in tab history
+  { key: 'ArrowRight', ctrl: true, handler: goForward },
+  // Cmd/Ctrl+Shift+T : reopen closed tab
+  { key: 't', ctrl: true, shift: true, handler: reopenClosedTab },
 ])
 </script>
 
@@ -389,9 +437,10 @@ useKeyboardShortcuts([
           @click.stop
         />
         <span v-else>{{ tab.label }}</span>
+        <span v-if="tab.pinned" class="ws-tab-pin" title="Pinned">📌</span>
         <span v-if="tab.broadcast" class="ws-tab-broadcast" title="Broadcast mode active">📡</span>
         <StatusDot :status="statusColor(tab.status)" style="margin-left: auto" />
-        <button class="ws-tab-close" @click.stop="closeTab(tab.id)">
+        <button class="ws-tab-close" @click.stop="requestCloseTab(tab.id)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       </div>
@@ -411,6 +460,10 @@ useKeyboardShortcuts([
         <div class="tab-ctx-item" @click="choose('duplicate')">📋 {{ t('workspace.duplicate') }}</div>
         <div class="tab-ctx-item" @click="choose('broadcast')">
           {{ findTab(tabContextMenu.tabId)?.broadcast ? '📡 ' + t('workspace.stopBroadcast') : '📡 ' + t('workspace.broadcastInput') }}
+        </div>
+        <div class="tab-ctx-separator" />
+        <div class="tab-ctx-item" @click="choose('pin')">
+          {{ findTab(tabContextMenu.tabId)?.pinned ? '📌 Unpin' : '📌 Pin Tab' }}
         </div>
         <div class="tab-ctx-separator" />
         <div class="tab-ctx-item" @click="choose('close')">{{ t('workspace.close') }}</div>
@@ -508,6 +561,26 @@ useKeyboardShortcuts([
       :visible="showCommandPalette"
       @close="showCommandPalette = false"
     />
+
+    <!-- Close confirmation dialog -->
+    <Teleport to="body">
+      <Transition name="overlay">
+        <div v-if="showConfirmClose" class="confirm-overlay" @click="cancelCloseTab" />
+      </Transition>
+      <Transition name="panel">
+        <div v-if="showConfirmClose" class="confirm-dialog">
+          <h3 class="confirm-title">Unsaved Changes</h3>
+          <p class="confirm-msg">This tab has unsaved changes. Are you sure you want to close it?</p>
+          <div class="confirm-actions">
+            <button class="confirm-btn confirm-btn--cancel" @click="cancelCloseTab">Cancel</button>
+            <button class="confirm-btn confirm-btn--danger" @click="confirmCloseTab">Close Tab</button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Welcome page (shown when no tabs are open) -->
+    <WelcomePage v-if="tabs.length === 0" />
   </div>
 </template>
 
@@ -894,5 +967,72 @@ useKeyboardShortcuts([
     bottom: calc(56px + var(--space-3));
   }
 }
+/* Pin icon */
+.ws-tab-pin {
+  font-size: 10px;
+  margin-left: 2px;
+  opacity: 0.7;
+}
+.ws-tab--active .ws-tab-pin {
+  opacity: 1;
+}
 
+/* Close confirmation dialog */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 80;
+}
+.confirm-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 360px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: 90;
+  padding: var(--space-4);
+}
+.confirm-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  margin: 0 0 var(--space-2);
+}
+.confirm-msg {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-4);
+  line-height: 1.5;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.confirm-btn {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+.confirm-btn:hover {
+  background: var(--bg-hover);
+}
+.confirm-btn--danger {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+.confirm-btn--danger:hover {
+  opacity: 0.9;
+}
 </style>
