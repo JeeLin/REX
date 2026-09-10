@@ -757,7 +757,7 @@ rex-agent = 所有 crate（无前端）
 6. 渐进披露 — 复杂功能隐藏在右键菜单/快捷键中，界面保持简洁
 
 
-### v0.78.0：缺陷池清理 + 文件管理交互完善 ← 新增（下一步）
+### v0.78.0：缺陷池清理 + 文件管理交互完善 ✅ 已完成
 - **核心功能**：修复缺陷池剩余后端 bug（SSH vim 卡死、SQL dialect 检测、Jump server ProxyJump、Windows service、IPv6 双栈）+ 文件管理交互增强（拖拽上传/移动、批量选择、传输进度完善）
 - **子任务预估**：6 个（SSH I/O 流修复、SQL dialect 检测改善、ProxyJump 实现、Windows service 注册、IPv6 双栈、文件管理增强）
 - **依赖**：v0.77.0
