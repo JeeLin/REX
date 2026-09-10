@@ -188,25 +188,28 @@ function onKeyDown(e: KeyboardEvent) {
 }
 
 async function downloadSelected(side: Side) {
-  if (!sessionId.value || panels[side].selected.size !== 1) return
-  const name = Array.from(panels[side].selected)[0]; const entry = panels[side].entries.find(e => e.name === name)
-  if (!entry || entry.is_dir) return
-  const key = `${sessionId.value}:dl:${entry.path}`
-  const item: TransferItem = {
-    sessionId: sessionId.value, remotePath: entry.path, fileName: entry.name,
-    type: 'download', status: 'transferring', transferredBytes: 0, totalBytes: entry.size,
-    side,
-  }
-  transferQueue.value.set(key, item)
-  transferQueue.value = new Map(transferQueue.value)
-  try {
-    const blob = await filesApi.downloadFile(sessionId.value, entry.path)
-    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = entry.name; a.click(); URL.revokeObjectURL(url)
-    item.status = 'completed'; item.transferredBytes = item.totalBytes || blob.size
-  } catch (e) {
-    item.status = 'failed'
-    item.errorMessage = e instanceof Error ? e.message : String(e)
-    console.error('Download failed:', e)
+  if (!sessionId.value || panels[side].selected.size === 0) return
+  const names = Array.from(panels[side].selected)
+  for (const name of names) {
+    const entry = panels[side].entries.find(e => e.name === name)
+    if (!entry || entry.is_dir) continue
+    const key = `${sessionId.value}:dl:${entry.path}`
+    const item: TransferItem = {
+      sessionId: sessionId.value, remotePath: entry.path, fileName: entry.name,
+      type: 'download', status: 'transferring', transferredBytes: 0, totalBytes: entry.size,
+      side,
+    }
+    transferQueue.value.set(key, item)
+    transferQueue.value = new Map(transferQueue.value)
+    try {
+      const blob = await filesApi.downloadFile(sessionId.value, entry.path)
+      const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = entry.name; a.click(); URL.revokeObjectURL(url)
+      item.status = 'completed'; item.transferredBytes = item.totalBytes || blob.size
+    } catch (e) {
+      item.status = 'failed'
+      item.errorMessage = e instanceof Error ? e.message : String(e)
+      console.error('Download failed:', e)
+    }
   }
   transferQueue.value = new Map(transferQueue.value)
 }
@@ -503,48 +506,84 @@ function onDragStart(e: DragEvent, side: Side, name: string) {
 
 function onDragOver(e: DragEvent, side: Side) {
   e.preventDefault()
-  if (dragData.value && dragData.value.side !== side) {
-    e.dataTransfer!.dropEffect = 'copy'
-    dropTarget.value = side
-  }
+  // Skip drop indicator for same-side internal drag
+  if (dragData.value && dragData.value.side === side) return
+  e.dataTransfer!.dropEffect = 'copy'
+  dropTarget.value = side
 }
 
-function onDragLeave() {
+function onDragLeave(e: DragEvent) {
+  // Don't clear drop indicator when moving between child elements inside the panel
+  const related = e.relatedTarget as HTMLElement | null
+  if (related && (e.currentTarget as HTMLElement).contains(related)) return
   dropTarget.value = null
+}
+
+async function handleExternalFileDrop(files: FileList, side: Side) {
+  if (!sessionId.value) return
+  for (const file of Array.from(files)) {
+    const remotePath = panels[side].path + file.name
+    const key = `${sessionId.value}:ul:${remotePath}`
+    const item: TransferItem = {
+      sessionId: sessionId.value, remotePath, fileName: file.name,
+      type: 'upload', status: 'transferring', transferredBytes: 0, totalBytes: file.size,
+      file, side,
+    }
+    transferQueue.value.set(key, item)
+    transferQueue.value = new Map(transferQueue.value)
+    try {
+      if (file.size > PART_SIZE) {
+        const result = await filesApi.uploadFileWithProgress(sessionId.value, remotePath, file, (_pct, loaded) => {
+          item.transferredBytes = loaded
+          transferQueue.value = new Map(transferQueue.value)
+        })
+        item.uploadId = result.upload_id
+        item.status = 'completed'
+      } else {
+        await filesApi.uploadFile(sessionId.value, remotePath, file)
+        item.status = 'completed'
+      }
+    } catch (e) {
+      item.status = 'failed'
+      item.errorMessage = e instanceof Error ? e.message : String(e)
+      console.error('Upload failed:', e)
+    }
+  }
+  transferQueue.value = new Map(transferQueue.value)
+  loadPanel(side)
 }
 
 async function onDrop(e: DragEvent, targetSide: Side) {
   e.preventDefault()
   dropTarget.value = null
-  if (!dragData.value || !sessionId.value) return
+  if (!sessionId.value) return
+  // Handle external file drops from OS file manager
+  if (e.dataTransfer?.files.length) {
+    await handleExternalFileDrop(e.dataTransfer.files, targetSide)
+    return
+  }
+  if (!dragData.value) return
   const { side: sourceSide, names } = dragData.value
 
   for (const name of names) {
     const srcEntry = panels[sourceSide].entries.find(en => en.name === name)
     if (!srcEntry) continue
-
-    if (srcEntry.is_dir) {
-      // For directories, we'd need recursive transfer — skip for now
-      continue
-    }
+    if (srcEntry.is_dir) continue
 
     const srcPath = srcEntry.path
     const dstPath = panels[targetSide].path + name
 
     try {
       if (sourceSide === 'left' && targetSide === 'right') {
-        // Local → Remote: upload
         const blob = await filesApi.downloadFile(sessionId.value, srcPath)
         await filesApi.uploadFile(sessionId.value, dstPath, new File([blob], name))
       } else if (sourceSide === 'right' && targetSide === 'left') {
-        // Remote → Local: download
         const blob = await filesApi.downloadFile(sessionId.value, srcPath)
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url; a.download = name; a.click()
         URL.revokeObjectURL(url)
       } else {
-        // Same-side or local→local: download from source, upload to target
         const blob = await filesApi.downloadFile(sessionId.value, srcPath)
         await filesApi.uploadFile(sessionId.value, dstPath, new File([blob], name))
       }
@@ -616,6 +655,13 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
             <span v-if="isS3" class="csc mu">{{ e.acl || '-' }}</span>
           </div>
           <div v-if="!panels[side].loading && !panels[side].entries.length" class="pe">{{ t('files.empty') }}</div>
+        </div>
+        <div v-if="panels[side].selected.size > 0" class="batch-bar">
+          <span class="batch-bar-count">{{ panels[side].selected.size }} {{ t('files.selected') }}</span>
+          <div class="batch-bar-actions">
+            <Button variant="ghost" icon @click="downloadSelected(side)" title="Download selected">⬇</Button>
+            <Button variant="danger" icon @click="confirmDelete(side)" title="Delete selected">🗑</Button>
+          </div>
         </div>
         <div class="ps">{{ panels[side].entries.length }} {{ t('files.items') }}<template v-if="panels[side].selected.size"> · {{ panels[side].selected.size }} {{ t('files.selected') }}</template></div>
       </div>
@@ -911,4 +957,12 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
   .tq-panel{width:100%;max-height:60vh}
   .tq-toggle{bottom:60px}
 }
+
+/* Batch action bar */
+.batch-bar{display:flex;align-items:center;justify-content:space-between;padding:var(--space-1) var(--space-3);background:var(--accent-soft);border-top:1px solid var(--accent);font-size:var(--text-xs);min-height:28px}
+.batch-bar-count{color:var(--accent);font-weight:600}
+.batch-bar-actions{display:flex;gap:var(--space-1)}
+
+/* Enhanced selected file highlight */
+.fr--sel{background:var(--accent-soft) !important;border-left:2px solid var(--accent) !important}
 </style>
