@@ -103,22 +103,25 @@ pub async fn run_ssh_session(
         }
     }
 
-    // 终端输出（russh 事件）→ 隧道帧（带 channelId 前缀）。
-    // events 独立拥有事件接收器，无需锁。
+    // ── out_task：终端输出（russh 事件）→ 隧道帧 ──
+    // 加超时检测：若 60s 无任何事件，判定 SSH 连接已僵死并主动退出。
     let evt_tx_out = evt_tx.clone();
     let cid_out = channel_id.clone();
     let out_task = tokio::spawn(async move {
+        let stall_timeout = std::time::Duration::from_secs(60);
         loop {
-            match events.recv().await {
-                Some(TerminalEvent::Data(data)) => {
+            match tokio::time::timeout(stall_timeout, events.recv()).await {
+                Ok(Some(TerminalEvent::Data(data))) => {
                     let mut frame = Vec::with_capacity(4 + data.len());
                     frame.extend_from_slice(&ch_id_num.to_be_bytes());
                     frame.extend_from_slice(data.as_bytes());
                     if evt_tx_out.send(AgentEvent::Binary(frame)).await.is_err() {
+                        tracing::debug!(action = "AGENT_SSH_OUT", channel_id = %cid_out, "evt_tx closed, stopping out_task");
                         break;
                     }
                 }
-                Some(TerminalEvent::Disconnected(_reason)) => {
+                Ok(Some(TerminalEvent::Disconnected(reason))) => {
+                    tracing::info!(action = "AGENT_SSH_OUT", channel_id = %cid_out, reason = %reason, "SSH disconnected");
                     let close = serde_json::to_string(&crate::agent_ws::AgentMsg::Closed {
                         payload: crate::agent_ws::ChannelPayload {
                             channel_id: cid_out.clone(),
@@ -128,13 +131,34 @@ pub async fn run_ssh_session(
                     let _ = evt_tx_out.send(AgentEvent::Text(close)).await;
                     break;
                 }
-                None => break,
+                Ok(None) => {
+                    tracing::info!(action = "AGENT_SSH_OUT", channel_id = %cid_out, "events channel closed");
+                    break;
+                }
+                Err(_elapsed) => {
+                    // 超时无事件 — SSH 连接可能已僵死（半关闭 TCP 等）。
+                    tracing::warn!(
+                        action = "AGENT_SSH_OUT",
+                        channel_id = %cid_out,
+                        timeout_secs = stall_timeout.as_secs(),
+                        "SSH event stall detected, closing session"
+                    );
+                    let close = serde_json::to_string(&crate::agent_ws::AgentMsg::Closed {
+                        payload: crate::agent_ws::ChannelPayload {
+                            channel_id: cid_out.clone(),
+                        },
+                    })
+                    .unwrap_or_default();
+                    let _ = evt_tx_out.send(AgentEvent::Text(close)).await;
+                    break;
+                }
             }
         }
     });
-
-    // 隧道输入（浏览器键入）→ russh send_data；resize 帧 → russh window_change。
+    // ── in_task：隧道输入（浏览器键入）→ russh send_data；resize 帧 → russh window_change。 ──
     // write_half 通过 Arc 共享，send_data/resize 仅需 &self，无锁竞争。
+    // 用信号量限制并发写入，防止无限 spawn 导致资源耗尽或 SSH 会话乱序。
+    let write_semaphore = Arc::new(tokio::sync::Semaphore::new(16));
     let in_task = tokio::spawn(async move {
         loop {
             tokio::select! {
@@ -142,12 +166,17 @@ pub async fn run_ssh_session(
                     match maybe {
                         Some(data) => {
                             if data.is_empty() {
-                                break; // 关闭信号
+                                tracing::debug!(action = "AGENT_SSH_IN", "received close signal");
+                                break;
                             }
+                            let sem = write_semaphore.clone();
                             let wh = write_half.clone();
                             let bytes = bytes::Bytes::copy_from_slice(&data);
                             tokio::spawn(async move {
-                                let _ = wh.data_bytes(bytes).await;
+                                let _permit = sem.acquire().await;
+                                if let Err(e) = wh.data_bytes(bytes).await {
+                                    tracing::debug!(action = "AGENT_SSH_IN", error = %e, "write failed");
+                                }
                             });
                         }
                         None => break,
@@ -169,8 +198,12 @@ pub async fn run_ssh_session(
     });
 
     tokio::select! {
-        _ = out_task => {},
-        _ = in_task => {},
+        _ = out_task => {
+            tracing::debug!(action = "AGENT_SSH_SESSION", channel_id = %channel_id, "out_task finished");
+        },
+        _ = in_task => {
+            tracing::debug!(action = "AGENT_SSH_SESSION", channel_id = %channel_id, "in_task finished");
+        },
     }
 
     // 清理 channel 表。

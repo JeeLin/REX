@@ -219,10 +219,14 @@ async fn detect_dialect(
         _ => &[DatabaseType::MySQL, DatabaseType::PostgreSQL],
     };
 
+    // 收集每次尝试的失败原因，最终诊断时一并输出。
+    let mut errors: Vec<String> = Vec::new();
+
     for &dt in candidates {
+        let label = format!("{:?}", dt);
         match connect_by_type(dt, req).await {
             Ok(mut conn) => {
-                tracing::debug!(action = "AGENT_SQL_DETECT", dialect = ?dt, "protocol handshake succeeded, trying SELECT VERSION()");
+                tracing::debug!(action = "AGENT_SQL_DETECT", dialect = %label, "protocol handshake succeeded, trying SELECT VERSION()");
                 // `SELECT VERSION()` 确认 dialect（消除线缆协议握手歧义）。
                 match conn.execute("SELECT VERSION()").await {
                     Ok(result) => {
@@ -253,16 +257,36 @@ async fn detect_dialect(
                         };
                         return Ok((final_conn, Some(detected_to_str(confirmed))));
                     }
-                    Err(_) => continue,
+                    Err(e) => {
+                        let msg = format!(
+                            "dialect {} protocol handshake OK but SELECT VERSION() failed: {}",
+                            label, e
+                        );
+                        tracing::warn!(action = "AGENT_SQL_DETECT", dialect = %label, error = %e, %msg);
+                        errors.push(msg);
+                        continue;
+                    }
                 }
             }
-            Err(_) => continue,
+            Err(e) => {
+                let msg = format!("dialect {} connection failed: {}", label, e);
+                tracing::warn!(action = "AGENT_SQL_DETECT", dialect = %label, error = %e, %msg);
+                errors.push(msg);
+                continue;
+            }
         }
     }
 
-    anyhow::bail!("unrecognized dialect, please specify subtype when creating the resource")
+    // 汇总所有失败原因，提供可操作的诊断信息。
+    let detail = errors.join("; ");
+    anyhow::bail!(
+        "unrecognized dialect (host={}, port={}). Detection attempts: {}. \
+         Please specify the subtype explicitly when creating the resource (e.g. 'mysql', 'postgresql', or 'sqlite').",
+        req.host,
+        req.port,
+        detail
+    )
 }
-
 /// v0.70.7：将探测确认的 [`DatabaseType`] 转成持久化用的 db_type 字符串。
 fn detected_to_str(dt: DatabaseType) -> String {
     match dt {
