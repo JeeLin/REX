@@ -1,8 +1,8 @@
-# Hub Docker 镜像：复制 CI 预构建的二进制和前端资源
+# Hub Docker 镜像：复制 CI 预构建的二进制
 #
 # CI 流程：
-# 1. build-hub → dist/rex-hub
-# 2. build-frontend → dist/static/
+# 1. build-frontend → dist/
+# 2. build-hub → dist/rex-hub（编译时通过 include_dir! 嵌入前端 dist）
 # 3. 本 Dockerfile 将所有产物打包到最终镜像
 
 FROM ubuntu:24.04
@@ -13,12 +13,9 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-# Hub 二进制
+# Hub 二进制（已通过 include_dir! 嵌入前端 dist，无需额外前端目录）
 COPY dist/rex-hub /app/rex-hub
 RUN chmod +x /app/rex-hub
-
-# 前端静态资源
-COPY dist/static/ /app/static/
 
 # Agent 二进制（供 /api/agents/download 使用，按 os/arch 目录组织）
 COPY dist/agents/ /app/agent-binaries/
@@ -27,8 +24,6 @@ RUN mkdir -p /app/data /app/data/certs /app/data/acme /app/data/self-signed
 
 ENV REX_DATA_DIR=/app/data
 ENV REX_AGENT_BINARIES_DIR=/app/agent-binaries
-ENV REX_STATIC_DIR=/app/static
-
 EXPOSE 3000
 EXPOSE 80
 EXPOSE 443

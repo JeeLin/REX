@@ -39,7 +39,7 @@ impl ServiceKind {
     /// 安装为服务时需要从当前进程继承的相关环境变量。
     pub fn relevant_env_keys(self) -> &'static [&'static str] {
         match self {
-            ServiceKind::Hub => &["REX_PORT", "REX_DATA_DIR", "REX_STATIC_DIR"],
+            ServiceKind::Hub => &["REX_PORT", "REX_DATA_DIR"],
             ServiceKind::Agent => &["REX_HUB_URL", "REX_AGENT_TOKEN"],
         }
     }
@@ -751,7 +751,7 @@ mod tests {
         assert_eq!(ServiceKind::Hub.launchd_label(), "com.rex.hub");
         assert_eq!(
             ServiceKind::Hub.relevant_env_keys(),
-            &["REX_PORT", "REX_DATA_DIR", "REX_STATIC_DIR"]
+            &["REX_PORT", "REX_DATA_DIR"]
         );
     }
 }
