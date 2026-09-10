@@ -755,3 +755,13 @@ rex-agent = 所有 crate（无前端）
 4. 键盘驱动 — 快捷键是一等公民，鼠标操作是补充
 5. 一致性 — 统一的交互范式贯穿全站
 6. 渐进披露 — 复杂功能隐藏在右键菜单/快捷键中，界面保持简洁
+
+
+### v0.78.0：缺陷池清理 + 文件管理交互完善 ← 新增（下一步）
+- **核心功能**：修复缺陷池剩余后端 bug（SSH vim 卡死、SQL dialect 检测、Jump server ProxyJump、Windows service、IPv6 双栈）+ 文件管理交互增强（拖拽上传/移动、批量选择、传输进度完善）
+- **子任务预估**：6 个（SSH I/O 流修复、SQL dialect 检测改善、ProxyJump 实现、Windows service 注册、IPv6 双栈、文件管理增强）
+- **依赖**：v0.77.0
+- **版本类型**：minor
+- **版本号**：v0.78.0
+- **缺陷池 bug**：SSH终端vim卡死（🔴）、Agent连接SQL报unrecognized dialect（🔴）、通过Agent连接jump server失败（🔴）、Windows service install 不支持（🟡）、无法访问IPv6服务（🟡）（从 docs/BUGS.md 纳入，已在规划时从缺陷池删除）
+
