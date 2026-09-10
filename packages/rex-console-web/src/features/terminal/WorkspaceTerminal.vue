@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -13,7 +13,7 @@ import Button from '@/components/ui/Button.vue'
 import MobileTerminalBar from './MobileTerminalBar.vue'
 import Toast from '@/components/ui/Toast.vue'
 import { clipboard } from '@/utils/clipboard'
-
+import DockerMenu from '@/features/workspace/DockerMenu.vue'
 const { t } = useI18n()
 const toast = ref<InstanceType<typeof Toast>>()
 let themeObserver: MutationObserver | null = null
@@ -35,6 +35,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   'terminal-resize': [cols: number, rows: number]
   'toggle-sftp': []
+  'send-command': [command: string]
+  'create-new-tab': [command: string, label: string]
   'encoding-change': [encoding: string]
   'update:status': [status: string]
   'split-horizontal': []
@@ -116,6 +118,21 @@ function handleSetEncoding(encoding: string) {
   }
   emit('encoding-change', encoding)
 }
+
+// ── Docker send command ─────────────────────────────────────
+function sendTerminalCommand(command: string) {
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'terminal.data',
+      data: btoa(command + '\r'),
+    }))
+    terminal?.focus()
+  } else {
+    terminal?.write('\r\n\x1b[31m[Connection not open]\x1b[0m')
+  }
+}
+
+provide('sendCommand', sendTerminalCommand)
 
 // ── Theme ─────────────────────────────────────────────────
 function getTerminalSettings() {
@@ -586,6 +603,10 @@ onBeforeUnmount(() => {
         <button class="wt-btn" @click="doPaste" :title="t('terminal.paste', 'Paste')">📋</button>
         <button class="wt-btn" :class="{ active: showSearch }" @click="showSearch = !showSearch" :title="t('terminal.find', 'Find')">🔍</button>
         <button class="wt-btn" @click="emit('toggle-sftp')" :title="t('terminal.sftp', 'SFTP')">📁</button>
+        <DockerMenu
+          @send-command="sendTerminalCommand"
+          @create-new-tab="(cmd: string, label: string) => emit('create-new-tab', cmd, label)"
+        />
         <span class="wt-sep"></span>
         <span class="wt-protocol">{{ protocol?.toUpperCase() || 'SSH' }}</span>
         <span class="wt-encoding">{{ terminalEncoding }}</span>
