@@ -46,19 +46,28 @@ impl EmbeddedStatic {
             file_path
         };
 
+        // Track whether we fell back to index.html for SPA routing
+        let mut used_fallback = false;
+
         let file = DIST.get_file(file_path).or_else(|| {
             // SPA fallback：非文件请求 → index.html
             if !file_path.contains('.') {
+                used_fallback = true;
                 DIST.get_file("index.html")
             } else {
                 None
             }
         })?;
 
-        let mime = mime_guess::from_path(file_path)
-            .first_or_octet_stream()
-            .to_string();
-
+        // When SPA fallback serves index.html, always use text/html
+        // regardless of the original request path's extension.
+        let mime = if used_fallback {
+            "text/html".to_string()
+        } else {
+            mime_guess::from_path(file_path)
+                .first_or_octet_stream()
+                .to_string()
+        };
         let body = Body::from(Bytes::copy_from_slice(file.contents()));
         let resp = Response::builder()
             .status(StatusCode::OK)
