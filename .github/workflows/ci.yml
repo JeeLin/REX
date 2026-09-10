@@ -249,9 +249,6 @@ jobs:
         with:
           name: binaries-linux-amd64
           path: dist/hub-tmp/
-      - name: Download frontend
-        uses: actions/download-artifact@v8
-        with:
       - name: Download all agent binaries
         uses: actions/download-artifact@v8
         with:
