@@ -784,7 +784,20 @@
     "selectAll": "全选",
     "sessionDisconnected": "会话已断开",
     "title": "终端",
-    "toggleFileBrowser": "切换文件浏览器 (Ctrl+B)"
+    "toggleFileBrowser": "切换文件浏览器 (Ctrl+B)",
+    "docker": "Docker",
+    "dockerContainerList": "容器列表",
+    "dockerImageList": "镜像列表",
+    "dockerStartContainer": "启动容器",
+    "dockerStopContainer": "停止容器",
+    "dockerRemoveContainer": "删除容器",
+    "dockerViewLogs": "查看日志",
+    "dockerExec": "进入容器",
+    "dockerCustomCommand": "自定义命令",
+    "dockerCustomPrompt": "输入 docker 命令（不含 'docker' 前缀）：",
+    "dockerContainerPrompt": "输入容器名称：",
+    "dockerRemoveConfirm": "确定要强制删除此容器吗？",
+    "dockerExecHint": "将打开新的 SSH 标签进行交互式会话"
   },
   "wizard": {
     "agent": "Agent",

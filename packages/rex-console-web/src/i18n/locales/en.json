@@ -784,7 +784,20 @@
     "selectAll": "Select All",
     "sessionDisconnected": "Session disconnected",
     "title": "Terminal",
-    "toggleFileBrowser": "Toggle file browser (Ctrl+B)"
+    "toggleFileBrowser": "Toggle file browser (Ctrl+B)",
+    "docker": "Docker",
+    "dockerContainerList": "Container List",
+    "dockerImageList": "Image List",
+    "dockerStartContainer": "Start Container",
+    "dockerStopContainer": "Stop Container",
+    "dockerRemoveContainer": "Remove Container",
+    "dockerViewLogs": "View Logs",
+    "dockerExec": "Exec into Container",
+    "dockerCustomCommand": "Custom Command",
+    "dockerCustomPrompt": "Enter docker command (without 'docker' prefix):",
+    "dockerContainerPrompt": "Enter container name:",
+    "dockerRemoveConfirm": "Are you sure you want to force remove this container?",
+    "dockerExecHint": "Will open a new SSH tab for interactive session"
   },
   "wizard": {
     "agent": "Agent",

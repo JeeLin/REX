@@ -67,6 +67,7 @@ function buildCtx(overrides: Partial<PaneCtx> = {}): PaneCtx {
     sftpDrawerHeight,
     toggleSftpDrawer: vi.fn(),
     startSftpDrag: vi.fn(),
+    createTab: vi.fn((protocol: string, label: string) => `new-${protocol}-${label}`),
     ...overrides,
   }
 }
