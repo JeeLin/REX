@@ -55,3 +55,7 @@ tower = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+
+[features]
+default = []
+embedded-static = ["rex-common/embedded-static"]

@@ -93,3 +93,6 @@ pub mod sip_media;
 pub mod sql;
 pub mod supervisor;
 pub mod update;
+
+#[cfg(feature = "embedded-static")]
+pub mod embedded_static;
