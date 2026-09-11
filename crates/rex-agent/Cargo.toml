@@ -36,3 +36,7 @@ sha2 = { workspace = true }
 hex = { workspace = true }
 rustls = { workspace = true }
 webpki-roots = { workspace = true }
+axum = { workspace = true }
+tower = { workspace = true }
+include_dir = { workspace = true }
+mime_guess = { workspace = true }

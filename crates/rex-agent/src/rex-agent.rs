@@ -11,6 +11,7 @@ mod agent_redis;
 mod agent_sql;
 mod agent_ssh;
 mod agent_ws;
+mod http_server;
 mod supervisor;
 mod updater;
 
@@ -156,6 +157,20 @@ fn worker_main() {
 
     let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
     rt.block_on(async {
+        // 启动 HTTP server（默认端口 3000）
+        let http_port = std::env::var("REX_AGENT_HTTP_PORT")
+            .unwrap_or_else(|_| "3000".to_string())
+            .parse::<u16>()
+            .unwrap_or(3000);
+
+        // 在后台启动 HTTP server
+        tokio::spawn(async move {
+            if let Err(e) = http_server::start_http_server(http_port).await {
+                tracing::error!(error = %e, "failed to start HTTP server");
+            }
+        });
+
+        // 启动 Agent WebSocket 连接
         agent_ws::run_agent(config).await;
     });
 }
