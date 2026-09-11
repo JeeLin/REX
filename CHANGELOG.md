@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.82.0] - 2026-07-16
+
+### Added
+- **Agent 本地 Web 访问**：Agent 二进制嵌入前端，支持本地 HTTP server（默认端口 3000）
+- **健康检查 API**：Agent 和 Hub 都提供 /api/health 端点，返回 mode 字段（hub/agent）
+- **模式自适应 UI**：前端自动检测连接模式，Agent 模式下隐藏 Hub 专有功能（Dashboard、Environments、AuditLog）
+- **共享 EmbeddedStatic**：提取嵌入式静态文件服务到 rex-common，Hub 和 Agent 复用同一实现
+
+### Fixed
+- **Docker 按钮体验**：增强容器选择功能，支持在下拉菜单中选择容器后执行操作
+- **Pico 对比度**：环境原型标签在暗色模式下使用 -soft 背景色 + 彩色文字，提升可读性
+- **计数标签换行**：修复环境原型计数标签在暗色模式下换行到下方的问题
+- **RP 按钮切换**：移除多余的单击/双击切换功能，固定为单击激活
+
+
+
 ## [0.81.2] - 2026-09-10
 
 ### Fixed
