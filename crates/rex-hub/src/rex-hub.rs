@@ -35,7 +35,7 @@ use rex_common::cli::{self, RunOpts, ServiceKind};
 
 use axum::routing::get_service;
 use axum::Router;
-use rex_hub::static_embed::EmbeddedStatic;
+use rex_hub::static_embed::create_embedded_static;
 
 fn main() {
     let cli = cli::parse();
@@ -287,6 +287,7 @@ fn redirect_stdio(log_path: &std::path::Path) -> anyhow::Result<()> {
 async fn health_check() -> axum::Json<serde_json::Value> {
     axum::Json(serde_json::json!({
         "status": "ok",
+        "mode": "hub",
         "version": env!("CARGO_PKG_VERSION"),
         "uptime": std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -296,7 +297,7 @@ async fn health_check() -> axum::Json<serde_json::Value> {
 }
 
 fn build_router(state: AppState) -> Router {
-    let embedded = EmbeddedStatic::new("/");
+    let embedded = create_embedded_static("/");
 
     let public_routes = Router::new()
         .route("/api/health", axum::routing::get(health_check))
