@@ -12,6 +12,7 @@ import type { Resource } from '@/api/resources'
 import { useRouter } from 'vue-router'
 import { useSwipeGesture } from '@/composables/useSwipeGesture'
 import { useVirtualKeyboard } from '@/composables/useVirtualKeyboard'
+import CommandPalette from '@/components/CommandPalette.vue'
 
 const { t, locale } = useI18n()
 const { showWarning, remainingSeconds, extendSession } = useSessionTimeout()
@@ -42,6 +43,7 @@ const bottomNav = [
 
 const fullscreen = ref(false)
 const mobileMenuOpen = ref(false)
+const commandPaletteVisible = ref(false)
 
 
 const isWorkspace = computed(() => route.path === '/workspace')
@@ -61,6 +63,11 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   if (e.key === 'F11') {
     e.preventDefault()
     fullscreen.value = !fullscreen.value
+  }
+  // Cmd+K / Ctrl+K for global search
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault()
+    commandPaletteVisible.value = !commandPaletteVisible.value
   }
 }
 onMounted(() => {
@@ -288,6 +295,11 @@ function openQuickConnect() {
       </template>
     </Modal>
   </div>
+  
+  <CommandPalette 
+    :visible="commandPaletteVisible" 
+    @close="commandPaletteVisible = false" 
+  />
 </template>
 
 <style scoped>
