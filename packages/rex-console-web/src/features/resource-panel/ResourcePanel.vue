@@ -100,12 +100,9 @@ function escapeHtml(s: string): string {
 
 /* ---- activation mode ---- */
 type ActivationMode = 'click' | 'dblclick'
-const resourceActivation = ref<ActivationMode>((localStorage.getItem('rex-resource-activation') as ActivationMode) || 'click')
+const resourceActivation = ref<ActivationMode>('click')
 
-function toggleActivationMode() {
-  resourceActivation.value = resourceActivation.value === 'click' ? 'dblclick' : 'click'
-  localStorage.setItem('rex-resource-activation', resourceActivation.value)
-}
+
 
 function agentStatusColor(envId: string): string {
   const env = store.environments.find(e => e.id === envId)
@@ -317,16 +314,7 @@ function ctxToggleFavorite() {
       </div>
     </div>
 
-    <!-- Activation mode toggle -->
-    <div v-if="!showGlobalResults" class="rp-activation-toggle">
-      <button
-        class="rp-activation-btn"
-        :title="resourceActivation === 'click' ? 'Single-click activation (current)' : 'Double-click activation (current)'"
-        @click="toggleActivationMode"
-      >
-        {{ resourceActivation === 'click' ? '👆' : '👆👆' }}
-      </button>
-    </div>
+
 
     <!-- Tabs (hidden when search active) -->
     <div v-if="!showGlobalResults" class="rp-header">
@@ -649,27 +637,9 @@ function ctxToggleFavorite() {
 .rp-item:hover {
   background: var(--bg-hover);
 }
-.rp-activation-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 0 var(--space-3);
-  border-bottom: 1px solid var(--border);
-}
-.rp-activation-btn {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 12px;
-  cursor: pointer;
-  padding: 2px 6px;
-  color: var(--text-muted);
-  transition: color var(--transition), border-color var(--transition);
-}
-.rp-activation-btn:hover {
-  color: var(--text-primary);
-  border-color: var(--accent);
-}
+
+
+
 .rp-agent-dot {
   width: 8px;
   height: 8px;
