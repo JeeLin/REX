@@ -42,7 +42,7 @@ const vfEdges = computed(() => {
     id: e.id,
     source: e.source,
     target: e.target,
-    type: 'smoothstep',
+    type: 'bezier',
     animated: true,
     style: { stroke: 'var(--border-strong)', strokeWidth: 1.5 },
   }))
