@@ -994,15 +994,15 @@ async function resetToken() {
   background: var(--bg-elevated);
   flex: none;
 }
-.resource-tline-pico.pico--ssh { background: var(--success); }
-.resource-tline-pico.pico--sftp { background: var(--purple); }
+.resource-tline-pico.pico--ssh { background: var(--success-soft); color: var(--success); }
+.resource-tline-pico.pico--sftp { background: rgba(139, 92, 246, 0.15); color: var(--purple); }
 .resource-tline-pico.pico--sql,
-.resource-tline-pico.pico--mysql { background: var(--info); }
-.resource-tline-pico.pico--postgresql { background: var(--purple); }
-.resource-tline-pico.pico--redis { background: var(--danger); }
-.resource-tline-pico.pico--sqlite { background: var(--warning); }
-.resource-tline-pico.pico--s3 { background: var(--brand); }
-.resource-tline-pico.pico--sip { background: var(--teal); }
+.resource-tline-pico.pico--mysql { background: var(--info-soft); color: var(--info); }
+.resource-tline-pico.pico--postgresql { background: rgba(139, 92, 246, 0.15); color: var(--purple); }
+.resource-tline-pico.pico--redis { background: var(--danger-soft); color: var(--danger); }
+.resource-tline-pico.pico--sqlite { background: var(--warning-soft); color: var(--warning); }
+.resource-tline-pico.pico--s3 { background: var(--accent-soft, rgba(255, 123, 114, 0.15)); color: var(--brand); }
+.resource-tline-pico.pico--sip { background: var(--teal-soft); color: var(--teal); }
 .resource-tline-name {
   font-weight: 600;
   color: var(--text);

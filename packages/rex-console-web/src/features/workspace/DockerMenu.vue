@@ -9,6 +9,7 @@ const emit = defineEmits<{
 }>()
 
 const isOpen = ref(false)
+const selectedContainer = ref<string | null>(null)
 const menuRef = ref<HTMLElement>()
 const buttonRef = ref<HTMLElement>()
 
@@ -41,18 +42,18 @@ function runCommand(command: string) {
 }
 
 function promptAndRun(commandFn: (name: string) => void) {
-  const name = prompt(t('terminal.dockerContainerPrompt'))
-  if (name && name.trim()) {
-    commandFn(name.trim())
+  if (selectedContainer.value) {
+    commandFn(selectedContainer.value)
+    selectedContainer.value = null
   }
   isOpen.value = false
 }
 
 function handleExec() {
-  const name = prompt(t('terminal.dockerContainerPrompt'))
-  if (name && name.trim()) {
-    const cmd = `docker exec -it ${name.trim()} /bin/bash`
-    emit('create-new-tab', cmd, `docker exec ${name.trim()}`)
+  if (selectedContainer.value) {
+    const cmd = `docker exec -it ${selectedContainer.value} /bin/bash`
+    emit('create-new-tab', cmd, `docker exec ${selectedContainer.value}`)
+    selectedContainer.value = null
   }
   isOpen.value = false
 }
@@ -74,7 +75,17 @@ function confirmRemove(name: string): boolean {
   return confirm(t('terminal.dockerRemoveConfirm'))
 }
 
-const containerListCmd = () => runCommand('docker ps --format table {{.Names}}\t{{.Status}}\t{{.Ports}}')
+function selectContainer(name: string) {
+  if (selectedContainer.value === name) {
+    selectedContainer.value = null
+  } else {
+    selectedContainer.value = name
+  }
+}
+
+function containerListCmd() {
+  runCommand('docker ps --format table {{.Names}}\t{{.Status}}\t{{.Ports}}')
+}
 const imageListCmd = () => runCommand('docker images --format table {{.Repository}}\t{{.Tag}}\t{{.Size}}')
 </script>
 
@@ -96,8 +107,16 @@ const imageListCmd = () => runCommand('docker images --format table {{.Repositor
           :style="dropdownPosition"
           @click.stop
         >
-          <div class="docker-dropdown-item" @click="containerListCmd">
+          <div class="docker-dropdown-section-title">Containers</div>
+          <div class="docker-dropdown-item docker-dropdown-item--muted" @click="containerListCmd">
             📦 {{ t('terminal.dockerContainerList') }}
+          </div>
+          <div v-if="selectedContainer" class="docker-dropdown-item docker-dropdown-item--selected">
+            🎯 {{ selectedContainer }}
+            <span class="docker-dropdown-item-hint">Selected</span>
+          </div>
+          <div class="docker-dropdown-item docker-dropdown-item--hint" @click="selectedContainer = null">
+            💡 {{ t('terminal.dockerSelectHint') || 'Click container name in terminal to select' }}
           </div>
           <div class="docker-dropdown-item" @click="imageListCmd">
             🖼️ {{ t('terminal.dockerImageList') }}
@@ -178,6 +197,37 @@ const imageListCmd = () => runCommand('docker images --format table {{.Repositor
 .menu-enter-active,
 .menu-leave-active {
   transition: opacity var(--transition);
+}
+
+.docker-dropdown-section-title {
+  padding: var(--space-2) var(--space-3) 2px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.docker-dropdown-item--selected {
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--success);
+  font-weight: 500;
+}
+
+.docker-dropdown-item--hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.docker-dropdown-item-hint {
+  margin-left: auto;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.docker-dropdown-item--muted {
+  opacity: 0.7;
 }
 
 .menu-enter-from,

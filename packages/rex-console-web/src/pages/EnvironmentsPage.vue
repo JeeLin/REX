@@ -565,6 +565,7 @@ async function handleImport(event: Event) {
 
 .env-card-protocols {
   display: flex;
+  flex-wrap: nowrap;
   gap: 6px;
   margin-top: 8px;
   padding: 8px 16px 12px;
@@ -583,17 +584,18 @@ async function handleImport(event: Event) {
   color: var(--on-ink);
   background: var(--bg-elevated);
   white-space: nowrap;
+  flex-shrink: 0;
 }
-.env-proto-pico.pico--ssh { background: var(--success); }
-.env-proto-pico.pico--sftp { background: var(--purple); }
-.env-proto-count { font-size: 10px; margin-left: 2px; opacity: 0.9; font-weight: 500; }
+.env-proto-pico.pico--ssh { background: var(--success-soft); color: var(--success); }
+.env-proto-pico.pico--sftp { background: rgba(139, 92, 246, 0.15); color: var(--purple); }
+.env-proto-count { font-size: 10px; margin-left: 2px; font-weight: 500; }
 .env-proto-pico.pico--sql,
-.env-proto-pico.pico--mysql { background: var(--info); }
-.env-proto-pico.pico--postgresql { background: var(--purple); }
-.env-proto-pico.pico--redis { background: var(--danger); }
-.env-proto-pico.pico--sqlite { background: var(--warning); }
-.env-proto-pico.pico--s3 { background: var(--brand); }
-.env-proto-pico.pico--sip { background: var(--teal); }
+.env-proto-pico.pico--mysql { background: var(--info-soft); color: var(--info); }
+.env-proto-pico.pico--postgresql { background: rgba(139, 92, 246, 0.15); color: var(--purple); }
+.env-proto-pico.pico--redis { background: var(--danger-soft); color: var(--danger); }
+.env-proto-pico.pico--sqlite { background: var(--warning-soft); color: var(--warning); }
+.env-proto-pico.pico--s3 { background: var(--accent-soft, rgba(255, 123, 114, 0.15)); color: var(--brand); }
+.env-proto-pico.pico--sip { background: var(--teal-soft); color: var(--teal); }
 
 /* Agents Section */
 .env-card-agents {
