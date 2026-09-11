@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { dashboardApi, type DashboardStats } from '@/api/dashboard'
 import { useEnvironmentsStore } from '@/stores/environments'
+import { useAppStore } from '@/stores/app'
 import { useWorkspaceStore } from '@/stores/workspace'
 import StatusDot from '@/components/ui/StatusDot.vue'
 import type { Resource } from '@/api/resources'
@@ -12,9 +13,18 @@ import { agentStatus } from '@/utils/status'
 const { t } = useI18n()
 const router = useRouter()
 const store = useEnvironmentsStore()
+const appStore = useAppStore()
 const wsStore = useWorkspaceStore()
 
 const stats = ref<DashboardStats>({ environment_count: 0, resource_count: 0, online_agents: 0 })
+
+// Filter environments based on connection mode (Agent mode shows only agent-managed envs)
+const filteredEnvironments = computed(() => {
+  if (appStore.isAgent) {
+    return store.environments.filter(env => env.connection_mode === 'agent')
+  }
+  return store.environments
+})
 const recentResources = ref<Resource[]>([])
 const loading = ref(true)
 
@@ -193,7 +203,7 @@ const timeAgo = (dateStr: string): string => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="env in store.environments" :key="env.id">
+                <tr v-for="env in filteredEnvironments" :key="env.id">
                   <td><b>{{ env.name }}</b></td>
                   <td>{{ env.name }}</td>
                   <td class="mono">{{ env.connection_mode === 'agent' ? '3 ms' : '—' }}</td>
@@ -214,7 +224,7 @@ const timeAgo = (dateStr: string): string => {
       <h3 class="section-heading">{{ t('dashboard.environmentsSection', 'Environments') }}</h3>
       <div class="env-grid">
         <button
-          v-for="env in store.environments"
+          v-for="env in filteredEnvironments"
           :key="env.id"
           class="env-card"
           @click="router.push(`/environments/${env.id}`)"
