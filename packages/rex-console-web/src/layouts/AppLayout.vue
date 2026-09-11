@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import ResourcePanel from '@/features/resource-panel/ResourcePanel.vue'
 import { useSessionTimeout } from '@/composables/useSessionTimeout'
 import { useAuthStore } from '@/stores/auth'
+import { useAppStore } from '@/stores/app'
 import Modal from '@/components/ui/Modal.vue'
 import Button from '@/components/ui/Button.vue'
 import type { Resource } from '@/api/resources'
@@ -15,6 +16,7 @@ import { useVirtualKeyboard } from '@/composables/useVirtualKeyboard'
 const { t, locale } = useI18n()
 const { showWarning, remainingSeconds, extendSession } = useSessionTimeout()
 const authStore = useAuthStore()
+const appStore = useAppStore()
 const router = useRouter()
 
 function onResourceProperties(res: Resource) {
@@ -28,10 +30,10 @@ function sessionLogout() {
 const route = useRoute()
 
 const mainNav = [
-  { to: '/workspace', key: 'nav.workspace', icon: 'grid' },
-  { to: '/dashboard', key: 'nav.dashboard', icon: 'chart' },
-  { to: '/environments', key: 'nav.environments', icon: 'list' },
-  { to: '/audit-log', key: 'nav.auditLog', icon: 'bolt' },
+  { to: '/workspace', key: 'nav.workspace', icon: 'grid', hubOnly: false },
+  { to: '/dashboard', key: 'nav.dashboard', icon: 'chart', hubOnly: true },
+  { to: '/environments', key: 'nav.environments', icon: 'list', hubOnly: true },
+  { to: '/audit-log', key: 'nav.auditLog', icon: 'bolt', hubOnly: true },
 ]
 
 const bottomNav = [
@@ -61,11 +63,16 @@ function handleGlobalKeydown(e: KeyboardEvent) {
     fullscreen.value = !fullscreen.value
   }
 }
-onMounted(() => document.addEventListener('keydown', handleGlobalKeydown))
+onMounted(() => {
+  document.addEventListener('keydown', handleGlobalKeydown)
+  appStore.checkMode()
+})
 onBeforeUnmount(() => document.removeEventListener('keydown', handleGlobalKeydown))
 
+const filteredMainNav = computed(() => mainNav.filter(item => !item.hubOnly || appStore.isHub))
+
 const currentTitle = computed(() => {
-  const match = [...mainNav, ...bottomNav].find((n) => route.path.startsWith(n.to))
+  const match = [...filteredMainNav.value, ...bottomNav].find((n) => route.path.startsWith(n.to))
   return match ? t(match.key) : 'REX'
 })
 
@@ -114,7 +121,7 @@ function openQuickConnect() {
       <!-- 主导航 -->
       <nav class="sidebar-nav">
         <RouterLink
-          v-for="item in mainNav"
+          v-for="item in filteredMainNav"
           :key="item.to"
           :to="item.to"
           class="nav-item"
