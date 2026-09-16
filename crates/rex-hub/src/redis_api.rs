@@ -768,4 +768,3 @@ pub async fn pubsub_poll(
 
     (StatusCode::OK, Json(PubSubPollResult { messages })).into_response()
 }
-
