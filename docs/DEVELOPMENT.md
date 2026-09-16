@@ -817,3 +817,10 @@ rex-agent = 所有 crate（无前端）
 - **版本类型**：patch
 - **版本号**：v0.85.0
 - **缺陷池 bug**：Agent Web API 未通过 WS 隧道转发到 Hub（🔴）（从 docs/BUGS.md 纳入，已在规划时从缺陷池删除）
+
+### v0.86.0：多 SQL 方言支持 ✅ 已完成
+- **核心功能**：添加 ClickHouse、SQL Server、MariaDB、Oracle 四种 SQL 方言支持
+- **子任务预估**：5 个（ClickHouse 驱动、SQL Server 驱动、MariaDB 兼容、Oracle 驱动、方言自动检测扩展）
+- **依赖**：v0.85.0
+- **版本类型**：minor
+- **版本号**：v0.86.0
