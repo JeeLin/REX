@@ -747,9 +747,8 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
             let url = format!("http://127.0.0.1:{}{}", listen_port, uri);
 
             // 构建请求
-            let client = reqwest::Client::new();
             let method: reqwest::Method = method.parse().unwrap_or(reqwest::Method::GET);
-            let mut req_builder = client.request(method, &url);
+            let mut req_builder = state.http_client.request(method, &url);
 
             // 复制 headers
             if let Some(headers) = &payload.headers {
