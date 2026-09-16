@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.84.0] - 2025-07-18
+
+### Added
+- **SQL 数据对比**：SQL 控制台支持两个查询结果对比，按主键列或行序对比，高亮差异行和列
+- **MongoDB 支持**：新增 MongoDB 数据库连接、数据库/集合浏览、查询执行（find/count/aggregate）
+- **Redis Pub/Sub 监控**：Redis 控制台新增 Pub/Sub 实时消息监控面板，支持订阅、发布、消息查看
+
 ## [0.83.0] - 2026-07-16
 
 ### Added
