@@ -3,6 +3,7 @@
 //! 提供 MongoDB 连接、数据库列表、集合列表、查询执行等 API。
 
 use std::collections::HashMap;
+use url::form_urlencoded;
 use std::sync::Arc;
 
 use crate::resource_conn::load_resource_config;
@@ -130,9 +131,11 @@ async fn connect(
         .unwrap_or("admin");
 
     let conn_str = if !username.is_empty() {
+        let enc_user = form_urlencoded::byte_serialize(username.as_bytes()).collect::<String>();
+        let enc_pass = form_urlencoded::byte_serialize(password.as_bytes()).collect::<String>();
         format!(
             "mongodb://{}:{}@{}:{}/?authSource={}",
-            username, password, host, port, auth_db
+            enc_user, enc_pass, host, port, auth_db
         )
     } else {
         format!("mongodb://{}:{}", host, port)
