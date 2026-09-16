@@ -802,3 +802,10 @@ rex-agent = 所有 crate（无前端）
 - **版本类型**：patch
 - **版本号**：v0.83.0
 - **缺陷池 bug**：Agent 健康状态展示直连环境（🟡）、顶部导航栏 Workspace 按钮改为全局搜索（🟢）、拓扑连线布局优化建议（🟢）（从 docs/BUGS.md 纳入，已在规划时从缺陷池删除）
+
+### v0.84.0：数据对比 + MongoDB + Redis Pub/Sub ✅ 已完成
+- **核心功能**：数据对比、MongoDB 支持、Redis Pub/Sub 监控
+- **子任务预估**：3 个（数据对比、MongoDB、Redis Pub/Sub）
+- **依赖**：v0.83.0
+- **版本类型**：minor
+- **版本号**：v0.84.0
