@@ -16,6 +16,7 @@ pub mod file_api;
 pub mod metrics;
 pub mod middleware;
 pub mod models;
+pub mod mongodb_api;
 pub mod redis_api;
 pub mod resource_api;
 pub mod resource_conn;

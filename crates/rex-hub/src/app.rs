@@ -8,6 +8,7 @@ use crate::auth::AuthConfig;
 use crate::crypto::CredentialCrypto;
 use crate::db::Database;
 use crate::file_api::FileState;
+use crate::mongodb_api;
 use crate::redis_api::RedisState;
 use crate::sip_capture::SipCaptureRegistry;
 use crate::sip_recording::SipRecordingRegistry;
@@ -22,6 +23,7 @@ pub struct AppState {
     pub sql_pool: SqlState,
     pub redis_pool: RedisState,
     pub file_pool: FileState,
+    pub mongo_pool: mongodb_api::MongoState,
     pub agent_tunnel: Arc<AgentTunnelState>,
     pub agent_binaries: Arc<AgentBinaries>,
     pub sip_capture: Arc<SipCaptureRegistry>,
