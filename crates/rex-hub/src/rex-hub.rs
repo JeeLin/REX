@@ -365,7 +365,7 @@ fn build_router(state: AppState) -> Router {
         )
         .nest("/api/sql", sql_api::sql_routes())
         .nest("/api/redis", redis_api::redis_routes())
-        .nest("/api/mongodb", mongodb_api::mongodb_routes())
+                .nest("/api/mongodb", mongodb_api::mongodb_routes())
         .nest("/api/files", file_api::file_routes())
         .route("/ws/terminal", axum::routing::get(terminal_ws::ws_handler))
         .route("/ws/sip", axum::routing::get(sip_ws::ws_handler))
