@@ -3871,7 +3871,7 @@ dependencies = [
 
 [[package]]
 name = "rex-agent"
-version = "0.83.0"
+version = "0.84.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3906,7 +3906,7 @@ dependencies = [
 
 [[package]]
 name = "rex-common"
-version = "0.83.0"
+version = "0.84.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3942,7 +3942,7 @@ dependencies = [
 
 [[package]]
 name = "rex-hub"
-version = "0.83.0"
+version = "0.84.0"
 dependencies = [
  "aes-gcm 0.10.3",
  "anyhow",
@@ -3990,7 +3990,7 @@ dependencies = [
 
 [[package]]
 name = "rex-mysql"
-version = "0.83.0"
+version = "0.84.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4002,7 +4002,7 @@ dependencies = [
 
 [[package]]
 name = "rex-postgresql"
-version = "0.83.0"
+version = "0.84.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4014,7 +4014,7 @@ dependencies = [
 
 [[package]]
 name = "rex-redis"
-version = "0.83.0"
+version = "0.84.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4032,7 +4032,7 @@ dependencies = [
 
 [[package]]
 name = "rex-s3"
-version = "0.83.0"
+version = "0.84.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4045,7 +4045,7 @@ dependencies = [
 
 [[package]]
 name = "rex-sip"
-version = "0.83.0"
+version = "0.84.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4061,7 +4061,7 @@ dependencies = [
 
 [[package]]
 name = "rex-sqlite"
-version = "0.83.0"
+version = "0.84.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4074,7 +4074,7 @@ dependencies = [
 
 [[package]]
 name = "rex-ssh"
-version = "0.83.0"
+version = "0.84.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4094,7 +4094,7 @@ dependencies = [
 
 [[package]]
 name = "rex-transfer"
-version = "0.83.0"
+version = "0.84.0"
 dependencies = [
  "anyhow",
  "async-trait",
