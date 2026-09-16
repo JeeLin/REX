@@ -31,14 +31,14 @@ export async function getDatabases(sessionId: string): Promise<string[]> {
   const res = await fetch(`${API_BASE}/databases?session_id=${sessionId}`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const data = await res.json()
-  return data.databases || []
+  return Array.isArray(data) ? data : data.databases || []
 }
 
 export async function getCollections(sessionId: string, database: string): Promise<string[]> {
   const res = await fetch(`${API_BASE}/collections?session_id=${sessionId}&database=${database}`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const data = await res.json()
-  return data.collections || []
+  return Array.isArray(data) ? data : data.collections || []
 }
 
 export interface QueryResult {
@@ -47,11 +47,11 @@ export interface QueryResult {
   error?: string
 }
 
-export async function query(sessionId: string, database: string, collection: string, operation: string, filter?: Record<string, unknown>, options?: Record<string, unknown>): Promise<QueryResult> {
+export async function query(sessionId: string, database: string, collection: string, operation: string, filter?: Record<string, unknown>, options?: { sort?: Record<string, unknown>; projection?: Record<string, unknown>; limit?: number }): Promise<QueryResult> {
   const res = await fetch(`${API_BASE}/query`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ session_id: sessionId, database, collection, operation, filter, options }),
+    body: JSON.stringify({ session_id: sessionId, database, collection, operation, filter, ...options }),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()

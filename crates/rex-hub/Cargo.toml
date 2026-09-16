@@ -43,6 +43,7 @@ argon2 = { workspace = true }
 jsonwebtoken = { workspace = true }
 rand_core = { workspace = true }
 redis = { workspace = true }
+url = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-config = { workspace = true }
 aes-gcm = { workspace = true }
