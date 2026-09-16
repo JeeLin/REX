@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.85.0] - 2025-07-18
+
+### Fixed
+- **Agent API 隧道转发**：修复 Agent HTTP server 未通过 WebSocket 隧道转发 API 请求到 Hub 的问题，Agent 位于内网时所有 API 调用 404 的 bug
+
 ## [0.84.0] - 2025-07-18
 
 ### Added
