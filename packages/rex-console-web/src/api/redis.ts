@@ -135,3 +135,18 @@ export async function runCommand(sessionId: string, args: string[]): Promise<str
   if (!res.ok) throw new Error('Failed to run command')
   return (await res.json()).result
 }
+
+export interface PubSubMessage {
+  channel: string
+  data: string
+}
+
+export async function pubsubPoll(sessionId: string, channels: string[], timeoutMs = 5000): Promise<PubSubMessage[]> {
+  const res = await fetch(`${API_BASE}/pubsub/poll`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ session_id: sessionId, channels, timeout_ms: timeoutMs }),
+  })
+  if (!res.ok) throw new Error('Failed to poll pub/sub')
+  return (await res.json()).messages
+}

@@ -423,6 +423,7 @@ function onDragEnd() {
 }
 
 onBeforeUnmount(async () => {
+  stopPubSubPoll()
   document.removeEventListener('mousemove', onDragMove)
   document.removeEventListener('mouseup', onDragEnd)
   if (sessionId.value) {
@@ -681,6 +682,69 @@ async function flushDb() {
     await loadKeys()
   } catch { /* ignore */ }
 }
+
+// ── Pub/Sub ──────────────────────────────────────
+const showPubSub = ref(false)
+const pubsubChannel = ref('')
+const pubsubMessage = ref('')
+const pubsubLog = ref<Array<{ time: string; channel: string; message: string }>>([])
+const pubsubConnected = ref(false)
+let pubsubPollTimer: ReturnType<typeof setInterval> | null = null
+
+function openPubSub() {
+  showPubSub.value = true
+}
+
+function closePubSub() {
+  stopPubSubPoll()
+  pubsubConnected.value = false
+}
+
+function stopPubSubPoll() {
+  if (pubsubPollTimer) {
+    clearInterval(pubsubPollTimer)
+    pubsubPollTimer = null
+  }
+}
+
+function startPubSubPoll() {
+  stopPubSubPoll()
+  if (!sessionId.value || !pubsubChannel.value.trim()) return
+  const channels = pubsubChannel.value.split(',').map(c => c.trim()).filter(Boolean)
+  if (channels.length === 0) return
+
+  pubsubConnected.value = true
+  pubsubPollTimer = setInterval(async () => {
+    if (!sessionId.value) return
+    try {
+      const msgs = await redisApi.pubsubPoll(sessionId.value, channels, 4000)
+      for (const msg of msgs) {
+        pubsubLog.value.unshift({
+          time: new Date().toLocaleTimeString(),
+          channel: msg.channel,
+          message: msg.data,
+        })
+      }
+      if (pubsubLog.value.length > 500) pubsubLog.value.length = 500
+    } catch { /* ignore */ }
+  }, 5000)
+}
+
+function connectPubSub() {
+  startPubSubPoll()
+}
+
+async function pubsubPublish() {
+  if (!sessionId.value || !pubsubChannel.value || !pubsubMessage.value) return
+  try {
+    await redisApi.runCommand(sessionId.value, ['PUBLISH', pubsubChannel.value, pubsubMessage.value])
+    pubsubMessage.value = ''
+  } catch { /* ignore */ }
+}
+
+function clearPubSubLog() {
+  pubsubLog.value = []
+}
 </script>
 
 <template>
@@ -802,6 +866,7 @@ async function flushDb() {
           <div class="redis-toolbar-sep" />
           <button class="redis-toolbar-btn" title="Memory Analysis" @click="openMemoryAnalysis">📊</button>
           <button class="redis-toolbar-btn" title="Slow Log" @click="openSlowLog">📋</button>
+          <button class="redis-toolbar-btn" title="Pub/Sub" @click="openPubSub">📡</button>
           <button class="redis-toolbar-btn redis-toolbar-btn--danger" title="Flush DB" @click="showFlushDb = true">⚠️</button>
         </template>
       </div>
@@ -1064,7 +1129,47 @@ async function flushDb() {
       </div>
     </Teleport>
 
-    <!-- Memory Analysis Modal -->
+    
+      <!-- Pub/Sub Panel -->
+      <div v-if="showPubSub" class="modal-overlay" @click.self="showPubSub = false">
+        <div class="redis-modal" style="width: 700px; max-height: 80vh;">
+          <div class="modal-header">
+            <h3>📡 {{ t('redis.pubsub', 'Pub/Sub Monitor') }}</h3>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span v-if="pubsubConnected" style="color: #22c55e; font-size: 12px;">● {{ t('redis.subscribed', 'Subscribed') }}</span>
+              <span v-else style="color: var(--text-secondary); font-size: 12px;">○ {{ t('redis.disconnected', 'Disconnected') }}</span>
+              <button class="modal-close" @click="closePubSub(); showPubSub = false">×</button>
+            </div>
+          </div>
+          <div style="padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+            <!-- Subscribe -->
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <input v-model="pubsubChannel" class="redis-input" placeholder="Channel(s), e.g. news.* or ch1,ch2" style="flex: 1;" @keyup.enter="connectPubSub" />
+              <button class="btn btn-primary" :disabled="pubsubConnected || !pubsubChannel.trim()" @click="connectPubSub">{{ t('redis.subscribe', 'Subscribe') }}</button>
+              <button class="btn btn-secondary" :disabled="!pubsubConnected" @click="closePubSub">{{ t('redis.unsubscribe', 'Unsubscribe') }}</button>
+            </div>
+            <!-- Publish -->
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <input v-model="pubsubMessage" class="redis-input" placeholder="Message to publish..." style="flex: 1;" :disabled="!pubsubChannel" @keyup.enter="pubsubPublish" />
+              <button class="btn btn-secondary" :disabled="!pubsubChannel || !pubsubMessage" @click="pubsubPublish">{{ t('redis.publish', 'Publish') }}</button>
+              <button class="btn btn-secondary" @click="clearPubSubLog">{{ t('redis.clear', 'Clear') }}</button>
+            </div>
+            <!-- Messages -->
+            <div style="border: 1px solid var(--border); border-radius: 6px; overflow: auto; max-height: 400px; background: var(--bg-secondary);">
+              <div v-if="pubsubLog.length === 0" style="padding: 24px; text-align: center; color: var(--text-secondary); font-size: 12px;">
+                {{ t('redis.noMessages', 'No messages yet. Subscribe to a channel to start monitoring.') }}
+              </div>
+              <div v-for="(msg, i) in pubsubLog" :key="i" style="padding: 4px 10px; border-bottom: 1px solid var(--border); font-size: 12px; font-family: monospace;">
+                <span style="color: var(--text-secondary);">{{ msg.time }}</span>
+                <span style="color: #3b82f6; margin-left: 8px;">[{{ msg.channel }}]</span>
+                <span style="margin-left: 8px; word-break: break-all;">{{ msg.message }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Memory Analysis Modal -->
     <Teleport to="body">
       <div v-if="showMemoryAnalysis" class="modal-overlay" @click.self="showMemoryAnalysis = false">
         <div class="modal-content modal-wide">
