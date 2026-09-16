@@ -3,8 +3,8 @@
 //! 提供 MongoDB 连接、数据库列表、集合列表、查询执行等 API。
 
 use std::collections::HashMap;
-use url::form_urlencoded;
 use std::sync::Arc;
+use url::form_urlencoded;
 
 use crate::resource_conn::load_resource_config;
 use crate::AppState;

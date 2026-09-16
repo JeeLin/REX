@@ -291,7 +291,10 @@ pub async fn run_agent(config: AgentConfig, api_pending: ApiPendingMap) {
             .unwrap_or_else(|_| "3000".to_string())
             .parse::<u16>()
             .unwrap_or(3000);
-        if let Err(e) = crate::http_server::start_http_server(http_port, hub_url, api_tx, api_pending_http).await {
+        if let Err(e) =
+            crate::http_server::start_http_server(http_port, hub_url, api_tx, api_pending_http)
+                .await
+        {
             tracing::error!(error = %e, "failed to start HTTP server");
         }
     });
@@ -299,7 +302,15 @@ pub async fn run_agent(config: AgentConfig, api_pending: ApiPendingMap) {
     loop {
         tracing::info!(hub_url = %config.hub_url, "connecting to hub");
 
-        match connect_and_run(&config, channels.clone(), ssh_handles.clone(), api_pending.clone(), api_rx.clone()).await {
+        match connect_and_run(
+            &config,
+            channels.clone(),
+            ssh_handles.clone(),
+            api_pending.clone(),
+            api_rx.clone(),
+        )
+        .await
+        {
             Ok(()) => {
                 tracing::info!("connection closed cleanly");
                 backoff = 1; // 正常关闭，重置退避

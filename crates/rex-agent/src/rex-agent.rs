@@ -158,7 +158,8 @@ fn worker_main() {
     let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
     rt.block_on(async {
         // 创建 API 请求挂起映射
-        let api_pending: agent_ws::ApiPendingMap = std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
+        let api_pending: agent_ws::ApiPendingMap =
+            std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
 
         // 启动 Agent WebSocket 连接（内部会启动 HTTP server）
         agent_ws::run_agent(config, api_pending).await;

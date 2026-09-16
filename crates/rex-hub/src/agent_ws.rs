@@ -742,8 +742,8 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
             };
 
             // 获取 Hub 监听端口（默认 3080）
-            let listen_port = std::env::var("REX_LISTEN_PORT")
-                .unwrap_or_else(|_| "3080".to_string());
+            let listen_port =
+                std::env::var("REX_LISTEN_PORT").unwrap_or_else(|_| "3080".to_string());
             let url = format!("http://127.0.0.1:{}{}", listen_port, uri);
 
             // 构建请求
