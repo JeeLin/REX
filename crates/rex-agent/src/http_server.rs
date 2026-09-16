@@ -156,7 +156,7 @@ pub async fn start_http_server(
 
     let app = Router::new()
         .route("/api/health", get(health_check))
-        .route("/api/*path", axum::routing::any(proxy_api))
+        .route("/api/{*path}", axum::routing::any(proxy_api))
         .fallback_service(axum::routing::any_service(embedded))
         .with_state(state);
 
