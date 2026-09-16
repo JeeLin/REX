@@ -163,9 +163,10 @@ fn worker_main() {
             .parse::<u16>()
             .unwrap_or(3000);
 
-        // 在后台启动 HTTP server
+        // 在后台启动 HTTP server（代理 API 请求到 Hub）
+        let hub_url = config.hub_url.clone();
         tokio::spawn(async move {
-            if let Err(e) = http_server::start_http_server(http_port).await {
+            if let Err(e) = http_server::start_http_server(http_port, hub_url).await {
                 tracing::error!(error = %e, "failed to start HTTP server");
             }
         });
