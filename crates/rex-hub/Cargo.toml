@@ -29,6 +29,10 @@ rex-common = { workspace = true }
 rex-mysql = { workspace = true }
 rex-postgresql = { workspace = true }
 rex-sqlite = { workspace = true }
+rex-clickhouse = { workspace = true }
+rex-mssql = { workspace = true }
+rex-mariadb = { workspace = true }
+rex-oracle = { workspace = true }
 rex-redis = { workspace = true }
 rex-s3 = { workspace = true }
 rex-sip = { workspace = true }

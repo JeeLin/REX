@@ -180,7 +180,7 @@ async fn connect_by_type(
     req: &ConnectRequest,
 ) -> anyhow::Result<Box<dyn SqlConnector>> {
     match db_type {
-        DatabaseType::MySQL => Ok(Box::new(
+        DatabaseType::MySQL | DatabaseType::MariaDB => Ok(Box::new(
             rex_mysql::MySqlConnector::connect(req.clone()).await?,
         )),
         DatabaseType::PostgreSQL => Ok(Box::new(
@@ -188,6 +188,15 @@ async fn connect_by_type(
         )),
         DatabaseType::SQLite => Ok(Box::new(
             rex_sqlite::SqliteConnector::connect(req.clone()).await?,
+        )),
+        DatabaseType::ClickHouse => Ok(Box::new(
+            rex_clickhouse::ClickHouseConnector::connect(req.clone()).await?,
+        )),
+        DatabaseType::SqlServer => Ok(Box::new(
+            rex_mssql::SqlServerConnector::connect(req.clone()).await?,
+        )),
+        DatabaseType::Oracle => Ok(Box::new(
+            rex_oracle::OracleConnector::connect(req.clone()).await?,
         )),
     }
 }
@@ -290,9 +299,12 @@ async fn detect_dialect(
 /// v0.70.7：将探测确认的 [`DatabaseType`] 转成持久化用的 db_type 字符串。
 fn detected_to_str(dt: DatabaseType) -> String {
     match dt {
-        DatabaseType::MySQL => "mysql".to_string(),
+        DatabaseType::MySQL | DatabaseType::MariaDB => "mysql".to_string(),
         DatabaseType::PostgreSQL => "postgresql".to_string(),
         DatabaseType::SQLite => "sqlite".to_string(),
+        DatabaseType::ClickHouse => "clickhouse".to_string(),
+        DatabaseType::SqlServer => "sqlserver".to_string(),
+        DatabaseType::Oracle => "oracle".to_string(),
     }
 }
 
