@@ -904,6 +904,8 @@ fn build_summary(
     right: &rex_common::sql::QueryResult,
     diffs: &[DiffRow],
 ) -> CompareSummary {
+    use std::collections::HashSet;
+
     let only_left = diffs
         .iter()
         .filter(|d| d.diff_type == "only_in_left")
@@ -912,7 +914,13 @@ fn build_summary(
         .iter()
         .filter(|d| d.diff_type == "only_in_right")
         .count();
-    let modified = diffs.iter().filter(|d| d.diff_type == "modified").count();
+    // Count unique row indices that have at least one "modified" diff
+    let modified_row_indices: HashSet<usize> = diffs
+        .iter()
+        .filter(|d| d.diff_type == "modified")
+        .map(|d| d.row_index)
+        .collect();
+    let modified = modified_row_indices.len();
     let total_rows = left.rows.len().max(right.rows.len());
     let identical = total_rows.saturating_sub(only_left + only_right + modified);
 

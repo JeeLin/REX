@@ -1,6 +1,7 @@
 //! Redis 控制台 REST 路由。
 
 use std::collections::HashMap;
+use url::form_urlencoded;
 use std::sync::Arc;
 
 use crate::resource_conn::load_resource_config;
@@ -706,7 +707,8 @@ pub async fn pubsub_poll(
             Some(req) => {
                 let host = rex_common::bracket_host(&req.host);
                 if let Some(ref password) = req.password {
-                    format!("redis://:{}@{host}:{}", password, req.port)
+                    let enc_pass = form_urlencoded::byte_serialize(password.as_bytes()).collect::<String>();
+                    format!("redis://:{}@{host}:{}", enc_pass, req.port)
                 } else {
                     format!("redis://{host}:{}", req.port)
                 }
