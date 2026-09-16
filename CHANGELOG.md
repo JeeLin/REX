@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.86.0] - 2025-07-18
+
+### Added
+- **ClickHouse 支持**：新增 ClickHouse SQL 方言连接器，基于 HTTP API
+- **SQL Server 支持**：新增 SQL Server (MSSQL) 方言连接器，基于 tiberius 驱动
+- **MariaDB 支持**：新增 MariaDB 方言连接器，复用 MySQL 驱动
+- **Oracle 支持**：新增 Oracle 方言 stub 实现（真实驱动待集成）
+- **方言自动检测扩展**：端口 8123/9000→ClickHouse、1433→SQL Server、1521→Oracle
+
 ## [0.85.0] - 2025-07-18
 
 ### Fixed
