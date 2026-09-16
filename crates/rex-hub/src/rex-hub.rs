@@ -2,8 +2,10 @@
 
 #[cfg(unix)]
 use std::os::unix::io::IntoRawFd;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use rex_hub::agent_api;
 use rex_hub::agent_ws;
@@ -16,6 +18,7 @@ use rex_hub::db::Database;
 use rex_hub::env_api;
 use rex_hub::file_api::{self, FileState};
 use rex_hub::middleware::{self, AuthUser};
+use rex_hub::mongodb_api;
 use rex_hub::redis_api::{self, RedisState};
 use rex_hub::resource_api;
 use rex_hub::settings_api;
@@ -177,6 +180,8 @@ fn worker_main() {
         ));
         let file_pool: FileState =
             Arc::new(tokio::sync::Mutex::new(file_api::FileConnectionPool::new()));
+        let mongo_pool: mongodb_api::MongoState =
+            Arc::new(Mutex::new(HashMap::new()));
 
         let agent_tunnel = Arc::new(agent_ws::AgentTunnelState::new());
         let agent_binaries = Arc::new(update_api::AgentBinaries::new());
@@ -188,6 +193,7 @@ fn worker_main() {
             sql_pool,
             redis_pool,
             file_pool,
+            mongo_pool,
             agent_tunnel,
             agent_binaries,
             sip_capture: Arc::new(SipCaptureRegistry::new()),
@@ -359,6 +365,7 @@ fn build_router(state: AppState) -> Router {
         )
         .nest("/api/sql", sql_api::sql_routes())
         .nest("/api/redis", redis_api::redis_routes())
+        .nest("/api/mongodb", mongodb_api::mongodb_routes())
         .nest("/api/files", file_api::file_routes())
         .route("/ws/terminal", axum::routing::get(terminal_ws::ws_handler))
         .route("/ws/sip", axum::routing::get(sip_ws::ws_handler))

@@ -44,6 +44,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
 sha2 = "0.10"
 hex = "0.4"
+mongodb = { version = "3.2", default-features = false, features = ["rustls-tls", "bson-2", "compat-3-3-0"] }
 hostname = "0.4"
 russh = { version = "0.62" }
 russh-keys = { version = "0.49" }
