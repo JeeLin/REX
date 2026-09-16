@@ -64,6 +64,7 @@ pub fn sql_routes() -> axum::Router<AppState> {
             "/saved-queries/{id}",
             axum::routing::delete(delete_saved_query),
         )
+        .route("/compare", axum::routing::post(compare))
 }
 
 // ---------------------------------------------------------------------------
@@ -137,6 +138,41 @@ fn error_response(code: &str, message: &str) -> (StatusCode, Json<ErrorBody>) {
     )
 }
 
+#[derive(Debug, Deserialize)]
+struct CompareBody {
+    session_id: String,
+    sql_left: String,
+    sql_right: String,
+    #[serde(default)]
+    key_columns: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize)]
+struct CompareResult {
+    left: rex_common::sql::QueryResult,
+    right: rex_common::sql::QueryResult,
+    diffs: Vec<DiffRow>,
+    summary: CompareSummary,
+}
+
+#[derive(Debug, Serialize)]
+struct DiffRow {
+    row_index: usize,
+    diff_type: String,
+    column: String,
+    left_value: serde_json::Value,
+    right_value: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+struct CompareSummary {
+    left_rows: usize,
+    right_rows: usize,
+    identical_rows: usize,
+    modified_rows: usize,
+    only_in_left: usize,
+    only_in_right: usize,
+}
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
@@ -651,5 +687,217 @@ async fn delete_saved_query(
     match db.delete_saved_query(&id) {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => error_response("DB_ERROR", &e.to_string()).into_response(),
+    }
+}
+
+/// POST /api/sql/compare
+/// Execute two SQL queries and compare results, highlighting differences.
+async fn compare(
+    State(state): State<AppState>,
+    Json(body): Json<CompareBody>,
+) -> impl IntoResponse {
+    let mut pool = state.sql_pool.lock().await;
+    let conn = match pool.connectors.get_mut(&body.session_id) {
+        Some(c) => c,
+        None => {
+            return error_response("SESSION_NOT_FOUND", "session not found").into_response()
+        }
+    };
+
+    let timeout = std::time::Duration::from_secs(30);
+
+    // Execute left query
+    let left_result = match tokio::time::timeout(timeout, conn.execute(&body.sql_left)).await {
+        Ok(Ok(r)) => r,
+        Ok(Err(e)) => {
+            return error_response("QUERY_FAILED_LEFT", &e.to_string()).into_response()
+        }
+        Err(_) => {
+            return error_response("QUERY_TIMEOUT", "left query timed out").into_response()
+        }
+    };
+
+    // Execute right query
+    let right_result = match tokio::time::timeout(timeout, conn.execute(&body.sql_right)).await {
+        Ok(Ok(r)) => r,
+        Ok(Err(e)) => {
+            return error_response("QUERY_FAILED_RIGHT", &e.to_string()).into_response()
+        }
+        Err(_) => {
+            return error_response("QUERY_TIMEOUT", "right query timed out").into_response()
+        }
+    };
+
+    // Compare results
+    let diffs = compare_results(&left_result, &right_result, &body.key_columns);
+    let summary = build_summary(&left_result, &right_result, &diffs);
+
+    tracing::info!(
+        action = "SQL_COMPARE",
+        session_id = %body.session_id,
+        left_rows = left_result.rows.len(),
+        right_rows = right_result.rows.len(),
+        diff_count = diffs.len(),
+        "SQL compare executed"
+    );
+
+    (StatusCode::OK, Json(CompareResult { left: left_result, right: right_result, diffs, summary })).into_response()
+}
+
+/// Compare two query results row by row.
+fn compare_results(
+    left: &rex_common::sql::QueryResult,
+    right: &rex_common::sql::QueryResult,
+    key_columns: &Option<Vec<String>>,
+) -> Vec<DiffRow> {
+    let mut diffs = Vec::new();
+
+    // Build column index maps
+    let left_cols: std::collections::HashMap<&str, usize> = left.columns.iter().enumerate().map(|(i, c)| (c.name.as_str(), i)).collect();
+    let right_cols: std::collections::HashMap<&str, usize> = right.columns.iter().enumerate().map(|(i, c)| (c.name.as_str(), i)).collect();
+
+    // Common columns
+    let common_cols: Vec<&str> = left_cols.keys().filter(|k| right_cols.contains_key(*k)).copied().collect();
+
+    // Determine key column indices
+    let key_indices: Vec<(usize, usize)> = if let Some(keys) = key_columns {
+        keys.iter().filter_map(|k| {
+            let li = left_cols.get(k.as_str())?;
+            let ri = right_cols.get(k.as_str())?;
+            Some((*li, *ri))
+        }).collect()
+    } else {
+        Vec::new()
+    };
+
+    if key_indices.is_empty() {
+        // Row-by-row comparison (by index)
+        let max_rows = left.rows.len().max(right.rows.len());
+        for i in 0..max_rows {
+            let left_row = left.rows.get(i);
+            let right_row = right.rows.get(i);
+
+            match (left_row, right_row) {
+                (Some(lr), Some(rr)) => {
+                    for &col_name in &common_cols {
+                        let li = left_cols[col_name];
+                        let ri = right_cols[col_name];
+                        if lr[li] != rr[ri] {
+                            diffs.push(DiffRow {
+                                row_index: i,
+                                diff_type: "modified".to_string(),
+                                column: col_name.to_string(),
+                                left_value: lr[li].clone(),
+                                right_value: rr[ri].clone(),
+                            });
+                        }
+                    }
+                }
+                (Some(_), None) => {
+                    diffs.push(DiffRow {
+                        row_index: i,
+                        diff_type: "only_in_left".to_string(),
+                        column: "*".to_string(),
+                        left_value: serde_json::Value::Bool(true),
+                        right_value: serde_json::Value::Null,
+                    });
+                }
+                (None, Some(_)) => {
+                    diffs.push(DiffRow {
+                        row_index: i,
+                        diff_type: "only_in_right".to_string(),
+                        column: "*".to_string(),
+                        left_value: serde_json::Value::Null,
+                        right_value: serde_json::Value::Bool(true),
+                    });
+                }
+                (None, None) => {}
+            }
+        }
+    } else {
+        // Key-based comparison
+        let mut right_matched: std::collections::BTreeSet<usize> = std::collections::BTreeSet::new();
+
+        for (li, left_row) in left.rows.iter().enumerate() {
+            let mut found = None;
+            for (ri, right_row) in right.rows.iter().enumerate() {
+                if right_matched.contains(&ri) { continue; }
+                let mut key_match = true;
+                for &(lki, rki) in &key_indices {
+                    if left_row[lki] != right_row[rki] {
+                        key_match = false;
+                        break;
+                    }
+                }
+                if key_match {
+                    found = Some(ri);
+                    break;
+                }
+            }
+
+            match found {
+                Some(ri) => {
+                    right_matched.insert(ri);
+                    let right_row = &right.rows[ri];
+                    for &col_name in &common_cols {
+                        let li_idx = left_cols[col_name];
+                        let ri_idx = right_cols[col_name];
+                        if left_row[li_idx] != right_row[ri_idx] {
+                            diffs.push(DiffRow {
+                                row_index: li,
+                                diff_type: "modified".to_string(),
+                                column: col_name.to_string(),
+                                left_value: left_row[li_idx].clone(),
+                                right_value: right_row[ri_idx].clone(),
+                            });
+                        }
+                    }
+                }
+                None => {
+                    diffs.push(DiffRow {
+                        row_index: li,
+                        diff_type: "only_in_left".to_string(),
+                        column: "*".to_string(),
+                        left_value: serde_json::Value::Bool(true),
+                        right_value: serde_json::Value::Null,
+                    });
+                }
+            }
+        }
+
+        for ri in 0..right.rows.len() {
+            if !right_matched.contains(&ri) {
+                diffs.push(DiffRow {
+                    row_index: ri,
+                    diff_type: "only_in_right".to_string(),
+                    column: "*".to_string(),
+                    left_value: serde_json::Value::Null,
+                    right_value: serde_json::Value::Bool(true),
+                });
+            }
+        }
+    }
+
+    diffs
+}
+
+fn build_summary(
+    left: &rex_common::sql::QueryResult,
+    right: &rex_common::sql::QueryResult,
+    diffs: &[DiffRow],
+) -> CompareSummary {
+    let only_left = diffs.iter().filter(|d| d.diff_type == "only_in_left").count();
+    let only_right = diffs.iter().filter(|d| d.diff_type == "only_in_right").count();
+    let modified = diffs.iter().filter(|d| d.diff_type == "modified").count();
+    let total_rows = left.rows.len().max(right.rows.len());
+    let identical = total_rows.saturating_sub(only_left + only_right + modified);
+
+    CompareSummary {
+        left_rows: left.rows.len(),
+        right_rows: right.rows.len(),
+        identical_rows: identical,
+        modified_rows: modified,
+        only_in_left: only_left,
+        only_in_right: only_right,
     }
 }
