@@ -168,7 +168,11 @@ async fn connect(
 
     let session_id = uuid::Uuid::new_v4().to_string();
 
-    state.mongo_pool.lock().await.insert(session_id.clone(), client);
+    state
+        .mongo_pool
+        .lock()
+        .await
+        .insert(session_id.clone(), client);
 
     tracing::info!(
         action = "MONGO_CONNECT",
@@ -179,11 +183,7 @@ async fn connect(
         "MongoDB connected"
     );
 
-    (
-        StatusCode::OK,
-        Json(ConnectResponse { session_id }),
-    )
-        .into_response()
+    (StatusCode::OK, Json(ConnectResponse { session_id })).into_response()
 }
 
 /// POST /api/mongodb/disconnect
@@ -237,10 +237,7 @@ async fn collections(
 }
 
 /// POST /api/mongodb/query
-async fn query(
-    State(state): State<AppState>,
-    Json(body): Json<QueryBody>,
-) -> impl IntoResponse {
+async fn query(State(state): State<AppState>, Json(body): Json<QueryBody>) -> impl IntoResponse {
     let pool = state.mongo_pool.lock().await;
     let client = match pool.get(&body.session_id) {
         Some(c) => c,

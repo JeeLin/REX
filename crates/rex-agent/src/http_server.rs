@@ -8,7 +8,7 @@
 use axum::extract::{Request, State};
 use axum::response::Response;
 use axum::routing::get;
-use axum::{Router};
+use axum::Router;
 use include_dir::{include_dir, Dir};
 use rex_common::embedded_static::EmbeddedStatic;
 use std::sync::Arc;
@@ -38,7 +38,11 @@ async fn proxy_api(
 ) -> Result<Response, axum::http::StatusCode> {
     // 提取请求信息（在 move req 之前）
     let path = req.uri().path().to_string();
-    let query = req.uri().query().map(|q| format!("?{}", q)).unwrap_or_default();
+    let query = req
+        .uri()
+        .query()
+        .map(|q| format!("?{}", q))
+        .unwrap_or_default();
     let hub_target = format!("{}{}{}", state.hub_url, path, query);
     let method = req.method().clone();
     let headers = req.headers().clone();
@@ -63,13 +67,10 @@ async fn proxy_api(
     }
 
     // 发送请求
-    let hub_response = builder
-        .send()
-        .await
-        .map_err(|e| {
-            tracing::warn!(error = %e, path = %path, "proxy to hub failed");
-            axum::http::StatusCode::BAD_GATEWAY
-        })?;
+    let hub_response = builder.send().await.map_err(|e| {
+        tracing::warn!(error = %e, path = %path, "proxy to hub failed");
+        axum::http::StatusCode::BAD_GATEWAY
+    })?;
 
     // 构建响应
     let status = hub_response.status();

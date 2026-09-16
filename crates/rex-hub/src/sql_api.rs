@@ -699,9 +699,7 @@ async fn compare(
     let mut pool = state.sql_pool.lock().await;
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,
-        None => {
-            return error_response("SESSION_NOT_FOUND", "session not found").into_response()
-        }
+        None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
     };
 
     let timeout = std::time::Duration::from_secs(30);
@@ -709,23 +707,15 @@ async fn compare(
     // Execute left query
     let left_result = match tokio::time::timeout(timeout, conn.execute(&body.sql_left)).await {
         Ok(Ok(r)) => r,
-        Ok(Err(e)) => {
-            return error_response("QUERY_FAILED_LEFT", &e.to_string()).into_response()
-        }
-        Err(_) => {
-            return error_response("QUERY_TIMEOUT", "left query timed out").into_response()
-        }
+        Ok(Err(e)) => return error_response("QUERY_FAILED_LEFT", &e.to_string()).into_response(),
+        Err(_) => return error_response("QUERY_TIMEOUT", "left query timed out").into_response(),
     };
 
     // Execute right query
     let right_result = match tokio::time::timeout(timeout, conn.execute(&body.sql_right)).await {
         Ok(Ok(r)) => r,
-        Ok(Err(e)) => {
-            return error_response("QUERY_FAILED_RIGHT", &e.to_string()).into_response()
-        }
-        Err(_) => {
-            return error_response("QUERY_TIMEOUT", "right query timed out").into_response()
-        }
+        Ok(Err(e)) => return error_response("QUERY_FAILED_RIGHT", &e.to_string()).into_response(),
+        Err(_) => return error_response("QUERY_TIMEOUT", "right query timed out").into_response(),
     };
 
     // Compare results
@@ -741,7 +731,16 @@ async fn compare(
         "SQL compare executed"
     );
 
-    (StatusCode::OK, Json(CompareResult { left: left_result, right: right_result, diffs, summary })).into_response()
+    (
+        StatusCode::OK,
+        Json(CompareResult {
+            left: left_result,
+            right: right_result,
+            diffs,
+            summary,
+        }),
+    )
+        .into_response()
 }
 
 /// Compare two query results row by row.
@@ -753,19 +752,35 @@ fn compare_results(
     let mut diffs = Vec::new();
 
     // Build column index maps
-    let left_cols: std::collections::HashMap<&str, usize> = left.columns.iter().enumerate().map(|(i, c)| (c.name.as_str(), i)).collect();
-    let right_cols: std::collections::HashMap<&str, usize> = right.columns.iter().enumerate().map(|(i, c)| (c.name.as_str(), i)).collect();
+    let left_cols: std::collections::HashMap<&str, usize> = left
+        .columns
+        .iter()
+        .enumerate()
+        .map(|(i, c)| (c.name.as_str(), i))
+        .collect();
+    let right_cols: std::collections::HashMap<&str, usize> = right
+        .columns
+        .iter()
+        .enumerate()
+        .map(|(i, c)| (c.name.as_str(), i))
+        .collect();
 
     // Common columns
-    let common_cols: Vec<&str> = left_cols.keys().filter(|k| right_cols.contains_key(*k)).copied().collect();
+    let common_cols: Vec<&str> = left_cols
+        .keys()
+        .filter(|k| right_cols.contains_key(*k))
+        .copied()
+        .collect();
 
     // Determine key column indices
     let key_indices: Vec<(usize, usize)> = if let Some(keys) = key_columns {
-        keys.iter().filter_map(|k| {
-            let li = left_cols.get(k.as_str())?;
-            let ri = right_cols.get(k.as_str())?;
-            Some((*li, *ri))
-        }).collect()
+        keys.iter()
+            .filter_map(|k| {
+                let li = left_cols.get(k.as_str())?;
+                let ri = right_cols.get(k.as_str())?;
+                Some((*li, *ri))
+            })
+            .collect()
     } else {
         Vec::new()
     };
@@ -816,12 +831,15 @@ fn compare_results(
         }
     } else {
         // Key-based comparison
-        let mut right_matched: std::collections::BTreeSet<usize> = std::collections::BTreeSet::new();
+        let mut right_matched: std::collections::BTreeSet<usize> =
+            std::collections::BTreeSet::new();
 
         for (li, left_row) in left.rows.iter().enumerate() {
             let mut found = None;
             for (ri, right_row) in right.rows.iter().enumerate() {
-                if right_matched.contains(&ri) { continue; }
+                if right_matched.contains(&ri) {
+                    continue;
+                }
                 let mut key_match = true;
                 for &(lki, rki) in &key_indices {
                     if left_row[lki] != right_row[rki] {
@@ -886,8 +904,14 @@ fn build_summary(
     right: &rex_common::sql::QueryResult,
     diffs: &[DiffRow],
 ) -> CompareSummary {
-    let only_left = diffs.iter().filter(|d| d.diff_type == "only_in_left").count();
-    let only_right = diffs.iter().filter(|d| d.diff_type == "only_in_right").count();
+    let only_left = diffs
+        .iter()
+        .filter(|d| d.diff_type == "only_in_left")
+        .count();
+    let only_right = diffs
+        .iter()
+        .filter(|d| d.diff_type == "only_in_right")
+        .count();
     let modified = diffs.iter().filter(|d| d.diff_type == "modified").count();
     let total_rows = left.rows.len().max(right.rows.len());
     let identical = total_rows.saturating_sub(only_left + only_right + modified);
