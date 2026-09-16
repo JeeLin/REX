@@ -124,7 +124,7 @@ function sendTerminalCommand(command: string) {
   if (ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({
       type: 'terminal.data',
-      data: btoa(command + '\r'),
+      data: toBase64(command + '\r'),
     }))
     terminal?.focus()
   } else {
@@ -231,25 +231,27 @@ function initTerminal() {
       return false
     }
     // Ctrl+V → paste from clipboard
-    // Ctrl+V → paste from clipboard
     if (ctrl && (event.key === 'v' || event.key === 'V')) {
       event.preventDefault()
-      void doPaste()
+      doPaste().catch(() => {})
       return false
     }
     // Ctrl+C → copy selection or SIGINT
     if (ctrl && !event.shiftKey && (event.key === 'c' || event.key === 'C')) {
-      const selection = terminal?.getSelection()
-      if (selection) {
-        void doCopy()
+      const sel = terminal?.getSelection()
+      if (sel && sel.length > 0) {
+        event.preventDefault()
+        doCopy(sel).catch(() => {})
         return false
       }
+      // No selection → let SIGINT through
     }
     // Ctrl+Shift+C → force copy
     if (ctrl && event.shiftKey && (event.key === 'c' || event.key === 'C')) {
-      const selection = terminal?.getSelection()
-      if (selection) {
-        void doCopy()
+      event.preventDefault()
+      const sel = terminal?.getSelection()
+      if (sel && sel.length > 0) {
+        doCopy(sel).catch(() => {})
       }
       return false
     }
@@ -289,7 +291,7 @@ function initTerminal() {
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
         type: 'terminal.data',
-        data: btoa(data),
+        data: toBase64(data),
       }))
     }
   })
@@ -466,12 +468,20 @@ function handleReconnect() {
 }
 
 // ── Copy / Paste ──────────────────────────────────────────
-async function doCopy() {
-  const selection = terminal?.getSelection()
-  if (selection) {
-    await clipboard.writeText(selection)
+async function doCopy(text?: string) {
+  const sel = text || terminal?.getSelection()
+  if (sel && sel.length > 0) {
+    await clipboard.writeText(sel)
     toast.value?.push(t('terminal.clipboard.copied', 'Copied'), 'success')
   }
+}
+
+/** Encode string to base64, supporting non-ASCII (UTF-8) */
+function toBase64(str: string): string {
+  const bytes = new TextEncoder().encode(str)
+  let binary = ''
+  for (const b of bytes) binary += String.fromCharCode(b)
+  return btoa(binary)
 }
 
 async function doPaste() {
@@ -479,7 +489,7 @@ async function doPaste() {
   if (text && ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({
       type: 'terminal.data',
-      data: btoa(text),
+      data: toBase64(text),
     }))
   }
 }
@@ -501,7 +511,7 @@ function handleContextMenu(event: MouseEvent) {
   if (!terminal) return
   const selection = terminal.getSelection()
   showContextMenu(event.clientX, event.clientY, [
-    { label: t('terminal.ctx.copy', 'Copy'), action: doCopy, disabled: !selection },
+    { label: t('terminal.ctx.copy', 'Copy'), action: () => doCopy(), disabled: !selection },
     { label: t('terminal.ctx.paste', 'Paste'), action: doPaste },
     { label: t('terminal.ctx.selectAll', 'Select All'), action: () => terminal?.selectAll() },
     { separator: true, label: '', action: () => {} },
