@@ -809,3 +809,11 @@ rex-agent = 所有 crate（无前端）
 - **依赖**：v0.83.0
 - **版本类型**：minor
 - **版本号**：v0.84.0
+
+### v0.85.0：缺陷池 bug 修复 ✅ 已完成
+- **核心功能**：修复缺陷池中的 Agent Web API 隧道转发 bug
+- **子任务预估**：1 个（Agent HTTP server API 请求转发到 Hub）
+- **依赖**：v0.84.0
+- **版本类型**：patch
+- **版本号**：v0.85.0
+- **缺陷池 bug**：Agent Web API 未通过 WS 隧道转发到 Hub（🔴）（从 docs/BUGS.md 纳入，已在规划时从缺陷池删除）
