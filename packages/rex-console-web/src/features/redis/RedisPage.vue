@@ -1129,10 +1129,11 @@ function clearPubSubLog() {
       </div>
     </Teleport>
 
-    
-      <!-- Pub/Sub Panel -->
+
+    <!-- Pub/Sub Panel -->
+    <Teleport to="body">
       <div v-if="showPubSub" class="modal-overlay" @click.self="showPubSub = false">
-        <div class="redis-modal" style="width: 700px; max-height: 80vh;">
+        <div class="modal-content" style="width: 700px; max-height: 80vh;">
           <div class="modal-header">
             <h3>📡 {{ t('redis.pubsub', 'Pub/Sub Monitor') }}</h3>
             <div style="display: flex; align-items: center; gap: 8px;">
@@ -1144,13 +1145,13 @@ function clearPubSubLog() {
           <div style="padding: 12px; display: flex; flex-direction: column; gap: 8px;">
             <!-- Subscribe -->
             <div style="display: flex; gap: 8px; align-items: center;">
-              <input v-model="pubsubChannel" class="redis-input" placeholder="Channel(s), e.g. news.* or ch1,ch2" style="flex: 1;" @keyup.enter="connectPubSub" />
+              <input v-model="pubsubChannel" class="redis-search mono" placeholder="Channel(s), e.g. news.* or ch1,ch2" style="flex: 1;" @keyup.enter="connectPubSub" />
               <button class="btn btn-primary" :disabled="pubsubConnected || !pubsubChannel.trim()" @click="connectPubSub">{{ t('redis.subscribe', 'Subscribe') }}</button>
               <button class="btn btn-secondary" :disabled="!pubsubConnected" @click="closePubSub">{{ t('redis.unsubscribe', 'Unsubscribe') }}</button>
             </div>
             <!-- Publish -->
             <div style="display: flex; gap: 8px; align-items: center;">
-              <input v-model="pubsubMessage" class="redis-input" placeholder="Message to publish..." style="flex: 1;" :disabled="!pubsubChannel" @keyup.enter="pubsubPublish" />
+              <input v-model="pubsubMessage" class="redis-search mono" placeholder="Message to publish..." style="flex: 1;" :disabled="!pubsubChannel" @keyup.enter="pubsubPublish" />
               <button class="btn btn-secondary" :disabled="!pubsubChannel || !pubsubMessage" @click="pubsubPublish">{{ t('redis.publish', 'Publish') }}</button>
               <button class="btn btn-secondary" @click="clearPubSubLog">{{ t('redis.clear', 'Clear') }}</button>
             </div>
@@ -1168,6 +1169,7 @@ function clearPubSubLog() {
           </div>
         </div>
       </div>
+    </Teleport>
 
       <!-- Memory Analysis Modal -->
     <Teleport to="body">

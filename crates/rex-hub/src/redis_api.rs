@@ -5,11 +5,11 @@ use std::sync::Arc;
 
 use crate::resource_conn::load_resource_config;
 use crate::AppState;
-use axum::extract::{Query, State, WebSocketUpgrade};
+use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
-use futures_util::{SinkExt, StreamExt};
+use futures_util::StreamExt;
 use rex_common::redis::{RedisConnectRequest, RedisConnector};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -723,7 +723,8 @@ pub async fn pubsub_poll(
         Err(e) => return error_response("CLIENT_ERROR", &e.to_string()).into_response(),
     };
 
-    let mut conn = match client.get_async_connection().await {
+    #[allow(deprecated)]
+    let conn = match client.get_async_connection().await {
         Ok(c) => c,
         Err(e) => return error_response("CONNECT_ERROR", &e.to_string()).into_response(),
     };
