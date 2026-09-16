@@ -102,9 +102,10 @@ impl DetectedDialect {
     /// 从连接返回的连接器里读取方言（每个连接器已实现 `database_type()`）。
     pub fn from_connector(conn: &dyn SqlConnector) -> Option<DetectedDialect> {
         match conn.database_type() {
-            DatabaseType::MySQL => Some(DetectedDialect::MySQL),
+            DatabaseType::MySQL | DatabaseType::MariaDB => Some(DetectedDialect::MySQL),
             DatabaseType::PostgreSQL => Some(DetectedDialect::PostgreSQL),
             DatabaseType::SQLite => Some(DetectedDialect::SQLite),
+            _ => None,
         }
     }
 }
@@ -182,6 +183,10 @@ pub enum DatabaseType {
     MySQL,
     PostgreSQL,
     SQLite,
+    ClickHouse,
+    SqlServer,
+    MariaDB,
+    Oracle,
 }
 
 /// 连接器工厂，根据数据库类型创建对应的 [`SqlConnector`] 实现。

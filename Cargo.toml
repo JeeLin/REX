@@ -16,6 +16,7 @@ rex-redis = { path = "crates/rex-redis" }
 rex-sqlite = { path = "crates/rex-sqlite" }
 rex-s3 = { path = "crates/rex-s3" }
 rex-sip = { path = "crates/rex-sip" }
+rex-clickhouse = { path = "crates/rex-clickhouse" }
 bindgen = "0.71"
 cc = "1"
 pkg-config = "0.3"
