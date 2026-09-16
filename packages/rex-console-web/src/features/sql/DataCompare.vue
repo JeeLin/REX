@@ -8,6 +8,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Button from '@/components/ui/Button.vue'
 import SqlEditor from './SqlEditor.vue'
+import * as sqlApi from '@/api/sql'
 import { clipboard } from '@/utils/clipboard'
 
 const { t } = useI18n()
@@ -102,23 +103,12 @@ async function onCompare() {
       ? keyColumns.value.split(',').map(s => s.trim()).filter(Boolean)
       : undefined
 
-    const resp = await fetch('/api/sql/compare', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        session_id: props.sessionId,
-        sql_left: sqlLeft.value,
-        sql_right: sqlRight.value,
-        key_columns: keys,
-      }),
-    })
-
-    if (!resp.ok) {
-      const body = await resp.json().catch(() => ({}))
-      throw new Error(body?.error?.message || `HTTP ${resp.status}`)
-    }
-
-    result.value = await resp.json()
+    result.value = await sqlApi.compare(
+      props.sessionId,
+      sqlLeft.value,
+      sqlRight.value,
+      keys,
+    )
   } catch (e: unknown) {
     errorMsg.value = e instanceof Error ? e.message : String(e)
   } finally {

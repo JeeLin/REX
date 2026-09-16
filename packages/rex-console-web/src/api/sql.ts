@@ -169,3 +169,52 @@ export async function deleteSavedQuery(id: string): Promise<void> {
   })
   if (!res.ok) throw new Error('Failed to delete saved query')
 }
+
+// --- Data Compare ---
+
+export interface CompareSummary {
+  left_rows: number
+  right_rows: number
+  identical_rows: number
+  modified_rows: number
+  only_in_left: number
+  only_in_right: number
+}
+
+export interface DiffRow {
+  row_index: number
+  diff_type: string
+  column: string
+  left_value: unknown
+  right_value: unknown
+}
+
+export interface CompareResult {
+  left: QueryResult
+  right: QueryResult
+  diffs: DiffRow[]
+  summary: CompareSummary
+}
+
+export async function compare(
+  sessionId: string,
+  sqlLeft: string,
+  sqlRight: string,
+  keyColumns?: string[],
+): Promise<CompareResult> {
+  const res = await fetch(`${API_BASE}/compare`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({
+      session_id: sessionId,
+      sql_left: sqlLeft,
+      sql_right: sqlRight,
+      key_columns: keyColumns,
+    }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body?.error?.message || `HTTP ${res.status}`)
+  }
+  return await res.json()
+}

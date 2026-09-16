@@ -6,6 +6,7 @@
 import { ref, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Button from '@/components/ui/Button.vue'
+import * as mongoApi from '@/api/mongodb'
 
 const { t } = useI18n()
 
@@ -37,17 +38,8 @@ async function onConnect() {
   loading.value = true
   error.value = ''
   try {
-    const resp = await fetch('/api/mongodb/connect', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ resource_id: props.resourceId }),
-    })
-    if (!resp.ok) {
-      const body = await resp.json().catch(() => ({}))
-      throw new Error(body?.error?.message || `HTTP ${resp.status}`)
-    }
-    const data = await resp.json()
-    sessionId.value = data.session_id
+    if (!props.resourceId) throw new Error('No resource ID')
+    sessionId.value = await mongoApi.connect(props.resourceId)
     connected.value = true
     emit('update:status', 'connected')
     await loadDatabases()
@@ -61,11 +53,7 @@ async function onConnect() {
 async function onDisconnect() {
   if (!sessionId.value) return
   try {
-    await fetch('/api/mongodb/disconnect', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId.value }),
-    })
+    await mongoApi.disconnect(sessionId.value)
   } catch { /* ignore */ }
   sessionId.value = null
   connected.value = false
@@ -79,9 +67,7 @@ async function onDisconnect() {
 async function loadDatabases() {
   if (!sessionId.value) return
   try {
-    const resp = await fetch(`/api/mongodb/databases?session_id=${sessionId.value}`)
-    if (!resp.ok) throw new Error('Failed to load databases')
-    databases.value = await resp.json()
+    databases.value = await mongoApi.getDatabases(sessionId.value)
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : String(e)
   }
@@ -93,9 +79,7 @@ async function loadCollections(db: string) {
   collections.value = []
   selectedColl.value = ''
   try {
-    const resp = await fetch(`/api/mongodb/collections?session_id=${sessionId.value}&database=${db}`)
-    if (!resp.ok) throw new Error('Failed to load collections')
-    collections.value = await resp.json()
+    collections.value = await mongoApi.getCollections(sessionId.value, db)
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : String(e)
   }
@@ -116,28 +100,16 @@ async function onExecute() {
       throw new Error('Invalid JSON filter')
     }
 
-    const resp = await fetch('/api/mongodb/query', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        session_id: sessionId.value,
-        database: selectedDb.value,
-        collection: selectedColl.value,
-        operation: operation.value,
-        filter: filter.filter || filter,
-        limit: filter.limit || 100,
-      }),
-    })
-
-    if (!resp.ok) {
-      const body = await resp.json().catch(() => ({}))
-      throw new Error(body?.error?.message || `HTTP ${resp.status}`)
-    }
-
-    const data = await resp.json()
+    const data = await mongoApi.query(
+      sessionId.value,
+      selectedDb.value,
+      selectedColl.value,
+      operation.value,
+      filter.filter as Record<string, unknown> || filter,
+    )
+    if (data.error) throw new Error(data.error)
     resultDocs.value = data.documents || []
     resultCount.value = data.count ?? data.documents?.length ?? 0
-    elapsedMs.value = data.elapsed_ms ?? 0
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : String(e)
   } finally {
@@ -148,11 +120,7 @@ async function onExecute() {
 // ── Cleanup ────────────────────────────────────
 onBeforeUnmount(() => {
   if (sessionId.value) {
-    fetch('/api/mongodb/disconnect', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId.value }),
-    }).catch(() => {})
+    mongoApi.disconnect(sessionId.value).catch(() => {})
   }
 })
 </script>
