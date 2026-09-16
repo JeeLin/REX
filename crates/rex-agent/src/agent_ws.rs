@@ -10,13 +10,16 @@ use rex_ssh::SshHandle;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use url::Url;
 
 /// SSH 连接池 — 按 host:port 复用已认证的 SSH Handle
 /// 避免同一服务器的 SSH 和 SFTP 各建独立连接导致 MaxSessions=1 时 SFTP 失败
 pub type SshHandlePool = Arc<RwLock<HashMap<String, Arc<tokio::sync::Mutex<SshHandle>>>>>;
+
+/// API 请求挂起映射 — request_id → oneshot::Sender<ApiResponsePayload>
+pub type ApiPendingMap = Arc<RwLock<HashMap<String, oneshot::Sender<ApiResponsePayload>>>>;
 
 // ═══════════════════════════════════════
 // TLS Insecure 模式（自签名证书跳过验证）
@@ -95,6 +98,18 @@ enum HubMsg {
     Update {
         payload: rex_common::update::UpdateCommand,
     },
+    #[serde(rename = "api_response")]
+    ApiResponse { payload: ApiResponsePayload },
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiResponsePayload {
+    pub(crate) request_id: String,
+    pub(crate) status: u16,
+    #[serde(default)]
+    pub(crate) headers: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    pub(crate) body: Vec<u8>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -146,6 +161,21 @@ pub(crate) enum AgentMsg {
     Closed { payload: ChannelPayload },
     #[serde(rename = "update_progress")]
     UpdateProgress { payload: UpdateProgressPayload },
+    #[serde(rename = "api_request")]
+    ApiRequest { payload: ApiRequestPayload },
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct ApiRequestPayload {
+    pub(crate) request_id: String,
+    pub(crate) method: String,
+    pub(crate) path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) query: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) headers: Option<std::collections::HashMap<String, String>>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub(crate) body: Vec<u8>,
 }
 
 #[derive(Debug, Serialize)]
@@ -239,19 +269,37 @@ pub(crate) struct LocalChannel {
 // 主入口
 // ═══════════════════════════════════════
 
-pub async fn run_agent(config: AgentConfig) {
+pub async fn run_agent(config: AgentConfig, api_pending: ApiPendingMap) {
     let channels: Arc<RwLock<HashMap<String, LocalChannel>>> =
         Arc::new(RwLock::new(HashMap::new()));
 
     // SSH 连接池：按 host:port 复用已认证的 SSH Handle
     let ssh_handles: SshHandlePool = Arc::new(RwLock::new(HashMap::new()));
+
     let mut backoff = 1u64; // 初始退避 1 秒
     const MAX_BACKOFF: u64 = 30;
+
+    // 创建 API 请求通道（HTTP server → WS task）
+    let (api_tx, api_rx) = mpsc::channel::<AgentEvent>(256);
+    let api_rx = Arc::new(tokio::sync::Mutex::new(api_rx));
+
+    // 在后台启动 HTTP server
+    let hub_url = config.hub_url.clone();
+    let api_pending_http = api_pending.clone();
+    tokio::spawn(async move {
+        let http_port = std::env::var("REX_AGENT_HTTP_PORT")
+            .unwrap_or_else(|_| "3000".to_string())
+            .parse::<u16>()
+            .unwrap_or(3000);
+        if let Err(e) = crate::http_server::start_http_server(http_port, hub_url, api_tx, api_pending_http).await {
+            tracing::error!(error = %e, "failed to start HTTP server");
+        }
+    });
 
     loop {
         tracing::info!(hub_url = %config.hub_url, "connecting to hub");
 
-        match connect_and_run(&config, channels.clone(), ssh_handles.clone()).await {
+        match connect_and_run(&config, channels.clone(), ssh_handles.clone(), api_pending.clone(), api_rx.clone()).await {
             Ok(()) => {
                 tracing::info!("connection closed cleanly");
                 backoff = 1; // 正常关闭，重置退避
@@ -272,6 +320,8 @@ async fn connect_and_run(
     config: &AgentConfig,
     channels: Arc<RwLock<HashMap<String, LocalChannel>>>,
     ssh_handles: SshHandlePool,
+    api_pending: ApiPendingMap,
+    api_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<AgentEvent>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // 构建 WebSocket URL
     let ws_url = build_ws_url(&config.hub_url, &config.agent_token)?;
@@ -339,6 +389,25 @@ async fn connect_and_run(
             };
             if ws_sink.send(msg).await.is_err() {
                 break;
+            }
+        }
+    });
+
+    // 4a. 转发 API 请求任务（api_rx → evt_tx → ws_sink）
+    let evt_tx_api = evt_tx.clone();
+    let api_fwd_task = tokio::spawn(async move {
+        loop {
+            let evt = {
+                let mut rx = api_rx.lock().await;
+                rx.recv().await
+            };
+            match evt {
+                Some(evt) => {
+                    if evt_tx_api.send(evt).await.is_err() {
+                        break;
+                    }
+                }
+                None => break,
             }
         }
     });
@@ -412,6 +481,13 @@ async fn connect_and_run(
                             });
                             tracing::info!(version = %version, "update started");
                         }
+                        HubMsg::ApiResponse { payload } => {
+                            // 路由 API 响应到等待中的请求
+                            let mut pending = api_pending.write().await;
+                            if let Some(tx) = pending.remove(&payload.request_id) {
+                                let _ = tx.send(payload);
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -436,6 +512,7 @@ async fn connect_and_run(
     // 8. 清理
     heartbeat_task.abort();
     ws_write_task.abort();
+    api_fwd_task.abort();
     channels.write().await.clear();
 
     Ok(())

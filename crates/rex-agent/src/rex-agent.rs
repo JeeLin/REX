@@ -157,21 +157,10 @@ fn worker_main() {
 
     let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
     rt.block_on(async {
-        // 启动 HTTP server（默认端口 3000）
-        let http_port = std::env::var("REX_AGENT_HTTP_PORT")
-            .unwrap_or_else(|_| "3000".to_string())
-            .parse::<u16>()
-            .unwrap_or(3000);
+        // 创建 API 请求挂起映射
+        let api_pending: agent_ws::ApiPendingMap = std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
 
-        // 在后台启动 HTTP server（代理 API 请求到 Hub）
-        let hub_url = config.hub_url.clone();
-        tokio::spawn(async move {
-            if let Err(e) = http_server::start_http_server(http_port, hub_url).await {
-                tracing::error!(error = %e, "failed to start HTTP server");
-            }
-        });
-
-        // 启动 Agent WebSocket 连接
-        agent_ws::run_agent(config).await;
+        // 启动 Agent WebSocket 连接（内部会启动 HTTP server）
+        agent_ws::run_agent(config, api_pending).await;
     });
 }

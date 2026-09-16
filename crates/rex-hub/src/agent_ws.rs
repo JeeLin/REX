@@ -30,6 +30,21 @@ enum AgentMsg {
     ConnectError { payload: ConnectErrorPayload },
     #[serde(rename = "closed")]
     Closed { payload: ChannelIdPayload },
+    #[serde(rename = "api_request")]
+    ApiRequest { payload: ApiRequestPayload },
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiRequestPayload {
+    request_id: String,
+    method: String,
+    path: String,
+    #[serde(default)]
+    query: Option<String>,
+    #[serde(default)]
+    headers: Option<std::collections::HashMap<String, String>>,
+    #[serde(default)]
+    body: Vec<u8>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -89,6 +104,18 @@ enum HubMsg {
     Connect { payload: ConnectRequest },
     #[serde(rename = "close")]
     Close { payload: ChannelIdPayload },
+    #[serde(rename = "api_response")]
+    ApiResponse { payload: ApiResponsePayload },
+}
+
+#[derive(Debug, Serialize)]
+struct ApiResponsePayload {
+    request_id: String,
+    status: u16,
+    #[serde(default)]
+    headers: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    body: Vec<u8>,
 }
 
 #[derive(Debug, Serialize)]
@@ -701,6 +728,78 @@ async fn handle_agent_msg(msg: AgentMsg, agent_id: &str, state: &AppState) {
                 channel_id,
                 "agent channel closed"
             );
+        }
+        AgentMsg::ApiRequest { payload } => {
+            let request_id = payload.request_id.clone();
+            let method = payload.method.clone();
+            let path = payload.path.clone();
+
+            // 构建本地 HTTP 请求 URL
+            let uri = if let Some(ref query) = payload.query {
+                format!("{}{}", path, query)
+            } else {
+                path.clone()
+            };
+
+            // 获取 Hub 监听端口（默认 3080）
+            let listen_port = std::env::var("REX_LISTEN_PORT")
+                .unwrap_or_else(|_| "3080".to_string());
+            let url = format!("http://127.0.0.1:{}{}", listen_port, uri);
+
+            // 构建请求
+            let client = reqwest::Client::new();
+            let method: reqwest::Method = method.parse().unwrap_or(reqwest::Method::GET);
+            let mut req_builder = client.request(method, &url);
+
+            // 复制 headers
+            if let Some(headers) = &payload.headers {
+                for (key, value) in headers {
+                    req_builder = req_builder.header(key.as_str(), value.as_str());
+                }
+            }
+
+            if !payload.body.is_empty() {
+                req_builder = req_builder.body(payload.body.clone());
+            }
+
+            // 发送请求
+            let response = req_builder.send().await;
+
+            // 构建响应
+            let (status, resp_headers, resp_body) = match response {
+                Ok(resp) => {
+                    let status = resp.status().as_u16();
+                    let mut headers = std::collections::HashMap::new();
+                    for (key, value) in resp.headers() {
+                        if let Ok(v) = value.to_str() {
+                            headers.insert(key.as_str().to_string(), v.to_string());
+                        }
+                    }
+                    let body = resp.bytes().await.unwrap_or_default().to_vec();
+                    (status, headers, body)
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, path = %path, "agent api proxy failed");
+                    (
+                        502,
+                        std::collections::HashMap::new(),
+                        format!("{{\"error\":\"{}\"}}", e).into_bytes(),
+                    )
+                }
+            };
+
+            // 发送响应给 Agent
+            if let Some(conn) = state.agent_tunnel.connections.read().await.get(agent_id) {
+                let api_resp = ApiResponsePayload {
+                    request_id,
+                    status,
+                    headers: resp_headers,
+                    body: resp_body,
+                };
+                if let Ok(msg) = serde_json::to_string(&HubMsg::ApiResponse { payload: api_resp }) {
+                    let _ = conn.sender.send(AgentEvent::Text(msg)).await;
+                }
+            }
         }
         AgentMsg::Auth { .. } => {
             // 已在握手阶段处理，忽略后续 auth 消息

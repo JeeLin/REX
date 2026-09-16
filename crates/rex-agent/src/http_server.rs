@@ -5,6 +5,7 @@
 //!
 //! API 代理：所有 /api/* 请求通过 HTTP 转发到 Hub，实现 Agent 本地访问。
 
+use crate::agent_ws::{AgentEvent, AgentMsg, ApiPendingMap};
 use axum::extract::{Request, State};
 use axum::response::Response;
 use axum::routing::get;
@@ -12,14 +13,15 @@ use axum::Router;
 use include_dir::{include_dir, Dir};
 use rex_common::embedded_static::EmbeddedStatic;
 use std::sync::Arc;
+use tokio::sync::mpsc;
 
 /// 嵌入的前端 dist 目录
 static DIST: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../packages/rex-console-web/dist");
 
 /// Agent HTTP server 状态
 struct AgentState {
-    hub_url: String,
-    http_client: reqwest::Client,
+    api_tx: mpsc::Sender<AgentEvent>,
+    api_pending: ApiPendingMap,
 }
 
 /// 健康检查端点
@@ -31,63 +33,112 @@ async fn health_check() -> axum::Json<serde_json::Value> {
     }))
 }
 
-/// API 代理：转发 /api/* 请求到 Hub
+/// API 代理：通过 WebSocket 隧道转发 /api/* 请求到 Hub
 async fn proxy_api(
     State(state): State<Arc<AgentState>>,
     req: Request,
 ) -> Result<Response, axum::http::StatusCode> {
-    // 提取请求信息（在 move req 之前）
+    // 提取请求信息
     let path = req.uri().path().to_string();
-    let query = req
-        .uri()
-        .query()
-        .map(|q| format!("?{}", q))
-        .unwrap_or_default();
-    let hub_target = format!("{}{}{}", state.hub_url, path, query);
-    let method = req.method().clone();
+    let query = req.uri().query().map(|q| q.to_string());
+    let method = req.method().to_string();
     let headers = req.headers().clone();
 
     // 读取请求体
     let body = axum::body::to_bytes(req.into_body(), usize::MAX)
         .await
-        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?
+        .to_vec();
 
-    // 构建转发请求
-    let mut builder = state.http_client.request(method, &hub_target);
+    // 生成唯一 request_id
+    let request_id = uuid::Uuid::new_v4().to_string();
 
     // 复制关键头
+    let mut header_map = std::collections::HashMap::new();
     for (key, value) in headers.iter() {
         if key == "content-type" || key == "authorization" || key == "cookie" {
-            builder = builder.header(key.clone(), value.clone());
+            if let Ok(v) = value.to_str() {
+                header_map.insert(key.as_str().to_string(), v.to_string());
+            }
         }
     }
 
-    if !body.is_empty() {
-        builder = builder.body(body);
+    // 创建 oneshot channel 等待响应
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    // 注册挂起请求
+    {
+        let mut pending = state.api_pending.write().await;
+        pending.insert(request_id.clone(), tx);
     }
 
-    // 发送请求
-    let hub_response = builder.send().await.map_err(|e| {
-        tracing::warn!(error = %e, path = %path, "proxy to hub failed");
-        axum::http::StatusCode::BAD_GATEWAY
+    // 构造 ApiRequest 消息
+    let api_msg = AgentMsg::ApiRequest {
+        payload: crate::agent_ws::ApiRequestPayload {
+            request_id: request_id.clone(),
+            method,
+            path,
+            query,
+            headers: if header_map.is_empty() {
+                None
+            } else {
+                Some(header_map)
+            },
+            body,
+        },
+    };
+
+    // 序列化并发送
+    let msg_json = serde_json::to_string(&api_msg).map_err(|_| {
+        // 清理挂起请求
+        let api_pending = state.api_pending.clone();
+        let rid = request_id.clone();
+        tokio::spawn(async move {
+            api_pending.write().await.remove(&rid);
+        });
+        axum::http::StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    // 构建响应
-    let status = hub_response.status();
-    let resp_headers = hub_response.headers().clone();
-    let resp_body = hub_response
-        .bytes()
+    if state
+        .api_tx
+        .send(AgentEvent::Text(msg_json))
         .await
-        .map_err(|_| axum::http::StatusCode::BAD_GATEWAY)?;
+        .is_err()
+    {
+        // WS 已断开
+        state.api_pending.write().await.remove(&request_id);
+        return Err(axum::http::StatusCode::BAD_GATEWAY);
+    }
 
-    let mut response = Response::new(axum::body::Body::from(resp_body));
-    *response.status_mut() = axum::http::StatusCode::from_u16(status.as_u16())
+    // 等待响应（超时 30 秒）
+    let api_response = match tokio::time::timeout(std::time::Duration::from_secs(30), rx).await {
+        Ok(Ok(resp)) => resp,
+        Ok(Err(_)) => {
+            // oneshot sender dropped
+            state.api_pending.write().await.remove(&request_id);
+            return Err(axum::http::StatusCode::BAD_GATEWAY);
+        }
+        Err(_) => {
+            // timeout
+            state.api_pending.write().await.remove(&request_id);
+            return Err(axum::http::StatusCode::GATEWAY_TIMEOUT);
+        }
+    };
+
+    // 构建 HTTP 响应
+    let status = axum::http::StatusCode::from_u16(api_response.status)
         .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
 
+    let mut response = Response::new(axum::body::Body::from(api_response.body));
+    *response.status_mut() = status;
+
     // 复制响应头
-    for (key, value) in resp_headers.iter() {
-        if key != "transfer-encoding" && key != "content-length" {
-            response.headers_mut().insert(key.clone(), value.clone());
+    for (key, value) in &api_response.headers {
+        if let (Ok(name), Ok(val)) = (
+            axum::http::header::HeaderName::from_bytes(key.as_bytes()),
+            axum::http::HeaderValue::from_str(value),
+        ) {
+            response.headers_mut().insert(name, val);
         }
     }
 
@@ -95,14 +146,17 @@ async fn proxy_api(
 }
 
 /// 启动 Agent HTTP server
-pub async fn start_http_server(port: u16, hub_url: String) -> anyhow::Result<()> {
+pub async fn start_http_server(
+    port: u16,
+    _hub_url: String,
+    api_tx: mpsc::Sender<AgentEvent>,
+    api_pending: ApiPendingMap,
+) -> anyhow::Result<()> {
     let embedded = EmbeddedStatic::new("/", &DIST);
 
     let state = Arc::new(AgentState {
-        hub_url,
-        http_client: reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .build()?,
+        api_tx,
+        api_pending,
     });
 
     let app = Router::new()
