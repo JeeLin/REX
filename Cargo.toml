@@ -17,6 +17,9 @@ rex-sqlite = { path = "crates/rex-sqlite" }
 rex-s3 = { path = "crates/rex-s3" }
 rex-sip = { path = "crates/rex-sip" }
 rex-clickhouse = { path = "crates/rex-clickhouse" }
+rex-mssql = { path = "crates/rex-mssql" }
+rex-mariadb = { path = "crates/rex-mariadb" }
+rex-oracle = { path = "crates/rex-oracle" }
 bindgen = "0.71"
 cc = "1"
 pkg-config = "0.3"
@@ -60,7 +63,7 @@ hyper = { version = "1", features = ["http1", "server"] }
 hyper-util = { version = "0.1", features = ["tokio", "server-auto", "http1"] }
 rustls-acme = { version = "0.15", features = ["ring", "tokio", "tower"] }
 rcgen = { version = "0.13", features = ["pem"] }
-tokio-util = { version = "0.7", features = ["codec"] }
+tokio-util = { version = "0.7", features = ["codec", "compat"] }
 bytes = "1"
 dotenvy = "0.15"
 futures = { version = "0.3", features = ["alloc"] }
