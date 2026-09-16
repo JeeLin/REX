@@ -158,11 +158,12 @@ function onSave() {
                 { label: 'SFTP', value: 'sftp' },
                 { label: 'SQLite', value: 'sqlite' },
                 { label: 'S3', value: 's3' },
+                { label: 'MongoDB', value: 'mongodb' },
               ]" size="sm"
             />
           </div>
           <!-- SSH/SFTP/SQL: Host + Port -->
-          <template v-if="['ssh', 'sftp', 'mysql', 'postgresql', 'redis', 'sql'].includes(form.protocol)">
+          <template v-if="['ssh', 'sftp', 'mysql', 'postgresql', 'redis', 'sql', 'mongodb'].includes(form.protocol)">
             <div class="props-row">
               <div class="props-field props-field--grow">
                 <label class="props-label">Host</label>
@@ -254,7 +255,7 @@ function onSave() {
           </template>
 
           <!-- MySQL/PostgreSQL/SQL/Redis/SFTP: Username + Password -->
-          <template v-if="['mysql', 'postgresql', 'redis', 'sftp', 'sql'].includes(form.protocol)">
+          <template v-if="['mysql', 'postgresql', 'redis', 'sftp', 'sql', 'mongodb'].includes(form.protocol)">
             <div class="props-field">
               <label class="props-label">Username</label>
               <Input v-model="form.user" size="sm" placeholder="root" />

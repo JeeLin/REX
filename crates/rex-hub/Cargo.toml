@@ -49,6 +49,7 @@ aes-gcm = { workspace = true }
 reqwest = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }
+mongodb = { workspace = true }
 include_dir = { workspace = true }
 mime_guess = { workspace = true }
 tower = { workspace = true }

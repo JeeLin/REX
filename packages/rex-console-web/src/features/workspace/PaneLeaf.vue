@@ -10,6 +10,7 @@ const SqlPage = defineAsyncComponent(() => import('@/features/sql/SqlPage.vue'))
 const RedisPage = defineAsyncComponent(() => import('@/features/redis/RedisPage.vue'))
 const FilesPage = defineAsyncComponent(() => import('@/features/files/FilesPage.vue'))
 const SipPage = defineAsyncComponent(() => import('@/features/sip/SipPage.vue'))
+const MongoPage = defineAsyncComponent(() => import('@/features/mongodb/MongoPage.vue'))
 
 const props = defineProps<{ leafId: string }>()
 const ctx = inject<PaneCtx>(PANE_CTX)!
@@ -120,6 +121,14 @@ function sqlDbType(tab: { protocol?: string; subtype?: string } | null): string 
       :resource-id="tabInfo?.resourceId"
       :environment-id="tabInfo?.environmentId"
       :name="tabInfo?.label"
+      @update:status="(s: string) => tabInfo?.id && onStatus(tabInfo.id, s)"
+    />
+
+    <!-- MongoDB -->
+    <MongoPage
+      v-else-if="tabInfo?.protocol === 'mongodb'"
+      :key="tabInfo?.id || ''"
+      :resource-id="tabInfo?.resourceId"
       @update:status="(s: string) => tabInfo?.id && onStatus(tabInfo.id, s)"
     />
 
