@@ -33,10 +33,9 @@ fn test_state() -> (tempfile::TempDir, AppState) {
         sip_recording: Arc::new(rex_hub::sip_recording::SipRecordingRegistry::new(
             dir.path().to_path_buf(),
         )),
-        mongo_pool: Arc::new(tokio::sync::Mutex::new(
-            std::collections::HashMap::new(),
-        )),
+        mongo_pool: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
         data_dir: dir.path().to_path_buf(),
+        http_client: reqwest::Client::new(),
     };
     (dir, state)
 }
