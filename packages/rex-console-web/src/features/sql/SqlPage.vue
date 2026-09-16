@@ -14,6 +14,7 @@ import ImportWizard from './ImportWizard.vue'
 import SqlFormView from './SqlFormView.vue'
 import SavedQueryList from './SavedQueryList.vue'
 import GlobalSearchModal from './GlobalSearchModal.vue'
+import DataCompare from './DataCompare.vue'
 import type { SearchTab } from './GlobalSearchModal.vue'
 import Modal from '@/components/ui/Modal.vue'
 import Input from '@/components/ui/Input.vue'
@@ -324,6 +325,7 @@ function onSave(sql: string) {
 
 // Saved-query (命名查询) panel
 const showSavedQueries = ref(false)
+const showCompare = ref(false)
 
 // Save-as-named-query modal
 const showSaveNamed = ref(false)
@@ -568,6 +570,8 @@ onBeforeUnmount(() => {
           <div class="sql-toolbar-sep" />
           <button class="sql-toolbar-btn" :title="t('sql.saveQuery')" @click="activeQueryTab && onSaveNamed(activeQueryTab.sql)">💾 {{ t('sql.saveQuery') }}</button>
           <button class="sql-toolbar-btn" :title="t('sql.savedQueries')" @click="showSavedQueries = true">📂 {{ t('sql.savedQueries') }}</button>
+          <div class="sql-toolbar-sep" />
+          <button class="sql-toolbar-btn" :title="t('sql.compare', 'Compare')" @click="showCompare = !showCompare">⚖️ {{ t('sql.compare', 'Compare') }}</button>
         </div>
       </div>
 
@@ -718,6 +722,18 @@ onBeforeUnmount(() => {
         @update:open="showSavedQueries = $event"
         @open="onOpenSavedQuery"
       />
+
+      <!-- Data Compare Panel -->
+      <Modal
+        v-model:model-value="showCompare"
+        :title="t('sql.dataCompare', 'Data Compare')"
+        width="90%"
+      >
+        <DataCompare
+          :session-id="sessionId || ''"
+          @close="showCompare = false"
+        />
+      </Modal>
 
       <!-- Save as named query -->
       <Modal
