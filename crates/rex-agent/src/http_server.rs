@@ -99,12 +99,7 @@ async fn proxy_api(
         axum::http::StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    if state
-        .api_tx
-        .send(AgentEvent::Text(msg_json))
-        .await
-        .is_err()
-    {
+    if state.api_tx.send(AgentEvent::Text(msg_json)).await.is_err() {
         // WS 已断开
         state.api_pending.write().await.remove(&request_id);
         return Err(axum::http::StatusCode::BAD_GATEWAY);
