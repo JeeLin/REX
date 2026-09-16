@@ -388,8 +388,11 @@ async fn detect_dialect(req: ConnectRequest) -> anyhow::Result<Box<dyn SqlConnec
     }
 
     let candidates: &[DatabaseType] = match req.port {
-        3306 => &[DatabaseType::MySQL, DatabaseType::PostgreSQL],
+        3306 => &[DatabaseType::MySQL, DatabaseType::MariaDB, DatabaseType::PostgreSQL],
         5432 => &[DatabaseType::PostgreSQL, DatabaseType::MySQL],
+        8123 | 9000 => &[DatabaseType::ClickHouse],
+        1433 => &[DatabaseType::SqlServer],
+        1521 => &[DatabaseType::Oracle],
         _ => &[DatabaseType::MySQL, DatabaseType::PostgreSQL],
     };
 
@@ -436,7 +439,7 @@ async fn connect_by_dialect(
     req: &ConnectRequest,
 ) -> anyhow::Result<Box<dyn SqlConnector>> {
     match db_type {
-        DatabaseType::MySQL => Ok(Box::new(
+        DatabaseType::MySQL | DatabaseType::MariaDB => Ok(Box::new(
             rex_mysql::MySqlConnector::connect(req.clone()).await?,
         )),
         DatabaseType::PostgreSQL => Ok(Box::new(
@@ -444,6 +447,15 @@ async fn connect_by_dialect(
         )),
         DatabaseType::SQLite => Ok(Box::new(
             rex_sqlite::SqliteConnector::connect(req.clone()).await?,
+        )),
+        DatabaseType::ClickHouse => Ok(Box::new(
+            rex_clickhouse::ClickHouseConnector::connect(req.clone()).await?,
+        )),
+        DatabaseType::SqlServer => Ok(Box::new(
+            rex_mssql::SqlServerConnector::connect(req.clone()).await?,
+        )),
+        DatabaseType::Oracle => Ok(Box::new(
+            rex_oracle::OracleConnector::connect(req.clone()).await?,
         )),
     }
 }
