@@ -198,7 +198,13 @@ fn worker_main() {
             sip_capture: Arc::new(SipCaptureRegistry::new()),
             sip_recording: Arc::new(SipRecordingRegistry::new(data_dir.clone())),
             data_dir: data_dir.clone(),
-            http_client: reqwest::Client::new(),
+            http_client: reqwest::Client::builder()
+                .no_proxy()
+                .redirect(reqwest::redirect::Policy::none())
+                .timeout(std::time::Duration::from_secs(25))
+                .build()
+                .expect("failed to create local API client"),
+            http_port: port,
         };
 
         tracing::info!(name = "REX Hub", status = "serving embedded frontend");

@@ -388,7 +388,11 @@ async fn detect_dialect(req: ConnectRequest) -> anyhow::Result<Box<dyn SqlConnec
     }
 
     let candidates: &[DatabaseType] = match req.port {
-        3306 => &[DatabaseType::MySQL, DatabaseType::MariaDB, DatabaseType::PostgreSQL],
+        3306 => &[
+            DatabaseType::MySQL,
+            DatabaseType::MariaDB,
+            DatabaseType::PostgreSQL,
+        ],
         5432 => &[DatabaseType::PostgreSQL, DatabaseType::MySQL],
         8123 | 9000 => &[DatabaseType::ClickHouse],
         1433 => &[DatabaseType::SqlServer],

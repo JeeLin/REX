@@ -23,6 +23,7 @@ import Badge from '@/components/ui/Badge.vue'
 import Input from '@/components/ui/Input.vue'
 import Toast from '@/components/ui/Toast.vue'
 import { agentStatus } from '@/utils/status'
+import { formatDateTime } from '@/utils/datetime'
 
 const { t } = useI18n()
 const store = useEnvironmentsStore()
@@ -382,7 +383,7 @@ const filteredLogs = computed(() => {
             <span class="agent-conn-sep">·</span>
             <span>{{ agent.os || '—' }}/{{ agent.arch }}</span>
             <span class="agent-conn-sep">·</span>
-            <span>{{ t('agents.lastSeen') }} {{ agent.last_seen_at ? new Date(agent.last_seen_at).toLocaleString() : '—' }}</span>
+            <span>{{ t('agents.lastSeen') }} {{ formatDateTime(agent.last_seen_at) }}</span>
           </div>
           <div class="agent-actions">
             <Button variant="ghost" size="sm" @click="openConfig(agent)">{{ t('agents.config') }}</Button>
@@ -423,7 +424,7 @@ const filteredLogs = computed(() => {
         <div v-else-if="filteredLogs.length === 0" class="log-empty">{{ t('agents.noLogs') }}</div>
         <div v-else class="log-list">
           <div v-for="entry in filteredLogs" :key="entry.id" class="log-entry">
-            <span class="log-time mono">{{ new Date(entry.time).toLocaleString() }}</span>
+            <span class="log-time mono">{{ formatDateTime(entry.time) }}</span>
             <span class="log-action" :class="`log-action--${entry.action.toLowerCase()}`">{{ entry.action }}</span>
             <span class="log-result" :class="entry.result === 'success' ? 'log-result--ok' : 'log-result--fail'">{{ entry.result }}</span>
             <span v-if="entry.detail" class="log-detail muted">{{ entry.detail }}</span>

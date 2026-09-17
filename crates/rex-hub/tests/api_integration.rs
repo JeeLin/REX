@@ -36,6 +36,7 @@ fn test_state() -> (tempfile::TempDir, AppState) {
         mongo_pool: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
         data_dir: dir.path().to_path_buf(),
         http_client: reqwest::Client::new(),
+        http_port: 3000,
     };
     (dir, state)
 }

@@ -31,7 +31,7 @@ serde_yaml = "0.9"
 tokio = { version = "1", features = ["full"] }
 anyhow = "1"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "chrono"] }
 clap = { version = "4", features = ["derive"] }
 axum = { version = "0.8", features = ["ws", "multipart"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
