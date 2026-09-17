@@ -84,9 +84,9 @@ function selectContainer(name: string) {
 }
 
 function containerListCmd() {
-  runCommand('docker ps --format table {{.Names}}\t{{.Status}}\t{{.Ports}}')
+  runCommand('docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"')
 }
-const imageListCmd = () => runCommand('docker images --format table {{.Repository}}\t{{.Tag}}\t{{.Size}}')
+const imageListCmd = () => runCommand('docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"')
 </script>
 
 <template>

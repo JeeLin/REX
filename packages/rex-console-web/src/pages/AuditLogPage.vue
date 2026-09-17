@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '@/utils/datetime'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { auditApi, type AuditEntry, type AuditStats } from '@/api/audit'
@@ -270,15 +271,7 @@ function isJsonDetail(detail: string | null): boolean {
   }
 }
 
-function formatTime(time: string): string {
-  const d = new Date(time)
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  const h = String(d.getHours()).padStart(2, '0')
-  const min = String(d.getMinutes()).padStart(2, '0')
-  const s = String(d.getSeconds()).padStart(2, '0')
-  return `${m}-${day} ${h}:${min}:${s}`
-}
+const formatTime = formatDateTime
 
 function opTagClass(action: string): string {
   if (action.includes('SSH')) return 'ssh'

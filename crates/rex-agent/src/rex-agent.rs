@@ -126,11 +126,13 @@ fn redirect_stdio(log_path: &std::path::Path) -> anyhow::Result<()> {
 }
 
 fn worker_main() {
+    let timer = tracing_subscriber::fmt::time::ChronoLocal::rfc_3339();
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
                 .add_directive("info".parse().unwrap()),
         )
+        .with_timer(timer)
         .init();
 
     tracing::info!(

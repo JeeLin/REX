@@ -31,10 +31,12 @@ impl ClickHouseConnector {
             request = request.basic_auth(&req.username, req.password.as_deref());
         }
 
-        request
-            .send()
-            .await
-            .with_context(|| format!("failed to connect to ClickHouse at {}:{}", req.host, req.port))?;
+        request.send().await.with_context(|| {
+            format!(
+                "failed to connect to ClickHouse at {}:{}",
+                req.host, req.port
+            )
+        })?;
 
         Ok(Self {
             client,
