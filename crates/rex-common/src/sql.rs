@@ -87,6 +87,10 @@ pub enum DetectedDialect {
     MySQL,
     PostgreSQL,
     SQLite,
+    ClickHouse,
+    SqlServer,
+    MariaDB,
+    Oracle,
 }
 
 impl DetectedDialect {
@@ -96,6 +100,10 @@ impl DetectedDialect {
             DetectedDialect::MySQL => "mysql",
             DetectedDialect::PostgreSQL => "postgresql",
             DetectedDialect::SQLite => "sqlite",
+            DetectedDialect::ClickHouse => "clickhouse",
+            DetectedDialect::SqlServer => "sqlserver",
+            DetectedDialect::MariaDB => "mariadb",
+            DetectedDialect::Oracle => "oracle",
         }
     }
 
@@ -105,7 +113,9 @@ impl DetectedDialect {
             DatabaseType::MySQL | DatabaseType::MariaDB => Some(DetectedDialect::MySQL),
             DatabaseType::PostgreSQL => Some(DetectedDialect::PostgreSQL),
             DatabaseType::SQLite => Some(DetectedDialect::SQLite),
-            _ => None,
+            DatabaseType::ClickHouse => Some(DetectedDialect::ClickHouse),
+            DatabaseType::SqlServer => Some(DetectedDialect::SqlServer),
+            DatabaseType::Oracle => Some(DetectedDialect::Oracle),
         }
     }
 }

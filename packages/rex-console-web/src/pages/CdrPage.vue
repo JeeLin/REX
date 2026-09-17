@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '@/utils/datetime'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { cdrApi, type CdrRecord, type CdrDirection, type CdrState } from '@/api/sip'
@@ -101,14 +102,7 @@ function shortPeer(peer: string): string {
   return peer
 }
 
-function formatTime(time: string): string {
-  if (!time) return '—'
-  try {
-    return new Date(time).toLocaleString()
-  } catch {
-    return time
-  }
-}
+const formatTime = formatDateTime
 
 const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / pageSize.value)))
 const gotoPage = ref(1)

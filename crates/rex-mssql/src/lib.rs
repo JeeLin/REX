@@ -32,19 +32,33 @@ impl SqlServerConnector {
 
         let tcp = TcpStream::connect(config.get_addr())
             .await
-            .with_context(|| format!("failed to connect to SQL Server at {}:{}", req.host, req.port))?;
+            .with_context(|| {
+                format!(
+                    "failed to connect to SQL Server at {}:{}",
+                    req.host, req.port
+                )
+            })?;
 
         tcp.set_nodelay(true)?;
 
         let client = Client::connect(config, tcp.compat_write())
             .await
-            .with_context(|| format!("failed to connect to SQL Server at {}:{}", req.host, req.port))?;
+            .with_context(|| {
+                format!(
+                    "failed to connect to SQL Server at {}:{}",
+                    req.host, req.port
+                )
+            })?;
 
-        Ok(Self { client: Some(client) })
+        Ok(Self {
+            client: Some(client),
+        })
     }
 
     fn client(&mut self) -> Result<&mut Client<Compat<TcpStream>>> {
-        self.client.as_mut().ok_or_else(|| anyhow::anyhow!("SQL Server connection is closed"))
+        self.client
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("SQL Server connection is closed"))
     }
 }
 
@@ -63,19 +77,25 @@ impl SqlConnector for SqlServerConnector {
             || trimmed.starts_with("EXECUTE");
 
         let client = self.client()?;
-        let result = client.simple_query(sql).await
+        let result = client
+            .simple_query(sql)
+            .await
             .with_context(|| format!("failed to execute query: {sql}"))?;
 
         if is_query {
             let rows = result.into_first_result().await?;
 
             let columns = if let Some(first) = rows.first() {
-                first.columns().iter().map(|c| ColumnInfo {
-                    name: c.name().to_string(),
-                    data_type: format!("{:?}", c.column_type()),
-                    nullable: true,
-                    is_primary_key: false,
-                }).collect()
+                first
+                    .columns()
+                    .iter()
+                    .map(|c| ColumnInfo {
+                        name: c.name().to_string(),
+                        data_type: format!("{:?}", c.column_type()),
+                        nullable: true,
+                        is_primary_key: false,
+                    })
+                    .collect()
             } else {
                 Vec::new()
             };
@@ -125,13 +145,16 @@ impl SqlConnector for SqlServerConnector {
 
     async fn databases(&mut self) -> Result<Vec<String>> {
         let client = self.client()?;
-        let result = client.simple_query(
-            "SELECT name FROM sys.databases ORDER BY name"
-        ).await?.into_first_result().await?;
+        let result = client
+            .simple_query("SELECT name FROM sys.databases ORDER BY name")
+            .await?
+            .into_first_result()
+            .await?;
 
-        Ok(result.iter().filter_map(|row| {
-            row.try_get::<&str, _>(0).ok().flatten().map(String::from)
-        }).collect())
+        Ok(result
+            .iter()
+            .filter_map(|row| row.try_get::<&str, _>(0).ok().flatten().map(String::from))
+            .collect())
     }
 
     async fn tables(&mut self, db: &str) -> Result<Vec<TableInfo>> {
@@ -140,13 +163,20 @@ impl SqlConnector for SqlServerConnector {
             db
         );
         let client = self.client()?;
-        let result = client.simple_query(&query).await?.into_first_result().await?;
+        let result = client
+            .simple_query(&query)
+            .await?
+            .into_first_result()
+            .await?;
 
-        Ok(result.iter().filter_map(|row| {
-            let name = row.try_get::<&str, _>(0).ok().flatten()?.to_string();
-            let table_type = row.try_get::<&str, _>(1).ok().flatten()?.to_string();
-            Some(TableInfo { name, table_type })
-        }).collect())
+        Ok(result
+            .iter()
+            .filter_map(|row| {
+                let name = row.try_get::<&str, _>(0).ok().flatten()?.to_string();
+                let table_type = row.try_get::<&str, _>(1).ok().flatten()?.to_string();
+                Some(TableInfo { name, table_type })
+            })
+            .collect())
     }
 
     async fn columns(&mut self, db: &str, table: &str) -> Result<Vec<ColumnInfo>> {
@@ -158,15 +188,37 @@ impl SqlConnector for SqlServerConnector {
             db, table, db, table
         );
         let client = self.client()?;
-        let result = client.simple_query(&query).await?.into_first_result().await?;
+        let result = client
+            .simple_query(&query)
+            .await?
+            .into_first_result()
+            .await?;
 
-        Ok(result.iter().filter_map(|row| {
-            let name = row.try_get::<&str, _>(0).ok().flatten()?.to_string();
-            let data_type = row.try_get::<&str, _>(1).ok().flatten()?.to_string();
-            let nullable = row.try_get::<&str, _>(2).ok().flatten().map(|v| v == "YES").unwrap_or(true);
-            let is_pk = row.try_get::<i32, _>(3).ok().flatten().map(|v| v == 1).unwrap_or(false);
-            Some(ColumnInfo { name, data_type, nullable, is_primary_key: is_pk })
-        }).collect())
+        Ok(result
+            .iter()
+            .filter_map(|row| {
+                let name = row.try_get::<&str, _>(0).ok().flatten()?.to_string();
+                let data_type = row.try_get::<&str, _>(1).ok().flatten()?.to_string();
+                let nullable = row
+                    .try_get::<&str, _>(2)
+                    .ok()
+                    .flatten()
+                    .map(|v| v == "YES")
+                    .unwrap_or(true);
+                let is_pk = row
+                    .try_get::<i32, _>(3)
+                    .ok()
+                    .flatten()
+                    .map(|v| v == 1)
+                    .unwrap_or(false);
+                Some(ColumnInfo {
+                    name,
+                    data_type,
+                    nullable,
+                    is_primary_key: is_pk,
+                })
+            })
+            .collect())
     }
 
     async fn indexes(&mut self, _db: &str, _table: &str) -> Result<Vec<IndexInfo>> {
