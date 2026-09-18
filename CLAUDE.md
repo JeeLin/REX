@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## 项目定位
 
 REX Hub 是个人自托管远程资源统一管理平台，单用户、自托管、深色优先。不要引入多用户、RBAC、企业协作等概念。
@@ -15,6 +13,44 @@ REX Hub 是个人自托管远程资源统一管理平台，单用户、自托管
 新增功能前先确认产品文档中的功能边界，再把实现细节写入里程碑文档。
 
 ---
+
+## 硬性约束
+
+1. **前端命令一律用 `bun`**（`bun run dev`、`bun run build` 等），禁止 `npm run`。项目工具链由 `.mise.toml` 管理，bun 是前端包管理器。
+2. **Hub/Agent 版本必须一致**，不存在跨版本兼容。
+3. **文件传输数据不经过浏览器**，前端只创建任务、选择源/目标、展示进度、处理冲突。
+4. 依赖声明在根 `Cargo.toml`，子 crate 用 `workspace = true`，不重复声明版本。
+
+## 设计对标
+
+2.0 重设计，交互布局对标成熟专业工具：
+
+- 工作空间 / SSH 终端 → Xshell
+- 数据库控制台 → Navicat
+- Redis 控制台 → Another Redis Desktop Manager (ARDM)
+- 文件管理 / 对象存储 → Xftp
+
+详见 `docs/PRODUCT.md` 第 0 节「设计基调」与第 10 节「设计核对基线」。
+
+## 设计审查配置
+
+- 人工复核：可选（自动设计审查通过后，有争议时才进入人工复核）
+
+## 质量门禁
+
+Rust：
+```bash
+cargo fmt --check
+cargo clippy --workspace --all-targets
+cargo test --workspace
+```
+
+前端（`packages/rex-console-web/`）：
+```bash
+bun run type-check
+bun run lint
+bun run build
+```
 
 ## 开发流程
 
