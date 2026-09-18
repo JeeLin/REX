@@ -221,11 +221,11 @@ async fn detect_dialect(
 
     tracing::info!(action = "AGENT_SQL_DETECT", host = %req.host, port = req.port, "starting dialect auto-detection");
 
-    // 端口预判。
+    // 端口预判：已知端口优先排对应方言，未知端口按常见度全量尝试。
     let candidates: &[DatabaseType] = match req.port {
         3306 => &[DatabaseType::MySQL, DatabaseType::PostgreSQL],
         5432 => &[DatabaseType::PostgreSQL, DatabaseType::MySQL],
-        2883 => &[
+        2883 | 1521 => &[
             DatabaseType::Oracle,
             DatabaseType::MySQL,
             DatabaseType::PostgreSQL,
@@ -240,7 +240,13 @@ async fn detect_dialect(
             DatabaseType::MySQL,
             DatabaseType::PostgreSQL,
         ],
-        _ => &[DatabaseType::MySQL, DatabaseType::PostgreSQL],
+        _ => &[
+            DatabaseType::MySQL,
+            DatabaseType::PostgreSQL,
+            DatabaseType::Oracle,
+            DatabaseType::SqlServer,
+            DatabaseType::ClickHouse,
+        ],
     };
 
     // 收集每次尝试的失败原因，最终诊断时一并输出。
