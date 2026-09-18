@@ -396,39 +396,55 @@ async fn detect_dialect(req: ConnectRequest) -> anyhow::Result<Box<dyn SqlConnec
         5432 => &[DatabaseType::PostgreSQL, DatabaseType::MySQL],
         8123 | 9000 => &[DatabaseType::ClickHouse],
         1433 => &[DatabaseType::SqlServer],
-        1521 => &[DatabaseType::Oracle],
+        1521 | 2883 => &[
+            DatabaseType::Oracle,
+            DatabaseType::MySQL,
+            DatabaseType::PostgreSQL,
+        ],
         _ => &[DatabaseType::MySQL, DatabaseType::PostgreSQL],
     };
 
     for &dt in candidates {
         match connect_by_dialect(dt, &req).await {
-            Ok(mut conn) => match conn.execute("SELECT VERSION()").await {
-                Ok(result) => {
-                    let version = result
-                        .rows
-                        .first()
-                        .and_then(|r| r.first())
-                        .map(|v| v.to_string())
-                        .unwrap_or_default();
-                    let confirmed = if version.to_uppercase().contains("POSTGRESQL") {
-                        DatabaseType::PostgreSQL
-                    } else {
-                        dt
-                    };
+            Ok(mut conn) => {
+                // Oracle 不支持 SELECT VERSION()，协议握手成功即确认。
+                if dt == DatabaseType::Oracle {
                     tracing::info!(
                         action = "SQL_DETECT",
                         port = req.port,
-                        version = %version,
-                        dialect = ?confirmed,
-                        "dialect detected"
+                        dialect = ?dt,
+                        "dialect detected (Oracle, protocol handshake OK)"
                     );
-                    if confirmed == dt {
-                        return Ok(conn);
-                    }
-                    return connect_by_dialect(confirmed, &req).await;
+                    return Ok(conn);
                 }
-                Err(_) => continue,
-            },
+                match conn.execute("SELECT VERSION()").await {
+                    Ok(result) => {
+                        let version = result
+                            .rows
+                            .first()
+                            .and_then(|r| r.first())
+                            .map(|v| v.to_string())
+                            .unwrap_or_default();
+                        let confirmed = if version.to_uppercase().contains("POSTGRESQL") {
+                            DatabaseType::PostgreSQL
+                        } else {
+                            dt
+                        };
+                        tracing::info!(
+                            action = "SQL_DETECT",
+                            port = req.port,
+                            version = %version,
+                            dialect = ?confirmed,
+                            "dialect detected"
+                        );
+                        if confirmed == dt {
+                            return Ok(conn);
+                        }
+                        return connect_by_dialect(confirmed, &req).await;
+                    }
+                    Err(_) => continue,
+                }
+            }
             Err(_) => continue,
         }
     }

@@ -225,6 +225,21 @@ async fn detect_dialect(
     let candidates: &[DatabaseType] = match req.port {
         3306 => &[DatabaseType::MySQL, DatabaseType::PostgreSQL],
         5432 => &[DatabaseType::PostgreSQL, DatabaseType::MySQL],
+        2883 => &[
+            DatabaseType::Oracle,
+            DatabaseType::MySQL,
+            DatabaseType::PostgreSQL,
+        ],
+        1433 => &[
+            DatabaseType::SqlServer,
+            DatabaseType::MySQL,
+            DatabaseType::PostgreSQL,
+        ],
+        8123 | 9000 => &[
+            DatabaseType::ClickHouse,
+            DatabaseType::MySQL,
+            DatabaseType::PostgreSQL,
+        ],
         _ => &[DatabaseType::MySQL, DatabaseType::PostgreSQL],
     };
 
@@ -235,6 +250,16 @@ async fn detect_dialect(
         let label = format!("{:?}", dt);
         match connect_by_type(dt, req).await {
             Ok(mut conn) => {
+                // Oracle 不支持 SELECT VERSION()，协议握手成功即确认。
+                if dt == DatabaseType::Oracle {
+                    tracing::info!(
+                        action = "AGENT_SQL_DETECT",
+                        port = req.port,
+                        dialect = ?dt,
+                        "dialect detected (Oracle, protocol handshake OK)"
+                    );
+                    return Ok((conn, Some(detected_to_str(dt))));
+                }
                 tracing::debug!(action = "AGENT_SQL_DETECT", dialect = %label, "protocol handshake succeeded, trying SELECT VERSION()");
                 // `SELECT VERSION()` 确认 dialect（消除线缆协议握手歧义）。
                 match conn.execute("SELECT VERSION()").await {
