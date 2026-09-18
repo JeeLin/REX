@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onClickOutside } from '@vueuse/core'
 import type { DatabaseNode } from './useSqlNav'
+import { clipboard } from '@/utils/clipboard'
 
 const { t } = useI18n()
 
@@ -68,7 +69,7 @@ function onContextMenu(e: MouseEvent, dbName: string, tableName: string) {
 
 function ctxAction(action: string) {
   if (action === 'copyTableName') {
-    navigator.clipboard?.writeText(ctxMenu.value.tableName)
+    clipboard.writeText(ctxMenu.value.tableName)
   } else if (action === 'copyDdl') {
     emit('copyDdl', ctxMenu.value.dbName, ctxMenu.value.tableName)
   } else if (action === 'newQuery') {

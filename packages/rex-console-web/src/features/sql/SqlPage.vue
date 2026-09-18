@@ -19,6 +19,7 @@ import type { SearchTab } from './GlobalSearchModal.vue'
 import Modal from '@/components/ui/Modal.vue'
 import Input from '@/components/ui/Input.vue'
 import Button from '@/components/ui/Button.vue'
+import { clipboard } from '@/utils/clipboard'
 import { useSqlQuery } from './useSqlQuery'
 import {
   connect as sqlConnect,
@@ -271,7 +272,7 @@ const ddlDrawer = ref<{ open: boolean; db: string; table: string; ddl: string }>
 })
 
 function copyDdl() {
-  navigator.clipboard?.writeText(ddlDrawer.value.ddl)
+  clipboard.writeText(ddlDrawer.value.ddl)
 }
 
 async function onViewDdl(db: string, table: string) {

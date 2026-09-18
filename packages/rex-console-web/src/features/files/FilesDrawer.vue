@@ -5,6 +5,7 @@ import * as filesApi from '@/api/files'
 import type { FileEntry } from '@/api/files'
 import Button from '@/components/ui/Button.vue'
 import { useI18n } from 'vue-i18n'
+import { clipboard } from '@/utils/clipboard'
 
 const { t } = useI18n()
 
@@ -201,7 +202,7 @@ async function ctxDelete() {
   if (sessionId.value && ctx.value.path) await filesApi.deleteFile(sessionId.value, ctx.value.path)
   ctx.value.show = false; loadDir()
 }
-function ctxCopy() { navigator.clipboard?.writeText(ctx.value.path); ctx.value.show = false }
+function ctxCopy() { clipboard.writeText(ctx.value.path); ctx.value.show = false }
 function ctxRename() {
   const entry = entries.value.find(e => e.name === ctx.value.name)
   if (entry) startRename(entry)

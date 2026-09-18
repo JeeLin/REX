@@ -7,6 +7,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { environmentsApi, type Environment } from '@/api/environments'
 import type { Resource } from '@/api/resources'
 import { api } from '@/api/client'
+import { clipboard } from '@/utils/clipboard'
 import Card from '@/components/ui/Card.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
@@ -361,17 +362,7 @@ function confirmDeleteResource() {
 
 async function copyToken() {
   if (env.value?.registration_token) {
-    try {
-      await navigator.clipboard.writeText(env.value.registration_token)
-    } catch {
-      // fallback
-      const el = document.createElement('textarea')
-      el.value = env.value.registration_token!
-      document.body.appendChild(el)
-      el.select()
-      document.execCommand('copy')
-      document.body.removeChild(el)
-    }
+    await clipboard.writeText(env.value.registration_token)
   }
 }
 

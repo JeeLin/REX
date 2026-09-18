@@ -391,13 +391,11 @@ pub async fn test_connection(
                                 });
                                 // 合并 config_json（含 password/private_key 等凭证）
                                 if let Some(ref cfg_str) = body.config_json {
-                                    if let Ok(cfg_val) =
+                                    if let Ok(serde_json::Value::Object(m)) =
                                         serde_json::from_str::<serde_json::Value>(cfg_str)
                                     {
-                                        if let serde_json::Value::Object(m) = cfg_val {
-                                            for (k, v) in m {
-                                                connect_config[k] = v;
-                                            }
+                                        for (k, v) in m {
+                                            connect_config[k] = v;
                                         }
                                     }
                                 }
