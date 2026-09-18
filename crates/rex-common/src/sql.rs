@@ -110,7 +110,8 @@ impl DetectedDialect {
     /// 从连接返回的连接器里读取方言（每个连接器已实现 `database_type()`）。
     pub fn from_connector(conn: &dyn SqlConnector) -> Option<DetectedDialect> {
         match conn.database_type() {
-            DatabaseType::MySQL | DatabaseType::MariaDB => Some(DetectedDialect::MySQL),
+            DatabaseType::MySQL => Some(DetectedDialect::MySQL),
+            DatabaseType::MariaDB => Some(DetectedDialect::MariaDB),
             DatabaseType::PostgreSQL => Some(DetectedDialect::PostgreSQL),
             DatabaseType::SQLite => Some(DetectedDialect::SQLite),
             DatabaseType::ClickHouse => Some(DetectedDialect::ClickHouse),

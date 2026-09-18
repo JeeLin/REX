@@ -11,13 +11,14 @@ use rex_common::sql::{
 pub struct ClickHouseConnector {
     client: reqwest::Client,
     base_url: String,
-    _database: String,
+    database: String,
+    username: String,
+    password: Option<String>,
 }
 
 impl ClickHouseConnector {
     /// 建立 ClickHouse 连接
     pub async fn connect(req: ConnectRequest) -> Result<Self> {
-        let database = req.database.as_deref().unwrap_or("default");
         let host = bracket_host(&req.host);
         let base_url = format!("http://{}:{}", host, req.port);
 
@@ -38,22 +39,55 @@ impl ClickHouseConnector {
             )
         })?;
 
-        Ok(Self {
+        let connector = Self {
             client,
             base_url,
-            _database: database.to_string(),
-        })
+            database: req.database.as_deref().unwrap_or("default").to_string(),
+            username: req.username,
+            password: req.password,
+        };
+
+        // 设置默认数据库
+        if !connector.database.is_empty() {
+            let _ = connector
+                .http_query(&format!(
+                    "SET default_database = '{}'",
+                    connector.database.replace("'", "''")
+                ))
+                .await;
+        }
+
+        Ok(connector)
     }
 
     /// 执行 HTTP 查询
     async fn http_query(&self, sql: &str) -> Result<String> {
-        let url = format!("{}/?query={}", self.base_url, urlencoding::encode(sql));
-        let response = self
-            .client
-            .get(&url)
+        // Request TabSeparatedWithNames format to include header row
+        let url = format!(
+            "{}/?query={}&default_format=TabSeparatedWithNames",
+            self.base_url,
+            urlencoding::encode(sql)
+        );
+        let mut request = self.client.get(&url);
+
+        if !self.username.is_empty() {
+            request = request.basic_auth(&self.username, self.password.as_deref());
+        }
+
+        let response = request
             .send()
             .await
             .with_context(|| format!("failed to execute query: {sql}"))?;
+
+        // 检查 HTTP 状态码
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            anyhow::bail!("HTTP {}: {}", status, error_text);
+        }
 
         response
             .text()
@@ -61,36 +95,72 @@ impl ClickHouseConnector {
             .with_context(|| format!("failed to read response for query: {sql}"))
     }
 
-    /// 解析 CSV 响应为行数据
-    fn parse_csv_response(response: &str) -> (Vec<String>, Vec<Vec<serde_json::Value>>) {
-        let mut reader = csv::Reader::from_reader(response.as_bytes());
-        let headers: Vec<String> = reader
-            .headers()
-            .map(|h| h.iter().map(|s| s.to_string()).collect())
-            .unwrap_or_default();
+    /// 尝试获取非查询语句的受影响行数（ClickHouse 私有方法）
+    async fn get_affected_rows(&mut self, sql: &str) -> Result<u64> {
+        let trimmed_sql = sql.trim().to_uppercase();
+        if trimmed_sql.starts_with("INSERT")
+            || trimmed_sql.starts_with("UPDATE")
+            || trimmed_sql.starts_with("DELETE")
+            || trimmed_sql.starts_with("CREATE")
+            || trimmed_sql.starts_with("ALTER")
+            || trimmed_sql.starts_with("DROP")
+            || trimmed_sql.starts_with("TRUNCATE")
+        {
+            let response = self
+                .http_query(&format!(
+                    "SELECT rows FROM system.query_log WHERE query = '{}' ORDER BY event_time DESC LIMIT 1",
+                    ch_escape(sql)
+                ))
+                .await?;
+            let (_, rows) = parse_csv_response(&response);
 
-        let mut rows = Vec::new();
-        for result in reader.records() {
-            if let Ok(record) = result {
-                let values: Vec<serde_json::Value> = record
-                    .iter()
-                    .map(|field| {
-                        // 尝试解析为数字
-                        if let Ok(n) = field.parse::<i64>() {
-                            serde_json::json!(n)
-                        } else if let Ok(f) = field.parse::<f64>() {
-                            serde_json::json!(f)
-                        } else {
-                            serde_json::json!(field)
-                        }
-                    })
-                    .collect();
-                rows.push(values);
+            if let Some(row) = rows.first() {
+                if let Some(value) = row.first() {
+                    if let Some(rows_affected) = value.as_u64() {
+                        return Ok(rows_affected);
+                    }
+                }
             }
         }
 
-        (headers, rows)
+        Ok(0)
     }
+}
+
+/// Escape a string for use in ClickHouse SQL string literals (single-quote escaping).
+fn ch_escape(s: &str) -> String {
+    s.replace('\'', "''")
+}
+
+/// 解析 CSV 响应为行数据（实际上是 TabSeparatedWithNames）
+fn parse_csv_response(response: &str) -> (Vec<String>, Vec<Vec<serde_json::Value>>) {
+    let mut reader = csv::ReaderBuilder::new()
+        .delimiter(b'\t')
+        .has_headers(true)
+        .from_reader(response.as_bytes());
+    let headers: Vec<String> = reader
+        .headers()
+        .map(|h| h.iter().map(|s| s.to_string()).collect())
+        .unwrap_or_default();
+
+    let mut rows = Vec::new();
+    for record in reader.records().flatten() {
+        let values: Vec<serde_json::Value> = record
+            .iter()
+            .map(|field| {
+                if let Ok(n) = field.parse::<i64>() {
+                    serde_json::json!(n)
+                } else if let Ok(f) = field.parse::<f64>() {
+                    serde_json::json!(f)
+                } else {
+                    serde_json::json!(field)
+                }
+            })
+            .collect();
+        rows.push(values);
+    }
+
+    (headers, rows)
 }
 
 #[async_trait::async_trait]
@@ -108,8 +178,9 @@ impl SqlConnector for ClickHouseConnector {
             || trimmed.starts_with("EXPLAIN");
 
         if is_query {
+            // For queries, use TabSeparatedWithNames format to get column names and data
             let response = self.http_query(sql).await?;
-            let (headers, rows) = Self::parse_csv_response(&response);
+            let (headers, rows) = parse_csv_response(&response);
 
             let columns = headers
                 .iter()
@@ -129,12 +200,14 @@ impl SqlConnector for ClickHouseConnector {
                 elapsed_ms: elapsed,
             })
         } else {
-            self.http_query(sql).await?;
+            // For non-queries (INSERT, UPDATE, DELETE, etc.), we try to get affected rows
+            // ClickHouse returns summary information in a different format
+            let affected_rows = self.get_affected_rows(sql).await?;
             let elapsed = start.elapsed().as_millis() as u64;
             Ok(QueryResult {
                 columns: Vec::new(),
                 rows: Vec::new(),
-                affected_rows: 0,
+                affected_rows,
                 elapsed_ms: elapsed,
             })
         }
@@ -144,7 +217,7 @@ impl SqlConnector for ClickHouseConnector {
         let response = self
             .http_query("SELECT name FROM system.databases ORDER BY name")
             .await?;
-        let (_, rows) = Self::parse_csv_response(&response);
+        let (_, rows) = parse_csv_response(&response);
 
         Ok(rows
             .into_iter()
@@ -156,10 +229,10 @@ impl SqlConnector for ClickHouseConnector {
         let response = self
             .http_query(&format!(
                 "SELECT name, engine FROM system.tables WHERE database = '{}' ORDER BY name",
-                db
+                ch_escape(db)
             ))
             .await?;
-        let (_, rows) = Self::parse_csv_response(&response);
+        let (_, rows) = parse_csv_response(&response);
 
         Ok(rows
             .into_iter()
@@ -180,10 +253,10 @@ impl SqlConnector for ClickHouseConnector {
         let response = self
             .http_query(&format!(
                 "SELECT name, type, is_in_primary_key FROM system.columns WHERE database = '{}' AND table = '{}' ORDER BY position",
-                db, table
+                ch_escape(db), ch_escape(table)
             ))
             .await?;
-        let (_, rows) = Self::parse_csv_response(&response);
+        let (_, rows) = parse_csv_response(&response);
 
         Ok(rows
             .into_iter()
@@ -202,16 +275,81 @@ impl SqlConnector for ClickHouseConnector {
             .collect())
     }
 
-    async fn indexes(&mut self, _db: &str, _table: &str) -> Result<Vec<IndexInfo>> {
-        Ok(vec![])
+    async fn indexes(&mut self, db: &str, table: &str) -> Result<Vec<IndexInfo>> {
+        // Query system.indices for index information
+        let response = self
+            .http_query(&format!(
+                "SELECT name, type, columns FROM system.indices WHERE database = '{}' AND table = '{}'",
+                ch_escape(db), ch_escape(table)
+            ))
+            .await?;
+        let (_, rows) = parse_csv_response(&response);
+
+        let mut indexes = Vec::new();
+        for row in rows {
+            if row.len() >= 3 {
+                // Parse columns array from string representation
+                let index_name = row[0].as_str().unwrap_or("").to_string();
+                let index_type = row[1].as_str().unwrap_or("").to_string();
+                let columns_str = row[2].as_str().unwrap_or("[]").to_string();
+
+                // Parse columns from string like "[col1,col2]" or "'col1','col2'"
+                let mut columns = Vec::new();
+                if columns_str.starts_with('[') && columns_str.ends_with(']') {
+                    let inner = &columns_str[1..columns_str.len() - 1];
+                    if !inner.is_empty() {
+                        for col in inner.split(',') {
+                            let trimmed = col.trim().trim_matches(|c| c == '"' || c == '\'');
+                            if !trimmed.is_empty() {
+                                columns.push(trimmed.to_string());
+                            }
+                        }
+                    }
+                }
+
+                indexes.push(IndexInfo {
+                    name: index_name,
+                    index_type,
+                    columns,
+                    unique: false, // ClickHouse indices are not necessarily unique in traditional sense
+                });
+            }
+        }
+
+        Ok(indexes)
     }
 
     async fn foreign_keys(&mut self, _db: &str, _table: &str) -> Result<Vec<ForeignKeyInfo>> {
         Ok(vec![])
     }
 
-    async fn ddl(&mut self, _db: &str, _table: &str) -> Result<DdlResult> {
-        anyhow::bail!("DDL not supported for ClickHouse")
+    async fn ddl(&mut self, db: &str, table: &str) -> Result<DdlResult> {
+        // Use SHOW CREATE TABLE to get the DDL statement
+        // ClickHouse identifiers need backtick escaping
+        let escaped_db = db.replace('`', "``");
+        let escaped_table = table.replace('`', "``");
+        let response = self
+            .http_query(&format!(
+                "SHOW CREATE TABLE `{}`.`{}`",
+                escaped_db, escaped_table
+            ))
+            .await?;
+        let (_, rows) = parse_csv_response(&response);
+
+        // SHOW CREATE TABLE returns two columns: 'table' and 'statement'
+        // We want the statement column (second column)
+        if let Some(row) = rows.first() {
+            if row.len() >= 2 {
+                if let Some(ddl) = row[1].as_str() {
+                    return Ok(DdlResult {
+                        ddl: ddl.to_string(),
+                    });
+                }
+            }
+        }
+
+        // If we couldn't get the DDL, return an error
+        anyhow::bail!("Failed to retrieve DDL for {}.{}", db, table)
     }
 
     async fn close(&mut self) -> Result<()> {

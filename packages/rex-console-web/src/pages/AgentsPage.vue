@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { agentsApi, type Agent, type AuditEntry } from '@/api/agents'
+import { clipboard } from '@/utils/clipboard'
 
 /** Extended agent fields for display (optional, may come from runtime) */
 interface AgentDisplay extends Agent {
@@ -129,24 +130,9 @@ function openConfig(agent: Agent) {
 }
 
 async function copyText(text: string) {
-  try {
-    if (!navigator.clipboard?.writeText) throw new Error('clipboard not available')
-    await navigator.clipboard.writeText(text)
-    copySuccess.value = 'copied'
-    setTimeout(() => { copySuccess.value = '' }, 2000)
-  } catch {
-    // fallback for non-HTTPS environments
-    const ta = document.createElement('textarea')
-    ta.value = text
-    ta.style.position = 'fixed'
-    ta.style.left = '-9999px'
-    document.body.appendChild(ta)
-    ta.select()
-    document.execCommand('copy')
-    document.body.removeChild(ta)
-    copySuccess.value = 'copied'
-    setTimeout(() => { copySuccess.value = '' }, 2000)
-  }
+  await clipboard.writeText(text)
+  copySuccess.value = 'copied'
+  setTimeout(() => { copySuccess.value = '' }, 2000)
 }
 
 const deployCode = computed(() => {

@@ -130,14 +130,12 @@ impl SqlConnector for MySqlConnector {
     }
 
     async fn tables(&mut self, db: &str) -> Result<Vec<TableInfo>> {
-        let escaped_db = escape_identifier(db);
-        let sql = format!(
-            "SELECT TABLE_NAME AS name, TABLE_TYPE AS table_type \
-             FROM information_schema.TABLES \
-             WHERE TABLE_SCHEMA = {escaped_db} \
-             ORDER BY TABLE_NAME"
-        );
-        let result_rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
+        // Use parameter binding to avoid SQL injection
+        let sql = "SELECT TABLE_NAME AS name, TABLE_TYPE AS table_type \
+                   FROM information_schema.TABLES \
+                   WHERE TABLE_SCHEMA = ? \
+                   ORDER BY TABLE_NAME";
+        let result_rows = sqlx::query(sql).bind(db).fetch_all(&self.pool).await?;
         Ok(result_rows
             .iter()
             .map(|r| TableInfo {
@@ -148,17 +146,17 @@ impl SqlConnector for MySqlConnector {
     }
 
     async fn columns(&mut self, db: &str, table: &str) -> Result<Vec<ColumnInfo>> {
-        let escaped_db = escape_identifier(db);
-        let escaped_table = escape_identifier(table);
-        let sql = format!(
-            "SELECT COLUMN_NAME AS name, DATA_TYPE AS data_type, \
-             IS_NULLABLE AS nullable, \
-             IF(COLUMN_KEY = 'PRI', 1, 0) AS is_primary_key \
-             FROM information_schema.COLUMNS \
-             WHERE TABLE_SCHEMA = {escaped_db} AND TABLE_NAME = {escaped_table} \
-             ORDER BY ORDINAL_POSITION"
-        );
-        let result_rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
+        let sql = "SELECT COLUMN_NAME AS name, DATA_TYPE AS data_type, \
+                   IS_NULLABLE AS nullable, \
+                   IF(COLUMN_KEY = 'PRI', 1, 0) AS is_primary_key \
+                   FROM information_schema.COLUMNS \
+                   WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? \
+                   ORDER BY ORDINAL_POSITION";
+        let result_rows = sqlx::query(sql)
+            .bind(db)
+            .bind(table)
+            .fetch_all(&self.pool)
+            .await?;
         Ok(result_rows
             .iter()
             .map(|r| {
@@ -180,15 +178,17 @@ impl SqlConnector for MySqlConnector {
     }
 
     async fn indexes(&mut self, db: &str, table: &str) -> Result<Vec<IndexInfo>> {
-        let sql = format!(
-            "SELECT INDEX_NAME AS name, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) AS columns, \
-             NON_UNIQUE, INDEX_TYPE \
-             FROM information_schema.STATISTICS \
-             WHERE TABLE_SCHEMA = '{db}' AND TABLE_NAME = '{table}' \
-             GROUP BY INDEX_NAME, NON_UNIQUE, INDEX_TYPE \
-             ORDER BY INDEX_NAME"
-        );
-        let rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
+        let sql = "SELECT INDEX_NAME AS name, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) AS columns, \
+                   NON_UNIQUE, INDEX_TYPE \
+                   FROM information_schema.STATISTICS \
+                   WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? \
+                   GROUP BY INDEX_NAME, NON_UNIQUE, INDEX_TYPE \
+                   ORDER BY INDEX_NAME";
+        let rows = sqlx::query(sql)
+            .bind(db)
+            .bind(table)
+            .fetch_all(&self.pool)
+            .await?;
         Ok(rows
             .iter()
             .map(|r| {
@@ -209,19 +209,21 @@ impl SqlConnector for MySqlConnector {
     }
 
     async fn foreign_keys(&mut self, db: &str, table: &str) -> Result<Vec<ForeignKeyInfo>> {
-        let sql = format!(
-            "SELECT CONSTRAINT_NAME AS name, \
-             GROUP_CONCAT(COLUMN_NAME ORDER BY ORDINAL_POSITION) AS columns, \
-             REFERENCED_TABLE_NAME AS ref_table, \
-             GROUP_CONCAT(REFERENCED_COLUMN_NAME ORDER BY ORDINAL_POSITION) AS ref_columns, \
-             DELETE_RULE AS on_delete, UPDATE_RULE AS on_update \
-             FROM information_schema.KEY_COLUMN_USAGE \
-             JOIN information_schema.REFERENTIAL_CONSTRAINTS USING (CONSTRAINT_NAME, CONSTRAINT_SCHEMA) \
-             WHERE TABLE_SCHEMA = '{db}' AND TABLE_NAME = '{table}' \
-               AND REFERENCED_TABLE_NAME IS NOT NULL \
-             GROUP BY CONSTRAINT_NAME, REFERENCED_TABLE_NAME, DELETE_RULE, UPDATE_RULE"
-        );
-        let rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
+        let sql = "SELECT CONSTRAINT_NAME AS name, \
+                   GROUP_CONCAT(COLUMN_NAME ORDER BY ORDINAL_POSITION) AS columns, \
+                   REFERENCED_TABLE_NAME AS ref_table, \
+                   GROUP_CONCAT(REFERENCED_COLUMN_NAME ORDER BY ORDINAL_POSITION) AS ref_columns, \
+                   DELETE_RULE AS on_delete, UPDATE_RULE AS on_update \
+                   FROM information_schema.KEY_COLUMN_USAGE \
+                   JOIN information_schema.REFERENTIAL_CONSTRAINTS USING (CONSTRAINT_NAME, CONSTRAINT_SCHEMA) \
+                   WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? \
+                     AND REFERENCED_TABLE_NAME IS NOT NULL \
+                   GROUP BY CONSTRAINT_NAME, REFERENCED_TABLE_NAME, DELETE_RULE, UPDATE_RULE";
+        let rows = sqlx::query(sql)
+            .bind(db)
+            .bind(table)
+            .fetch_all(&self.pool)
+            .await?;
         Ok(rows
             .iter()
             .map(|r| ForeignKeyInfo {
@@ -245,10 +247,16 @@ impl SqlConnector for MySqlConnector {
             .collect())
     }
 
-    async fn ddl(&mut self, _db: &str, table: &str) -> Result<DdlResult> {
-        let rows = sqlx::query_scalar::<_, String>(&format!("SHOW CREATE TABLE `{table}`"))
-            .fetch_all(&self.pool)
-            .await?;
+    async fn ddl(&mut self, db: &str, table: &str) -> Result<DdlResult> {
+        let escaped_db = escape_identifier(db);
+        let escaped_table = escape_identifier(table);
+        let rows = sqlx::query_scalar::<_, String>(&format!(
+            "SHOW CREATE TABLE {escaped_db}.{escaped_table}"
+        ))
+        .fetch_all(&self.pool)
+        .await?;
+        // SHOW CREATE TABLE returns two columns: table name and create statement
+        // Index 0 is the table name, index 1 is the DDL
         let ddl = rows.get(1).cloned().unwrap_or_default();
         Ok(DdlResult { ddl })
     }

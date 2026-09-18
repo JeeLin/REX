@@ -6,6 +6,7 @@ import * as redisApi from '@/api/redis'
 import type { DbInfo, KeyInfo, RedisStringValue, RedisValue } from '@/api/redis'
 import FormatViewer from './FormatViewer.vue'
 import Toast from '@/components/ui/Toast.vue'
+import { clipboard } from '@/utils/clipboard'
 
 const props = defineProps<{
   resourceId?: string
@@ -449,7 +450,7 @@ async function ctxDelete() {
 }
 
 function ctxCopy() {
-  navigator.clipboard?.writeText(ctxMenu.value.key)
+  clipboard.writeText(ctxMenu.value.key)
   ctxMenu.value.show = false
 }
 // Folder context menu
@@ -469,7 +470,7 @@ function folderCtxLoad() {
 }
 
 function folderCtxCopy() {
-  navigator.clipboard?.writeText(folderCtx.value.prefix)
+  clipboard.writeText(folderCtx.value.prefix)
   folderCtx.value.show = false
 }
 

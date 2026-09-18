@@ -3,6 +3,7 @@ import { formatDateTime } from '@/utils/datetime'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { auditApi, type AuditEntry, type AuditStats } from '@/api/audit'
+import { clipboard } from '@/utils/clipboard'
 import { agentsApi, type Agent } from '@/api/agents'
 import { useEnvironmentsStore } from '@/stores/environments'
 import Button from '@/components/ui/Button.vue'
@@ -47,19 +48,7 @@ function ctxViewDetail() {
 
 async function ctxCopyRecord() {
   if (ctxMenu.value.entry) {
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(ctxMenu.value.entry, null, 2))
-    } catch {
-      // fallback for non-HTTPS
-      const ta = document.createElement('textarea')
-      ta.value = JSON.stringify(ctxMenu.value.entry, null, 2)
-      ta.style.position = 'fixed'
-      ta.style.left = '-9999px'
-      document.body.appendChild(ta)
-      ta.select()
-      document.execCommand('copy')
-      document.body.removeChild(ta)
-    }
+    await clipboard.writeText(JSON.stringify(ctxMenu.value.entry, null, 2))
   }
   closeCtxMenu()
 }

@@ -221,16 +221,199 @@ impl SqlConnector for SqlServerConnector {
             .collect())
     }
 
-    async fn indexes(&mut self, _db: &str, _table: &str) -> Result<Vec<IndexInfo>> {
-        Ok(vec![])
+    async fn indexes(&mut self, db: &str, table: &str) -> Result<Vec<IndexInfo>> {
+        let client = self.client()?;
+        let query = format!(
+            "SELECT i.name AS index_name, i.type_desc, 
+                    STRING_AGG(c.name, ',') WITHIN GROUP (ORDER BY ic.key_ordinal) AS columns,
+                    i.is_unique
+             FROM {}.sys.indexes i
+             INNER JOIN {}.sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+             INNER JOIN {}.sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+             INNER JOIN {}.sys.objects o ON i.object_id = o.object_id
+             WHERE o.name = '{}' AND i.name IS NOT NULL
+             GROUP BY i.name, i.type_desc, i.is_unique
+             ORDER BY i.name",
+            db, db, db, db, table
+        );
+        let result = client
+            .simple_query(&query)
+            .await?
+            .into_first_result()
+            .await?;
+
+        let mut indexes = Vec::new();
+        for row in result.iter() {
+            let name = row
+                .try_get::<&str, _>(0)
+                .ok()
+                .flatten()
+                .ok_or_else(|| anyhow::anyhow!("missing index name"))?
+                .to_string();
+            let index_type = row
+                .try_get::<&str, _>(1)
+                .ok()
+                .flatten()
+                .ok_or_else(|| anyhow::anyhow!("missing index type"))?
+                .to_string();
+            let columns_str = row
+                .try_get::<&str, _>(2)
+                .ok()
+                .flatten()
+                .ok_or_else(|| anyhow::anyhow!("missing columns"))?
+                .to_string();
+            let unique = row.try_get::<bool, _>(3).ok().flatten().unwrap_or(false);
+
+            let columns = columns_str.split(',').map(String::from).collect();
+
+            indexes.push(IndexInfo {
+                name,
+                index_type,
+                columns,
+                unique,
+            });
+        }
+
+        Ok(indexes)
     }
 
-    async fn foreign_keys(&mut self, _db: &str, _table: &str) -> Result<Vec<ForeignKeyInfo>> {
-        Ok(vec![])
+    async fn foreign_keys(&mut self, db: &str, table: &str) -> Result<Vec<ForeignKeyInfo>> {
+        let client = self.client()?;
+        let query = format!(
+            "SELECT fk.name AS fk_name,
+                    STRING_AGG(cp.name, ',') WITHIN GROUP (ORDER BY fkc.constraint_column_id) AS fk_columns,
+                    OBJECT_NAME(fk.referenced_object_id) AS ref_table,
+                    STRING_AGG(rp.name, ',') WITHIN GROUP (ORDER BY fkc.constraint_column_id) AS ref_columns,
+                    fk.delete_referential_action_desc,
+                    fk.update_referential_action_desc
+             FROM {}.sys.foreign_keys fk
+             INNER JOIN {}.sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
+             INNER JOIN {}.sys.columns cp ON fkc.parent_object_id = cp.object_id AND fkc.parent_column_id = cp.column_id
+             INNER JOIN {}.sys.columns rp ON fkc.referenced_object_id = rp.object_id AND fkc.referenced_column_id = rp.column_id
+             INNER JOIN {}.sys.objects o ON fk.parent_object_id = o.object_id
+             WHERE o.name = '{}'
+             GROUP BY fk.name, fk.referenced_object_id, fk.delete_referential_action_desc, fk.update_referential_action_desc
+             ORDER BY fk.name",
+            db, db, db, db, db, table
+        );
+        let result = client
+            .simple_query(&query)
+            .await?
+            .into_first_result()
+            .await?;
+
+        let mut fks = Vec::new();
+        for row in result.iter() {
+            let name = row
+                .try_get::<&str, _>(0)
+                .ok()
+                .flatten()
+                .ok_or_else(|| anyhow::anyhow!("missing FK name"))?
+                .to_string();
+            let columns_str = row
+                .try_get::<&str, _>(1)
+                .ok()
+                .flatten()
+                .ok_or_else(|| anyhow::anyhow!("missing FK columns"))?
+                .to_string();
+            let ref_table = row
+                .try_get::<&str, _>(2)
+                .ok()
+                .flatten()
+                .ok_or_else(|| anyhow::anyhow!("missing reference table"))?
+                .to_string();
+            let ref_columns_str = row
+                .try_get::<&str, _>(3)
+                .ok()
+                .flatten()
+                .ok_or_else(|| anyhow::anyhow!("missing reference columns"))?
+                .to_string();
+            let on_delete = row
+                .try_get::<&str, _>(4)
+                .ok()
+                .flatten()
+                .ok_or_else(|| anyhow::anyhow!("missing ON DELETE"))?
+                .to_string();
+            let on_update = row
+                .try_get::<&str, _>(5)
+                .ok()
+                .flatten()
+                .ok_or_else(|| anyhow::anyhow!("missing ON UPDATE"))?
+                .to_string();
+
+            let columns = columns_str.split(',').map(String::from).collect();
+            let ref_columns = ref_columns_str.split(',').map(String::from).collect();
+
+            fks.push(ForeignKeyInfo {
+                name,
+                columns,
+                ref_table,
+                ref_columns,
+                on_delete,
+                on_update,
+            });
+        }
+
+        Ok(fks)
     }
 
-    async fn ddl(&mut self, _db: &str, _table: &str) -> Result<DdlResult> {
-        anyhow::bail!("DDL not supported for SQL Server")
+    async fn ddl(&mut self, db: &str, table: &str) -> Result<DdlResult> {
+        let client = self.client()?;
+        // Note: sp_help returns multiple result sets with complex structure
+        // For simplicity, we'll just get column information from INFORMATION_SCHEMA
+
+        // Get column information
+        let columns_query = format!(
+            "SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE, COLUMN_DEFAULT
+             FROM {}.INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_NAME = '{}'
+             ORDER BY ORDINAL_POSITION",
+            db, table
+        );
+        let columns_result = client
+            .simple_query(&columns_query)
+            .await?
+            .into_first_result()
+            .await?;
+
+        let mut ddl = format!("CREATE TABLE {}.{} (\n", db, table);
+        let mut column_defs = Vec::new();
+        for row in columns_result.iter() {
+            let name = row
+                .try_get::<&str, _>(0)
+                .ok()
+                .flatten()
+                .ok_or_else(|| anyhow::anyhow!("missing column name"))?
+                .to_string();
+            let data_type = row
+                .try_get::<&str, _>(1)
+                .ok()
+                .flatten()
+                .ok_or_else(|| anyhow::anyhow!("missing data type"))?
+                .to_string();
+            let max_length = row.try_get::<i32, _>(2).ok().flatten();
+            let nullable = row.try_get::<&str, _>(3).ok().flatten().unwrap_or("YES") == "YES";
+            let default = row.try_get::<&str, _>(4).ok().flatten();
+
+            let mut col_def = format!("  {} {}", name, data_type);
+            if let Some(max_len) = max_length {
+                if max_len > 0 {
+                    col_def.push_str(&format!("({})", max_len));
+                }
+            }
+            if !nullable {
+                col_def.push_str(" NOT NULL");
+            }
+            if let Some(default_val) = default {
+                col_def.push_str(&format!(" DEFAULT {}", default_val));
+            }
+            column_defs.push(col_def);
+        }
+
+        ddl.push_str(&column_defs.join(",\n"));
+        ddl.push_str("\n)");
+
+        Ok(DdlResult { ddl })
     }
 
     async fn close(&mut self) -> Result<()> {

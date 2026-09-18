@@ -1,13 +1,17 @@
 # Changelog
 
-## [0.86.0] - 2025-07-18
+## [0.86.0] - 2026-09-22
 
 ### Added
-- **ClickHouse 支持**：新增 ClickHouse SQL 方言连接器，基于 HTTP API
-- **SQL Server 支持**：新增 SQL Server (MSSQL) 方言连接器，基于 tiberius 驱动
+- **ClickHouse 支持**：新增 ClickHouse SQL 方言连接器，基于 HTTP API，支持 databases/tables/columnes/indexes/ddl
+- **SQL Server 支持**：新增 SQL Server (MSSQL) 方言连接器，基于 tiberius 驱动，支持 indexes/foreign_keys/ddl
 - **MariaDB 支持**：新增 MariaDB 方言连接器，复用 MySQL 驱动
-- **Oracle 支持**：新增 Oracle 方言 stub 实现（真实驱动待集成）
+- **Oracle 支持**：新增 Oracle 方言连接器，基于 oracle-rs 纯 Rust 驱动，完整实现 SqlConnector trait
 - **方言自动检测扩展**：端口 8123/9000→ClickHouse、1433→SQL Server、1521→Oracle
+
+### Fixed
+- **剪贴板统一**：修复所有 Vue 组件直接调用 navigator.clipboard 导致非 HTTPS 环境复制粘贴失效的问题，统一使用 clipboard 工具函数
+- **ClickHouse SQL 安全**：修复 indexes/tables/columns/ddl 中 SQL 字符串插值注入风险
 
 ## [0.85.0] - 2025-07-18
 

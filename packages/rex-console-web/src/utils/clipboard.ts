@@ -10,19 +10,34 @@ async function writeText(text: string): Promise<boolean> {
   } catch {
     // 安全上下文受限，降级
   }
+  const active = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  const selection = window.getSelection()
+  const ranges = selection ? Array.from({ length: selection.rangeCount }, (_, i) => selection.getRangeAt(i).cloneRange()) : []
+  const input = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement ? active : null
+  const start = input?.selectionStart ?? null
+  const end = input?.selectionEnd ?? null
+  const direction = input?.selectionDirection ?? undefined
+  const ta = document.createElement('textarea')
   try {
-    const ta = document.createElement('textarea')
     ta.value = text
     ta.style.position = 'fixed'
     ta.style.left = '-9999px'
     document.body.appendChild(ta)
     ta.focus()
     ta.select()
-    const ok = document.execCommand('copy')
-    document.body.removeChild(ta)
-    return ok
+    return document.execCommand('copy')
   } catch {
     return false
+  } finally {
+    ta.remove()
+    if (active?.isConnected) active.focus({ preventScroll: true })
+    if (selection) {
+      selection.removeAllRanges()
+      for (const range of ranges) selection.addRange(range)
+    }
+    if (input?.isConnected && start !== null && end !== null) {
+      input.setSelectionRange(start, end, direction)
+    }
   }
 }
 

@@ -37,6 +37,7 @@ axum = { version = "0.8", features = ["ws", "multipart"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "mysql", "postgres"] }
 redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+oracle-rs = "0.1"
 jsonwebtoken = "9"
 argon2 = { version = "0.5", features = ["password-hash", "rand"] }
 rand_core = { version = "0.6", features = ["getrandom"] }
