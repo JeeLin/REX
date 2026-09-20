@@ -187,7 +187,10 @@ pub async fn start_http_server(
                 Err(e2) => {
                     return Err(anyhow::anyhow!(
                         "failed to start HTTP server: tried 0.0.0.0:{} ({}) and 127.0.0.1:{} ({})",
-                        port, e, port, e2
+                        port,
+                        e,
+                        port,
+                        e2
                     ));
                 }
             }

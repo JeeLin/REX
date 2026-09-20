@@ -107,9 +107,9 @@ fn classify_addr(host: &str) -> AddrType {
 fn default_terminal_modes() -> Vec<(Pty, u32)> {
     vec![
         // 输入标志
-        (Pty::ICRNL, 1),   // 将 CR (0x0D) 转换为 NL (0x0A)
-        (Pty::IXON, 1),    // 启用 XON/XOFF 流控
-        (Pty::IUTF8, 1),   // UTF-8 输入模式
+        (Pty::ICRNL, 1), // 将 CR (0x0D) 转换为 NL (0x0A)
+        (Pty::IXON, 1),  // 启用 XON/XOFF 流控
+        (Pty::IUTF8, 1), // UTF-8 输入模式
         // 本地标志
         (Pty::ISIG, 1),    // 启用信号（Ctrl+C → SIGINT, Ctrl+Z → SIGTSTP）
         (Pty::ICANON, 1),  // 规范模式（行缓冲，Backspace/Delete 正常工作）
@@ -120,17 +120,17 @@ fn default_terminal_modes() -> Vec<(Pty, u32)> {
         (Pty::ECHOCTL, 1), // 控制字符可见（如 ^C 显示为 ^C）
         (Pty::ECHOKE, 1),  // 删除行时视觉删除
         // 输出标志
-        (Pty::OPOST, 1),   // 启用输出处理
-        (Pty::ONLCR, 1),   // 将 NL 转换为 CR-NL（终端输出换行正确）
+        (Pty::OPOST, 1), // 启用输出处理
+        (Pty::ONLCR, 1), // 将 NL 转换为 CR-NL（终端输出换行正确）
         // 特殊字符（保持默认值，确保 vim 快捷键正常）
-        (Pty::VINTR, 3),   // Ctrl+C → 中断信号
-        (Pty::VQUIT, 28),  // Ctrl+\ → 退出信号
+        (Pty::VINTR, 3),    // Ctrl+C → 中断信号
+        (Pty::VQUIT, 28),   // Ctrl+\ → 退出信号
         (Pty::VERASE, 127), // Backspace → 删除
-        (Pty::VKILL, 21),  // Ctrl+U → 删除行
-        (Pty::VEOF, 4),    // Ctrl+D → EOF
-        (Pty::VSTART, 17), // Ctrl+Q → 恢复输出（XON）
-        (Pty::VSTOP, 19),  // Ctrl+S → 暂停输出（XOFF）
-        (Pty::VSUSP, 26),  // Ctrl+Z → 挂起信号
+        (Pty::VKILL, 21),   // Ctrl+U → 删除行
+        (Pty::VEOF, 4),     // Ctrl+D → EOF
+        (Pty::VSTART, 17),  // Ctrl+Q → 恢复输出（XON）
+        (Pty::VSTOP, 19),   // Ctrl+S → 暂停输出（XOFF）
+        (Pty::VSUSP, 26),   // Ctrl+Z → 挂起信号
     ]
 }
 
@@ -309,7 +309,15 @@ impl SshSession {
         // 传入标准终端模式以确保 vim/nano 等全屏编辑器正常工作。
         // 空模式 (&[]) 会导致服务器不设置任何终端属性，vim 等程序可能无法正常渲染。
         write_half
-            .request_pty(true, "xterm-256color", 80, 24, 0, 0, &default_terminal_modes())
+            .request_pty(
+                true,
+                "xterm-256color",
+                80,
+                24,
+                0,
+                0,
+                &default_terminal_modes(),
+            )
             .await
             .context("failed to request PTY")?;
 
