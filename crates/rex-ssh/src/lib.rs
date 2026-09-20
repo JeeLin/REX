@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 use bytes::Bytes;
 use russh::client;
 use russh::keys::{decode_secret_key, PrivateKeyWithHashAlg, PublicKey};
-use russh::{Channel, ChannelMsg, ChannelWriteHalf};
+use russh::{Channel, ChannelMsg, ChannelWriteHalf, Pty};
 use tokio::sync::mpsc;
 
 /// SSH 连接配置
@@ -95,6 +95,43 @@ fn classify_addr(host: &str) -> AddrType {
     } else {
         AddrType::Hostname
     }
+}
+
+// ── 终端模式 ──
+
+/// 返回 PTY 请求的标准终端模式。
+///
+/// 空模式 (`&[]`) 会导致 SSH 服务器不设置任何终端属性，vim/nano 等全屏编辑器
+/// 可能无法正常渲染（屏幕闪烁、光标错位、输入丢失等）。传入标准模式确保
+/// 服务器端 terminal driver 以合理的默认值运行。
+fn default_terminal_modes() -> Vec<(Pty, u32)> {
+    vec![
+        // 输入标志
+        (Pty::ICRNL, 1),   // 将 CR (0x0D) 转换为 NL (0x0A)
+        (Pty::IXON, 1),    // 启用 XON/XOFF 流控
+        (Pty::IUTF8, 1),   // UTF-8 输入模式
+        // 本地标志
+        (Pty::ISIG, 1),    // 启用信号（Ctrl+C → SIGINT, Ctrl+Z → SIGTSTP）
+        (Pty::ICANON, 1),  // 规范模式（行缓冲，Backspace/Delete 正常工作）
+        (Pty::ECHO, 1),    // 回显输入
+        (Pty::ECHOE, 1),   // 退格时删除前一个字符（视觉上）
+        (Pty::ECHOK, 1),   // 删除行时回显换行
+        (Pty::IEXTEN, 1),  // 启用扩展输入（Ctrl+V, Ctrl+O 等）
+        (Pty::ECHOCTL, 1), // 控制字符可见（如 ^C 显示为 ^C）
+        (Pty::ECHOKE, 1),  // 删除行时视觉删除
+        // 输出标志
+        (Pty::OPOST, 1),   // 启用输出处理
+        (Pty::ONLCR, 1),   // 将 NL 转换为 CR-NL（终端输出换行正确）
+        // 特殊字符（保持默认值，确保 vim 快捷键正常）
+        (Pty::VINTR, 3),   // Ctrl+C → 中断信号
+        (Pty::VQUIT, 28),  // Ctrl+\ → 退出信号
+        (Pty::VERASE, 127), // Backspace → 删除
+        (Pty::VKILL, 21),  // Ctrl+U → 删除行
+        (Pty::VEOF, 4),    // Ctrl+D → EOF
+        (Pty::VSTART, 17), // Ctrl+Q → 恢复输出（XON）
+        (Pty::VSTOP, 19),  // Ctrl+S → 暂停输出（XOFF）
+        (Pty::VSUSP, 26),  // Ctrl+Z → 挂起信号
+    ]
 }
 
 // ── ProxyJump 解析 ──
@@ -269,8 +306,10 @@ impl SshSession {
         let (mut read_half, write_half) = channel.split();
 
         // 请求 PTY（xterm-256color，80x24 初始尺寸，前端会立即 resize）
+        // 传入标准终端模式以确保 vim/nano 等全屏编辑器正常工作。
+        // 空模式 (&[]) 会导致服务器不设置任何终端属性，vim 等程序可能无法正常渲染。
         write_half
-            .request_pty(true, "xterm-256color", 80, 24, 0, 0, &[])
+            .request_pty(true, "xterm-256color", 80, 24, 0, 0, &default_terminal_modes())
             .await
             .context("failed to request PTY")?;
 
