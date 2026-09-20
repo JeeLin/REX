@@ -163,7 +163,36 @@ pub async fn start_http_server(
     let addr = format!("0.0.0.0:{}", port);
     tracing::info!(addr = %addr, "starting agent HTTP server");
 
-    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    // Windows: binding to 0.0.0.0 may fail with WSAEACCES (os error 10013) when
+    // the port is restricted by Windows Firewall or another process. Fall back to
+    // 127.0.0.1 so the agent HTTP server still starts for local access.
+    let listener = match tokio::net::TcpListener::bind(&addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            let fallback = format!("127.0.0.1:{}", port);
+            tracing::warn!(
+                error = %e,
+                original_addr = %addr,
+                fallback_addr = %fallback,
+                "failed to bind HTTP server on 0.0.0.0, trying 127.0.0.1"
+            );
+            match tokio::net::TcpListener::bind(&fallback).await {
+                Ok(l) => {
+                    tracing::info!(
+                        addr = %fallback,
+                        "agent HTTP server bound to localhost only (0.0.0.0 unavailable on this platform)"
+                    );
+                    l
+                }
+                Err(e2) => {
+                    return Err(anyhow::anyhow!(
+                        "failed to start HTTP server: tried 0.0.0.0:{} ({}) and 127.0.0.1:{} ({})",
+                        port, e, port, e2
+                    ));
+                }
+            }
+        }
+    };
     axum::serve(listener, app).await?;
 
     Ok(())
