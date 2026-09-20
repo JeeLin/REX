@@ -27,15 +27,17 @@ pub fn run_supervisor() {
 
     let current_exe = std::env::current_exe().expect("failed to get current exe path");
 
-    // Windows: 清理上次更新遗留的 .old 文件
+    // Windows: 清理上次更新遗留的 .old 和 .bak 文件
     #[cfg(target_os = "windows")]
     {
-        let old_path = current_exe.with_extension("old");
-        if old_path.exists() {
-            if let Err(e) = std::fs::remove_file(&old_path) {
-                tracing::warn!(error = %e, "failed to remove old binary");
-            } else {
-                tracing::info!("cleaned up old binary from previous update");
+        for ext in &["old", "bak"] {
+            let path = current_exe.with_extension(ext);
+            if path.exists() {
+                if let Err(e) = std::fs::remove_file(&path) {
+                    tracing::warn!(error = %e, ext = %ext, "failed to remove leftover file");
+                } else {
+                    tracing::info!(ext = %ext, "cleaned up leftover file from previous update");
+                }
             }
         }
     }
