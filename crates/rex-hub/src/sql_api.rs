@@ -268,7 +268,8 @@ async fn connect(
     }
 
     let req = match db_type.to_lowercase().as_str() {
-        "mysql" | "postgresql" | "postgres" => ConnectRequest {
+        "mysql" | "postgresql" | "postgres" | "clickhouse" | "sqlserver" | "mssql" | "oracle"
+        | "mariadb" => ConnectRequest {
             host: res.host,
             port: res.port.unwrap_or(0),
             username: res.username,
@@ -323,13 +324,22 @@ async fn connect(
 
     // v0.70.7：db_type 缺省（auto）或显式给出都走探测/连接；探测成功回写资源 db_type。
     let conn_result = match db_type.to_lowercase().as_str() {
-        "mysql" => rex_mysql::MySqlConnector::connect(req)
+        "mysql" | "mariadb" => rex_mysql::MySqlConnector::connect(req)
             .await
             .map(|c| Box::new(c) as Box<dyn SqlConnector>),
         "postgresql" | "postgres" => rex_postgresql::PostgresConnector::connect(req)
             .await
             .map(|c| Box::new(c) as Box<dyn SqlConnector>),
         "sqlite" => rex_sqlite::SqliteConnector::connect(req)
+            .await
+            .map(|c| Box::new(c) as Box<dyn SqlConnector>),
+        "clickhouse" => rex_clickhouse::ClickHouseConnector::connect(req)
+            .await
+            .map(|c| Box::new(c) as Box<dyn SqlConnector>),
+        "sqlserver" | "mssql" => rex_mssql::SqlServerConnector::connect(req)
+            .await
+            .map(|c| Box::new(c) as Box<dyn SqlConnector>),
+        "oracle" => rex_oracle::OracleConnector::connect(req)
             .await
             .map(|c| Box::new(c) as Box<dyn SqlConnector>),
         "auto" => detect_dialect(req).await,
@@ -375,123 +385,29 @@ async fn connect(
     }
 }
 
-/// v0.70.7 dialect 探测：db_type 缺省时，按端口预判 → 双线缆协议握手回退 →
-/// `SELECT VERSION()` 确认，最终解析出 dialect 并连上对应连接器。
-///
-/// 与 Agent 侧 `detect_dialect` 共用同一套规则。
+/// 通过共享方言探测函数连接，返回已连接的 [`SqlConnector`]。
 async fn detect_dialect(req: ConnectRequest) -> anyhow::Result<Box<dyn SqlConnector>> {
-    // SQLite：无 host 或 port 为 0 视为本地文件库。
-    if req.host.is_empty() || req.port == 0 {
-        return Ok(Box::new(
-            rex_sqlite::SqliteConnector::connect(req.clone()).await?,
-        ));
-    }
-
-    // 端口预判：已知端口优先排对应方言，未知端口按常见度全量尝试。
-    let candidates: &[DatabaseType] = match req.port {
-        3306 => &[
-            DatabaseType::MySQL,
-            DatabaseType::MariaDB,
-            DatabaseType::PostgreSQL,
-        ],
-        5432 => &[DatabaseType::PostgreSQL, DatabaseType::MySQL],
-        8123 | 9000 => &[
-            DatabaseType::ClickHouse,
-            DatabaseType::MySQL,
-            DatabaseType::PostgreSQL,
-        ],
-        1433 => &[
-            DatabaseType::SqlServer,
-            DatabaseType::MySQL,
-            DatabaseType::PostgreSQL,
-        ],
-        1521 | 2883 => &[
-            DatabaseType::Oracle,
-            DatabaseType::MySQL,
-            DatabaseType::PostgreSQL,
-        ],
-        _ => &[
-            DatabaseType::MySQL,
-            DatabaseType::PostgreSQL,
-            DatabaseType::Oracle,
-            DatabaseType::SqlServer,
-            DatabaseType::ClickHouse,
-        ],
-    };
-
-    for &dt in candidates {
-        match connect_by_dialect(dt, &req).await {
-            Ok(mut conn) => {
-                // Oracle 不支持 SELECT VERSION()，协议握手成功即确认。
-                if dt == DatabaseType::Oracle {
-                    tracing::info!(
-                        action = "SQL_DETECT",
-                        port = req.port,
-                        dialect = ?dt,
-                        "dialect detected (Oracle, protocol handshake OK)"
-                    );
-                    return Ok(conn);
-                }
-                match conn.execute("SELECT VERSION()").await {
-                    Ok(result) => {
-                        let version = result
-                            .rows
-                            .first()
-                            .and_then(|r| r.first())
-                            .map(|v| v.to_string())
-                            .unwrap_or_default();
-                        let confirmed = if version.to_uppercase().contains("POSTGRESQL") {
-                            DatabaseType::PostgreSQL
-                        } else {
-                            dt
-                        };
-                        tracing::info!(
-                            action = "SQL_DETECT",
-                            port = req.port,
-                            version = %version,
-                            dialect = ?confirmed,
-                            "dialect detected"
-                        );
-                        if confirmed == dt {
-                            return Ok(conn);
-                        }
-                        return connect_by_dialect(confirmed, &req).await;
-                    }
-                    Err(_) => continue,
-                }
-            }
-            Err(_) => continue,
-        }
-    }
-
-    Err(anyhow::anyhow!(
-        "unrecognized dialect, please specify subtype when creating the resource"
-    ))
+    let result = rex_common::sql::detect_dialect(req, |dt, r| connect_by_dialect(dt, r)).await?;
+    Ok(result.conn)
 }
 
 async fn connect_by_dialect(
     db_type: DatabaseType,
-    req: &ConnectRequest,
+    req: ConnectRequest,
 ) -> anyhow::Result<Box<dyn SqlConnector>> {
     match db_type {
-        DatabaseType::MySQL | DatabaseType::MariaDB => Ok(Box::new(
-            rex_mysql::MySqlConnector::connect(req.clone()).await?,
-        )),
+        DatabaseType::MySQL | DatabaseType::MariaDB => {
+            Ok(Box::new(rex_mysql::MySqlConnector::connect(req).await?))
+        }
         DatabaseType::PostgreSQL => Ok(Box::new(
-            rex_postgresql::PostgresConnector::connect(req.clone()).await?,
+            rex_postgresql::PostgresConnector::connect(req).await?,
         )),
-        DatabaseType::SQLite => Ok(Box::new(
-            rex_sqlite::SqliteConnector::connect(req.clone()).await?,
-        )),
+        DatabaseType::SQLite => Ok(Box::new(rex_sqlite::SqliteConnector::connect(req).await?)),
         DatabaseType::ClickHouse => Ok(Box::new(
-            rex_clickhouse::ClickHouseConnector::connect(req.clone()).await?,
+            rex_clickhouse::ClickHouseConnector::connect(req).await?,
         )),
-        DatabaseType::SqlServer => Ok(Box::new(
-            rex_mssql::SqlServerConnector::connect(req.clone()).await?,
-        )),
-        DatabaseType::Oracle => Ok(Box::new(
-            rex_oracle::OracleConnector::connect(req.clone()).await?,
-        )),
+        DatabaseType::SqlServer => Ok(Box::new(rex_mssql::SqlServerConnector::connect(req).await?)),
+        DatabaseType::Oracle => Ok(Box::new(rex_oracle::OracleConnector::connect(req).await?)),
     }
 }
 

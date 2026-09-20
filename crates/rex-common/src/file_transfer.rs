@@ -104,3 +104,104 @@ pub trait FileConnector: Send + Sync {
     /// Mutable downcast support for protocol-specific methods
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
+
+// ---------------------------------------------------------------------------
+// Base64 helpers
+// ---------------------------------------------------------------------------
+
+/// 将字节数组编码为 Base64 字符串。
+pub fn base64_chunk(data: &[u8]) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD.encode(data)
+}
+
+/// 将 Base64 字符串解码为字节数组。
+pub fn base64_decode(s: &str) -> anyhow::Result<Vec<u8>> {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD
+        .decode(s)
+        .map_err(|e| anyhow::anyhow!("base64 decode failed: {e}"))
+}
+
+// ---------------------------------------------------------------------------
+// 统一文件操作分发
+// ---------------------------------------------------------------------------
+
+/// 统一文件操作分发：按 kind 调用 connector 对应方法，返回 JSON。
+/// Agent（WebSocket 隧道）和 Hub（HTTP handler）共用此函数。
+pub async fn dispatch_file(
+    conn: &mut dyn FileConnector,
+    kind: &str,
+    payload: &serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
+    match kind {
+        "list" => {
+            let path = payload.get("path").and_then(|v| v.as_str()).unwrap_or("/");
+            let entries = conn.list(path).await?;
+            Ok(serde_json::json!({ "entries": entries }))
+        }
+        "stat" => {
+            let path = payload.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            let e = conn.stat(path).await?;
+            Ok(serde_json::json!({ "entry": e }))
+        }
+        "mkdir" => {
+            let path = payload.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            conn.mkdir(path).await?;
+            Ok(serde_json::json!({ "ok": true }))
+        }
+        "delete" => {
+            let path = payload.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            conn.delete(path).await?;
+            Ok(serde_json::json!({ "ok": true }))
+        }
+        "rename" => {
+            let from = payload.get("from").and_then(|v| v.as_str()).unwrap_or("");
+            let to = payload.get("to").and_then(|v| v.as_str()).unwrap_or("");
+            conn.rename(from, to).await?;
+            Ok(serde_json::json!({ "ok": true }))
+        }
+        "download" => {
+            let path = payload.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            let offset = payload.get("offset").and_then(|v| v.as_u64()).unwrap_or(0);
+            let limit = payload.get("limit").and_then(|v| v.as_u64());
+            let data = if limit.is_some() || offset > 0 {
+                conn.download_range(path, offset, limit).await?
+            } else {
+                conn.download(path).await?
+            };
+            // 文件分块走 session_response 的 data.b64；大文件由前端切片下发。
+            Ok(serde_json::json!({ "data": base64_chunk(&data), "len": data.len() }))
+        }
+        "download_meta" => {
+            let path = payload.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            let e = conn.stat(path).await?;
+            Ok(serde_json::json!({ "size": e.size }))
+        }
+        "read_for_edit" => {
+            let path = payload.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            let data = conn.read_for_edit(path).await?;
+            Ok(serde_json::json!({ "data": base64_chunk(&data), "len": data.len() }))
+        }
+        "upload" => {
+            let path = payload.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            let offset = payload.get("offset").and_then(|v| v.as_u64()).unwrap_or(0);
+            let b64 = payload.get("data").and_then(|v| v.as_str()).unwrap_or("");
+            let data = base64_decode(b64)?;
+            conn.upload(path, data, offset, None).await?;
+            Ok(serde_json::json!({ "ok": true }))
+        }
+        "save_from_edit" => {
+            let path = payload.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            let b64 = payload.get("data").and_then(|v| v.as_str()).unwrap_or("");
+            let data = base64_decode(b64)?;
+            conn.save_from_edit(path, data).await?;
+            Ok(serde_json::json!({ "ok": true }))
+        }
+        "close" => {
+            let _ = conn.close().await;
+            Ok(serde_json::json!({ "closed": true }))
+        }
+        other => anyhow::bail!("unsupported file request kind: {other}"),
+    }
+}

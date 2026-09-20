@@ -15,6 +15,8 @@ use rex_common::redis::{RedisConnectRequest, RedisConnector};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
+use crate::error::{error_with_status, ErrorBody};
+
 /// 全局 Redis 连接池状态
 pub type RedisState = Arc<Mutex<RedisConnectionPool>>;
 
@@ -169,27 +171,8 @@ struct CommandBody {
     args: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
-struct ErrorBody {
-    error: ErrorDetail,
-}
-
-#[derive(Debug, Serialize)]
-struct ErrorDetail {
-    code: String,
-    message: String,
-}
-
 fn error_response(code: &str, message: &str) -> (StatusCode, Json<ErrorBody>) {
-    (
-        StatusCode::BAD_REQUEST,
-        Json(ErrorBody {
-            error: ErrorDetail {
-                code: code.to_string(),
-                message: message.to_string(),
-            },
-        }),
-    )
+    error_with_status(StatusCode::BAD_REQUEST, code, message)
 }
 
 // ---------------------------------------------------------------------------

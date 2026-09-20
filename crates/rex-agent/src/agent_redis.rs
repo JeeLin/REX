@@ -9,10 +9,14 @@ use std::sync::Arc;
 
 use tokio::sync::{mpsc, RwLock};
 
+use rex_common::redis::dispatch_redis;
 use rex_common::redis::RedisConnectRequest;
 use rex_common::redis::RedisConnector;
 
-use crate::agent_ws::{AgentEvent, LocalChannel};
+use rex_common::agent_proto::send_session_error;
+use rex_common::agent_proto::AgentEvent;
+
+use crate::agent_ws::LocalChannel;
 
 /// Agent 内建立 Redis 连接并接管隧道上的请求/响应。
 pub async fn handle_connect_redis(
@@ -92,7 +96,13 @@ pub async fn handle_connect_redis(
                 continue;
             }
         };
-        let resp = match dispatch_redis(&mut connector, &msg.kind, &msg.payload).await {
+        let resp = match dispatch_redis(
+            &mut connector as &mut dyn RedisConnector,
+            &msg.kind,
+            &msg.payload,
+        )
+        .await
+        {
             Ok(data) => rex_common::agent_proto::SessionResponse {
                 channel_id: channel_id.clone(),
                 seq: msg.seq,
@@ -121,110 +131,4 @@ pub async fn handle_connect_redis(
         chs.remove(&channel_id);
     }
     tracing::info!(action = "AGENT_REDIS_END", channel_id = %channel_id, "agent Redis session ended");
-}
-
-async fn dispatch_redis(
-    conn: &mut rex_redis::RedisConnectorImpl,
-    kind: &str,
-    payload: &serde_json::Value,
-) -> anyhow::Result<serde_json::Value> {
-    match kind {
-        "info" => {
-            let info = conn.info().await?;
-            Ok(serde_json::json!({ "info": info }))
-        }
-        "dbs" => {
-            let dbs = conn.dbs().await?;
-            Ok(serde_json::json!({ "dbs": dbs }))
-        }
-        "select_db" => {
-            let db = payload.get("db").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            conn.select_db(db).await?;
-            Ok(serde_json::json!({ "ok": true }))
-        }
-        "scan" => {
-            let pattern = payload
-                .get("pattern")
-                .and_then(|v| v.as_str())
-                .unwrap_or("*");
-            let count = payload.get("count").and_then(|v| v.as_u64()).unwrap_or(100) as u32;
-            let keys = conn.scan(pattern, count).await?;
-            Ok(serde_json::json!({ "keys": keys }))
-        }
-        "get_type" => {
-            let key = payload.get("key").and_then(|v| v.as_str()).unwrap_or("");
-            let t = conn.get_type(key).await?;
-            Ok(serde_json::json!({ "type": t }))
-        }
-        "get_value" => {
-            let key = payload.get("key").and_then(|v| v.as_str()).unwrap_or("");
-            let v = conn.get_value(key).await?;
-            Ok(serde_json::json!({ "value": v }))
-        }
-        "set_value" => {
-            let key = payload.get("key").and_then(|v| v.as_str()).unwrap_or("");
-            let val = payload.get("value").and_then(|v| v.as_str()).unwrap_or("");
-            conn.set_value(key, val).await?;
-            Ok(serde_json::json!({ "ok": true }))
-        }
-        "del" => {
-            let keys: Vec<String> = payload
-                .get("keys")
-                .and_then(|v| v.as_array())
-                .map(|a| {
-                    a.iter()
-                        .filter_map(|x| x.as_str().map(String::from))
-                        .collect()
-                })
-                .unwrap_or_default();
-            let n = conn.del(&keys).await?;
-            Ok(serde_json::json!({ "deleted": n }))
-        }
-        "ttl" => {
-            let key = payload.get("key").and_then(|v| v.as_str()).unwrap_or("");
-            let ttl = conn.ttl(key).await?;
-            Ok(serde_json::json!({ "ttl": ttl }))
-        }
-        "set_ttl" => {
-            let key = payload.get("key").and_then(|v| v.as_str()).unwrap_or("");
-            let secs = payload.get("seconds").and_then(|v| v.as_i64()).unwrap_or(0);
-            conn.set_ttl(key, secs).await?;
-            Ok(serde_json::json!({ "ok": true }))
-        }
-        "command" => {
-            let args: Vec<String> = payload
-                .get("args")
-                .and_then(|v| v.as_array())
-                .map(|a| {
-                    a.iter()
-                        .filter_map(|x| x.as_str().map(String::from))
-                        .collect()
-                })
-                .unwrap_or_default();
-            let out = conn.command(&args).await?;
-            Ok(serde_json::json!({ "output": out }))
-        }
-        "close" => {
-            let _ = conn.close().await;
-            Ok(serde_json::json!({ "closed": true }))
-        }
-        other => anyhow::bail!("unsupported redis request kind: {other}"),
-    }
-}
-
-async fn send_session_error(
-    evt_tx: &mpsc::Sender<AgentEvent>,
-    channel_id: &str,
-    request_id: Option<&str>,
-    error: &str,
-) {
-    let msg = rex_common::agent_proto::AgentSessionMsg::SessionError(
-        rex_common::agent_proto::SessionError {
-            channel_id: channel_id.to_string(),
-            request_id: request_id.map(|s| s.to_string()),
-            error: error.to_string(),
-        },
-    );
-    let s = serde_json::to_string(&msg).unwrap_or_default();
-    let _ = evt_tx.send(AgentEvent::Text(s)).await;
 }

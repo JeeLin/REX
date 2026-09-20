@@ -14,6 +14,8 @@ use rex_common::file_transfer::{FileConnectRequest, FileConnector};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
+use crate::error::{error_with_status, ErrorBody};
+
 pub type FileState = Arc<Mutex<FileConnectionPool>>;
 
 pub struct FileConnectionPool {
@@ -120,27 +122,8 @@ struct SaveFromEditBody {
     content: String, // base64 encoded
 }
 
-#[derive(Debug, Serialize)]
-struct ErrorBody {
-    error: ErrorDetail,
-}
-
-#[derive(Debug, Serialize)]
-struct ErrorDetail {
-    code: String,
-    message: String,
-}
-
 fn error_response(code: &str, message: &str) -> (StatusCode, Json<ErrorBody>) {
-    (
-        StatusCode::BAD_REQUEST,
-        Json(ErrorBody {
-            error: ErrorDetail {
-                code: code.to_string(),
-                message: message.to_string(),
-            },
-        }),
-    )
+    error_with_status(StatusCode::BAD_REQUEST, code, message)
 }
 
 // ---------------------------------------------------------------------------
