@@ -18,7 +18,9 @@ use tokio::sync::{mpsc, RwLock};
 use rex_ssh::{SshConfig, SshSession, TerminalEvent};
 use serde_json::Value;
 
-use crate::agent_ws::{AgentEvent, LocalChannel};
+use rex_common::agent_proto::AgentEvent;
+
+use crate::agent_ws::LocalChannel;
 
 /// 从 connect config 解析 SSH 配置（对应 Hub 侧 `handle_agent_terminal` 下发的字段约定）。
 pub fn parse_ssh_config(cfg: &Value) -> SshConfig {

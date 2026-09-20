@@ -118,3 +118,98 @@ pub trait RedisConnector: Send + Sync {
     /// 关闭连接
     async fn close(&mut self) -> Result<()>;
 }
+
+// ---------------------------------------------------------------------------
+// 统一 Redis 操作分发
+// ---------------------------------------------------------------------------
+
+/// 统一 Redis 操作分发：按 kind 调用 connector 对应方法，返回 JSON。
+/// Agent（WebSocket 隧道）和 Hub（HTTP handler）共用此函数。
+pub async fn dispatch_redis(
+    conn: &mut dyn RedisConnector,
+    kind: &str,
+    payload: &serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
+    match kind {
+        "info" => {
+            let info = conn.info().await?;
+            Ok(serde_json::json!({ "info": info }))
+        }
+        "dbs" => {
+            let dbs = conn.dbs().await?;
+            Ok(serde_json::json!({ "dbs": dbs }))
+        }
+        "select_db" => {
+            let db = payload.get("db").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            conn.select_db(db).await?;
+            Ok(serde_json::json!({ "ok": true }))
+        }
+        "scan" => {
+            let pattern = payload
+                .get("pattern")
+                .and_then(|v| v.as_str())
+                .unwrap_or("*");
+            let count = payload.get("count").and_then(|v| v.as_u64()).unwrap_or(100) as u32;
+            let keys = conn.scan(pattern, count).await?;
+            Ok(serde_json::json!({ "keys": keys }))
+        }
+        "get_type" => {
+            let key = payload.get("key").and_then(|v| v.as_str()).unwrap_or("");
+            let t = conn.get_type(key).await?;
+            Ok(serde_json::json!({ "type": t }))
+        }
+        "get_value" => {
+            let key = payload.get("key").and_then(|v| v.as_str()).unwrap_or("");
+            let v = conn.get_value(key).await?;
+            Ok(serde_json::json!({ "value": v }))
+        }
+        "set_value" => {
+            let key = payload.get("key").and_then(|v| v.as_str()).unwrap_or("");
+            let val = payload.get("value").and_then(|v| v.as_str()).unwrap_or("");
+            conn.set_value(key, val).await?;
+            Ok(serde_json::json!({ "ok": true }))
+        }
+        "del" => {
+            let keys: Vec<String> = payload
+                .get("keys")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let n = conn.del(&keys).await?;
+            Ok(serde_json::json!({ "deleted": n }))
+        }
+        "ttl" => {
+            let key = payload.get("key").and_then(|v| v.as_str()).unwrap_or("");
+            let ttl = conn.ttl(key).await?;
+            Ok(serde_json::json!({ "ttl": ttl }))
+        }
+        "set_ttl" => {
+            let key = payload.get("key").and_then(|v| v.as_str()).unwrap_or("");
+            let secs = payload.get("seconds").and_then(|v| v.as_i64()).unwrap_or(0);
+            conn.set_ttl(key, secs).await?;
+            Ok(serde_json::json!({ "ok": true }))
+        }
+        "command" => {
+            let args: Vec<String> = payload
+                .get("args")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let out = conn.command(&args).await?;
+            Ok(serde_json::json!({ "output": out }))
+        }
+        "close" => {
+            let _ = conn.close().await;
+            Ok(serde_json::json!({ "closed": true }))
+        }
+        other => anyhow::bail!("unsupported redis request kind: {other}"),
+    }
+}

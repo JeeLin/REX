@@ -121,6 +121,38 @@ impl DetectedDialect {
     }
 }
 
+/// 按端口返回候选方言列表（已知端口优先排对应方言，未知端口全量尝试）。
+///
+/// 调用方应依次对候选列表做协议握手，首个成功的即为正确方言。
+pub fn candidates_for_port(port: u16) -> &'static [DatabaseType] {
+    match port {
+        3306 => &[DatabaseType::MySQL, DatabaseType::PostgreSQL],
+        5432 => &[DatabaseType::PostgreSQL, DatabaseType::MySQL],
+        2883 | 1521 => &[
+            DatabaseType::Oracle,
+            DatabaseType::MySQL,
+            DatabaseType::PostgreSQL,
+        ],
+        1433 => &[
+            DatabaseType::SqlServer,
+            DatabaseType::MySQL,
+            DatabaseType::PostgreSQL,
+        ],
+        8123 | 9000 => &[
+            DatabaseType::ClickHouse,
+            DatabaseType::MySQL,
+            DatabaseType::PostgreSQL,
+        ],
+        _ => &[
+            DatabaseType::MySQL,
+            DatabaseType::PostgreSQL,
+            DatabaseType::Oracle,
+            DatabaseType::SqlServer,
+            DatabaseType::ClickHouse,
+        ],
+    }
+}
+
 // ---------------------------------------------------------------------------
 // SqlConnector trait
 // ---------------------------------------------------------------------------
@@ -200,6 +232,21 @@ pub enum DatabaseType {
     Oracle,
 }
 
+impl DatabaseType {
+    /// 转为持久化用的小写字符串。
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::MySQL => "mysql",
+            Self::PostgreSQL => "postgresql",
+            Self::SQLite => "sqlite",
+            Self::ClickHouse => "clickhouse",
+            Self::SqlServer => "sqlserver",
+            Self::MariaDB => "mariadb",
+            Self::Oracle => "oracle",
+        }
+    }
+}
+
 /// 连接器工厂，根据数据库类型创建对应的 [`SqlConnector`] 实现。
 pub struct SqlConnectorFactory {
     db_type: DatabaseType,
@@ -219,5 +266,163 @@ impl SqlConnectorFactory {
     /// 由 rex-hub 层提供实际分发，此处仅作类型封装。
     pub async fn connect(&self, _req: ConnectRequest) -> anyhow::Result<Box<dyn SqlConnector>> {
         anyhow::bail!("connect must be wired in rex-hub")
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 共享方言探测
+// ---------------------------------------------------------------------------
+
+/// 方言探测结果：已连接的连接器 + 持久化用的方言字符串。
+pub struct DetectResult {
+    pub conn: Box<dyn SqlConnector>,
+    pub dialect: &'static str,
+}
+
+/// 共享方言探测算法：端口预判 → 协议握手 → Oracle 跳过 → SELECT VERSION() 确认。
+///
+/// `connect_fn` 负责按 `DatabaseType` 创建连接器（Agent/Hub 各自注入实现）。
+pub async fn detect_dialect<F, Fut>(
+    req: ConnectRequest,
+    connect_fn: F,
+) -> anyhow::Result<DetectResult>
+where
+    F: Fn(DatabaseType, ConnectRequest) -> Fut,
+    Fut: std::future::Future<Output = anyhow::Result<Box<dyn SqlConnector>>>,
+{
+    // SQLite：无 host 或 port 为 0 视为本地文件库。
+    if req.host.is_empty() || req.port == 0 {
+        let conn = connect_fn(DatabaseType::SQLite, req.clone()).await?;
+        return Ok(DetectResult {
+            conn,
+            dialect: "sqlite",
+        });
+    }
+
+    let candidates = candidates_for_port(req.port);
+
+    for &dt in candidates {
+        let label = format!("{:?}", dt);
+        match connect_fn(dt, req.clone()).await {
+            Ok(mut conn) => {
+                // Oracle 不支持 SELECT VERSION()，协议握手成功即确认。
+                if dt == DatabaseType::Oracle {
+                    tracing::info!(port = req.port, dialect = ?dt, "dialect detected (Oracle, protocol handshake OK)");
+                    return Ok(DetectResult {
+                        conn,
+                        dialect: dt.as_str(),
+                    });
+                }
+                tracing::debug!(dialect = %label, "protocol handshake succeeded, trying SELECT VERSION()");
+                match conn.execute("SELECT VERSION()").await {
+                    Ok(result) => {
+                        let version = result
+                            .rows
+                            .first()
+                            .and_then(|r| r.first())
+                            .map(|v| v.to_string())
+                            .unwrap_or_default();
+                        let confirmed = if version.to_uppercase().contains("POSTGRESQL") {
+                            DatabaseType::PostgreSQL
+                        } else {
+                            dt
+                        };
+                        tracing::info!(
+                            port = req.port,
+                            version = %version,
+                            dialect = ?confirmed,
+                            "dialect detected"
+                        );
+                        // 确认结果与握手类型不同，重新连接。
+                        let final_conn = if confirmed == dt {
+                            conn
+                        } else {
+                            connect_fn(confirmed, req.clone()).await?
+                        };
+                        return Ok(DetectResult {
+                            conn: final_conn,
+                            dialect: confirmed.as_str(),
+                        });
+                    }
+                    Err(e) => {
+                        tracing::warn!(dialect = %label, error = %e, "SELECT VERSION() failed");
+                        continue;
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(dialect = %label, error = %e, "connection failed");
+                continue;
+            }
+        }
+    }
+
+    anyhow::bail!(
+        "unrecognized dialect (host={}, port={}). Please specify the subtype explicitly.",
+        req.host,
+        req.port,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// 统一 SQL 操作分发
+// ---------------------------------------------------------------------------
+
+/// 统一 SQL 操作分发：按 kind 调用 connector 对应方法，返回 JSON。
+/// Agent（WebSocket 隧道）和 Hub（HTTP handler）共用此函数。
+pub async fn dispatch_sql(
+    conn: &mut dyn SqlConnector,
+    kind: &str,
+    payload: &serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
+    match kind {
+        "query" | "exec" => {
+            let sql = payload.get("sql").and_then(|v| v.as_str()).unwrap_or("");
+            let res: QueryResult = conn.execute(sql).await?;
+            Ok(serde_json::json!({
+                "columns": res.columns,
+                "rows": res.rows,
+                "affected_rows": res.affected_rows,
+                "elapsed_ms": res.elapsed_ms,
+            }))
+        }
+        "databases" => {
+            let dbs = conn.databases().await?;
+            Ok(serde_json::json!({ "databases": dbs }))
+        }
+        "tables" => {
+            let db = payload.get("db").and_then(|v| v.as_str()).unwrap_or("");
+            let t = conn.tables(db).await?;
+            Ok(serde_json::json!({ "tables": t }))
+        }
+        "columns" => {
+            let db = payload.get("db").and_then(|v| v.as_str()).unwrap_or("");
+            let table = payload.get("table").and_then(|v| v.as_str()).unwrap_or("");
+            let c = conn.columns(db, table).await?;
+            Ok(serde_json::json!({ "columns": c }))
+        }
+        "indexes" => {
+            let db = payload.get("db").and_then(|v| v.as_str()).unwrap_or("");
+            let table = payload.get("table").and_then(|v| v.as_str()).unwrap_or("");
+            let idx = conn.indexes(db, table).await?;
+            Ok(serde_json::json!({ "indexes": idx }))
+        }
+        "foreign_keys" => {
+            let db = payload.get("db").and_then(|v| v.as_str()).unwrap_or("");
+            let table = payload.get("table").and_then(|v| v.as_str()).unwrap_or("");
+            let fks = conn.foreign_keys(db, table).await?;
+            Ok(serde_json::json!({ "foreign_keys": fks }))
+        }
+        "ddl" => {
+            let db = payload.get("db").and_then(|v| v.as_str()).unwrap_or("");
+            let table = payload.get("table").and_then(|v| v.as_str()).unwrap_or("");
+            let d = conn.ddl(db, table).await?;
+            Ok(serde_json::json!({ "ddl": d }))
+        }
+        "close" => {
+            let _ = conn.close().await;
+            Ok(serde_json::json!({ "closed": true }))
+        }
+        other => anyhow::bail!("unsupported sql request kind: {other}"),
     }
 }

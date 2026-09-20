@@ -11,6 +11,31 @@
 //! `channel_id` 关联 agent 隧道槽。
 
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
+
+/// Agent 内部事件类型，经 WebSocket 发送给 Hub。
+pub enum AgentEvent {
+    Text(String),
+    Binary(Vec<u8>),
+    #[allow(dead_code)]
+    Close,
+}
+
+/// 向 Hub 发送会话级错误消息。
+pub async fn send_session_error(
+    evt_tx: &mpsc::Sender<AgentEvent>,
+    channel_id: &str,
+    request_id: Option<&str>,
+    error: &str,
+) {
+    let msg = AgentSessionMsg::SessionError(SessionError {
+        channel_id: channel_id.to_string(),
+        request_id: request_id.map(|s| s.to_string()),
+        error: error.to_string(),
+    });
+    let s = serde_json::to_string(&msg).unwrap_or_default();
+    let _ = evt_tx.send(AgentEvent::Text(s)).await;
+}
 
 /// Hub → Agent：发起一次协议会话。
 #[derive(Debug, Clone, Serialize, Deserialize)]

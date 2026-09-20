@@ -11,7 +11,10 @@ use tokio::sync::{mpsc, RwLock};
 
 use rex_common::sql::{ConnectRequest, DatabaseType, QueryResult, SqlConnector};
 
-use crate::agent_ws::{AgentEvent, LocalChannel};
+use rex_common::agent_proto::send_session_error;
+use rex_common::agent_proto::AgentEvent;
+
+use crate::agent_ws::LocalChannel;
 
 /// 在 Agent 内建立 SQL 连接并接管隧道上的请求/响应。
 pub async fn handle_connect_sql(
@@ -61,6 +64,10 @@ pub async fn handle_connect_sql(
         "mysql" | "sql" => Some(DatabaseType::MySQL),
         "postgresql" | "postgres" => Some(DatabaseType::PostgreSQL),
         "sqlite" => Some(DatabaseType::SQLite),
+        "clickhouse" => Some(DatabaseType::ClickHouse),
+        "sqlserver" | "mssql" => Some(DatabaseType::SqlServer),
+        "oracle" => Some(DatabaseType::Oracle),
+        "mariadb" => Some(DatabaseType::MariaDB),
         "auto" | "" => None,
         other => {
             send_session_error(
@@ -76,7 +83,7 @@ pub async fn handle_connect_sql(
 
     // v0.70.7：db_type 缺省（auto）时，由 Agent 私网内探测 dialect 后回传 Hub 持久化。
     let (mut connector, detected): (Box<dyn SqlConnector>, Option<String>) = match db_type {
-        Some(dt) => match connect_by_type(dt, &req).await {
+        Some(dt) => match connect_by_type(dt, req.clone()).await {
             Ok(c) => (c, None),
             Err(e) => {
                 send_session_error(
@@ -144,20 +151,21 @@ pub async fn handle_connect_sql(
                 continue;
             }
         };
-        let resp = match dispatch_sql(&mut connector, &msg.kind, &msg.payload).await {
-            Ok(data) => rex_common::agent_proto::SessionResponse {
-                channel_id: channel_id.clone(),
-                seq: msg.seq,
-                data,
-                error: None,
-            },
-            Err(e) => rex_common::agent_proto::SessionResponse {
-                channel_id: channel_id.clone(),
-                seq: msg.seq,
-                data: serde_json::Value::Null,
-                error: Some(e.to_string()),
-            },
-        };
+        let resp =
+            match rex_common::sql::dispatch_sql(&mut *connector, &msg.kind, &msg.payload).await {
+                Ok(data) => rex_common::agent_proto::SessionResponse {
+                    channel_id: channel_id.clone(),
+                    seq: msg.seq,
+                    data,
+                    error: None,
+                },
+                Err(e) => rex_common::agent_proto::SessionResponse {
+                    channel_id: channel_id.clone(),
+                    seq: msg.seq,
+                    data: serde_json::Value::Null,
+                    error: Some(e.to_string()),
+                },
+            };
         let s = serde_json::to_string(&rex_common::agent_proto::AgentSessionMsg::SessionResponse(
             resp,
         ))
@@ -177,166 +185,32 @@ pub async fn handle_connect_sql(
 
 async fn connect_by_type(
     db_type: DatabaseType,
-    req: &ConnectRequest,
+    req: ConnectRequest,
 ) -> anyhow::Result<Box<dyn SqlConnector>> {
     match db_type {
-        DatabaseType::MySQL | DatabaseType::MariaDB => Ok(Box::new(
-            rex_mysql::MySqlConnector::connect(req.clone()).await?,
-        )),
+        DatabaseType::MySQL | DatabaseType::MariaDB => {
+            Ok(Box::new(rex_mysql::MySqlConnector::connect(req).await?))
+        }
         DatabaseType::PostgreSQL => Ok(Box::new(
-            rex_postgresql::PostgresConnector::connect(req.clone()).await?,
+            rex_postgresql::PostgresConnector::connect(req).await?,
         )),
-        DatabaseType::SQLite => Ok(Box::new(
-            rex_sqlite::SqliteConnector::connect(req.clone()).await?,
-        )),
+        DatabaseType::SQLite => Ok(Box::new(rex_sqlite::SqliteConnector::connect(req).await?)),
         DatabaseType::ClickHouse => Ok(Box::new(
-            rex_clickhouse::ClickHouseConnector::connect(req.clone()).await?,
+            rex_clickhouse::ClickHouseConnector::connect(req).await?,
         )),
-        DatabaseType::SqlServer => Ok(Box::new(
-            rex_mssql::SqlServerConnector::connect(req.clone()).await?,
-        )),
-        DatabaseType::Oracle => Ok(Box::new(
-            rex_oracle::OracleConnector::connect(req.clone()).await?,
-        )),
+        DatabaseType::SqlServer => Ok(Box::new(rex_mssql::SqlServerConnector::connect(req).await?)),
+        DatabaseType::Oracle => Ok(Box::new(rex_oracle::OracleConnector::connect(req).await?)),
     }
 }
 
-/// v0.70.7 dialect 探测：db_type 缺省时，按端口预判 → 双线缆协议握手回退 →
-/// `SELECT VERSION()` 确认，最终解析出 dialect 并连上对应连接器。
-///
-/// 返回探测出的连接器，以及探测 dialect 的 db_type 字符串（mysql/postgresql/sqlite），
-/// 供 `handle_connect_sql` 经 `SessionOpened.db_type` 回传 Hub 持久化。
-/// 与 Hub 直连侧 `detect_dialect` 共用同一套规则（见 rex-hub sql_api.rs）。
+/// v0.70.7 dialect 探测：db_type 缺省时，由 Agent 私网内探测 dialect 后回传 Hub 持久化。
+/// 连接逻辑委托给 `rex_common::sql::detect_dialect`，此处只提供 Agent 侧的 connect 闭包。
 async fn detect_dialect(
     req: &ConnectRequest,
 ) -> anyhow::Result<(Box<dyn SqlConnector>, Option<String>)> {
-    use rex_common::sql::DatabaseType;
-
-    // SQLite：无 host 或 port 为 0 视为本地文件库。
-    if req.host.is_empty() || req.port == 0 {
-        tracing::info!(action = "AGENT_SQL_DETECT", host = %req.host, port = req.port, "dialect: SQLite (empty host or port 0)");
-        let conn = Box::new(rex_sqlite::SqliteConnector::connect(req.clone()).await?);
-        return Ok((conn, Some("sqlite".to_string())));
-    }
-
-    tracing::info!(action = "AGENT_SQL_DETECT", host = %req.host, port = req.port, "starting dialect auto-detection");
-
-    // 端口预判：已知端口优先排对应方言，未知端口按常见度全量尝试。
-    let candidates: &[DatabaseType] = match req.port {
-        3306 => &[DatabaseType::MySQL, DatabaseType::PostgreSQL],
-        5432 => &[DatabaseType::PostgreSQL, DatabaseType::MySQL],
-        2883 | 1521 => &[
-            DatabaseType::Oracle,
-            DatabaseType::MySQL,
-            DatabaseType::PostgreSQL,
-        ],
-        1433 => &[
-            DatabaseType::SqlServer,
-            DatabaseType::MySQL,
-            DatabaseType::PostgreSQL,
-        ],
-        8123 | 9000 => &[
-            DatabaseType::ClickHouse,
-            DatabaseType::MySQL,
-            DatabaseType::PostgreSQL,
-        ],
-        _ => &[
-            DatabaseType::MySQL,
-            DatabaseType::PostgreSQL,
-            DatabaseType::Oracle,
-            DatabaseType::SqlServer,
-            DatabaseType::ClickHouse,
-        ],
-    };
-
-    // 收集每次尝试的失败原因，最终诊断时一并输出。
-    let mut errors: Vec<String> = Vec::new();
-
-    for &dt in candidates {
-        let label = format!("{:?}", dt);
-        match connect_by_type(dt, req).await {
-            Ok(mut conn) => {
-                // Oracle 不支持 SELECT VERSION()，协议握手成功即确认。
-                if dt == DatabaseType::Oracle {
-                    tracing::info!(
-                        action = "AGENT_SQL_DETECT",
-                        port = req.port,
-                        dialect = ?dt,
-                        "dialect detected (Oracle, protocol handshake OK)"
-                    );
-                    return Ok((conn, Some(detected_to_str(dt))));
-                }
-                tracing::debug!(action = "AGENT_SQL_DETECT", dialect = %label, "protocol handshake succeeded, trying SELECT VERSION()");
-                // `SELECT VERSION()` 确认 dialect（消除线缆协议握手歧义）。
-                match conn.execute("SELECT VERSION()").await {
-                    Ok(result) => {
-                        let version = result
-                            .rows
-                            .first()
-                            .and_then(|r| r.first())
-                            .map(|v| v.to_string())
-                            .unwrap_or_default();
-                        let confirmed = if version.to_uppercase().contains("POSTGRESQL") {
-                            DatabaseType::PostgreSQL
-                        } else {
-                            dt
-                        };
-                        tracing::info!(
-                            action = "AGENT_SQL_DETECT",
-                            port = req.port,
-                            version = %version,
-                            dialect = ?confirmed,
-                            "dialect detected"
-                        );
-                        // 已连上 confirmed 类型的连接器；若确认结果与握手类型不同，
-                        // 重新以确认类型连接（端口预判 + 握手可能匹配到错误协议）。
-                        let final_conn = if confirmed == dt {
-                            conn
-                        } else {
-                            connect_by_type(confirmed, req).await?
-                        };
-                        return Ok((final_conn, Some(detected_to_str(confirmed))));
-                    }
-                    Err(e) => {
-                        let msg = format!(
-                            "dialect {} protocol handshake OK but SELECT VERSION() failed: {}",
-                            label, e
-                        );
-                        tracing::warn!(action = "AGENT_SQL_DETECT", dialect = %label, error = %e, %msg);
-                        errors.push(msg);
-                        continue;
-                    }
-                }
-            }
-            Err(e) => {
-                let msg = format!("dialect {} connection failed: {}", label, e);
-                tracing::warn!(action = "AGENT_SQL_DETECT", dialect = %label, error = %e, %msg);
-                errors.push(msg);
-                continue;
-            }
-        }
-    }
-
-    // 汇总所有失败原因，提供可操作的诊断信息。
-    let detail = errors.join("; ");
-    anyhow::bail!(
-        "unrecognized dialect (host={}, port={}). Detection attempts: {}. \
-         Please specify the subtype explicitly when creating the resource (e.g. 'mysql', 'postgresql', or 'sqlite').",
-        req.host,
-        req.port,
-        detail
-    )
-}
-/// v0.70.7：将探测确认的 [`DatabaseType`] 转成持久化用的 db_type 字符串。
-fn detected_to_str(dt: DatabaseType) -> String {
-    match dt {
-        DatabaseType::MySQL | DatabaseType::MariaDB => "mysql".to_string(),
-        DatabaseType::PostgreSQL => "postgresql".to_string(),
-        DatabaseType::SQLite => "sqlite".to_string(),
-        DatabaseType::ClickHouse => "clickhouse".to_string(),
-        DatabaseType::SqlServer => "sqlserver".to_string(),
-        DatabaseType::Oracle => "oracle".to_string(),
-    }
+    let result =
+        rex_common::sql::detect_dialect(req.clone(), |dt, r| connect_by_type(dt, r)).await?;
+    Ok((result.conn, Some(result.dialect.to_string())))
 }
 
 async fn dispatch_sql(
@@ -376,21 +250,4 @@ async fn dispatch_sql(
         }
         other => anyhow::bail!("unsupported sql request kind: {other}"),
     }
-}
-
-async fn send_session_error(
-    evt_tx: &mpsc::Sender<AgentEvent>,
-    channel_id: &str,
-    request_id: Option<&str>,
-    error: &str,
-) {
-    let msg = rex_common::agent_proto::AgentSessionMsg::SessionError(
-        rex_common::agent_proto::SessionError {
-            channel_id: channel_id.to_string(),
-            request_id: request_id.map(|s| s.to_string()),
-            error: error.to_string(),
-        },
-    );
-    let s = serde_json::to_string(&msg).unwrap_or_default();
-    let _ = evt_tx.send(AgentEvent::Text(s)).await;
 }

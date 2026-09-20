@@ -1094,12 +1094,7 @@ fn parse_sip_config(cfg: &serde_json::Value) -> Result<rex_sip::SipConfig, Strin
     })
 }
 
-pub(crate) enum AgentEvent {
-    Text(String),
-    Binary(Vec<u8>),
-    #[allow(dead_code)]
-    Close,
-}
+pub(crate) use rex_common::agent_proto::AgentEvent;
 
 /// 处理 Hub 发来的更新指令
 async fn handle_update(cmd: rex_common::update::UpdateCommand, evt_tx: mpsc::Sender<AgentEvent>) {

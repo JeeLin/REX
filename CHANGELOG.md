@@ -1,4 +1,10 @@
 # Changelog
+## [0.87.0] - 2026-09-23
+
+### Changed
+- **Agent/Hub 公共逻辑收敛**：将方言探测（detect_dialect/candidates_for_port）、操作分发（dispatch_sql/redis/file）、错误处理（send_session_error/ErrorBody）等重复代码提取到 rex-common，消除 Agent 与 Hub 之间的大量重复
+- **手动指定方言**：Agent 和 Hub 连接时支持所有 7 种方言的手动指定（clickhouse/sqlserver/oracle/mariadb）
+
 
 ## [0.86.0] - 2026-09-22
 
