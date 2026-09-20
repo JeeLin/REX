@@ -229,14 +229,22 @@ async fn export_environments(State(state): State<AppState>) -> ApiResult<ExportD
             connection_mode: env.connection_mode.clone(),
             resources: resources
                 .into_iter()
-                .map(|r| ExportResource {
-                    name: r.name,
-                    protocol: r.protocol,
-                    host: r.host,
-                    port: r.port,
-                    username: r.username,
-                    config_json: r.config_json,
-                    color: r.color,
+                .map(|mut r| {
+                    // 解密 config_json 以便导出明文密码，import 时会重新加密
+                    if !r.config_json.is_empty() && r.config_json != "{}" {
+                        if let Ok(dec) = state.crypto.decrypt(&r.config_json) {
+                            r.config_json = dec;
+                        }
+                    }
+                    ExportResource {
+                        name: r.name,
+                        protocol: r.protocol,
+                        host: r.host,
+                        port: r.port,
+                        username: r.username,
+                        config_json: r.config_json,
+                        color: r.color,
+                    }
                 })
                 .collect(),
         });
@@ -311,13 +319,21 @@ async fn import_environments(
         for imp_res in &imp_env.resources {
             let db = state.db.clone();
             let env_id = env.id.clone();
+            // 重新加密 config_json（导出时已解密为明文）
+            let config_json = imp_res.config_json.as_deref().map(|cfg| {
+                if !cfg.is_empty() && cfg != "{}" {
+                    state.crypto.encrypt(cfg).unwrap_or_else(|_| cfg.to_string())
+                } else {
+                    cfg.to_string()
+                }
+            });
             let new_res = crate::models::NewResource {
                 name: imp_res.name.clone(),
                 protocol: imp_res.protocol.clone(),
                 host: imp_res.host.clone(),
                 port: imp_res.port,
                 username: imp_res.username.clone(),
-                config_json: imp_res.config_json.clone(),
+                config_json,
                 subtype: imp_res.subtype.clone(),
                 color: imp_res.color.clone(),
                 sort_order: None,
