@@ -1,4 +1,12 @@
 # Changelog
+## [0.87.1] - 2026-09-28
+
+### Fixed
+- **Windows Agent HTTP server**：改进端口绑定错误处理，0.0.0.0 失败时回退到 127.0.0.1 并输出明确日志
+- **SSH 终端 vim 兼容性**：PTY 请求添加标准终端模式（21 个），修复 vim/nano 等全屏编辑器无法正常工作的问题，同时修复 Agent 模式下 JumpServer 访问
+- **Hub 日志时区**：Hub worker 日志添加 RFC 3339 时区信息，与 Agent 日志格式统一
+- **环境数据导出**：修复导出环境数据时 config_json 未解密导致导入后密码丢失的问题，export 解密、import 重新加密
+
 ## [0.87.0] - 2026-09-23
 
 ### Changed

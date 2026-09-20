@@ -824,3 +824,11 @@ rex-agent = 所有 crate（无前端）
 - **依赖**：v0.85.0
 - **版本类型**：minor
 - **版本号**：v0.86.0
+
+### v0.87.1：缺陷池 bug 修复 ✅ 已完成
+- **核心功能**：修复缺陷池中的 5 个 bug（2 🔴 + 3 🟡）
+- **子任务**：5 个（Windows Agent HTTP server 端口权限、SSH 终端 vim + JumpServer 兼容、Agent 日志时区、Agent 更新残留文件清理、环境数据导出密码）
+- **依赖**：v0.86.0
+- **版本类型**：patch
+- **版本号**：v0.87.1
+- **缺陷池 bug**：Windows 下 Agent HTTP server 启动失败/端口权限（🔴）、SSH 终端不支持 vim 和 Agent 访问 JumpServer（🔴）、Agent 日志缺少时区信息（🟡）、Agent 更新后残留 .bak 和 .old 文件（🟡）（从 docs/BUGS.md 纳入，已在规划时从缺陷池删除）

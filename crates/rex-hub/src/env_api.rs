@@ -322,7 +322,10 @@ async fn import_environments(
             // 重新加密 config_json（导出时已解密为明文）
             let config_json = imp_res.config_json.as_deref().map(|cfg| {
                 if !cfg.is_empty() && cfg != "{}" {
-                    state.crypto.encrypt(cfg).unwrap_or_else(|_| cfg.to_string())
+                    state
+                        .crypto
+                        .encrypt(cfg)
+                        .unwrap_or_else(|_| cfg.to_string())
                 } else {
                     cfg.to_string()
                 }
