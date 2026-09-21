@@ -230,11 +230,9 @@ function initTerminal() {
       showSearch.value = !showSearch.value
       return false
     }
-    // Ctrl+V → paste from clipboard
+    // Ctrl+V → 交给 xterm.js 原生处理（自动 bracketed paste + 视觉显示）
     if (ctrl && (event.key === 'v' || event.key === 'V')) {
-      event.preventDefault()
-      doPaste().catch(() => {})
-      return false
+      return true
     }
     // Ctrl+C → copy selection or SIGINT
     if (ctrl && !event.shiftKey && (event.key === 'c' || event.key === 'C')) {
@@ -485,14 +483,21 @@ function toBase64(str: string): string {
 }
 
 async function doPaste() {
-  const text = await clipboard.readText()
-  if (text && ws?.readyState === WebSocket.OPEN) {
-    // 用 bracketed paste 模式包裹，让 vim/less 等程序区分粘贴和按键输入
-    const wrapped = `\x1b[200~${text}\x1b[201~`
-    ws.send(JSON.stringify({
-      type: 'terminal.data',
-      data: toBase64(wrapped),
-    }))
+  try {
+    const text = await navigator.clipboard.readText()
+    if (text && ws?.readyState === WebSocket.OPEN) {
+      const wrapped = `\x1b[200~${text}\x1b[201~`
+      ws.send(JSON.stringify({
+        type: 'terminal.data',
+        data: toBase64(wrapped),
+      }))
+    }
+  } catch {
+    // Clipboard API 被拒绝（非安全上下文）→ 提示用户用 Ctrl+V
+    toast.value?.push(
+      t('terminal.paste denied', 'Clipboard access denied. Use Ctrl+V to paste.'),
+      'warning',
+    )
   }
 }
 
