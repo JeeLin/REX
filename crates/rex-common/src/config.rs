@@ -32,10 +32,19 @@ pub fn default_config_path(kind: ServiceKind) -> PathBuf {
     }
 }
 
-fn default_data_dir() -> PathBuf {
-    std::env::var_os("HOME")
-        .map(|h| PathBuf::from(h).join(".rex"))
-        .unwrap_or_else(|| PathBuf::from(".rex"))
+pub fn default_data_dir() -> PathBuf {
+    #[cfg(windows)]
+    {
+        std::env::var_os("LOCALAPPDATA")
+            .map(|p| PathBuf::from(p).join("rex"))
+            .unwrap_or_else(|| PathBuf::from(".rex"))
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var_os("HOME")
+            .map(|h| PathBuf::from(h).join(".rex"))
+            .unwrap_or_else(|| PathBuf::from(".rex"))
+    }
 }
 
 /// 从配置文件加载并写入 env（env 已设置的键不被覆盖）。

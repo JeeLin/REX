@@ -85,9 +85,11 @@ pub fn dispatch(
         None => run(&RunOpts::default()),
         Some(Commands::Run(ref opts)) => run(opts),
         Some(Commands::Stop) => {
+            // 与 run 一致：先读配置文件，确保 data_dir 路径匹配
+            crate::config::apply_config_env(kind);
             let data_dir = std::env::var("REX_DATA_DIR")
                 .map(PathBuf::from)
-                .unwrap_or_else(|_| PathBuf::from(".rex"));
+                .unwrap_or_else(|_| crate::config::default_data_dir());
             println!("{}", crate::process::stop(kind, &data_dir));
             Ok(())
         }

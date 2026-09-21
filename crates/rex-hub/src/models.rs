@@ -28,6 +28,7 @@ pub struct UpdateEnvironment {
     pub name: Option<String>,
     pub description: Option<String>,
     pub connection_mode: Option<String>,
+    pub registration_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -443,11 +443,15 @@ impl Database {
             .connection_mode
             .as_deref()
             .unwrap_or(&existing.connection_mode);
+        let token = env
+            .registration_token
+            .as_deref()
+            .unwrap_or(&existing.registration_token);
         let now = chrono::Utc::now().to_rfc3339();
         let conn = self.conn()?;
         conn.execute(
-            "UPDATE environments SET name = ?1, description = ?2, connection_mode = ?3, updated_at = ?4 WHERE id = ?5",
-            rusqlite::params![name, desc, mode, now, id],
+            "UPDATE environments SET name = ?1, description = ?2, connection_mode = ?3, registration_token = ?4, updated_at = ?5 WHERE id = ?6",
+            rusqlite::params![name, desc, mode, token, now, id],
         )
         .map_err(|e| RExError::Message(e.to_string()))?;
         self.get_environment(id)?
