@@ -1,4 +1,21 @@
 # Changelog
+## [0.87.3] - 2026-09-21
+
+### Added
+- **Windows SCM 协议**：实现 `StartServiceCtrlDispatcherW` / `SERVICE_RUNNING` 状态上报，修复 `service start` 报错 1053（服务未及时响应）。新增 `--windows-service` 隐藏参数，`sc create binPath` 自动带入
+- **审计日志覆盖**：为 SQL、MongoDB、更新、SSH 终端、WS 隧道等敏感操作补充审计日志；新增 `db.audit()` / `db.audit_with_detail()` 便捷方法
+- **Settings 页面重设计**：数据管理（导出/导入 JSON）、字体大小步进、主题色板、透明度滑块、关于信息
+
+### Fixed
+- **SSH 终端粘贴**：移除自定义 `paste` 事件拦截器（调了 `e.preventDefault()` 导致 xterm.js 原生粘贴被阻断）；Ctrl+V 现在走 xterm.js 原生处理（自动 bracketed paste）
+- **SSH 终端 vim 崩溃**：降级 xterm.js 6.0→5.5，6.0 的 `requestMode` 在处理 DECSET/DECRST 序列时有 `ReferenceError` bug
+- **Supervisor 快速崩溃**：worker 在 5 秒内崩溃（端口占用、配置错误等确定性问题）时 supervisor 立即退出，不再无限重启
+- **开发模式启动**：去掉 `embedded-static` feature 硬依赖，开发模式用 `tower-http ServeDir` 从文件系统提供静态文件
+- **Windows service 错误提示**：安装/启动失败时给出管理员身份运行提示
+- **环境 token 重置**：修复前端 token 重置按钮不生效的问题
+- **Windows Agent PID 路径**：Stop 和 Run 使用相同的 `default_data_dir()`，修复跨路径死锁
+- **测试修复**：`UpdateEnvironment` 补充 `registration_token` 字段
+
 ## [0.87.1] - 2026-09-28
 
 ### Fixed
