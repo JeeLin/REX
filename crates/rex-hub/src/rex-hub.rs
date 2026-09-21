@@ -103,7 +103,7 @@ fn run_service(opts: &RunOpts) -> anyhow::Result<()> {
 fn data_dir_or_default() -> PathBuf {
     std::env::var("REX_DATA_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| default_data_dir())
+        .unwrap_or_else(|_| rex_common::config::default_data_dir())
 }
 
 fn supervisor_main() {
@@ -122,7 +122,7 @@ fn supervisor_main() {
 
     let data_dir = std::env::var("REX_DATA_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| default_data_dir());
+        .unwrap_or_else(|_| rex_common::config::default_data_dir());
     let _ = std::fs::create_dir_all(&data_dir);
 
     let port: u16 = std::env::var("REX_PORT")
@@ -166,7 +166,7 @@ fn worker_main() {
 
         let data_dir = std::env::var("REX_DATA_DIR")
             .map(PathBuf::from)
-            .unwrap_or_else(|_| default_data_dir());
+            .unwrap_or_else(|_| rex_common::config::default_data_dir());
         let db_path = data_dir.join("rex.db");
         let db = Arc::new(Database::open(&db_path).expect("failed to open database"));
         let auth = Arc::new(auth::AuthConfig::new(db.clone()).expect("failed to init auth"));
@@ -266,18 +266,6 @@ fn worker_main() {
 /// - Linux/macOS：`$HOME/.rex`
 /// - Windows：`%LOCALAPPDATA%/rex`（无则当前目录下的 .rex）
 /// - 其他平台：`.rex`
-fn default_data_dir() -> PathBuf {
-    if cfg!(windows) {
-        std::env::var_os("LOCALAPPDATA")
-            .map(|p| PathBuf::from(p).join("rex"))
-            .unwrap_or_else(|| PathBuf::from(".rex"))
-    } else {
-        std::env::var_os("HOME")
-            .map(|h| PathBuf::from(h).join(".rex"))
-            .unwrap_or_else(|| PathBuf::from(".rex"))
-    }
-}
-
 /// 把 stdout / stderr 重定向到日志文件（后台模式用）。
 #[cfg(unix)]
 fn redirect_stdio(log_path: &std::path::Path) -> anyhow::Result<()> {
