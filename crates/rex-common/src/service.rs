@@ -527,9 +527,20 @@ fn windows_install(cfg: &InstallConfig) -> Result<String> {
     cmd.arg("start=");
     cmd.arg("auto");
 
-    let status = cmd.status().context("failed to run sc create")?;
-    if !status.success() {
-        bail!("sc create failed for service {}", cfg.name);
+    let output = cmd.output().context("failed to run sc create")?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // error 5 = Access is denied (需要管理员权限)
+        if stderr.contains("5")
+            && (stderr.contains("Access is denied") || stderr.contains("拒绝访问"))
+        {
+            bail!("Access is denied. Please run this command as Administrator.\n右键点击终端 → \"以管理员身份运行\"");
+        }
+        bail!(
+            "sc create failed for service {}:\n{}",
+            cfg.name,
+            stderr.trim()
+        );
     }
 
     Ok(format!("installed Windows service: {}", cfg.name))
@@ -560,14 +571,34 @@ fn windows_uninstall(name: &str) -> Result<String> {
 fn windows_run(action: &str, name: &str) -> Result<String> {
     use std::process::Command;
 
-    let status = Command::new("sc")
+    let output = Command::new("sc")
         .arg(action)
         .arg(name)
-        .status()
+        .output()
         .context(format!("failed to run sc {}", action))?;
 
-    if !status.success() {
-        bail!("sc {} failed for service {}", action, name);
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // error 1060 = The specified service does not exist
+        if stderr.contains("1060") {
+            bail!(
+                "Service '{}' is not installed.\nRun: {} service install",
+                name,
+                name
+            );
+        }
+        // error 5 = Access is denied
+        if stderr.contains("5")
+            && (stderr.contains("Access is denied") || stderr.contains("拒绝访问"))
+        {
+            bail!("Access is denied. Please run this command as Administrator.\n右键点击终端 → \"以管理员身份运行\"");
+        }
+        bail!(
+            "sc {} failed for service {}:\n{}",
+            action,
+            name,
+            stderr.trim()
+        );
     }
 
     Ok(format!("service {} {}", name, action))
