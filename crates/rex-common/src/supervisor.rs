@@ -43,6 +43,8 @@ pub const EXIT_CRASH: i32 = 12;
 /// 不应直接调用此函数；应由 `main()` 根据进程角色决定调用。
 pub fn run_supervisor(config: SupervisorConfig, worker_args: &[String]) -> ! {
     let mut attempt: u32 = 0;
+    /// worker 启动后在此时间内退出视为"快速崩溃"（配置错误，不应无限重启）
+    const FAST_CRASH_SECS: u64 = 5;
 
     loop {
         tracing::info!(
@@ -51,14 +53,31 @@ pub fn run_supervisor(config: SupervisorConfig, worker_args: &[String]) -> ! {
             "spawning worker process"
         );
 
+        let start = std::time::Instant::now();
         let status = spawn_worker(worker_args);
+        let elapsed = start.elapsed().as_secs();
         let code = extract_exit_code(&status);
+        let fast_crash = elapsed < FAST_CRASH_SECS && code != EXIT_NORMAL;
 
         tracing::info!(
             action = "SUPERVISOR_WORKER_EXIT",
             exit_code = code,
+            elapsed_secs = elapsed,
+            fast_crash,
             "worker process exited"
         );
+
+        // 快速崩溃：端口占用、配置错误等确定性问题，不应无限重启
+        if fast_crash {
+            tracing::error!(
+                action = "SUPERVISOR_FAST_CRASH",
+                exit_code = code,
+                elapsed_secs = elapsed,
+                "worker crashed within {}s — likely a configuration error (port in use, bad config, etc.), stopping supervisor",
+                FAST_CRASH_SECS,
+            );
+            std::process::exit(code);
+        }
 
         let state_path = config.data_dir.join("update-state.json");
         let state = read_update_state(&state_path);
