@@ -204,43 +204,6 @@ impl Database {
         Ok(())
     }
 
-    /// 异步写审计日志的便捷方法，在 spawn_blocking 中执行。
-    pub fn audit(&self, action: &str, result: &str, target: Option<String>) {
-        let db = self.clone();
-        let action = action.to_string();
-        let result = result.to_string();
-        let _ = tokio::task::spawn_blocking(move || {
-            db.write_audit_log(&NewAuditEntry {
-                action,
-                target,
-                result,
-                ..Default::default()
-            })
-        });
-    }
-
-    /// 异步写审计日志（带 detail）。
-    pub fn audit_with_detail(
-        &self,
-        action: &str,
-        result: &str,
-        target: Option<String>,
-        detail: Option<String>,
-    ) {
-        let db = self.clone();
-        let action = action.to_string();
-        let result = result.to_string();
-        let _ = tokio::task::spawn_blocking(move || {
-            db.write_audit_log(&NewAuditEntry {
-                action,
-                target,
-                result,
-                detail,
-                ..Default::default()
-            })
-        });
-    }
-
     pub fn query_audit_log(&self, filter: &AuditFilter) -> Result<Vec<AuditEntry>> {
         let conn = self.conn()?;
         let mut sql = String::from(
@@ -1231,6 +1194,48 @@ impl Database {
             None => Ok(None),
         }
     }
+}
+
+/// 异步写审计日志的便捷方法，在 spawn_blocking 中执行。
+pub fn audit_log(
+    db: &std::sync::Arc<Database>,
+    action: &str,
+    result: &str,
+    target: Option<String>,
+) {
+    let db = db.clone();
+    let action = action.to_string();
+    let result = result.to_string();
+    let _ = tokio::task::spawn_blocking(move || {
+        db.write_audit_log(&NewAuditEntry {
+            action,
+            target,
+            result,
+            ..Default::default()
+        })
+    });
+}
+
+/// 异步写审计日志（带 detail）。
+pub fn audit_log_with_detail(
+    db: &std::sync::Arc<Database>,
+    action: &str,
+    result: &str,
+    target: Option<String>,
+    detail: Option<String>,
+) {
+    let db = db.clone();
+    let action = action.to_string();
+    let result = result.to_string();
+    let _ = tokio::task::spawn_blocking(move || {
+        db.write_audit_log(&NewAuditEntry {
+            action,
+            target,
+            result,
+            detail,
+            ..Default::default()
+        })
+    });
 }
 
 #[cfg(test)]

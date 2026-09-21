@@ -14,6 +14,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use rex_common::update::{UpdatePhase, UpdateStateFile};
 
+use crate::db::{audit_log, audit_log_with_detail};
 use crate::AppState;
 
 // ═══════════════════════════════════════
@@ -290,13 +291,19 @@ pub async fn trigger_update(
         match checker.download_and_stage(&info).await {
             Ok(()) => {
                 tracing::info!(action = "UPDATE_TRIGGERED", version = %target_version, "update staged, setting exit flag");
-                db_for_audit.audit("UPDATE_TRIGGERED", "success", Some(target_version));
+                audit_log(
+                    &db_for_audit,
+                    "UPDATE_TRIGGERED",
+                    "success",
+                    Some(target_version),
+                );
                 // 设置退出标志，由 main loop 检测后调用 std::process::exit(10)
                 std::env::set_var("REX_UPDATE_READY", "1");
             }
             Err(e) => {
                 tracing::error!(action = "UPDATE_TRIGGER_FAILED", error = %e, "failed to stage update");
-                db_for_audit.audit_with_detail(
+                audit_log_with_detail(
+                    &db_for_audit,
                     "UPDATE_TRIGGERED",
                     "failure",
                     Some(target_version),
@@ -402,9 +409,12 @@ pub async fn rollback_update(
         "rollback requested, supervisor will restart with old version"
     );
 
-    state
-        .db
-        .audit("UPDATE_ROLLBACK", "success", Some(s.target_version.clone()));
+    audit_log(
+        &state.db,
+        "UPDATE_ROLLBACK",
+        "success",
+        Some(s.target_version.clone()),
+    );
 
     Ok((
         StatusCode::OK,

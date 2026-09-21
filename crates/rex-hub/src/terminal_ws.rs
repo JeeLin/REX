@@ -17,6 +17,7 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio::time::Interval;
 
 use crate::agent_ws::{AgentEvent, ConnectResponse};
+use crate::db::audit_log;
 use crate::AppState;
 
 /// 前端 → 后端的消息（连接建立后的控制消息）
@@ -123,9 +124,12 @@ async fn handle_socket(mut ws: WebSocket, state: AppState, resource_id: String) 
         use_agent = conn_info.use_agent,
         "SSH connection initiated"
     );
-    state
-        .db
-        .audit("SSH_CONNECT", "success", Some(conn_info.name.clone()));
+    audit_log(
+        &state.db,
+        "SSH_CONNECT",
+        "success",
+        Some(conn_info.name.clone()),
+    );
 
     if conn_info.use_agent {
         handle_agent_terminal(ws, &state, &conn_info, &resource_id, &session_id).await;
@@ -139,9 +143,7 @@ async fn handle_socket(mut ws: WebSocket, state: AppState, resource_id: String) 
         name = %conn_info.name,
         "SSH session ended"
     );
-    state
-        .db
-        .audit("SSH_DISCONNECT", "success", Some(conn_info.name));
+    audit_log(&state.db, "SSH_DISCONNECT", "success", Some(conn_info.name));
 }
 
 /// 从 DB 读取资源连接信息

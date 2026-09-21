@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use url::form_urlencoded;
 
+use crate::db::audit_log;
 use crate::resource_conn::load_resource_config;
 use crate::AppState;
 use axum::extract::{Query, State};
@@ -169,7 +170,7 @@ async fn connect(
         "MongoDB connected"
     );
 
-    state.db.audit("MONGO_CONNECT", "success", Some(res.name));
+    audit_log(&state.db, "MONGO_CONNECT", "success", Some(res.name));
     (StatusCode::OK, Json(ConnectResponse { session_id })).into_response()
 }
 
@@ -179,9 +180,12 @@ async fn disconnect(
     Json(body): Json<DisconnectBody>,
 ) -> impl IntoResponse {
     state.mongo_pool.lock().await.remove(&body.session_id);
-    state
-        .db
-        .audit("MONGO_DISCONNECT", "success", Some(body.session_id));
+    audit_log(
+        &state.db,
+        "MONGO_DISCONNECT",
+        "success",
+        Some(body.session_id),
+    );
     StatusCode::NO_CONTENT.into_response()
 }
 
@@ -239,7 +243,8 @@ async fn query(State(state): State<AppState>, Json(body): Json<QueryBody>) -> im
 
     let start = std::time::Instant::now();
 
-    state.db.audit(
+    audit_log(
+        &state.db,
         "MONGO_QUERY",
         "success",
         Some(format!("{}/{}", body.database, body.collection)),
