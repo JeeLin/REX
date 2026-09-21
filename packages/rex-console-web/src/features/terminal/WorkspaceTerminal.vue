@@ -487,9 +487,11 @@ function toBase64(str: string): string {
 async function doPaste() {
   const text = await clipboard.readText()
   if (text && ws?.readyState === WebSocket.OPEN) {
+    // 用 bracketed paste 模式包裹，让 vim/less 等程序区分粘贴和按键输入
+    const wrapped = `\x1b[200~${text}\x1b[201~`
     ws.send(JSON.stringify({
       type: 'terminal.data',
-      data: toBase64(text),
+      data: toBase64(wrapped),
     }))
   }
 }
