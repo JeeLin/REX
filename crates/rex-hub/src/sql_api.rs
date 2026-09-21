@@ -369,6 +369,9 @@ async fn connect(
                 "SQL connection established"
             );
             state.sql_pool.lock().await.insert(session_id.clone(), conn);
+            state
+                .db
+                .audit("SQL_CONNECT", "success", Some(res.name.clone()));
             (StatusCode::OK, Json(ConnectResponse { session_id })).into_response()
         }
         Err(e) => {
@@ -379,6 +382,12 @@ async fn connect(
                 resource_name = %res.name,
                 error = %e,
                 "SQL connection failed"
+            );
+            state.db.audit_with_detail(
+                "SQL_CONNECT",
+                "failure",
+                Some(res.name),
+                Some(e.to_string()),
             );
             error_response("CONNECTION_FAILED", &e.to_string()).into_response()
         }
@@ -417,9 +426,13 @@ async fn disconnect(
     Json(body): Json<DisconnectBody>,
 ) -> impl IntoResponse {
     let mut pool = state.sql_pool.lock().await;
+    let session_id = body.session_id.clone();
     if let Some(mut conn) = pool.remove(&body.session_id) {
         let _ = conn.close().await;
-        tracing::info!(action = "SQL_DISCONNECT", session_id = %body.session_id, "SQL session disconnected");
+        tracing::info!(action = "SQL_DISCONNECT", session_id = %session_id, "SQL session disconnected");
+        state
+            .db
+            .audit("SQL_DISCONNECT", "success", Some(session_id));
         (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response()
     } else {
         error_response("SESSION_NOT_FOUND", "session not found").into_response()
@@ -453,6 +466,9 @@ async fn query(State(state): State<AppState>, Json(body): Json<QueryBody>) -> im
                 duration_ms = elapsed,
                 "SQL query executed"
             );
+            state
+                .db
+                .audit("SQL_QUERY", "success", Some(body.session_id));
             // Apply row limit (10000 rows)
             if result.rows.len() > 10000 {
                 result.rows.truncate(10000);
@@ -467,6 +483,12 @@ async fn query(State(state): State<AppState>, Json(body): Json<QueryBody>) -> im
                 error = %e,
                 "SQL query failed"
             );
+            state.db.audit_with_detail(
+                "SQL_QUERY",
+                "failure",
+                Some(body.session_id),
+                Some(e.to_string()),
+            );
             error_response("QUERY_FAILED", &e.to_string()).into_response()
         }
         Err(_) => {
@@ -476,6 +498,9 @@ async fn query(State(state): State<AppState>, Json(body): Json<QueryBody>) -> im
                 query_length = query_len,
                 "SQL query timed out"
             );
+            state
+                .db
+                .audit("SQL_QUERY", "timeout", Some(body.session_id));
             error_response("QUERY_TIMEOUT", "query timed out after 30 seconds").into_response()
         }
     }

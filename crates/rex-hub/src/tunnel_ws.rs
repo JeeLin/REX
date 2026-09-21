@@ -82,6 +82,11 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
         host = %connect_req.host,
         "tunnel connect requested"
     );
+    state.db.audit(
+        "TUNNEL_CONNECT",
+        "success",
+        Some(format!("{}@{}", connect_req.protocol, connect_req.host)),
+    );
 
     // 2. 查找 Agent 连接
     let agent_conn = {
@@ -271,6 +276,7 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
         error_count = errors,
         "tunnel closed"
     );
+    state.db.audit("TUNNEL_CLOSE", "success", Some(channel_id));
 }
 
 /// 从 WebSocket 读取连接请求

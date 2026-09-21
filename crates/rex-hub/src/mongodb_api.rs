@@ -169,6 +169,7 @@ async fn connect(
         "MongoDB connected"
     );
 
+    state.db.audit("MONGO_CONNECT", "success", Some(res.name));
     (StatusCode::OK, Json(ConnectResponse { session_id })).into_response()
 }
 
@@ -178,6 +179,9 @@ async fn disconnect(
     Json(body): Json<DisconnectBody>,
 ) -> impl IntoResponse {
     state.mongo_pool.lock().await.remove(&body.session_id);
+    state
+        .db
+        .audit("MONGO_DISCONNECT", "success", Some(body.session_id));
     StatusCode::NO_CONTENT.into_response()
 }
 
@@ -234,6 +238,12 @@ async fn query(State(state): State<AppState>, Json(body): Json<QueryBody>) -> im
     let coll: Collection<Document> = db.collection(&body.collection);
 
     let start = std::time::Instant::now();
+
+    state.db.audit(
+        "MONGO_QUERY",
+        "success",
+        Some(format!("{}/{}", body.database, body.collection)),
+    );
 
     match body.operation.to_lowercase().as_str() {
         "find" => {
