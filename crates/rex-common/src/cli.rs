@@ -55,6 +55,10 @@ pub struct RunOpts {
     #[arg(long)]
     pub background: bool,
 
+    /// Windows 服务模式：与 SCM 通信（StartServiceCtrlDispatcher），用于 service start。
+    #[arg(long, hide = true)]
+    pub windows_service: bool,
+
     // ── Hub 相关 ──
     /// Hub HTTP 监听端口（Hub）
     #[arg(long)]

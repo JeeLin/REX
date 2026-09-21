@@ -519,11 +519,14 @@ fn remove_file_if_exists(path: &Path) {
 fn windows_install(cfg: &InstallConfig) -> Result<String> {
     use std::process::Command;
 
-    // 构建 sc create 命令
+    // 构建 sc create 命令（binPath 需带 --windows-service 以启用 SCM 协议）
     let mut cmd = Command::new("sc");
     cmd.arg("create");
     cmd.arg(&cfg.name);
-    cmd.arg(format!("binPath=\"{}\"", cfg.exe.display()));
+    cmd.arg(format!(
+        "binPath=\"{}\" --windows-service",
+        cfg.exe.display()
+    ));
     cmd.arg("start=");
     cmd.arg("auto");
 
@@ -534,7 +537,7 @@ fn windows_install(cfg: &InstallConfig) -> Result<String> {
         if stderr.contains("5")
             && (stderr.contains("Access is denied") || stderr.contains("拒绝访问"))
         {
-            bail!("Access is denied. Please run this command as Administrator.\n右键点击终端 → \"以管理员身份运行\"");
+            bail!("Access is denied. Please open a terminal as Administrator, then re-run this command.\n请先以管理员身份打开终端（搜索 cmd → 右键 → 以管理员身份运行），再执行此命令。");
         }
         bail!(
             "sc create failed for service {}:\n{}",

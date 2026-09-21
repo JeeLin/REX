@@ -2,3 +2,5 @@
 
 | 提出版本 | 优先级 | 标题 | 来源 | 描述 |
 |----------|--------|------|------|------|
+| v0.87.2 | 🔴 | SSH 终端粘贴功能异常 | 用户反馈 | 复制操作正常，但所有粘贴操作都有问题（无法粘贴或粘贴内容异常） |
+| v0.87.2 | 🔴 | Windows 服务启动超时错误 1053 | 用户反馈 | `service install` 成功后，`service start` 报错 1053（服务未及时响应启动请求），可能是 rex-agent 未实现 Windows SCM 协议（StartServiceCtrlDispatcher / SERVICE_RUNNING 状态上报） |

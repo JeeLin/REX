@@ -11,9 +11,28 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+#[cfg(target_os = "windows")]
+use std::sync::atomic::{AtomicBool, Ordering};
 
 const EXIT_CODE_UPDATE: i32 = 42;
 const MAX_RESTARTS: u32 = 3;
+
+/// 全局 shutdown 标志：Windows SCM 控制处理器设置此标志，supervisor 循环检查后退出。
+#[cfg(target_os = "windows")]
+#[cfg(target_os = "windows")]
+static SHUTDOWN_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+/// 请求优雅关闭（Windows SCM 控制处理器调用）
+#[cfg(target_os = "windows")]
+pub fn request_shutdown() {
+    SHUTDOWN_REQUESTED.store(true, Ordering::SeqCst);
+}
+
+/// 检查是否收到 shutdown 请求
+#[cfg(target_os = "windows")]
+pub fn is_shutdown_requested() -> bool {
+    SHUTDOWN_REQUESTED.load(Ordering::SeqCst)
+}
 
 pub fn run_supervisor() {
     let timer = tracing_subscriber::fmt::time::ChronoLocal::rfc_3339();
@@ -51,6 +70,13 @@ pub fn run_supervisor() {
     let mut restart_count: u32 = 0;
 
     loop {
+        // 检查 SCM shutdown 请求（仅 Windows 服务模式）
+        #[cfg(target_os = "windows")]
+        if is_shutdown_requested() {
+            tracing::info!("shutdown requested by SCM, stopping supervisor");
+            break;
+        }
+
         // 启动 worker 子进程
         tracing::info!(restart = restart_count, "spawning worker");
 
