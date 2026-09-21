@@ -24,9 +24,138 @@ use rex_common::cli::{self, RunOpts, ServiceKind};
 fn main() {
     let cli = cli::parse();
     let kind = ServiceKind::Agent;
+
+    // Windows 服务模式：走 SCM 协议
+    #[cfg(target_os = "windows")]
+    {
+        if matches!(&cli.command, Some(cli::Commands::Run(o)) if o.windows_service) {
+            if let Err(e) = run_service_as_windows_service(&RunOpts::default()) {
+                eprintln!("Error: {e:#}");
+                std::process::exit(1);
+            }
+            return;
+        }
+    }
+
     if let Err(e) = cli::dispatch(cli, kind, run_service) {
         eprintln!("Error: {e:#}");
         std::process::exit(1);
+    }
+}
+
+/// Windows SCM 服务入口。由 `--windows-service` 触发。
+///
+/// 调用链：main → StartServiceCtrlDispatcher → scm_service_main → 注册 handler → 上报 RUNNING → 实际业务
+#[cfg(target_os = "windows")]
+fn run_service_as_windows_service(_opts: &RunOpts) -> anyhow::Result<()> {
+    use windows_sys::Win32::System::Services::*;
+
+    // SERVICE_TABLE_ENTRY 需要静态生命周期
+    let service_name: Vec<u16> = "rex-agent\0".encode_utf16().collect();
+    let mut table = [
+        SERVICE_TABLE_ENTRYW {
+            lpServiceName: service_name.as_ptr(),
+            lpServiceProc: Some(scm_service_main),
+        },
+        SERVICE_TABLE_ENTRYW {
+            lpServiceName: std::ptr::null(),
+            lpServiceProc: None,
+        },
+    ];
+
+    // StartServiceCtrlDispatcher 会阻塞，直到服务主函数返回
+    let ok = unsafe { StartServiceCtrlDispatcherW(table.as_ptr()) };
+    if ok == 0 {
+        // 失败（可能不是从 SCM 启动的），直接按普通模式运行
+        let opts = RunOpts::default();
+        run_service(&opts)?;
+    }
+    Ok(())
+}
+
+/// SCM 回调的服务主函数：注册 handler → 上报状态 → 执行业务 → 等待 shutdown
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn scm_service_main(_argc: u32, _argv: *mut *mut u16) {
+    use windows_sys::Win32::System::Services::*;
+
+    // 1. 注册控制处理器
+    let _handle = RegisterServiceCtrlHandlerExW(
+        b"rex-agent\0".as_ptr().cast(),
+        Some(scm_control_handler),
+        std::ptr::null_mut(),
+    );
+
+    // 2. 上报 SERVICE_START_PENDING
+    scm_report_status(SERVICE_START_PENDING, 0, 10000);
+
+    // 3. 执行实际业务（在新线程中，因为 scm_service_main 本身要阻塞等 shutdown）
+    let handle = std::thread::spawn(|| {
+        scm_report_status(SERVICE_RUNNING, 0, 0);
+        let opts = RunOpts::default();
+        let _ = run_service(&opts);
+    });
+
+    // 4. 阻塞等待 shutdown 请求
+    while !crate::supervisor::is_shutdown_requested() {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+
+    // 5. 上报 SERVICE_STOP_PENDING
+    scm_report_status(SERVICE_STOP_PENDING, 0, 30000);
+
+    // 6. 等待业务线程退出（最多 30 秒）
+    let _ = handle.join();
+
+    // 7. 上报 SERVICE_STOPPED
+    scm_report_status(SERVICE_STOPPED, 0, 0);
+}
+
+/// SCM 控制处理器：响应 Stop / Shutdown
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn scm_control_handler(
+    control: u32,
+    _event_type: u32,
+    _event_data: *mut core::ffi::c_void,
+    _context: *mut core::ffi::c_void,
+) -> u32 {
+    use windows_sys::Win32::System::Services::*;
+
+    match control {
+        SERVICE_CONTROL_STOP | SERVICE_CONTROL_SHUTDOWN => {
+            crate::supervisor::request_shutdown();
+            0 // NO_ERROR
+        }
+        _ => 0,
+    }
+}
+
+/// 上报服务状态给 SCM
+#[cfg(target_os = "windows")]
+fn scm_report_status(status: u32, exit_code: u32, wait_hint: u32) {
+    use windows_sys::Win32::System::Services::*;
+
+    static mut HANDLE: SERVICE_STATUS_HANDLE = std::ptr::null_mut();
+
+    unsafe {
+        if HANDLE.is_null() {
+            HANDLE = RegisterServiceCtrlHandlerExW(
+                b"rex-agent\0".as_ptr().cast(),
+                Some(scm_control_handler),
+                std::ptr::null_mut(),
+            );
+        }
+
+        let service_status = SERVICE_STATUS {
+            dwServiceType: SERVICE_WIN32_OWN_PROCESS,
+            dwCurrentState: status,
+            dwControlsAccepted: SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN,
+            dwWin32ExitCode: exit_code,
+            dwServiceSpecificExitCode: 0,
+            dwCheckPoint: 0,
+            dwWaitHint: wait_hint,
+        };
+
+        SetServiceStatus(HANDLE, &service_status);
     }
 }
 
