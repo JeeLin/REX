@@ -40,6 +40,10 @@ frontend/vite.config.d.ts
 frontend/vite.config.d.ts.map
 frontend/vite.config.js
 
+# Frontend coverage
+coverage/
+apps/web/
+
 # Worktrees
 .worktrees/
 

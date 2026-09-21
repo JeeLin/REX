@@ -36,9 +36,13 @@ use rex_hub::AppState;
 
 use rex_common::cli::{self, RunOpts, ServiceKind};
 
+#[cfg(feature = "embedded-static")]
 use axum::routing::get_service;
 use axum::Router;
+#[cfg(feature = "embedded-static")]
 use rex_hub::static_embed::create_embedded_static;
+#[cfg(not(feature = "embedded-static"))]
+use rex_hub::static_embed::dev_static_dir;
 
 fn main() {
     let cli = cli::parse();
@@ -299,6 +303,7 @@ async fn health_check() -> axum::Json<serde_json::Value> {
 }
 
 fn build_router(state: AppState) -> Router {
+    #[cfg(feature = "embedded-static")]
     let embedded = create_embedded_static("/");
 
     let public_routes = Router::new()
@@ -375,20 +380,31 @@ fn build_router(state: AppState) -> Router {
     // Agent WebSocket — 使用 Agent 自己的 token 认证，不走 JWT 中间件
     let agent_ws_route = Router::new().route("/ws/agent", axum::routing::get(agent_ws::ws_handler));
 
-    Router::new()
+    let router = Router::new()
         .merge(public_routes)
         .merge(protected_routes)
         .merge(agent_ws_route)
         .with_state(state)
         .layer(axum::middleware::from_fn(middleware::security_headers))
-        .layer(axum::middleware::from_fn(middleware::csrf_protection))
-        .fallback(
-            get_service(embedded).handle_error(|err: std::convert::Infallible| async move {
-                tracing::error!(error = %err, "static file serve error");
-                (
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    "Internal Server Error",
-                )
-            }),
-        )
+        .layer(axum::middleware::from_fn(middleware::csrf_protection));
+
+    #[cfg(feature = "embedded-static")]
+    let router = router.fallback(get_service(embedded).handle_error(
+        |err: std::convert::Infallible| async move {
+            tracing::error!(error = %err, "static file serve error");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal Server Error",
+            )
+        },
+    ));
+
+    #[cfg(not(feature = "embedded-static"))]
+    let router = {
+        let dir = dev_static_dir();
+        tracing::info!(path = %dir.display(), "serving static files from directory (dev mode)");
+        router.fallback_service(tower_http::services::ServeDir::new(&dir))
+    };
+
+    router
 }
