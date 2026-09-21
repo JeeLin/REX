@@ -283,16 +283,25 @@ pub async fn trigger_update(
 
     // 后台下载+暂存
     let data_dir = state.data_dir.clone();
+    let db_for_audit = state.db.clone();
+    let target_version = info.version.clone();
     tokio::spawn(async move {
         let checker = crate::update_checker::UpdateChecker::from_env(data_dir);
         match checker.download_and_stage(&info).await {
             Ok(()) => {
-                tracing::info!(action = "UPDATE_TRIGGERED", version = %info.version, "update staged, setting exit flag");
+                tracing::info!(action = "UPDATE_TRIGGERED", version = %target_version, "update staged, setting exit flag");
+                db_for_audit.audit("UPDATE_TRIGGERED", "success", Some(target_version));
                 // 设置退出标志，由 main loop 检测后调用 std::process::exit(10)
                 std::env::set_var("REX_UPDATE_READY", "1");
             }
             Err(e) => {
                 tracing::error!(action = "UPDATE_TRIGGER_FAILED", error = %e, "failed to stage update");
+                db_for_audit.audit_with_detail(
+                    "UPDATE_TRIGGERED",
+                    "failure",
+                    Some(target_version),
+                    Some(e.to_string()),
+                );
             }
         }
     });
@@ -392,6 +401,10 @@ pub async fn rollback_update(
         action = "UPDATE_ROLLBACK_TRIGGERED",
         "rollback requested, supervisor will restart with old version"
     );
+
+    state
+        .db
+        .audit("UPDATE_ROLLBACK", "success", Some(s.target_version.clone()));
 
     Ok((
         StatusCode::OK,
