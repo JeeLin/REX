@@ -13,6 +13,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use crate::agent_ws::{AgentEvent, ConnectResponse};
+use crate::db::audit_log;
 use crate::AppState;
 
 /// 前端 → Hub 的连接请求（第一条消息）
@@ -82,7 +83,8 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
         host = %connect_req.host,
         "tunnel connect requested"
     );
-    state.db.audit(
+    audit_log(
+        &state.db,
         "TUNNEL_CONNECT",
         "success",
         Some(format!("{}@{}", connect_req.protocol, connect_req.host)),
@@ -276,7 +278,7 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
         error_count = errors,
         "tunnel closed"
     );
-    state.db.audit("TUNNEL_CLOSE", "success", Some(channel_id));
+    audit_log(&state.db, "TUNNEL_CLOSE", "success", Some(channel_id));
 }
 
 /// 从 WebSocket 读取连接请求
