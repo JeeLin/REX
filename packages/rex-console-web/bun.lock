@@ -30,10 +30,10 @@
         "@vue-flow/core": "^1.41.0",
         "@vue-flow/minimap": "^1.5.0",
         "@vueuse/core": "^14.4.0",
-        "@xterm/addon-fit": "^0.11.0",
-        "@xterm/addon-search": "^0.16.0",
-        "@xterm/addon-unicode11": "^0.9.0",
-        "@xterm/xterm": "^6.0.0",
+        "@xterm/addon-fit": "0.11.0",
+        "@xterm/addon-search": "0.16.0",
+        "@xterm/addon-unicode11": "0.9.0",
+        "@xterm/xterm": "5.5.0",
         "axios": "^1.18.0",
         "pinia": "^2.2.0",
         "splitpanes": "^4.1.2",
@@ -396,7 +396,7 @@
 
     "@xterm/addon-unicode11": ["@xterm/addon-unicode11@0.9.0", "http://mirrors.cloud.tencent.com/npm/@xterm/addon-unicode11/-/addon-unicode11-0.9.0.tgz", {}, "sha512-FxDnYcyuXhNl+XSqGZL/t0U9eiNb/q3EWT5rYkQT/zuig8Gz/VagnQANKHdDWFM2lTMk9ly0EFQxxxtZUoRetw=="],
 
-    "@xterm/xterm": ["@xterm/xterm@6.0.0", "http://mirrors.cloud.tencent.com/npm/@xterm/xterm/-/xterm-6.0.0.tgz", {}, "sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg=="],
+    "@xterm/xterm": ["@xterm/xterm@5.5.0", "http://mirrors.cloud.tencent.com/npm/@xterm/xterm/-/xterm-5.5.0.tgz", {}, "sha512-hqJHYaQb5OptNunnyAnkHyM8aCjZ1MEIDTQu1iIbbTD/xops91NB5yq1ZK/dC2JDbVWtF23zUtl9JE2NqwT87A=="],
 
     "abbrev": ["abbrev@2.0.0", "http://mirrors.cloud.tencent.com/npm/abbrev/-/abbrev-2.0.0.tgz", {}, "sha512-6/mh1E2u2YgEsCHdY0Yx5oW+61gZU+1vXaoiHHrpKeuRNNgFvS+/jrwHiQhB5apAf5oB7UB7E19ol2R2LKH8hQ=="],
 
