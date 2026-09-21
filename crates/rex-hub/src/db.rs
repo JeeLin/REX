@@ -1580,6 +1580,7 @@ mod tests {
                     name: Some("new".into()),
                     description: None,
                     connection_mode: None,
+                    registration_token: None,
                 },
             )
             .unwrap();
