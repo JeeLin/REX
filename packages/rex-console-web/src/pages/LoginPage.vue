@@ -56,6 +56,17 @@ function toggleLang() {
   locale.value = locale.value === 'zh' ? 'en' : 'zh'
   localStorage.setItem('rex-lang', locale.value)
 }
+
+function toggleTheme() {
+  const current = localStorage.getItem('rex-theme') || 'dark'
+  const next = current === 'dark' ? 'light' : 'dark'
+  localStorage.setItem('rex-theme', next)
+  if (next === 'dark') {
+    delete document.documentElement.dataset.theme
+  } else {
+    document.documentElement.dataset.theme = next
+  }
+}
 </script>
 
 <template>
@@ -119,7 +130,25 @@ function toggleLang() {
             <span class="glyph">R</span>
             <span class="name">RE<b>X</b></span>
           </div>
-          <button class="lang-btn mono" @click="toggleLang">{{ locale === 'zh' ? '中文' : 'EN' }}</button>
+          <div class="top-actions">
+            <button
+              class="lang-btn mono"
+              :aria-label="t('language.toggle', 'Language')"
+              @click="toggleLang"
+            >
+              {{ locale === 'zh' ? '中文' : 'EN' }}
+            </button>
+            <button
+              class="lang-btn theme-btn"
+              :aria-label="t('theme.toggle', 'Toggle theme')"
+              :title="t('theme.toggle', 'Toggle theme')"
+              @click="toggleTheme"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <h1>{{ t('login.title') }}</h1>
@@ -324,7 +353,13 @@ function toggleLang() {
   margin: 0 0 26px;
 }
 
-/* ========== 语言切换按钮 ========== */
+/* ========== 语言 / 主题切换按钮 ========== */
+.top-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .lang-btn {
   display: inline-flex;
   align-items: center;
@@ -338,11 +373,21 @@ function toggleLang() {
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: background var(--transition), border-color var(--transition);
+  transition: background var(--transition), border-color var(--transition), color var(--transition);
 }
 .lang-btn:hover {
   background: var(--bg-hover);
   border-color: var(--border-strong);
+}
+
+.theme-btn {
+  width: 32px;
+  padding: 0;
+  color: var(--text-muted);
+}
+.theme-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 /* ========== 表单 ========== */
