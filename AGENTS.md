@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 ## 项目定位
 
@@ -224,7 +224,7 @@ docs/
     M{N}-reports/         里程碑报告（步骤 2/4/5/6/7）
   BUGS.md                  缺陷池
 README.md                 产品简介
-CLAUDE.md                 本文件
+AGENTS.md                 本文件
 .mise.toml                本地工具版本
 Cargo.toml                Rust workspace 根配置
 crates/
