@@ -4270,6 +4270,7 @@ dependencies = [
  "dotenvy",
  "futures-util",
  "hex",
+ "hostname",
  "include_dir",
  "jsonwebtoken",
  "libc",
