@@ -6,7 +6,8 @@ REX Agent 是部署在目标网络中的轻量级反向代理进程，为主进�
 
 - 主动出站连接 Hub，建立 WebSocket 加密隧道
 - 内网服务器无需开放入站端口
-- 支持 SSH/SFTP、MySQL、PostgreSQL、Redis、SQLite、S3/MinIO 协议代理
+- 支持 SSH/SFTP、MySQL、PostgreSQL、Redis、SQLite、ClickHouse、SQL Server、MariaDB、Oracle、S3/MinIO 协议代理
+- 内置本地 HTTP server（默认端口 3000），Agent 模式下直接提供前端页面与 /api/health
 - 自动更新机制
 
 ## 快速开始

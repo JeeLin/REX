@@ -91,18 +91,15 @@
 
 ## 审计日志
 
-### GET /api/audit
+### GET /api/audit-log
 查询审计日志（支持筛选）。
 
 **查询参数：** `time_from`, `time_to`, `action`, `result`, `limit`, `offset`
 
-### GET /api/audit/stats
+### GET /api/audit-log/stats
 获取审计日志统计。
 
-### GET /api/audit/export
-导出审计日志（`?format=csv` 或 `?format=json`）。
-
-### GET /api/audit/security-report
+### GET /api/audit-log/security-report
 安全审计报告（最近 24h 登录失败统计）。
 
 ---
@@ -113,10 +110,16 @@
 文件管理（SFTP/S3），见 `file_api`：`/connect` `/list` `/stat` `/mkdir` `/rename` `/delete` `/upload` `/download` `/acl`。
 
 ### POST /api/sql/connect
-连接 SQL 数据库（mysql/postgresql/sqlite），返回会话 id；后续 `/query` `/tables` `/columns` `/indexes` `/foreign_keys` `/ddl` `/databases` `/disconnect` 均带该 id。
+连接 SQL 数据库（mysql/postgresql/sqlite/clickhouse/mssql/mariadb/oracle），返回会话 id；后续 `/query` `/tables` `/columns` `/indexes` `/foreign_keys` `/ddl` `/databases` `/disconnect` 均带该 id。
 
 ### POST /api/redis/connect
 连接 Redis，返回会话 id；后续 `/scan` `/key` `/get` `/set` `/del` `/ttl` `/info` `/databases` `/command` `/select` `/disconnect` 均带该 id。
+
+### POST /api/mongodb/connect
+连接 MongoDB，返回会话 id；后续 `/databases` `/collections` `/query` `/disconnect` 均带该 id。
+
+### GET /api/health
+健康检查端点（supervisor 验证 worker 存活），返回 `mode` 字段（hub/agent），无需认证。
 
 ### POST /api/dashboard/**
 仪表盘统计（环境数 / 资源数 / Agent 在线数 / 今日操作数）。

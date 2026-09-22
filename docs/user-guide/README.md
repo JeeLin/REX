@@ -32,7 +32,7 @@ docker run -d \
 
 1. 进入环境详情页
 2. 点击「添加资源」
-3. 选择协议（SSH / MySQL / PostgreSQL / Redis / S3）
+3. 选择协议（SSH / SFTP / SQL / Redis / S3 / SIP）
 4. 填写连接信息
 5. 测试连接成功后创建
 
@@ -55,11 +55,15 @@ docker run -d \
 
 ### SQL 控制台
 
-数据库查询管理，支持 MySQL / PostgreSQL / SQLite。
+数据库查询管理，支持 MySQL / PostgreSQL / SQLite / ClickHouse / SQL Server / MariaDB / Oracle，提供查询结果数据对比。
+
+### MongoDB
+
+MongoDB 连接、数据库/集合浏览与查询执行（find / count / aggregate）。
 
 ### Redis 控制台
 
-Redis 缓存管理，支持键树、值查看器、CLI。
+Redis 缓存管理，支持键树、值查看器、CLI、Pub/Sub 实时消息监控。
 
 ### 文件管理
 
