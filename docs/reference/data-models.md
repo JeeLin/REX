@@ -103,9 +103,10 @@ CREATE TABLE settings (
 加密流程：
 
 ```text
-REX_SECRET_KEY
+数据目录 .master-key 文件
+（不存在时随机生成并写入，无对应环境变量）
   ↓
-派生加密密钥
+主密钥（32 字节）
   ↓
 AES-256-GCM 加密资源配置中的敏感字段
   ↓
