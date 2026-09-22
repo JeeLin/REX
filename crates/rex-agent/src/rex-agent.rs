@@ -51,14 +51,14 @@ fn run_service_as_windows_service(_opts: &RunOpts) -> anyhow::Result<()> {
     use windows_sys::Win32::System::Services::*;
 
     // SERVICE_TABLE_ENTRY 需要静态生命周期
-    let service_name: Vec<u16> = "rex-agent\0".encode_utf16().collect();
+    let mut service_name: Vec<u16> = "rex-agent\0".encode_utf16().collect();
     let mut table = [
         SERVICE_TABLE_ENTRYW {
-            lpServiceName: service_name.as_ptr(),
+            lpServiceName: service_name.as_mut_ptr(),
             lpServiceProc: Some(scm_service_main),
         },
         SERVICE_TABLE_ENTRYW {
-            lpServiceName: std::ptr::null(),
+            lpServiceName: std::ptr::null_mut(),
             lpServiceProc: None,
         },
     ];
