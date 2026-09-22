@@ -82,7 +82,6 @@ webpki-roots = "0.26"
 rmpv = "1"
 flate2 = "1"
 zstd = "0.13"
-criterion = { version = "0.5", features = ["html_reports"] }
 libc = "0.2"
 include_dir = "0.7"
 mime_guess = "2"
