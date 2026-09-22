@@ -303,12 +303,31 @@ async fn health_check() -> axum::Json<serde_json::Value> {
     }))
 }
 
+/// GET /api/system-info — 宿主机系统信息（os / arch / hostname）
+async fn system_info() -> axum::Json<serde_json::Value> {
+    let hostname = std::process::Command::new("hostname")
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "unknown".to_string());
+
+    axum::Json(serde_json::json!({
+        "os": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+        "hostname": hostname,
+    }))
+}
+
 fn build_router(state: AppState) -> Router {
     #[cfg(feature = "embedded-static")]
     let embedded = create_embedded_static("/");
 
     let public_routes = Router::new()
         .route("/api/health", axum::routing::get(health_check))
+        .route("/api/system-info", axum::routing::get(system_info))
         .route(
             "/metrics",
             axum::routing::get(rex_hub::metrics::metrics_endpoint),
