@@ -170,8 +170,8 @@ fn apply_update(current_exe: &Path) -> Result<String, String> {
     // rename staged → current（原子操作）
     // Windows 不允许 rename 正在运行的可执行文件（os error 5）。
     // 先 rename current → .old，再 rename staged → current。
-    // .old 的删除在更新完成后的 cleanup_update_leftovers 中尝试
-    // （Windows 上 supervisor 仍从 .old 运行会失败仅告警），并兜底于下次启动。
+    // .old / .bak 残留由下次更新前（updater）或 supervisor 下次启动时的
+    // cleanup_update_leftovers 清理（Windows 上 supervisor 仍从 .old 运行时删除会失败仅告警）。
     #[cfg(target_os = "windows")]
     {
         let old_path = current_exe.with_extension("old");
@@ -185,9 +185,6 @@ fn apply_update(current_exe: &Path) -> Result<String, String> {
 
     // 清理 update-state.json
     let _ = std::fs::remove_file(&state_path);
-
-    // 更新完成后清理 .old / .bak 残留（失败仅告警，不阻断更新）
-    rex_common::update::cleanup_update_leftovers(current_exe);
 
     Ok(state.target_version)
 }
