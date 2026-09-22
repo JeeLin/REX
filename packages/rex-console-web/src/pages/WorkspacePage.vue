@@ -666,7 +666,7 @@ useKeyboardShortcuts([
     <!-- Shortcut panel -->
     <ShortcutPanel :show="showShortcuts" @close="showShortcuts = false" />
 
-    <!-- Bottom-right shortcut guide toggle -->
+    <!-- Top-right shortcut guide toggle -->
     <button
       class="ws-shortcut-fab"
       :title="t('shortcuts.title')"
@@ -1076,11 +1076,11 @@ useKeyboardShortcuts([
   outline-offset: -2px;
 }
 
-/* Bottom-right shortcut guide toggle */
+/* Top-right shortcut guide toggle (below topbar so topbar actions stay clear) */
 .ws-shortcut-fab {
   position: fixed;
   right: var(--space-3);
-  bottom: var(--space-3);
+  top: calc(var(--topbar-height) + var(--space-3));
   z-index: 1000;
   width: 40px;
   height: 40px;
@@ -1103,12 +1103,11 @@ useKeyboardShortcuts([
   border-color: var(--accent);
 }
 
-/* 移动端：底栏（z-997）与右下浮动按钮簇会盖住/碰撞 FAB，移到左下并抬高避开 */
+/* 移动端：顶栏下右侧定位不与底部导航/右下浮动按钮簇冲突，仅收紧间距 */
 @media (max-width: 768px) {
   .ws-shortcut-fab {
-    right: auto;
-    left: var(--space-3);
-    bottom: calc(56px + var(--space-3));
+    right: var(--space-2);
+    top: calc(var(--topbar-height) + var(--space-2));
   }
 }
 /* Pin icon */
