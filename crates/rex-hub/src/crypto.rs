@@ -1,5 +1,5 @@
 //! 凭据加密：资源密码、SSH 私钥密码、Agent token 等敏感字段用 AES-256-GCM
-//! 加密后存库（密文 + nonce + 算法标识）。密钥由 `REX_SECRET_KEY` 派生。
+//! 加密后存库（密文 + nonce + 算法标识）。主密钥在数据目录 `.master-key` 自动生成（不存在时随机生成并写入，无对应环境变量）。
 
 use aes_gcm::{
     aead::{Aead, KeyInit, OsRng},

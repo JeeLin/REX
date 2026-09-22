@@ -16,8 +16,8 @@ services:
       - agent-data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      - REX_SERVER=${REX_SERVER}
-      - REX_TOKEN=${REX_TOKEN}
+      - REX_HUB_URL=${REX_HUB_URL}
+      - REX_AGENT_TOKEN=${REX_AGENT_TOKEN}
       - REX_DATA_DIR=/app/data
       # Hub 使用自签名证书时设置此项（跳过 TLS 证书验证）
       # - REX_TLS_INSECURE=true
