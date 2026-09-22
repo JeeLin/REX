@@ -89,7 +89,7 @@ fn run_worker() {
     // 定期检查更新
     loop {
         check_for_update();
-        sleep(Duration::from_secs(3600)); // 每 24 小时
+        sleep(Duration::from_secs(21600)); // 每 6 小时（与 update_checker 一致）
     }
 }
 ```
@@ -172,6 +172,7 @@ v0.70.8 起，`rex-hub` / `rex-agent` 提供统一的 clap 子命令入口，并
 
 - **Linux** → systemd：`install` 生成 `<name>.service`（user 在 `~/.config/systemd/user/`，system 在 `/etc/systemd/system/`），写入当前相关 env，随后 `daemon-reload` → `enable` → `start`。
 - **macOS** → launchd：生成 `com.rex.<hub|agent>.plist`（`RunAtLoad` + `KeepAlive`），写入当前 env，随后 `launchctl load`。
-- **其他平台**（如 Windows）：返回明确的不支持错误与带外指引（nssm / 任务计划程序），不崩溃。
+- **Windows** → SCM（v0.87）：`install` 执行 `sc create <name> binPath="…exe" --windows-service start= auto`（需管理员权限），`start`/`stop`/`restart`/`status` 分别映射到 `sc start`/`sc stop`/`sc restart`/`sc query`，`uninstall` 先 `sc stop` 再 `sc delete`。进程以 `--windows-service` 启动时走 `StartServiceCtrlDispatcher` 与 SCM 通信（见 rex-agent 的 `run_service_as_windows_service`）。
+- **其他平台**：返回明确的不支持错误与带外指引，不崩溃。
 
 Hub/Agent 共享 `rex-common::cli` 与 `rex-common::service` 模块，二进制本身仍只跑 supervisor + worker，进程模型与退出码语义不变。

@@ -36,6 +36,7 @@ pub trait FileConnector: Send + Sync {
 |------|------|------|
 | `SftpConnector`（rex-ssh） | SSH/SFTP | 通过 SSH 通道的 SFTP |
 | `S3Connector`（rex-s3） | S3/MinIO | 对象存储操作（含 multipart 续传） |
+| `AgentFileProxy`（rex-hub agent_proxy） | Agent 代理 | 内网资源经 `/ws/agent` 隧道代理文件操作 |
 | `MemConnector`（rex-transfer 测试用） | 内存 | 单测/集成测试的内存实现 |
 
 ---
@@ -105,15 +106,22 @@ pub struct TransferProgress {
 
 | 端点 | 说明 |
 |------|------|
-| `POST /connect` | 按 resource 建立后端 `FileConnector`（SFTP 或 S3） |
+| `POST /connect` | 按 resource 建立后端 `FileConnector`（SFTP / S3 / Agent 代理） |
+| `POST /disconnect` | 断开会话 |
 | `GET /list` | 列目录 |
 | `GET /stat` | 取文件/目录元信息 |
 | `POST /mkdir` | 建目录 |
 | `POST /rename` | 重命名/移动 |
-| `DELETE /delete` | 删除 |
+| `POST /delete` | 删除 |
 | `POST /upload` | 上传（支持 offset 断点续传，`progress` 回调回报进度） |
 | `GET /download` | 下载（支持 Range，对应 `download_range`） |
-| `POST /acl` | S3 ACL 读写 |
+| `POST /presigned-url` | 获取 S3 预签名 URL |
+| `GET /s3/multipart-uploads` | 列出 S3 分片上传 |
+| `POST /s3/resume-upload` | 恢复分片上传 |
+| `POST /s3/abort-upload` | 取消分片上传 |
+| `GET /acl` · `PUT /acl` | S3 ACL 读/写 |
+| `GET /read-for-edit` | 读取小文件内容（编辑器，最大 5MB） |
+| `POST /save-from-edit` | 保存编辑内容 |
 
 > 前端通过 `FileConnector` 的 `upload(offset)/download_range(offset, limit)` 实现断点续传与分片；进度由后端 `ProgressCallback` 经 REST 响应或前端轮询/状态展示，不经过浏览器中转数据。
 

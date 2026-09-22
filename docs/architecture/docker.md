@@ -26,35 +26,59 @@ supervisor 收到 SIGTERM 后，应在 30 秒内完成 worker 关闭和自身退
 
 ---
 
-## Hub Dockerfile
+## Hub Dockerfile（`Dockerfile.hub`）
 
 ```dockerfile
-FROM debian:bookworm-slim
+FROM ubuntu:24.04
 
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
-COPY rex-hub /usr/local/bin/rex-hub
 WORKDIR /app
 
-VOLUME ["/app/data"]
-EXPOSE 3000
+# Hub 二进制（已通过 include_dir! 嵌入前端 dist）
+COPY dist/rex-hub /app/rex-hub
+RUN chmod +x /app/rex-hub
 
-ENTRYPOINT ["rex-hub"]
+# Agent 二进制（供 /api/agents/download 使用）
+COPY dist/agents/ /app/agent-binaries/
+
+RUN mkdir -p /app/data /app/data/certs /app/data/acme /app/data/self-signed
+
+ENV REX_DATA_DIR=/app/data
+ENV REX_AGENT_BINARIES_DIR=/app/agent-binaries
+EXPOSE 3000
+EXPOSE 80
+EXPOSE 443
+
+# supervisor 作为 PID 1，spawn worker 子进程
+CMD ["/app/rex-hub"]
 ```
 
-## Agent Dockerfile
+## Agent Dockerfile（`Dockerfile.agent`）
 
 ```dockerfile
 FROM debian:bookworm-slim
 
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
-COPY rex-agent /usr/local/bin/rex-agent
+RUN useradd -r -s /bin/false agent
+
 WORKDIR /app
+RUN mkdir -p /app/data && chown agent:agent /app/data
 
-VOLUME ["/app/data"]
+# buildx 按 TARGETARCH 复制对应架构二进制
+ARG TARGETARCH
+COPY dist/rex-${TARGETARCH} /app/rex-agent
+RUN chmod +x /app/rex-agent
 
-ENTRYPOINT ["rex-agent"]
+USER agent
+ENV REX_DATA_DIR=/app/data
+
+CMD ["/app/rex-agent"]
 ```
 
 ## Docker 内更新限制
@@ -108,8 +132,10 @@ supervisor 退出
 
 ```bash
 REX_SECRET_KEY=your-secret-key
-GITHUB_REPO_OWNER=rexhub
+GITHUB_REPO_OWNER=<ghcr.io 仓库 owner，镜像为 ghcr.io/<owner>/rex-hub:latest>
 ```
+
+镜像与 compose 文件：`ghcr.io/${GITHUB_REPO_OWNER}/rex-hub:latest`，compose 文件为 `docker-compose.hub.yaml`（映射端口 3000/80，healthcheck 探测 `http://127.0.0.1:3000/`）。
 
 启动：
 
@@ -138,8 +164,10 @@ docker compose -f docker-compose.hub.yaml logs -f hub
 ```bash
 REX_SERVER=https://your-hub.com
 REX_TOKEN=<环境注册令牌>
-GITHUB_REPO_OWNER=rexhub
+GITHUB_REPO_OWNER=<ghcr.io 仓库 owner，镜像为 ghcr.io/<owner>/rex-agent:latest>
 ```
+
+可选：`REX_TLS_INSECURE=true`（Hub 使用自签名证书时）。Agent 无入站端口，healthcheck 用 `pgrep` 探测进程存活；卷中挂载了 `/var/run/docker.sock`。
 
 启动：
 
