@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import Checkbox from '@/components/ui/Checkbox.vue'
+import { toggleTheme } from '@/composables/useTheme'
 
 const { t, locale } = useI18n()
 const auth = useAuthStore()
@@ -57,16 +58,6 @@ function toggleLang() {
   localStorage.setItem('rex-lang', locale.value)
 }
 
-function toggleTheme() {
-  const current = localStorage.getItem('rex-theme') || 'dark'
-  const next = current === 'dark' ? 'light' : 'dark'
-  localStorage.setItem('rex-theme', next)
-  if (next === 'dark') {
-    delete document.documentElement.dataset.theme
-  } else {
-    document.documentElement.dataset.theme = next
-  }
-}
 </script>
 
 <template>
