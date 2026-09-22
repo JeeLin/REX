@@ -15,7 +15,6 @@ RestartSec=3
 # Directories — adjust to match your deployment
 WorkingDirectory=/opt/rex-hub
 Environment=DATA_DIR=/opt/rex-hub/data
-Environment=REX_SECRET_KEY=CHANGE_ME
 
 # Hardening
 NoNewPrivileges=true
