@@ -46,7 +46,7 @@
 | `REX_TLS_INSECURE` | — | 存在时跳过 TLS 证书验证（仅限内网测试环境） |
 | `REX_AUTO_UPDATE` | — | 存在时启用自动更新 |
 | `REX_WORKER` | — | 存在时启动 worker 子进程（supervisor 自动设置，不要手动设置） |
-| `REX_AGENT_HTTP_PORT` | `9527` | Agent 本地 HTTP 控制端口 |
+| `REX_AGENT_HTTP_PORT` | `3000` | Agent 本地 HTTP 控制端口 |
 | `REX_AGENT_BINARIES_DIR` | `./bin` | Agent 更新时暂存/替换二进制的目录 |
 
 ---
