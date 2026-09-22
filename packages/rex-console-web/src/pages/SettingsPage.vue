@@ -1074,6 +1074,10 @@ async function importData() {
 
 /* Import button */
 .import-btn {
+  /* Positioned ancestor for the .sr-only file input: without it the abs-pos
+     input escapes .main's clip and extends the document scroll area, making
+     scrollIntoView shift the whole page on nav clicks */
+  position: relative;
   display: inline-flex;
   align-items: center;
   height: var(--btn-height-sm);
