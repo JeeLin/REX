@@ -177,6 +177,22 @@ onMounted(async () => {
   }
 })
 
+// About: deployment server info (not the visiting browser)
+interface SystemInfo {
+  os: string
+  arch: string
+  hostname: string
+}
+const serverInfo = ref<SystemInfo>({ os: '', arch: '', hostname: '' })
+
+onMounted(async () => {
+  try {
+    serverInfo.value = await api.get<SystemInfo>('/system-info')
+  } catch {
+    // endpoint unavailable — keep placeholders
+  }
+})
+
 function onLanguageChange() {
   locale.value = settings.value.language as 'zh' | 'en'
   localStorage.setItem('rex-lang', settings.value.language)
@@ -675,12 +691,16 @@ async function importData() {
           </div>
           <div class="about-grid">
             <div class="about-item">
-              <span class="about-item-label">{{ t('settings.platform') }}</span>
-              <span class="about-item-value mono">{{ navigatorPlatform }}</span>
+              <span class="about-item-label">{{ t('settings.serverOs', 'Server OS') }}</span>
+              <span class="about-item-value mono">{{ serverInfo.os || '—' }}</span>
             </div>
             <div class="about-item">
-              <span class="about-item-label">{{ t('settings.userAgent') }}</span>
-              <span class="about-item-value mono">{{ navigatorUserAgent }}</span>
+              <span class="about-item-label">{{ t('settings.serverArch', 'Architecture') }}</span>
+              <span class="about-item-value mono">{{ serverInfo.arch || '—' }}</span>
+            </div>
+            <div class="about-item">
+              <span class="about-item-label">{{ t('settings.serverHostname', 'Hostname') }}</span>
+              <span class="about-item-value mono">{{ serverInfo.hostname || '—' }}</span>
             </div>
             <div class="about-item">
               <span class="about-item-label">{{ t('settings.license') }}</span>
@@ -707,11 +727,6 @@ async function importData() {
     </div>
   </div>
 </template>
-
-<script lang="ts">
-const navigatorPlatform = navigator.platform || '—'
-const navigatorUserAgent = navigator.userAgent.split(' ').pop() || '—'
-</script>
 
 <style scoped>
 /* Layout */
