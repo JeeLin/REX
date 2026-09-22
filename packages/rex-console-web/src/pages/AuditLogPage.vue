@@ -22,9 +22,9 @@ const expandedId = ref<string | null>(null)
 const currentPage = ref(1)
 const pageSize = ref(50)
 const pageSizeOptions = [
-  { label: '20', value: 20 },
   { label: '50', value: 50 },
   { label: '100', value: 100 },
+  { label: '200', value: 200 },
 ]
 const totalCount = ref(0)
 const agentsMap = ref<Map<string, Agent>>(new Map())
@@ -475,9 +475,26 @@ onMounted(async () => {
       </ResponsiveTable>
     </div>
 
-    <!-- No pagination per prototype - show all rows -->
+    <!-- Pagination -->
     <div class="audit-table-footer">
-      <span class="page-total muted">{{ totalCount.toLocaleString() }} {{ t('auditLog.totalCount', 'total') }}</span>
+      <span class="page-total muted">{{ t('auditLog.totalCount', { n: totalCount }) }}</span>
+      <span class="field-label">{{ t('auditLog.pageSize', 'Page size') }}</span>
+      <Select v-model="pageSize" :options="pageSizeOptions" size="sm" />
+      <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--">← {{ t('common.prev', 'Prev') }}</button>
+      <span class="page-info mono">{{ currentPage }} / {{ totalPages }}</span>
+      <button class="page-btn" :disabled="currentPage >= totalPages" @click="currentPage++">{{ t('common.next', 'Next') }} →</button>
+      <span class="page-goto">
+        <span class="muted">{{ t('auditLog.gotoPage', 'Go to page') }}</span>
+        <input
+          v-model.number="gotoPage"
+          class="page-goto-input mono"
+          type="number"
+          min="1"
+          :max="totalPages"
+          @keyup.enter="applyGoto"
+        />
+        <span class="muted">{{ t('auditLog.pageUnit', 'Page') }}</span>
+      </span>
     </div>
 
 
@@ -835,8 +852,12 @@ onMounted(async () => {
 }
 
 .audit-table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
   padding: var(--space-4) 0;
-  text-align: center;
 }
 .page-total {
   font-size: var(--text-xs);
