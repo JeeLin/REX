@@ -175,6 +175,7 @@
     "environmentsSection": "Environments",
     "newEnvironment": "New environment",
     "noAgent": "no agent",
+    "noAgentEnvironments": "No agent-connected environments",
     "noEnvironments": "No environments",
     "noRecentConnections": "No recent connections",
     "recentCount": "recent · {count}",
