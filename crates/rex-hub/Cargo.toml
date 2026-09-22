@@ -58,6 +58,7 @@ mongodb = { workspace = true }
 include_dir = { workspace = true }
 mime_guess = { workspace = true }
 tower = { workspace = true }
+dotenvy = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
