@@ -229,9 +229,6 @@ fn worker_main() {
             tracing::info!("listening on HTTP 0.0.0.0:{port}");
         }
 
-        // 初始化指标收集
-        rex_hub::metrics::init();
-
         // 启动后台更新检查任务（每 6 小时检查 GitHub Release）
         let update_data_dir = data_dir.clone();
         tokio::spawn(async move {
@@ -328,10 +325,6 @@ fn build_router(state: AppState) -> Router {
     let public_routes = Router::new()
         .route("/api/health", axum::routing::get(health_check))
         .route("/api/system-info", axum::routing::get(system_info))
-        .route(
-            "/metrics",
-            axum::routing::get(rex_hub::metrics::metrics_endpoint),
-        )
         .route("/api/auth/check", axum::routing::get(auth::check_auth))
         .route("/api/auth/login", axum::routing::post(auth::login))
         .route(
