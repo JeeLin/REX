@@ -14,7 +14,7 @@
 {
   "phase": "idle",
   "target_version": "",
-  "old_version": "v0.1.0",
+  "old_version": "v0.87.2",
   "staged_path": "",
   "rollback_path": "",
   "attempt": 0
@@ -55,43 +55,37 @@ idle                    重启 worker                       rolled_back
 
 ### Hub Release 结构
 
-GitHub Release 建议包含：
+GitHub Release 资源命名（当前版本示例 v0.87.3）：
 
 ```text
-rex-hub-v0.2.0-linux-amd64
-rex-hub-v0.2.0-linux-arm64
-rex-hub-v0.2.0-darwin-arm64
-rex-hub-v0.2.0-darwin-amd64
-rex-hub-v0.2.0-windows-amd64.exe
-rex-hub-v0.2.0-SHA256SUMS
+rex-hub-linux-amd64
+rex-hub-linux-arm64
+rex-hub-mac-arm64
+rex-hub-mac-amd64
+rex-hub-windows-amd64.exe
+rex-hub-SHA256SUMS
 ```
 
-Hub worker 下载对应平台二进制和 `SHA256SUMS`，校验通过后才进入替换流程。
+GitHub 仓库通过环境变量配置：`REX_UPDATE_GITHUB_OWNER`（默认 `JeeLin`）、`REX_UPDATE_GITHUB_REPO`（默认 `REX`）。检查间隔：每 6 小时。
+
+Hub worker 下载对应平台二进制和 `rex-hub-SHA256SUMS`，校验通过后才进入替换流程。
 
 ### Agent 下载包
 
-Hub 部署包需要包含同版本 Agent 二进制：
+Hub 需要能提供同版本 Agent 二进制，查找顺序：本地预置目录（`REX_AGENT_BINARIES_DIR` / `{data-dir}/agent-binaries` / `/app/agent-binaries`）→ GitHub Releases（当前版本，命名 `rex-agent-{os}-{arch}`，darwin 映射为 mac）。
 
-```text
-agent-binaries/
-├── rex-agent-linux-amd64
-├── rex-agent-linux-arm64
-├── rex-agent-linux-armv7l
-├── rex-agent-darwin-arm64
-├── rex-agent-darwin-amd64
-└── rex-agent-windows-amd64.exe
 ```
-
-Hub 在 `/api/agent/download` 中读取对应文件，并返回 SHA256。
+GET /api/agents/download?os=linux&arch=amd64
+```
 
 ### 原子替换
 
-Unix/Linux/macOS：
+Unix/Linux/macOS（staging 目录在 data-dir 下）：
 
 ```text
-当前二进制：/opt/rex-hub/rex-hub
-staging：/opt/rex-hub/update/staging/rex-hub.v0.2.0
-rollback：/opt/rex-hub/update/rollback/rex-hub.v0.1.0
+当前二进制：{data-dir}/../rex-hub（实际安装路径）
+staging：{data-dir}/update/rex-hub.v0.87.3
+rollback：{data-dir}/update/rollback/rex-hub.v0.87.2
 ```
 
 替换流程：
@@ -119,7 +113,7 @@ rename update-state.json.tmp → update-state.json
 
 ```text
 REX_UPDATE_PENDING=1
-REX_TARGET_VERSION=v0.2.0
+REX_TARGET_VERSION=v0.87.3
 ```
 
 worker 检测到 `REX_UPDATE_PENDING=1` 时：
