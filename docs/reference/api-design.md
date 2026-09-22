@@ -30,7 +30,7 @@ POST /api/auth/login
 - 登录成功后返回 bearer token。
 - 前端请求携带 `Authorization: Bearer <token>` header。
 - 所有管理 API 必须认证。
-- `/healthz` 可以公开，只返回基础健康状态。
+- `/api/health` 可以公开，只返回基础健康状态（含 mode 字段 hub/agent）。
 
 ## 统一错误响应
 

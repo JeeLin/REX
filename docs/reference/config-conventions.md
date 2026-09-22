@@ -2,30 +2,26 @@
 
 ## Hub 配置
 
+配置优先级：**命令行参数 > 环境变量 > 配置文件**。Hub 配置文件：`~/.rex/config.yaml`（即 `<data_dir>/config.yaml`），Agent 配置文件：`~/.rex/agent.yaml`。
+
 ```yaml
-# hub.yaml
-listen: ":3000"
+# config.yaml（Hub）
+port: 3000
 data_dir: "./data"
-secret_key: "${REX_SECRET_KEY}"
-tls:
-  cert: ""
-  key: ""
-update:
-  enabled: true
-  check_interval: 86400
-  github_repo: "owner/rex-hub"
 ```
+
+对应环境变量：`REX_PORT`、`REX_DATA_DIR`。TLS 由环境变量配置（`REX_TLS_CERT`/`REX_TLS_KEY` 或 `REX_ACME_DOMAIN` 等，见 `tls.rs::TlsConfig::from_env`），不进配置文件。
 
 ## Agent 配置
 
 ```yaml
 # agent.yaml
-server: "https://hub.example.com"
+hub_url: "https://hub.example.com"
 token: "rex_env_xxx"
-name: "内网 Agent"
 data_dir: "./data"
-auto_update: true
 ```
+
+对应环境变量：`REX_HUB_URL`、`REX_AGENT_TOKEN`、`REX_DATA_DIR`；Agent 名称用 `REX_AGENT_NAME`。CLI：`rex-agent run --hub-url ... --token ... --data-dir ...`。
 
 ## Hub 数据目录
 
@@ -68,6 +64,10 @@ REX/
 │   ├── rex-postgresql/    PostgreSQL 协议实现
 │   ├── rex-redis/         Redis 协议实现
 │   ├── rex-sqlite/        SQLite 协议实现
+│   ├── rex-mariadb/       MariaDB 协议实现（复用 MySQL 驱动）
+│   ├── rex-clickhouse/    ClickHouse 协议实现（HTTP API）
+│   ├── rex-mssql/         SQL Server 协议实现（tiberius）
+│   ├── rex-oracle/        Oracle 协议实现（oracle-rs）
 │   ├── rex-s3/            S3/MinIO 协议实现
 │   ├── rex-sip/           SIP 电话（baresip FFI：UA/音频桥/视频桥/抓包/CDR/录音）
 │   ├── rex-transfer/      文件传输引擎（FileConnector 抽象）
@@ -84,10 +84,11 @@ REX/
 
 每个协议 crate 只负责协议实现，不依赖 Hub 或 Agent 业务层。各协议以统一 trait 向上层输出能力（`rex-common` 内定义）：
 
-- `rex-common::sql::SqlConnector`（`sql_api.rs` 用 `SqlConnectorFactory` 按 `DatabaseType` 分派 `MySqlConnector`/`PostgresConnector`/`SqliteConnector`）
+- `rex-common::sql::SqlConnector`（`sql_api.rs` 用 `SqlConnectorFactory` 按 `DatabaseType` 分派 `MySqlConnector`/`PostgresConnector`/`SqliteConnector`/`MariaDBConnector`/`ClickHouseConnector`/`SqlServerConnector`/`OracleConnector`）
 - `rex-common::redis::RedisConnector`
 - `rex-common::file_transfer::FileConnector`（`SftpConnector` / `S3Connector` / 本地实现）
 - `rex-sip` 通过 `rex-common::sip_media` 的 PCM/视频帧编解码与隧道帧封装对接 Hub/Agent
+- MongoDB 无独立协议 crate：`rex-hub/src/mongodb_api.rs` 直接使用 `mongodb` crate（rustls-tls）
 
 Hub 和 Agent 都通过同一套协议 crate 建立连接，区别只在于连接入口：
 

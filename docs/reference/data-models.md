@@ -5,7 +5,7 @@
 Hub 使用 SQLite 作为本地数据库：
 
 ```text
-{data-dir}/hub.db
+{data-dir}/rex.db
 ```
 
 原因：
