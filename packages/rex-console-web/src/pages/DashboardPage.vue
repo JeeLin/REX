@@ -219,7 +219,7 @@ const timeAgo = (dateStr: string): string => {
                 </tr>
               </tbody>
             </table>
-            <div v-else class="panel-empty muted">{{ t('dashboard.noEnvironments', 'No environments') }}</div>
+            <div v-else class="panel-empty muted">{{ t('dashboard.noAgentEnvironments', 'No agent-connected environments') }}</div>
           </div>
         </div>
       </div>
