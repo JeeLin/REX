@@ -302,11 +302,9 @@ async fn health_check() -> axum::Json<serde_json::Value> {
 
 /// GET /api/system-info — 宿主机系统信息（os / arch / hostname）
 async fn system_info() -> axum::Json<serde_json::Value> {
-    let hostname = std::process::Command::new("hostname")
-        .output()
+    let hostname = hostname::get()
         .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|h| h.to_string_lossy().into_owned())
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "unknown".to_string());
@@ -324,7 +322,6 @@ fn build_router(state: AppState) -> Router {
 
     let public_routes = Router::new()
         .route("/api/health", axum::routing::get(health_check))
-        .route("/api/system-info", axum::routing::get(system_info))
         .route("/api/auth/check", axum::routing::get(auth::check_auth))
         .route("/api/auth/login", axum::routing::post(auth::login))
         .route(
@@ -337,6 +334,7 @@ fn build_router(state: AppState) -> Router {
         );
 
     let protected_routes = Router::new()
+        .route("/api/system-info", axum::routing::get(system_info))
         .route(
             "/api/auth/change-password",
             axum::routing::post(auth::change_password),
