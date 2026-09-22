@@ -25,11 +25,11 @@ Agent 通过环境变量配置，以下两个变量必填：
 ```bash
 # 根据系统架构下载对应二进制
 # Linux amd64
-curl -L https://github.com/your-org/rex/releases/latest/download/rex-agent-linux-amd64 -o rex-agent
+curl -L https://github.com/JeeLin/REX/releases/latest/download/rex-agent-linux-amd64 -o rex-agent
 chmod +x rex-agent
 
 # Linux arm64
-curl -L https://github.com/your-org/rex/releases/latest/download/rex-agent-linux-arm64 -o rex-agent
+curl -L https://github.com/JeeLin/REX/releases/latest/download/rex-agent-linux-arm64 -o rex-agent
 chmod +x rex-agent
 ```
 
@@ -68,8 +68,8 @@ sudo ./rex-agent service install --system
 ```
 
 - **Linux** 使用 systemd；**macOS** 使用 launchd（`~/Library/LaunchAgents` 或 `/Library/LaunchDaemons`）。
+- **Windows** 使用 SCM（v0.87+）：`service install` 以管理员权限执行 `sc create … --windows-service start= auto`，`start`/`stop`/`restart`/`status` 映射到 `sc` 子命令，进程通过 `--windows-service` 与 SCM 通信。
 - 配置文件也可放在数据目录 `~/.rex/agent.yaml`（`hub_url` / `token` 字段），env 变量优先于文件。
-- 其他平台（如 Windows）不支持自动注册，请用 nssm 或任务计划程序手动注册二进制。
 
 ### Systemd 服务（手动方式，备用）
 
@@ -114,7 +114,7 @@ docker run -d \
   --restart always \
   -e REX_HUB_URL="http://hub.example.com:3000" \
   -e REX_AGENT_TOKEN="your-agent-token-here" \
-  your-registry/rex-agent:latest
+  ghcr.io/JeeLin/rex-agent:latest
 ```
 
 ## 方式三：Docker Compose 部署
@@ -122,10 +122,9 @@ docker run -d \
 创建 `docker-compose.yml`：
 
 ```yaml
-version: '3.8'
 services:
   rex-agent:
-    image: your-registry/rex-agent:latest
+    image: ghcr.io/JeeLin/rex-agent:latest
     container_name: rex-agent
     restart: always
     environment:
@@ -156,11 +155,12 @@ docker logs -f rex-agent
 正常日志输出：
 
 ```
-INFO REX Agent version=0.16.0 status=starting
-INFO agent configured hub_url=http://hub.example.com:3000 agent_id=xxx
-INFO connecting hub_url=http://hub.example.com:3000
-INFO connecting url=ws://hub.example.com:3000/ws/agent?token=xxx
-INFO authenticated agent_id=xxx
+INFO name="REX Agent" version=0.87.3 status="supervisor starting"
+INFO name="REX Agent" version=0.87.3 status="worker starting"
+INFO hub_url=http://hub.example.com:3000 auto_update=true "agent configured"
+INFO "connecting to hub"
+INFO url=ws://hub.example.com:3000/ws/agent?token=xxx connecting
+INFO agent_id=xxx authenticated
 ```
 
 ## 故障排查
@@ -177,7 +177,7 @@ INFO authenticated agent_id=xxx
 
 - 检查网络稳定性
 - 检查 Hub 是否重启
-- Agent 会自动重连（5 秒间隔）
+- Agent 会自动重连（指数退避，1 秒起、翻倍、上限 30 秒）
 
 ## 安全建议
 
