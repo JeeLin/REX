@@ -30,7 +30,6 @@ const loading = ref(true)
 const saving = ref(false)
 const saveMessage = ref('')
 const activeTab = ref('profile')
-const contentRef = ref<HTMLElement>()
 
 // Profile
 const displayName = ref('admin')
@@ -87,27 +86,36 @@ function scrollToSection(key: string) {
   }
 }
 
-const sectionIds = sections.map(s => s.key)
+// Sticky nav: highlight the section currently crossing the upper viewport band
+let sectionObserver: IntersectionObserver | null = null
+const visibleSections = new Set<string>()
 
-function handleScroll() {
-  const container = contentRef.value
-  if (!container) return
-  const scrollTop = container.scrollTop
-  for (let i = sectionIds.length - 1; i >= 0; i--) {
-    const el = document.getElementById(`settings-${sectionIds[i]!}`)
-    if (el && el.offsetTop - 80 <= scrollTop) {
-      activeTab.value = sectionIds[i]!
-      return
-    }
+function setupSectionObserver() {
+  sectionObserver?.disconnect()
+  visibleSections.clear()
+  sectionObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        const key = (entry.target as HTMLElement).id.replace('settings-', '')
+        if (entry.isIntersecting) visibleSections.add(key)
+        else visibleSections.delete(key)
+      }
+      const active = sections.find(s => visibleSections.has(s.key))
+      if (active) activeTab.value = active.key
+    },
+    { rootMargin: '0px 0px -60% 0px' },
+  )
+  for (const s of sections) {
+    const el = document.getElementById(`settings-${s.key}`)
+    if (el) sectionObserver.observe(el)
   }
-  activeTab.value = 'profile'
 }
 
 onMounted(() => {
-  contentRef.value?.addEventListener('scroll', handleScroll, { passive: true })
+  setupSectionObserver()
 })
 onBeforeUnmount(() => {
-  contentRef.value?.removeEventListener('scroll', handleScroll)
+  sectionObserver?.disconnect()
 })
 
 // Password change
@@ -284,7 +292,7 @@ async function importData() {
     </nav>
 
     <!-- Right content area -->
-    <div ref="contentRef" class="settings-content">
+    <div class="settings-content">
 
       <!-- Profile -->
       <section id="settings-profile" class="settings-section">
@@ -711,7 +719,7 @@ const navigatorUserAgent = navigator.userAgent.split(' ').pop() || '—'
   display: flex;
   gap: var(--space-8);
   max-width: 960px;
-  height: 100%;
+  min-height: 100%;
   margin: 0 auto;
 }
 
@@ -773,6 +781,7 @@ const navigatorUserAgent = navigator.userAgent.split(' ').pop() || '—'
 /* Section */
 .settings-section {
   margin-bottom: var(--space-8);
+  scroll-margin-top: var(--space-6);
 }
 
 .section-header {
