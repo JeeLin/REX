@@ -22,6 +22,7 @@ use std::path::PathBuf;
 use rex_common::cli::{self, RunOpts, ServiceKind};
 
 fn main() {
+    let _ = dotenvy::dotenv();
     let cli = cli::parse();
     let kind = ServiceKind::Agent;
 

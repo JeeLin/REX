@@ -43,6 +43,7 @@ rustls = { workspace = true }
 webpki-roots = { workspace = true }
 axum = { workspace = true }
 include_dir = { workspace = true }
+dotenvy = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { workspace = true }
