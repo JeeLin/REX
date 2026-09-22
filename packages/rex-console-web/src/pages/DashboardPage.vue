@@ -25,6 +25,10 @@ const filteredEnvironments = computed(() => {
   }
   return store.environments
 })
+// Agent health only covers tunnel-connected envs; direct envs are excluded in any mode
+const agentHealthEnvironments = computed(() =>
+  store.environments.filter(env => env.connection_mode === 'agent'),
+)
 const recentResources = ref<Resource[]>([])
 const loading = ref(true)
 
@@ -190,10 +194,10 @@ const timeAgo = (dateStr: string): string => {
         <div class="panel">
           <div class="panel-head">
             <h3>{{ t('dashboard.agentHealth', 'Agent health') }}</h3>
-            <StatusDot :status="store.environments.some(e => e.agent_status === 'online') ? 'online' : 'offline'" />
+            <StatusDot :status="agentHealthEnvironments.some(e => e.agent_status === 'online') ? 'online' : 'offline'" />
           </div>
           <div class="agent-table-wrap">
-            <table v-if="store.environments.length" class="agent-table">
+            <table v-if="agentHealthEnvironments.length" class="agent-table">
               <thead>
                 <tr>
                   <th>{{ t('dashboard.tableAgent', 'Agent') }}</th>
@@ -203,7 +207,7 @@ const timeAgo = (dateStr: string): string => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="env in filteredEnvironments" :key="env.id">
+                <tr v-for="env in agentHealthEnvironments" :key="env.id">
                   <td><b>{{ env.name }}</b></td>
                   <td>{{ env.name }}</td>
                   <td class="mono">{{ env.connection_mode === 'agent' ? '3 ms' : '—' }}</td>
