@@ -131,7 +131,7 @@ supervisor 退出
 创建 `.env` 文件：
 
 ```bash
-REX_SECRET_KEY=your-secret-key
+RUST_LOG=info
 GITHUB_REPO_OWNER=<ghcr.io 仓库 owner，镜像为 ghcr.io/<owner>/rex-hub:latest>
 ```
 
@@ -162,8 +162,8 @@ docker compose -f docker-compose.hub.yaml logs -f hub
 创建 `.env` 文件：
 
 ```bash
-REX_SERVER=https://your-hub.com
-REX_TOKEN=<环境注册令牌>
+REX_HUB_URL=https://your-hub.com
+REX_AGENT_TOKEN=<环境注册令牌>
 GITHUB_REPO_OWNER=<ghcr.io 仓库 owner，镜像为 ghcr.io/<owner>/rex-agent:latest>
 ```
 

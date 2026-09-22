@@ -10,7 +10,7 @@ docker run -d \
   -p 3000:3000 \
   -v rex-data:/app/data \
   -e REX_PORT=3000 \
-  -e REX_SECRET_KEY=your-secret-key \
+  -e RUST_LOG=info \
   ghcr.io/JeeLin/rex-hub:latest
 ```
 
@@ -39,7 +39,7 @@ services:
       - rex-data:/app/data
     environment:
       - REX_PORT=3000
-      - REX_SECRET_KEY=your-secret-key
+      - REX_DATA_DIR=/app/data
     restart: unless-stopped
 
   rex-agent:
@@ -94,7 +94,7 @@ EOF
 |------|------|--------|
 | `REX_PORT` | 监听端口 | `3000` |
 | `REX_DATA_DIR` | 数据目录（SQLite、TLS 证书等） | `~/.rex` |
-| `REX_SECRET_KEY` | 数据加密密钥（派生用于敏感字段加密） | — |
+REX_DATA_DIR | 数据目录（含 `.master-key` 加密主密钥，自动生成） | `./data` |
 | `REX_STATIC_DIR` | 前端静态文件目录 | 内嵌 |
 | `REX_WORKER` | Worker 进程标识（supervisor 自动设置） | — |
 | `REX_TLS_CERT` | TLS 证书路径（PEM） | — |

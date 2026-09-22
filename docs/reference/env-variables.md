@@ -1,6 +1,6 @@
 # REX Hub — 环境变量参考
 
-所有环境变量均以 `REX_` 前缀开头。Hub 和 Agent 各自使用不同的变量子集。
+所有运行时环境变量均以 `REX_` 前缀开头（日志级别例外：`RUST_LOG`，由 tracing `EnvFilter` 读取）。Hub 和 Agent 各自使用不同的变量子集。
 
 ---
 
@@ -46,6 +46,8 @@
 | `REX_TLS_INSECURE` | — | 存在时跳过 TLS 证书验证（仅限内网测试环境） |
 | `REX_AUTO_UPDATE` | — | 存在时启用自动更新 |
 | `REX_WORKER` | — | 存在时启动 worker 子进程（supervisor 自动设置，不要手动设置） |
+| `REX_AGENT_HTTP_PORT` | `9527` | Agent 本地 HTTP 控制端口 |
+| `REX_AGENT_BINARIES_DIR` | `./bin` | Agent 更新时暂存/替换二进制的目录 |
 
 ---
 
