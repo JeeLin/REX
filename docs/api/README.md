@@ -25,6 +25,7 @@ Authorization: Bearer <token>
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | `/api/auth/change-password` | 修改密码 |
+| GET | `/api/system-info` | 获取系统信息（os / arch / hostname） |
 
 ## 自更新
 
