@@ -26,6 +26,10 @@ pub async fn run_update(
 ) -> Result<(), UpdateError> {
     let tmp_path = current_exe.with_extension("tmp");
 
+    // 清理上次更新残留的 .old / .bak（supervisor 可能仍是旧镜像，
+    // 其启动清理未生效时在此兜底）。失败仅告警，不阻断本次更新。
+    rex_common::update::cleanup_update_leftovers(&current_exe);
+
     // 1. 下载
     report(UpdateProgress {
         phase: UpdatePhase::Downloading,
