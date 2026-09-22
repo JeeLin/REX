@@ -523,15 +523,20 @@ onMounted(async () => {
 <style scoped>
 .audit-page {
   height: 100%;
-  overflow-y: auto;
+  /* Fixed-height layout: only the table body scrolls inside the viewport */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: var(--space-6);
 }
 
 .page-header {
+  flex-shrink: 0;
   margin-bottom: var(--space-1);
 }
 
 .page-desc {
+  flex-shrink: 0;
   font-size: var(--text-sm);
   color: var(--text-muted);
   margin-bottom: var(--space-4);
@@ -540,6 +545,7 @@ onMounted(async () => {
 
 /* Toolbar */
 .toolbar {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -572,6 +578,7 @@ onMounted(async () => {
 
 /* Stats */
 .stats {
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 14px;
@@ -619,10 +626,13 @@ onMounted(async () => {
 
 /* Table */
 .table-wrap {
+  flex: 1;
+  min-height: 0;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .loading {
@@ -852,6 +862,7 @@ onMounted(async () => {
 }
 
 .audit-table-footer {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
