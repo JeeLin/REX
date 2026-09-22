@@ -845,9 +845,10 @@ async function importData() {
   margin: 0;
 }
 
-/* Field row */
+/* Field row — label left, fixed-width control column right */
 .field {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
   align-items: center;
   gap: 14px;
   padding: 12px 0;
@@ -860,7 +861,6 @@ async function importData() {
 }
 
 .field-label {
-  flex: 1;
   min-width: 0;
 }
 
@@ -891,7 +891,6 @@ async function importData() {
   color: var(--text-primary);
   font: inherit;
   font-size: 13px;
-  min-width: 220px;
 }
 
 .field-input:focus {
@@ -900,22 +899,29 @@ async function importData() {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-.field-select {
-  min-width: 220px;
+/* Right-side controls alignment: wide controls fill the fixed column,
+   compact ones (switch/badge/button) right-align to the same edge */
+.field > * {
+  justify-self: end;
 }
 
-/* Right-side controls alignment */
+.field > .field-label {
+  justify-self: stretch;
+}
+
 .field > :deep(.field-select),
 .field > :deep(.field-input),
-.field > :deep(.switch),
-.field > .seg,
-.field > .theme-swatches,
-.field > .field-actions,
-.field > .update-progress,
-.field > .badge,
 .field > .field-control,
-.field > .opacity-control {
-  margin-left: auto;
+.field > .opacity-control,
+.field > .update-progress {
+  width: 100%;
+  min-width: 0;
+  justify-self: stretch;
+}
+
+.field > .field-error,
+.field > .field-success {
+  justify-self: start;
 }
 
 .field-actions {
@@ -1011,6 +1017,7 @@ async function importData() {
 }
 
 .size-value {
+  flex: 1;
   min-width: 52px;
   text-align: center;
   font-family: var(--font-mono);
@@ -1028,7 +1035,8 @@ async function importData() {
 }
 
 .opacity-slider {
-  width: 120px;
+  flex: 1;
+  min-width: 0;
   height: 4px;
   -webkit-appearance: none;
   appearance: none;
@@ -1109,7 +1117,7 @@ async function importData() {
 
 /* Update progress */
 .update-progress {
-  min-width: 220px;
+  min-width: 0;
 }
 
 .progress-bar {
@@ -1117,7 +1125,7 @@ async function importData() {
   background: var(--bg-deep);
   border-radius: 3px;
   overflow: hidden;
-  width: 120px;
+  width: 100%;
 }
 
 .progress-fill {
@@ -1258,20 +1266,22 @@ async function importData() {
     padding: var(--space-4) 0;
   }
   .field {
-    flex-direction: column;
-    align-items: flex-start;
+    grid-template-columns: 1fr;
+    align-items: start;
     gap: var(--space-2);
+  }
+  .field > * {
+    justify-self: start;
   }
   .field > :deep(.field-select),
   .field > :deep(.field-input),
   .field > :deep(.switch),
   .field > .field-actions,
   .field > .field-control,
-  .field > .opacity-control {
-    margin-left: 0;
+  .field > .opacity-control,
+  .field > .update-progress {
+    justify-self: stretch;
     width: 100%;
   }
-  .field-select { min-width: 0; width: 100%; }
-  .field-input { min-width: 0; width: 100%; }
 }
 </style>
