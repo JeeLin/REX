@@ -121,6 +121,9 @@
 ### GET /api/health
 健康检查端点（supervisor 验证 worker 存活），返回 `mode` 字段（hub/agent），无需认证。
 
+### GET /api/system-info
+获取系统信息（`os` / `arch` / `hostname`），需登录。
+
 ### POST /api/dashboard/**
 仪表盘统计（环境数 / 资源数 / Agent 在线数 / 今日操作数）。
 
