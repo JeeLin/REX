@@ -12,6 +12,7 @@ import type { Resource } from '@/api/resources'
 import { useRouter } from 'vue-router'
 import { useSwipeGesture } from '@/composables/useSwipeGesture'
 import { useVirtualKeyboard } from '@/composables/useVirtualKeyboard'
+import { toggleTheme } from '@/composables/useTheme'
 import CommandPalette from '@/components/CommandPalette.vue'
 
 const { t, locale } = useI18n()
@@ -83,12 +84,6 @@ const currentTitle = computed(() => {
   return match ? t(match.key) : 'REX'
 })
 
-function toggleTheme() {
-  const current = localStorage.getItem('rex-theme') || 'dark'
-  const next = current === 'dark' ? 'light' : 'dark'
-  localStorage.setItem('rex-theme', next)
-  document.documentElement.dataset.theme = next === 'dark' ? undefined : next
-}
 function toggleLanguage() {
   locale.value = locale.value === 'zh' ? 'en' : 'zh'
   localStorage.setItem('rex-lang', locale.value)
