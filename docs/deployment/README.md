@@ -8,9 +8,10 @@
 docker run -d \
   --name rex-hub \
   -p 3000:3000 \
-  -v rex-data:/data \
+  -v rex-data:/app/data \
   -e REX_PORT=3000 \
-  ghcr.io/jlin/rex-hub:latest
+  -e REX_SECRET_KEY=your-secret-key \
+  ghcr.io/JeeLin/rex-hub:latest
 ```
 
 ### Agent
@@ -18,30 +19,33 @@ docker run -d \
 ```bash
 docker run -d \
   --name rex-agent \
-  -e REX_HUB_URL=wss://your-hub.example.com/ws/agent \
+  -e REX_HUB_URL=https://your-hub.example.com \
   -e REX_AGENT_TOKEN=YOUR_REGISTRATION_TOKEN \
   -e REX_AGENT_NAME=my-agent \
-  ghcr.io/jlin/rex-agent:latest
+  ghcr.io/JeeLin/rex-agent:latest
 ```
+
+说明：`REX_HUB_URL` 填 Hub 基地址即可（`http(s)://` 或 `ws(s)://` 均可，Agent 会自动归一化并拼上 `/ws/agent?token=…`）。
 
 ## Docker Compose
 
 ```yaml
 services:
   rex-hub:
-    image: ghcr.io/jlin/rex-hub:latest
+    image: ghcr.io/JeeLin/rex-hub:latest
     ports:
       - "3000:3000"
     volumes:
-      - rex-data:/data
+      - rex-data:/app/data
     environment:
       - REX_PORT=3000
+      - REX_SECRET_KEY=your-secret-key
     restart: unless-stopped
 
   rex-agent:
-    image: ghcr.io/jlin/rex-agent:latest
+    image: ghcr.io/JeeLin/rex-agent:latest
     environment:
-      - REX_HUB_URL=wss://rex-hub/ws/agent
+      - REX_HUB_URL=https://rex-hub
       - REX_AGENT_TOKEN=YOUR_REGISTRATION_TOKEN
       - REX_AGENT_NAME=local-agent
     restart: unless-stopped
@@ -56,7 +60,7 @@ volumes:
 
 ```bash
 # 下载
-curl -LO https://github.com/jlin/rex/releases/latest/download/rex-hub-linux-amd64
+curl -LO https://github.com/JeeLin/REX/releases/latest/download/rex-hub-linux-amd64
 chmod +x rex-hub-linux-amd64
 
 # 运行
@@ -67,20 +71,17 @@ chmod +x rex-hub-linux-amd64
 
 ```bash
 # 下载
-curl -LO https://github.com/jlin/rex/releases/latest/download/rex-agent-linux-amd64
+curl -LO https://github.com/JeeLin/REX/releases/latest/download/rex-agent-linux-amd64
 chmod +x rex-agent-linux-amd64
 
-# 配置
-cat > agent.toml << EOF
-[agent]
-hub_url = "wss://your-hub.example.com/ws/agent"
-token = "YOUR_REGISTRATION_TOKEN"
-name = "my-agent"
-auto_update = true
+# 配置（数据目录下的 agent.yaml，字段 hub_url / token）
+cat > ~/.rex/agent.yaml << EOF
+hub_url: "https://your-hub.example.com"
+token: "YOUR_REGISTRATION_TOKEN"
 EOF
 
-# 运行
-./rex-agent-linux-amd64 --config agent.toml
+# 运行（或用命令行参数 --hub-url / --token，优先级：CLI > env > 配置文件）
+./rex-agent-linux-amd64
 ```
 
 ## 配置
@@ -92,7 +93,8 @@ EOF
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `REX_PORT` | 监听端口 | `3000` |
-| `REX_DATA_DIR` | 数据目录（SQLite、TLS 证书等） | `./data` |
+| `REX_DATA_DIR` | 数据目录（SQLite、TLS 证书等） | `~/.rex` |
+| `REX_SECRET_KEY` | 数据加密密钥（派生用于敏感字段加密） | — |
 | `REX_STATIC_DIR` | 前端静态文件目录 | 内嵌 |
 | `REX_WORKER` | Worker 进程标识（supervisor 自动设置） | — |
 | `REX_TLS_CERT` | TLS 证书路径（PEM） | — |
@@ -101,20 +103,23 @@ EOF
 | `REX_ACME_DOMAIN` | ACME 自动证书域名 | — |
 | `REX_ACME_EMAIL` | ACME 注册邮箱 | — |
 | `REX_ACME_STAGING` | 使用 Let's Encrypt 测试环境 | — |
-| `REX_AUTO_UPDATE` | 启用自动更新 | — |
+| `REX_AGENT_BINARIES_DIR` | Agent 二进制预置目录（供 `/api/agents/download`） | `{data-dir}/agent-binaries` |
 | `REX_UPDATE_GITHUB_OWNER` | 更新源 GitHub Owner | `JeeLin` |
 | `REX_UPDATE_GITHUB_REPO` | 更新源 GitHub Repo | `REX` |
+| `REX_UPDATE_PENDING` | 更新验证阶段标识（supervisor 自动设置） | — |
 
 #### Agent
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `REX_HUB_URL` | Hub WebSocket 地址 | **必填** |
+| `REX_HUB_URL` | Hub 基地址（自动归一化为 `/ws/agent`） | **必填** |
 | `REX_AGENT_TOKEN` | 认证令牌 | **必填** |
 | `REX_AGENT_NAME` | Agent 名称 | `agent` |
+| `REX_AGENT_HTTP_PORT` | Agent 内嵌 HTTP 端口 | `3000` |
 | `REX_HEARTBEAT_INTERVAL` | 心跳间隔（秒） | `30` |
 | `REX_TLS_INSECURE` | 跳过 TLS 验证（仅内网测试） | — |
-| `REX_AUTO_UPDATE` | 启用自动更新 | — |
+| `REX_AUTO_UPDATE` | 启用自动更新 | `true` |
+| `REX_DATA_DIR` | 数据目录 | `~/.rex` |
 | `REX_WORKER` | Worker 进程标识 | — |
 
 ## TLS / HTTPS
@@ -122,8 +127,8 @@ EOF
 Hub 支持自动 HTTPS（ACME/Let's Encrypt）：
 
 ```bash
-# 设置域名环境变量即可自动启用
-REX_DOMAIN=hub.example.com ./rex-hub
+# 设置 ACME 域名环境变量即可自动启用
+REX_ACME_DOMAIN=hub.example.com REX_ACME_EMAIL=admin@example.com ./rex-hub
 ```
 
 ## 反向代理
@@ -141,37 +146,23 @@ location / {
 }
 ```
 
-## 备份
-
-数据存储在 `REX_DATA_DIR`（默认 `./data`），备份 `rex.db` 文件即可：
-
-```bash
-cp ~/.rex/rex.db ~/rex-backup-$(date +%Y%m%d).db
-```
-
 ## 备份与恢复
 
 ### 备份
 
-数据存储在 `REX_DATA_DIR`（默认 `./data`），核心文件是 `rex.db`（SQLite）。
+数据存储在 `REX_DATA_DIR`（默认 `~/.rex`），核心文件是 `rex.db`（SQLite）。
 
 **手动备份：**
 ```bash
 # 停止 Hub 服务后复制数据目录
-cp -r /path/to/data /path/to/data-backup-$(date +%Y%m%d)
-```
-
-**API 备份（v0.61.0+）：**
-```bash
-curl -X POST http://localhost:3000/api/backup/create \
-  -H "Authorization: Bearer YOUR_TOKEN"
+cp -r ~/.rex ~/rex-backup-$(date +%Y%m%d)
 ```
 
 ### 恢复
 
 ```bash
 # 停止 Hub 服务 → 替换数据目录 → 重启 Hub 服务
-cp -r /path/to/data-backup /path/to/data
+cp -r ~/rex-backup-$(date +%Y%m%d) ~/.rex
 ```
 
 ## 故障排查
