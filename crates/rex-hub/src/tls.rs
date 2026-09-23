@@ -215,6 +215,183 @@ fn primary_local_ip() -> Option<String> {
     }
 }
 
+fn read_cert_chain(path: &Path) -> Result<Vec<CertificateDer<'static>>, String> {
+    let file = std::fs::File::open(path)
+        .map_err(|e| format!("failed to open TLS certificate {}: {e}", path.display()))?;
+    let certs = rustls_pemfile::certs(&mut BufReader::new(file))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("failed to read TLS certificate {}: {e}", path.display()))?;
+    if certs.is_empty() {
+        return Err(format!("no certificate found in {}", path.display()));
+    }
+    Ok(certs)
+}
+
+fn read_private_key(path: &Path) -> Result<PrivateKeyDer<'static>, String> {
+    let file = std::fs::File::open(path)
+        .map_err(|e| format!("failed to open TLS private key {}: {e}", path.display()))?;
+    rustls_pemfile::private_key(&mut BufReader::new(file))
+        .map_err(|e| format!("failed to read TLS private key {}: {e}", path.display()))?
+        .ok_or_else(|| format!("no private key found in {}", path.display()))
+}
+
+/// 校验证书处于有效期内（叶子证书的 notBefore/notAfter）。
+fn ensure_not_expired(chain: &[CertificateDer<'static>], cert_path: &Path) -> Result<(), String> {
+    let cert = chain
+        .first()
+        .ok_or_else(|| format!("no certificate found in {}", cert_path.display()))?;
+    let (not_before, not_after) = validity_window(cert).map_err(|e| {
+        format!(
+            "failed to parse TLS certificate {}: {e}",
+            cert_path.display()
+        )
+    })?;
+    let now = chrono::Utc::now().timestamp();
+    if now > not_after {
+        return Err(format!(
+            "TLS certificate {} expired at {}",
+            cert_path.display(),
+            format_timestamp(not_after)
+        ));
+    }
+    if now < not_before {
+        return Err(format!(
+            "TLS certificate {} is not valid until {}",
+            cert_path.display(),
+            format_timestamp(not_before)
+        ));
+    }
+    Ok(())
+}
+
+/// 从 DER 证书中提取 (not_before, not_after)（Unix 秒）。
+/// 只走读 Certificate -> tbsCertificate -> validity 所需的最小 DER 解析。
+fn validity_window(cert_der: &[u8]) -> Result<(i64, i64), String> {
+    let (tag, cert_body, _) = read_tlv(cert_der)?;
+    if tag != 0x30 {
+        return Err("not a DER-encoded certificate".to_string());
+    }
+    let (tag, tbs, _) = read_tlv(cert_body)?;
+    if tag != 0x30 {
+        return Err("missing tbsCertificate".to_string());
+    }
+    let mut rest = tbs;
+    // version [0] EXPLICIT OPTIONAL
+    if rest.first() == Some(&0xa0) {
+        let (_, _, next) = read_tlv(rest)?;
+        rest = next;
+    }
+    // serialNumber INTEGER, signature AlgorithmIdentifier, issuer Name
+    for expected in [0x02u8, 0x30, 0x30] {
+        let (tag, _, next) = read_tlv(rest)?;
+        if tag != expected {
+            return Err(format!("unexpected tbsCertificate field tag 0x{tag:02x}"));
+        }
+        rest = next;
+    }
+    // validity SEQUENCE { notBefore Time, notAfter Time }
+    let (tag, validity, _) = read_tlv(rest)?;
+    if tag != 0x30 {
+        return Err("missing validity".to_string());
+    }
+    let (nb_tag, nb, after_nb) = read_tlv(validity)?;
+    let (na_tag, na, _) = read_tlv(after_nb)?;
+    Ok((parse_asn1_time(nb_tag, nb)?, parse_asn1_time(na_tag, na)?))
+}
+
+/// 读取一个 DER TLV，返回 (tag, content, rest)。
+fn read_tlv(input: &[u8]) -> Result<(u8, &[u8], &[u8]), String> {
+    if input.len() < 2 {
+        return Err("truncated DER".to_string());
+    }
+    let tag = input[0];
+    let len_byte = input[1];
+    let (len, header) = if len_byte & 0x80 == 0 {
+        (len_byte as usize, 2)
+    } else {
+        let n = (len_byte & 0x7f) as usize;
+        if n == 0 || n > 4 || input.len() < 2 + n {
+            return Err("unsupported DER length".to_string());
+        }
+        let mut len = 0usize;
+        for &b in &input[2..2 + n] {
+            len = (len << 8) | b as usize;
+        }
+        (len, 2 + n)
+    };
+    if input.len() < header + len {
+        return Err("truncated DER".to_string());
+    }
+    Ok((tag, &input[header..header + len], &input[header + len..]))
+}
+
+/// 解析 X.509 Time（UTCTime 0x17 / GeneralizedTime 0x18）为 Unix 秒。
+fn parse_asn1_time(tag: u8, bytes: &[u8]) -> Result<i64, String> {
+    let text =
+        std::str::from_utf8(bytes).map_err(|_| "certificate time is not ASCII".to_string())?;
+    let (year, month, day, hour, minute, second) = match tag {
+        0x17 => {
+            // YYMMDDHHMM[SS]Z，RFC 5280 要求带秒
+            if text.len() < 11 {
+                return Err(format!("invalid UTCTime {text:?}"));
+            }
+            let yy = parse_component(&text[0..2])?;
+            let year = if yy >= 50 { 1900 + yy } else { 2000 + yy };
+            let sec = if text.len() >= 12 {
+                parse_component(&text[10..12])?
+            } else {
+                0
+            };
+            (
+                year,
+                parse_component(&text[2..4])?,
+                parse_component(&text[4..6])?,
+                parse_component(&text[6..8])?,
+                parse_component(&text[8..10])?,
+                sec,
+            )
+        }
+        0x18 => {
+            // YYYYMMDDHHMMSS[.frac]Z
+            if text.len() < 14 {
+                return Err(format!("invalid GeneralizedTime {text:?}"));
+            }
+            (
+                parse_component(&text[0..4])?,
+                parse_component(&text[4..6])?,
+                parse_component(&text[6..8])?,
+                parse_component(&text[8..10])?,
+                parse_component(&text[10..12])?,
+                parse_component(&text[12..14])?,
+            )
+        }
+        other => return Err(format!("unsupported certificate time tag 0x{other:02x}")),
+    };
+    Ok(days_from_civil(year, month, day) * 86400 + hour * 3600 + minute * 60 + second)
+}
+
+fn parse_component(value: &str) -> Result<i64, String> {
+    value
+        .parse::<i64>()
+        .map_err(|_| format!("invalid certificate time component {value:?}"))
+}
+
+/// Howard Hinnant 的 civil-from-days 正向算法：公历日期 -> 距 1970-01-01 的天数。
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = if year >= 0 { year } else { year - 399 } / 400;
+    let yoe = year - era * 400;
+    let doy = (153 * (if month > 2 { month - 3 } else { month + 9 }) + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146097 + doe - 719468
+}
+
+fn format_timestamp(secs: i64) -> String {
+    chrono::DateTime::from_timestamp(secs, 0)
+        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+        .unwrap_or_else(|| format!("unix timestamp {secs}"))
+}
+
 /// 构建显式 CryptoProvider。
 ///
 /// 本 workspace 同时启用 rustls 的 `ring`（reqwest/hyper-rustls 链路）与
@@ -222,6 +399,21 @@ fn primary_local_ip() -> Option<String> {
 /// `ServerConfig::builder()` 会 panic，因此显式选择 ring（与 PRODUCT.md 对齐）。
 fn tls_provider() -> Arc<rustls::crypto::CryptoProvider> {
     Arc::new(rustls::crypto::ring::default_provider())
+}
+
+fn key_pair_error(error: rustls::Error, key_path: &Path, cert_path: &Path) -> String {
+    match error {
+        rustls::Error::InconsistentKeys(rustls::InconsistentKeys::KeyMismatch) => format!(
+            "TLS private key {} does not match certificate {}",
+            key_path.display(),
+            cert_path.display()
+        ),
+        error => format!(
+            "failed to load TLS key {} with certificate {}: {error}",
+            key_path.display(),
+            cert_path.display()
+        ),
+    }
 }
 
 /// 在后台完成 TLS 握手后再把流交给 axum，避免慢握手阻塞 listener 的 accept 循环。
@@ -312,6 +504,14 @@ mod tests {
     use std::time::Duration;
     use tempfile::tempdir;
 
+    /// 生成一对默认有效期（1975..4096，notAfter 为 GeneralizedTime）的证书。
+    fn valid_pair() -> (String, String) {
+        let params = rcgen::CertificateParams::new(vec!["localhost".to_string()]).unwrap();
+        let key = rcgen::KeyPair::generate().unwrap();
+        let cert = params.self_signed(&key).unwrap();
+        (cert.pem(), key.serialize_pem())
+    }
+
     /// 生成一对已过期（notAfter 为 UTCTime）的证书。
     fn expired_pair() -> (String, String) {
         let mut params = rcgen::CertificateParams::new(vec!["localhost".to_string()]).unwrap();
@@ -326,6 +526,13 @@ mod tests {
         std::fs::create_dir_all(dir).unwrap();
         std::fs::write(dir.join("cert.pem"), cert_pem).unwrap();
         std::fs::write(dir.join("key.pem"), key_pem).unwrap();
+    }
+
+    fn manual_config(dir: &Path) -> TlsConfig {
+        TlsConfig::Manual {
+            cert_path: dir.join("cert.pem"),
+            key_path: dir.join("key.pem"),
+        }
     }
 
     #[test]
@@ -431,4 +638,57 @@ mod tests {
         );
     }
 
+    #[test]
+    fn manual_valid_pem_loads() {
+        let dir = tempdir().unwrap();
+        let (cert_pem, key_pem) = valid_pair();
+        write_pair(dir.path(), &cert_pem, &key_pem);
+        let config = manual_config(dir.path());
+
+        let (chain, _key) = config.load_cert_chain().unwrap();
+        assert_eq!(chain.len(), 1);
+        let server_config = config.server_config().unwrap();
+        assert_eq!(server_config.alpn_protocols, vec![b"http/1.1".to_vec()]);
+    }
+
+    #[test]
+    fn manual_expired_certificate_reports_expired() {
+        let dir = tempdir().unwrap();
+        let (cert_pem, key_pem) = expired_pair();
+        write_pair(dir.path(), &cert_pem, &key_pem);
+        let config = manual_config(dir.path());
+
+        let err = config.server_config().unwrap_err();
+        assert!(
+            err.contains("expired"),
+            "error should mention expiry: {err}"
+        );
+        assert!(
+            err.contains("cert.pem"),
+            "error should contain cert path: {err}"
+        );
+    }
+
+    #[test]
+    fn manual_key_mismatch_reports_paths() {
+        let dir = tempdir().unwrap();
+        let (cert_pem, _key_pem) = valid_pair();
+        let (_other_cert_pem, other_key_pem) = valid_pair();
+        write_pair(dir.path(), &cert_pem, &other_key_pem);
+        let config = manual_config(dir.path());
+
+        let err = config.server_config().unwrap_err();
+        assert!(
+            err.contains("does not match"),
+            "error should mention mismatch: {err}"
+        );
+        assert!(
+            err.contains("cert.pem"),
+            "error should contain cert path: {err}"
+        );
+        assert!(
+            err.contains("key.pem"),
+            "error should contain key path: {err}"
+        );
+    }
 }
