@@ -524,7 +524,6 @@ xKf9eJozrJ0HMBIM0q3JAAAADHJleC1zc2gtdGVzdAE=
                 private_key: None,
                 keepalive_interval: Some(0),
                 init_script: None,
-                proxy_jump: None,
             }
         }
 
