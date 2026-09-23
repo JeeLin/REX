@@ -88,21 +88,72 @@ enum HubTlsMode {
     SystemRoots,
 }
 
-/// 解析信任模式：`REX_TLS_INSECURE` 与 `REX_CA_CERT` 同设时 insecure 生效并告警。
-fn resolve_hub_tls(tls_insecure: bool, ca_cert_path: Option<&str>) -> Result<HubTlsMode, String> {
+/// Resolved trust inputs shared by every Agent→Hub TLS path (wss tunnel and
+/// HTTPS download), so `REX_CA_CERT` / `REX_TLS_INSECURE` cannot drift apart.
+pub(crate) struct HubTlsSettings {
+    /// `REX_TLS_INSECURE`: skip certificate verification (takes precedence over `REX_CA_CERT`).
+    pub(crate) insecure: bool,
+    /// Raw PEM bytes read from `REX_CA_CERT` (None when unset or insecure).
+    pub(crate) ca_pem: Option<Vec<u8>>,
+}
+
+/// Resolve trust settings: `REX_TLS_INSECURE` wins over `REX_CA_CERT` (with a warning),
+/// mirroring the wss-side semantics for the HTTPS download path.
+pub(crate) fn resolve_hub_tls_settings(
+    tls_insecure: bool,
+    ca_cert_path: Option<&str>,
+) -> Result<HubTlsSettings, String> {
     if tls_insecure {
         if ca_cert_path.is_some() {
             tracing::warn!(
                 "REX_TLS_INSECURE and REX_CA_CERT both set; REX_TLS_INSECURE takes precedence"
             );
         }
-        return Ok(HubTlsMode::Insecure);
+        return Ok(HubTlsSettings {
+            insecure: true,
+            ca_pem: None,
+        });
     }
     let Some(path) = ca_cert_path else {
-        return Ok(HubTlsMode::SystemRoots);
+        return Ok(HubTlsSettings {
+            insecure: false,
+            ca_pem: None,
+        });
     };
     let pem = std::fs::read(path).map_err(|e| format!("read REX_CA_CERT {path}: {e}"))?;
-    Ok(HubTlsMode::CustomCa(build_ca_root_store(&pem)?))
+    Ok(HubTlsSettings {
+        insecure: false,
+        ca_pem: Some(pem),
+    })
+}
+
+/// Apply resolved trust settings to a reqwest builder (HTTPS download path),
+/// with the same precedence as the wss client config: insecure > CA_CERT > system roots.
+pub(crate) fn apply_hub_tls_to_reqwest(
+    builder: reqwest::ClientBuilder,
+    settings: &HubTlsSettings,
+) -> Result<reqwest::ClientBuilder, String> {
+    if settings.insecure {
+        return Ok(builder.danger_accept_invalid_certs(true));
+    }
+    let Some(pem) = &settings.ca_pem else {
+        return Ok(builder);
+    };
+    let cert =
+        reqwest::Certificate::from_pem(pem).map_err(|e| format!("parse REX_CA_CERT PEM: {e}"))?;
+    Ok(builder.add_root_certificate(cert))
+}
+
+/// Resolve the wss trust mode from the shared settings (single source of truth).
+fn resolve_hub_tls(tls_insecure: bool, ca_cert_path: Option<&str>) -> Result<HubTlsMode, String> {
+    let settings = resolve_hub_tls_settings(tls_insecure, ca_cert_path)?;
+    if settings.insecure {
+        return Ok(HubTlsMode::Insecure);
+    }
+    match settings.ca_pem {
+        None => Ok(HubTlsMode::SystemRoots),
+        Some(pem) => Ok(HubTlsMode::CustomCa(build_ca_root_store(&pem)?)),
+    }
 }
 
 /// 构造信任集：系统根（webpki-roots）**并入**后再追加自定义 CA，不替换/清空系统根。

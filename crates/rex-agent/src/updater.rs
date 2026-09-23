@@ -131,8 +131,11 @@ pub async fn run_update(
 async fn download(cmd: &UpdateCommand, report: &ProgressReporter) -> Result<Vec<u8>, UpdateError> {
     // 读取一次 Hub 基地址（由 REX_HUB_URL 推导），避免在每个 URL 解析处重复读全局 env。
     let hub_base = hub_http_base(&std::env::var("REX_HUB_URL").unwrap_or_default());
+    // Same trust config as the wss tunnel (REX_CA_CERT / REX_TLS_INSECURE), so Hub
+    // setups with a self-signed / private CA can download updates too.
+    let client = build_download_client()?;
     let primary = resolve_download_url(&cmd.download_url, hub_base.as_deref());
-    match try_download(&primary, report).await {
+    match try_download(&client, &primary, report).await {
         Ok(bytes) => Ok(bytes),
         Err(e) => {
             tracing::warn!("primary download failed: {e}, trying fallback");
@@ -140,9 +143,25 @@ async fn download(cmd: &UpdateCommand, report: &ProgressReporter) -> Result<Vec<
                 return Err(e);
             }
             let fb = resolve_download_url(&cmd.fallback_url, hub_base.as_deref());
-            try_download(&fb, report).await
+            try_download(&client, &fb, report).await
         }
     }
+}
+
+/// Build the download client with the shared Agent→Hub trust settings so the
+/// HTTPS path honors `REX_CA_CERT` / `REX_TLS_INSECURE` like the wss path does.
+fn build_download_client() -> Result<reqwest::Client, UpdateError> {
+    let tls_insecure = std::env::var("REX_TLS_INSECURE")
+        .map(|v| v == "true")
+        .unwrap_or(false);
+    let ca_cert = std::env::var("REX_CA_CERT").ok().filter(|v| !v.is_empty());
+    let settings = crate::agent_ws::resolve_hub_tls_settings(tls_insecure, ca_cert.as_deref())
+        .map_err(UpdateError::Io)?;
+    crate::agent_ws::apply_hub_tls_to_reqwest(reqwest::Client::builder(), &settings)
+        .map_err(UpdateError::Io)?
+        .timeout(std::time::Duration::from_secs(300))
+        .build()
+        .map_err(|e| UpdateError::Io(e.to_string()))
 }
 
 /// 解析下载地址：若给定的是相对路径（不含 `://`），则拼接 Hub 基地址
@@ -175,12 +194,11 @@ fn hub_http_base(hub_url: &str) -> Option<String> {
     }
 }
 
-async fn try_download(url: &str, report: &ProgressReporter) -> Result<Vec<u8>, UpdateError> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(300))
-        .build()
-        .map_err(|e| UpdateError::Io(e.to_string()))?;
-
+async fn try_download(
+    client: &reqwest::Client,
+    url: &str,
+    report: &ProgressReporter,
+) -> Result<Vec<u8>, UpdateError> {
     let resp = client
         .get(url)
         .send()
@@ -287,5 +305,76 @@ mod tests {
             resolve_download_url("/api/agents/download", None),
             "/api/agents/download"
         );
+    }
+
+    // --- Update download trust config: same resolution path as the wss tunnel ---
+
+    /// Generate a self-signed CA PEM for exercising the REX_CA_CERT path offline.
+    fn make_ca_pem() -> Vec<u8> {
+        let mut params = rcgen::CertificateParams::new(Vec::<String>::new()).unwrap();
+        params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+        params.key_usages = vec![
+            rcgen::KeyUsagePurpose::KeyCertSign,
+            rcgen::KeyUsagePurpose::CrlSign,
+        ];
+        params
+            .distinguished_name
+            .push(rcgen::DnType::CommonName, "REX Update Test CA");
+        let key = rcgen::KeyPair::generate().unwrap();
+        params.self_signed(&key).unwrap().pem().into_bytes()
+    }
+
+    /// Build a client from resolved settings; must succeed offline for all modes.
+    fn build_with(insecure: bool, ca_path: Option<&str>) -> Result<reqwest::Client, UpdateError> {
+        let settings = crate::agent_ws::resolve_hub_tls_settings(insecure, ca_path)
+            .map_err(UpdateError::Io)?;
+        crate::agent_ws::apply_hub_tls_to_reqwest(reqwest::Client::builder(), &settings)
+            .map_err(UpdateError::Io)?
+            .timeout(std::time::Duration::from_secs(1))
+            .build()
+            .map_err(|e| UpdateError::Io(e.to_string()))
+    }
+
+    #[test]
+    fn download_client_trust_settings_default_system_roots() {
+        let settings = crate::agent_ws::resolve_hub_tls_settings(false, None).unwrap();
+        assert!(!settings.insecure);
+        assert!(settings.ca_pem.is_none());
+        build_with(false, None).expect("default client must build");
+    }
+
+    #[test]
+    fn download_client_trust_settings_custom_ca() {
+        let dir = tempfile::tempdir().unwrap();
+        let ca_path = dir.path().join("ca.pem");
+        std::fs::write(&ca_path, make_ca_pem()).unwrap();
+        let path = ca_path.to_str().unwrap();
+
+        let settings = crate::agent_ws::resolve_hub_tls_settings(false, Some(path)).unwrap();
+        assert!(!settings.insecure);
+        assert!(settings.ca_pem.is_some());
+        // CA path must yield a buildable client (root cert accepted by reqwest/rustls).
+        build_with(false, Some(path)).expect("custom CA client must build");
+    }
+
+    #[test]
+    fn download_client_trust_settings_insecure_overrides_ca() {
+        let dir = tempfile::tempdir().unwrap();
+        let ca_path = dir.path().join("ca.pem");
+        std::fs::write(&ca_path, make_ca_pem()).unwrap();
+        let path = ca_path.to_str().unwrap();
+
+        // Both set → insecure wins and CA is not even read (same as wss side).
+        let settings = crate::agent_ws::resolve_hub_tls_settings(true, Some(path)).unwrap();
+        assert!(settings.insecure);
+        assert!(settings.ca_pem.is_none());
+        build_with(true, Some(path)).expect("insecure client must build");
+        // Insecure without CA also resolves.
+        build_with(true, None).expect("insecure-only client must build");
+    }
+
+    #[test]
+    fn download_client_trust_settings_missing_ca_file_is_error() {
+        assert!(build_with(false, Some("/nonexistent/ca.pem")).is_err());
     }
 }
