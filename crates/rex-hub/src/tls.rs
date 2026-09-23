@@ -16,11 +16,12 @@ use std::io::BufReader;
 use std::net::{IpAddr, UdpSocket};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::serve::Listener;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use tokio::net::TcpStream;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Semaphore};
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::TlsAcceptor;
 
@@ -41,11 +42,20 @@ const SELF_SIGNED_DIR: &str = "tls";
 
 impl TlsConfig {
     pub fn from_env() -> Self {
-        if let (Ok(cert), Ok(key)) = (std::env::var("REX_TLS_CERT"), std::env::var("REX_TLS_KEY")) {
-            return Self::Manual {
-                cert_path: PathBuf::from(cert),
-                key_path: PathBuf::from(key),
-            };
+        let cert = std::env::var("REX_TLS_CERT");
+        let key = std::env::var("REX_TLS_KEY");
+        match (cert, key) {
+            (Ok(cert), Ok(key)) => {
+                return Self::Manual {
+                    cert_path: PathBuf::from(cert),
+                    key_path: PathBuf::from(key),
+                };
+            }
+            (Ok(_), Err(_)) | (Err(_), Ok(_)) => tracing::warn!(
+                "REX_TLS_CERT and REX_TLS_KEY must both be set; ignoring half-configured TLS \
+                 and serving plain HTTP (set both, or neither)"
+            ),
+            (Err(_), Err(_)) => {}
         }
         if std::env::var("REX_TLS_SELF_SIGNED")
             .map(|v| v == "true")
@@ -187,6 +197,13 @@ fn generate_self_signed(dir: &Path, cert_path: &Path, key_path: &Path) -> Result
         .map_err(|e| format!("failed to write {}: {e}", cert_path.display()))?;
     std::fs::write(key_path, key.serialize_pem())
         .map_err(|e| format!("failed to write {}: {e}", key_path.display()))?;
+    // Restrict the private key to owner-only access regardless of process umask.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(key_path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| format!("failed to set permissions on {}: {e}", key_path.display()))?;
+    }
     tracing::info!(cert = %cert_path.display(), "generated self-signed TLS certificate");
     Ok(())
 }
@@ -424,10 +441,17 @@ fn key_pair_error(error: rustls::Error, key_path: &Path, cert_path: &Path) -> St
     }
 }
 
+/// Single TLS handshake deadline — slow or stalled handshakes are dropped.
+const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+/// Upper bound on concurrent in-flight handshakes (permits), bounds task/fd growth under floods.
+const MAX_HANDSHAKES_IN_FLIGHT: usize = 1024;
+
 /// 在后台完成 TLS 握手后再把流交给 axum，避免慢握手阻塞 listener 的 accept 循环。
+/// 握手有超时上限与并发上限，防止慢握手/泛洪无界积累任务与 fd。
 struct TlsListener {
     inner: tokio::net::TcpListener,
     acceptor: TlsAcceptor,
+    handshake_limiter: Arc<Semaphore>,
     ready_tx: mpsc::UnboundedSender<(TlsStream<TcpStream>, std::net::SocketAddr)>,
     ready_rx: mpsc::UnboundedReceiver<(TlsStream<TcpStream>, std::net::SocketAddr)>,
 }
@@ -438,6 +462,7 @@ impl TlsListener {
         Self {
             inner,
             acceptor,
+            handshake_limiter: Arc::new(Semaphore::new(MAX_HANDSHAKES_IN_FLIGHT)),
             ready_tx,
             ready_rx,
         }
@@ -459,12 +484,33 @@ impl Listener for TlsListener {
                     }
                 }
                 (stream, addr) = Listener::accept(&mut self.inner) => {
+                    // Non-blocking permit check: drop excess connections instead of
+                    // queueing behind the accept loop.
+                    let permit = match self.handshake_limiter.clone().try_acquire_owned() {
+                        Ok(permit) => permit,
+                        Err(_) => {
+                            tracing::warn!(
+                                %addr,
+                                "too many in-flight TLS handshakes ({}), dropping connection",
+                                MAX_HANDSHAKES_IN_FLIGHT
+                            );
+                            drop(stream);
+                            continue;
+                        }
+                    };
                     tokio::spawn(async move {
-                        match acceptor.accept(stream).await {
-                            Ok(tls) => {
+                        // Permit released when the handshake task finishes (success, failure or timeout).
+                        let _permit = permit;
+                        match tokio::time::timeout(HANDSHAKE_TIMEOUT, acceptor.accept(stream)).await {
+                            Ok(Ok(tls)) => {
                                 let _ = ready_tx.send((tls, addr));
                             }
-                            Err(e) => tracing::warn!(%addr, "TLS handshake failed: {e}"),
+                            Ok(Err(e)) => tracing::warn!(%addr, "TLS handshake failed: {e}"),
+                            Err(_) => tracing::warn!(
+                                %addr,
+                                "TLS handshake timed out after {}s",
+                                HANDSHAKE_TIMEOUT.as_secs()
+                            ),
                         }
                     });
                 }
@@ -508,9 +554,27 @@ pub async fn serve(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::extract::ws::{WebSocket, WebSocketUpgrade};
+    use axum::response::IntoResponse;
     use axum::routing::get;
+    use futures_util::{SinkExt, StreamExt};
+    use std::sync::Mutex as StdMutex;
     use std::time::Duration;
     use tempfile::tempdir;
+    use tokio_tungstenite::tungstenite::Message;
+
+    /// Serializes tests that read or mutate `REX_TLS_*` process env vars.
+    static ENV_LOCK: StdMutex<()> = StdMutex::new(());
+
+    fn lock_env() -> std::sync::MutexGuard<'static, ()> {
+        ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn clear_tls_env() {
+        std::env::remove_var("REX_TLS_CERT");
+        std::env::remove_var("REX_TLS_KEY");
+        std::env::remove_var("REX_TLS_SELF_SIGNED");
+    }
 
     /// 生成一对默认有效期（1975..4096，notAfter 为 GeneralizedTime）的证书。
     fn valid_pair() -> (String, String) {
@@ -545,8 +609,81 @@ mod tests {
 
     #[test]
     fn test_tls_config_default() {
+        let _guard = lock_env();
+        clear_tls_env();
         let config = TlsConfig::from_env();
         assert!(!config.is_enabled());
+        assert!(matches!(config, TlsConfig::None));
+    }
+
+    #[test]
+    fn half_config_cert_only_falls_back_to_none() {
+        let _guard = lock_env();
+        clear_tls_env();
+        std::env::set_var("REX_TLS_CERT", "/tmp/cert.pem");
+        let config = TlsConfig::from_env();
+        assert!(
+            matches!(config, TlsConfig::None),
+            "cert without key must fall back to plain HTTP"
+        );
+        clear_tls_env();
+    }
+
+    #[test]
+    fn half_config_key_only_falls_back_to_none() {
+        let _guard = lock_env();
+        clear_tls_env();
+        std::env::set_var("REX_TLS_KEY", "/tmp/key.pem");
+        let config = TlsConfig::from_env();
+        assert!(
+            matches!(config, TlsConfig::None),
+            "key without cert must fall back to plain HTTP"
+        );
+        clear_tls_env();
+    }
+
+    #[test]
+    fn paired_env_vars_select_manual_mode() {
+        let _guard = lock_env();
+        clear_tls_env();
+        std::env::set_var("REX_TLS_CERT", "/tmp/cert.pem");
+        std::env::set_var("REX_TLS_KEY", "/tmp/key.pem");
+        let config = TlsConfig::from_env();
+        match config {
+            TlsConfig::Manual {
+                cert_path,
+                key_path,
+            } => {
+                assert_eq!(cert_path, PathBuf::from("/tmp/cert.pem"));
+                assert_eq!(key_path, PathBuf::from("/tmp/key.pem"));
+            }
+            other => panic!("expected Manual mode, got disabled={}", other.is_enabled()),
+        }
+        clear_tls_env();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn self_signed_key_has_owner_only_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempdir().unwrap();
+        let config = TlsConfig::SelfSigned {
+            data_dir: dir.path().to_path_buf(),
+        };
+        config.load_cert_chain().unwrap();
+        let key_meta = std::fs::metadata(dir.path().join("tls/key.pem")).unwrap();
+        assert_eq!(
+            key_meta.permissions().mode() & 0o777,
+            0o600,
+            "self-signed private key must be owner read/write only"
+        );
+        let cert_meta = std::fs::metadata(dir.path().join("tls/cert.pem")).unwrap();
+        assert_ne!(
+            cert_meta.permissions().mode() & 0o777,
+            0o600,
+            "certificate keeps the default (umask) mode"
+        );
     }
 
     #[tokio::test]
@@ -617,9 +754,9 @@ mod tests {
         let key_path = dir.path().join("tls/key.pem");
         assert!(cert_path.is_file());
         assert!(key_path.is_file());
-        let first = std::fs::read(&cert_path).unwrap();
 
         // 第二次加载必须复用已生成的证书，不重新生成
+        let first = std::fs::read(&cert_path).unwrap();
         config.load_cert_chain().unwrap();
         let second = std::fs::read(&cert_path).unwrap();
         assert_eq!(first, second, "existing certificate must be reused");
@@ -698,5 +835,221 @@ mod tests {
             err.contains("key.pem"),
             "error should contain key path: {err}"
         );
+    }
+
+    /// Test-only verifier that accepts the self-signed certificate.
+    #[derive(Debug)]
+    struct NoVerify;
+
+    impl rustls::client::danger::ServerCertVerifier for NoVerify {
+        fn verify_server_cert(
+            &self,
+            _end_entity: &rustls::pki_types::CertificateDer<'_>,
+            _intermediates: &[rustls::pki_types::CertificateDer<'_>],
+            _server_name: &rustls::pki_types::ServerName<'_>,
+            _ocsp_response: &[u8],
+            _now: rustls::pki_types::UnixTime,
+        ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+            Ok(rustls::client::danger::ServerCertVerified::assertion())
+        }
+
+        fn verify_tls12_signature(
+            &self,
+            _message: &[u8],
+            _cert: &rustls::pki_types::CertificateDer<'_>,
+            _dcsa: &rustls::DigitallySignedStruct,
+        ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+            Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+        }
+
+        fn verify_tls13_signature(
+            &self,
+            _message: &[u8],
+            _cert: &rustls::pki_types::CertificateDer<'_>,
+            _dcsa: &rustls::DigitallySignedStruct,
+        ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+            Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+        }
+
+        fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+            vec![
+                rustls::SignatureScheme::RSA_PKCS1_SHA256,
+                rustls::SignatureScheme::RSA_PKCS1_SHA384,
+                rustls::SignatureScheme::RSA_PKCS1_SHA512,
+                rustls::SignatureScheme::ECDSA_NISTP256_SHA256,
+                rustls::SignatureScheme::ECDSA_NISTP384_SHA384,
+                rustls::SignatureScheme::ECDSA_NISTP521_SHA512,
+                rustls::SignatureScheme::ED25519,
+                rustls::SignatureScheme::RSA_PSS_SHA256,
+                rustls::SignatureScheme::RSA_PSS_SHA384,
+                rustls::SignatureScheme::RSA_PSS_SHA512,
+            ]
+        }
+    }
+
+    fn ws_client_config() -> Arc<rustls::ClientConfig> {
+        let mut config = rustls::ClientConfig::builder_with_provider(tls_provider())
+            .with_safe_default_protocol_versions()
+            .expect("default TLS protocol versions supported by crypto provider")
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(NoVerify))
+            .with_no_client_auth();
+        config.alpn_protocols = vec![b"http/1.1".to_vec()];
+        Arc::new(config)
+    }
+
+    async fn ws_echo(ws: WebSocketUpgrade) -> impl IntoResponse {
+        ws.on_upgrade(|mut socket: WebSocket| async move {
+            while let Some(Ok(msg)) = socket.recv().await {
+                if socket.send(msg).await.is_err() {
+                    break;
+                }
+            }
+        })
+    }
+
+    #[tokio::test]
+    async fn websocket_upgrade_works_over_tls() {
+        let dir = tempdir().unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let app = axum::Router::new().route("/ws", get(ws_echo));
+        let config = TlsConfig::SelfSigned {
+            data_dir: dir.path().to_path_buf(),
+        };
+        let handle = tokio::spawn(async move {
+            let _ = serve(app, listener, config).await;
+        });
+
+        let (mut ws, resp) = tokio::time::timeout(
+            Duration::from_secs(10),
+            tokio_tungstenite::connect_async_tls_with_config(
+                format!("wss://{addr}/ws"),
+                None,
+                false,
+                Some(tokio_tungstenite::Connector::Rustls(ws_client_config())),
+            ),
+        )
+        .await
+        .expect("ws connect timed out")
+        .expect("ws upgrade over TLS failed");
+        assert_eq!(resp.status(), 101);
+
+        ws.send(Message::Text("hello-tls-ws".into()))
+            .await
+            .expect("ws send failed");
+        let echo = tokio::time::timeout(Duration::from_secs(5), ws.next())
+            .await
+            .expect("ws echo timed out")
+            .expect("ws stream closed before echo")
+            .expect("ws echo error");
+        assert_eq!(echo, Message::Text("hello-tls-ws".into()));
+
+        let _ = ws.close(None).await;
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn plain_http_to_tls_port_is_cleanly_rejected() {
+        let dir = tempdir().unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let app = axum::Router::new().route("/ping", get(|| async { "pong" }));
+        let config = TlsConfig::SelfSigned {
+            data_dir: dir.path().to_path_buf(),
+        };
+        let handle = tokio::spawn(async move {
+            let _ = serve(app, listener, config).await;
+        });
+
+        // Plaintext HTTP against the TLS port: handshake fails, connection is dropped.
+        let plain = reqwest::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap();
+        let result = plain.get(format!("http://{addr}/ping")).send().await;
+        assert!(
+            result.is_err(),
+            "plain HTTP to TLS port must be rejected, got: {:?}",
+            result.map(|r| r.status())
+        );
+
+        // Server must still be alive and serving TLS after the failed handshake.
+        let tls_client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .timeout(Duration::from_secs(10))
+            .build()
+            .unwrap();
+        let resp = tls_client
+            .get(format!("https://{addr}/ping"))
+            .send()
+            .await
+            .expect("server must survive failed handshake");
+        assert_eq!(resp.status(), reqwest::StatusCode::OK);
+        assert_eq!(resp.text().await.unwrap(), "pong");
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn garbage_bytes_on_tls_port_are_rejected_without_panic() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let dir = tempdir().unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let app = axum::Router::new().route("/ping", get(|| async { "pong" }));
+        let config = TlsConfig::SelfSigned {
+            data_dir: dir.path().to_path_buf(),
+        };
+        let handle = tokio::spawn(async move {
+            let _ = serve(app, listener, config).await;
+        });
+
+        // Cert generation is lazy; wait until the TLS path accepts TCP connections.
+        let mut stream = None;
+        for _ in 0..100 {
+            match TcpStream::connect(addr).await {
+                Ok(s) => {
+                    stream = Some(s);
+                    break;
+                }
+                Err(_) => tokio::time::sleep(Duration::from_millis(50)).await,
+            }
+        }
+        let mut stream = stream.expect("server must accept TCP connections");
+
+        // Non-TLS bytes: the handshake branch must fail and close the stream.
+        // rustls may emit a plaintext TLS alert record first (5-byte header +
+        // 2-byte alert = 7 bytes); anything larger would mean an HTTP payload.
+        let _ = stream.write_all(b"NOT A TLS CLIENT HELLO").await;
+        let _ = stream.flush().await;
+        let mut received = 0usize;
+        let mut buf = [0u8; 256];
+        loop {
+            match tokio::time::timeout(Duration::from_secs(5), stream.read(&mut buf)).await {
+                // EOF or reset: connection torn down cleanly by the server.
+                Ok(Ok(0)) | Ok(Err(_)) => break,
+                Ok(Ok(n)) => received += n,
+                Err(_) => panic!("server must close rejected connection in time"),
+            }
+        }
+        assert!(
+            received <= 16,
+            "handshake rejection must not return an HTTP payload (got {received} bytes)"
+        );
+
+        // Server keeps serving after the failed handshake (no panic).
+        let tls_client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .timeout(Duration::from_secs(10))
+            .build()
+            .unwrap();
+        let resp = tls_client
+            .get(format!("https://{addr}/ping"))
+            .send()
+            .await
+            .expect("server must survive garbage handshake");
+        assert_eq!(resp.status(), reqwest::StatusCode::OK);
+        handle.abort();
     }
 }
