@@ -173,7 +173,7 @@
     "environmentsSection": "环境",
     "newEnvironment": "新建环境",
     "noAgent": "无 Agent",
-    "noAgentEnvironments": "暂无 Agent 直连环境",
+    "noAgentEnvironments": "暂无经 Agent 接入的环境",
     "noEnvironments": "暂无环境",
     "noRecentConnections": "暂无最近连接",
     "recentCount": "最近 · {count}",
