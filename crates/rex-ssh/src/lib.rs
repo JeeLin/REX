@@ -63,7 +63,7 @@ fn split_init_script(script: &str) -> Vec<String> {
 
 /// 拼装 SSH 连接地址；IPv6 需加方括号（已有方括号不再重复添加）。
 /// 纯逻辑，便于单元测试。
-fn format_ssh_addr(host: &str, port: u16) -> String {
+pub(crate) fn format_ssh_addr(host: &str, port: u16) -> String {
     if host.contains(':') && !host.starts_with('[') {
         format!("[{host}]:{port}")
     } else {
@@ -86,6 +86,37 @@ pub(crate) fn ensure_auth_success(result: client::AuthResult) -> Result<()> {
             "SSH authentication failed (partial_success={partial_success}, remaining methods: {remaining_methods:?})"
         )),
     }
+}
+
+/// 对已建立的 SSH 连接按配置完成认证（公钥 → 密码 → none）并校验认证结果。
+/// 终端会话与 SFTP 新建连接共用，避免三认证分支重复。
+pub(crate) async fn authenticate(
+    handle: &mut client::Handle<SshHandler>,
+    config: &SshConfig,
+) -> Result<()> {
+    if let Some(ref key_pem) = config.private_key {
+        let private_key = decode_secret_key(key_pem, config.password.as_deref())
+            .context("failed to decode private key PEM")?;
+        let key_with_hash = PrivateKeyWithHashAlg::new(Arc::new(private_key), None);
+        let result = handle
+            .authenticate_publickey(&config.username, key_with_hash)
+            .await
+            .context("SSH public key authentication failed")?;
+        ensure_auth_success(result)?;
+    } else if let Some(ref password) = config.password {
+        let result = handle
+            .authenticate_password(&config.username, password)
+            .await
+            .context("SSH password authentication failed")?;
+        ensure_auth_success(result)?;
+    } else {
+        let result = handle
+            .authenticate_none(&config.username)
+            .await
+            .context("SSH none authentication failed")?;
+        ensure_auth_success(result)?;
+    }
+    Ok(())
 }
 
 /// 统一 session channel 打开失败的错误文案（含 MaxSessions 排查指引）。
@@ -310,28 +341,7 @@ impl SshSession {
         };
 
         // 认证
-        if let Some(ref key_pem) = config.private_key {
-            let private_key = decode_secret_key(key_pem, config.password.as_deref())
-                .context("failed to decode private key PEM")?;
-            let key_with_hash = PrivateKeyWithHashAlg::new(Arc::new(private_key), None);
-            let result = handle
-                .authenticate_publickey(&config.username, key_with_hash)
-                .await
-                .context("SSH public key authentication failed")?;
-            ensure_auth_success(result)?;
-        } else if let Some(ref password) = config.password {
-            let result = handle
-                .authenticate_password(&config.username, password)
-                .await
-                .context("SSH password authentication failed")?;
-            ensure_auth_success(result)?;
-        } else {
-            let result = handle
-                .authenticate_none(&config.username)
-                .await
-                .context("SSH none authentication failed")?;
-            ensure_auth_success(result)?;
-        }
+        authenticate(&mut handle, &config).await?;
 
         // 打开 session channel
         let channel: Channel<client::Msg> = handle
