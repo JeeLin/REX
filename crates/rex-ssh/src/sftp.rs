@@ -457,11 +457,13 @@ mod tests {
                 server_handles: StdMutex::new(Vec::new()),
             });
 
-            let mut server_config = server::Config::default();
-            server_config.auth_rejection_time = Duration::from_millis(10);
-            server_config.keys = vec![
-                decode_secret_key(&format!("{HOST_KEY_PEM}\n"), None).expect("decode host key")
-            ];
+            let server_config = server::Config {
+                auth_rejection_time: Duration::from_millis(10),
+                keys: vec![
+                    decode_secret_key(&format!("{HOST_KEY_PEM}\n"), None).expect("decode host key")
+                ],
+                ..Default::default()
+            };
             let server_config = Arc::new(server_config);
 
             let accept_state = state.clone();
@@ -477,16 +479,13 @@ mod tests {
                     let config = server_config.clone();
                     let state = accept_state.clone();
                     tokio::spawn(async move {
-                        match server::run_stream(config, socket, handler).await {
-                            Ok(running) => {
-                                state
-                                    .server_handles
-                                    .lock()
-                                    .expect("lock handles")
-                                    .push(running.handle());
-                                let _ = running.await;
-                            }
-                            Err(_) => {}
+                        if let Ok(running) = server::run_stream(config, socket, handler).await {
+                            state
+                                .server_handles
+                                .lock()
+                                .expect("lock handles")
+                                .push(running.handle());
+                            let _ = running.await;
                         }
                     });
                 }
