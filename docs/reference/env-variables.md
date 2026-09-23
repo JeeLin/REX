@@ -2,6 +2,12 @@
 
 所有运行时环境变量均以 `REX_` 前缀开头（日志级别例外：`RUST_LOG`，由 tracing `EnvFilter` 读取）。Hub 和 Agent 各自使用不同的变量子集。
 
+模板文件：
+- `REX Hub`：`.env.hub.example`
+- `REX Agent`：`.env.agent.example`
+
+复制对应的模板文件到 `.env` 并填入实际值。
+
 ---
 
 ## Hub 变量
