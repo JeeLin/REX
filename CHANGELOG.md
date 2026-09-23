@@ -1,4 +1,29 @@
 # Changelog
+
+## [Unreleased]
+
+## [0.87.4] - 2026-09-23
+
+### Fixed
+- **登录页主题切换**：登录页新增主题切换按钮，与布局页共用 `useTheme` composable（消除内联复制）
+- **设置页布局**：配置行控件对齐（240px 固定控件列）；左侧导览滚动吸顶跟随并高亮当前区；点击导航不再整页错位留白（根因：`.sr-only` 文件输入 absolute 逃出裁剪）
+- **关于页服务器信息**：Platform/UserAgent 改为展示部署服务器 os/arch/hostname（新增 `GET /api/system-info`，需登录）
+- **Agent 健康状态**：过滤直连环境（v0.83.0 同类问题回归）；空态文案改「暂无 Agent 直连环境」并补双语言键
+- **审计日志**：补翻页控件（页大小 20/50/100/200），后端 limit/offset 端到端生效；列表改为页内滚动、分页条常显
+- **快捷键提示**：右下角浮层移至右上角（顶栏下方），不再遮挡内容
+- **Agent 更新残留**：`.bak`/`.old` 清理收敛为 rex-common 共享实现（全平台双后缀，启动 + 更新前清理，含单测）
+- **system-info 实现**：`hostname::get()` 替代每请求 spawn 子进程
+
+### Changed
+- **文档刷新**：15 个陈旧文档对照代码核对更新；DEVELOPMENT.md 里程碑总览表补 v0.74.0～v0.87.3
+- **.env 整理**：.env.example 按代码实际变量重写（dotenvy 接入 hub/agent `main()`），env-variables.md / docker-compose / systemd 三方对齐；清除幽灵 `REX_SECRET_KEY`（凭据加密实为数据目录 `.master-key` 文件制）
+- **依赖清理**：删除孤立 criterion 工作区依赖；`CLAUDE.md` 更名 `AGENTS.md`
+
+### Removed
+- **SSH 终端 Docker 按钮**：按用户反馈移除无效按钮及 DockerMenu 功能链
+- **`/metrics` 端点**：移除计划外 Prometheus 公开端点（收紧攻击面）及文档登记
+- **陈旧原型/死文件**：删除 `prototypes/rex-1.0/`、工作区根级 `tests/`、`benches/`（虚拟工作区从未编译）
+
 ## [0.87.3] - 2026-09-21
 
 ### Added
