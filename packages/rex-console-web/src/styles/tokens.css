@@ -161,9 +161,9 @@
   --border: #c3cbd3;         /* 边框略增强，补偿背景对比降低（原 #d0d7de） */
   --border-strong: #a3acb6;  /* 原 #afb8c1 */
   --border-subtle: #dde2e8;  /* 原 #eaeef2 */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
-  --shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
-  --shadow-lg: 0 14px 36px rgba(0, 0, 0, 0.62);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 14px 36px rgba(0, 0, 0, 0.16);
   --accent-soft: rgba(232, 145, 45, 0.12);
   --success-soft: rgba(63, 185, 80, 0.12);
   --danger-soft: rgba(248, 81, 73, 0.12);
