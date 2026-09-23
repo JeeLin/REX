@@ -217,7 +217,6 @@ async fn connect(
                     .and_then(|v| v.as_str())
                     .filter(|s| !s.trim().is_empty())
                     .map(String::from),
-                proxy_jump: None,
             })
             .await;
             match conn {

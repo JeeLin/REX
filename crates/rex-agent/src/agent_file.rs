@@ -183,7 +183,6 @@ async fn build_connector(
                                     .and_then(|v| v.as_str())
                                     .map(String::from)
                             }),
-                        proxy_jump: None,
                         keepalive_interval: cfg
                             .get("keepalive_interval")
                             .and_then(|v| v.as_u64())

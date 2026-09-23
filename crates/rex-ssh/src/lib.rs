@@ -26,9 +26,6 @@ pub struct SshConfig {
     pub keepalive_interval: Option<u32>,
     /// 会话建立后自动执行的初始化脚本（多行以 `\n` 分隔，逐行发送）
     pub init_script: Option<String>,
-    /// SSH ProxyJump 跳板机（逗号分隔多个跳板机，按顺序连接）
-    /// 格式: `user@host:port` 或 `host:port`
-    pub proxy_jump: Option<String>,
 }
 
 /// 终端事件 — 从 SSH 会话流向 WebSocket
@@ -192,52 +189,6 @@ fn default_terminal_modes() -> Vec<(Pty, u32)> {
     ]
 }
 
-// ── ProxyJump 解析 ──
-
-/// 解析 ProxyJump 字符串，返回跳板机列表（纯逻辑，便于单元测试）
-fn parse_proxy_jump(proxy_jump: &str) -> Vec<String> {
-    proxy_jump
-        .split(',')
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect()
-}
-
-/// 解析跳板机地址字符串为 (user, host, port)
-/// 支持格式：`user@host:port`, `host:port`, `host`
-fn parse_jump_host(jump: &str) -> (Option<String>, String, u16) {
-    let (user, host_port) = if let Some(at_pos) = jump.find('@') {
-        (Some(jump[..at_pos].to_string()), &jump[at_pos + 1..])
-    } else {
-        (None, jump)
-    };
-
-    // 处理 IPv6 [host]:port 格式
-    if host_port.starts_with('[') {
-        if let Some(bracket_end) = host_port.find(']') {
-            let host = &host_port[1..bracket_end];
-            let remaining = &host_port[bracket_end + 1..];
-            let port = remaining
-                .strip_prefix(':')
-                .and_then(|p| p.parse::<u16>().ok())
-                .unwrap_or(22);
-            return (user, host.to_string(), port);
-        }
-    }
-
-    // 处理 host:port 格式（最后一个冒号分割，避免 IPv6 地址误分割）
-    if let Some(colon_pos) = host_port.rfind(':') {
-        let host = &host_port[..colon_pos];
-        let port_str = &host_port[colon_pos + 1..];
-        if let Ok(port) = port_str.parse::<u16>() {
-            return (user, host.to_string(), port);
-        }
-    }
-
-    // 仅主机名
-    (user, host_port.to_string(), 22)
-}
-
 // ── 双栈 DNS 解析 ──
 
 /// 双栈 DNS 解析：优先 IPv4，失败后尝试 IPv6
@@ -316,29 +267,10 @@ impl SshSession {
         }
         let ssh_config = Arc::new(ssh_config);
 
-        // 建立连接（支持 ProxyJump 跳板机链）
+        // 建立连接
         let handler = SshHandler;
-        let mut handle = if let Some(ref proxy_jump_str) = config.proxy_jump {
-            let jumps = parse_proxy_jump(proxy_jump_str);
-            if jumps.is_empty() {
-                // proxy_jump 为空，直接连接
-                Self::connect_direct(&ssh_config, &config.host, config.port, handler).await?
-            } else {
-                // 通过跳板机链连接
-                Self::connect_via_jumps(
-                    &ssh_config,
-                    &jumps,
-                    &config.host,
-                    config.port,
-                    handler,
-                    config.password.as_deref(),
-                    config.private_key.as_deref(),
-                )
-                .await?
-            }
-        } else {
-            Self::connect_direct(&ssh_config, &config.host, config.port, handler).await?
-        };
+        let mut handle =
+            Self::connect_direct(&ssh_config, &config.host, config.port, handler).await?;
 
         // 认证
         authenticate(&mut handle, &config).await?;
@@ -463,9 +395,7 @@ impl SshSession {
         self.events.recv().await
     }
 
-    // ── ProxyJump 内部连接方法 ──
-
-    /// 直接 SSH 连接（无跳板机），使用双栈 DNS 解析
+    /// 直接 SSH 连接，使用双栈 DNS 解析
     async fn connect_direct(
         ssh_config: &Arc<client::Config>,
         host: &str,
@@ -493,103 +423,6 @@ impl SshSession {
             None => anyhow::bail!("no addresses to connect to {host}"),
         }
         .context("SSH connection failed")
-    }
-
-    /// 通过跳板机链 SSH 连接
-    /// 依次连接每个跳板机，打开 direct-tcpip 通道到下一个节点，最终连接到目标
-    async fn connect_via_jumps(
-        ssh_config: &Arc<client::Config>,
-        jumps: &[String],
-        target_host: &str,
-        target_port: u16,
-        handler: SshHandler,
-        password: Option<&str>,
-        private_key: Option<&str>,
-    ) -> Result<client::Handle<SshHandler>> {
-        // 连接第一个跳板机（直接连接）
-        let (jump_user, jump_host, jump_port) = parse_jump_host(&jumps[0]);
-        let jump_user = jump_user.unwrap_or_else(|| "root".to_string());
-
-        let mut current_handle =
-            Self::connect_direct(ssh_config, &jump_host, jump_port, handler.clone()).await?;
-
-        // 认证跳板机
-        Self::authenticate_handle(&mut current_handle, &jump_user, password, private_key).await?;
-        tracing::info!(jump = %jumps[0], "authenticated to jump host");
-
-        // 依次通过每个跳板机的 direct-tcpip 通道
-        for jump_str in jumps.iter().skip(1) {
-            let (next_user, next_host, next_port) = parse_jump_host(jump_str);
-            let next_user = next_user.unwrap_or_else(|| "root".to_string());
-
-            // 打开 direct-tcpip 通道到下一个跳板机
-            let channel = current_handle
-                .channel_open_direct_tcpip(&next_host, next_port as u32, "127.0.0.1", 0)
-                .await
-                .context("failed to open direct-tcpip channel through jump host")?;
-
-            // 通过通道建立 SSH 连接
-            let stream = channel.into_stream();
-            current_handle = client::connect_stream(ssh_config.clone(), stream, handler.clone())
-                .await
-                .context("SSH connection through jump channel failed")?;
-
-            // 认证下一个跳板机
-            Self::authenticate_handle(&mut current_handle, &next_user, password, private_key)
-                .await?;
-            tracing::info!(
-                jump = %jump_str,
-                "authenticated to intermediate jump host"
-            );
-        }
-
-        // 通过最后一个跳板机打开 direct-tcpip 通道到最终目标
-        let channel = current_handle
-            .channel_open_direct_tcpip(target_host, target_port as u32, "127.0.0.1", 0)
-            .await
-            .context("failed to open direct-tcpip channel to target through last jump host")?;
-
-        let stream = channel.into_stream();
-        let final_handle = client::connect_stream(ssh_config.clone(), stream, handler)
-            .await
-            .context("SSH connection to target through jump channel failed")?;
-
-        tracing::info!(
-            target = %target_host,
-            port = target_port,
-            "connected to target through proxy jump chain"
-        );
-        Ok(final_handle)
-    }
-
-    /// 对给定的 SSH Handle 进行认证（跳板机使用与目标相同的凭据）
-    async fn authenticate_handle(
-        handle: &mut client::Handle<SshHandler>,
-        username: &str,
-        password: Option<&str>,
-        private_key: Option<&str>,
-    ) -> Result<()> {
-        // 公钥 → 密码 → None
-        if let Some(key_pem) = private_key {
-            let pk = decode_secret_key(key_pem, password)
-                .context("failed to decode private key PEM for jump host")?;
-            let key_with_hash = PrivateKeyWithHashAlg::new(Arc::new(pk), None);
-            handle
-                .authenticate_publickey(username, key_with_hash)
-                .await
-                .context("jump host public key authentication failed")?;
-        } else if let Some(pwd) = password {
-            handle
-                .authenticate_password(username, pwd)
-                .await
-                .context("jump host password authentication failed")?;
-        } else {
-            handle
-                .authenticate_none(username)
-                .await
-                .context("jump host none authentication failed")?;
-        }
-        Ok(())
     }
 }
 
@@ -665,50 +498,6 @@ mod tests {
         assert_eq!(classify_addr("[::1]"), AddrType::Ipv6);
         assert_eq!(classify_addr("example.com"), AddrType::Hostname);
         assert_eq!(classify_addr("localhost"), AddrType::Hostname);
-    }
-
-    #[test]
-    fn test_parse_proxy_jump() {
-        assert_eq!(parse_proxy_jump("j1.example.com"), vec!["j1.example.com"]);
-        assert_eq!(
-            parse_proxy_jump("j1.example.com, j2.example.com"),
-            vec!["j1.example.com", "j2.example.com"]
-        );
-        assert_eq!(parse_proxy_jump(""), Vec::<String>::new());
-        assert_eq!(parse_proxy_jump(" j1 , j2 , j3 "), vec!["j1", "j2", "j3"]);
-    }
-
-    #[test]
-    fn test_parse_jump_host() {
-        // 简单 host
-        assert_eq!(
-            parse_jump_host("j1.example.com"),
-            (None, "j1.example.com".to_string(), 22)
-        );
-        // user@host:port
-        assert_eq!(
-            parse_jump_host("admin@j1.example.com:2222"),
-            (
-                Some("admin".to_string()),
-                "j1.example.com".to_string(),
-                2222
-            )
-        );
-        // host:port
-        assert_eq!(
-            parse_jump_host("j1.example.com:2222"),
-            (None, "j1.example.com".to_string(), 2222)
-        );
-        // IPv6 with brackets
-        assert_eq!(
-            parse_jump_host("user@[::1]:22"),
-            (Some("user".to_string()), "::1".to_string(), 22)
-        );
-        // IPv6 without port
-        assert_eq!(
-            parse_jump_host("[2001:db8::1]"),
-            (None, "2001:db8::1".to_string(), 22)
-        );
     }
 
     #[test]

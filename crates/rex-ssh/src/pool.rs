@@ -16,13 +16,7 @@ static POOL: LazyLock<Mutex<HashMap<String, PooledHandle>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// 计算连接池键：`user@host:port`。
-///
-/// ProxyJump 链路的连接走的是跳板机通道，`SftpConnector::connect_with_config`
-/// 无法直连复用，因此不入池。
 pub(crate) fn pool_key(config: &SshConfig) -> Option<String> {
-    if config.proxy_jump.is_some() {
-        return None;
-    }
     Some(format!(
         "{}@{}:{}",
         config.username, config.host, config.port
@@ -70,7 +64,7 @@ pub(crate) fn should_evict(err: &russh::Error) -> bool {
 mod tests {
     use super::*;
 
-    fn config(username: &str, host: &str, port: u16, proxy_jump: Option<&str>) -> SshConfig {
+    fn config(username: &str, host: &str, port: u16) -> SshConfig {
         SshConfig {
             host: host.to_string(),
             port,
@@ -79,27 +73,18 @@ mod tests {
             private_key: None,
             keepalive_interval: Some(0),
             init_script: None,
-            proxy_jump: proxy_jump.map(str::to_string),
         }
     }
 
     #[test]
     fn pool_key_contains_user_host_port() {
         assert_eq!(
-            pool_key(&config("root", "10.0.0.1", 22, None)).as_deref(),
+            pool_key(&config("root", "10.0.0.1", 22)).as_deref(),
             Some("root@10.0.0.1:22")
         );
         assert_eq!(
-            pool_key(&config("root", "::1", 2222, None)).as_deref(),
+            pool_key(&config("root", "::1", 2222)).as_deref(),
             Some("root@::1:2222")
-        );
-    }
-
-    #[test]
-    fn pool_key_skips_proxy_jump_chain() {
-        assert_eq!(
-            pool_key(&config("root", "10.0.0.1", 22, Some("jump.example.com:22"))),
-            None
         );
     }
 

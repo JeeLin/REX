@@ -89,7 +89,6 @@ struct ResourceConnInfo {
     agent_id: Option<String>,
     keepalive_interval: Option<u32>,
     init_script: Option<String>,
-    proxy_jump: Option<String>,
 }
 
 /// GET /ws/terminal?token=jwt&resourceId=xxx
@@ -195,7 +194,9 @@ async fn load_resource_conn(
         };
 
         // 从 config_json 解密敏感字段（password、privateKey、initScript）
-        let (password, private_key, init_script, proxy_jump) = if !resource.config_json.is_empty() && resource.config_json != "{}" {
+        // 未知键静默忽略，不报错也不告警。
+        let (password, private_key, init_script) =
+            if !resource.config_json.is_empty() && resource.config_json != "{}" {
             let config_str = crypto
                 .decrypt(&resource.config_json)
                 .map_err(|e| {
@@ -221,12 +222,6 @@ async fn load_resource_conn(
                 .and_then(|v| v.as_str())
                 .filter(|s| !s.trim().is_empty())
                 .map(String::from);
-            let proxy_jump = config
-                .get("proxyJump")
-                .or_else(|| config.get("proxy_jump"))
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.trim().is_empty())
-                .map(String::from);
 
             tracing::debug!(
                 action = "SSH_CONFIG_LOADED",
@@ -236,10 +231,10 @@ async fn load_resource_conn(
                 "sensitive config loaded"
             );
 
-            (pw, pk, init_script, proxy_jump)
+            (pw, pk, init_script)
         } else {
             tracing::debug!(action = "SSH_CONFIG_PARSE", resource_id = %rid, resource_name = %resource.name, "no config_json — using defaults");
-            (None, None, None, None)
+            (None, None, None)
         };
 
         let auth_method = if private_key.is_some() {
@@ -318,7 +313,6 @@ async fn load_resource_conn(
             agent_id,
             keepalive_interval: None,
             init_script,
-            proxy_jump,
         })
     })
     .await
@@ -350,7 +344,6 @@ async fn handle_direct_terminal(mut ws: WebSocket, conn: &ResourceConnInfo, sess
         private_key: conn.private_key.clone(),
         keepalive_interval: conn.keepalive_interval,
         init_script: conn.init_script.clone(),
-        proxy_jump: conn.proxy_jump.clone(),
     };
 
     let session = match SshSession::connect(config).await {
