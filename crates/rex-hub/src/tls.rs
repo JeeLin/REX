@@ -77,10 +77,14 @@ impl TlsConfig {
         }
     }
 
+    /// 加载证书链与私钥；SelfSigned 模式先确保磁盘上的材料可用（首启生成、过期重生成）。
     fn load_cert_chain(
         &self,
     ) -> Result<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>), String> {
         let (cert_path, key_path) = self.paths()?;
+        if let Self::SelfSigned { .. } = self {
+            ensure_self_signed(&cert_path, &key_path)?;
+        }
         let chain = read_cert_chain(&cert_path)?;
         let key = read_private_key(&key_path)?;
         Ok((chain, key))
@@ -121,6 +125,94 @@ fn data_dir_or_default() -> PathBuf {
     std::env::var("REX_DATA_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| rex_common::config::default_data_dir())
+}
+
+/// 确保自签名证书存在且可用：已存在则校验（有效期 + key 匹配）后复用，
+/// 过期/损坏/缺失时重新生成。
+fn ensure_self_signed(cert_path: &Path, key_path: &Path) -> Result<(), String> {
+    if cert_path.is_file() && key_path.is_file() {
+        match check_self_signed_pair(cert_path, key_path) {
+            Ok(()) => return Ok(()),
+            Err(e) => tracing::warn!(
+                cert = %cert_path.display(),
+                error = %e,
+                "regenerating self-signed TLS certificate"
+            ),
+        }
+    }
+    let dir = cert_path
+        .parent()
+        .ok_or_else(|| format!("invalid TLS certificate path {}", cert_path.display()))?;
+    generate_self_signed(dir, cert_path, key_path)
+}
+
+/// 复用前校验已存在的自签名证书对。
+fn check_self_signed_pair(cert_path: &Path, key_path: &Path) -> Result<(), String> {
+    let chain = read_cert_chain(cert_path)?;
+    ensure_not_expired(&chain, cert_path)?;
+    let key = read_private_key(key_path)?;
+    let provider = tls_provider();
+    rustls::sign::CertifiedKey::from_der(chain, key, &provider)
+        .map_err(|e| key_pair_error(e, key_path, cert_path))?;
+    Ok(())
+}
+
+fn generate_self_signed(dir: &Path, cert_path: &Path, key_path: &Path) -> Result<(), String> {
+    let mut params = rcgen::CertificateParams::new(Vec::<String>::new())
+        .map_err(|e| format!("failed to prepare self-signed TLS parameters: {e}"))?;
+    for candidate in san_candidates() {
+        if let Ok(ip) = candidate.parse::<IpAddr>() {
+            params.subject_alt_names.push(rcgen::SanType::IpAddress(ip));
+        } else if let Ok(name) = rcgen::Ia5String::try_from(candidate.as_str()) {
+            params.subject_alt_names.push(rcgen::SanType::DnsName(name));
+        } else {
+            tracing::debug!(candidate = %candidate, "skipping invalid TLS SAN candidate");
+        }
+    }
+    let key = rcgen::KeyPair::generate()
+        .map_err(|e| format!("failed to generate TLS private key: {e}"))?;
+    let cert = params
+        .self_signed(&key)
+        .map_err(|e| format!("failed to generate self-signed TLS certificate: {e}"))?;
+    std::fs::create_dir_all(dir).map_err(|e| format!("failed to create {}: {e}", dir.display()))?;
+    std::fs::write(cert_path, cert.pem())
+        .map_err(|e| format!("failed to write {}: {e}", cert_path.display()))?;
+    std::fs::write(key_path, key.serialize_pem())
+        .map_err(|e| format!("failed to write {}: {e}", key_path.display()))?;
+    tracing::info!(cert = %cert_path.display(), "generated self-signed TLS certificate");
+    Ok(())
+}
+
+/// 自签名 SAN 候选：localhost（名称 + 回环）、hostname、宿主 IP（尽力而为）。
+fn san_candidates() -> Vec<String> {
+    let mut out = vec![
+        "localhost".to_string(),
+        "127.0.0.1".to_string(),
+        "::1".to_string(),
+    ];
+    if let Ok(hostname) = hostname::get() {
+        let hostname = hostname.to_string_lossy();
+        let hostname = hostname.trim();
+        if !hostname.is_empty() {
+            out.push(hostname.to_string());
+        }
+    }
+    if let Some(ip) = primary_local_ip() {
+        out.push(ip);
+    }
+    out
+}
+
+/// 通过 UDP connect（不实际发包）探测宿主对外主 IP。
+fn primary_local_ip() -> Option<String> {
+    let sock = UdpSocket::bind("0.0.0.0:0").ok()?;
+    sock.connect("8.8.8.8:80").ok()?;
+    let ip = sock.local_addr().ok()?.ip();
+    if ip.is_loopback() {
+        None
+    } else {
+        Some(ip.to_string())
+    }
 }
 
 /// 构建显式 CryptoProvider。
@@ -220,6 +312,22 @@ mod tests {
     use std::time::Duration;
     use tempfile::tempdir;
 
+    /// 生成一对已过期（notAfter 为 UTCTime）的证书。
+    fn expired_pair() -> (String, String) {
+        let mut params = rcgen::CertificateParams::new(vec!["localhost".to_string()]).unwrap();
+        params.not_before = rcgen::date_time_ymd(2000, 1, 1);
+        params.not_after = rcgen::date_time_ymd(2000, 2, 1);
+        let key = rcgen::KeyPair::generate().unwrap();
+        let cert = params.self_signed(&key).unwrap();
+        (cert.pem(), key.serialize_pem())
+    }
+
+    fn write_pair(dir: &Path, cert_pem: &str, key_pem: &str) {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(dir.join("cert.pem"), cert_pem).unwrap();
+        std::fs::write(dir.join("key.pem"), key_pem).unwrap();
+    }
+
     #[test]
     fn test_tls_config_default() {
         let config = TlsConfig::from_env();
@@ -249,6 +357,78 @@ mod tests {
         assert_eq!(resp.status(), reqwest::StatusCode::OK);
         assert_eq!(resp.text().await.unwrap(), "pong");
         handle.abort();
+    }
+
+    #[tokio::test]
+    async fn self_signed_serves_https() {
+        let dir = tempdir().unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let app = axum::Router::new().route("/ping", get(|| async { "pong" }));
+        let config = TlsConfig::SelfSigned {
+            data_dir: dir.path().to_path_buf(),
+        };
+        let handle = tokio::spawn(async move {
+            let _ = serve(app, listener, config).await;
+        });
+
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .timeout(Duration::from_secs(10))
+            .build()
+            .unwrap();
+        let resp = client
+            .get(format!("https://{addr}/ping"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), reqwest::StatusCode::OK);
+        assert_eq!(resp.text().await.unwrap(), "pong");
+        // HTTPS 握手成功后，自签名材料必然已生成
+        assert!(dir.path().join("tls/cert.pem").is_file());
+        assert!(dir.path().join("tls/key.pem").is_file());
+        handle.abort();
+    }
+
+    #[test]
+    fn self_signed_generates_then_reuses() {
+        let dir = tempdir().unwrap();
+        let config = TlsConfig::SelfSigned {
+            data_dir: dir.path().to_path_buf(),
+        };
+        let (chain, _key) = config.load_cert_chain().unwrap();
+        ensure_not_expired(&chain, &dir.path().join("tls/cert.pem")).unwrap();
+        let cert_path = dir.path().join("tls/cert.pem");
+        let key_path = dir.path().join("tls/key.pem");
+        assert!(cert_path.is_file());
+        assert!(key_path.is_file());
+        let first = std::fs::read(&cert_path).unwrap();
+
+        // 第二次加载必须复用已生成的证书，不重新生成
+        config.load_cert_chain().unwrap();
+        let second = std::fs::read(&cert_path).unwrap();
+        assert_eq!(first, second, "existing certificate must be reused");
+    }
+
+    #[test]
+    fn self_signed_regenerates_expired_certificate() {
+        let dir = tempdir().unwrap();
+        let (cert_pem, key_pem) = expired_pair();
+        write_pair(&dir.path().join("tls"), &cert_pem, &key_pem);
+        let cert_path = dir.path().join("tls/cert.pem");
+        let expired_bytes = std::fs::read(&cert_path).unwrap();
+
+        let config = TlsConfig::SelfSigned {
+            data_dir: dir.path().to_path_buf(),
+        };
+        let (chain, _key) = config.load_cert_chain().unwrap();
+        // 过期证书已被重新生成，复用校验（有效期）必须通过
+        ensure_not_expired(&chain, &cert_path).unwrap();
+        let new_bytes = std::fs::read(&cert_path).unwrap();
+        assert_ne!(
+            expired_bytes, new_bytes,
+            "expired certificate must be regenerated"
+        );
     }
 
 }
