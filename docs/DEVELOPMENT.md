@@ -168,6 +168,7 @@ rex-agent = 所有 crate（无前端）
 | **v0.87.2** | 环境令牌/导出加密修复 + Windows 启停死锁（patch） | — | ✅ 已完成（v0.87.2） |
 | **v0.87.3** | 敏感操作审计日志 + Windows SCM 编译修复（patch） | — | ✅ 已完成（v0.87.3） |
 | **v0.87.4** | 用户反馈缺陷修复（12 🟡 + 1 🟢）+ 文档刷新 + .env 整理 + 步骤4审查修复（8 条） | — | ✅ 已完成（v0.87.4） |
+| **v0.88.0** | HTTPS 证书逻辑真实现（minor，TLS serve 实装 + 自签名/手动/ACME 三模式 + Agent 信任链） | ← 新增（下一步） | ⬜ |
 ### M0：项目骨架重建
 
 **核心功能**：清空 `packages/rex-console-web` 与 `crates/*` 源码，按新设计系统重建最小可运行骨架。
@@ -748,6 +749,14 @@ rex-agent = 所有 crate（无前端）
 - **版本类型**：minor
 - **版本号**：v0.77.0
 ---
+
+### v0.88.0：HTTPS 证书逻辑真实现 ← 新增（下一步）
+- **核心功能**：TLS 从「三模式全部回退 HTTP」的 stub 实装修复——axum + tokio-rustls 实装 TLS serve；自签名（rcgen 首启生成）、手动证书（PEM 加载 + 过期校验）、ACME（进程内 rustls-acme，域名/IP 签发 + 自动续期）三模式真实可用；Agent 信任链（REX_CA_CERT 实装 + 已有 REX_TLS_INSECURE）；文档/env 对齐
+- **子任务预估**：7 个（TLS serve 内核、自签名模式、手动证书模式、ACME 进程内实装、Agent 信任链、文档/env 对齐、缺陷池 2 条修复）
+- **依赖**：v0.87.4
+- **版本类型**：minor
+- **版本号**：v0.88.0
+- **缺陷池 bug**：亮色主题过亮，优化长时间使用体验（🟢）、SSH 终端打开对应 SFTP 报错/并发 session（🟡）（从 docs/BUGS.md 纳入，已在规划时从缺陷池删除）
 
 ## 7. UI/UX 优化路线图（参考 DBX）
 
