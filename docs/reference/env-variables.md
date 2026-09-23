@@ -44,6 +44,7 @@
 | `REX_AGENT_NAME` | `agent` | Agent 名称（显示在 Hub 管理界面） |
 | `REX_HEARTBEAT_INTERVAL` | `30` | 心跳间隔（秒），Agent 每隔此时间向 Hub 发送心跳 |
 | `REX_TLS_INSECURE` | — | 存在时跳过 TLS 证书验证（仅限内网测试环境） |
+| `REX_CA_CERT` | 无 | 自定义 CA 证书路径（PEM），加入 Agent 连 Hub 的 TLS 信任锚（与系统根合并，不影响其他出站流量）；与 `REX_TLS_INSECURE` 同设时 `REX_TLS_INSECURE` 优先生效 |
 | `REX_AUTO_UPDATE` | — | 存在时启用自动更新 |
 | `REX_WORKER` | — | 存在时启动 worker 子进程（supervisor 自动设置，不要手动设置） |
 | `REX_AGENT_HTTP_PORT` | `3000` | Agent 本地 HTTP 控制端口 |

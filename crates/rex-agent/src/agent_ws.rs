@@ -75,6 +75,101 @@ impl rustls::client::danger::ServerCertVerifier for InsecureVerifier {
 }
 
 // ═══════════════════════════════════════
+// TLS 信任模式（REX_CA_CERT 自定义信任锚）
+// ═══════════════════════════════════════
+
+/// Agent 连 Hub 的 wss 信任模式——仅作用于该条出站连接，Agent 其余出站流量不受影响。
+enum HubTlsMode {
+    /// `REX_TLS_INSECURE`：跳过证书验证（优先级高于 `REX_CA_CERT`）。
+    Insecure,
+    /// `REX_CA_CERT`：系统根（webpki-roots）并入后追加自定义 CA。
+    CustomCa(rustls::RootCertStore),
+    /// 默认：沿用 tokio-tungstenite 内置的 webpki-roots 信任集。
+    SystemRoots,
+}
+
+/// 解析信任模式：`REX_TLS_INSECURE` 与 `REX_CA_CERT` 同设时 insecure 生效并告警。
+fn resolve_hub_tls(tls_insecure: bool, ca_cert_path: Option<&str>) -> Result<HubTlsMode, String> {
+    if tls_insecure {
+        if ca_cert_path.is_some() {
+            tracing::warn!(
+                "REX_TLS_INSECURE and REX_CA_CERT both set; REX_TLS_INSECURE takes precedence"
+            );
+        }
+        return Ok(HubTlsMode::Insecure);
+    }
+    let Some(path) = ca_cert_path else {
+        return Ok(HubTlsMode::SystemRoots);
+    };
+    let pem = std::fs::read(path).map_err(|e| format!("read REX_CA_CERT {path}: {e}"))?;
+    Ok(HubTlsMode::CustomCa(build_ca_root_store(&pem)?))
+}
+
+/// 构造信任集：系统根（webpki-roots）**并入**后再追加自定义 CA，不替换/清空系统根。
+fn build_ca_root_store(ca_pem: &[u8]) -> Result<rustls::RootCertStore, String> {
+    let mut store = rustls::RootCertStore {
+        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+    };
+    let mut reader = std::io::BufReader::new(ca_pem);
+    let certs = rustls_pemfile::certs(&mut reader)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("parse REX_CA_CERT PEM: {e}"))?;
+    if certs.is_empty() {
+        return Err("REX_CA_CERT contains no certificates".into());
+    }
+    for cert in certs {
+        store
+            .add(cert)
+            .map_err(|e| format!("invalid CA certificate: {e}"))?;
+    }
+    Ok(store)
+}
+
+/// 选定 TLS 加密 provider：优先已安装的进程默认，否则回落 `ring`
+/// （rex-agent 构建图同时启用 rustls `ring` 与 `aws_lc_rs`，crate feature 推断歧义，
+/// `ClientConfig::builder()` 会 panic——故显式指定，与项目「默认 provider ring」一致）。
+fn crypto_provider() -> Arc<rustls::crypto::CryptoProvider> {
+    rustls::crypto::CryptoProvider::get_default()
+        .cloned()
+        .unwrap_or_else(|| Arc::new(rustls::crypto::ring::default_provider()))
+}
+
+/// 幂等安装进程默认 CryptoProvider，使 tokio-tungstenite 内部的
+/// `ClientConfig::builder()`（默认信任集路径）与 reqwest 出站不因 provider 歧义 panic。
+fn ensure_crypto_provider() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let _ = rustls::crypto::CryptoProvider::install_default(
+            rustls::crypto::ring::default_provider(),
+        );
+    });
+}
+
+/// 按信任模式构造连 Hub 的 rustls ClientConfig；`SystemRoots` 返回 None 走默认连接。
+fn hub_client_config(mode: HubTlsMode) -> Option<rustls::ClientConfig> {
+    ensure_crypto_provider();
+    let builder = || {
+        rustls::ClientConfig::builder_with_provider(crypto_provider())
+            .with_safe_default_protocol_versions()
+            .expect("default TLS protocol versions supported by crypto provider")
+    };
+    match mode {
+        HubTlsMode::SystemRoots => None,
+        HubTlsMode::Insecure => Some(
+            builder()
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(InsecureVerifier))
+                .with_no_client_auth(),
+        ),
+        HubTlsMode::CustomCa(roots) => Some(
+            builder()
+                .with_root_certificates(roots)
+                .with_no_client_auth(),
+        ),
+    }
+}
+
+// ═══════════════════════════════════════
 // 消息协议（与 Hub 侧 agent_ws.rs 对称）
 // ═══════════════════════════════════════
 
@@ -223,6 +318,8 @@ pub struct AgentConfig {
     pub agent_token: String,
     pub auto_update: bool,
     pub tls_insecure: bool,
+    /// `REX_CA_CERT`：自定义 CA 证书 PEM 路径（可选）
+    pub ca_cert: Option<String>,
     pub heartbeat_interval: u64,
 }
 
@@ -239,6 +336,7 @@ impl AgentConfig {
         let tls_insecure = std::env::var("REX_TLS_INSECURE")
             .map(|v| v == "true")
             .unwrap_or(false);
+        let ca_cert = std::env::var("REX_CA_CERT").ok().filter(|v| !v.is_empty());
         let heartbeat_interval = std::env::var("REX_HEARTBEAT_INTERVAL")
             .unwrap_or_else(|_| "30".into())
             .parse::<u64>()
@@ -248,6 +346,7 @@ impl AgentConfig {
             agent_token,
             auto_update,
             tls_insecure,
+            ca_cert,
             heartbeat_interval,
         })
     }
@@ -270,6 +369,9 @@ pub(crate) struct LocalChannel {
 // ═══════════════════════════════════════
 
 pub async fn run_agent(config: AgentConfig, api_pending: ApiPendingMap) {
+    // 先装进程默认 provider，覆盖 tokio-tungstenite / reqwest 内部的 rustls builder。
+    ensure_crypto_provider();
+
     let channels: Arc<RwLock<HashMap<String, LocalChannel>>> =
         Arc::new(RwLock::new(HashMap::new()));
 
@@ -338,21 +440,24 @@ async fn connect_and_run(
     let ws_url = build_ws_url(&config.hub_url, &config.agent_token)?;
     tracing::info!(url = %ws_url, "connecting");
 
-    // 根据 TLS 配置选择连接方式
-    let (ws_stream, _) = if config.tls_insecure && ws_url.starts_with("wss://") {
-        use tokio_tungstenite::connect_async_tls_with_config;
-        use tokio_tungstenite::Connector;
-
-        let request = ws_url.as_str();
-        let connector = Connector::Rustls(Arc::new(
-            rustls::ClientConfig::builder()
-                .dangerous()
-                .with_custom_certificate_verifier(Arc::new(InsecureVerifier))
-                .with_no_client_auth(),
-        ));
-        connect_async_tls_with_config(request, None, false, Some(connector)).await?
+    // 根据 TLS 配置选择连接方式（REX_TLS_INSECURE / REX_CA_CERT 仅作用于连 Hub 的 wss）
+    let client_config = if ws_url.starts_with("wss://") {
+        hub_client_config(resolve_hub_tls(
+            config.tls_insecure,
+            config.ca_cert.as_deref(),
+        )?)
     } else {
-        connect_async(&ws_url).await?
+        None
+    };
+    let (ws_stream, _) = match client_config {
+        Some(client_config) => {
+            use tokio_tungstenite::connect_async_tls_with_config;
+            use tokio_tungstenite::Connector;
+
+            let connector = Connector::Rustls(Arc::new(client_config));
+            connect_async_tls_with_config(ws_url.as_str(), None, false, Some(connector)).await?
+        }
+        None => connect_async(&ws_url).await?,
     };
     let (mut ws_sink, mut ws_stream) = ws_stream.split();
 
@@ -1166,6 +1271,121 @@ fn build_ws_url(hub_url: &str, token: &str) -> Result<String, Box<dyn std::error
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rustls::client::danger::ServerCertVerifier;
+
+    // --- 子任务 4：REX_CA_CERT 自定义信任锚 ---
+
+    /// 生成自签 CA（is_ca）。
+    fn make_ca(cn: &str) -> (rcgen::Certificate, rcgen::KeyPair) {
+        let mut params = rcgen::CertificateParams::new(Vec::<String>::new()).unwrap();
+        params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+        params.key_usages = vec![
+            rcgen::KeyUsagePurpose::KeyCertSign,
+            rcgen::KeyUsagePurpose::CrlSign,
+        ];
+        params
+            .distinguished_name
+            .push(rcgen::DnType::CommonName, cn);
+        let key = rcgen::KeyPair::generate().unwrap();
+        let cert = params.self_signed(&key).unwrap();
+        (cert, key)
+    }
+
+    /// 由 CA 签发 `cn` 的服务端证书。
+    fn make_server_cert(
+        cn: &str,
+        ca: &rcgen::Certificate,
+        ca_key: &rcgen::KeyPair,
+    ) -> rcgen::Certificate {
+        let mut params = rcgen::CertificateParams::new(vec![cn.to_string()]).unwrap();
+        params.key_usages = vec![rcgen::KeyUsagePurpose::DigitalSignature];
+        params
+            .extended_key_usages
+            .push(rcgen::ExtendedKeyUsagePurpose::ServerAuth);
+        params
+            .distinguished_name
+            .push(rcgen::DnType::CommonName, cn);
+        let key = rcgen::KeyPair::generate().unwrap();
+        params.signed_by(&key, ca, ca_key).unwrap()
+    }
+
+    fn verify_server(
+        store: &rustls::RootCertStore,
+        cert: &rcgen::Certificate,
+        name: &str,
+    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        let verifier = rustls::client::WebPkiServerVerifier::builder_with_provider(
+            Arc::new(store.clone()),
+            crypto_provider(),
+        )
+        .build()
+        .unwrap();
+        let server_name = rustls::pki_types::ServerName::try_from(name).unwrap();
+        verifier.verify_server_cert(
+            cert.der(),
+            &[],
+            &server_name,
+            &[],
+            rustls::pki_types::UnixTime::now(),
+        )
+    }
+
+    #[test]
+    fn custom_ca_store_verifies_cert_issued_by_that_ca() {
+        let (ca, ca_key) = make_ca("REX Test CA");
+        let server = make_server_cert("localhost", &ca, &ca_key);
+        let store = build_ca_root_store(ca.pem().as_bytes()).unwrap();
+        // 自定义 CA 并入信任集，而非清空系统根
+        assert!(store.roots.len() > webpki_roots::TLS_SERVER_ROOTS.len());
+        verify_server(&store, &server, "localhost").expect("CA-signed cert must verify");
+    }
+
+    #[test]
+    fn custom_ca_store_rejects_unknown_ca() {
+        let (ca, _) = make_ca("REX Test CA");
+        let (other_ca, other_key) = make_ca("Unknown CA");
+        let store = build_ca_root_store(ca.pem().as_bytes()).unwrap();
+        let stranger = make_server_cert("localhost", &other_ca, &other_key);
+        verify_server(&store, &stranger, "localhost").expect_err("unknown CA must be rejected");
+    }
+
+    #[test]
+    fn empty_ca_pem_is_rejected() {
+        assert!(build_ca_root_store(b"").is_err());
+        assert!(build_ca_root_store(b"not a pem").is_err());
+    }
+
+    #[test]
+    fn insecure_takes_precedence_over_ca_cert() {
+        let (ca, _) = make_ca("REX Test CA");
+        let dir = tempfile::tempdir().unwrap();
+        let ca_path = dir.path().join("ca.pem");
+        std::fs::write(&ca_path, ca.pem()).unwrap();
+        let path = ca_path.to_str().unwrap();
+
+        // 同设 → insecure 生效（resolve 阶段即短路，CA 不参与）
+        let mode = resolve_hub_tls(true, Some(path)).unwrap();
+        assert!(matches!(mode, HubTlsMode::Insecure));
+        // insecure 的 ClientConfig 可构造（走 InsecureVerifier 分支）
+        assert!(hub_client_config(mode).is_some());
+
+        // 仅 CA → 自定义信任集；两者都无 → 默认系统根
+        assert!(matches!(
+            resolve_hub_tls(false, Some(path)).unwrap(),
+            HubTlsMode::CustomCa(_)
+        ));
+        assert!(matches!(
+            resolve_hub_tls(false, None).unwrap(),
+            HubTlsMode::SystemRoots
+        ));
+        // SystemRoots 不构造自定义 config，沿用 tokio-tungstenite 默认连接
+        assert!(hub_client_config(HubTlsMode::SystemRoots).is_none());
+    }
+
+    #[test]
+    fn missing_ca_file_is_error() {
+        assert!(resolve_hub_tls(false, Some("/nonexistent/ca.pem")).is_err());
+    }
 
     #[test]
     fn parse_sip_config_full() {
