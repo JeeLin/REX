@@ -78,6 +78,8 @@ impl TlsConfig {
     }
 
     /// 加载证书链与私钥；SelfSigned 模式先确保磁盘上的材料可用（首启生成、过期重生成）。
+    /// 生产启动路径走 `server_config` → `validate_pair`，此方法仅供单测直接加载材料。
+    #[cfg(test)]
     fn load_cert_chain(
         &self,
     ) -> Result<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>), String> {
@@ -93,11 +95,11 @@ impl TlsConfig {
     /// 加载 + 校验（有效期、key 匹配）并构造 rustls `ServerConfig`（TLS 下限 1.3）。
     fn server_config(&self) -> Result<rustls::ServerConfig, String> {
         let (cert_path, key_path) = self.paths()?;
-        let (chain, key) = self.load_cert_chain()?;
-        ensure_not_expired(&chain, &cert_path)?;
+        if let Self::SelfSigned { .. } = self {
+            ensure_self_signed(&cert_path, &key_path)?;
+        }
+        let certified = validate_pair(&cert_path, &key_path)?;
         let provider = tls_provider();
-        let certified = rustls::sign::CertifiedKey::from_der(chain, key, &provider)
-            .map_err(|e| key_pair_error(e, &key_path, &cert_path))?;
         let mut config = rustls::ServerConfig::builder_with_provider(provider)
             .with_protocol_versions(&[&rustls::version::TLS13])
             .map_err(|e| format!("failed to restrict TLS to 1.3: {e}"))?
@@ -148,13 +150,19 @@ fn ensure_self_signed(cert_path: &Path, key_path: &Path) -> Result<(), String> {
 
 /// 复用前校验已存在的自签名证书对。
 fn check_self_signed_pair(cert_path: &Path, key_path: &Path) -> Result<(), String> {
+    validate_pair(cert_path, key_path)?;
+    Ok(())
+}
+
+/// 读证书 + 过期校验 + 与私钥配对校验，返回可用于构建 ServerConfig 的密钥对；
+/// 路径/签名错误文案均含对应文件路径。
+fn validate_pair(cert_path: &Path, key_path: &Path) -> Result<rustls::sign::CertifiedKey, String> {
     let chain = read_cert_chain(cert_path)?;
     ensure_not_expired(&chain, cert_path)?;
     let key = read_private_key(key_path)?;
     let provider = tls_provider();
     rustls::sign::CertifiedKey::from_der(chain, key, &provider)
-        .map_err(|e| key_pair_error(e, key_path, cert_path))?;
-    Ok(())
+        .map_err(|e| key_pair_error(e, key_path, cert_path))
 }
 
 fn generate_self_signed(dir: &Path, cert_path: &Path, key_path: &Path) -> Result<(), String> {
