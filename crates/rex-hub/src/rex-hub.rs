@@ -214,7 +214,13 @@ fn worker_main() {
             http_port: port,
         };
 
+        #[cfg(feature = "embedded-static")]
         tracing::info!(name = "REX Hub", status = "serving embedded frontend");
+        #[cfg(not(feature = "embedded-static"))]
+        tracing::info!(
+            name = "REX Hub",
+            status = "serving frontend from directory (dev mode)"
+        );
 
         let tls_config = rex_hub::tls::TlsConfig::from_env();
         let app = build_router(state);
@@ -414,6 +420,13 @@ fn build_router(state: AppState) -> Router {
     let router = {
         let dir = dev_static_dir();
         tracing::info!(path = %dir.display(), "serving static files from directory (dev mode)");
+        if !dir.join("index.html").exists() {
+            tracing::error!(
+                path = %dir.display(),
+                "frontend dist not found — UI will 404; build with --features embedded-static \
+                 or set REX_STATIC_DIR to a directory containing the built frontend"
+            );
+        }
         // SPA fallback: unknown paths (e.g. /dashboard) serve index.html so
         // vue-router history mode works on direct open / refresh, matching
         // the embedded-static behavior.
