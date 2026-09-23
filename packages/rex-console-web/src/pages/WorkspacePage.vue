@@ -10,7 +10,6 @@ import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import ContextMenu from '@/components/ui/ContextMenu.vue'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useSftpDrawer } from '@/composables/useSftpDrawer'
-import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
 import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
 import CommandPalette from '@/features/workspace/CommandPalette.vue'
 import PaneNode from '@/features/workspace/PaneNode.vue'
@@ -20,12 +19,14 @@ import { useNotificationStore } from '@/stores/notification'
 import { PANE_CTX, type PaneCtx } from '@/features/workspace/paneContext'
 import WelcomePage from '@/features/workspace/WelcomePage.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useShortcutsStore } from '@/stores/shortcuts'
 
 defineOptions({ name: 'WorkspacePage' })
 
 const { t } = useI18n()
 const router = useRouter()
 const wsStore = useWorkspaceStore()
+const shortcutsStore = useShortcutsStore()
 const notify = useNotificationStore()
 const dragOverPane = ref<string | null>(null)
 
@@ -436,8 +437,7 @@ function toggleFullscreen() {
   }
 }
 
-// 快捷键面板
-const showShortcuts = ref(false)
+// 快捷键面板状态由 shortcuts store 提供（顶栏按钮 + F1 / 状态栏共用）
 
 // 布局预设
 type LayoutPreset = 'single' | 'left-right' | 'top-bottom' | 'grid-four' | 'main-side'
@@ -485,7 +485,7 @@ useKeyboardShortcuts([
   { key: '4', alt: true, handler: () => applyLayout('grid-four') },
   { key: '5', alt: true, handler: () => applyLayout('main-side') },
   // 移动端隐藏桌面风格快捷键面板（触屏无键盘快捷键，改触屏友好交互）
-  { key: 'F1', handler: () => { if (window.innerWidth >= 768) showShortcuts.value = !showShortcuts.value } },
+  { key: 'F1', handler: () => { if (window.innerWidth >= 768) shortcutsStore.toggle() } },
   { key: 'b', ctrl: true, handler: () => {
     if (activeTabInfo.value?.protocol === 'ssh') toggleSftpDrawer()
   } },
@@ -639,7 +639,7 @@ useKeyboardShortcuts([
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10 4 13l3 3M4 13h11M17 14l3-3-3-3M20 11H9"/></svg>
         </button>
       </span>
-      <span v-if="toolbarConfig.f1Help" class="ws-seg ws-seg--help" :title="t('workspace.statusbar.f1Help', 'F1 help')" @click="showShortcuts = !showShortcuts">{{ t('workspace.statusbar.f1Help', 'F1 help') }}</span>
+      <span v-if="toolbarConfig.f1Help" class="ws-seg ws-seg--help" :title="t('workspace.statusbar.f1Help', 'F1 help')" @click="shortcutsStore.toggle()">{{ t('workspace.statusbar.f1Help', 'F1 help') }}</span>
       <span v-if="toolbarConfig.commandPalette" class="ws-seg ws-seg--help" title="Command palette (Ctrl+K)" @click="showCommandPalette = !showCommandPalette">⌘ {{ t('workspace.commandPalette', 'Command palette') }}</span>
       <span class="ws-seg ws-seg--actions">
         <button class="ws-action-btn" :title="t('workspace.exportWorkspace')" @click="handleExportWorkspace">
@@ -663,18 +663,7 @@ useKeyboardShortcuts([
       </span>
     </div>
 
-    <!-- Shortcut panel -->
-    <ShortcutPanel :show="showShortcuts" @close="showShortcuts = false" />
-
-    <!-- Top-right shortcut guide toggle -->
-    <button
-      class="ws-shortcut-fab"
-      :title="t('shortcuts.title')"
-      :aria-label="t('shortcuts.title')"
-      @click="showShortcuts = !showShortcuts"
-    >
-      ⌨
-    </button>
+    <!-- Shortcut panel is rendered by AppLayout (shared shortcuts store) -->
 
     <!-- Resource properties dialog -->
     <ResourceProperties
@@ -1076,40 +1065,6 @@ useKeyboardShortcuts([
   outline-offset: -2px;
 }
 
-/* Top-right shortcut guide toggle (below topbar so topbar actions stay clear) */
-.ws-shortcut-fab {
-  position: fixed;
-  right: var(--space-3);
-  top: calc(var(--topbar-height) + var(--space-3));
-  z-index: 1000;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  line-height: 1;
-  color: var(--text-secondary);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  box-shadow: var(--shadow-md);
-  cursor: pointer;
-  transition: color var(--transition), background var(--transition), border-color var(--transition);
-}
-.ws-shortcut-fab:hover {
-  color: var(--text-primary);
-  background: var(--bg-hover);
-  border-color: var(--accent);
-}
-
-/* 移动端：顶栏下右侧定位不与底部导航/右下浮动按钮簇冲突，仅收紧间距 */
-@media (max-width: 768px) {
-  .ws-shortcut-fab {
-    right: var(--space-2);
-    top: calc(var(--topbar-height) + var(--space-2));
-  }
-}
 /* Pin icon */
 .ws-tab-pin {
   font-size: 10px;

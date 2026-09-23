@@ -14,12 +14,15 @@ import { useSwipeGesture } from '@/composables/useSwipeGesture'
 import { useVirtualKeyboard } from '@/composables/useVirtualKeyboard'
 import { toggleTheme } from '@/composables/useTheme'
 import CommandPalette from '@/components/CommandPalette.vue'
+import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
+import { useShortcutsStore } from '@/stores/shortcuts'
 
 const { t, locale } = useI18n()
 const { showWarning, remainingSeconds, extendSession } = useSessionTimeout()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 const router = useRouter()
+const shortcutsStore = useShortcutsStore()
 
 function onResourceProperties(res: Resource) {
   router.push({ name: 'environment-detail', params: { id: res.environment_id } })
@@ -207,6 +210,18 @@ function openQuickConnect() {
               <polyline v-if="fullscreen" points="14 14 4 14 4 4"/><polyline v-if="fullscreen" points="10 10 20 10 20 20"/><line v-if="fullscreen" x1="4" y1="14" x2="10" y2="10"/><line v-if="fullscreen" x1="20" y1="10" x2="14" y2="14"/>
             </svg>
           </button>
+          <button
+            class="topbar-icon-btn"
+            :aria-label="t('shortcuts.title')"
+            :title="t('shortcuts.title')"
+            :aria-pressed="shortcutsStore.show"
+            @click="shortcutsStore.toggle()"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="6" width="20" height="12" rx="2"/>
+              <path d="M6 10h.01"/><path d="M10 10h.01"/><path d="M14 10h.01"/><path d="M18 10h.01"/><path d="M8 14h8"/>
+            </svg>
+          </button>
           <button class="topbar-icon-btn" :aria-label="t('session.logout', 'Logout')" :title="t('session.logout', 'Logout')" @click="sessionLogout" style="color:var(--danger)">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
@@ -295,6 +310,7 @@ function openQuickConnect() {
     :visible="commandPaletteVisible" 
     @close="commandPaletteVisible = false" 
   />
+  <ShortcutPanel :show="shortcutsStore.show" @close="shortcutsStore.close()" />
 </template>
 
 <style scoped>
