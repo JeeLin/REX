@@ -9,3 +9,4 @@
 | v0.88.0 | 🟡 | Ctrl+Tab / Ctrl+Shift+Tab 切换标签与浏览器冲突 | 用户反馈 | WorkspacePage 绑定 Ctrl+Tab/Ctrl+Shift+Tab 切换标签，与浏览器标签切换保留键冲突且无法拦截；处置已定：移除应用绑定、浏览器为准，同上统一规划 |
 | v0.88.0 | 🟡 | Alt+1~9 面板宣称跳转标签、实测切换布局 | 用户反馈 | 快捷键面板宣称 Alt+1~9 跳转标签 N；实测 Alt+1~5 为布局面板（single/LR/TB/grid/main），Alt+6~9 才是跳标签，面板文案与实现矛盾 |
 | v0.88.0 | 🟡 | Ctrl+Shift+\ 垂直分屏无效 | 用户反馈 | WorkspacePage.vue:481 Ctrl+Shift+\ 垂直分屏无响应，Ctrl+\ 水平分屏正常 |
+| v0.88.0 | 🟡 | Agent 连接日志明文含 token | 步骤5审查 | agent_ws.rs `tracing::info!(url = %ws_url)` 将带 token 的 ws URL 打入 info 日志；base 既有问题（v0.88.0 审查备注发现），需脱敏（log token 以外部分或降级/移除 URL 字段） |
