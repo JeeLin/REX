@@ -18,7 +18,7 @@ cp -r dist/* "$DIST/static/"
 cd "$ROOT"
 
 echo "=== 构建 rex-hub ==="
-cargo build --release -p rex-hub
+cargo build --release -p rex-hub --features embedded-static
 cp target/release/rex-hub "$DIST/"
 
 echo "=== 构建 Docker 镜像: $TAG ==="

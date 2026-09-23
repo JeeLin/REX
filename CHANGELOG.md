@@ -2,9 +2,6 @@
 
 ## [Unreleased]
 
-### Changed
-- **.env 模板拆分**：`.env.example` 拆为 `.env.hub.example` 与 `.env.agent.example`（按部署目标各自独立，共享变量各自保留一份）
-
 ## [0.88.0] - 2026-09-23
 
 ### Added
@@ -16,8 +13,10 @@
 - **亮色主题**：背景去白降亮度/对比度，`--shadow*` alpha 0.45/0.55/0.62 → 0.08/0.12/0.16（深色基线与品牌色不动）
 - **SSH 连接池**：30 分钟空闲条目惰性回收；`pool_key` 收敛为 `String`
 - **Docker**：TLS 目录对齐 `data/tls`；healthcheck 双模探测（http → https `--no-check-certificate`），去除 `|| true`
+- **.env 模板拆分**：`.env.example` 拆为 `.env.hub.example` 与 `.env.agent.example`（按部署目标各自独立，共享变量各自保留一份）；按代码读取方修正变量归属（`REX_AGENT_BINARIES_DIR` 归 Hub、`REX_AUTO_UPDATE` 默认 `true` 归 Agent）
 
 ### Fixed
+- **release 二进制前端嵌入回归**：CI 与 `build-hub-image.sh` 构建补 `--features embedded-static`（`9f7bf80` 引入 feature 门控后 CI 从未开启）——此前 release 二进制误入 dev 模式、按编译机源码树路径找前端导致页面 404；启动日志按实际模式输出，dev 模式下 dist 缺失时打错误日志
 - **SFTP 并发 session**：终端与 SFTP 复用同一条 SSH 连接（绕开 `MaxSessions<2`），连接被拒按错误类型降级新建；认证失败不再误报 `Disconnected`，错误文案含 MaxSessions 指引
 - **dev 模式深链/刷新 404**：`ServeDir` 补 `index.html` fallback，对齐生产 embedded 行为
 

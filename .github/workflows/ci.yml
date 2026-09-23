@@ -183,7 +183,7 @@ jobs:
           name: frontend
           path: packages/rex-console-web/dist/
       - name: Build Agent + Hub
-        run: cargo build --release -p rex-agent -p rex-hub --target ${{ matrix.target }}
+        run: cargo build --release -p rex-agent -p rex-hub --features rex-hub/embedded-static --target ${{ matrix.target }}
       # Windows：验证 exe 真的自包含——dumpbin /dependents 不得出现 libssl/libcrypto。
       # 出现则说明 OpenSSL 没静态链入，仍依赖 DLL，本构建失败。
       - name: Verify standalone exe (Windows)
