@@ -33,69 +33,121 @@ impl SftpConnector {
             .await
             .map_err(|e| {
                 tracing::error!(action = "SFTP_CONNECT", host = %host, error = %e, "SFTP: channel_open_session failed from existing handle");
-                anyhow::anyhow!("failed to open session from existing handle: {e}")
+                crate::session_open_error("pooled connection", e)
             })?;
         tracing::info!(action = "SFTP_CONNECT", host = %host, "SFTP: session channel opened from existing handle, creating SFTP session");
         Self::connect(channel).await
     }
 
     /// 从 SSH 配置直接建立 SFTP 连接
+    ///
+    /// 优先复用连接池中已有的连接（同 `user@host:port`），复用失败则降级为新建连接。
     pub async fn connect_with_config(config: crate::SshConfig) -> Result<Self> {
-        use russh::client;
-        use std::sync::Arc;
-
-        let ssh_config = Arc::new(client::Config::default());
-        let handler = crate::SshHandler;
-        // IPv6 addresses need brackets: [::1]:22
-        // 已有方括号的不再重复添加
-        let addr = if config.host.contains(':') && !config.host.starts_with('[') {
-            format!("[{}]:{}", config.host, config.port)
-        } else {
-            format!("{}:{}", config.host, config.port)
-        };
-        tracing::info!(action = "SFTP_CONNECT", host = %config.host, port = config.port, username = %config.username, has_password = config.password.is_some(), has_key = config.private_key.is_some(), "SFTP: opening new SSH connection");
-        let mut handle = client::connect(ssh_config, &addr, handler)
-            .await
-            .map_err(|e| {
-                tracing::error!(action = "SFTP_CONNECT", host = %config.host, port = config.port, error = %e, "SFTP: SSH connection failed");
-                anyhow::anyhow!("SSH connection failed for SFTP: {e}")
-            })?;
-        tracing::info!(action = "SFTP_CONNECT", host = %config.host, "SFTP: SSH connected, authenticating");
-
-        if let Some(ref key_pem) = config.private_key {
-            let private_key = russh::keys::decode_secret_key(key_pem, config.password.as_deref())
-                .context("failed to decode private key")?;
-            let key_with_hash =
-                russh::keys::PrivateKeyWithHashAlg::new(Arc::new(private_key), None);
-            handle
-                .authenticate_publickey(&config.username, key_with_hash)
-                .await
-                .context("SSH auth failed")?;
-        } else if let Some(ref password) = config.password {
-            handle
-                .authenticate_password(&config.username, password)
-                .await
-                .context("SSH auth failed")?;
-        } else {
-            handle
-                .authenticate_none(&config.username)
-                .await
-                .context("SSH auth failed")?;
-        }
-
-        tracing::info!(action = "SFTP_CONNECT", host = %config.host, "SFTP: auth ok, opening session channel");
-
-        let channel = handle
-            .channel_open_session()
-            .await
-            .map_err(|e| {
-                tracing::error!(action = "SFTP_CONNECT", host = %config.host, error = %e, "SFTP: channel_open_session failed — server may reject concurrent sessions");
-                anyhow::anyhow!("failed to open session: {e}. The SSH server may not support concurrent sessions. Try: (1) set MaxSessions ≥2 in sshd_config, or (2) disconnect the terminal first and retry SFTP.")
-            })?;
+        tracing::info!(action = "SFTP_CONNECT", host = %config.host, port = config.port, username = %config.username, has_password = config.password.is_some(), has_key = config.private_key.is_some(), "SFTP: opening session channel");
+        let channel = open_session_channel(&config).await?;
         tracing::info!(action = "SFTP_CONNECT", host = %config.host, "SFTP: session channel opened, creating SFTP session");
-
         Self::connect(channel).await
     }
+}
+
+/// 池连接 / 新连接打开 session channel 的超时
+const OPEN_SESSION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// 打开一个 session channel：优先复用连接池中的连接，失败则降级为新建连接。
+///
+/// 1. 池命中 → 在同一条 TCP 连接上打开新 channel（不触发服务端并发会话限制）；
+/// 2. 池打开失败 → 按 [`crate::pool::should_evict`] 决定是否剔除该连接，随后降级；
+/// 3. 降级 → 新建连接、认证、打开 channel，失败返回统一的 MaxSessions 指引文案。
+pub(crate) async fn open_session_channel(
+    config: &crate::SshConfig,
+) -> Result<russh::Channel<russh::client::Msg>> {
+    if let Some(key) = crate::pool::pool_key(config) {
+        if let Some(cell) = crate::pool::get(&key).await {
+            tracing::info!(action = "SFTP_CONNECT", key = %key, "SFTP: reusing pooled SSH connection");
+            let opened = tokio::time::timeout(OPEN_SESSION_TIMEOUT, async {
+                let handle = cell.lock().await;
+                handle.channel_open_session().await
+            })
+            .await;
+            match opened {
+                Ok(Ok(channel)) => return Ok(channel),
+                Ok(Err(e)) => {
+                    tracing::warn!(action = "SFTP_CONNECT", key = %key, error = %e, "SFTP: pooled channel open failed, falling back to a new connection");
+                    if crate::pool::should_evict(&e) {
+                        crate::pool::evict(&key, &cell).await;
+                    }
+                }
+                Err(_) => {
+                    tracing::warn!(action = "SFTP_CONNECT", key = %key, "SFTP: pooled channel open timed out, falling back to a new connection");
+                    crate::pool::evict(&key, &cell).await;
+                }
+            }
+        }
+    }
+
+    // 降级：新建连接
+    let handle = fresh_handle(config).await?;
+    let channel = handle
+        .channel_open_session()
+        .await
+        .map_err(|e| {
+            tracing::error!(action = "SFTP_CONNECT", host = %config.host, port = config.port, error = %e, "SFTP: channel_open_session failed on new connection");
+            crate::session_open_error("new connection", e)
+        })?;
+    if let Some(key) = crate::pool::pool_key(config) {
+        crate::pool::register(&key, handle).await;
+    }
+    Ok(channel)
+}
+
+/// 新建一条 SSH 连接并完成认证（不打开 channel）
+async fn fresh_handle(
+    config: &crate::SshConfig,
+) -> Result<russh::client::Handle<crate::SshHandler>> {
+    use russh::client;
+    use std::sync::Arc;
+
+    let ssh_config = Arc::new(client::Config::default());
+    let handler = crate::SshHandler;
+    // IPv6 addresses need brackets: [::1]:22
+    // 已有方括号的不再重复添加
+    let addr = if config.host.contains(':') && !config.host.starts_with('[') {
+        format!("[{}]:{}", config.host, config.port)
+    } else {
+        format!("{}:{}", config.host, config.port)
+    };
+    tracing::info!(action = "SFTP_CONNECT", host = %config.host, port = config.port, "SFTP: opening new SSH connection");
+    let mut handle = client::connect(ssh_config, &addr, handler)
+        .await
+        .map_err(|e| {
+            tracing::error!(action = "SFTP_CONNECT", host = %config.host, port = config.port, error = %e, "SFTP: SSH connection failed");
+            anyhow::anyhow!("SSH connection failed for SFTP: {e}")
+        })?;
+    tracing::info!(action = "SFTP_CONNECT", host = %config.host, "SFTP: SSH connected, authenticating");
+
+    let auth_result = if let Some(ref key_pem) = config.private_key {
+        let private_key = russh::keys::decode_secret_key(key_pem, config.password.as_deref())
+            .context("failed to decode private key")?;
+        let key_with_hash = russh::keys::PrivateKeyWithHashAlg::new(Arc::new(private_key), None);
+        handle
+            .authenticate_publickey(&config.username, key_with_hash)
+            .await
+            .context("SSH auth failed")?
+    } else if let Some(ref password) = config.password {
+        handle
+            .authenticate_password(&config.username, password)
+            .await
+            .context("SSH auth failed")?
+    } else {
+        handle
+            .authenticate_none(&config.username)
+            .await
+            .context("SSH auth failed")?
+    };
+    crate::ensure_auth_success(auth_result)?;
+
+    tracing::info!(action = "SFTP_CONNECT", host = %config.host, "SFTP: auth ok");
+    Ok(handle)
 }
 
 #[async_trait]
@@ -296,5 +348,333 @@ impl FileConnector for SftpConnector {
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::SocketAddr;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex as StdMutex};
+    use std::time::{Duration, Instant};
+
+    use russh::keys::decode_secret_key;
+    use russh::server::{self, Auth, ChannelOpenHandle, Server as _, Session};
+    use russh::{Channel, ChannelId, ChannelOpenFailure, Disconnect, Pty};
+
+    use super::*;
+    use crate::{SshConfig, SshSession};
+
+    /// 固定测试 host key（Ed25519，仅供单测构建 `server::Config::keys`）
+    const HOST_KEY_PEM: &str = r#"-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+QyNTUxOQAAACDu4wlRHuujJzs4p1gNufzdP8Sn/XiaM6ydBzASDNKtyQAAAJDrqQL166kC
+9QAAAAtzc2gtZWQyNTUxOQAAACDu4wlRHuujJzs4p1gNufzdP8Sn/XiaM6ydBzASDNKtyQ
+AAAEA7muFkuswZkYvrEUDbhXtDlUfD31ZM8GUS7P85sXisyO7jCVEe66MnOzinWA25/N0/
+xKf9eJozrJ0HMBIM0q3JAAAADHJleC1zc2gtdGVzdAE=
+-----END OPENSSH PRIVATE KEY-----"#;
+
+    /// 保证每个 harness 的 pool key（含 username）全局唯一，隔离并行测试
+    static NEXT_HARNESS_ID: AtomicUsize = AtomicUsize::new(0);
+
+    struct ServerState {
+        conns: AtomicUsize,
+        max_sessions: usize,
+        accept_auth: bool,
+        server_handles: StdMutex<Vec<server::Handle>>,
+    }
+
+    struct TestServer {
+        state: Arc<ServerState>,
+    }
+
+    impl server::Server for TestServer {
+        type Handler = TestHandler;
+
+        fn new_client(&mut self, _peer: Option<SocketAddr>) -> TestHandler {
+            self.state.conns.fetch_add(1, Ordering::SeqCst);
+            TestHandler {
+                state: self.state.clone(),
+                sessions: 0,
+            }
+        }
+    }
+
+    struct TestHandler {
+        state: Arc<ServerState>,
+        /// 本条连接上已接受的 session channel 数（模拟 sshd MaxSessions）
+        sessions: usize,
+    }
+
+    impl TestHandler {
+        fn auth(&self) -> Auth {
+            if self.state.accept_auth {
+                Auth::Accept
+            } else {
+                Auth::reject()
+            }
+        }
+    }
+
+    impl server::Handler for TestHandler {
+        type Error = russh::Error;
+
+        async fn auth_none(&mut self, _user: &str) -> Result<Auth, Self::Error> {
+            Ok(self.auth())
+        }
+
+        async fn auth_password(
+            &mut self,
+            _user: &str,
+            _password: &str,
+        ) -> Result<Auth, Self::Error> {
+            Ok(self.auth())
+        }
+
+        async fn channel_open_session(
+            &mut self,
+            _channel: Channel<server::Msg>,
+            reply: ChannelOpenHandle,
+            _session: &mut Session,
+        ) -> Result<(), Self::Error> {
+            if self.sessions >= self.state.max_sessions {
+                reply
+                    .reject(ChannelOpenFailure::AdministrativelyProhibited)
+                    .await;
+            } else {
+                self.sessions += 1;
+                reply.accept().await;
+            }
+            Ok(())
+        }
+
+        async fn pty_request(
+            &mut self,
+            channel: ChannelId,
+            _term: &str,
+            _col_width: u32,
+            _row_height: u32,
+            _pix_width: u32,
+            _pix_height: u32,
+            _modes: &[(Pty, u32)],
+            session: &mut Session,
+        ) -> Result<(), Self::Error> {
+            let _ = session.channel_success(channel);
+            Ok(())
+        }
+
+        async fn shell_request(
+            &mut self,
+            channel: ChannelId,
+            session: &mut Session,
+        ) -> Result<(), Self::Error> {
+            let _ = session.channel_success(channel);
+            Ok(())
+        }
+    }
+
+    /// 回环测试 SSH server：可配置 MaxSessions 与认证是否放行
+    struct Harness {
+        addr: SocketAddr,
+        state: Arc<ServerState>,
+        username: String,
+    }
+
+    impl Harness {
+        async fn start(max_sessions: usize, accept_auth: bool) -> Self {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind loopback sshd");
+            let addr = listener.local_addr().expect("local addr");
+            let state = Arc::new(ServerState {
+                conns: AtomicUsize::new(0),
+                max_sessions,
+                accept_auth,
+                server_handles: StdMutex::new(Vec::new()),
+            });
+
+            let mut server_config = server::Config::default();
+            server_config.auth_rejection_time = Duration::from_millis(10);
+            server_config.keys = vec![
+                decode_secret_key(&format!("{HOST_KEY_PEM}\n"), None).expect("decode host key")
+            ];
+            let server_config = Arc::new(server_config);
+
+            let accept_state = state.clone();
+            tokio::spawn(async move {
+                let mut srv = TestServer {
+                    state: accept_state.clone(),
+                };
+                loop {
+                    let Ok((socket, _)) = listener.accept().await else {
+                        break;
+                    };
+                    let handler = srv.new_client(socket.peer_addr().ok());
+                    let config = server_config.clone();
+                    let state = accept_state.clone();
+                    tokio::spawn(async move {
+                        match server::run_stream(config, socket, handler).await {
+                            Ok(running) => {
+                                state
+                                    .server_handles
+                                    .lock()
+                                    .expect("lock handles")
+                                    .push(running.handle());
+                                let _ = running.await;
+                            }
+                            Err(_) => {}
+                        }
+                    });
+                }
+            });
+
+            let id = NEXT_HARNESS_ID.fetch_add(1, Ordering::SeqCst);
+            Harness {
+                addr,
+                state,
+                username: format!("tester{id}"),
+            }
+        }
+
+        fn conns(&self) -> usize {
+            self.state.conns.load(Ordering::SeqCst)
+        }
+
+        fn config(&self) -> SshConfig {
+            SshConfig {
+                host: "127.0.0.1".to_string(),
+                port: self.addr.port(),
+                username: self.username.clone(),
+                password: Some("secret".to_string()),
+                private_key: None,
+                keepalive_interval: Some(0),
+                init_script: None,
+                proxy_jump: None,
+            }
+        }
+
+        /// 主动断开所有已建立的服务端连接（模拟服务端掐线）
+        async fn disconnect_all(&self) {
+            let handles =
+                std::mem::take(&mut *self.state.server_handles.lock().expect("lock handles"));
+            for handle in handles {
+                let _ = handle
+                    .disconnect(
+                        Disconnect::ByApplication,
+                        "test shutdown".to_string(),
+                        String::new(),
+                    )
+                    .await;
+            }
+        }
+    }
+
+    /// 方向 a：SFTP 在终端已建立的连接上开 channel，不新建第二条连接
+    #[tokio::test]
+    async fn sftp_reuses_terminal_connection_from_pool() {
+        let harness = Harness::start(usize::MAX, true).await;
+        let cfg = harness.config();
+        let _terminal = SshSession::connect(cfg.clone())
+            .await
+            .expect("terminal connect");
+        assert_eq!(harness.conns(), 1);
+
+        let key = crate::pool::pool_key(&cfg).expect("pool key");
+        assert!(
+            crate::pool::get(&key).await.is_some(),
+            "terminal handle must be registered into the pool"
+        );
+
+        let channel = open_session_channel(&cfg)
+            .await
+            .expect("sftp channel over pooled connection");
+        assert_eq!(
+            harness.conns(),
+            1,
+            "SFTP must reuse the terminal's TCP connection"
+        );
+        drop(channel);
+    }
+
+    /// 方向 b：池连接已被服务端掐断 → 剔除死句柄并降级为新连接
+    #[tokio::test]
+    async fn sftp_falls_back_when_pooled_handle_is_dead() {
+        let harness = Harness::start(usize::MAX, true).await;
+        let cfg = harness.config();
+        let _terminal = SshSession::connect(cfg.clone())
+            .await
+            .expect("terminal connect");
+        assert_eq!(harness.conns(), 1);
+        let key = crate::pool::pool_key(&cfg).expect("pool key");
+
+        harness.disconnect_all().await;
+
+        // 等待客户端感知断开：pool::get 对已关闭连接返回 None 并剔除
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            if crate::pool::get(&key).await.is_none() {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "pooled handle never reported closed"
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        let channel = open_session_channel(&cfg)
+            .await
+            .expect("should degrade to a fresh connection");
+        assert_eq!(
+            harness.conns(),
+            2,
+            "dead pooled handle must trigger a new SSH connection"
+        );
+        assert!(
+            crate::pool::get(&key).await.is_some(),
+            "fresh connection should be re-registered"
+        );
+        drop(channel);
+    }
+
+    /// MaxSessions=1 拒绝第二条 channel：连接仍存活 → 保留池句柄并降级新连接
+    #[tokio::test]
+    async fn sftp_degrades_after_channel_open_rejection() {
+        let harness = Harness::start(1, true).await;
+        let cfg = harness.config();
+        let _terminal = SshSession::connect(cfg.clone())
+            .await
+            .expect("terminal connect");
+        assert_eq!(harness.conns(), 1);
+
+        let channel = open_session_channel(&cfg)
+            .await
+            .expect("should degrade after channel open rejection");
+        assert_eq!(
+            harness.conns(),
+            2,
+            "rejection on the pooled connection must fall back to a new connection"
+        );
+        drop(channel);
+    }
+
+    /// 认证被拒必须报 authentication failed，而不是误导性的 Disconnected
+    #[tokio::test]
+    async fn sftp_reports_authentication_failure_clearly() {
+        let harness = Harness::start(usize::MAX, false).await;
+        let cfg = harness.config();
+        let err = match SftpConnector::connect_with_config(cfg).await {
+            Ok(_) => panic!("rejected authentication must fail"),
+            Err(e) => e,
+        };
+        let msg = err.to_string();
+        assert!(
+            msg.contains("authentication failed"),
+            "unexpected error: {msg}"
+        );
+        assert!(
+            !msg.contains("Disconnected"),
+            "must not misreport as Disconnected: {msg}"
+        );
     }
 }

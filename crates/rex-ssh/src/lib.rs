@@ -2,6 +2,8 @@
 
 pub mod sftp;
 
+pub(crate) mod pool;
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -67,6 +69,31 @@ fn format_ssh_addr(host: &str, port: u16) -> String {
     } else {
         format!("{host}:{port}")
     }
+}
+
+/// 显式检查认证结果。
+///
+/// russh 认证失败返回 `Ok(AuthResult::Failure)` 而非 `Err`，不检查会把
+/// 「认证被拒」伪装成后续开 channel 时的 `Disconnected`，误导排查方向。
+/// 纯逻辑，便于单元测试。
+pub(crate) fn ensure_auth_success(result: client::AuthResult) -> Result<()> {
+    match result {
+        client::AuthResult::Success => Ok(()),
+        client::AuthResult::Failure {
+            remaining_methods,
+            partial_success,
+        } => Err(anyhow::anyhow!(
+            "SSH authentication failed (partial_success={partial_success}, remaining methods: {remaining_methods:?})"
+        )),
+    }
+}
+
+/// 统一 session channel 打开失败的错误文案（含 MaxSessions 排查指引）。
+/// `origin` 标注连接来源，便于区分池复用路径与新建连接路径。纯逻辑，便于单元测试。
+pub(crate) fn session_open_error(origin: &str, e: impl std::fmt::Display) -> anyhow::Error {
+    anyhow::anyhow!(
+        "failed to open session ({origin}): {e}. The SSH server may not support concurrent sessions. Try: (1) set MaxSessions ≥2 in sshd_config, or (2) disconnect the terminal first and retry SFTP."
+    )
 }
 
 // ── 地址类型检测 ──
@@ -233,8 +260,15 @@ async fn try_resolve_with_preference(host: &str, port: u16) -> Result<Vec<Socket
 
 impl SshSession {
     /// 建立 SSH 连接、分配 PTY、启动 shell，返回会话
+    ///
+    /// 连接会注册进进程内连接池，供后续 SFTP 在同一条 TCP 连接上打开
+    /// session channel（避免服务端并发会话限制）。
     pub async fn connect(config: SshConfig) -> Result<Self> {
-        let (_handle, session) = Self::connect_with_handle(config).await?;
+        let pool_key = pool::pool_key(&config);
+        let (handle, session) = Self::connect_with_handle(config).await?;
+        if let Some(key) = pool_key {
+            pool::register(&key, handle).await;
+        }
         Ok(session)
     }
 
@@ -280,20 +314,23 @@ impl SshSession {
             let private_key = decode_secret_key(key_pem, config.password.as_deref())
                 .context("failed to decode private key PEM")?;
             let key_with_hash = PrivateKeyWithHashAlg::new(Arc::new(private_key), None);
-            handle
+            let result = handle
                 .authenticate_publickey(&config.username, key_with_hash)
                 .await
                 .context("SSH public key authentication failed")?;
+            ensure_auth_success(result)?;
         } else if let Some(ref password) = config.password {
-            handle
+            let result = handle
                 .authenticate_password(&config.username, password)
                 .await
                 .context("SSH password authentication failed")?;
+            ensure_auth_success(result)?;
         } else {
-            handle
+            let result = handle
                 .authenticate_none(&config.username)
                 .await
                 .context("SSH none authentication failed")?;
+            ensure_auth_success(result)?;
         }
 
         // 打开 session channel
@@ -661,6 +698,39 @@ mod tests {
         assert_eq!(
             parse_jump_host("[2001:db8::1]"),
             (None, "2001:db8::1".to_string(), 22)
+        );
+    }
+
+    #[test]
+    fn test_ensure_auth_success_accepts_success() {
+        assert!(ensure_auth_success(client::AuthResult::Success).is_ok());
+    }
+
+    #[test]
+    fn test_ensure_auth_success_reports_rejection() {
+        let err = ensure_auth_success(client::AuthResult::Failure {
+            remaining_methods: (&[russh::MethodKind::Password][..]).into(),
+            partial_success: false,
+        })
+        .expect_err("rejected auth must fail");
+        let msg = err.to_string();
+        assert!(msg.contains("authentication failed"), "{msg}");
+        assert!(!msg.contains("Disconnected"), "{msg}");
+    }
+
+    #[test]
+    fn test_session_open_error_carries_origin_and_maxsessions_hint() {
+        let msg = session_open_error("new connection", "Disconnected").to_string();
+        assert!(
+            msg.starts_with("failed to open session (new connection): Disconnected"),
+            "{msg}"
+        );
+        assert!(msg.contains("MaxSessions"), "{msg}");
+
+        let pooled = session_open_error("pooled connection", "boom").to_string();
+        assert!(
+            pooled.starts_with("failed to open session (pooled connection): boom"),
+            "{pooled}"
         );
     }
 }
