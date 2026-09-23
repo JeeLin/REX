@@ -109,13 +109,7 @@ async fn fresh_handle(
 
     let ssh_config = Arc::new(client::Config::default());
     let handler = crate::SshHandler;
-    // IPv6 addresses need brackets: [::1]:22
-    // 已有方括号的不再重复添加
-    let addr = if config.host.contains(':') && !config.host.starts_with('[') {
-        format!("[{}]:{}", config.host, config.port)
-    } else {
-        format!("{}:{}", config.host, config.port)
-    };
+    let addr = crate::format_ssh_addr(&config.host, config.port);
     tracing::info!(action = "SFTP_CONNECT", host = %config.host, port = config.port, "SFTP: opening new SSH connection");
     let mut handle = client::connect(ssh_config, &addr, handler)
         .await
@@ -125,26 +119,7 @@ async fn fresh_handle(
         })?;
     tracing::info!(action = "SFTP_CONNECT", host = %config.host, "SFTP: SSH connected, authenticating");
 
-    let auth_result = if let Some(ref key_pem) = config.private_key {
-        let private_key = russh::keys::decode_secret_key(key_pem, config.password.as_deref())
-            .context("failed to decode private key")?;
-        let key_with_hash = russh::keys::PrivateKeyWithHashAlg::new(Arc::new(private_key), None);
-        handle
-            .authenticate_publickey(&config.username, key_with_hash)
-            .await
-            .context("SSH auth failed")?
-    } else if let Some(ref password) = config.password {
-        handle
-            .authenticate_password(&config.username, password)
-            .await
-            .context("SSH auth failed")?
-    } else {
-        handle
-            .authenticate_none(&config.username)
-            .await
-            .context("SSH auth failed")?
-    };
-    crate::ensure_auth_success(auth_result)?;
+    crate::authenticate(&mut handle, config).await?;
 
     tracing::info!(action = "SFTP_CONNECT", host = %config.host, "SFTP: auth ok");
     Ok(handle)
