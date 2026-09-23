@@ -97,12 +97,8 @@ EOF
 REX_DATA_DIR | 数据目录（含 `.master-key` 加密主密钥，自动生成） | `./data` |
 | `REX_STATIC_DIR` | 前端静态文件目录 | 内嵌 |
 | `REX_WORKER` | Worker 进程标识（supervisor 自动设置） | — |
-| `REX_TLS_CERT` | TLS 证书路径（PEM） | — |
-| `REX_TLS_KEY` | TLS 私钥路径（PEM） | — |
-| `REX_TLS_SELF_SIGNED` | 启用自签名证书 | — |
-| `REX_ACME_DOMAIN` | ACME 自动证书域名 | — |
-| `REX_ACME_EMAIL` | ACME 注册邮箱 | — |
-| `REX_ACME_STAGING` | 使用 Let's Encrypt 测试环境 | — |
+| `REX_TLS_CERT` + `REX_TLS_KEY` | 手动证书（PEM），配错拒绝启动 | — |
+| `REX_TLS_SELF_SIGNED` | 设为 `true` 启用自签名证书 | — |
 | `REX_AGENT_BINARIES_DIR` | Agent 二进制预置目录（供 `/api/agents/download`） | `{data-dir}/agent-binaries` |
 | `REX_UPDATE_GITHUB_OWNER` | 更新源 GitHub Owner | `JeeLin` |
 | `REX_UPDATE_GITHUB_REPO` | 更新源 GitHub Repo | `REX` |
@@ -124,12 +120,17 @@ REX_DATA_DIR | 数据目录（含 `.master-key` 加密主密钥，自动生成�
 
 ## TLS / HTTPS
 
-Hub 支持自动 HTTPS（ACME/Let's Encrypt）：
+默认未配置任何 TLS 变量时为纯 HTTP。启用方式二选一（优先级：`REX_TLS_CERT`/`REX_TLS_KEY` > `REX_TLS_SELF_SIGNED`），TLS 最低版本 1.3：
 
 ```bash
-# 设置 ACME 域名环境变量即可自动启用
-REX_ACME_DOMAIN=hub.example.com REX_ACME_EMAIL=admin@example.com ./rex-hub
+# 自签名：首启在 {REX_DATA_DIR}/tls/ 自动生成证书（开发/测试，浏览器会警告）
+REX_TLS_SELF_SIGNED=true ./rex-hub
+
+# 手动证书：证书过期、私钥不匹配或路径不可读时拒绝启动（错误含路径）
+REX_TLS_CERT=/path/fullchain.pem REX_TLS_KEY=/path/privkey.pem ./rex-hub
 ```
+
+端口要求：HTTP 默认仅需监听端口 `REX_PORT`（默认 3000，对外可映射 80）；启用 TLS 后仍是同一监听端口（对外如需标准 HTTPS 端口可映射 443 或把 `REX_PORT` 设为 443），无需额外开放 80。
 
 ## 反向代理
 

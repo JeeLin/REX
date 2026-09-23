@@ -11,27 +11,20 @@ services:
       retries: 3
       start_period: 20s
     ports:
-      # 端口说明：
-      # - 3000：始终监听。无 TLS 时为 HTTP，启用 TLS 后为 HTTPS
-      # - 80：仅 ACME HTTP-01 验证时需要（Let's Encrypt 验证域名所有权）
-      # - 443：可选，额外的 HTTPS 入口（方便使用标准端口）
+      # Hub listens on a single port (REX_PORT, default 3000): plain HTTP by
+      # default, HTTPS on the same port once TLS is enabled. No port 80 needed.
       - "3000:3000"
-      - "80:80"      # ACME HTTP-01（启用 ACME 域名证书时需要，IP 证书不需要）
-      # - "443:443"  # 可选：额外 HTTPS 入口
+      # - "443:3000"  # optional: expose TLS on standard 443 (map to REX_PORT)
     volumes:
       - hub-data:/app/data
     environment:
       - REX_DATA_DIR=/app/data
-      # ═══ TLS 配置（三选一，都不设置则为 HTTP）══
-      # 自签名模式（开发/测试，浏览器会警告证书不可信）
+      # ═══ TLS 配置（二选一，都不设置则为 HTTP）══
+      # Self-signed: first start generates {REX_DATA_DIR}/tls/*.pem (dev/test; browsers will warn)
       # - REX_TLS_SELF_SIGNED=true
-      # 手动证书模式（生产，提供 PEM 证书和私钥）
+      # Manual PEM pair: startup aborts if cert expired / key mismatch / path unreadable
       # - REX_TLS_CERT=/app/data/certs/hub.crt
       # - REX_TLS_KEY=/app/data/certs/hub.key
-      # ACME 模式（生产，自动从 Let's Encrypt 签发证书，需要域名指向此服务器）
-      # - REX_ACME_DOMAIN=hub.example.com
-      # - REX_ACME_EMAIL=admin@example.com
-      # - REX_ACME_STAGING=false
 
 volumes:
   hub-data:

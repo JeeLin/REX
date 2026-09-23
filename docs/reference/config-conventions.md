@@ -10,7 +10,7 @@ port: 3000
 data_dir: "./data"
 ```
 
-对应环境变量：`REX_PORT`、`REX_DATA_DIR`。TLS 由环境变量配置（`REX_TLS_CERT`/`REX_TLS_KEY` 或 `REX_ACME_DOMAIN` 等，见 `tls.rs::TlsConfig::from_env`），不进配置文件。
+对应环境变量：`REX_PORT`、`REX_DATA_DIR`。TLS 由环境变量配置（`REX_TLS_CERT`/`REX_TLS_KEY` 或 `REX_TLS_SELF_SIGNED`，见 `tls.rs::TlsConfig::from_env`），不进配置文件。
 
 ## Agent 配置
 

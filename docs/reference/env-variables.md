@@ -15,14 +15,13 @@
 
 ### TLS
 
+默认未配置任何 TLS 变量 → 纯 HTTP。两种 TLS 模式（优先级：`REX_TLS_CERT`/`REX_TLS_KEY` > `REX_TLS_SELF_SIGNED` > HTTP），TLS 最低版本 1.3。
+
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `REX_TLS_CERT` | — | TLS 证书文件路径（PEM 格式） |
-| `REX_TLS_KEY` | — | TLS 私钥文件路径（PEM 格式） |
-| `REX_TLS_SELF_SIGNED` | — | 存在时自动生成自签名证书 |
-| `REX_ACME_DOMAIN` | — | ACME 自动证书域名 |
-| `REX_ACME_EMAIL` | — | ACME 注册邮箱 |
-| `REX_ACME_STAGING` | — | 存在时使用 Let's Encrypt 测试环境 |
+| `REX_TLS_SELF_SIGNED` | — | 设为 `true` 时启用自签名：首启在 `{REX_DATA_DIR}/tls/` 生成 `cert.pem` / `key.pem`，已存在则复用（过期或损坏时自动重新生成） |
+| `REX_TLS_CERT` | — | 手动证书 PEM 路径，需与 `REX_TLS_KEY` 成对设置；证书过期、私钥不匹配或路径不可读时拒绝启动（错误信息含路径） |
+| `REX_TLS_KEY` | — | 手动私钥 PEM 路径，需与 `REX_TLS_CERT` 成对设置 |
 
 ### 更新
 
@@ -60,7 +59,7 @@
 docker run -d \
   -p 3000:3000 \
   -v rex-data:/app/data \
-  -e REX_TLS_SELF_SIGNED=1 \
+  -e REX_TLS_SELF_SIGNED=true \
   ghcr.io/jielin/rex-hub:latest
 ```
 
@@ -68,7 +67,7 @@ docker run -d \
 
 ```bash
 REX_PORT=8443 \
-REX_TLS_SELF_SIGNED=1 \
+REX_TLS_SELF_SIGNED=true \
 ./rex-hub
 ```
 
