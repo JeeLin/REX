@@ -4,8 +4,8 @@ services:
     restart: unless-stopped
     # Container-level safety net; in-container supervisor handles exit 10 / crash auto-restart.
     healthcheck:
-      # Hub serves HTTP on 3000 even without TLS; probe the listen port.
-      test: ["CMD", "sh", "-c", "wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1 || true"]
+      # Probe plain HTTP first, then HTTPS (TLS mode). Fails only if both fail.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || wget --no-check-certificate -q -O /dev/null https://127.0.0.1:3000/"]
       interval: 30s
       timeout: 5s
       retries: 3

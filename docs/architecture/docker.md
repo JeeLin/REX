@@ -44,7 +44,7 @@ RUN chmod +x /app/rex-hub
 # Agent 二进制（供 /api/agents/download 使用）
 COPY dist/agents/ /app/agent-binaries/
 
-RUN mkdir -p /app/data /app/data/certs /app/data/self-signed
+RUN mkdir -p /app/data /app/data/certs /app/data/tls
 
 ENV REX_DATA_DIR=/app/data
 ENV REX_AGENT_BINARIES_DIR=/app/agent-binaries
@@ -134,7 +134,7 @@ RUST_LOG=info
 GITHUB_REPO_OWNER=<ghcr.io 仓库 owner，镜像为 ghcr.io/<owner>/rex-hub:latest>
 ```
 
-镜像与 compose 文件：`ghcr.io/${GITHUB_REPO_OWNER}/rex-hub:latest`，compose 文件为 `docker-compose.hub.yaml`（映射端口 3000，TLS 需要时可另映射 443；healthcheck 探测 `http://127.0.0.1:3000/`）。
+镜像与 compose 文件：`ghcr.io/${GITHUB_REPO_OWNER}/rex-hub:latest`，compose 文件为 `docker-compose.hub.yaml`（映射端口 3000，TLS 需要时可另映射 443；healthcheck 双模探测：先试 `http://127.0.0.1:3000/`，失败再试 `https://127.0.0.1:3000/`（跳过证书校验），两者都失败才判定不健康）。
 
 启动：
 

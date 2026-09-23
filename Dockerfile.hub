@@ -20,7 +20,7 @@ RUN chmod +x /app/rex-hub
 # Agent 二进制（供 /api/agents/download 使用，按 os/arch 目录组织）
 COPY dist/agents/ /app/agent-binaries/
 
-RUN mkdir -p /app/data /app/data/certs /app/data/self-signed
+RUN mkdir -p /app/data /app/data/certs /app/data/tls
 
 ENV REX_DATA_DIR=/app/data
 ENV REX_AGENT_BINARIES_DIR=/app/agent-binaries
