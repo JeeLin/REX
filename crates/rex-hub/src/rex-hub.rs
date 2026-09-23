@@ -414,7 +414,14 @@ fn build_router(state: AppState) -> Router {
     let router = {
         let dir = dev_static_dir();
         tracing::info!(path = %dir.display(), "serving static files from directory (dev mode)");
-        router.fallback_service(tower_http::services::ServeDir::new(&dir))
+        // SPA fallback: unknown paths (e.g. /dashboard) serve index.html so
+        // vue-router history mode works on direct open / refresh, matching
+        // the embedded-static behavior.
+        let index = dir.join("index.html");
+        router.fallback_service(
+            tower_http::services::ServeDir::new(&dir)
+                .fallback(tower_http::services::ServeFile::new(index)),
+        )
     };
 
     router
