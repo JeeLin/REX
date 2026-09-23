@@ -426,3 +426,60 @@ fn build_router(state: AppState) -> Router {
 
     router
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::{to_bytes, Body};
+    use axum::http::{Request, StatusCode};
+    use tower::util::ServiceExt;
+
+    /// Dev-mode SPA fallback: ServeDir + fallback ServeFile(index.html),
+    /// mirroring the `not(feature = "embedded-static")` branch of `build_router`.
+    fn spa_router(dir: &std::path::Path) -> Router {
+        let index = dir.join("index.html");
+        Router::new().fallback_service(
+            tower_http::services::ServeDir::new(dir)
+                .fallback(tower_http::services::ServeFile::new(index)),
+        )
+    }
+
+    #[tokio::test]
+    async fn dev_spa_fallback_serves_index_html() {
+        let tmp = tempfile::tempdir().expect("create tempdir");
+        let index_html = "<!DOCTYPE html><html><body>rex-spa</body></html>";
+        std::fs::write(tmp.path().join("index.html"), index_html).expect("write index.html");
+
+        let app = spa_router(tmp.path());
+
+        // Root path serves index.html
+        let resp = app
+            .clone()
+            .oneshot(Request::get("/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(body.as_ref(), index_html.as_bytes());
+
+        // Unknown non-root path falls back to index.html (vue-router history mode)
+        let resp = app
+            .clone()
+            .oneshot(Request::get("/dashboard").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(body.as_ref(), index_html.as_bytes());
+
+        // Existing static asset is still served from the directory
+        std::fs::write(tmp.path().join("app.js"), "console.log(1);").expect("write asset");
+        let resp = app
+            .oneshot(Request::get("/app.js").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(body.as_ref(), b"console.log(1);");
+    }
+}
