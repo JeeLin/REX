@@ -31,10 +31,11 @@ pub(crate) async fn spawn_kex_server() -> SocketAddr {
         .expect("bind loopback sshd");
     let addr = listener.local_addr().expect("local addr");
 
-    let mut config = server::Config::default();
-    config.auth_rejection_time = Duration::from_millis(10);
-    config.keys =
-        vec![decode_secret_key(&format!("{HOST_KEY_PEM}\n"), None).expect("decode host key")];
+    let config = server::Config {
+        auth_rejection_time: Duration::from_millis(10),
+        keys: vec![decode_secret_key(&format!("{HOST_KEY_PEM}\n"), None).expect("decode host key")],
+        ..Default::default()
+    };
     let config = Arc::new(config);
 
     tokio::spawn(async move {
