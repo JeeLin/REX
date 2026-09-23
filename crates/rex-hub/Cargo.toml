@@ -60,6 +60,10 @@ mime_guess = { workspace = true }
 tower = { workspace = true }
 dotenvy = { workspace = true }
 hostname = { workspace = true }
+rustls = { workspace = true }
+tokio-rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
+rcgen = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
