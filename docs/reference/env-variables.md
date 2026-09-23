@@ -29,11 +29,16 @@
 | `REX_TLS_CERT` | — | 手动证书 PEM 路径，需与 `REX_TLS_KEY` 成对设置；证书过期、私钥不匹配或路径不可读时拒绝启动（错误信息含路径） |
 | `REX_TLS_KEY` | — | 手动私钥 PEM 路径，需与 `REX_TLS_CERT` 成对设置 |
 
+### Agent 二进制服务
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `REX_AGENT_BINARIES_DIR` | — | Agent 二进制预置目录（供 `/api/agents/download` 下载与自更新）；默认搜索顺序：该变量 → `{data-dir}/agent-binaries` → `/app/agent-binaries` → `/usr/local/lib/rex/agents` → `~/.rex/agents` |
+
 ### 更新
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `REX_AUTO_UPDATE` | — | 存在时启用自动更新 |
 | `REX_UPDATE_GITHUB_OWNER` | `JeeLin` | GitHub 更新源 Owner |
 | `REX_UPDATE_GITHUB_REPO` | `REX` | GitHub 更新源 Repo |
 | `REX_UPDATE_PENDING` | — | 存在时标记有待应用的更新 |
@@ -49,11 +54,10 @@
 | `REX_AGENT_NAME` | `agent` | Agent 名称（显示在 Hub 管理界面） |
 | `REX_HEARTBEAT_INTERVAL` | `30` | 心跳间隔（秒），Agent 每隔此时间向 Hub 发送心跳 |
 | `REX_TLS_INSECURE` | — | 存在时跳过 TLS 证书验证（仅限内网测试环境） |
-| `REX_CA_CERT` | 无 | 自定义 CA 证书路径（PEM），加入 Agent 连 Hub 的 TLS 信任锚（与系统根合并，不影响其他出站流量）；与 `REX_TLS_INSECURE` 同设时 `REX_TLS_INSECURE` 优先生效 |
-| `REX_AUTO_UPDATE` | — | 存在时启用自动更新 |
+| `REX_CA_CERT` | 无 | 自定义 CA 证书路径（PEM），加入 Agent 连 Hub 的 TLS 信任锚（与系统根合并）；与 `REX_TLS_INSECURE` 同设时 `REX_TLS_INSECURE` 优先生效 |
+| `REX_AUTO_UPDATE` | `true` | 自动更新默认开启；设为 `false` 可关闭（--single 单进程模式下强制关闭，因为没有 supervisor 执行替换） |
 | `REX_WORKER` | — | 存在时启动 worker 子进程（supervisor 自动设置，不要手动设置） |
 | `REX_AGENT_HTTP_PORT` | `3000` | Agent 本地 HTTP 控制端口 |
-| `REX_AGENT_BINARIES_DIR` | `./bin` | Agent 更新时暂存/替换二进制的目录 |
 
 ---
 
