@@ -1,4 +1,16 @@
 # Changelog
+## v0.88.0 - 2026-09-23
+
+### 添加
+- 实现 HTTPS/TLS 真实监听（axum + tokio-rustls），支持三种模式：None（HTTP）、自签名（rcgen 首启）、手动 PEM
+- Agent 新增 REX_CA_CERT 信任锚，优先级低于 REX_TLS_INSECURE
+- 清除所有 REX_ACME_* 相关代码及依赖，ACME 功能整体砍除
+- 修复缺陷池：亮色主题降低亮度，SFTP 并发 session 会话管理（复用/降级/明文提示）
+- 移除 ProxyJump 跳板机功能（后端字段、解析、配置读取，前端无改动）
+- 补足 dev SPA 回退测试（rex-hub）
+- 调整亮色主题阴影 alpha 以适应亮色背景
+
+
 
 ## [Unreleased]
 
