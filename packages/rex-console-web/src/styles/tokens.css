@@ -147,28 +147,31 @@
   50% { opacity: 0.4; }
 }
 
-/* 浅色主题 */
+/* 浅色主题 — 柔和灰白基调，降低长时间使用的亮度刺激 */
 :root[data-theme='light'] {
-  --bg-deep: #ffffff;
-  --bg-page: #f6f8fa;
-  --bg-sidebar: #f6f8fa;
-  --bg-surface: #ffffff;
-  --bg-elevated: #ffffff;
-  --bg-hover: #f0f3f6;
+  --bg-deep: #e8ebef;        /* 终端/编辑器：柔和灰白（原 #ffffff） */
+  --bg-page: #f0f2f5;        /* 页面基础背景（原 #f6f8fa） */
+  --bg-sidebar: #ebedf1;     /* 侧栏略沉于 page，延续深色层级（原 #f6f8fa） */
+  --bg-surface: #f8f9fb;     /* 卡片：柔和白，去纯白（原 #ffffff） */
+  --bg-elevated: #fcfcfd;    /* 弹层微亮于 surface，仍非纯白（原 #ffffff） */
+  --bg-hover: #e7eaef;       /* 悬停随之同步（原 #f0f3f6） */
   --text-primary: #1f2328;
   --text-secondary: #59636e;
-  --text-muted: #818b96;
-  --border: #d0d7de;
-  --border-strong: #afb8c1;
-  --border-subtle: #eaeef2;
+  --text-muted: #757f8b;     /* 补偿背景灰化，保持可读（原 #818b96） */
+  --border: #c3cbd3;         /* 边框略增强，补偿背景对比降低（原 #d0d7de） */
+  --border-strong: #a3acb6;  /* 原 #afb8c1 */
+  --border-subtle: #dde2e8;  /* 原 #eaeef2 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 14px 36px rgba(0, 0, 0, 0.62);
   --accent-soft: rgba(232, 145, 45, 0.12);
   --success-soft: rgba(63, 185, 80, 0.12);
   --danger-soft: rgba(248, 81, 73, 0.12);
   --info-soft: rgba(88, 166, 255, 0.12);
   --purple-soft: rgba(139, 92, 246, 0.12);
   --warning-soft: rgba(210, 153, 34, 0.12);
-  --scrollbar-thumb: #d0d7de;
-  --scrollbar-thumb-hover: #afb8c1;
+  --scrollbar-thumb: #c3cbd3;
+  --scrollbar-thumb-hover: #a3acb6;
 }
 
 /* 减少动画偏好 */
