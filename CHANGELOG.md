@@ -1,18 +1,29 @@
 # Changelog
-## v0.88.0 - 2026-09-23
-
-### 添加
-- 实现 HTTPS/TLS 真实监听（axum + tokio-rustls），支持三种模式：None（HTTP）、自签名（rcgen 首启）、手动 PEM
-- Agent 新增 REX_CA_CERT 信任锚，优先级低于 REX_TLS_INSECURE
-- 清除所有 REX_ACME_* 相关代码及依赖，ACME 功能整体砍除
-- 修复缺陷池：亮色主题降低亮度，SFTP 并发 session 会话管理（复用/降级/明文提示）
-- 移除 ProxyJump 跳板机功能（后端字段、解析、配置读取，前端无改动）
-- 补足 dev SPA 回退测试（rex-hub）
-- 调整亮色主题阴影 alpha 以适应亮色背景
-
-
 
 ## [Unreleased]
+
+### Changed
+- **.env 模板拆分**：`.env.example` 拆为 `.env.hub.example` 与 `.env.agent.example`（按部署目标各自独立，共享变量各自保留一份）
+
+## [0.88.0] - 2026-09-23
+
+### Added
+- **HTTPS/TLS 实装**：`tls.rs` 由「回退 HTTP」占位改为 axum + tokio-rustls 真监听；三模式——默认纯 HTTP（零配置行为不变）、自签名（rcgen 首启生成 `{data-dir}/tls/*.pem`，过期/损坏自动重生成）、手动 PEM（`REX_TLS_CERT`/`REX_TLS_KEY`，过期或 key 不匹配拒绝启动）；TLS 下限 1.3、握手 10s 超时、并发握手上限 1024、私钥 0600
+- **Agent 信任链**：新增 `REX_CA_CERT` 自定义信任锚（并入系统根证书，不替换）；与 `REX_TLS_INSECURE` 同设时 insecure 优先并打警告；Agent 更新下载复用同一信任配置
+- **dev SPA 回退回归测试**：`dev_spa_fallback_serves_index_html`（根路径/深链回退/静态资产三断言）
+
+### Changed
+- **亮色主题**：背景去白降亮度/对比度，`--shadow*` alpha 0.45/0.55/0.62 → 0.08/0.12/0.16（深色基线与品牌色不动）
+- **SSH 连接池**：30 分钟空闲条目惰性回收；`pool_key` 收敛为 `String`
+- **Docker**：TLS 目录对齐 `data/tls`；healthcheck 双模探测（http → https `--no-check-certificate`），去除 `|| true`
+
+### Fixed
+- **SFTP 并发 session**：终端与 SFTP 复用同一条 SSH 连接（绕开 `MaxSessions<2`），连接被拒按错误类型降级新建；认证失败不再误报 `Disconnected`，错误文案含 MaxSessions 指引
+- **dev 模式深链/刷新 404**：`ServeDir` 补 `index.html` fallback，对齐生产 embedded 行为
+
+### Removed
+- **ACME**：`REX_ACME_*` 全链路清除（代码/env/docs），孤立依赖 `rustls-acme` 移除——HTTP-01 占 80 端口与宿主冲突，整体砍除
+- **ProxyJump 跳板机**：`proxy_jump` 字段/解析/链式连接整体移除，Hub/Agent 停读 `proxyJump` 键（存在即忽略）；历史文档条目保留
 
 ## [0.87.4] - 2026-09-23
 
