@@ -61,26 +61,25 @@ const OPEN_SESSION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs
 pub(crate) async fn open_session_channel(
     config: &crate::SshConfig,
 ) -> Result<russh::Channel<russh::client::Msg>> {
-    if let Some(key) = crate::pool::pool_key(config) {
-        if let Some(cell) = crate::pool::get(&key).await {
-            tracing::info!(action = "SFTP_CONNECT", key = %key, "SFTP: reusing pooled SSH connection");
-            let opened = tokio::time::timeout(OPEN_SESSION_TIMEOUT, async {
-                let handle = cell.lock().await;
-                handle.channel_open_session().await
-            })
-            .await;
-            match opened {
-                Ok(Ok(channel)) => return Ok(channel),
-                Ok(Err(e)) => {
-                    tracing::warn!(action = "SFTP_CONNECT", key = %key, error = %e, "SFTP: pooled channel open failed, falling back to a new connection");
-                    if crate::pool::should_evict(&e) {
-                        crate::pool::evict(&key, &cell).await;
-                    }
-                }
-                Err(_) => {
-                    tracing::warn!(action = "SFTP_CONNECT", key = %key, "SFTP: pooled channel open timed out, falling back to a new connection");
+    let key = crate::pool::pool_key(config);
+    if let Some(cell) = crate::pool::get(&key).await {
+        tracing::info!(action = "SFTP_CONNECT", key = %key, "SFTP: reusing pooled SSH connection");
+        let opened = tokio::time::timeout(OPEN_SESSION_TIMEOUT, async {
+            let handle = cell.lock().await;
+            handle.channel_open_session().await
+        })
+        .await;
+        match opened {
+            Ok(Ok(channel)) => return Ok(channel),
+            Ok(Err(e)) => {
+                tracing::warn!(action = "SFTP_CONNECT", key = %key, error = %e, "SFTP: pooled channel open failed, falling back to a new connection");
+                if crate::pool::should_evict(&e) {
                     crate::pool::evict(&key, &cell).await;
                 }
+            }
+            Err(_) => {
+                tracing::warn!(action = "SFTP_CONNECT", key = %key, "SFTP: pooled channel open timed out, falling back to a new connection");
+                crate::pool::evict(&key, &cell).await;
             }
         }
     }
@@ -94,9 +93,7 @@ pub(crate) async fn open_session_channel(
             tracing::error!(action = "SFTP_CONNECT", host = %config.host, port = config.port, error = %e, "SFTP: channel_open_session failed on new connection");
             crate::session_open_error("new connection", e)
         })?;
-    if let Some(key) = crate::pool::pool_key(config) {
-        crate::pool::register(&key, handle).await;
-    }
+    crate::pool::register(&crate::pool::pool_key(config), handle).await;
     Ok(channel)
 }
 
@@ -338,16 +335,8 @@ mod tests {
     use russh::{Channel, ChannelId, ChannelOpenFailure, Disconnect, Pty};
 
     use super::*;
+    use crate::test_support::HOST_KEY_PEM;
     use crate::{SshConfig, SshSession};
-
-    /// 固定测试 host key（Ed25519，仅供单测构建 `server::Config::keys`）
-    const HOST_KEY_PEM: &str = r#"-----BEGIN OPENSSH PRIVATE KEY-----
-b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
-QyNTUxOQAAACDu4wlRHuujJzs4p1gNufzdP8Sn/XiaM6ydBzASDNKtyQAAAJDrqQL166kC
-9QAAAAtzc2gtZWQyNTUxOQAAACDu4wlRHuujJzs4p1gNufzdP8Sn/XiaM6ydBzASDNKtyQ
-AAAEA7muFkuswZkYvrEUDbhXtDlUfD31ZM8GUS7P85sXisyO7jCVEe66MnOzinWA25/N0/
-xKf9eJozrJ0HMBIM0q3JAAAADHJleC1zc2gtdGVzdAE=
------END OPENSSH PRIVATE KEY-----"#;
 
     /// 保证每个 harness 的 pool key（含 username）全局唯一，隔离并行测试
     static NEXT_HARNESS_ID: AtomicUsize = AtomicUsize::new(0);
@@ -553,7 +542,7 @@ xKf9eJozrJ0HMBIM0q3JAAAADHJleC1zc2gtdGVzdAE=
             .expect("terminal connect");
         assert_eq!(harness.conns(), 1);
 
-        let key = crate::pool::pool_key(&cfg).expect("pool key");
+        let key = crate::pool::pool_key(&cfg);
         assert!(
             crate::pool::get(&key).await.is_some(),
             "terminal handle must be registered into the pool"
@@ -579,7 +568,7 @@ xKf9eJozrJ0HMBIM0q3JAAAADHJleC1zc2gtdGVzdAE=
             .await
             .expect("terminal connect");
         assert_eq!(harness.conns(), 1);
-        let key = crate::pool::pool_key(&cfg).expect("pool key");
+        let key = crate::pool::pool_key(&cfg);
 
         harness.disconnect_all().await;
 

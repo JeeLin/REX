@@ -4,6 +4,9 @@ pub mod sftp;
 
 pub(crate) mod pool;
 
+#[cfg(test)]
+mod test_support;
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -248,9 +251,7 @@ impl SshSession {
     pub async fn connect(config: SshConfig) -> Result<Self> {
         let pool_key = pool::pool_key(&config);
         let (handle, session) = Self::connect_with_handle(config).await?;
-        if let Some(key) = pool_key {
-            pool::register(&key, handle).await;
-        }
+        pool::register(&pool_key, handle).await;
         Ok(session)
     }
 
