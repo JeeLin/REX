@@ -18,7 +18,9 @@ const wsStore = useWorkspaceStore()
 
 const stats = ref<DashboardStats>({ environment_count: 0, resource_count: 0, online_agents: 0 })
 
-// Filter environments based on connection mode (Agent mode shows only agent-managed envs)
+// v0.89 scope split: Dashboard counts agent envs only in agent mode — direct envs are
+// intentionally excluded here. The workspace sidebar (ResourcePanel) deliberately shows ALL
+// resources so direct envs stay visible & connectable. Do not unify these two filters.
 const filteredEnvironments = computed(() => {
   if (appStore.isAgent) {
     return store.environments.filter(env => env.connection_mode === 'agent')

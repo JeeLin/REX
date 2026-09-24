@@ -64,6 +64,7 @@ function sqlDbType(tab: { protocol?: string; subtype?: string } | null): string 
           :key="tabInfo.id || ''"
           :tab-id="tabInfo.id || ''"
           :resource-id="tabInfo.resourceId || ''"
+          :environment-id="tabInfo.environmentId"
           :name="tabInfo.label || ''"
           :protocol="tabInfo.protocol"
           :theme="tabInfo.theme"

@@ -803,13 +803,15 @@
     "disconnected": "已断开",
     "encoding": "编码",
     "find": "查找",
+    "hintHubDirect": "直连资源由 Hub 所在网络访问，非本 Agent 网络",
     "openSftp": "打开 SFTP",
     "paste": "粘贴",
     "reconnect": "重连",
     "selectAll": "全选",
     "sessionDisconnected": "会话已断开",
     "title": "终端",
-    "toggleFileBrowser": "切换文件浏览器 (Ctrl+B)"
+    "toggleFileBrowser": "切换文件浏览器 (Ctrl+B)",
+    "wsCreateFailed": "创建 WebSocket 连接失败"
   },
   "wizard": {
     "agent": "Agent",
