@@ -774,6 +774,16 @@ rex-agent = 所有 crate（无前端）
 - **版本号**：v0.90.0
 - **缺陷池 bug**：ctrl+K 同时打开两个搜索面板（🟡）、Ctrl+N 新建连接与浏览器冲突（🟡）、Ctrl+T 新建标签与浏览器冲突（🟡）、Ctrl+W 关闭当前标签与浏览器冲突（🟡）、Ctrl+Tab/Ctrl+Shift+Tab 切换标签与浏览器冲突（🟡）、Alt+1~9 面板宣称跳转标签实测切换布局（🟡）、Ctrl+Shift+\ 垂直分屏无效（🟡）（从 docs/BUGS.md 纳入，已在规划时从缺陷池删除）
 
+### 候选（已裁决待排期）：数据密钥守卫与解密失败指引
+- **背景**：用户实测——Docker 升级/清理时 `.master-key` 丢失，DB 保留 → 静默生成新 key → SSH 报 `decrypt failed: aead::Error`，错误延迟到连接时且无法联想到密钥丢失（2026-09-24）
+- **已裁决方案（用户决策 B，2026-09-24）——软失败，不拦启动**：
+  1. **启动守卫**：`crates/rex-hub/src/rex-hub.rs:172-181` worker 初始化处——DB 已存在非空 `config_json` 密文而 `.master-key` 缺失（本启动生成新 key）→ `tracing::error!` 明确报「数据密钥与数据库不匹配，`.master-key` 可能丢失，请从备份恢复或重新输入连接凭据」，服务照常运行（UI 存活，保留重输密码自救路径）
+  2. **运行时人话报错**：`terminal_ws.rs:200-205`、`resource_conn.rs:58-64`、`resource_api.rs:49-73` 三处解密失败统一翻译为「凭据解密失败：数据密钥与数据库不匹配（`.master-key` 丢失）。请从备份恢复该文件，或重新编辑连接并重新输入密码」
+  3. **（可选）密钥指纹**：DB 存一行 key fingerprint 供启动比对（指纹不可反推密钥）；支持 `REX_MASTER_KEY` 环境变量覆盖（与幽灵 `REX_SECRET_KEY` 区分，注释写明）
+- **不做**：密钥存 DB（密文与密钥同体，DB 导出即泄露，已否决 2026-09-24）；硬失败拦启动（断 UI 自救路径，已否决）
+- **关联**：备份文档点名 `.master-key` 与 `rex.db` 同等关键（v0.89 S7 已排）；v0.89 Bugs 表 decrypt failed 行
+- **状态**：已裁决待排期，不塞 v0.89（范围已满）；`milestone-planner` 规划时吸纳为独立小任务
+
 ### 候选（条件触发）：资源访问短路（控制面/数据面分离）
 - **核心功能**：同 Agent 内文件互传、远程 Hub 时 SIP 媒体等数据面流量不再绕 Hub；形态 = Hub 会话建立时下发「直连」指令，Agent 按指令哑中继（类似 TURN 选择），鉴权/审计/会话判定/录音仍全走 Hub（控制面一步不动），拓扑判断收敛 Hub 单点、无散落分支
 - **痛点排序**：同 Agent 文件互传（数据 Agent→Hub→Agent，LAN 拷贝绕 Hub/VPS 两趟）> 远程 Hub 时 SIP 媒体（每 RTP 包多一发 WAN 往返 + VPS 双向媒体带宽）> SSH 键击往返（体感最钝）
