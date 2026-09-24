@@ -759,7 +759,7 @@ rex-agent = 所有 crate（无前端）
 - **缺陷池 bug**：亮色主题过亮，优化长时间使用体验（🟢）、SSH 终端打开对应 SFTP 报错/并发 session（🟡）（从 docs/BUGS.md 纳入，已在规划时从缺陷池删除）
 
 ### v0.89.0：Agent 前端访问通道重设计 ← 新增（下一步）
-- **核心功能**：整体重设计「Agent 嵌入前端 ↔ 后端」访问通道，根因已确认——前端 WS 相对同源构造（`WorkspaceTerminal.vue:324-326`），Agent `http_server` 路由表仅 `/api/health` + `/api/*` + 静态 fallback，无 `/ws/*`，`/ws/terminal`、`/ws/sip` 落入 SPA fallback 返回 200 text/html（非 101）握手失败；直连 SSH 失败实为终端通道全断（SQL/Redis/文件走 `/api/*` 正常）。采用评审推荐**方案 C（统一流式边缘反代，A→C 两阶段）**：Agent 退化为「静态资源 + health 直答 + 纯管道」，`/api/*` 与 `/ws/*` 走同一条 `/ws/agent` 隧道 stream 帧通道，字节级反代到 Hub 明文回环 listener；硬前置修复 Hub TLS 模式下回环明文 502（`agent_ws.rs:745` vs `tls.rs:531-548`）；agent 模式 direct 环境语义=可见可连、路径经 Hub、前端零分支。否决方案 B（前端直连 Hub origin，破坏 agent 前端存在意义）
+- **核心功能**：整体重设计「Agent 嵌入前端 ↔ 后端」访问通道，根因已确认——前端 WS 相对同源构造（`WorkspaceTerminal.vue:324-326`），Agent `http_server` 路由表仅 `/api/health` + `/api/*` + 静态 fallback，无 `/ws/*`，`/ws/terminal`、`/ws/sip` 落入 SPA fallback 返回 200 text/html（非 101）握手失败；直连 SSH 失败实为终端通道全断（SQL/Redis/文件走 `/api/*` 正常）。采用评审推荐**方案 C（统一流式边缘反代，A→C 两阶段）**：Agent 退化为「静态资源 + health 直答 + 纯管道」，`/api/*` 与 `/ws/*` 走同一条 `/ws/agent` 隧道 stream 帧通道，字节级反代到 Hub 明文回环 listener；硬前置修复 Hub TLS 模式下回环明文 502（`agent_ws.rs:745` vs `tls.rs:531-548`）；agent 模式 direct 环境语义=可见可连、路径经 Hub、前端零分支。否决方案 B（前端直连 Hub origin，破坏 agent 前端存在意义）；Agent 嵌入前端页面默认关闭、显式开启（`REX_AGENT_HTTP_PORT` 未设置或 0 不启动 HTTP server，用户决策 2026-09-24）
 - **子任务预估**：8 个（S1 设计文档与通道清单裁决、S2 隧道流式协议、S3 Hub 明文回环 listener、S4 Agent http_server 通道重构、S5 前端 direct 语义对齐、S6 token 脱敏、S7 验证与文档对齐、S8 Agent HTTP server 默认关闭显式开启）
 - **依赖**：v0.88.0
 - **版本类型**：minor
