@@ -65,7 +65,7 @@ Hub API
 
 Agent 模式下浏览器同源的 `/ws/*`（终端、SIP）全部握手失败，根因链路（file:line 见里程碑文档 Context）：
 
-1. 前端 WS URL 一律相对同源构造（`WorkspaceTerminal.vue:324-326`、`api/sip.ts:163-165`），
+1. 前端 WS URL 一律相对同源构造（`WorkspaceTerminal.vue:345`（S5 提交后行号）、`api/sip.ts:163-165`），
    agent 模式下打到 Agent 内嵌 http_server。
 2. Agent 路由表仅 `/api/health` + `/api/{*path}` + 静态 fallback（`crates/rex-agent/src/http_server.rs:157-160`），
    没有 `/ws/*` 路由。
