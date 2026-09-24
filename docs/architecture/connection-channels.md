@@ -70,7 +70,7 @@ Agent 模式下浏览器同源的 `/ws/*`（终端、SIP）全部握手失败，
 2. Agent 路由表仅 `/api/health` + `/api/{*path}` + 静态 fallback（`crates/rex-agent/src/http_server.rs:157-160`），
    没有 `/ws/*` 路由。
 3. `/ws/terminal`、`/ws/sip` 落入 SPA fallback，返回 `200 text/html`
-   （`crates/rex-hub/src/embedded_static.rs:62-75`），浏览器等待 101 握手超时失败——
+   （`crates/rex-common/src/embedded_static.rs:62-75`），浏览器等待 101 握手超时失败——
    整条链路从未触及 `/ws/agent` 隧道。
 4. 连带问题：Hub 开 TLS 时唯一 listener 被 TLS 包裹（`crates/rex-hub/src/rex-hub.rs:264`），
    API 隧道回环却用明文 `http://127.0.0.1:{port}`（`crates/rex-hub/src/agent_ws.rs:745`），
