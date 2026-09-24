@@ -13,7 +13,11 @@ import Button from '@/components/ui/Button.vue'
 import MobileTerminalBar from './MobileTerminalBar.vue'
 import Toast from '@/components/ui/Toast.vue'
 import { clipboard } from '@/utils/clipboard'
+import { useAppStore } from '@/stores/app'
+import { useEnvironmentsStore } from '@/stores/environments'
 const { t } = useI18n()
+const appStore = useAppStore()
+const envStore = useEnvironmentsStore()
 const toast = ref<InstanceType<typeof Toast>>()
 let themeObserver: MutationObserver | null = null
 const props = defineProps<{
@@ -23,6 +27,7 @@ const props = defineProps<{
   host?: string
   port?: number
   protocol?: string
+  environmentId?: string
   theme?: string
   fontSize?: number
   opacity?: number
@@ -79,6 +84,7 @@ const MAX_RECONNECT_ATTEMPTS = 5
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000]
 let manualDisconnect = false
 let connecting = false  // Prevent duplicate connection attempts
+let sessionOpened = false  // Current WS attempt completed a handshake at least once
 
 // ── Context menu state ────────────────────────────────────
 const ctxMenuVisible = ref(false)
@@ -312,6 +318,18 @@ function stopPing() {
 }
 
 // ── Connection ────────────────────────────────────────────
+// agent mode + direct env: the target is reached from the Hub's network
+// (browser → agent → tunnel → hub → target), not from the Agent's network.
+// WS URL construction stays same-origin for every resource — no branching here.
+const hubDirect = computed(() => {
+  if (!appStore.isAgent || !props.environmentId) return false
+  return envStore.environments.find(e => e.id === props.environmentId)?.connection_mode === 'direct'
+})
+
+// Transport-level failure of the current session; cleared once a connection opens.
+const connectFailed = ref(false)
+const showHubDirectHint = computed(() => hubDirect.value && connectFailed.value)
+
 function connectSession() {
   // Prevent duplicate connection attempts
   if (connecting) return
@@ -319,6 +337,7 @@ function connectSession() {
   
   connectionStatus.value = 'connecting'
   manualDisconnect = false
+  sessionOpened = false
   emit('update:status', 'connecting')
 
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -331,8 +350,12 @@ function connectSession() {
   } catch {
     connecting = false
     connectionStatus.value = 'error'
+    connectFailed.value = true
     emit('update:status', 'error')
-    terminal?.write('\r\n\x1b[31m[Failed to create WebSocket connection]\x1b[0m')
+    terminal?.write(`\r\n\x1b[31m[${t('terminal.wsCreateFailed', 'Failed to create WebSocket connection')}]\x1b[0m`)
+    if (hubDirect.value) {
+      terminal?.write(`\r\n\x1b[33m[${t('terminal.hintHubDirect', 'Direct resources are reached from the Hub\'s network, not this Agent\'s network')}]\x1b[0m`)
+    }
     return
   }
   ws = currentWs
@@ -340,6 +363,9 @@ function connectSession() {
   ws.onopen = () => {
     if (ws !== currentWs) return // Stale handler, ignore
     connecting = false
+    sessionOpened = true
+    connectFailed.value = false
+    reconnectAttempts = 0
     connectionStatus.value = 'connected'
     emit('update:status', 'online')
     terminal?.focus()
@@ -391,6 +417,7 @@ function connectSession() {
     connecting = false
     stopPing()
     connectionStatus.value = 'disconnected'
+    if (!sessionOpened) connectFailed.value = true
     emit('update:status', 'offline')
 
     // Auto-reconnect
@@ -403,6 +430,9 @@ function connectSession() {
       }, delay)
     } else if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
       terminal?.write(`\r\n\x1b[31m[Connection lost. Click reconnect to try again.]\x1b[0m\r\n`)
+      if (hubDirect.value) {
+        terminal?.write(`\r\n\x1b[33m[${t('terminal.hintHubDirect', 'Direct resources are reached from the Hub\'s network, not this Agent\'s network')}]\x1b[0m\r\n`)
+      }
     }
   }
 
@@ -630,6 +660,9 @@ onBeforeUnmount(() => {
           <p class="wt-overlay-text">
             {{ connectionStatus === 'error' ? t('terminal.connectionError', 'Connection error') : t('terminal.sessionDisconnected', 'Session disconnected') }}
           </p>
+          <p v-if="showHubDirectHint" class="wt-overlay-hint">
+            {{ t('terminal.hintHubDirect', 'Direct resources are reached from the Hub\'s network, not this Agent\'s network') }}
+          </p>
           <button class="wt-reconnect-btn" @click="handleReconnect">
             {{ t('terminal.reconnect', 'Reconnect') }}
           </button>
@@ -824,6 +857,14 @@ onBeforeUnmount(() => {
   font-size: 13px;
   color: var(--text-muted);
   margin-bottom: 12px;
+}
+
+.wt-overlay-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-width: 340px;
+  margin: -6px auto 14px;
 }
 
 .wt-reconnect-btn {

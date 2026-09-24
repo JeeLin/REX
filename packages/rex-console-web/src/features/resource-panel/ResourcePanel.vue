@@ -201,6 +201,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('rex:env-changed', onEnvChanged)
 })
+// v0.89 scope split: sidebar shows every env/resource (direct envs stay visible &
+// connectable in agent mode, marked as hub-direct); Dashboard counts agent envs only.
+// The two scopes differ on purpose — do not filter this list to match Dashboard.
 const filteredEnvs = computed(() => {
   let envs = store.environments
   if (searchQuery.value) {
@@ -405,7 +408,9 @@ function ctxToggleFavorite() {
             size="sm"
             tone="info"
             :title="t('resourcePanel.badgeHubDirectTip')"
-          >{{ t('resourcePanel.badgeHubDirect') }}</Badge>
+          >
+            {{ t('resourcePanel.badgeHubDirect') }}
+          </Badge>
           <span class="rp-group-count muted">{{ env.resource_count }}</span>
           <button class="rp-add-btn" :title="t('resourcePanel.addResource')" @click="openWizard(env.id, $event)">+</button>
         </div>

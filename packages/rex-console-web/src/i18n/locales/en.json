@@ -803,13 +803,15 @@
     "disconnected": "Disconnected",
     "encoding": "Encoding",
     "find": "Find",
+    "hintHubDirect": "Direct resources are reached from the Hub's network, not this Agent's network",
     "openSftp": "Open SFTP",
     "paste": "Paste",
     "reconnect": "Reconnect",
     "selectAll": "Select All",
     "sessionDisconnected": "Session disconnected",
     "title": "Terminal",
-    "toggleFileBrowser": "Toggle file browser (Ctrl+B)"
+    "toggleFileBrowser": "Toggle file browser (Ctrl+B)",
+    "wsCreateFailed": "Failed to create WebSocket connection"
   },
   "wizard": {
     "agent": "Agent",
