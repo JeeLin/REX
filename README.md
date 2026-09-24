@@ -68,13 +68,13 @@ Each protocol module's interaction and layout benchmarks against the most mature
 
 ```text
 浏览器 (REX Hub 控制台)
-    │ HTTPS + WebSocket
+    │ HTTPS + WebSocket（直连 Hub，或经 Agent 嵌入前端由 Agent 反代到 Hub）
     ▼
 REX Hub 服务端 (Rust, single binary)
-    │ TLS 加密隧道
+    │ TLS 加密隧道（控制面 + 文件传输）
     ▼
 REX Agent (内网节点, 主动出站)
-    │ 协议代理
+    │ 协议代理（内网资源由 Agent 拨号侧连接）
     ▼
 SSH / 数据库 / 文件系统 / 对象存储
 ```
