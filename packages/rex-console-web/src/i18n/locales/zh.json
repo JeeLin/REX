@@ -445,6 +445,8 @@
   },
   "resourcePanel": {
     "addResource": "添加资源",
+    "badgeHubDirect": "经 Hub 直连",
+    "badgeHubDirectTip": "直连环境：目标由 Hub 所在网络访问（浏览器 → Agent → 隧道 → Hub → 直连目标）",
     "connections": "连接",
     "noEnvironments": "暂无环境",
     "noResources": "暂无资源",

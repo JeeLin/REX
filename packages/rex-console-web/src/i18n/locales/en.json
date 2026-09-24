@@ -446,6 +446,8 @@
   },
   "resourcePanel": {
     "addResource": "Add resource",
+    "badgeHubDirect": "Hub direct",
+    "badgeHubDirectTip": "Direct environment: the target is reached from the Hub's network (browser → agent → tunnel → hub → target)",
     "connections": "Connections",
     "noEnvironments": "No environments yet",
     "noResources": "No resources",
