@@ -337,6 +337,7 @@
     "speed": "Speed",
     "startSync": "Start Sync",
     "storageClass": "Storage Class",
+    "syncBrowsing": "Sync Browsing (link both panes)",
     "syncPreview": "Sync Preview",
     "target": "Target",
     "transferQueue": "Transfer Queue",
