@@ -343,7 +343,7 @@ CSS 变量（`--bg-deep` / `--bg-surface` / `--bg-elevated` / `--bg-hover` / `--
 
 ---
 
-## 5. 快捷键
+## 5. 快捷键 [已规划]
 
 ### 工作空间（Xshell 模式）
 | 快捷键 | 功能 |

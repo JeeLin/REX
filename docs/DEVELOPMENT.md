@@ -750,13 +750,29 @@ rex-agent = 所有 crate（无前端）
 - **版本号**：v0.77.0
 ---
 
-### v0.88.0：HTTPS 证书逻辑真实现 ← 新增（下一步）
+### v0.88.0：HTTPS 证书逻辑真实现 ✅ 已完成（v0.88.0）
 - **核心功能**：TLS 从「三模式全部回退 HTTP」的 stub 实装修复——axum + tokio-rustls 实装 TLS serve；自签名（rcgen 首启生成）、手动证书（PEM 加载 + 过期校验）两模式真实可用（ACME 经用户裁决整体砍除：HTTP-01 占 80 端口与宿主服务冲突，`rustls-acme` 孤立依赖一并移除）；Agent 信任链（REX_CA_CERT 实装 + 已有 REX_TLS_INSECURE）；文档/env 对齐
 - **子任务预估**：6 个（TLS serve 内核、自签名模式、手动证书模式、Agent 信任链、文档/env 对齐、缺陷池 2 条修复）
 - **依赖**：v0.87.4
 - **版本类型**：minor
 - **版本号**：v0.88.0
 - **缺陷池 bug**：亮色主题过亮，优化长时间使用体验（🟢）、SSH 终端打开对应 SFTP 报错/并发 session（🟡）（从 docs/BUGS.md 纳入，已在规划时从缺陷池删除）
+
+### v0.89.0：Agent 前端访问通道重设计 ← 新增（下一步）
+- **核心功能**：整体重设计「Agent 嵌入前端 ↔ 后端」访问通道，根因已确认——前端 WS 相对同源构造（`WorkspaceTerminal.vue:324-326`），Agent `http_server` 路由表仅 `/api/health` + `/api/*` + 静态 fallback，无 `/ws/*`，`/ws/terminal`、`/ws/sip` 落入 SPA fallback 返回 200 text/html（非 101）握手失败；直连 SSH 失败实为终端通道全断（SQL/Redis/文件走 `/api/*` 正常）。采用评审推荐**方案 C（统一流式边缘反代，A→C 两阶段）**：Agent 退化为「静态资源 + health 直答 + 纯管道」，`/api/*` 与 `/ws/*` 走同一条 `/ws/agent` 隧道 stream 帧通道，字节级反代到 Hub 明文回环 listener；硬前置修复 Hub TLS 模式下回环明文 502（`agent_ws.rs:745` vs `tls.rs:531-548`）；agent 模式 direct 环境语义=可见可连、路径经 Hub、前端零分支。否决方案 B（前端直连 Hub origin，破坏 agent 前端存在意义）
+- **子任务预估**：7 个（S1 设计文档与通道清单裁决、S2 隧道流式协议、S3 Hub 明文回环 listener、S4 Agent http_server 通道重构、S5 前端 direct 语义对齐、S6 token 脱敏、S7 验证与文档对齐）
+- **依赖**：v0.88.0
+- **版本类型**：minor
+- **版本号**：v0.89.0
+- **缺陷池 bug**：Agent 前端无法连接直连 SSH（🔴）、Agent 连接日志明文含 token（🟡）（SSH 从 docs/BUGS.md 纳入并在规划时删除；token 原列于快捷键条目，随 Agent 域归属移入本条）
+
+### v0.90.0：快捷键治理
+- **核心功能**：基于 `.dev-flow/shortcuts-inventory.md` 全量清点的快捷键治理——移除浏览器保留键绑定（Ctrl+N/T/W/Tab，用户已决策 2026-09-23，浏览器为准，替代键位统一规划）；修复 Ctrl+K 双面板双触发、Ctrl+Shift+\ 垂直分屏无效；面板文案与实现对齐（Alt+1~9 矛盾、宣而未实现项、context-menu 纯展示文案）；注册表/死代码治理（`utils/shortcuts.ts`、`config/shortcuts.ts`、`QuickOpen.vue` 零引用清理，`stores/shortcuts.ts` 与面板分工注明）；F11 改用真 fullscreen API；补齐 PRODUCT §5 规格内未实现键位（F4-F8/Delete/Ctrl+L/Ctrl+R 等，或经设计核对后修订规格）；同步修订 PRODUCT §5 键位表
+- **子任务预估**：6 个（浏览器保留键解绑与替代键位、Ctrl+K 双触发收敛、注册表与死代码治理、面板/文案与实现对齐、规格键位补齐与 §5 同步、分屏与 F11 修复）
+- **依赖**：v0.89.0
+- **版本类型**：minor
+- **版本号**：v0.90.0
+- **缺陷池 bug**：ctrl+K 同时打开两个搜索面板（🟡）、Ctrl+N 新建连接与浏览器冲突（🟡）、Ctrl+T 新建标签与浏览器冲突（🟡）、Ctrl+W 关闭当前标签与浏览器冲突（🟡）、Ctrl+Tab/Ctrl+Shift+Tab 切换标签与浏览器冲突（🟡）、Alt+1~9 面板宣称跳转标签实测切换布局（🟡）、Ctrl+Shift+\ 垂直分屏无效（🟡）（从 docs/BUGS.md 纳入，已在规划时从缺陷池删除）
 
 ## 7. UI/UX 优化路线图（参考 DBX）
 
