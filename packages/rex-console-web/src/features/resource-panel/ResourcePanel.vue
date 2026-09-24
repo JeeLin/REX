@@ -9,6 +9,8 @@ import { PROTOCOL_ICONS, PROTOCOL_COLORS } from '@/features/resource/protocols'
 import WizardModal from '@/features/resource/WizardModal.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useFavoritesStore } from '@/stores/favorites'
+import { useAppStore } from '@/stores/app'
+import Badge from '@/components/ui/Badge.vue'
 
 const emit = defineEmits<{
   resourceProperties: [resource: Resource]
@@ -18,6 +20,15 @@ const store = useEnvironmentsStore()
 const router = useRouter()
 const wsStore = useWorkspaceStore()
 const favStore = useFavoritesStore()
+const appStore = useAppStore()
+
+// agent mode: a direct env is still reachable, but the target is reached from the Hub's
+// network (browser → agent → tunnel → hub → target). Mark it so users don't assume the
+// Agent's network covers the target.
+function isHubDirect(envId: string): boolean {
+  if (!appStore.isAgent) return false
+  return store.environments.find(e => e.id === envId)?.connection_mode === 'direct'
+}
 
 /* ---- types ---- */
 type TabKey = 'connections' | 'favorites' | 'recent'
@@ -388,6 +399,13 @@ function ctxToggleFavorite() {
         <div class="rp-group" @click="toggleEnv(env.id)">
           <span class="rp-chevron" :class="{ 'rp-collapsed': collapsedEnvs.has(env.id) }">▸</span>
           <span class="rp-group-name mono">{{ env.name }}</span>
+          <Badge
+            v-if="isHubDirect(env.id)"
+            class="rp-group-badge"
+            size="sm"
+            tone="info"
+            :title="t('resourcePanel.badgeHubDirectTip')"
+          >{{ t('resourcePanel.badgeHubDirect') }}</Badge>
           <span class="rp-group-count muted">{{ env.resource_count }}</span>
           <button class="rp-add-btn" :title="t('resourcePanel.addResource')" @click="openWizard(env.id, $event)">+</button>
         </div>
@@ -401,7 +419,12 @@ function ctxToggleFavorite() {
             @dblclick="resourceDblClickEvent(res)"
             @contextmenu.prevent="onContextMenu($event, res)"
           >
-            <span class="rp-agent-dot" :style="{ backgroundColor: agentStatusColor(res.environment_id) }"></span>
+            <span
+              v-if="isHubDirect(res.environment_id)"
+              class="rp-agent-dot rp-agent-dot--hub"
+              :title="t('resourcePanel.badgeHubDirectTip')"
+            >◉</span>
+            <span v-else class="rp-agent-dot" :style="{ backgroundColor: agentStatusColor(res.environment_id) }"></span>
             <span class="rp-item-icon" :style="{ color: res.color || PROTOCOL_COLORS[res.protocol] || 'var(--text-secondary)' }">
               {{ PROTOCOL_ICONS[res.protocol] || '?' }}
             </span>
@@ -436,7 +459,12 @@ function ctxToggleFavorite() {
         @dblclick="resourceDblClickEvent(res)"
         @contextmenu.prevent="onContextMenu($event, res)"
       >
-        <span class="rp-agent-dot" :style="{ backgroundColor: agentStatusColor(res.environment_id) }"></span>
+        <span
+          v-if="isHubDirect(res.environment_id)"
+          class="rp-agent-dot rp-agent-dot--hub"
+          :title="t('resourcePanel.badgeHubDirectTip')"
+        >◉</span>
+        <span v-else class="rp-agent-dot" :style="{ backgroundColor: agentStatusColor(res.environment_id) }"></span>
         <span class="rp-item-icon" :style="{ color: res.color || PROTOCOL_COLORS[res.protocol] || 'var(--text-secondary)' }">
           {{ PROTOCOL_ICONS[res.protocol] || '?' }}
         </span>
@@ -601,6 +629,15 @@ function ctxToggleFavorite() {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.3px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rp-group-badge {
+  flex-shrink: 0;
+  margin-left: var(--space-1);
+  font-family: var(--font-mono);
 }
 .rp-group-count {
   margin-left: auto;
@@ -645,6 +682,15 @@ function ctxToggleFavorite() {
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+/* direct env marker in agent mode — PRODUCT §2.4 token: ◉ #58A6FF (--info) */
+.rp-agent-dot--hub {
+  width: auto;
+  height: auto;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--info);
+  background: transparent;
 }
 .rp-item-icon {
   font-family: var(--font-mono);
