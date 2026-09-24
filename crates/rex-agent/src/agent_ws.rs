@@ -1303,17 +1303,30 @@ async fn handle_update(cmd: rex_common::update::UpdateCommand, evt_tx: mpsc::Sen
     }
 }
 
+/// Derive Hub HTTP and WebSocket base origins from one raw `REX_HUB_URL` value.
+///
+/// https → (`https://…`, `wss://…`); http → (`http://…`, `ws://…`);
+/// ws/wss inputs are accepted and normalized the same way. Unparsable input
+/// and unsupported schemes are errors — callers must not guess a scheme.
+pub(crate) fn hub_origin(raw: &str) -> Result<(String, String), String> {
+    let mut url = Url::parse(raw).map_err(|e| format!("invalid hub url {raw:?}: {e}"))?;
+    let (http_scheme, ws_scheme) = match url.scheme() {
+        "http" | "ws" => ("http", "ws"),
+        "https" | "wss" => ("https", "wss"),
+        other => return Err(format!("unsupported hub url scheme {other:?} in {raw:?}")),
+    };
+    url.set_scheme(http_scheme)
+        .map_err(|_| format!("cannot derive http origin from {raw:?}"))?;
+    let http_base = url.to_string();
+    url.set_scheme(ws_scheme)
+        .map_err(|_| format!("cannot derive ws origin from {raw:?}"))?;
+    let ws_base = url.to_string();
+    Ok((http_base, ws_base))
+}
+
 fn build_ws_url(hub_url: &str, token: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let mut url = Url::parse(hub_url)?;
-    // 替换 scheme: http → ws, https → wss
-    match url.scheme() {
-        "http" => url.set_scheme("ws").unwrap(),
-        "https" => url.set_scheme("wss").unwrap(),
-        "ws" | "wss" => {}
-        _ => {
-            url.set_scheme("ws").unwrap();
-        }
-    }
+    let (_, ws_base) = hub_origin(hub_url)?;
+    let mut url = Url::parse(&ws_base)?;
     url.set_path("/ws/agent");
     url.query_pairs_mut().append_pair("token", token);
     Ok(url.to_string())
@@ -1712,5 +1725,77 @@ mod tests {
         );
         dispatch_sip_tunnel_frame(&ua, "1", &frame).await.unwrap();
         assert!(ua.actions.lock().unwrap().is_empty());
+    }
+
+    // --- S-fix: hub_origin 统一 scheme 推导（https→wss / http→ws） ---
+
+    #[test]
+    fn hub_origin_https_yields_https_and_wss() {
+        let (http, ws) = hub_origin("https://hub.example.com").unwrap();
+        assert_eq!(http, "https://hub.example.com/");
+        assert_eq!(ws, "wss://hub.example.com/");
+    }
+
+    #[test]
+    fn hub_origin_http_yields_http_and_ws() {
+        let (http, ws) = hub_origin("http://hub.example.com:3000").unwrap();
+        assert_eq!(http, "http://hub.example.com:3000/");
+        assert_eq!(ws, "ws://hub.example.com:3000/");
+    }
+
+    #[test]
+    fn hub_origin_accepts_ws_and_wss_input() {
+        assert_eq!(
+            hub_origin("wss://hub.example.com:8443").unwrap(),
+            (
+                "https://hub.example.com:8443/".into(),
+                "wss://hub.example.com:8443/".into()
+            )
+        );
+        assert_eq!(
+            hub_origin("ws://127.0.0.1:3000").unwrap(),
+            (
+                "http://127.0.0.1:3000/".into(),
+                "ws://127.0.0.1:3000/".into()
+            )
+        );
+    }
+
+    #[test]
+    fn hub_origin_trailing_slash_equivalent() {
+        let with = hub_origin("https://hub.example.com/").unwrap();
+        let without = hub_origin("https://hub.example.com").unwrap();
+        assert_eq!(with, without);
+        assert!(with.1.starts_with("wss://"));
+    }
+
+    #[test]
+    fn hub_origin_preserves_path_port_and_query() {
+        let (http, ws) = hub_origin("https://hub.example.com:8443/base?x=1").unwrap();
+        assert_eq!(http, "https://hub.example.com:8443/base?x=1");
+        assert_eq!(ws, "wss://hub.example.com:8443/base?x=1");
+    }
+
+    #[test]
+    fn hub_origin_rejects_invalid_input() {
+        assert!(hub_origin("").is_err());
+        assert!(hub_origin("not a url").is_err());
+        assert!(hub_origin("hub.example.com").is_err());
+        assert!(hub_origin("ftp://hub.example.com").is_err());
+    }
+
+    /// Bugs 表 🟡 回归：`REX_HUB_URL=https://…` 必须拨号 `wss://`（构造点 build_ws_url）。
+    #[test]
+    fn build_ws_url_https_input_dials_wss() {
+        let ws = build_ws_url("https://hub.example.com:8443", "tok").unwrap();
+        assert!(
+            ws.starts_with("wss://hub.example.com:8443/ws/agent?token=tok"),
+            "got {ws}"
+        );
+        let ws = build_ws_url("http://hub.example.com", "tok").unwrap();
+        assert!(
+            ws.starts_with("ws://hub.example.com/ws/agent?token=tok"),
+            "got {ws}"
+        );
     }
 }

@@ -177,20 +177,25 @@ fn resolve_download_url(url: &str, hub_base: Option<&str>) -> String {
     }
 }
 
-/// 由 Hub URL 推导 Hub 的 HTTP 下载基地址（ws/wss → http/https）。
-/// Agent 通过 WebSocket 隧道连接 Hub，其下载端点与 WS 监听在同一地址，
-/// 仅协议不同，因此可直接由 Hub URL 推导，无需额外配置。
+/// 由 Hub URL 推导 Hub 的 HTTP 下载基地址。
+/// 与隧道 dialer 共用 `hub_origin()` 统一 scheme 推导（https/wss → https，http/ws → http），
+/// 不再手写字符串替换；无 scheme 的历史输入仍回退为 https。
 fn hub_http_base(hub_url: &str) -> Option<String> {
     if hub_url.is_empty() {
         return None;
     }
-    let base = hub_url
-        .replace("wss://", "https://")
-        .replace("ws://", "http://");
-    if base.contains("://") {
-        Some(base)
+    let normalized = if hub_url.contains("://") {
+        hub_url.to_string()
     } else {
-        Some(format!("https://{base}"))
+        format!("https://{hub_url}")
+    };
+    match crate::agent_ws::hub_origin(&normalized) {
+        // 保持既有基地址形态（无尾斜杠），`resolve_download_url` 拼接时同样会修剪。
+        Ok((http_base, _)) => Some(http_base.trim_end_matches('/').to_string()),
+        Err(e) => {
+            tracing::warn!(error = %e, "failed to derive hub http base");
+            None
+        }
     }
 }
 
