@@ -29,7 +29,4 @@ pub struct AppState {
     pub sip_capture: Arc<SipCaptureRegistry>,
     pub sip_recording: Arc<SipRecordingRegistry>,
     pub data_dir: PathBuf,
-    pub http_client: reqwest::Client,
-    /// Actual HTTP listener port, shared with the Agent API loopback proxy.
-    pub http_port: u16,
 }
