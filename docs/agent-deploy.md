@@ -16,6 +16,8 @@ Agent 通过环境变量配置，以下两个变量必填：
 | `REX_HUB_URL` | ✅ | Hub 的访问地址（如 `http://192.168.1.100:3000`）。生产环境建议用 `https://` 域名，Agent 通过 WebSocket（`wss://`）自动跟随 | 部署 Hub 时确定 |
 | `REX_AGENT_TOKEN` | ✅ | 该环境的注册令牌，作为 Agent 连接 Hub 的凭证 | Hub 管理页面 → 环境 → 「Agent 令牌」复制 |
 
+可选变量 `REX_AGENT_HTTP_PORT`：Agent 内嵌 HTTP server（本地页面 + `/api/health`）**默认关闭**，需显式配置 1-65535 的端口才监听；设为 `0` 或不设置均不启动。**注意**：0.89 起为 breaking 变更，升级后未配置此变量的部署将没有本地页面。
+
 > `REX_HUB_URL` 与 `REX_AGENT_TOKEN` **每个环境一组、互不相同**。先在 Hub 管理页面创建好环境并复制 `REX_AGENT_TOKEN`，再填入下方任意一种部署方式。下文所有示例中的 `your-agent-token-here` / `http://hub.example.com:3000` 均为占位符，需替换为你自己的实际值。Agent ID 由 Hub 在认证成功后自动分配，不在客户端配置。
 
 ## 方式一：二进制部署

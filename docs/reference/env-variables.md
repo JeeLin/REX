@@ -59,7 +59,7 @@
 | `REX_CA_CERT` | 无 | 自定义 CA 证书路径（PEM），加入 Agent 连 Hub 的 TLS 信任锚（与系统根合并）；与 `REX_TLS_INSECURE` 同设时 `REX_TLS_INSECURE` 优先生效 |
 | `REX_AUTO_UPDATE` | `true` | 自动更新默认开启；设为 `false` 可关闭（--single 单进程模式下强制关闭，因为没有 supervisor 执行替换） |
 | `REX_WORKER` | — | 存在时启动 worker 子进程（supervisor 自动设置，不要手动设置） |
-| `REX_AGENT_HTTP_PORT` | `3000` | Agent 本地 HTTP 控制端口 |
+| `REX_AGENT_HTTP_PORT` | 未设置（关闭） | Agent 内嵌 HTTP server 端口。**需显式配置**为 1-65535 的端口才监听；未设置或 `0` 均不启动（**breaking**：升级后未配置此变量的部署将没有本地页面） |
 
 ---
 

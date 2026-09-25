@@ -419,6 +419,19 @@ pub(crate) struct LocalChannel {
 // 主入口
 // ═══════════════════════════════════════
 
+/// 解析 `REX_AGENT_HTTP_PORT`：未设置或 `0` → `None`（不启动内嵌 HTTP server），
+/// 可解析且 `> 0` → `Some(port)`（监听 `0.0.0.0:{port}`）。无法解析的值同样视为关闭。
+fn resolve_http_port(raw: Option<&str>) -> Option<u16> {
+    let value = raw?.trim();
+    if value.is_empty() {
+        return None;
+    }
+    match value.parse::<u16>() {
+        Ok(port) if port > 0 => Some(port),
+        _ => None,
+    }
+}
+
 pub async fn run_agent(config: AgentConfig, api_pending: ApiPendingMap) {
     // 先装进程默认 provider，覆盖 tokio-tungstenite / reqwest 内部的 rustls builder。
     ensure_crypto_provider();
@@ -436,21 +449,29 @@ pub async fn run_agent(config: AgentConfig, api_pending: ApiPendingMap) {
     let (api_tx, api_rx) = mpsc::channel::<AgentEvent>(256);
     let api_rx = Arc::new(tokio::sync::Mutex::new(api_rx));
 
-    // 在后台启动 HTTP server
-    let hub_url = config.hub_url.clone();
-    let api_pending_http = api_pending.clone();
-    tokio::spawn(async move {
-        let http_port = std::env::var("REX_AGENT_HTTP_PORT")
-            .unwrap_or_else(|_| "3000".to_string())
-            .parse::<u16>()
-            .unwrap_or(3000);
-        if let Err(e) =
-            crate::http_server::start_http_server(http_port, hub_url, api_tx, api_pending_http)
+    // 内嵌 HTTP server 默认关闭：未设置或 0 不启动，显式配置 >0 才监听
+    match resolve_http_port(std::env::var("REX_AGENT_HTTP_PORT").ok().as_deref()) {
+        Some(http_port) => {
+            let hub_url = config.hub_url.clone();
+            let api_pending_http = api_pending.clone();
+            tokio::spawn(async move {
+                if let Err(e) = crate::http_server::start_http_server(
+                    http_port,
+                    hub_url,
+                    api_tx,
+                    api_pending_http,
+                )
                 .await
-        {
-            tracing::error!(error = %e, "failed to start HTTP server");
+                {
+                    tracing::error!(error = %e, "failed to start HTTP server");
+                }
+            });
         }
-    });
+        None => {
+            tracing::info!("agent HTTP server disabled (set REX_AGENT_HTTP_PORT to enable)");
+            drop(api_tx);
+        }
+    }
 
     loop {
         tracing::info!(hub_url = %redact_url(&config.hub_url), "connecting to hub");
@@ -1917,5 +1938,33 @@ mod tests {
         let err = hub_origin("ftp://hub.example.com?token=abc").unwrap_err();
         assert!(!err.contains("abc"), "got {err}");
         assert!(err.contains("ftp://hub.example.com"), "got {err}");
+    }
+
+    // --- S8：内嵌 HTTP server 默认关闭、显式开启 ---
+
+    /// 未设置 REX_AGENT_HTTP_PORT → 不启动 HTTP server。
+    #[test]
+    fn http_server_disabled_when_env_unset() {
+        assert_eq!(resolve_http_port(None), None);
+    }
+
+    /// 设为 0 → 明确关闭，不启动 HTTP server。
+    #[test]
+    fn http_server_disabled_when_env_zero() {
+        assert_eq!(resolve_http_port(Some("0")), None);
+    }
+
+    /// 设为 3000 → 启动并监听该端口。
+    #[test]
+    fn http_server_enabled_when_env_port_3000() {
+        assert_eq!(resolve_http_port(Some("3000")), Some(3000));
+    }
+
+    /// 无法解析的值按关闭处理（不静默回落到默认端口）。
+    #[test]
+    fn http_server_disabled_when_env_invalid() {
+        assert_eq!(resolve_http_port(Some("not-a-port")), None);
+        assert_eq!(resolve_http_port(Some("")), None);
+        assert_eq!(resolve_http_port(Some("70000")), None);
     }
 }

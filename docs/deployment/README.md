@@ -111,7 +111,7 @@ REX_DATA_DIR | 数据目录（含 `.master-key` 加密主密钥，自动生成�
 | `REX_HUB_URL` | Hub 基地址（自动归一化为 `/ws/agent`） | **必填** |
 | `REX_AGENT_TOKEN` | 认证令牌 | **必填** |
 | `REX_AGENT_NAME` | Agent 名称 | `agent` |
-| `REX_AGENT_HTTP_PORT` | Agent 内嵌 HTTP 端口 | `3000` |
+| `REX_AGENT_HTTP_PORT` | Agent 内嵌 HTTP 端口（**breaking**：默认关闭，需显式配置才监听） | 未设置（关闭） |
 | `REX_HEARTBEAT_INTERVAL` | 心跳间隔（秒） | `30` |
 | `REX_TLS_INSECURE` | 跳过 TLS 验证（仅内网测试） | — |
 | `REX_AUTO_UPDATE` | 启用自动更新 | `true` |
