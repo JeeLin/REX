@@ -27,7 +27,6 @@ use futures_util::{SinkExt, StreamExt};
 use include_dir::{include_dir, Dir};
 use rex_common::embedded_static::EmbeddedStatic;
 use tokio::net::TcpStream;
-use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::handshake::client::Request as WsRequest;
 use tokio_tungstenite::tungstenite::protocol::CloseFrame as HubCloseFrame;
@@ -38,8 +37,7 @@ use tokio_tungstenite::{
 use url::Url;
 
 use crate::agent_ws::{
-    apply_hub_tls_to_reqwest, hub_origin, resolve_hub_tls_settings, AgentEvent, ApiPendingMap,
-    HubTlsSettings,
+    apply_hub_tls_to_reqwest, hub_origin, resolve_hub_tls_settings, HubTlsSettings,
 };
 
 /// 嵌入的前端 dist 目录
@@ -560,15 +558,7 @@ fn build_router(state: Arc<AgentState>) -> Router {
 }
 
 /// 启动 Agent HTTP server
-pub async fn start_http_server(
-    port: u16,
-    hub_url: String,
-    _api_tx: mpsc::Sender<AgentEvent>,
-    _api_pending: ApiPendingMap,
-) -> anyhow::Result<()> {
-    // Legacy tunnel plumbing: the reverse proxy no longer queues requests on
-    // the `/ws/agent` tunnel, but the parameters stay so `agent_ws.rs` (which
-    // owns `run_agent`) does not have to change in this task.
+pub async fn start_http_server(port: u16, hub_url: String) -> anyhow::Result<()> {
     let tls_insecure = std::env::var("REX_TLS_INSECURE")
         .map(|v| v == "true")
         .unwrap_or(false);
@@ -630,6 +620,7 @@ mod tests {
     use axum::http::Uri;
     use serde_json::Value;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::sync::mpsc;
     use tower::ServiceExt;
 
     /// Fixed peer injected through `MockConnectInfo` so `X-Forwarded-For` is deterministic.

@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use tokio::sync::{mpsc, RwLock};
 
-use rex_common::sql::{ConnectRequest, DatabaseType, QueryResult, SqlConnector};
+use rex_common::sql::{ConnectRequest, DatabaseType, SqlConnector};
 
 use rex_common::agent_proto::send_session_error;
 use rex_common::agent_proto::AgentEvent;
@@ -211,43 +211,4 @@ async fn detect_dialect(
     let result =
         rex_common::sql::detect_dialect(req.clone(), |dt, r| connect_by_type(dt, r)).await?;
     Ok((result.conn, Some(result.dialect.to_string())))
-}
-
-async fn dispatch_sql(
-    conn: &mut Box<dyn SqlConnector>,
-    kind: &str,
-    payload: &serde_json::Value,
-) -> anyhow::Result<serde_json::Value> {
-    match kind {
-        "query" | "exec" => {
-            let sql = payload.get("sql").and_then(|v| v.as_str()).unwrap_or("");
-            let res: QueryResult = conn.execute(sql).await?;
-            Ok(serde_json::json!({
-                "columns": res.columns,
-                "rows": res.rows,
-                "affected_rows": res.affected_rows,
-                "elapsed_ms": res.elapsed_ms,
-            }))
-        }
-        "databases" => {
-            let dbs = conn.databases().await?;
-            Ok(serde_json::json!({ "databases": dbs }))
-        }
-        "tables" => {
-            let db = payload.get("db").and_then(|v| v.as_str()).unwrap_or("");
-            let t = conn.tables(db).await?;
-            Ok(serde_json::json!({ "tables": t }))
-        }
-        "columns" => {
-            let db = payload.get("db").and_then(|v| v.as_str()).unwrap_or("");
-            let table = payload.get("table").and_then(|v| v.as_str()).unwrap_or("");
-            let c = conn.columns(db, table).await?;
-            Ok(serde_json::json!({ "columns": c }))
-        }
-        "close" => {
-            let _ = conn.close().await;
-            Ok(serde_json::json!({ "closed": true }))
-        }
-        other => anyhow::bail!("unsupported sql request kind: {other}"),
-    }
 }
