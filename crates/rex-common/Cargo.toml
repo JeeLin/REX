@@ -31,6 +31,7 @@ tower = { workspace = true, optional = true }
 bytes = { workspace = true, optional = true }
 include_dir = { workspace = true, optional = true }
 mime_guess = { workspace = true, optional = true }
+dotenvy = { workspace = true }
 
 [features]
 default = []

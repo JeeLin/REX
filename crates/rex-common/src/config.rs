@@ -6,7 +6,7 @@
 //!
 //! 文件不存在或解析失败时静默忽略，保持纯 env 变量的原有行为。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
@@ -77,6 +77,39 @@ fn set_if_unset(key: &str, value: Option<String>) {
     }
 }
 
+/// 加载 `.env`：优先**可执行文件同目录**，不存在时回退「当前工作目录逐级向上」
+/// （`dotenvy::dotenv()` 默认语义）。
+///
+/// exe 同目录优先保证 Windows 服务（CWD 常为 `system32`）、`--background` daemonize
+/// 与跨目录启动都能读到二进制旁的 `.env`。文件不存在属正常情况，静默跳过；
+/// 存在但读取/解析失败会在 stderr 打印 warning（main 阶段 tracing 尚未初始化）。
+/// 不覆盖已设置的环境变量（dotenvy 语义）。
+///
+/// 应在 `main()` 尽早调用：supervisor 加载后 spawn 的 worker 继承其环境变量，
+/// worker 自身的 `main()` 也会再执行一次（幂等）。
+pub fn load_dotenv() {
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf));
+    load_dotenv_from(exe_dir.as_deref());
+}
+
+fn load_dotenv_from(exe_dir: Option<&std::path::Path>) {
+    if let Some(dir) = exe_dir {
+        let path = dir.join(".env");
+        match dotenvy::from_path(&path) {
+            Ok(()) => return,
+            Err(e) if e.not_found() => {}
+            Err(e) => eprintln!("warning: failed to load {}: {e}", path.display()),
+        }
+    }
+    if let Err(e) = dotenvy::dotenv() {
+        if !e.not_found() {
+            eprintln!("warning: failed to load .env from working directory: {e}");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;
@@ -105,5 +138,48 @@ mod tests {
             PathBuf::from("/data/rex/agent.yaml")
         );
         std::env::remove_var("REX_DATA_DIR");
+    }
+
+    #[test]
+    fn test_load_dotenv_prefers_exe_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(".env"), "REX_TEST_DOTENV_FROM=exe-dir\n").unwrap();
+        assert!(std::env::var("REX_TEST_DOTENV_FROM").is_err());
+
+        load_dotenv_from(Some(dir.path()));
+
+        assert_eq!(
+            std::env::var("REX_TEST_DOTENV_FROM").as_deref(),
+            Ok("exe-dir")
+        );
+        std::env::remove_var("REX_TEST_DOTENV_FROM");
+    }
+
+    #[test]
+    fn test_load_dotenv_missing_exe_dir_falls_back() {
+        let dir = tempfile::tempdir().unwrap(); // 无 .env
+        assert!(std::env::var("REX_TEST_DOTENV_ABSENT").is_err());
+
+        load_dotenv_from(Some(dir.path()));
+
+        // exe 目录无 .env → 回退 CWD 查找；仓库根若有 .env 也不含该键
+        assert!(std::env::var("REX_TEST_DOTENV_ABSENT").is_err());
+    }
+
+    #[test]
+    fn test_load_dotenv_none_exe_dir_is_noop() {
+        assert!(std::env::var("REX_TEST_DOTENV_NONE").is_err());
+        load_dotenv_from(None);
+        assert!(std::env::var("REX_TEST_DOTENV_NONE").is_err());
+    }
+
+    #[test]
+    fn test_load_dotenv_broken_file_warns_but_does_not_panic() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(".env"), "not a valid dotenv line ===\n").unwrap();
+
+        load_dotenv_from(Some(dir.path()));
+
+        assert!(std::env::var("REX_TEST_DOTENV_BROKEN").is_err());
     }
 }

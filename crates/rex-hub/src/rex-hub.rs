@@ -45,7 +45,7 @@ use rex_hub::static_embed::create_embedded_static;
 use rex_hub::static_embed::dev_static_dir;
 
 fn main() {
-    let _ = dotenvy::dotenv();
+    rex_common::config::load_dotenv();
     let cli = cli::parse();
     let kind = ServiceKind::Hub;
     if let Err(e) = cli::dispatch(cli, kind, run_service) {
