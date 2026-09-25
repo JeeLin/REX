@@ -774,6 +774,15 @@ rex-agent = 所有 crate（无前端）
 - **版本号**：v0.90.0
 - **缺陷池 bug**：ctrl+K 同时打开两个搜索面板（🟡）、Ctrl+N 新建连接与浏览器冲突（🟡）、Ctrl+T 新建标签与浏览器冲突（🟡）、Ctrl+W 关闭当前标签与浏览器冲突（🟡）、Ctrl+Tab/Ctrl+Shift+Tab 切换标签与浏览器冲突（🟡）、Alt+1~9 面板宣称跳转标签实测切换布局（🟡）、Ctrl+Shift+\ 垂直分屏无效（🟡）（从 docs/BUGS.md 纳入，已在规划时从缺陷池删除）
 
+### v0.91.0：文件操作逻辑重设计（SFTP/S3）
+- **核心功能**：基于 exp 勘察（14 项痛点）重设计文件域操作逻辑——**1)** 后端传输任务模型落地（TransferTask / 冲突策略 / 进度查询 API / 持久化，`rex-transfer` 现仅 220 行常量，架构文档承诺的任务模型/冲突处理零实现，文件域骨架）；**2)** 拖放/移动/复制改后端 source/target 连接器直连搬运，去浏览器化（现 `FilesPage.vue:577-589` 走 `download→blob→upload` 过浏览器，违背「文件传输数据不经过浏览器」硬约束）；**3)** FileConnector 能力标志（chmod/presigned/ACL/multipart）废除 `downcast_ref::<S3Connector>`，修 agent 模式 S3 专属能力全挂（presigned/ACL/multipart 恒 UNSUPPORTED_PROTOCOL）；**4)** 断链补齐：chmod 后端路由（现 404）、桌面端 mkdir 入口、SFTP `permissions` / S3 列表 ACL 数据、续传语义修正（SFTP APPEND 不 seek、S3 `upload` 忽略 offset）；**5)** 队列合一：FilesPage/FilesDrawer 两套内存队列 → 单一任务源（后端持久化 + 前端共享 store）；**6)** 前端结构重构：`FilesPage.vue`（968 行、约 45 函数）拆分 + 与 FilesDrawer 共享 composable、能力模型替代 `isS3` 模板散布（7 处）、死 API 清理（`statFile`/`listMultipartUploads`/`abortMultipartUpload`）、错误处理补 toast；**7)** ⚠️ TODO 文件同步：本版移除目录同步假 UI（`FolderSyncDialog.vue:46-57` 预览写死、`onSync` 仅刷新列表），**真实目录同步（diff 比较 + 冲突处理，基于本版传输任务模型）下版单独立项**（用户决策 2026-09-25，勿忘）；**8)** `docs/architecture/file-transfer.md` 与实现对齐修订 + PRODUCT §3.8/§11.7 设计核对
+- **不做**：remote↔remote 跨连接传输、调度式定时同步（列候选不占版本位）、非 S3 协议扩展
+- **子任务预估**：8 个
+- **依赖**：v0.90.0
+- **版本类型**：minor
+- **版本号**：v0.91.0
+- **来源**：exp 勘察（v0.89 期间发起的文件域现状勘察），痛点 1/2/3/13 等作为缺陷行纳入该里程碑 Bugs 表（来源标内部勘察）
+
 ### 候选（已裁决待排期）：数据密钥守卫与解密失败指引
 - **背景**：用户实测——Docker 升级/清理时 `.master-key` 丢失，DB 保留 → 静默生成新 key → SSH 报 `decrypt failed: aead::Error`，错误延迟到连接时且无法联想到密钥丢失（2026-09-24）
 - **已裁决方案（用户决策 B，2026-09-24）——软失败，不拦启动**：
