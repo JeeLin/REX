@@ -15,7 +15,7 @@ use crate::app::AppState;
 /// `config` 是解密后的 config_json，各协议从中提取特有参数：
 /// - MySQL/PostgreSQL: `password`, `database_name`
 /// - Redis: `password`, `db`
-/// - SFTP: `password`, `private_key`
+/// - SFTP: `password`, `private_key` / `privateKey`
 /// - SQLite: `file_path`
 /// - S3: `endpoint`, `access_key`, `secret_key`, `bucket`, `region`
 ///
@@ -75,12 +75,42 @@ pub fn load_resource_config(
         protocol: resource.protocol,
         host: resource.host,
         port: resource.port,
-        username: resource.username,
+        username: normalize_username(&resource.username),
         config,
         subtype: resource.subtype.clone(),
         use_agent,
         agent_id,
     })
+}
+
+/// 空 username 统一兜底为 `root`。
+///
+/// 连接池键是 `user@host:port`（`rex_ssh::pool`），各入口口径不一致会让 SFTP
+/// 拿到与终端不同的键 → 必然新建连接，且以空用户名认证必然失败。
+/// 纯逻辑，便于单元测试。
+pub fn normalize_username(username: &str) -> String {
+    if username.is_empty() {
+        "root".to_string()
+    } else {
+        username.to_string()
+    }
+}
+
+/// 从解密后的 config_json 读取私钥，兼容 `privateKey`（camel）与 `private_key`（snake）。
+///
+/// 前端写入 `private_key`，历史/Agent 侧读 `privateKey`；单键读取会让终端与
+/// SFTP 拿到不同的凭据（一个落密码分支、一个只试公钥）。纯逻辑，便于单元测试。
+pub fn config_private_key(config: &JsonValue) -> Option<String> {
+    config
+        .get("privateKey")
+        .and_then(|v| v.as_str())
+        .map(String::from)
+        .or_else(|| {
+            config
+                .get("private_key")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        })
 }
 
 /// 若资源所属环境为 agent 模式，返回 (true, 某个在线 Agent 的 id)，否则 (false, None)。
@@ -237,5 +267,39 @@ mod tests {
         let cfg = r#"{"accounts":[{"id":"a1","server":"sip.x"}],"activeAccount":"a1"}"#;
         let res = load_sip_conn(&info_with_config(cfg));
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn normalize_username_falls_back_to_root_only_when_empty() {
+        assert_eq!(normalize_username(""), "root");
+        assert_eq!(normalize_username("alice"), "alice");
+        assert_eq!(normalize_username("root"), "root");
+    }
+
+    #[test]
+    fn config_private_key_reads_snake_and_camel_keys() {
+        let snake: JsonValue = serde_json::from_str(r#"{"private_key":"PEM-SNAKE"}"#).unwrap();
+        let camel: JsonValue = serde_json::from_str(r#"{"privateKey":"PEM-CAMEL"}"#).unwrap();
+        let none: JsonValue = serde_json::from_str(r#"{"password":"x"}"#).unwrap();
+        assert_eq!(
+            config_private_key(&snake).as_deref(),
+            Some("PEM-SNAKE"),
+            "frontend writes private_key"
+        );
+        assert_eq!(
+            config_private_key(&camel).as_deref(),
+            Some("PEM-CAMEL"),
+            "agent side reads privateKey"
+        );
+        assert_eq!(config_private_key(&none), None);
+        assert_eq!(config_private_key(&JsonValue::Null), None);
+    }
+
+    #[test]
+    fn config_private_key_prefers_camel_key_when_both_present() {
+        let both: JsonValue =
+            serde_json::from_str(r#"{"privateKey":"PEM-CAMEL","private_key":"PEM-SNAKE"}"#)
+                .unwrap();
+        assert_eq!(config_private_key(&both).as_deref(), Some("PEM-CAMEL"));
     }
 }

@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::resource_conn::load_resource_config;
+use crate::resource_conn::{config_private_key, load_resource_config, ResourceConnInfo};
 use crate::AppState;
 use axum::extract::{Multipart, Query, State};
 use axum::http::StatusCode;
@@ -130,6 +130,27 @@ fn error_response(code: &str, message: &str) -> (StatusCode, Json<ErrorBody>) {
 // Handlers
 // ---------------------------------------------------------------------------
 
+/// 组装发给 Agent 的文件连接配置（host/port/username + config_json 合并）。
+///
+/// username 必须下发：Agent 侧 `agent_file.rs` 用 `unwrap_or("")` 兜底，
+/// 缺字段会以空用户名发起 SSH 认证（与 `agent_ssh.rs` 的终端配置同源）。
+fn agent_file_config(res: &ResourceConnInfo) -> serde_json::Value {
+    let mut cfg = serde_json::json!({
+        "host": res.host,
+        "port": res.port.unwrap_or(22),
+    });
+    if let serde_json::Value::Object(m) = res.config.clone() {
+        for (k, v) in m {
+            cfg[k] = v;
+        }
+    }
+    if let serde_json::Value::Object(m) = &mut cfg {
+        // 资源顶层 username 为权威字段，不被 config_json 中的历史键覆盖
+        m.insert("username".to_string(), res.username.clone().into());
+    }
+    cfg
+}
+
 async fn connect(
     State(state): State<AppState>,
     Json(body): Json<ConnectBody>,
@@ -150,15 +171,7 @@ async fn connect(
                     .into_response()
             }
         };
-        let mut cfg = serde_json::json!({
-            "host": res.host,
-            "port": res.port.unwrap_or(22),
-        });
-        if let serde_json::Value::Object(m) = res.config.clone() {
-            for (k, v) in m {
-                cfg[k] = v;
-            }
-        }
+        let cfg = agent_file_config(&res);
         let channel_id = match crate::agent_ws::open_agent_session(
             &state,
             &agent_id,
@@ -187,7 +200,7 @@ async fn connect(
 
     tracing::info!(action = "FILE_CONNECT", resource_id = %body.resource_id, resource_name = %res.name, protocol = %res.protocol, use_agent = res.use_agent, "file connect request");
     if !res.config.is_null() {
-        tracing::debug!(action = "FILE_CONNECT", resource_id = %body.resource_id, has_password = res.config.get("password").is_some(), has_private_key = res.config.get("private_key").is_some(), "resource config loaded");
+        tracing::debug!(action = "FILE_CONNECT", resource_id = %body.resource_id, has_password = res.config.get("password").is_some(), has_private_key = config_private_key(&res.config).is_some(), "resource config loaded");
     }
 
     let conn: Box<dyn FileConnector> = match res.protocol.as_str() {
@@ -201,11 +214,7 @@ async fn connect(
                     .get("password")
                     .and_then(|v| v.as_str())
                     .map(String::from),
-                private_key: res
-                    .config
-                    .get("private_key")
-                    .and_then(|v| v.as_str())
-                    .map(String::from),
+                private_key: config_private_key(&res.config),
                 keepalive_interval: res
                     .config
                     .get("keepalive_interval")
@@ -1018,5 +1027,45 @@ async fn put_acl(
             (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response()
         }
         Err(e) => error_response("PUT_ACL_FAILED", &e.to_string()).into_response(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn info(username: &str, config: &str) -> ResourceConnInfo {
+        ResourceConnInfo {
+            resource_id: "r1".into(),
+            name: "files".into(),
+            protocol: "sftp".into(),
+            host: "10.0.0.1".into(),
+            port: Some(22),
+            username: username.to_string(),
+            config: serde_json::from_str(config).unwrap(),
+            subtype: None,
+            use_agent: true,
+            agent_id: Some("agent-1".into()),
+        }
+    }
+
+    #[test]
+    fn agent_file_config_carries_username_and_merged_credentials() {
+        let cfg = agent_file_config(&info("alice", r#"{"password":"pw","private_key":"PEM"}"#));
+        assert_eq!(
+            cfg.get("username").and_then(|v| v.as_str()),
+            Some("alice"),
+            "Agent authenticates with cfg.username — a missing field means empty-user auth"
+        );
+        assert_eq!(cfg.get("host").and_then(|v| v.as_str()), Some("10.0.0.1"));
+        assert_eq!(cfg.get("port").and_then(|v| v.as_u64()), Some(22));
+        assert_eq!(cfg.get("password").and_then(|v| v.as_str()), Some("pw"));
+        assert_eq!(cfg.get("private_key").and_then(|v| v.as_str()), Some("PEM"));
+    }
+
+    #[test]
+    fn agent_file_config_username_beats_stale_config_key() {
+        let cfg = agent_file_config(&info("alice", r#"{"username":"stale"}"#));
+        assert_eq!(cfg.get("username").and_then(|v| v.as_str()), Some("alice"));
     }
 }

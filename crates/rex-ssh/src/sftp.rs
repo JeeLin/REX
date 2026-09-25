@@ -635,8 +635,50 @@ mod tests {
             "unexpected error: {msg}"
         );
         assert!(
+            msg.contains("password"),
+            "the attempted method must be named: {msg}"
+        );
+        assert!(
             !msg.contains("Disconnected"),
             "must not misreport as Disconnected: {msg}"
         );
+    }
+
+    /// 同时配置私钥与密码、服务器拒 publickey → 必须回退 password 认证成功
+    /// （回归：SFTP 只试 publickey 导致已连上终端的资源点 SFTP 报 auth failed）
+    #[tokio::test]
+    async fn sftp_auth_falls_back_to_password_after_publickey_rejection() {
+        let harness = Harness::start(usize::MAX, true).await;
+        let mut cfg = harness.config();
+        cfg.private_key = Some(format!("{HOST_KEY_PEM}\n"));
+
+        let channel = open_session_channel(&cfg)
+            .await
+            .expect("password fallback must authenticate after publickey rejection");
+        assert_eq!(
+            harness.conns(),
+            1,
+            "fallback happens on the same connection"
+        );
+        drop(channel);
+    }
+
+    /// 私钥与密码全被拒 → 聚合错误保留每次尝试的 partial_success / remaining
+    #[tokio::test]
+    async fn sftp_auth_reports_every_rejected_method() {
+        let harness = Harness::start(usize::MAX, false).await;
+        let mut cfg = harness.config();
+        cfg.private_key = Some(format!("{HOST_KEY_PEM}\n"));
+
+        let err = match SftpConnector::connect_with_config(cfg).await {
+            Ok(_) => panic!("rejected authentication must fail"),
+            Err(e) => e,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("authentication failed"), "{msg}");
+        assert!(msg.contains("publickey"), "{msg}");
+        assert!(msg.contains("password"), "{msg}");
+        assert!(msg.contains("partial_success"), "{msg}");
+        assert!(!msg.contains("Disconnected"), "{msg}");
     }
 }

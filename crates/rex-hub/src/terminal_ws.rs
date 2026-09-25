@@ -187,13 +187,10 @@ async fn load_resource_conn(
             return Err(format!("resource {rid}: host is empty, please fill in host in resource settings"));
         }
         let port = resource.port.unwrap_or(22);
-        let username = if resource.username.is_empty() {
-            "root".to_string()
-        } else {
-            resource.username.clone()
-        };
+        // 与 SFTP/其它协议共用同一兜底口径，保证连接池键 user@host:port 一致
+        let username = crate::resource_conn::normalize_username(&resource.username);
 
-        // 从 config_json 解密敏感字段（password、privateKey、initScript）
+        // 从 config_json 解密敏感字段（password、privateKey/private_key、initScript）
         // 未知键静默忽略，不报错也不告警。
         let (password, private_key, init_script) =
             if !resource.config_json.is_empty() && resource.config_json != "{}" {
@@ -213,10 +210,7 @@ async fn load_resource_conn(
                 .get("password")
                 .and_then(|v| v.as_str())
                 .map(String::from);
-            let pk = config
-                .get("privateKey")
-                .and_then(|v| v.as_str())
-                .map(String::from);
+            let pk = crate::resource_conn::config_private_key(&config);
             let init_script = config
                 .get("initScript")
                 .and_then(|v| v.as_str())

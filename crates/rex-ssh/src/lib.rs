@@ -71,52 +71,91 @@ pub(crate) fn format_ssh_addr(host: &str, port: u16) -> String {
     }
 }
 
-/// 显式检查认证结果。
+/// 认证结果 → 失败原因（成功返回 `None`）。纯逻辑，便于单元测试。
 ///
 /// russh 认证失败返回 `Ok(AuthResult::Failure)` 而非 `Err`，不检查会把
 /// 「认证被拒」伪装成后续开 channel 时的 `Disconnected`，误导排查方向。
-/// 纯逻辑，便于单元测试。
-pub(crate) fn ensure_auth_success(result: client::AuthResult) -> Result<()> {
+pub(crate) fn auth_failure_reason(result: client::AuthResult) -> Option<String> {
     match result {
-        client::AuthResult::Success => Ok(()),
+        client::AuthResult::Success => None,
         client::AuthResult::Failure {
             remaining_methods,
             partial_success,
-        } => Err(anyhow::anyhow!(
-            "SSH authentication failed (partial_success={partial_success}, remaining methods: {remaining_methods:?})"
+        } => Some(format!(
+            "partial_success={partial_success}, remaining methods: {remaining_methods:?}"
         )),
     }
 }
 
-/// 对已建立的 SSH 连接按配置完成认证（公钥 → 密码 → none）并校验认证结果。
+/// 汇总各次认证尝试的失败原因，生成最终错误文案。纯逻辑，便于单元测试。
+pub(crate) fn auth_failed(attempts: &[String]) -> anyhow::Error {
+    anyhow::anyhow!("SSH authentication failed ({})", attempts.join("; "))
+}
+
+/// 尝试 publickey 认证：`Ok(None)` 表示成功，`Ok(Some(_))` 表示被拒。
+async fn try_publickey(
+    handle: &mut client::Handle<SshHandler>,
+    config: &SshConfig,
+    key_pem: &str,
+) -> Result<Option<String>> {
+    let private_key = decode_secret_key(key_pem, config.password.as_deref())
+        .context("failed to decode private key PEM")?;
+    let key_with_hash = PrivateKeyWithHashAlg::new(Arc::new(private_key), None);
+    let result = handle
+        .authenticate_publickey(&config.username, key_with_hash)
+        .await
+        .context("SSH public key authentication failed")?;
+    Ok(auth_failure_reason(result))
+}
+
+/// 对已建立的 SSH 连接按配置完成认证（公钥 → 密码 → none 顺序尝试）。
 /// 终端会话与 SFTP 新建连接共用，避免三认证分支重复。
+///
+/// 资源可能同时配置私钥与密码，且服务器未必启用 publickey：单分支只试一种
+/// 方式会把「另一种凭据可用」误判成认证失败。任一方式成功即返回；全部失败
+/// 才返回含 `authentication failed` 的聚合错误（保留每次尝试的
+/// partial_success / remaining methods 信息）。
 pub(crate) async fn authenticate(
     handle: &mut client::Handle<SshHandler>,
     config: &SshConfig,
 ) -> Result<()> {
+    let mut attempts: Vec<String> = Vec::new();
+
     if let Some(ref key_pem) = config.private_key {
-        let private_key = decode_secret_key(key_pem, config.password.as_deref())
-            .context("failed to decode private key PEM")?;
-        let key_with_hash = PrivateKeyWithHashAlg::new(Arc::new(private_key), None);
-        let result = handle
-            .authenticate_publickey(&config.username, key_with_hash)
-            .await
-            .context("SSH public key authentication failed")?;
-        ensure_auth_success(result)?;
-    } else if let Some(ref password) = config.password {
-        let result = handle
+        match try_publickey(handle, config, key_pem).await {
+            Ok(None) => return Ok(()),
+            Ok(Some(reason)) => attempts.push(format!("publickey: {reason}")),
+            Err(e) => attempts.push(format!("publickey: {e}")),
+        }
+        tracing::debug!(
+            username = %config.username,
+            has_password = config.password.is_some(),
+            "SSH public key authentication rejected, trying next method"
+        );
+    }
+
+    if let Some(ref password) = config.password {
+        match handle
             .authenticate_password(&config.username, password)
             .await
-            .context("SSH password authentication failed")?;
-        ensure_auth_success(result)?;
-    } else {
-        let result = handle
-            .authenticate_none(&config.username)
-            .await
-            .context("SSH none authentication failed")?;
-        ensure_auth_success(result)?;
+        {
+            Ok(result) => match auth_failure_reason(result) {
+                None => return Ok(()),
+                Some(reason) => attempts.push(format!("password: {reason}")),
+            },
+            Err(e) => attempts.push(format!("password: {e}")),
+        }
     }
-    Ok(())
+
+    match handle.authenticate_none(&config.username).await {
+        Ok(result) => match auth_failure_reason(result) {
+            None => return Ok(()),
+            Some(reason) => attempts.push(format!("none: {reason}")),
+        },
+        Err(e) => attempts.push(format!("none: {e}")),
+    }
+
+    Err(auth_failed(&attempts))
 }
 
 /// 统一 session channel 打开失败的错误文案（含 MaxSessions 排查指引）。
@@ -502,19 +541,34 @@ mod tests {
     }
 
     #[test]
-    fn test_ensure_auth_success_accepts_success() {
-        assert!(ensure_auth_success(client::AuthResult::Success).is_ok());
+    fn test_auth_failure_reason_accepts_success() {
+        assert!(auth_failure_reason(client::AuthResult::Success).is_none());
     }
 
     #[test]
-    fn test_ensure_auth_success_reports_rejection() {
-        let err = ensure_auth_success(client::AuthResult::Failure {
+    fn test_auth_failure_reason_reports_rejection() {
+        let reason = auth_failure_reason(client::AuthResult::Failure {
             remaining_methods: (&[russh::MethodKind::Password][..]).into(),
             partial_success: false,
         })
-        .expect_err("rejected auth must fail");
+        .expect("rejected auth must yield a reason");
+        assert!(reason.contains("partial_success=false"), "{reason}");
+        assert!(reason.contains("remaining methods"), "{reason}");
+    }
+
+    #[test]
+    fn test_auth_failed_keeps_every_attempt() {
+        let err = auth_failed(&[
+            "publickey: partial_success=false, remaining methods: MethodSet([Password])"
+                .to_string(),
+            "password: partial_success=false, remaining methods: MethodSet([PublicKey])"
+                .to_string(),
+        ]);
         let msg = err.to_string();
         assert!(msg.contains("authentication failed"), "{msg}");
+        assert!(msg.contains("publickey"), "{msg}");
+        assert!(msg.contains("password"), "{msg}");
+        assert!(msg.contains("partial_success"), "{msg}");
         assert!(!msg.contains("Disconnected"), "{msg}");
     }
 
