@@ -733,6 +733,42 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 
+    /// Alt 1 decoupling: the Hub⇄Agent tunnel is dialed outbound by
+    /// `agent_ws::run_agent` and is never served by this router, while browser
+    /// `/api` traffic takes its own outbound leg straight to `REX_HUB_URL`.
+    /// The two planes share no queue, channel or socket, so a tunnel outage
+    /// must not affect browser `/api` traffic (and vice versa).
+    #[tokio::test]
+    async fn api_proxy_is_independent_of_the_agent_tunnel() {
+        let hub = spawn_echo_hub().await;
+        let app = agent_app(&format!("http://{hub}"));
+
+        // Control plane: the tunnel endpoint is not routed here at all, so a
+        // dead or dying tunnel can never be observed through this server.
+        let tunnel = app
+            .clone()
+            .oneshot(get("/ws/agent?token=secret"))
+            .await
+            .unwrap();
+        assert_eq!(
+            tunnel.status(),
+            StatusCode::NOT_FOUND,
+            "the tunnel endpoint must not be served by the reverse proxy"
+        );
+
+        // Data plane: unrelated `/api/*` requests still reach the hub with no
+        // tunnel involved (no pending map, no WS round trip).
+        let api = app.clone().oneshot(get("/api/resources")).await.unwrap();
+        assert_eq!(
+            api.status(),
+            StatusCode::OK,
+            "browser /api traffic must keep flowing independently of the tunnel"
+        );
+        let json = json_body(api).await;
+        assert_eq!(json["path"], "/api/resources");
+        assert_eq!(json["method"], "GET");
+    }
+
     #[tokio::test]
     async fn ws_upgrade_to_unreachable_hub_is_502_not_static() {
         let addr = spawn_agent("http://127.0.0.1:1").await;
