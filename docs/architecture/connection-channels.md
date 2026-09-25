@@ -56,12 +56,12 @@ Hub API
 
 ## Agent Web 访问通道（v0.89 重设计）
 
-> 状态：设计裁决已定（S1 + S1′ 改判），实现随 v0.89.0 S-fix/S4 落地。根因探查与方案评审的完整记录见
+> 状态：设计裁决已定（S1 + S1′ 改判），实现已落地（S-fix `2e52cc0`、S4 `7e2083b` + `8947ad4`、S8 `73c2785`）。根因探查与方案评审的完整记录见
 > `.dev-flow/milestones/v0.89.0-agent-channel-redesign.md`（Context / 产品边界）。
 > **2026-09-24 用户确认改判**：由原「方案 C：隧道流式帧 + Hub 明文回环自代理」改判为
 > 「**Alt 1：Agent 标准反向代理直打 `REX_HUB_URL`**」，方案 C 否决理由见文末「方案 C 否决记录」。
 
-### 现状问题
+### 现状问题（v0.89 修复前，已随 S4 `7e2083b` + `8947ad4` 修复，留档回溯）
 
 Agent 模式下浏览器同源的 `/ws/*`（终端、SIP）全部握手失败，根因链路（file:line 见里程碑文档 Context）：
 
@@ -108,8 +108,9 @@ Agent HTTP server（静态资源 + /api/health 直答 + 反向代理）
 - URL scheme 解析统一走 `hub_origin()` helper（https→wss / http→ws），反代与隧道 dialer 共用，
   消除散落手写拼接（修 `REX_HUB_URL=https` 仍连 ws 的 🟡 bug，Alt 1 硬前置）。
 - 路由优先级：`/ws/agent` 属隧道不进反代；静态 fallback 保持但不吞 `/api` `/ws`。
+- Agent HTTP server **默认关闭**（S8 `73c2785`）：未显式配置 `REX_AGENT_HTTP_PORT`（或设为 `0`）时不监听，此时没有本地页面、本节腿 1 链路不成立；显式配置后行为见上，部署说明见 `docs/agent-deploy.md`。
 
-**腿 2（Hub → 内网资源，不变）**：既有 `/ws/agent` 隧道只承担控制面 + 文件传输 Binary 帧；
+**腿 2（Hub → 内网资源，不变）**：既有 `/ws/agent` 隧道承担控制面、文件传输 Binary 帧与 SIP 媒体 Binary 帧中继（音频/视频见 §SIP 通道）；
 Hub 够不着的内网资源由 Agent 拨号侧连接；direct 资源 Hub 直连。
 
 ```text
@@ -126,7 +127,7 @@ Agent 不开入站（反代是出站）；Hub/Agent 版本一致。
 
 | 路径 | 用途 | 状态（v0.89） |
 |------|------|---------------|
-| `/api/{*path}` | REST API（agent 模式经 Agent 标准反代直打 `REX_HUB_URL`；`/api/health` Agent 本地直答） | 现有 `api_request` 机制，v0.89 内改反代并删除旧机制 |
+| `/api/{*path}` | REST API（agent 模式经 Agent 标准反代直打 `REX_HUB_URL`；`/api/health` Agent 本地直答） | 已落地：反代替代 `api_request` 机制，旧机制已删（`7e2083b` + `8947ad4`） |
 | `/ws/terminal` | SSH 终端 WebSocket | 现有 Hub 路由；agent 模式修复为经 Agent 反代 |
 | `/ws/sip` | SIP 信令/媒体 WebSocket | 现有 Hub 路由；agent 模式修复为经 Agent 反代 |
 | `/ws/tunnel` | 浏览器直连隧道 WebSocket（`tunnel_ws.rs`，Hub 于 `crates/rex-hub/src/rex-hub.rs:390` 注册） | **死路由，保留不删**：当前无前端调用方，v0.90 后评估删除（裁决见下） |
