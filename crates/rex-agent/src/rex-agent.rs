@@ -266,7 +266,7 @@ fn worker_main() {
     };
 
     tracing::info!(
-        hub_url = %config.hub_url,
+        hub_url = %agent_ws::redact_url(&config.hub_url),
         auto_update = config.auto_update,
         "agent configured"
     );

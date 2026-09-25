@@ -159,7 +159,7 @@ INFO name="REX Agent" version=0.87.3 status="supervisor starting"
 INFO name="REX Agent" version=0.87.3 status="worker starting"
 INFO hub_url=http://hub.example.com:3000 auto_update=true "agent configured"
 INFO "connecting to hub"
-INFO url=ws://hub.example.com:3000/ws/agent?token=xxx connecting
+INFO url=ws://hub.example.com:3000/ws/agent connecting
 INFO agent_id=xxx authenticated
 ```
 

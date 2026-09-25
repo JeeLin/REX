@@ -453,7 +453,7 @@ pub async fn run_agent(config: AgentConfig, api_pending: ApiPendingMap) {
     });
 
     loop {
-        tracing::info!(hub_url = %config.hub_url, "connecting to hub");
+        tracing::info!(hub_url = %redact_url(&config.hub_url), "connecting to hub");
 
         match connect_and_run(
             &config,
@@ -469,7 +469,7 @@ pub async fn run_agent(config: AgentConfig, api_pending: ApiPendingMap) {
                 backoff = 1; // 正常关闭，重置退避
             }
             Err(e) => {
-                tracing::error!(error = %e, "connection failed");
+                tracing::error!(error = %redact_tokens(&e.to_string()), "connection failed");
             }
         }
 
@@ -489,7 +489,7 @@ async fn connect_and_run(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // 构建 WebSocket URL
     let ws_url = build_ws_url(&config.hub_url, &config.agent_token)?;
-    tracing::info!(url = %ws_url, "connecting");
+    tracing::info!(url = %redact_url(&ws_url), "connecting");
 
     // 根据 TLS 配置选择连接方式（REX_TLS_INSECURE / REX_CA_CERT 仅作用于连 Hub 的 wss）
     let client_config = if ws_url.starts_with("wss://") {
@@ -1298,8 +1298,55 @@ async fn handle_update(cmd: rex_common::update::UpdateCommand, evt_tx: mpsc::Sen
             std::process::exit(42);
         }
         Err(e) => {
-            tracing::error!(error = %e, "update failed");
+            tracing::error!(
+                error = %redact_tokens(&e.to_string()),
+                "update failed"
+            );
         }
+    }
+}
+
+/// Mask `token=<value>` occurrences inside free-form text (error messages
+/// that may embed a full URL) before it reaches log output.
+pub(crate) fn redact_tokens(text: &str) -> String {
+    const MARKER: &str = "token=";
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(idx) = rest.find(MARKER) {
+        let (head, tail) = rest.split_at(idx + MARKER.len());
+        out.push_str(head);
+        out.push_str("***");
+        let end = tail
+            .find(|c: char| {
+                c.is_whitespace() || matches!(c, '&' | '"' | '\'' | ')' | ']' | '}' | ',' | ';')
+            })
+            .unwrap_or(tail.len());
+        rest = &tail[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Redact secrets carried in a URL before it reaches log output.
+///
+/// Keeps only `scheme://host/path` — query and fragment are dropped, so a
+/// `?token=…` query can never leak into logs. Input without `?`/`#` is
+/// returned untouched (no URL normalization); unparsable input falls back to
+/// cutting everything from the first `?` or `#`.
+pub(crate) fn redact_url(raw: &str) -> String {
+    if !raw.contains('?') && !raw.contains('#') {
+        return raw.to_string();
+    }
+    match Url::parse(raw) {
+        Ok(mut url) => {
+            url.set_query(None);
+            url.set_fragment(None);
+            url.to_string()
+        }
+        Err(_) => raw
+            .find(|c| c == '?' || c == '#')
+            .map(|idx| raw[..idx].to_string())
+            .unwrap_or_else(|| raw.to_string()),
     }
 }
 
@@ -1308,18 +1355,21 @@ async fn handle_update(cmd: rex_common::update::UpdateCommand, evt_tx: mpsc::Sen
 /// https → (`https://…`, `wss://…`); http → (`http://…`, `ws://…`);
 /// ws/wss inputs are accepted and normalized the same way. Unparsable input
 /// and unsupported schemes are errors — callers must not guess a scheme.
+/// Error messages embed the redacted URL only: `REX_HUB_URL` may carry a
+/// `?token=…` query, and these errors surface in `tracing` output.
 pub(crate) fn hub_origin(raw: &str) -> Result<(String, String), String> {
-    let mut url = Url::parse(raw).map_err(|e| format!("invalid hub url {raw:?}: {e}"))?;
+    let safe = redact_url(raw);
+    let mut url = Url::parse(raw).map_err(|e| format!("invalid hub url {safe:?}: {e}"))?;
     let (http_scheme, ws_scheme) = match url.scheme() {
         "http" | "ws" => ("http", "ws"),
         "https" | "wss" => ("https", "wss"),
-        other => return Err(format!("unsupported hub url scheme {other:?} in {raw:?}")),
+        other => return Err(format!("unsupported hub url scheme {other:?} in {safe:?}")),
     };
     url.set_scheme(http_scheme)
-        .map_err(|_| format!("cannot derive http origin from {raw:?}"))?;
+        .map_err(|_| format!("cannot derive http origin from {safe:?}"))?;
     let http_base = url.to_string();
     url.set_scheme(ws_scheme)
-        .map_err(|_| format!("cannot derive ws origin from {raw:?}"))?;
+        .map_err(|_| format!("cannot derive ws origin from {safe:?}"))?;
     let ws_base = url.to_string();
     Ok((http_base, ws_base))
 }
@@ -1797,5 +1847,75 @@ mod tests {
             ws.starts_with("ws://hub.example.com/ws/agent?token=tok"),
             "got {ws}"
         );
+    }
+
+    // --- 子任务 S6：WS 连接日志 token 脱敏 ---
+
+    /// S6 主回归：`connect_and_run` 记录的 url 字段必须是 strip query 后的形态。
+    #[test]
+    fn redact_url_strips_query_from_ws_connect_url() {
+        let ws = build_ws_url("https://hub.example.com:8443", "super-secret").unwrap();
+        let logged = redact_url(&ws);
+        assert_eq!(logged, "wss://hub.example.com:8443/ws/agent");
+        assert!(!logged.contains("token"), "got {logged}");
+        assert!(!logged.contains("super-secret"), "got {logged}");
+    }
+
+    #[test]
+    fn redact_url_keeps_scheme_host_path_and_port() {
+        assert_eq!(
+            redact_url("http://192.168.1.10:3000/ws/agent?token=abc&x=1"),
+            "http://192.168.1.10:3000/ws/agent"
+        );
+        assert_eq!(
+            redact_url("wss://hub.example.com/base?x=1#frag"),
+            "wss://hub.example.com/base"
+        );
+    }
+
+    /// 无 query/fragment 的输入原样返回，不做 URL 规范化（避免日志形态漂移）。
+    #[test]
+    fn redact_url_passthrough_without_query() {
+        assert_eq!(
+            redact_url("http://hub.example.com:3000"),
+            "http://hub.example.com:3000"
+        );
+        assert_eq!(
+            redact_url("ws://hub.example.com/ws/agent"),
+            "ws://hub.example.com/ws/agent"
+        );
+    }
+
+    /// 非 URL 输入（如含空格的报错片段）走截断兜底，token 仍不外泄。
+    #[test]
+    fn redact_url_falls_back_to_cut_on_unparsable_input() {
+        assert_eq!(redact_url("invalid hub url ?token=abc"), "invalid hub url ");
+        assert_eq!(redact_url("no secret here"), "no secret here");
+    }
+
+    /// 自由文本（错误消息内嵌 URL）中 `token=…` 被掩码。
+    #[test]
+    fn redact_tokens_masks_token_values_in_text() {
+        assert_eq!(
+            redact_tokens("connect failed: ws://hub/ws/agent?token=abc123&x=1"),
+            "connect failed: ws://hub/ws/agent?token=***&x=1"
+        );
+        assert_eq!(
+            redact_tokens("error \"token=s3cr3t\" end"),
+            "error \"token=***\" end"
+        );
+        assert_eq!(
+            redact_tokens("token=tok, token=another;"),
+            "token=***, token=***;"
+        );
+        assert_eq!(redact_tokens("no token here"), "no token here");
+    }
+
+    /// hub_origin 报错文本（会被上游打进 tracing error 字段）不含原 query。
+    #[test]
+    fn hub_origin_error_text_is_redacted() {
+        let err = hub_origin("ftp://hub.example.com?token=abc").unwrap_err();
+        assert!(!err.contains("abc"), "got {err}");
+        assert!(err.contains("ftp://hub.example.com"), "got {err}");
     }
 }

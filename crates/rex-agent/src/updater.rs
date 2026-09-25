@@ -138,7 +138,10 @@ async fn download(cmd: &UpdateCommand, report: &ProgressReporter) -> Result<Vec<
     match try_download(&client, &primary, report).await {
         Ok(bytes) => Ok(bytes),
         Err(e) => {
-            tracing::warn!("primary download failed: {e}, trying fallback");
+            tracing::warn!(
+                error = %crate::agent_ws::redact_tokens(&e.to_string()),
+                "primary download failed, trying fallback"
+            );
             if cmd.fallback_url.is_empty() {
                 return Err(e);
             }
