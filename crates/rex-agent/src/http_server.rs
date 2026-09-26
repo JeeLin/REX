@@ -3,7 +3,7 @@
 //! Leg 1 of the v0.89 Alt 1 design: browser traffic that is same-origin to this
 //! Agent is dialed outbound straight to `REX_HUB_URL`:
 //!
-//! - `/api/{*path}` (except `/api/health`) → reqwest streaming proxy
+//! - `/api` and `/api/{*path}` (except `/api/health`) → reqwest streaming proxy
 //! - `/ws/{*path}` → tokio-tungstenite upgrade with message level relay
 //! - `/ws/agent` → the Hub⇄Agent tunnel is dialed outbound, never served here
 //! - anything else → embedded frontend (the SPA fallback never swallows `/api`/`/ws`)
@@ -38,7 +38,7 @@ use url::Url;
 
 use crate::agent_ws::{
     apply_hub_tls_to_reqwest, hub_client_config, hub_origin, hub_tls_settings_from_env,
-    tls_mode_from_settings, HubTlsSettings,
+    redact_tokens, redact_url, tls_mode_from_settings, HubTlsSettings,
 };
 
 /// 嵌入的前端 dist 目录
@@ -145,6 +145,42 @@ fn build_http_client(tls: &HubTlsSettings) -> anyhow::Result<reqwest::Client> {
         .no_proxy();
     let builder = apply_hub_tls_to_reqwest(builder, tls).map_err(anyhow::Error::msg)?;
     Ok(builder.build()?)
+}
+
+// ═══════════════════════════════════════
+// Status mapping / log rendering
+// ═══════════════════════════════════════
+
+/// Log-safe rendering of an upstream target URL: the query string is stripped,
+/// so `/ws/*?token=…` can never reach the log file (`RUST_LOG=debug`).
+/// Single point shared by both proxy legs so redaction cannot drift apart.
+fn log_target(url: &Url) -> String {
+    redact_url(url.as_str())
+}
+
+/// `/api` leg upstream failure → status the browser sees. Only a connect
+/// timeout is a `504` (`CONNECT_TIMEOUT` is 10s); refused/reset/protocol
+/// errors stay `502`. Split out as a pure predicate so both branches are
+/// unit-testable (a real connect timeout cannot be staged cheaply).
+fn upstream_error_status(is_timeout: bool) -> StatusCode {
+    if is_timeout {
+        StatusCode::GATEWAY_TIMEOUT
+    } else {
+        StatusCode::BAD_GATEWAY
+    }
+}
+
+/// `/ws` leg dial failure → status the browser sees. A non-101 handshake
+/// response (401/403/302 …) is relayed verbatim so token expiry and CSRF
+/// rejection stay distinguishable instead of collapsing into `502`;
+/// transport failures (refused, reset, timeout) stay `502`.
+fn ws_dial_status(error: &tokio_tungstenite::tungstenite::Error) -> StatusCode {
+    match error {
+        tokio_tungstenite::tungstenite::Error::Http(response) => {
+            StatusCode::from_u16(response.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY)
+        }
+        _ => StatusCode::BAD_GATEWAY,
+    }
 }
 
 // ═══════════════════════════════════════
@@ -277,7 +313,7 @@ async fn proxy_api(
     let target = state.target(&state.hub_http_base, &path, query.as_deref());
     let headers = forward_headers(&parts.headers, &state, peer.0, scheme)?;
 
-    tracing::debug!(target = %target, "proxying api request to hub");
+    tracing::debug!(target = %log_target(&target), "proxying api request to hub");
 
     // Body is streamed through: never buffered on the Agent side.
     let upstream = state
@@ -288,8 +324,14 @@ async fn proxy_api(
         .send()
         .await
         .map_err(|e| {
-            tracing::warn!(error = %e, path = %path, "api reverse proxy to hub failed");
-            StatusCode::BAD_GATEWAY
+            // reqwest's Display embeds the full target URL (`for url (…)`),
+            // query included — run it through the token redactor first.
+            tracing::warn!(
+                error = %redact_tokens(&e.to_string()),
+                path = %path,
+                "api reverse proxy to hub failed"
+            );
+            upstream_error_status(e.is_timeout())
         })?;
 
     let status = StatusCode::from_u16(upstream.status().as_u16())
@@ -307,7 +349,8 @@ async fn proxy_api(
 ///
 /// The 101 handshake is performed by both libraries (never hand written); the
 /// upstream dial happens before the downstream upgrade so a dead Hub answers
-/// `502` instead of a hanging handshake.
+/// `502` instead of a hanging handshake, while a Hub that rejects the upgrade
+/// (401/403/302 …) has its own status relayed verbatim.
 async fn proxy_ws(
     State(state): State<Arc<AgentState>>,
     peer: ConnectInfo<SocketAddr>,
@@ -324,7 +367,11 @@ async fn proxy_ws(
     // the browser's hop-by-hop and extension headers are never forwarded
     // (compression and fragmentation terminate on each leg).
     let mut request: WsRequest = target.as_str().into_client_request().map_err(|e| {
-        tracing::warn!(error = %e, path = %path, "failed to build hub ws request");
+        tracing::warn!(
+            error = %redact_tokens(&e.to_string()),
+            path = %path,
+            "failed to build hub ws request"
+        );
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     {
@@ -335,7 +382,7 @@ async fn proxy_ws(
         }
     }
 
-    tracing::debug!(target = %target, "proxying ws upgrade to hub");
+    tracing::debug!(target = %log_target(&target), "proxying ws upgrade to hub");
 
     let connector = if target.scheme() == "wss" {
         state.wss_config.clone().map(Connector::Rustls)
@@ -349,8 +396,12 @@ async fn proxy_ws(
         None => connect_async(request).await,
     }
     .map_err(|e| {
-        tracing::warn!(error = %e, path = %path, "ws reverse proxy to hub failed");
-        StatusCode::BAD_GATEWAY
+        tracing::warn!(
+            error = %redact_tokens(&e.to_string()),
+            path = %path,
+            "ws reverse proxy to hub failed"
+        );
+        ws_dial_status(&e)
     })?;
 
     // Propagate the sub protocol the Hub picked back to the browser (it is
@@ -443,6 +494,11 @@ fn build_router(state: Arc<AgentState>) -> Router {
 
     Router::new()
         .route("/api/health", get(health_check))
+        // Bare `/api` is its own exact route: `/api/{*path}` does not match it,
+        // so without this the request would fall through to the SPA and answer
+        // 200 text/html instead of being proxied (same failure mode the `/ws`
+        // route was fixed for).
+        .route("/api", axum::routing::any(proxy_api))
         .route("/api/{*path}", axum::routing::any(proxy_api))
         .route("/ws/agent", axum::routing::any(ws_tunnel_excluded))
         .route("/ws/{*path}", axum::routing::any(proxy_ws))
@@ -470,7 +526,7 @@ pub async fn start_http_server(port: u16, hub_url: String) -> anyhow::Result<()>
     let app = build_router(Arc::new(AgentState::new(&hub_url, &tls)?));
 
     let addr = format!("0.0.0.0:{}", port);
-    tracing::info!(addr = %addr, hub_url = %hub_url, "starting agent HTTP server");
+    tracing::info!(addr = %addr, hub_url = %redact_url(&hub_url), "starting agent HTTP server");
 
     // Windows: binding to 0.0.0.0 may fail with WSAEACCES (os error 10013) when
     // the port is restricted by Windows Firewall or another process. Fall back to
@@ -618,6 +674,14 @@ mod tests {
         // the hub is unreachable instead of 200 text/html.
         let api = app.clone().oneshot(get("/api/resources")).await.unwrap();
         assert_eq!(api.status(), StatusCode::BAD_GATEWAY);
+
+        // Bare `/api` is its own exact route (`/api/{*path}` does not match it).
+        let bare = app.clone().oneshot(get("/api")).await.unwrap();
+        assert_eq!(
+            bare.status(),
+            StatusCode::BAD_GATEWAY,
+            "bare /api must reach the proxy, not the SPA fallback"
+        );
     }
 
     #[tokio::test]
@@ -686,7 +750,197 @@ mod tests {
         );
     }
 
+    // ── status mapping ───────────────────────────────────────────────
+
+    /// CR7：只有 connect timeout 是 504，其余上游失败保持 502。
+    #[test]
+    fn upstream_error_status_distinguishes_timeout_from_transport_failure() {
+        assert_eq!(upstream_error_status(true), StatusCode::GATEWAY_TIMEOUT);
+        assert_eq!(upstream_error_status(false), StatusCode::BAD_GATEWAY);
+    }
+
+    /// CR2：非 101 握手响应原样透传自己的状态码，传输层失败保持 502。
+    #[test]
+    fn ws_dial_status_relays_upstream_http_response() {
+        let rejected = tokio_tungstenite::tungstenite::Error::Http(
+            axum::http::Response::builder()
+                .status(401)
+                .body(None)
+                .unwrap(),
+        );
+        assert_eq!(ws_dial_status(&rejected), StatusCode::UNAUTHORIZED);
+
+        let redirected = tokio_tungstenite::tungstenite::Error::Http(
+            axum::http::Response::builder()
+                .status(302)
+                .body(None)
+                .unwrap(),
+        );
+        assert_eq!(ws_dial_status(&redirected), StatusCode::FOUND);
+
+        let refused = tokio_tungstenite::tungstenite::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::ConnectionRefused,
+            "refused",
+        ));
+        assert_eq!(ws_dial_status(&refused), StatusCode::BAD_GATEWAY);
+    }
+
+    /// 假 Hub：对所有 WS upgrade 返回 `status`（永不 101）。
+    async fn spawn_rejecting_ws_hub(status: StatusCode) -> SocketAddr {
+        let app = Router::new().route(
+            "/ws/{*path}",
+            axum::routing::any(move || async move { (status, "rejected by hub") }),
+        );
+        spawn_served(app).await
+    }
+
+    /// CR2 端到端：假 Hub 对 upgrade 返回 401 → 客户端看到 401，而不是一律 502
+    ///（token 过期 / CSRF 403 必须可区分）。
+    #[tokio::test]
+    async fn ws_upgrade_relay_keeps_upstream_rejection_status() {
+        let hub = spawn_rejecting_ws_hub(StatusCode::UNAUTHORIZED).await;
+        let addr = spawn_served(agent_app(&format!("http://{hub}"))).await;
+
+        let mut stream = TcpStream::connect(addr).await.unwrap();
+        let request = format!(
+            "GET /ws/terminal?token=abc HTTP/1.1\r\n\
+             Host: {addr}\r\n\
+             Connection: Upgrade\r\n\
+             Upgrade: websocket\r\n\
+             Sec-WebSocket-Version: 13\r\n\
+             Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n"
+        );
+        stream.write_all(request.as_bytes()).await.unwrap();
+
+        let mut buf = vec![0u8; 4096];
+        let n = stream.read(&mut buf).await.unwrap();
+        let head = String::from_utf8_lossy(&buf[..n]).to_string();
+        assert!(
+            head.starts_with("HTTP/1.1 401"),
+            "expected the hub's 401 relayed to the browser, got: {head}"
+        );
+    }
+
+    // ── 反代日志脱敏 ─────────────────────────────────────────────────
+
+    /// 捕获 `tracing` 输出的内存 sink，供断言「日志里没有 token」。
+    #[derive(Clone, Default)]
+    struct LogSink(std::sync::Arc<std::sync::Mutex<String>>);
+
+    impl LogSink {
+        fn contents(&self) -> String {
+            self.0.lock().unwrap().clone()
+        }
+    }
+
+    impl std::io::Write for LogSink {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0
+                .lock()
+                .unwrap()
+                .push_str(&String::from_utf8_lossy(buf));
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogSink {
+        type Writer = LogSink;
+
+        fn make_writer(&'a self) -> Self::Writer {
+            self.clone()
+        }
+    }
+
+    /// 在本线程挂上 DEBUG 级别的内存 subscriber，执行 `body`，返回抓到的日志。
+    async fn capture_logs<F, Fut>(body: F) -> (String, Fut::Output)
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future,
+    {
+        let sink = LogSink::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::DEBUG)
+            .with_writer(sink.clone())
+            .finish();
+        let _guard = tracing::subscriber::set_default(subscriber);
+        let output = body().await;
+        (sink.contents(), output)
+    }
+
+    /// CR3：`/api` 腿的 debug 日志只打剥掉 query 的 target，token 不落盘。
+    #[tokio::test]
+    async fn api_proxy_log_redacts_token_query() {
+        let hub = spawn_echo_hub().await;
+        let app = agent_app(&format!("http://{hub}"));
+
+        let (logs, resp) = capture_logs(move || async move {
+            app.oneshot(get("/api/resources?token=supersecret")).await
+        })
+        .await;
+        assert_eq!(resp.unwrap().status(), StatusCode::OK);
+        assert!(
+            logs.contains("proxying api request to hub"),
+            "the proxy log line must still be emitted: {logs}"
+        );
+        assert!(
+            logs.contains("/api/resources"),
+            "the path (without query) must still be logged: {logs}"
+        );
+        assert!(
+            !logs.contains("supersecret"),
+            "token query leaked into logs: {logs}"
+        );
+    }
+
+    /// CR3：`/ws` 腿的 debug 日志同样剥掉 query。
+    #[tokio::test]
+    async fn ws_proxy_log_redacts_token_query() {
+        let (hub, _captured) = spawn_ws_hub().await;
+        let agent = spawn_served(agent_app(&format!("http://{hub}"))).await;
+
+        let (logs, handshake) = capture_logs(|| async {
+            connect_async(format!("ws://{agent}/ws/terminal?token=supersecret")).await
+        })
+        .await;
+        let (_, response) = handshake.expect("ws handshake");
+        assert_eq!(response.status(), 101);
+        assert!(
+            logs.contains("proxying ws upgrade to hub"),
+            "the proxy log line must still be emitted: {logs}"
+        );
+        assert!(
+            logs.contains("/ws/terminal"),
+            "the path (without query) must still be logged: {logs}"
+        );
+        assert!(
+            !logs.contains("supersecret"),
+            "token query leaked into logs: {logs}"
+        );
+    }
+
     // ── api reverse proxy ────────────────────────────────────────────
+
+    /// CR8：裸 `/api` 是精确路由，必须交反代而不是落 SPA fallback（200 html）。
+    #[tokio::test]
+    async fn bare_api_path_is_proxied_not_spa_fallback() {
+        // 死 Hub → 反代回 502；若落 SPA 会是 200 text/html。
+        let app = agent_app("http://127.0.0.1:1");
+        let resp = app.clone().oneshot(get("/api")).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+
+        // 活 Hub → 路径原样转发。
+        let hub = spawn_echo_hub().await;
+        let app = agent_app(&format!("http://{hub}"));
+        let resp = app.oneshot(get("/api")).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let json = json_body(resp).await;
+        assert_eq!(json["path"], "/api");
+        assert_eq!(json["method"], "GET");
+    }
 
     #[tokio::test]
     async fn api_proxy_rewrites_origin_host_and_adds_forwarded_headers() {
@@ -962,6 +1216,7 @@ mod tests {
         // /api/X on the agent must land on /api/X on the hub), so the echo hub
         // registers the same /api-prefixed routes the real hub serves.
         let app = Router::new()
+            .route("/api", axum::routing::any(hub_echo))
             .route("/api/echo", axum::routing::any(hub_echo))
             .route("/api/slow", axum::routing::get(hub_slow))
             .route("/api/chunked", axum::routing::get(hub_chunked))
