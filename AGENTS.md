@@ -218,11 +218,11 @@ docs/
   DEVELOPMENT.md          开发索引（技术栈、crate 结构、里程碑总览）
   architecture/           架构文档（进程模型、更新机制、文件传输、连接通道、Docker）
   reference/              参考文档（数据模型、API 设计、前端工程、配置约定）
+  BUGS.md                 缺陷池
 .dev-flow/                  dev-flow 产出物
   milestones/
     M{N}-{name}.md        里程碑开发文档（完成后保留）
     M{N}-reports/         里程碑报告（步骤 2/4/5/6/7）
-  BUGS.md                  缺陷池
 README.md                 产品简介
 AGENTS.md                 本文件
 .mise.toml                本地工具版本
