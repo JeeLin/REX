@@ -94,20 +94,66 @@ pub fn load_dotenv() {
     load_dotenv_from(exe_dir.as_deref());
 }
 
-fn load_dotenv_from(exe_dir: Option<&std::path::Path>) {
+/// 加载 `.env`：优先**可执行文件同目录**，未命中回退 CWD 逐级向上（[`cwd_fallback`]）。
+fn load_dotenv_from(exe_dir: Option<&Path>) -> DotenvSource {
+    load_dotenv_with(exe_dir, cwd_fallback)
+}
+
+/// 同 [`load_dotenv_from`]，但回退查找可注入：生产恒传 [`cwd_fallback`]，
+/// 测试传临时目录 fixture，避免切换进程 CWD 与同进程其它测试并发冲突。
+///
+/// 返回值语义：任一段出现真实读取/解析错误 → [`DotenvSource::Failed`]（取首个错误），
+/// 否则按命中来源返回。错误分支的 warning 打印与「继续回退」行为与不返回值时完全一致。
+fn load_dotenv_with(
+    exe_dir: Option<&Path>,
+    fallback: impl FnOnce() -> Result<(), dotenvy::Error>,
+) -> DotenvSource {
+    let mut first_err = None;
     if let Some(dir) = exe_dir {
         let path = dir.join(".env");
         match dotenvy::from_path(&path) {
-            Ok(()) => return,
+            Ok(()) => return DotenvSource::ExeDir(path),
             Err(e) if e.not_found() => {}
-            Err(e) => eprintln!("warning: failed to load {}: {e}", path.display()),
+            Err(e) => {
+                eprintln!("warning: failed to load {}: {e}", path.display());
+                first_err = Some(e);
+            }
         }
     }
-    if let Err(e) = dotenvy::dotenv() {
+    let cwd_result = fallback();
+    if let Err(e) = &cwd_result {
         if !e.not_found() {
             eprintln!("warning: failed to load .env from working directory: {e}");
         }
     }
+    if let Some(e) = first_err {
+        return DotenvSource::Failed(e);
+    }
+    match cwd_result {
+        Ok(()) => DotenvSource::CwdFallback,
+        Err(e) if e.not_found() => DotenvSource::NotFound,
+        Err(e) => DotenvSource::Failed(e),
+    }
+}
+
+/// CWD 逐级向上查找并加载 `.env`（`dotenvy::dotenv()` 默认语义）。
+fn cwd_fallback() -> Result<(), dotenvy::Error> {
+    dotenvy::dotenv().map(|_| ())
+}
+
+/// `.env` 加载来源或首个真实错误，供测试断言与诊断。
+///
+/// [`load_dotenv`] 忽略该返回值，加载/回退/告警行为保持不变。
+#[derive(Debug)]
+pub enum DotenvSource {
+    /// 命中 `<exe_dir>/.env`，路径为该文件
+    ExeDir(PathBuf),
+    /// exe 同目录未命中（或未提供），由 CWD 逐级向上回退命中
+    CwdFallback,
+    /// 两段查找都未找到 `.env`（正常情况，静默跳过）
+    NotFound,
+    /// 存在 `.env` 但读取/解析失败（warning 已打印到 stderr）
+    Failed(dotenvy::Error),
 }
 
 #[cfg(test)]
@@ -142,44 +188,88 @@ mod tests {
 
     #[test]
     fn test_load_dotenv_prefers_exe_dir() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join(".env"), "REX_TEST_DOTENV_FROM=exe-dir\n").unwrap();
-        assert!(std::env::var("REX_TEST_DOTENV_FROM").is_err());
+        let exe_dir = tempfile::tempdir().unwrap();
+        std::fs::write(exe_dir.path().join(".env"), "REX_TEST_DOTENV_EXE=exe-dir\n").unwrap();
+        // 回退目录里放同名键的 fixture：exe 命中时回退不应被触发
+        let cwd_dir = tempfile::tempdir().unwrap();
+        std::fs::write(cwd_dir.path().join(".env"), "REX_TEST_DOTENV_EXE=cwd\n").unwrap();
+        assert!(std::env::var("REX_TEST_DOTENV_EXE").is_err());
 
-        load_dotenv_from(Some(dir.path()));
+        let src = load_dotenv_with(Some(exe_dir.path()), || {
+            dotenvy::from_path(cwd_dir.path().join(".env"))
+        });
 
+        match src {
+            DotenvSource::ExeDir(path) => assert_eq!(path, exe_dir.path().join(".env")),
+            other => panic!("expected ExeDir, got {other:?}"),
+        }
         assert_eq!(
-            std::env::var("REX_TEST_DOTENV_FROM").as_deref(),
+            std::env::var("REX_TEST_DOTENV_EXE").as_deref(),
             Ok("exe-dir")
         );
-        std::env::remove_var("REX_TEST_DOTENV_FROM");
+        std::env::remove_var("REX_TEST_DOTENV_EXE");
     }
 
     #[test]
     fn test_load_dotenv_missing_exe_dir_falls_back() {
-        let dir = tempfile::tempdir().unwrap(); // 无 .env
-        assert!(std::env::var("REX_TEST_DOTENV_ABSENT").is_err());
+        let exe_dir = tempfile::tempdir().unwrap(); // 无 .env
+        let cwd_dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            cwd_dir.path().join(".env"),
+            "REX_TEST_DOTENV_FALLBACK=cwd\n",
+        )
+        .unwrap();
+        assert!(std::env::var("REX_TEST_DOTENV_FALLBACK").is_err());
 
-        load_dotenv_from(Some(dir.path()));
+        let src = load_dotenv_with(Some(exe_dir.path()), || {
+            dotenvy::from_path(cwd_dir.path().join(".env"))
+        });
 
-        // exe 目录无 .env → 回退 CWD 查找；仓库根若有 .env 也不含该键
-        assert!(std::env::var("REX_TEST_DOTENV_ABSENT").is_err());
+        assert!(
+            matches!(src, DotenvSource::CwdFallback),
+            "exe 目录无 .env 必须回退到 CWD 查找，got {src:?}"
+        );
+        assert_eq!(
+            std::env::var("REX_TEST_DOTENV_FALLBACK").as_deref(),
+            Ok("cwd")
+        );
+        std::env::remove_var("REX_TEST_DOTENV_FALLBACK");
     }
 
     #[test]
-    fn test_load_dotenv_none_exe_dir_is_noop() {
+    fn test_load_dotenv_none_exe_dir_uses_cwd_lookup() {
+        let cwd_dir = tempfile::tempdir().unwrap();
+        std::fs::write(cwd_dir.path().join(".env"), "REX_TEST_DOTENV_NONE=cwd\n").unwrap();
         assert!(std::env::var("REX_TEST_DOTENV_NONE").is_err());
-        load_dotenv_from(None);
-        assert!(std::env::var("REX_TEST_DOTENV_NONE").is_err());
+
+        let hit = load_dotenv_with(None, || dotenvy::from_path(cwd_dir.path().join(".env")));
+        assert!(
+            matches!(hit, DotenvSource::CwdFallback),
+            "无 exe 目录时必须走 CWD 查找并命中，got {hit:?}"
+        );
+        assert_eq!(std::env::var("REX_TEST_DOTENV_NONE").as_deref(), Ok("cwd"));
+
+        let missing = load_dotenv_with(None, || {
+            dotenvy::from_path(cwd_dir.path().join("no-such.env"))
+        });
+        assert!(
+            matches!(missing, DotenvSource::NotFound),
+            "CWD 查找未命中应返回 NotFound（静默），got {missing:?}"
+        );
+        std::env::remove_var("REX_TEST_DOTENV_NONE");
     }
 
     #[test]
-    fn test_load_dotenv_broken_file_warns_but_does_not_panic() {
+    fn test_load_dotenv_broken_file_returns_failed_but_does_not_panic() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join(".env"), "not a valid dotenv line ===\n").unwrap();
 
-        load_dotenv_from(Some(dir.path()));
+        let src = load_dotenv_from(Some(dir.path()));
 
+        assert!(
+            matches!(src, DotenvSource::Failed(_)),
+            "解析失败必须落到 Failed 分支，got {src:?}"
+        );
         assert!(std::env::var("REX_TEST_DOTENV_BROKEN").is_err());
     }
 }
