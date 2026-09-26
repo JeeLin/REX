@@ -75,7 +75,7 @@ pub(crate) fn format_ssh_addr(host: &str, port: u16) -> String {
 ///
 /// russh 认证失败返回 `Ok(AuthResult::Failure)` 而非 `Err`，不检查会把
 /// 「认证被拒」伪装成后续开 channel 时的 `Disconnected`，误导排查方向。
-pub(crate) fn auth_failure_reason(result: client::AuthResult) -> Option<String> {
+fn auth_failure_reason(result: client::AuthResult) -> Option<String> {
     match result {
         client::AuthResult::Success => None,
         client::AuthResult::Failure {
@@ -88,7 +88,7 @@ pub(crate) fn auth_failure_reason(result: client::AuthResult) -> Option<String> 
 }
 
 /// 汇总各次认证尝试的失败原因，生成最终错误文案。纯逻辑，便于单元测试。
-pub(crate) fn auth_failed(attempts: &[String]) -> anyhow::Error {
+fn auth_failed(attempts: &[String]) -> anyhow::Error {
     anyhow::anyhow!("SSH authentication failed ({})", attempts.join("; "))
 }
 

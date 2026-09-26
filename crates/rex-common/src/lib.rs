@@ -88,6 +88,7 @@ pub mod config;
 pub mod file_transfer;
 pub mod process;
 pub mod redis;
+pub mod resource_config;
 pub mod service;
 pub mod sip_media;
 pub mod sql;

@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::resource_conn::{config_private_key, load_resource_config, ResourceConnInfo};
+use crate::resource_conn::{load_resource_config, ResourceConnInfo};
 use crate::AppState;
 use axum::extract::{Multipart, Query, State};
 use axum::http::StatusCode;
@@ -11,6 +11,7 @@ use axum::response::IntoResponse;
 use axum::Json;
 use base64::Engine;
 use rex_common::file_transfer::{FileConnectRequest, FileConnector};
+use rex_common::resource_config::config_private_key;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 

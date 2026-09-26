@@ -210,7 +210,7 @@ async fn load_resource_conn(
                 .get("password")
                 .and_then(|v| v.as_str())
                 .map(String::from);
-            let pk = crate::resource_conn::config_private_key(&config);
+            let pk = rex_common::resource_config::config_private_key(&config);
             let init_script = config
                 .get("initScript")
                 .and_then(|v| v.as_str())

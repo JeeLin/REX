@@ -19,6 +19,7 @@ use rex_ssh::{SshConfig, SshSession, TerminalEvent};
 use serde_json::Value;
 
 use rex_common::agent_proto::AgentEvent;
+use rex_common::resource_config::config_private_key;
 
 use crate::agent_ws::LocalChannel;
 
@@ -39,15 +40,7 @@ pub fn parse_ssh_config(cfg: &Value) -> SshConfig {
         .get("password")
         .and_then(|v| v.as_str())
         .map(String::from);
-    let private_key = cfg
-        .get("privateKey")
-        .and_then(|v| v.as_str())
-        .map(String::from)
-        .or_else(|| {
-            cfg.get("private_key")
-                .and_then(|v| v.as_str())
-                .map(String::from)
-        });
+    let private_key = config_private_key(cfg);
     let keepalive_interval = cfg
         .get("keepalive_interval")
         .and_then(|v| v.as_u64())

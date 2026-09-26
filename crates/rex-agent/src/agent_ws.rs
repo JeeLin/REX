@@ -76,7 +76,7 @@ impl rustls::client::danger::ServerCertVerifier for InsecureVerifier {
 // ═══════════════════════════════════════
 
 /// Agent 连 Hub 的 wss 信任模式——仅作用于该条出站连接，Agent 其余出站流量不受影响。
-enum HubTlsMode {
+pub(crate) enum HubTlsMode {
     /// `REX_TLS_INSECURE`：跳过证书验证（优先级高于 `REX_CA_CERT`）。
     Insecure,
     /// `REX_CA_CERT`：系统根（webpki-roots）并入后追加自定义 CA。
@@ -141,16 +141,39 @@ pub(crate) fn apply_hub_tls_to_reqwest(
     Ok(builder.add_root_certificate(cert))
 }
 
-/// Resolve the wss trust mode from the shared settings (single source of truth).
-fn resolve_hub_tls(tls_insecure: bool, ca_cert_path: Option<&str>) -> Result<HubTlsMode, String> {
-    let settings = resolve_hub_tls_settings(tls_insecure, ca_cert_path)?;
+/// Raw env inputs for the Agent→Hub trust settings, read in exactly one place so
+/// the `v == "true"` / "unset or empty = None" semantics cannot drift between the
+/// tunnel, the update download and the reverse proxy paths.
+fn hub_tls_env() -> (bool, Option<String>) {
+    let insecure = std::env::var("REX_TLS_INSECURE")
+        .map(|v| v == "true")
+        .unwrap_or(false);
+    let ca_cert = std::env::var("REX_CA_CERT").ok().filter(|v| !v.is_empty());
+    (insecure, ca_cert)
+}
+
+/// Resolve `REX_TLS_INSECURE` / `REX_CA_CERT` from env into shared trust settings.
+pub(crate) fn hub_tls_settings_from_env() -> Result<HubTlsSettings, String> {
+    let (insecure, ca_cert) = hub_tls_env();
+    resolve_hub_tls_settings(insecure, ca_cert.as_deref())
+}
+
+/// Resolve the wss trust mode from already resolved settings (single source of
+/// truth for every Agent→Hub wss leg, including the reverse proxy in
+/// `http_server`): insecure > `REX_CA_CERT` > system roots.
+pub(crate) fn tls_mode_from_settings(settings: &HubTlsSettings) -> Result<HubTlsMode, String> {
     if settings.insecure {
         return Ok(HubTlsMode::Insecure);
     }
-    match settings.ca_pem {
+    match &settings.ca_pem {
         None => Ok(HubTlsMode::SystemRoots),
-        Some(pem) => Ok(HubTlsMode::CustomCa(build_ca_root_store(&pem)?)),
+        Some(pem) => Ok(HubTlsMode::CustomCa(build_ca_root_store(pem)?)),
     }
+}
+
+/// Resolve the wss trust mode from env-derived inputs (tunnel dialer path).
+fn resolve_hub_tls(tls_insecure: bool, ca_cert_path: Option<&str>) -> Result<HubTlsMode, String> {
+    tls_mode_from_settings(&resolve_hub_tls_settings(tls_insecure, ca_cert_path)?)
 }
 
 /// 构造信任集：系统根（webpki-roots）**并入**后再追加自定义 CA，不替换/清空系统根。
@@ -194,7 +217,7 @@ fn ensure_crypto_provider() {
 }
 
 /// 按信任模式构造连 Hub 的 rustls ClientConfig；`SystemRoots` 返回 None 走默认连接。
-fn hub_client_config(mode: HubTlsMode) -> Option<rustls::ClientConfig> {
+pub(crate) fn hub_client_config(mode: HubTlsMode) -> Option<rustls::ClientConfig> {
     ensure_crypto_provider();
     let builder = || {
         rustls::ClientConfig::builder_with_provider(crypto_provider())
@@ -354,10 +377,7 @@ impl AgentConfig {
             .unwrap_or_else(|_| "true".into())
             .parse::<bool>()
             .unwrap_or(true);
-        let tls_insecure = std::env::var("REX_TLS_INSECURE")
-            .map(|v| v == "true")
-            .unwrap_or(false);
-        let ca_cert = std::env::var("REX_CA_CERT").ok().filter(|v| !v.is_empty());
+        let (tls_insecure, ca_cert) = hub_tls_env();
         let heartbeat_interval = std::env::var("REX_HEARTBEAT_INTERVAL")
             .unwrap_or_else(|_| "30".into())
             .parse::<u64>()
@@ -389,19 +409,6 @@ pub(crate) struct LocalChannel {
 // 主入口
 // ═══════════════════════════════════════
 
-/// 解析 `REX_AGENT_HTTP_PORT`：未设置或 `0` → `None`（不启动内嵌 HTTP server），
-/// 可解析且 `> 0` → `Some(port)`（监听 `0.0.0.0:{port}`）。无法解析的值同样视为关闭。
-fn resolve_http_port(raw: Option<&str>) -> Option<u16> {
-    let value = raw?.trim();
-    if value.is_empty() {
-        return None;
-    }
-    match value.parse::<u16>() {
-        Ok(port) if port > 0 => Some(port),
-        _ => None,
-    }
-}
-
 pub async fn run_agent(config: AgentConfig) {
     // 先装进程默认 provider，覆盖 tokio-tungstenite / reqwest 内部的 rustls builder。
     ensure_crypto_provider();
@@ -416,7 +423,9 @@ pub async fn run_agent(config: AgentConfig) {
     const MAX_BACKOFF: u64 = 30;
 
     // 内嵌 HTTP server 默认关闭：未设置或 0 不启动，显式配置 >0 才监听
-    match resolve_http_port(std::env::var("REX_AGENT_HTTP_PORT").ok().as_deref()) {
+    match crate::http_server::resolve_http_port(
+        std::env::var("REX_AGENT_HTTP_PORT").ok().as_deref(),
+    ) {
         Some(http_port) => {
             let hub_url = config.hub_url.clone();
             tokio::spawn(async move {
@@ -1858,33 +1867,5 @@ mod tests {
         let err = hub_origin("ftp://hub.example.com?token=abc").unwrap_err();
         assert!(!err.contains("abc"), "got {err}");
         assert!(err.contains("ftp://hub.example.com"), "got {err}");
-    }
-
-    // --- S8：内嵌 HTTP server 默认关闭、显式开启 ---
-
-    /// 未设置 REX_AGENT_HTTP_PORT → 不启动 HTTP server。
-    #[test]
-    fn http_server_disabled_when_env_unset() {
-        assert_eq!(resolve_http_port(None), None);
-    }
-
-    /// 设为 0 → 明确关闭，不启动 HTTP server。
-    #[test]
-    fn http_server_disabled_when_env_zero() {
-        assert_eq!(resolve_http_port(Some("0")), None);
-    }
-
-    /// 设为 3000 → 启动并监听该端口。
-    #[test]
-    fn http_server_enabled_when_env_port_3000() {
-        assert_eq!(resolve_http_port(Some("3000")), Some(3000));
-    }
-
-    /// 无法解析的值按关闭处理（不静默回落到默认端口）。
-    #[test]
-    fn http_server_disabled_when_env_invalid() {
-        assert_eq!(resolve_http_port(Some("not-a-port")), None);
-        assert_eq!(resolve_http_port(Some("")), None);
-        assert_eq!(resolve_http_port(Some("70000")), None);
     }
 }

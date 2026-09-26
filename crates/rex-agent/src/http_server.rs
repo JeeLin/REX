@@ -37,7 +37,8 @@ use tokio_tungstenite::{
 use url::Url;
 
 use crate::agent_ws::{
-    apply_hub_tls_to_reqwest, hub_origin, resolve_hub_tls_settings, HubTlsSettings,
+    apply_hub_tls_to_reqwest, hub_client_config, hub_origin, hub_tls_settings_from_env,
+    tls_mode_from_settings, HubTlsSettings,
 };
 
 /// 嵌入的前端 dist 目录
@@ -102,18 +103,21 @@ impl AgentState {
             hub_origin,
             hub_host,
             client: build_http_client(tls)?,
-            wss_config: hub_rustls_config(tls).map_err(anyhow::Error::msg)?,
+            // Trust decision (insecure > REX_CA_CERT > system roots) and the
+            // rustls config are shared with the tunnel dialer in `agent_ws`.
+            wss_config: hub_client_config(tls_mode_from_settings(tls).map_err(anyhow::Error::msg)?)
+                .map(Arc::new),
         })
     }
 
     /// Resolve the upstream URL for one proxied request.
-    fn target(&self, base: &Url, path: &str, query: Option<&str>) -> Result<Url, StatusCode> {
+    fn target(&self, base: &Url, path: &str, query: Option<&str>) -> Url {
         let mut url = base.clone();
         let mut merged = url.path().trim_end_matches('/').to_string();
         merged.push_str(path);
         url.set_path(&merged);
         url.set_query(query);
-        Ok(url)
+        url
     }
 }
 
@@ -141,128 +145,6 @@ fn build_http_client(tls: &HubTlsSettings) -> anyhow::Result<reqwest::Client> {
         .no_proxy();
     let builder = apply_hub_tls_to_reqwest(builder, tls).map_err(anyhow::Error::msg)?;
     Ok(builder.build()?)
-}
-
-// ═══════════════════════════════════════
-// TLS for the upstream wss leg
-// ═══════════════════════════════════════
-
-/// Resolve the wss trust mode from shared settings.
-///
-/// The decision itself comes from `resolve_hub_tls_settings` (insecure >
-/// `REX_CA_CERT` > system roots). The rustls `ClientConfig` construction is
-/// mirrored from `agent_ws::hub_client_config`, which is private to that
-/// module — reusing it would require editing `agent_ws.rs` (owned by a
-/// parallel lane), so the same trust inputs are applied here instead of being
-/// resolved again.
-fn hub_rustls_config(tls: &HubTlsSettings) -> Result<Option<Arc<rustls::ClientConfig>>, String> {
-    if tls.insecure {
-        ensure_crypto_provider();
-        let config = rustls::ClientConfig::builder_with_provider(crypto_provider())
-            .with_safe_default_protocol_versions()
-            .map_err(|e| e.to_string())?
-            .dangerous()
-            .with_custom_certificate_verifier(Arc::new(InsecureVerifier))
-            .with_no_client_auth();
-        return Ok(Some(Arc::new(config)));
-    }
-    let Some(pem) = &tls.ca_pem else {
-        // System roots: let tokio-tungstenite use its built-in webpki-roots set.
-        return Ok(None);
-    };
-
-    ensure_crypto_provider();
-    let mut roots = rustls::RootCertStore {
-        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-    };
-    let mut reader = std::io::BufReader::new(pem.as_slice());
-    let certs = rustls_pemfile::certs(&mut reader)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("parse REX_CA_CERT PEM: {e}"))?;
-    if certs.is_empty() {
-        return Err("REX_CA_CERT contains no certificates".into());
-    }
-    for cert in certs {
-        roots
-            .add(cert)
-            .map_err(|e| format!("invalid CA certificate: {e}"))?;
-    }
-    let config = rustls::ClientConfig::builder_with_provider(crypto_provider())
-        .with_safe_default_protocol_versions()
-        .map_err(|e| e.to_string())?
-        .with_root_certificates(roots)
-        .with_no_client_auth();
-    Ok(Some(Arc::new(config)))
-}
-
-/// Prefer the process default crypto provider, otherwise `ring` — this build
-/// graph registers both `ring` and `aws-lc-rs`, so an implicit builder panics.
-fn crypto_provider() -> Arc<rustls::crypto::CryptoProvider> {
-    rustls::crypto::CryptoProvider::get_default()
-        .cloned()
-        .unwrap_or_else(|| Arc::new(rustls::crypto::ring::default_provider()))
-}
-
-/// Idempotently install the process default crypto provider so the default
-/// (system roots) wss path inside tokio-tungstenite cannot panic on ambiguity.
-fn ensure_crypto_provider() {
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
-        let _ = rustls::crypto::CryptoProvider::install_default(
-            rustls::crypto::ring::default_provider(),
-        );
-    });
-}
-
-/// `REX_TLS_INSECURE` verifier: skips server certificate validation for the
-/// upstream wss leg only. Mirrors `agent_ws::InsecureVerifier` (module private).
-#[derive(Debug)]
-struct InsecureVerifier;
-
-impl rustls::client::danger::ServerCertVerifier for InsecureVerifier {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &rustls::pki_types::CertificateDer<'_>,
-        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
-        _server_name: &rustls::pki_types::ServerName<'_>,
-        _ocsp_response: &[u8],
-        _now: rustls::pki_types::UnixTime,
-    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
-        Ok(rustls::client::danger::ServerCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        _message: &[u8],
-        _cert: &rustls::pki_types::CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        _message: &[u8],
-        _cert: &rustls::pki_types::CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        vec![
-            rustls::SignatureScheme::RSA_PKCS1_SHA256,
-            rustls::SignatureScheme::RSA_PKCS1_SHA384,
-            rustls::SignatureScheme::RSA_PKCS1_SHA512,
-            rustls::SignatureScheme::ECDSA_NISTP256_SHA256,
-            rustls::SignatureScheme::ECDSA_NISTP384_SHA384,
-            rustls::SignatureScheme::ECDSA_NISTP521_SHA512,
-            rustls::SignatureScheme::ED25519,
-            rustls::SignatureScheme::RSA_PSS_SHA256,
-            rustls::SignatureScheme::RSA_PSS_SHA384,
-            rustls::SignatureScheme::RSA_PSS_SHA512,
-        ]
-    }
 }
 
 // ═══════════════════════════════════════
@@ -320,6 +202,26 @@ fn insert_forwarded(
     Ok(())
 }
 
+/// Rewrite the identity headers (`Host`/`Origin`/`Referer`) to the Hub origin and
+/// add `X-Forwarded-*` — the single place both proxy legs (`/api` and `/ws`) build
+/// the Hub-facing identity, so the CSRF-critical rewrite cannot drift apart.
+///
+/// `SEC_WEBSOCKET_PROTOCOL` is not touched here: only the WS leg forwards it.
+fn apply_hub_identity(
+    out: &mut HeaderMap,
+    incoming: &HeaderMap,
+    state: &AgentState,
+    peer: SocketAddr,
+    inbound_scheme: &str,
+) -> Result<(), StatusCode> {
+    out.insert(HOST, state.hub_host.clone());
+    out.insert(ORIGIN, state.hub_origin.clone());
+    if incoming.contains_key(REFERER) {
+        out.insert(REFERER, state.hub_origin.clone());
+    }
+    insert_forwarded(out, peer, inbound_scheme, incoming.get(HOST))
+}
+
 /// Build the request headers sent upstream: strip hop-by-hop, rewrite
 /// `Host`/`Origin`/`Referer` to the Hub origin, then add `X-Forwarded-*`.
 fn forward_headers(
@@ -336,13 +238,7 @@ fn forward_headers(
         out.append(name, value);
     }
 
-    out.insert(HOST, state.hub_host.clone());
-    out.insert(ORIGIN, state.hub_origin.clone());
-    if incoming.contains_key(REFERER) {
-        out.insert(REFERER, state.hub_origin.clone());
-    }
-
-    insert_forwarded(&mut out, peer, inbound_scheme, incoming.get(HOST))?;
+    apply_hub_identity(&mut out, incoming, state, peer, inbound_scheme)?;
     Ok(out)
 }
 
@@ -378,7 +274,7 @@ async fn proxy_api(
     let path = parts.uri.path().to_string();
     let query = parts.uri.query().map(str::to_string);
     let scheme = parts.uri.scheme_str().unwrap_or("http");
-    let target = state.target(&state.hub_http_base, &path, query.as_deref())?;
+    let target = state.target(&state.hub_http_base, &path, query.as_deref());
     let headers = forward_headers(&parts.headers, &state, peer.0, scheme)?;
 
     tracing::debug!(target = %target, "proxying api request to hub");
@@ -422,7 +318,7 @@ async fn proxy_ws(
     let path = parts.uri.path().to_string();
     let query = parts.uri.query().map(str::to_string);
     let scheme = parts.uri.scheme_str().unwrap_or("http");
-    let target = state.target(&state.hub_ws_base, &path, query.as_deref())?;
+    let target = state.target(&state.hub_ws_base, &path, query.as_deref());
 
     // tungstenite generates Host/Connection/Upgrade/Sec-WebSocket-* itself, so
     // the browser's hop-by-hop and extension headers are never forwarded
@@ -433,15 +329,10 @@ async fn proxy_ws(
     })?;
     {
         let headers = request.headers_mut();
-        headers.insert(HOST, state.hub_host.clone());
-        headers.insert(ORIGIN, state.hub_origin.clone());
-        if parts.headers.contains_key(REFERER) {
-            headers.insert(REFERER, state.hub_origin.clone());
-        }
+        apply_hub_identity(headers, &parts.headers, &state, peer.0, scheme)?;
         if let Some(protocol) = parts.headers.get(SEC_WEBSOCKET_PROTOCOL) {
             headers.insert(SEC_WEBSOCKET_PROTOCOL, protocol.clone());
         }
-        insert_forwarded(headers, peer.0, scheme, parts.headers.get(HOST))?;
     }
 
     tracing::debug!(target = %target, "proxying ws upgrade to hub");
@@ -478,8 +369,11 @@ async fn proxy_ws(
 // WS message relay
 // ═══════════════════════════════════════
 
-fn client_to_hub(msg: ClientMessage) -> Option<HubMessage> {
-    Some(match msg {
+/// Browser → Hub relay mapping. All five `axum` message variants map over, so
+/// there is nothing to skip (`hub_to_client` keeps its `Option`: tungstenite has
+/// a `Frame` variant that must not cross the relay).
+fn client_to_hub(msg: ClientMessage) -> HubMessage {
+    match msg {
         ClientMessage::Text(text) => HubMessage::Text(text.to_string()),
         ClientMessage::Binary(data) => HubMessage::Binary(data.to_vec()),
         ClientMessage::Ping(data) => HubMessage::Ping(data.to_vec()),
@@ -488,7 +382,7 @@ fn client_to_hub(msg: ClientMessage) -> Option<HubMessage> {
             code: frame.code.into(),
             reason: frame.reason.to_string().into(),
         })),
-    })
+    }
 }
 
 fn hub_to_client(msg: HubMessage) -> Option<ClientMessage> {
@@ -520,8 +414,7 @@ async fn relay_ws(
         tokio::select! {
             incoming = client_stream.next() => {
                 let Some(Ok(msg)) = incoming else { break };
-                let Some(out) = client_to_hub(msg) else { break };
-                if hub_sink.send(out).await.is_err() {
+                if hub_sink.send(client_to_hub(msg)).await.is_err() {
                     break;
                 }
             }
@@ -557,14 +450,22 @@ fn build_router(state: Arc<AgentState>) -> Router {
         .with_state(state)
 }
 
+/// 解析 `REX_AGENT_HTTP_PORT`：未设置或 `0` → `None`（不启动内嵌 HTTP server），
+/// 可解析且 `> 0` → `Some(port)`（监听 `0.0.0.0:{port}`）。无法解析的值同样视为关闭。
+pub(crate) fn resolve_http_port(raw: Option<&str>) -> Option<u16> {
+    let value = raw?.trim();
+    if value.is_empty() {
+        return None;
+    }
+    match value.parse::<u16>() {
+        Ok(port) if port > 0 => Some(port),
+        _ => None,
+    }
+}
+
 /// 启动 Agent HTTP server
 pub async fn start_http_server(port: u16, hub_url: String) -> anyhow::Result<()> {
-    let tls_insecure = std::env::var("REX_TLS_INSECURE")
-        .map(|v| v == "true")
-        .unwrap_or(false);
-    let ca_cert = std::env::var("REX_CA_CERT").ok().filter(|v| !v.is_empty());
-    let tls =
-        resolve_hub_tls_settings(tls_insecure, ca_cert.as_deref()).map_err(anyhow::Error::msg)?;
+    let tls = hub_tls_settings_from_env().map_err(anyhow::Error::msg)?;
 
     let app = build_router(Arc::new(AgentState::new(&hub_url, &tls)?));
 
@@ -623,6 +524,8 @@ mod tests {
     use tokio::sync::mpsc;
     use tower::ServiceExt;
 
+    use crate::agent_ws::resolve_hub_tls_settings;
+
     /// Fixed peer injected through `MockConnectInfo` so `X-Forwarded-For` is deterministic.
     fn peer() -> SocketAddr {
         SocketAddr::from(([203, 0, 113, 9], 54321))
@@ -634,18 +537,10 @@ mod tests {
         build_router(state).layer(MockConnectInfo(peer()))
     }
 
-    async fn spawn_agent(hub_url: &str) -> SocketAddr {
-        let app = agent_app(hub_url);
+    async fn spawn_served(app: Router) -> SocketAddr {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        tokio::spawn(async move {
-            axum::serve(
-                listener,
-                app.into_make_service_with_connect_info::<SocketAddr>(),
-            )
-            .await
-            .unwrap();
-        });
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
         addr
     }
 
@@ -693,8 +588,7 @@ mod tests {
         let resp = app.oneshot(get("/api/health")).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
 
-        let bytes = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
-        let json: Value = serde_json::from_slice(&bytes).unwrap();
+        let json = json_body(resp).await;
         assert_eq!(json["mode"], "agent");
         assert_eq!(json["status"], "ok");
     }
@@ -771,7 +665,7 @@ mod tests {
 
     #[tokio::test]
     async fn ws_upgrade_to_unreachable_hub_is_502_not_static() {
-        let addr = spawn_agent("http://127.0.0.1:1").await;
+        let addr = spawn_served(agent_app("http://127.0.0.1:1")).await;
         let mut stream = TcpStream::connect(addr).await.unwrap();
         let request = format!(
             "GET /ws/terminal?token=abc HTTP/1.1\r\n\
@@ -931,7 +825,7 @@ mod tests {
     #[tokio::test]
     async fn ws_upgrade_is_relayed_and_upstream_headers_are_rewritten() {
         let (hub, mut captured) = spawn_ws_hub().await;
-        let agent = spawn_agent(&format!("http://{hub}")).await;
+        let agent = spawn_served(agent_app(&format!("http://{hub}"))).await;
 
         let mut request = format!("ws://{agent}/ws/terminal?token=abc")
             .into_client_request()
@@ -983,14 +877,35 @@ mod tests {
         );
     }
 
-    // ── test infrastructure ──────────────────────────────────────────
+    // ── REX_AGENT_HTTP_PORT：内嵌 HTTP server 默认关闭、显式开启 ──────
 
-    async fn spawn_served(app: Router) -> SocketAddr {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-        addr
+    /// 未设置 REX_AGENT_HTTP_PORT → 不启动 HTTP server。
+    #[test]
+    fn http_server_disabled_when_env_unset() {
+        assert_eq!(resolve_http_port(None), None);
     }
+
+    /// 设为 0 → 明确关闭，不启动 HTTP server。
+    #[test]
+    fn http_server_disabled_when_env_zero() {
+        assert_eq!(resolve_http_port(Some("0")), None);
+    }
+
+    /// 设为 3000 → 启动并监听该端口。
+    #[test]
+    fn http_server_enabled_when_env_port_3000() {
+        assert_eq!(resolve_http_port(Some("3000")), Some(3000));
+    }
+
+    /// 无法解析的值按关闭处理（不静默回落到默认端口）。
+    #[test]
+    fn http_server_disabled_when_env_invalid() {
+        assert_eq!(resolve_http_port(Some("not-a-port")), None);
+        assert_eq!(resolve_http_port(Some("")), None);
+        assert_eq!(resolve_http_port(Some("70000")), None);
+    }
+
+    // ── test infrastructure ──────────────────────────────────────────
 
     async fn hub_echo(
         method: axum::http::Method,
@@ -1001,25 +916,15 @@ mod tests {
         let bytes = axum::body::to_bytes(body, 16 * 1024 * 1024)
             .await
             .unwrap_or_default();
-        // Single-value headers echo as a plain string (the common case the
-        // assertions read directly); only repeated headers stay arrays.
+        // Every header the proxy sends is single-valued (`X-Forwarded-*` is
+        // overwritten, `Host`/`Origin`/`Referer` rewritten in place), so a
+        // repeated name collapses to its last value — assertions read strings.
         let mut echoed = serde_json::Map::new();
         for (name, value) in headers.iter() {
-            let entry = echoed
-                .entry(name.as_str().to_string())
-                .or_insert_with(|| Value::Array(Vec::new()));
-            if !entry.is_array() {
-                let prev = entry.take();
-                *entry = Value::Array(vec![prev]);
-            }
-            let arr = entry.as_array_mut().unwrap();
-            arr.push(Value::String(
-                value.to_str().unwrap_or_default().to_string(),
-            ));
-            if arr.len() == 1 {
-                let single = arr[0].clone();
-                *entry = single;
-            }
+            echoed.insert(
+                name.as_str().to_string(),
+                Value::String(value.to_str().unwrap_or_default().to_string()),
+            );
         }
 
         let mut resp = axum::Json(serde_json::json!({

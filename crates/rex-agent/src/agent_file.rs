@@ -14,6 +14,7 @@ use rex_common::file_transfer::{dispatch_file, FileConnectRequest, FileConnector
 
 use rex_common::agent_proto::send_session_error;
 use rex_common::agent_proto::AgentEvent;
+use rex_common::resource_config::config_private_key;
 
 use crate::agent_ws::LocalChannel;
 
@@ -174,15 +175,7 @@ async fn build_connector(
                             .get("password")
                             .and_then(|v| v.as_str())
                             .map(String::from),
-                        private_key: cfg
-                            .get("privateKey")
-                            .and_then(|v| v.as_str())
-                            .map(String::from)
-                            .or_else(|| {
-                                cfg.get("private_key")
-                                    .and_then(|v| v.as_str())
-                                    .map(String::from)
-                            }),
+                        private_key: config_private_key(cfg),
                         keepalive_interval: cfg
                             .get("keepalive_interval")
                             .and_then(|v| v.as_u64())

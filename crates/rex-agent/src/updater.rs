@@ -154,12 +154,7 @@ async fn download(cmd: &UpdateCommand, report: &ProgressReporter) -> Result<Vec<
 /// Build the download client with the shared Agent→Hub trust settings so the
 /// HTTPS path honors `REX_CA_CERT` / `REX_TLS_INSECURE` like the wss path does.
 fn build_download_client() -> Result<reqwest::Client, UpdateError> {
-    let tls_insecure = std::env::var("REX_TLS_INSECURE")
-        .map(|v| v == "true")
-        .unwrap_or(false);
-    let ca_cert = std::env::var("REX_CA_CERT").ok().filter(|v| !v.is_empty());
-    let settings = crate::agent_ws::resolve_hub_tls_settings(tls_insecure, ca_cert.as_deref())
-        .map_err(UpdateError::Io)?;
+    let settings = crate::agent_ws::hub_tls_settings_from_env().map_err(UpdateError::Io)?;
     crate::agent_ws::apply_hub_tls_to_reqwest(reqwest::Client::builder(), &settings)
         .map_err(UpdateError::Io)?
         .timeout(std::time::Duration::from_secs(300))
