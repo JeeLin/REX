@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::db::{audit_log, audit_log_with_detail};
 use crate::models::SavedQuery;
-use crate::resource_conn::load_resource_config;
+use crate::resource_conn::{load_resource_config, ResourceConnInfo};
 use crate::AppState;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
@@ -178,6 +178,29 @@ struct CompareSummary {
 // Handlers
 // ---------------------------------------------------------------------------
 
+/// 组装发给 Agent 的 SQL 连接配置（host/port/subtype + config_json 合并）。
+///
+/// 口径与 `file_api::agent_file_config` 一致：先合并 `config_json`，再以资源顶层
+/// `username` 强制覆盖——前端只写顶层字段，`config_json` 中的历史 `username` 键
+/// 不是权威值。Agent 侧 `agent_sql.rs` 直接读 `cfg["username"]` 发起认证。
+fn agent_sql_config(res: &ResourceConnInfo, subtype: &str) -> serde_json::Value {
+    let mut cfg = serde_json::json!({
+        "host": res.host,
+        "port": res.port.unwrap_or(0),
+        "subtype": subtype,
+    });
+    if let serde_json::Value::Object(m) = res.config.clone() {
+        for (k, v) in m {
+            cfg[k] = v;
+        }
+    }
+    if let serde_json::Value::Object(m) = &mut cfg {
+        // 资源顶层 username 为权威字段，不被 config_json 中的历史键覆盖
+        m.insert("username".to_string(), res.username.clone().into());
+    }
+    cfg
+}
+
 /// POST /api/sql/connect
 async fn connect(
     State(state): State<AppState>,
@@ -211,17 +234,7 @@ async fn connect(
         } else {
             db_type.as_str()
         };
-        let mut cfg = serde_json::json!({
-            "host": res.host,
-            "port": res.port.unwrap_or(0),
-            "username": res.username,
-            "subtype": agent_db_type,
-        });
-        if let serde_json::Value::Object(m) = res.config.clone() {
-            for (k, v) in m {
-                cfg[k] = v;
-            }
-        }
+        let cfg = agent_sql_config(&res, agent_db_type);
         tracing::debug!(action = "SQL_AGENT_CONFIG", resource_id = %body.resource_id, host = %res.host, port = %res.port.unwrap_or(0), subtype = %agent_db_type, has_password = res.config.get("password").and_then(|v| v.as_str()).is_some(), has_database = res.config.get("database").and_then(|v| v.as_str()).is_some(), "SQL agent config forwarded to agent");
         let channel_id = match crate::agent_ws::open_agent_session(
             &state,
@@ -914,5 +927,57 @@ fn build_summary(
         modified_rows: modified,
         only_in_left: only_left,
         only_in_right: only_right,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn info(username: &str, config: &str) -> ResourceConnInfo {
+        ResourceConnInfo {
+            resource_id: "r1".into(),
+            name: "orders".into(),
+            protocol: "mysql".into(),
+            host: "10.0.0.1".into(),
+            port: Some(3306),
+            username: username.to_string(),
+            config: serde_json::from_str(config).unwrap(),
+            subtype: None,
+            use_agent: true,
+            agent_id: Some("agent-1".into()),
+        }
+    }
+
+    #[test]
+    fn agent_sql_config_carries_username_and_merged_credentials() {
+        let cfg = agent_sql_config(
+            &info("alice", r#"{"password":"pw","database_name":"app"}"#),
+            "mysql",
+        );
+        assert_eq!(
+            cfg.get("username").and_then(|v| v.as_str()),
+            Some("alice"),
+            "Agent authenticates with cfg.username — a missing field means empty-user auth"
+        );
+        assert_eq!(cfg.get("host").and_then(|v| v.as_str()), Some("10.0.0.1"));
+        assert_eq!(cfg.get("port").and_then(|v| v.as_u64()), Some(3306));
+        assert_eq!(cfg.get("subtype").and_then(|v| v.as_str()), Some("mysql"));
+        assert_eq!(cfg.get("password").and_then(|v| v.as_str()), Some("pw"));
+        assert_eq!(
+            cfg.get("database_name").and_then(|v| v.as_str()),
+            Some("app")
+        );
+    }
+
+    #[test]
+    fn agent_sql_config_username_beats_stale_config_key() {
+        let cfg = agent_sql_config(&info("alice", r#"{"username":"stale"}"#), "auto");
+        assert_eq!(
+            cfg.get("username").and_then(|v| v.as_str()),
+            Some("alice"),
+            "top-level username must stay authoritative after config_json merge"
+        );
+        assert_eq!(cfg.get("subtype").and_then(|v| v.as_str()), Some("auto"));
     }
 }

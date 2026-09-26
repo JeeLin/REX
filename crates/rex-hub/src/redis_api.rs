@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use url::form_urlencoded;
 
-use crate::resource_conn::load_resource_config;
+use crate::resource_conn::{load_resource_config, ResourceConnInfo};
 use crate::AppState;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
@@ -179,6 +179,29 @@ fn error_response(code: &str, message: &str) -> (StatusCode, Json<ErrorBody>) {
 // Handlers
 // ---------------------------------------------------------------------------
 
+/// 组装发给 Agent 的 Redis 连接配置（host/port + config_json 合并）。
+///
+/// 口径与 `file_api::agent_file_config`、`sql_api::agent_sql_config` 一致：
+/// 先合并 `config_json`，再以资源顶层 `username` 强制覆盖——前端只写顶层字段，
+/// `config_json` 中的历史 `username` 键不是权威值（Agent 侧当前不消费该键，
+/// 下发为三 API 口径统一）。
+fn agent_redis_config(res: &ResourceConnInfo) -> serde_json::Value {
+    let mut cfg = serde_json::json!({
+        "host": res.host,
+        "port": res.port.unwrap_or(6379),
+    });
+    if let serde_json::Value::Object(m) = res.config.clone() {
+        for (k, v) in m {
+            cfg[k] = v;
+        }
+    }
+    if let serde_json::Value::Object(m) = &mut cfg {
+        // 资源顶层 username 为权威字段，不被 config_json 中的历史键覆盖
+        m.insert("username".to_string(), res.username.clone().into());
+    }
+    cfg
+}
+
 async fn connect(
     State(state): State<AppState>,
     Json(body): Json<ConnectBody>,
@@ -198,15 +221,7 @@ async fn connect(
                     .into_response()
             }
         };
-        let mut cfg = serde_json::json!({
-            "host": res.host,
-            "port": res.port.unwrap_or(6379),
-        });
-        if let serde_json::Value::Object(m) = res.config.clone() {
-            for (k, v) in m {
-                cfg[k] = v;
-            }
-        }
+        let cfg = agent_redis_config(&res);
         let channel_id = match crate::agent_ws::open_agent_session(
             &state,
             &agent_id,
@@ -754,4 +769,48 @@ pub async fn pubsub_poll(
     }
 
     (StatusCode::OK, Json(PubSubPollResult { messages })).into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn info(username: &str, config: &str) -> ResourceConnInfo {
+        ResourceConnInfo {
+            resource_id: "r1".into(),
+            name: "cache".into(),
+            protocol: "redis".into(),
+            host: "10.0.0.2".into(),
+            port: Some(6380),
+            username: username.to_string(),
+            config: serde_json::from_str(config).unwrap(),
+            subtype: None,
+            use_agent: true,
+            agent_id: Some("agent-1".into()),
+        }
+    }
+
+    #[test]
+    fn agent_redis_config_carries_username_and_merged_credentials() {
+        let cfg = agent_redis_config(&info("alice", r#"{"password":"pw","db":3}"#));
+        assert_eq!(
+            cfg.get("username").and_then(|v| v.as_str()),
+            Some("alice"),
+            "top-level username is always forwarded, same as file/sql agent configs"
+        );
+        assert_eq!(cfg.get("host").and_then(|v| v.as_str()), Some("10.0.0.2"));
+        assert_eq!(cfg.get("port").and_then(|v| v.as_u64()), Some(6380));
+        assert_eq!(cfg.get("password").and_then(|v| v.as_str()), Some("pw"));
+        assert_eq!(cfg.get("db").and_then(|v| v.as_i64()), Some(3));
+    }
+
+    #[test]
+    fn agent_redis_config_username_beats_stale_config_key() {
+        let cfg = agent_redis_config(&info("alice", r#"{"username":"stale"}"#));
+        assert_eq!(
+            cfg.get("username").and_then(|v| v.as_str()),
+            Some("alice"),
+            "top-level username must stay authoritative after config_json merge"
+        );
+    }
 }
