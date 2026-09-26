@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::resource_conn::{load_resource_config, ResourceConnInfo};
+use crate::resource_conn::{load_resource_config, normalize_username, ResourceConnInfo};
 use crate::AppState;
 use axum::extract::{Multipart, Query, State};
 use axum::http::StatusCode;
@@ -152,6 +152,36 @@ fn agent_file_config(res: &ResourceConnInfo) -> serde_json::Value {
     cfg
 }
 
+/// 直连腿的 SSH/SFTP 连接参数。
+///
+/// `username` 走 SSH/SFTP 专属归一（空 → `root`，[`normalize_username`]），
+/// 与 `terminal_ws::load_resource_conn` 同源，保证连接池键 `user@host:port`
+/// 不分叉；其他协议不经过这里，空 username 保持原值。
+fn ssh_connect_config(res: &ResourceConnInfo) -> rex_ssh::SshConfig {
+    rex_ssh::SshConfig {
+        host: res.host.clone(),
+        port: res.port.unwrap_or(22),
+        username: normalize_username(&res.username),
+        password: res
+            .config
+            .get("password")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        private_key: config_private_key(&res.config),
+        keepalive_interval: res
+            .config
+            .get("keepalive_interval")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32),
+        init_script: res
+            .config
+            .get("initScript")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.trim().is_empty())
+            .map(String::from),
+    }
+}
+
 async fn connect(
     State(state): State<AppState>,
     Json(body): Json<ConnectBody>,
@@ -206,29 +236,8 @@ async fn connect(
 
     let conn: Box<dyn FileConnector> = match res.protocol.as_str() {
         "sftp" | "ssh" => {
-            let conn = rex_ssh::sftp::SftpConnector::connect_with_config(rex_ssh::SshConfig {
-                host: res.host.clone(),
-                port: res.port.unwrap_or(22),
-                username: res.username.clone(),
-                password: res
-                    .config
-                    .get("password")
-                    .and_then(|v| v.as_str())
-                    .map(String::from),
-                private_key: config_private_key(&res.config),
-                keepalive_interval: res
-                    .config
-                    .get("keepalive_interval")
-                    .and_then(|v| v.as_u64())
-                    .map(|v| v as u32),
-                init_script: res
-                    .config
-                    .get("initScript")
-                    .and_then(|v| v.as_str())
-                    .filter(|s| !s.trim().is_empty())
-                    .map(String::from),
-            })
-            .await;
+            let conn =
+                rex_ssh::sftp::SftpConnector::connect_with_config(ssh_connect_config(&res)).await;
             match conn {
                 Ok(c) => Box::new(c),
                 Err(e) => {
@@ -1068,5 +1077,26 @@ mod tests {
     fn agent_file_config_username_beats_stale_config_key() {
         let cfg = agent_file_config(&info("alice", r#"{"username":"stale"}"#));
         assert_eq!(cfg.get("username").and_then(|v| v.as_str()), Some("alice"));
+    }
+
+    /// CR1 回归：SSH/SFTP 入口必须把空 username 归一为 `root`，否则与
+    /// `terminal_ws` 的归一（同源 `normalize_username`）分叉 → 连接池键
+    /// `user@host:port` 不同 → SFTP 必然新建连接且空用户名认证失败。
+    #[test]
+    fn ssh_entry_normalizes_empty_username_for_pool_key_parity() {
+        let cfg = ssh_connect_config(&info("", "{}"));
+        assert_eq!(cfg.username, "root");
+        assert_eq!(
+            crate::resource_conn::normalize_username(""),
+            cfg.username,
+            "terminal_ws and file_api must share one normalization source"
+        );
+    }
+
+    #[test]
+    fn ssh_entry_keeps_explicit_username() {
+        let cfg = ssh_connect_config(&info("alice", r#"{"password":"pw"}"#));
+        assert_eq!(cfg.username, "alice");
+        assert_eq!(cfg.password.as_deref(), Some("pw"));
     }
 }

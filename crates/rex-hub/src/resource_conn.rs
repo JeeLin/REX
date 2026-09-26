@@ -11,7 +11,9 @@ use crate::app::AppState;
 /// 从 DB 加载的资源连接信息（host/port/username + 解密后的 config_json）
 ///
 /// 所有协议的 connect handler 通过此结构获取连接参数。
-/// `host`/`port`/`username` 来自 Resource 顶层字段；
+/// `host`/`port`/`username` 来自 Resource 顶层字段，**原样透传**（空 username
+/// 是合法值：Mongo/ClickHouse 据此走无凭据路径）。只有 SSH/SFTP 入口在各自
+/// 分支调用 [`normalize_username`]，见该函数说明；
 /// `config` 是解密后的 config_json，各协议从中提取特有参数：
 /// - MySQL/PostgreSQL: `password`, `database_name`
 /// - Redis: `password`, `db`
@@ -75,7 +77,10 @@ pub fn load_resource_config(
         protocol: resource.protocol,
         host: resource.host,
         port: resource.port,
-        username: normalize_username(&resource.username),
+        // 原值透传：normalize_username 只在 SSH/SFTP 入口调用（terminal_ws.rs、
+        // file_api.rs 的 sftp/ssh 分支），全协议共用路径归一会破坏
+        // mongodb_api / rex-clickhouse 的 `username.is_empty()` 无凭据分支。
+        username: resource.username,
         config,
         subtype: resource.subtype.clone(),
         use_agent,
@@ -83,10 +88,13 @@ pub fn load_resource_config(
     })
 }
 
-/// 空 username 统一兜底为 `root`。
+/// 空 username 统一兜底为 `root`。**只在 SSH/SFTP 入口调用**：
+/// `terminal_ws::load_resource_conn` 与 `file_api` 的 sftp/ssh 分支。
 ///
-/// 连接池键是 `user@host:port`（`rex_ssh::pool`），各入口口径不一致会让 SFTP
-/// 拿到与终端不同的键 → 必然新建连接，且以空用户名认证必然失败。
+/// 连接池键是 `user@host:port`（`rex_ssh::pool`），这两个入口口径不一致会让
+/// SFTP 拿到与终端不同的键 → 必然新建连接，且以空用户名认证必然失败。
+/// 不要挂回 [`load_resource_config`]：Mongo/ClickHouse 等协议以「username 为空」
+/// 判定走无凭据路径，空值是产品合法值。
 /// 纯逻辑，便于单元测试。
 pub fn normalize_username(username: &str) -> String {
     if username.is_empty() {
@@ -168,6 +176,97 @@ pub fn load_sip_conn(info: &ResourceConnInfo) -> Result<rex_sip::SipConfig, Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::{NewEnvironment, NewResource};
+    use std::sync::Arc;
+
+    /// 完整 AppState（tempdir SQLite + 自动生成的主密钥），让
+    /// [`load_resource_config`] 走真实读库/解密路径。
+    fn test_state(dir: &std::path::Path) -> AppState {
+        let db = Arc::new(crate::db::Database::open(&dir.join("rex.db")).unwrap());
+        let auth = Arc::new(crate::auth::AuthConfig::new(db.clone()).unwrap());
+        let crypto = Arc::new(crate::crypto::CredentialCrypto::from_data_dir(dir).unwrap());
+        let sql_pool: crate::sql_api::SqlState = Arc::new(tokio::sync::Mutex::new(
+            crate::sql_api::SqlConnectionPool::new(),
+        ));
+        let redis_pool: crate::redis_api::RedisState =
+            Arc::new(tokio::sync::Mutex::new(Default::default()));
+        let file_pool: crate::file_api::FileState = Arc::new(tokio::sync::Mutex::new(
+            crate::file_api::FileConnectionPool::new(),
+        ));
+        let mongo_pool: crate::mongodb_api::MongoState = Arc::default();
+
+        AppState {
+            db,
+            auth,
+            crypto,
+            sql_pool,
+            redis_pool,
+            file_pool,
+            mongo_pool,
+            agent_tunnel: Arc::new(crate::agent_ws::AgentTunnelState::new()),
+            agent_binaries: Arc::new(crate::update_api::AgentBinaries::new()),
+            sip_capture: Arc::new(crate::sip_capture::SipCaptureRegistry::new()),
+            sip_recording: Arc::new(crate::sip_recording::SipRecordingRegistry::new(
+                dir.to_path_buf(),
+            )),
+            data_dir: dir.to_path_buf(),
+        }
+    }
+
+    fn create_resource(state: &AppState, protocol: &str, username: &str) -> String {
+        let env = state
+            .db
+            .create_environment(&NewEnvironment {
+                name: format!("env-{}", uuid::Uuid::new_v4()),
+                description: None,
+                connection_mode: Some("direct".into()),
+            })
+            .unwrap();
+        state
+            .db
+            .create_resource(
+                &env.id,
+                &NewResource {
+                    name: protocol.to_string(),
+                    protocol: protocol.to_string(),
+                    host: "10.0.0.1".into(),
+                    port: Some(27017),
+                    username: Some(username.to_string()),
+                    config_json: None,
+                    subtype: None,
+                    color: None,
+                    sort_order: None,
+                },
+            )
+            .unwrap()
+            .id
+    }
+
+    /// CR1 回归：空 username 是产品合法值，`load_resource_config` 必须原样返回空串，
+    /// mongodb_api（`mongodb://host:port` 无认证 URI）与 rex-clickhouse（不发
+    /// Basic 认证）依赖这一分支。归一只属于 SSH/SFTP 入口。
+    #[test]
+    fn load_resource_config_keeps_empty_username_for_credentialless_protocols() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = test_state(dir.path());
+
+        for protocol in ["mongodb", "clickhouse"] {
+            let id = create_resource(&state, protocol, "");
+            let info = load_resource_config(&state, &id).unwrap();
+            assert_eq!(
+                info.username, "",
+                "{protocol} with an empty username must keep the empty value \
+                 (otherwise it dials with bogus credentials)"
+            );
+        }
+
+        let id = create_resource(&state, "mongodb", "alice");
+        let info = load_resource_config(&state, &id).unwrap();
+        assert_eq!(
+            info.username, "alice",
+            "explicit usernames pass through verbatim"
+        );
+    }
 
     fn info_with_config(config: &str) -> ResourceConnInfo {
         ResourceConnInfo {
