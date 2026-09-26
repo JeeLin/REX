@@ -88,8 +88,10 @@ pub fn load_resource_config(
     })
 }
 
-/// 空 username 统一兜底为 `root`。**只在 SSH/SFTP 入口调用**：
-/// `terminal_ws::load_resource_conn` 与 `file_api` 的 sftp/ssh 分支。
+/// Fall back to `root` for an empty username. **Only called at SSH/SFTP
+/// entry points**: `terminal_ws::load_resource_conn`, the direct `sftp`/`ssh`
+/// branch of `file_api`, and `file_api::agent_file_config` (the agent-mode file
+/// entry, forwarded to the SSH/SFTP branch of `agent_file.rs`).
 ///
 /// 连接池键是 `user@host:port`（`rex_ssh::pool`），这两个入口口径不一致会让
 /// SFTP 拿到与终端不同的键 → 必然新建连接，且以空用户名认证必然失败。

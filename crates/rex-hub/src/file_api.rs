@@ -131,10 +131,13 @@ fn error_response(code: &str, message: &str) -> (StatusCode, Json<ErrorBody>) {
 // Handlers
 // ---------------------------------------------------------------------------
 
-/// 组装发给 Agent 的文件连接配置（host/port/username + config_json 合并）。
+/// Build the file connection config sent to the Agent (host/port/username +
+/// merged config_json).
 ///
-/// username 必须下发：Agent 侧 `agent_file.rs` 用 `unwrap_or("")` 兜底，
-/// 缺字段会以空用户名发起 SSH 认证（与 `agent_ssh.rs` 的终端配置同源）。
+/// `username` must be sent and normalized with the same source as the direct
+/// leg (empty → `root`, [`normalize_username`]): the agent side `agent_file.rs`
+/// falls back with `unwrap_or("")`, so an empty value authenticates as an empty
+/// SSH user (same origin as the terminal config in `agent_ssh.rs`).
 fn agent_file_config(res: &ResourceConnInfo) -> serde_json::Value {
     let mut cfg = serde_json::json!({
         "host": res.host,
@@ -147,7 +150,10 @@ fn agent_file_config(res: &ResourceConnInfo) -> serde_json::Value {
     }
     if let serde_json::Value::Object(m) = &mut cfg {
         // 资源顶层 username 为权威字段，不被 config_json 中的历史键覆盖
-        m.insert("username".to_string(), res.username.clone().into());
+        m.insert(
+            "username".to_string(),
+            normalize_username(&res.username).into(),
+        );
     }
     cfg
 }
@@ -1098,5 +1104,30 @@ mod tests {
         let cfg = ssh_connect_config(&info("alice", r#"{"password":"pw"}"#));
         assert_eq!(cfg.username, "alice");
         assert_eq!(cfg.password.as_deref(), Some("pw"));
+    }
+
+    /// CR12 regression: the agent file entry must normalize an empty username too,
+    /// otherwise Hub forwards `""` and `agent_file.rs`'s `unwrap_or("")`
+    /// authenticates as an empty user (SSH always rejects), diverging from the
+    /// terminal entry which sends `root` for the same resource.
+    #[test]
+    fn agent_file_entry_normalizes_empty_username() {
+        let cfg = agent_file_config(&info("", "{}"));
+        assert_eq!(
+            cfg.get("username").and_then(|v| v.as_str()),
+            Some("root"),
+            "empty top-level username must not be forwarded as an empty user"
+        );
+        assert_eq!(
+            cfg.get("username").and_then(|v| v.as_str()),
+            Some(crate::resource_conn::normalize_username("").as_str()),
+            "agent file and terminal entries must share one normalization source"
+        );
+    }
+
+    #[test]
+    fn agent_file_entry_keeps_explicit_username() {
+        let cfg = agent_file_config(&info("alice", r#"{"password":"pw"}"#));
+        assert_eq!(cfg.get("username").and_then(|v| v.as_str()), Some("alice"));
     }
 }
