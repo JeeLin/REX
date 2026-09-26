@@ -855,12 +855,31 @@ mod tests {
         }
     }
 
+    /// 确保进程级已安装 DEBUG 级、输出丢弃的全局 subscriber。
+    ///
+    /// `set_global_default` 会重建全仓 callsite interest 缓存：若放任
+    /// callsite 在无 dispatcher 的窗口里首次求值，`never` 会被永久缓存，
+    /// 并行调度下抓日志测试约 50% 概率丢行（隔离跑与 `--test-threads=1`
+    /// 从不复现）。全局装上后 interest 恒为启用；本测试线程的日志仍由
+    /// `set_default` 路由到内存 sink，其余线程进全局 sink 丢弃。
+    fn ensure_global_interest() {
+        static ONCE: std::sync::Once = std::sync::Once::new();
+        ONCE.call_once(|| {
+            let subscriber = tracing_subscriber::fmt()
+                .with_max_level(tracing::Level::DEBUG)
+                .with_writer(std::io::sink)
+                .finish();
+            let _ = tracing::subscriber::set_global_default(subscriber);
+        });
+    }
+
     /// 在本线程挂上 DEBUG 级别的内存 subscriber，执行 `body`，返回抓到的日志。
     async fn capture_logs<F, Fut>(body: F) -> (String, Fut::Output)
     where
         F: FnOnce() -> Fut,
         Fut: std::future::Future,
     {
+        ensure_global_interest();
         let sink = LogSink::default();
         let subscriber = tracing_subscriber::fmt()
             .with_max_level(tracing::Level::DEBUG)
