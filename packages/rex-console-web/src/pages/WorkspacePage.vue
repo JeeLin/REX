@@ -451,6 +451,14 @@ function statusColor(status: Tab['status']): StatusDotStatus {
   }
 }
 
+// Jump to the tab at the given index (1-based keys Alt+1~9), binding it to the active pane.
+function jumpToTab(index: number) {
+  const tab = tabs.value[index]
+  if (!tab) return
+  activeTab.value = tab.id
+  setPaneTab(activePaneId.value, tab.id)
+}
+
 // Cycle active tab by step, wrapping around the tab list.
 function cycleTab(step: number) {
   if (tabs.value.length === 0) return
@@ -476,11 +484,12 @@ useKeyboardShortcuts([
   } },
   { key: '\\', ctrl: true, handler: splitHorizontal },
   { key: '\\', ctrl: true, shift: true, handler: splitVertical },
-  { key: '1', alt: true, handler: () => applyLayout('single') },
-  { key: '2', alt: true, handler: () => applyLayout('left-right') },
-  { key: '3', alt: true, handler: () => applyLayout('top-bottom') },
-  { key: '4', alt: true, handler: () => applyLayout('grid-four') },
-  { key: '5', alt: true, handler: () => applyLayout('main-side') },
+  // Ctrl+Alt+1-5: layout presets
+  { key: '1', ctrl: true, alt: true, handler: () => applyLayout('single') },
+  { key: '2', ctrl: true, alt: true, handler: () => applyLayout('left-right') },
+  { key: '3', ctrl: true, alt: true, handler: () => applyLayout('top-bottom') },
+  { key: '4', ctrl: true, alt: true, handler: () => applyLayout('grid-four') },
+  { key: '5', ctrl: true, alt: true, handler: () => applyLayout('main-side') },
   // 移动端隐藏桌面风格快捷键面板（触屏无键盘快捷键，改触屏友好交互）
   { key: 'F1', handler: () => { if (window.innerWidth >= 768) shortcutsStore.toggle() } },
   { key: 'b', ctrl: true, handler: () => {
@@ -491,11 +500,16 @@ useKeyboardShortcuts([
   } },
   // Ctrl+Shift+N: 新建连接
   { key: 'n', ctrl: true, shift: true, handler: () => { router.push('/resource-new') } },
-  // Alt+6-9: 跳转到第 6-9 个标签
-  { key: '6', alt: true, handler: () => { if (tabs.value[5]) { activeTab.value = tabs.value[5].id; setPaneTab(activePaneId.value, tabs.value[5].id) } } },
-  { key: '7', alt: true, handler: () => { if (tabs.value[6]) { activeTab.value = tabs.value[6].id; setPaneTab(activePaneId.value, tabs.value[6].id) } } },
-  { key: '8', alt: true, handler: () => { if (tabs.value[7]) { activeTab.value = tabs.value[7].id; setPaneTab(activePaneId.value, tabs.value[7].id) } } },
-  { key: '9', alt: true, handler: () => { if (tabs.value[8]) { activeTab.value = tabs.value[8].id; setPaneTab(activePaneId.value, tabs.value[8].id) } } },
+  // Alt+1-9: jump to the 1st-9th tab
+  { key: '1', alt: true, handler: () => jumpToTab(0) },
+  { key: '2', alt: true, handler: () => jumpToTab(1) },
+  { key: '3', alt: true, handler: () => jumpToTab(2) },
+  { key: '4', alt: true, handler: () => jumpToTab(3) },
+  { key: '5', alt: true, handler: () => jumpToTab(4) },
+  { key: '6', alt: true, handler: () => jumpToTab(5) },
+  { key: '7', alt: true, handler: () => jumpToTab(6) },
+  { key: '8', alt: true, handler: () => jumpToTab(7) },
+  { key: '9', alt: true, handler: () => jumpToTab(8) },
   // Cmd/Ctrl+← : go back in tab history
   { key: 'ArrowLeft', ctrl: true, handler: goBack },
   // Cmd/Ctrl+→ : go forward in tab history

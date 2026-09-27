@@ -147,6 +147,56 @@ describe('replacement shortcuts', () => {
   })
 })
 
+describe('alt digit shortcuts', () => {
+  const paneRoot = () =>
+    wrapper!.findComponent({ name: 'PaneNode' }).props('node') as { direction: string | null; children: unknown[] }
+
+  it('Alt+1~9 jump to the corresponding tab', async () => {
+    await newTab(3)
+    expect(activeTabIndex()).toBe(2)
+
+    await pressAndFlush('1', { altKey: true })
+    expect(activeTabIndex()).toBe(0)
+
+    await pressAndFlush('3', { altKey: true })
+    expect(activeTabIndex()).toBe(2)
+
+    // No 9th tab: active tab stays where it is.
+    await pressAndFlush('9', { altKey: true })
+    expect(activeTabIndex()).toBe(2)
+    expect(tabs().length).toBe(3)
+  })
+
+  it('Ctrl+Alt+1~5 apply layout presets without jumping tabs', async () => {
+    await newTab(2)
+    expect(activeTabIndex()).toBe(1)
+
+    const ev = await pressAndFlush('2', { ctrlKey: true, altKey: true })
+
+    expect(ev.defaultPrevented).toBe(true)
+    expect(paneRoot().children.length).toBe(2)
+    expect(paneRoot().direction).toBe('row')
+    expect(activeTabIndex()).toBe(1)
+  })
+
+  it('keeps pure Alt digits on tab jumps and Ctrl+Alt digits on layouts', async () => {
+    await newTab(3)
+
+    await pressAndFlush('2', { altKey: true })
+    expect(activeTabIndex()).toBe(1)
+    expect(paneRoot().children.length).toBe(1)
+
+    await pressAndFlush('3', { ctrlKey: true, altKey: true })
+    expect(paneRoot().direction).toBe('column')
+    expect(activeTabIndex()).toBe(1)
+
+    await pressAndFlush('4', { ctrlKey: true, altKey: true })
+    expect(paneRoot().direction).toBe('column')
+    expect(paneRoot().children.length).toBe(2)
+    expect(activeTabIndex()).toBe(1)
+  })
+})
+
 describe('command palette entry', () => {
   it('ignores Ctrl+K so only the global palette owns the binding', async () => {
     const ev = await pressAndFlush('k', { ctrlKey: true })
