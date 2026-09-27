@@ -3,8 +3,6 @@
  * 参考 DBX buildContextMenu + menu descriptors
  */
 
-import { formatShortcut } from './platform'
-
 // ── 类型定义 ──────────────────────────────────────────────
 
 export interface MenuItem {
@@ -40,7 +38,7 @@ export interface MenuContext {
 const menuDefinitions: Record<NodeType, (ctx: MenuContext) => MenuItem[]> = {
   connection: (ctx) => [
     { label: 'Connect', icon: '🔗', action: () => ctx.data.connect?.() },
-    { label: 'Edit', icon: '✏️', shortcut: formatShortcut('Mod+E'), action: () => ctx.data.edit?.() },
+    { label: 'Edit', icon: '✏️', action: () => ctx.data.edit?.() },
     { separator: true, label: '' },
     { label: 'Duplicate', icon: '📋', action: () => ctx.data.duplicate?.() },
     { label: 'Export', icon: '📤', children: [
@@ -64,10 +62,10 @@ const menuDefinitions: Record<NodeType, (ctx: MenuContext) => MenuItem[]> = {
   ],
 
   table: (ctx) => [
-    { label: 'Open Table', icon: '📊', shortcut: formatShortcut('Enter'), action: () => ctx.data.open?.() },
+    { label: 'Open Table', icon: '📊', action: () => ctx.data.open?.() },
     { label: 'Design Table', icon: '🔧', action: () => ctx.data.design?.() },
     { separator: true, label: '' },
-    { label: 'Copy Name', icon: '📋', shortcut: formatShortcut('Mod+C'), action: () => ctx.data.copyName?.() },
+    { label: 'Copy Name', icon: '📋', action: () => ctx.data.copyName?.() },
     { label: 'Truncate', icon: '🧹', danger: true, action: () => ctx.data.truncate?.() },
     { label: 'Drop Table', icon: '⚠️', danger: true, action: () => ctx.data.drop?.() },
   ],
@@ -81,11 +79,11 @@ const menuDefinitions: Record<NodeType, (ctx: MenuContext) => MenuItem[]> = {
 
   file: (ctx) => [
     { label: 'Open', icon: '📄', action: () => ctx.data.open?.() },
-    { label: 'Download', icon: '⬇️', shortcut: formatShortcut('Mod+S'), action: () => ctx.data.download?.() },
+    { label: 'Download', icon: '⬇️', action: () => ctx.data.download?.() },
     { separator: true, label: '' },
     { label: 'Rename', icon: '✏️', shortcut: 'F2', action: () => ctx.data.rename?.() },
-    { label: 'Copy', icon: '📋', shortcut: formatShortcut('Mod+C'), action: () => ctx.data.copy?.() },
-    { label: 'Cut', icon: '✂️', shortcut: formatShortcut('Mod+X'), action: () => ctx.data.cut?.() },
+    { label: 'Copy', icon: '📋', action: () => ctx.data.copy?.() },
+    { label: 'Cut', icon: '✂️', action: () => ctx.data.cut?.() },
     { separator: true, label: '' },
     { label: 'Delete', icon: '🗑️', danger: true, shortcut: 'Del', action: () => ctx.data.delete?.() },
   ],
@@ -117,7 +115,7 @@ const menuDefinitions: Record<NodeType, (ctx: MenuContext) => MenuItem[]> = {
   ],
 
   tab: (ctx) => [
-    { label: 'Close', icon: '❌', shortcut: formatShortcut('Mod+W'), action: () => ctx.data.close?.() },
+    { label: 'Close', icon: '❌', action: () => ctx.data.close?.() },
     { label: 'Close Others', icon: '❌', action: () => ctx.data.closeOthers?.() },
     { label: 'Close to Right', icon: '❌', action: () => ctx.data.closeRight?.() },
     { separator: true, label: '' },

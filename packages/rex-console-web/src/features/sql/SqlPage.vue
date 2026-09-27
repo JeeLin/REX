@@ -31,7 +31,7 @@ import {
   type SavedQuery,
 } from '@/api/sql'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const emit = defineEmits<{
   'update:status': [status: string]
 }>()
@@ -294,6 +294,14 @@ const clipboardWrapRef = ref<HTMLDivElement>()
 
 onClickOutside(clipboardWrapRef, () => { showClipboard.value = false })
 
+// The format button lives in the editor toolbar: label the key with its
+// editor-scoped context so it is not read as the page-level global search.
+const formatTooltip = computed(() =>
+  locale.value === 'zh'
+    ? `${t('sql.format')}（Ctrl+Shift+F · 编辑器聚焦时）`
+    : `${t('sql.format')} (Ctrl+Shift+F · editor focused)`,
+)
+
 function onFormat() { editorRef.value?.format() }
 function onToggleComment() { editorRef.value?.toggleComment() }
 function onToggleCase() { editorRef.value?.toggleCase() }
@@ -459,6 +467,12 @@ async function onApplyChanges(changes: EditCell[]) {
 }
 
 // Keyboard shortcuts
+// Ctrl+Shift+F is context-scoped: focused SQL editor = format, otherwise the
+// SQL page opens global search. Yield to the editor instead of hijacking it.
+function isSqlEditorTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('.sql-editor') !== null
+}
+
 function handleKeydown(e: KeyboardEvent) {
   // Ctrl+Shift+Q: Global Query
   if (e.ctrlKey && e.shiftKey && e.key === 'Q') {
@@ -470,8 +484,9 @@ function handleKeydown(e: KeyboardEvent) {
     e.preventDefault()
     openAiAssistant()
   }
-  // Cmd/Ctrl+Shift+F: Global Search
+  // Cmd/Ctrl+Shift+F: Global Search (skipped while the SQL editor is focused)
   if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'F') {
+    if (isSqlEditorTarget(e.target)) return
     e.preventDefault()
     openGlobalSearch()
   }
@@ -543,7 +558,7 @@ onBeforeUnmount(() => {
             ▶ {{ t('sql.run') }}
           </button>
           <div class="sql-toolbar-sep" />
-          <button class="sql-toolbar-btn" :title="t('sql.format') + ' (Ctrl+Shift+F)'" @click="onFormat">✦ {{ t('sql.format') }}</button>
+          <button class="sql-toolbar-btn" :title="formatTooltip" @click="onFormat">✦ {{ t('sql.format') }}</button>
           <button class="sql-toolbar-btn" :title="t('sql.toggleComment') + ' (Ctrl+/)'" @click="onToggleComment">💬</button>
           <button class="sql-toolbar-btn" :title="t('sql.toggleCase') + ' (Ctrl+Shift+U)'" @click="onToggleCase">Aa</button>
           <div class="sql-toolbar-sep" />

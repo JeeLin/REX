@@ -1,10 +1,100 @@
+<script lang="ts">
+// Static key table behind the shortcut panel. `title`/`desc` are i18n keys
+// resolved at render time. `scope` disambiguates keys that do different
+// things depending on focus (the three Ctrl+Shift+F meanings).
+export type ShortcutScope = 'editorFocused' | 'editorBlurred' | 'terminalFocused'
+
+export interface PanelShortcut {
+  keys: string
+  desc: string
+  scope?: ShortcutScope
+}
+
+export interface PanelGroup {
+  title: string
+  shortcuts: PanelShortcut[]
+}
+
+export const SHORTCUT_PANEL_GROUPS: PanelGroup[] = [
+  {
+    title: 'shortcuts.groupWorkspace',
+    shortcuts: [
+      { keys: 'Ctrl+K', desc: 'shortcuts.globalSearch' },
+      { keys: 'Ctrl+Shift+N', desc: 'shortcuts.newConnection' },
+      { keys: 'Alt+T', desc: 'shortcuts.newTab' },
+      { keys: 'Alt+W', desc: 'shortcuts.closeTab' },
+      { keys: 'Ctrl+Shift+→', desc: 'shortcuts.nextTab' },
+      { keys: 'Ctrl+Shift+←', desc: 'shortcuts.prevTab' },
+      { keys: 'Alt+1~9', desc: 'shortcuts.jumpTab' },
+      { keys: 'Ctrl+\\', desc: 'shortcuts.splitH' },
+      { keys: 'Ctrl+Shift+\\', desc: 'shortcuts.splitV' },
+      { keys: 'Ctrl+Alt+1', desc: 'shortcuts.layoutSingle' },
+      { keys: 'Ctrl+Alt+2', desc: 'shortcuts.layoutLR' },
+      { keys: 'Ctrl+Alt+3', desc: 'shortcuts.layoutTB' },
+      { keys: 'Ctrl+Alt+4', desc: 'shortcuts.layoutGrid' },
+      { keys: 'Ctrl+Alt+5', desc: 'shortcuts.layoutMain' },
+      { keys: 'F11', desc: 'shortcuts.fullscreen' },
+      { keys: 'F1', desc: 'shortcuts.toggleShortcuts' },
+    ],
+  },
+  {
+    title: 'shortcuts.groupSSH',
+    shortcuts: [
+      { keys: 'Ctrl+Shift+C', desc: 'shortcuts.copy' },
+      { keys: 'Ctrl+Shift+V', desc: 'shortcuts.paste' },
+      { keys: 'Ctrl+F', desc: 'shortcuts.findTerminal' },
+      { keys: 'Ctrl+L', desc: 'shortcuts.clearScreen' },
+      { keys: 'Ctrl+Shift+F', desc: 'terminal.openSftp', scope: 'terminalFocused' },
+    ],
+  },
+  {
+    title: 'shortcuts.groupSQL',
+    shortcuts: [
+      { keys: 'Ctrl+Enter', desc: 'shortcuts.execute' },
+      { keys: 'Ctrl+Shift+F', desc: 'shortcuts.formatSQL', scope: 'editorFocused' },
+      { keys: 'Ctrl+Shift+F', desc: 'shortcuts.globalSearch', scope: 'editorBlurred' },
+      { keys: 'Ctrl+S', desc: 'shortcuts.saveQuery' },
+      { keys: 'Ctrl+F', desc: 'shortcuts.find' },
+      { keys: 'Ctrl+Shift+R', desc: 'shortcuts.findReplace' },
+      { keys: 'Ctrl+Shift+Q', desc: 'shortcuts.globalQuery' },
+      { keys: 'Ctrl+Shift+A', desc: 'shortcuts.aiAssistant' },
+    ],
+  },
+  {
+    title: 'shortcuts.groupFile',
+    shortcuts: [
+      { keys: 'F2', desc: 'shortcuts.renameFile' },
+      { keys: 'F7', desc: 'shortcuts.newFolder' },
+      { keys: 'F8 / Delete', desc: 'shortcuts.deleteFile' },
+      { keys: 'Ctrl+R', desc: 'shortcuts.refreshFiles' },
+    ],
+  },
+]
+</script>
+
 <script setup lang="ts">
 import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const props = defineProps<{ show: boolean }>()
 const emit = defineEmits<{ close: [] }>()
+
+// Focus-scope qualifiers for context-sensitive keys. Kept local to this
+// component because locale JSON files are outside this change's file scope;
+// move them into i18n locales when those files are next touched.
+const SCOPE_QUALIFIERS: Record<ShortcutScope, { zh: string; en: string }> = {
+  editorFocused: { zh: '编辑器聚焦时', en: 'editor focused' },
+  editorBlurred: { zh: '编辑器未聚焦时', en: 'editor not focused' },
+  terminalFocused: { zh: '终端聚焦时', en: 'terminal focused' },
+}
+
+function scopeSuffix(scope?: ShortcutScope): string {
+  if (!scope) return ''
+  const zh = locale.value === 'zh'
+  const label = SCOPE_QUALIFIERS[scope][zh ? 'zh' : 'en']
+  return zh ? `（${label}）` : ` (${label})`
+}
 
 function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') emit('close')
@@ -18,63 +108,15 @@ watch(() => props.show, (visible) => {
   }
 })
 
-const groups = computed(() => [
-  {
-    title: t('shortcuts.groupWorkspace'),
-    shortcuts: [
-      { keys: 'Ctrl+K', desc: t('shortcuts.globalSearch') },
-      { keys: 'Ctrl+N', desc: t('shortcuts.newConnection') },
-      { keys: 'Ctrl+T', desc: t('shortcuts.newTab') },
-      { keys: 'Ctrl+W', desc: t('shortcuts.closeTab') },
-      { keys: 'Ctrl+Tab', desc: t('shortcuts.nextTab') },
-      { keys: 'Ctrl+Shift+Tab', desc: t('shortcuts.prevTab') },
-      { keys: 'Alt+1~9', desc: t('shortcuts.jumpTab') },
-      { keys: 'Ctrl+\\', desc: t('shortcuts.splitH') },
-      { keys: 'Ctrl+Shift+\\', desc: t('shortcuts.splitV') },
-      { keys: 'Alt+1', desc: t('shortcuts.layoutSingle') },
-      { keys: 'Alt+2', desc: t('shortcuts.layoutLR') },
-      { keys: 'Alt+3', desc: t('shortcuts.layoutTB') },
-      { keys: 'Alt+4', desc: t('shortcuts.layoutGrid') },
-      { keys: 'Alt+5', desc: t('shortcuts.layoutMain') },
-      { keys: 'F11', desc: t('shortcuts.fullscreen') },
-      { keys: 'F1', desc: t('shortcuts.toggleShortcuts') },
-    ],
-  },
-  {
-    title: t('shortcuts.groupSSH'),
-    shortcuts: [
-      { keys: 'Ctrl+Shift+C', desc: t('shortcuts.copy') },
-      { keys: 'Ctrl+Shift+V', desc: t('shortcuts.paste') },
-      { keys: 'Ctrl+F', desc: t('shortcuts.findTerminal') },
-      { keys: 'Ctrl+L', desc: t('shortcuts.clearScreen') },
-    ],
-  },
-  {
-    title: t('shortcuts.groupSQL'),
-    shortcuts: [
-      { keys: 'Ctrl+Enter', desc: t('shortcuts.execute') },
-      { keys: 'Ctrl+Shift+F', desc: t('shortcuts.formatSQL') },
-      { keys: 'Ctrl+S', desc: t('shortcuts.saveQuery') },
-      { keys: 'Ctrl+F', desc: t('shortcuts.find') },
-      { keys: 'Ctrl+Shift+R', desc: t('shortcuts.findReplace') },
-      { keys: 'Ctrl+Shift+Q', desc: t('shortcuts.globalQuery') },
-      { keys: 'Ctrl+Shift+A', desc: t('shortcuts.aiAssistant') },
-    ],
-  },
-  {
-    title: t('shortcuts.groupFile'),
-    shortcuts: [
-      { keys: 'F2', desc: t('shortcuts.renameFile') },
-      { keys: 'F4', desc: t('shortcuts.editFile') },
-      { keys: 'F5', desc: t('shortcuts.download') },
-      { keys: 'F6', desc: t('shortcuts.upload') },
-      { keys: 'F7', desc: t('shortcuts.newFolder') },
-      { keys: 'F8 / Delete', desc: t('shortcuts.deleteFile') },
-      { keys: 'Ctrl+R', desc: t('shortcuts.refreshFiles') },
-      { keys: 'Tab', desc: t('shortcuts.switchPanel') },
-    ],
-  },
-])
+const groups = computed(() =>
+  SHORTCUT_PANEL_GROUPS.map((group) => ({
+    title: t(group.title),
+    shortcuts: group.shortcuts.map((s) => ({
+      keys: s.keys,
+      desc: t(s.desc) + scopeSuffix(s.scope),
+    })),
+  })),
+)
 </script>
 
 <template>
@@ -91,7 +133,7 @@ const groups = computed(() => [
         <div class="sp-body">
           <div v-for="group in groups" :key="group.title" class="sp-group">
             <h4 class="sp-group-title mono">{{ group.title }}</h4>
-            <div v-for="s in group.shortcuts" :key="s.keys" class="sp-row">
+            <div v-for="s in group.shortcuts" :key="s.desc" class="sp-row">
               <kbd class="sp-keys mono">{{ s.keys }}</kbd>
               <span class="sp-desc">{{ s.desc }}</span>
             </div>
