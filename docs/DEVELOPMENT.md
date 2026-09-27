@@ -767,7 +767,7 @@ rex-agent = 所有 crate（无前端）
 - **版本号**：v0.89.0
 - **缺陷池 bug**：Agent 前端无法连接直连 SSH（🔴）、Agent 连接日志明文含 token（🟡）（SSH 从 docs/BUGS.md 纳入并在规划时删除；token 原列于快捷键条目，随 Agent 域归属移入本条）
 
-### v0.90.0：快捷键治理
+### v0.90.0：快捷键治理 ← 新增（下一步）
 - **核心功能**：基于 `.dev-flow/shortcuts-inventory.md` 全量清点的快捷键治理——移除浏览器保留键绑定（Ctrl+N/T/W/Tab，用户已决策 2026-09-23，浏览器为准，替代键位统一规划）；修复 Ctrl+K 双面板双触发、Ctrl+Shift+\ 垂直分屏无效；面板文案与实现对齐（Alt+1~9 矛盾、宣而未实现项、context-menu 纯展示文案）；注册表/死代码治理（`utils/shortcuts.ts`、`config/shortcuts.ts`、`QuickOpen.vue` 零引用清理，`stores/shortcuts.ts` 与面板分工注明）；F11 改用真 fullscreen API；补齐 PRODUCT §5 规格内未实现键位（F4-F8/Delete/Ctrl+L/Ctrl+R 等，或经设计核对后修订规格）；同步修订 PRODUCT §5 键位表
 - **子任务预估**：6 个（浏览器保留键解绑与替代键位、Ctrl+K 双触发收敛、注册表与死代码治理、面板/文案与实现对齐、规格键位补齐与 §5 同步、分屏与 F11 修复）
 - **依赖**：v0.89.0
