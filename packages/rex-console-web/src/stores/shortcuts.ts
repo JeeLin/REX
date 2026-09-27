@@ -1,3 +1,6 @@
+// This store only owns the shortcut panel's open/closed state.
+// Key bindings are NOT defined here: each page listens for its own keys
+// locally, and ShortcutPanel.vue only displays the resulting key table.
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
