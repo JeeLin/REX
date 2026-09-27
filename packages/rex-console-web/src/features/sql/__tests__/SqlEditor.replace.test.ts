@@ -15,8 +15,8 @@ function press(target: Element, key: string, init: KeyboardEventInit = {}) {
   }))
 }
 
-async function mountEditor() {
-  wrapper = mount(SqlEditor, { props: { modelValue: 'select 1' }, attachTo: document.body })
+async function mountEditor(modelValue = 'select 1') {
+  wrapper = mount(SqlEditor, { props: { modelValue }, attachTo: document.body })
   await new Promise(resolve => setTimeout(resolve, 0))
   const content = wrapper.element.querySelector('.cm-content')
   expect(content).toBeTruthy()
@@ -49,5 +49,29 @@ describe('SqlEditor Ctrl+Shift+R', () => {
     press(content, 'r', { ctrlKey: true })
 
     expect(w.element.querySelector('.cm-search')).toBeNull()
+  })
+})
+
+describe('SqlEditor Ctrl+Shift+F', () => {
+  const DOC = 'select id from users where active = 1'
+  const FORMATTED = 'SELECT id \nFROM users \nWHERE active = 1'
+
+  it('rewrites the whole document through formatSql', async () => {
+    const { wrapper: w, content } = await mountEditor(DOC)
+
+    press(content, 'F', { ctrlKey: true, shiftKey: true })
+
+    const emitted = w.emitted('update:modelValue')
+    expect(emitted).toBeTruthy()
+    expect(emitted![emitted!.length - 1]![0]).toBe(FORMATTED)
+    expect(w.element.querySelector('.cm-content')!.textContent).toContain('SELECT id')
+  })
+
+  it('leaves the document untouched on plain Ctrl+F', async () => {
+    const { wrapper: w, content } = await mountEditor(DOC)
+
+    press(content, 'f', { ctrlKey: true })
+
+    expect(w.emitted('update:modelValue')).toBeUndefined()
   })
 })

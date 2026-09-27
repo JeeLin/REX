@@ -265,6 +265,14 @@ function createExtensions() {
         key: 'Cmd-Shift-r',
         run: () => openReplace(),
       },
+      {
+        key: 'Ctrl-Shift-f',
+        run: () => { format(); return true },
+      },
+      {
+        key: 'Cmd-Shift-f',
+        run: () => { format(); return true },
+      },
     ]),
     sql({
       dialect: SQLite,
