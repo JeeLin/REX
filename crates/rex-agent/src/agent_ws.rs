@@ -14,9 +14,20 @@ use tokio::sync::{mpsc, RwLock};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use url::Url;
 
-/// SSH 连接池 — 按 host:port 复用已认证的 SSH Handle
-/// 避免同一服务器的 SSH 和 SFTP 各建独立连接导致 MaxSessions=1 时 SFTP 失败
+/// SSH 连接池 — 按 `user@host:port` 复用已认证的 SSH Handle
+/// 避免同一服务器的 SSH 和 SFTP 各建独立连接导致 MaxSessions=1 时 SFTP 失败。
+/// 键必须含 username：同 host:port 不同用户不得共用已认证会话（CR10）。
 pub type SshHandlePool = Arc<RwLock<HashMap<String, Arc<tokio::sync::Mutex<SshHandle>>>>>;
+
+/// 由下发 config 计算连接池键：`user@host:port`，与 Hub 侧
+/// `rex_ssh::pool::pool_key` 同口径；SSH 终端（`agent_ssh`）与 SFTP
+/// （`agent_file`）两个入口共用，保证同一配置落到同一条目。
+pub(crate) fn ssh_pool_key_from_cfg(cfg: &serde_json::Value) -> String {
+    let host = cfg.get("host").and_then(|v| v.as_str()).unwrap_or("");
+    let port = cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(22);
+    let username = cfg.get("username").and_then(|v| v.as_str()).unwrap_or("");
+    format!("{username}@{host}:{port}")
+}
 
 // ═══════════════════════════════════════
 // TLS Insecure 模式（自签名证书跳过验证）

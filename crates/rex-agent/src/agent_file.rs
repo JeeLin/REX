@@ -133,13 +133,15 @@ async fn build_connector(
 ) -> anyhow::Result<Box<dyn FileConnector>> {
     match protocol {
         "sftp" | "ssh" => {
+            // 池键与 `agent_ssh` 同源（含 username）：终端已认证的 Handle 只在
+            // 同一用户下被 SFTP 复用，不同用户不共用会话（CR10）。
+            let pool_key = crate::agent_ws::ssh_pool_key_from_cfg(cfg);
             let host = cfg
                 .get("host")
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
             let port = cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(22) as u16;
-            let pool_key = format!("{}:{}", host, port);
 
             // 检查连接池：优先复用已有的 SSH Handle
             let conn = {

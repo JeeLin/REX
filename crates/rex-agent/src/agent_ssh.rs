@@ -272,8 +272,9 @@ pub async fn handle_connect_ssh(
         }
     };
 
-    // 将 handle 存入连接池，供 SFTP 复用
-    let pool_key = format!("{}:{}", ssh_cfg.host, ssh_cfg.port);
+    // 将 handle 存入连接池，供 SFTP 复用（键含 username，同 host:port 不同
+    // 用户不共用已认证会话，与 Hub 侧 rex_ssh::pool 同口径）
+    let pool_key = crate::agent_ws::ssh_pool_key_from_cfg(cfg);
     {
         let mut handles = ssh_handles.write().await;
         handles.insert(pool_key.clone(), Arc::new(tokio::sync::Mutex::new(handle)));
@@ -363,5 +364,51 @@ mod tests {
         assert_eq!(ssh.port, 22);
         assert!(ssh.password.is_none());
         assert!(ssh.private_key.is_none());
+    }
+
+    /// CR10 回归：池键必须含 username（与 Hub 侧 `rex_ssh::pool` 的
+    /// `user@host:port` 同口径），同 host/port 不同用户拿到不同池条目。
+    #[test]
+    fn pool_key_contains_username_and_separates_users_on_same_host_port() {
+        let alice = crate::agent_ws::ssh_pool_key_from_cfg(
+            &serde_json::json!({"host":"10.0.0.1","port":22,"username":"alice"}),
+        );
+        assert_eq!(alice, "alice@10.0.0.1:22");
+
+        let bob = crate::agent_ws::ssh_pool_key_from_cfg(
+            &serde_json::json!({"host":"10.0.0.1","port":22,"username":"bob"}),
+        );
+        assert_ne!(
+            alice, bob,
+            "same host:port with different users must not share a pool entry"
+        );
+
+        let mut pool: HashMap<String, &str> = HashMap::new();
+        pool.insert(alice.clone(), "session-alice");
+        pool.insert(bob.clone(), "session-bob");
+        assert_eq!(pool.len(), 2);
+        assert_eq!(pool[&alice], "session-alice");
+        assert_eq!(pool[&bob], "session-bob");
+    }
+
+    /// SFTP 入口（`agent_file::build_connector`）与终端入口共用
+    /// `ssh_pool_key_from_cfg`：同一下发 config 由 `parse_ssh_config` 解析出的
+    /// 用户/主机/端口与池键提取结果一致，两个入口必然落到同一条目。
+    #[test]
+    fn pool_key_matches_parsed_ssh_config_for_sftp_entry() {
+        let cfg =
+            serde_json::json!({"host":"10.0.0.5","port":2222,"username":"ops","password":"pw"});
+        let ssh = parse_ssh_config(&cfg);
+        assert_eq!(
+            crate::agent_ws::ssh_pool_key_from_cfg(&cfg),
+            format!("{}@{}:{}", ssh.username, ssh.host, ssh.port),
+            "ssh and sftp entries must derive one pool key from one config"
+        );
+
+        let bare = serde_json::json!({"host":"10.0.0.5","port":2222});
+        assert_eq!(
+            crate::agent_ws::ssh_pool_key_from_cfg(&bare),
+            "@10.0.0.5:2222"
+        );
     }
 }
