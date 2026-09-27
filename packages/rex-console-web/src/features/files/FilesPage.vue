@@ -174,16 +174,39 @@ function cancelRename() { renamingId.value = null }
 function isRenaming(side: Side, name: string) { return renamingId.value === `${side}:${name}` }
 
 // Keyboard
+function activeSide(): Side { return panels.left.active ? 'left' : 'right' }
+
 function onKeyDown(e: KeyboardEvent) {
   if (renamingId.value) return
+  // Skip shortcuts while typing (mirrors the useKeyboardShortcuts guard)
+  const target = e.target as HTMLElement | null
+  const tag = target?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return
+
   if (e.key === 'F2') {
     e.preventDefault()
-    const side: Side = panels.left.active ? 'left' : 'right'
+    const side = activeSide()
     const sel = Array.from(panels[side].selected)
     if (sel.length === 1) {
       const entry = panels[side].entries.find(en => en.name === sel[0])
       if (entry) startRename(side, entry)
     }
+    return
+  }
+  if (e.key === 'F7') {
+    e.preventDefault()
+    newFolder(activeSide())
+    return
+  }
+  if (e.key === 'F8' || e.key === 'Delete') {
+    e.preventDefault()
+    confirmDelete(activeSide())
+    return
+  }
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'r' || e.key === 'R')) {
+    e.preventDefault()
+    loadPanel('left')
+    loadPanel('right')
   }
 }
 
@@ -339,14 +362,14 @@ async function ctxPresignedUrl() {
   ctx.value.show = false
 }
 
-// Mobile bar actions
-function mfbNewFolder() {
+// New folder (desktop shortcut + mobile bar)
+function newFolder(side: Side) {
   if (!sessionId.value) return
   const name = prompt(t('files.folderNamePrompt'))
   if (!name) return
-  const side = mobileActiveSide.value
   filesApi.mkdir(sessionId.value, panels[side].path + name).then(() => loadPanel(side))
 }
+function mfbNewFolder() { newFolder(mobileActiveSide.value) }
 function mfbRename() {
   if (!sessionId.value) return
   const side = mobileActiveSide.value

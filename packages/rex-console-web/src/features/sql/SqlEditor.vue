@@ -4,7 +4,7 @@ import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightSpecialC
 import { EditorState } from '@codemirror/state'
 import { defaultKeymap, indentWithTab, history, historyKeymap } from '@codemirror/commands'
 import { sql, SQLite } from '@codemirror/lang-sql'
-import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
+import { searchKeymap, highlightSelectionMatches, openSearchPanel } from '@codemirror/search'
 import { foldGutter, indentOnInput, bracketMatching, foldKeymap } from '@codemirror/language'
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete'
 import { formatSql } from './sql-format'
@@ -130,6 +130,18 @@ function format() {
   })
 }
 
+/* ---- find & replace ---- */
+function openReplace() {
+  if (!view.value) return false
+  const opened = openSearchPanel(view.value)
+  const replaceField = view.value.dom.querySelector('.cm-search input[name="replace"]') as HTMLInputElement | null
+  if (replaceField) {
+    replaceField.focus()
+    replaceField.select()
+  }
+  return opened
+}
+
 function createTheme() {
   return EditorView.theme({
     '&': {
@@ -244,6 +256,14 @@ function createExtensions() {
       {
         key: 'Ctrl-Shift-U',
         run: () => { toggleCase(); return true },
+      },
+      {
+        key: 'Ctrl-Shift-r',
+        run: () => openReplace(),
+      },
+      {
+        key: 'Cmd-Shift-r',
+        run: () => openReplace(),
       },
     ]),
     sql({
