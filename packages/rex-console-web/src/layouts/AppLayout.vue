@@ -74,11 +74,20 @@ function handleGlobalKeydown(e: KeyboardEvent) {
     commandPaletteVisible.value = !commandPaletteVisible.value
   }
 }
+// Workspace toolbar entry: the workspace page dispatches this event so the
+// global palette stays the only Ctrl+K/command-palette instance in the app.
+function onCommandPaletteToggle() {
+  commandPaletteVisible.value = !commandPaletteVisible.value
+}
 onMounted(() => {
   document.addEventListener('keydown', handleGlobalKeydown)
+  document.addEventListener('rex:command-palette-toggle', onCommandPaletteToggle)
   appStore.checkMode()
 })
-onBeforeUnmount(() => document.removeEventListener('keydown', handleGlobalKeydown))
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleGlobalKeydown)
+  document.removeEventListener('rex:command-palette-toggle', onCommandPaletteToggle)
+})
 
 const filteredMainNav = computed(() => mainNav.filter(item => !item.hubOnly || appStore.isHub))
 

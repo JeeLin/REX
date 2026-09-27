@@ -11,7 +11,6 @@ import ContextMenu from '@/components/ui/ContextMenu.vue'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useSftpDrawer } from '@/composables/useSftpDrawer'
 import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
-import CommandPalette from '@/features/workspace/CommandPalette.vue'
 import PaneNode from '@/features/workspace/PaneNode.vue'
 import { PROTOCOL_COLORS, PROTOCOL_ICONS } from '@/features/resource/protocols'
 import ToolbarSettings from '@/features/workspace/ToolbarSettings.vue'
@@ -205,28 +204,22 @@ function handleToolbarConfigUpdate(cfg: ToolbarConfig) {
 }
 
 
-const showCommandPalette = ref(false)
-
-function handleKeydown(e: KeyboardEvent) {
-  // Ctrl+K: Command palette
-  if (e.ctrlKey && e.key === 'k') {
-    e.preventDefault()
-    showCommandPalette.value = !showCommandPalette.value
-  }
+// Workspace toolbar entry delegates to the single global palette owned by AppLayout,
+// so the toolbar button and Ctrl+K always open the same panel.
+function toggleGlobalCommandPalette() {
+  document.dispatchEvent(new CustomEvent('rex:command-palette-toggle'))
 }
 
 // 工作区状态保活：切换页面回来时恢复 tab
 const { restore } = useWorkspacePersistence({ tabs, activeTab, paneLayoutSerialize: serializeLayout, paneLayoutDeserialize: deserializeLayout, allLeaves, setPaneTab })
 
 onMounted(() => {
-  document.addEventListener('keydown', handleKeydown)
   document.addEventListener('click', handleToolbarSettingsClickAway)
   // 从 localStorage 恢复上次的工作区状态
   restore()
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('click', handleToolbarSettingsClickAway)
 })
 
@@ -648,7 +641,7 @@ useKeyboardShortcuts([
         </button>
       </span>
       <span v-if="toolbarConfig.f1Help" class="ws-seg ws-seg--help" :title="t('workspace.statusbar.f1Help', 'F1 help')" @click="shortcutsStore.toggle()">{{ t('workspace.statusbar.f1Help', 'F1 help') }}</span>
-      <span v-if="toolbarConfig.commandPalette" class="ws-seg ws-seg--help" title="Command palette (Ctrl+K)" @click="showCommandPalette = !showCommandPalette">⌘ {{ t('workspace.commandPalette', 'Command palette') }}</span>
+      <span v-if="toolbarConfig.commandPalette" class="ws-seg ws-seg--help" title="Command palette (Ctrl+K)" @click="toggleGlobalCommandPalette">⌘ {{ t('workspace.commandPalette', 'Command palette') }}</span>
       <span class="ws-seg ws-seg--actions">
         <button class="ws-action-btn" :title="t('workspace.exportWorkspace')" @click="handleExportWorkspace">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -678,12 +671,6 @@ useKeyboardShortcuts([
       v-model:show="showProps"
       :resource="propsResource"
       @save="onPropsSave"
-    />
-
-    <!-- Command palette -->
-    <CommandPalette
-      :visible="showCommandPalette"
-      @close="showCommandPalette = false"
     />
 
     <!-- Close confirmation dialog -->

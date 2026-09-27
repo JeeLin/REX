@@ -146,3 +146,22 @@ describe('replacement shortcuts', () => {
     expect(tabs().length).toBe(1)
   })
 })
+
+describe('command palette entry', () => {
+  it('ignores Ctrl+K so only the global palette owns the binding', async () => {
+    const ev = await pressAndFlush('k', { ctrlKey: true })
+
+    expect(ev.defaultPrevented).toBe(false)
+    expect(document.querySelectorAll('.palette-overlay, .command-palette-overlay').length).toBe(0)
+  })
+
+  it('routes the status bar palette button to the global palette event', async () => {
+    const listener = vi.fn()
+    document.addEventListener('rex:command-palette-toggle', listener)
+
+    await wrapper!.find('[title="Command palette (Ctrl+K)"]').trigger('click')
+
+    expect(listener).toHaveBeenCalledTimes(1)
+    document.removeEventListener('rex:command-palette-toggle', listener)
+  })
+})
