@@ -214,12 +214,14 @@ function toggleGlobalCommandPalette() {
 const { restore } = useWorkspacePersistence({ tabs, activeTab, paneLayoutSerialize: serializeLayout, paneLayoutDeserialize: deserializeLayout, allLeaves, setPaneTab })
 
 onMounted(() => {
+  document.addEventListener('keydown', handleSplitKeydown)
   document.addEventListener('click', handleToolbarSettingsClickAway)
   // 从 localStorage 恢复上次的工作区状态
   restore()
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleSplitKeydown)
   document.removeEventListener('click', handleToolbarSettingsClickAway)
 })
 
@@ -422,6 +424,17 @@ function splitVertical(paneId?: string) {
   splitPane(paneId || lastFocusedPaneId.value || activePaneId.value, 'down')
 }
 
+// Ctrl+Shift+\ vertical split. With shift held the event key becomes '|' on most
+// layouts, so the character-based matcher never fires: match the physical key code.
+function handleSplitKeydown(e: KeyboardEvent) {
+  const target = e.target as HTMLElement | null
+  if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable) return
+  if (e.code === 'Backslash' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+    e.preventDefault()
+    splitVertical()
+  }
+}
+
 function toggleFullscreen() {
   if (!document.fullscreenElement) {
     document.documentElement.requestFullscreen()
@@ -483,7 +496,6 @@ useKeyboardShortcuts([
     }
   } },
   { key: '\\', ctrl: true, handler: splitHorizontal },
-  { key: '\\', ctrl: true, shift: true, handler: splitVertical },
   // Ctrl+Alt+1-5: layout presets
   { key: '1', ctrl: true, alt: true, handler: () => applyLayout('single') },
   { key: '2', ctrl: true, alt: true, handler: () => applyLayout('left-right') },
