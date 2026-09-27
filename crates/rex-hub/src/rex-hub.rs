@@ -299,6 +299,25 @@ async fn health_check() -> axum::Json<serde_json::Value> {
     }))
 }
 
+/// `/api` 前缀兜底：未知 API 路径一律返回 JSON 404，绝不落 SPA fallback。
+///
+/// 否则 `GET /api`、`GET /api/anything` 会拿到 200 text/html（index.html），
+/// Agent 反代与浏览器直连都把 html 当业务响应解析（CR14②）。
+async fn api_not_found() -> (
+    axum::http::StatusCode,
+    axum::Json<rex_hub::error::ErrorBody>,
+) {
+    rex_hub::error::error_with_status(axum::http::StatusCode::NOT_FOUND, "NOT_FOUND", "not found")
+}
+
+/// `CR14②`：`/api` 前缀兜底路由（精确 `/api`、尾斜杠 `/api/`、其余 `/api/{*path}`）。
+fn api_fallback_routes() -> Router<AppState> {
+    Router::new()
+        .route("/api", axum::routing::any(api_not_found))
+        .route("/api/", axum::routing::any(api_not_found))
+        .route("/api/{*path}", axum::routing::any(api_not_found))
+}
+
 /// GET /api/system-info — 宿主机系统信息（os / arch / hostname）
 async fn system_info() -> axum::Json<serde_json::Value> {
     let hostname = hostname::get()
@@ -394,6 +413,9 @@ fn build_router(state: AppState) -> Router {
         .merge(public_routes)
         .merge(protected_routes)
         .merge(agent_ws_route)
+        // `api_fallback_routes` 挂在 auth 中间件之外：API 前缀未匹配路径直接
+        // 返回 JSON 404，不需要（也不应）先要 JWT。
+        .merge(api_fallback_routes())
         .with_state(state)
         .layer(axum::middleware::from_fn(middleware::security_headers))
         .layer(axum::middleware::from_fn(middleware::csrf_protection));
@@ -448,6 +470,77 @@ mod tests {
             tower_http::services::ServeDir::new(dir)
                 .fallback(tower_http::services::ServeFile::new(index)),
         )
+    }
+
+    /// 完整 AppState（tempdir SQLite + 自动生成的主密钥），与
+    /// `tests/api_integration.rs` 同构，供 [`build_router`] 走真实路由装配。
+    fn test_state(dir: &std::path::Path) -> AppState {
+        let db = Arc::new(Database::open(&dir.join("rex.db")).expect("open sqlite"));
+        let auth = Arc::new(auth::AuthConfig::new(db.clone()).expect("auth config"));
+        let crypto = Arc::new(crypto::CredentialCrypto::from_data_dir(dir).expect("crypto"));
+
+        AppState {
+            db,
+            auth,
+            crypto,
+            sql_pool: Arc::new(Mutex::new(sql_api::SqlConnectionPool::new())),
+            redis_pool: Arc::new(Mutex::new(redis_api::RedisConnectionPool::new())),
+            file_pool: Arc::new(Mutex::new(file_api::FileConnectionPool::new())),
+            mongo_pool: Arc::default(),
+            agent_tunnel: Arc::new(agent_ws::AgentTunnelState::new()),
+            agent_binaries: Arc::new(update_api::AgentBinaries::new()),
+            sip_capture: Arc::new(SipCaptureRegistry::new()),
+            sip_recording: Arc::new(SipRecordingRegistry::new(dir.to_path_buf())),
+            data_dir: dir.to_path_buf(),
+        }
+    }
+
+    /// CR14②：`/api` 前缀（精确、尾斜杠、任意子路径）一律 JSON 404，
+    /// 绝不落 SPA fallback 的 200 text/html —— Agent 反代与浏览器直连共用此约束。
+    #[tokio::test]
+    async fn api_prefix_answers_json_404_not_spa_html() {
+        let dir = tempfile::tempdir().expect("create tempdir");
+        let app = build_router(test_state(dir.path()));
+
+        for path in ["/api", "/api/", "/api/anything"] {
+            let resp = app
+                .clone()
+                .oneshot(Request::get(path).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(
+                resp.status(),
+                StatusCode::NOT_FOUND,
+                "{path} must be 404, not the SPA's 200"
+            );
+            let content_type = resp
+                .headers()
+                .get(axum::http::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("");
+            assert!(
+                content_type.starts_with("application/json"),
+                "{path} must answer JSON, got content-type {content_type:?}"
+            );
+
+            let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+            let json: serde_json::Value = serde_json::from_slice(&body).expect("json body");
+            assert_eq!(json["error"]["message"], "not found", "{path}");
+        }
+
+        // 静态/SPA 路径不受影响：仍走 fallback。
+        let resp = app
+            .oneshot(Request::get("/dashboard").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_ne!(
+            resp.headers()
+                .get(axum::http::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or(""),
+            "application/json",
+            "non-API paths must keep falling back to the SPA"
+        );
     }
 
     #[tokio::test]

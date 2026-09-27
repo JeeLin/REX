@@ -499,6 +499,10 @@ fn build_router(state: Arc<AgentState>) -> Router {
         // 200 text/html instead of being proxied (same failure mode the `/ws`
         // route was fixed for).
         .route("/api", axum::routing::any(proxy_api))
+        // Trailing-slash `/api/` is the empty-remainder case of the same gap:
+        // matchit's catch-all requires a non-empty segment, so it also needs
+        // its own exact route to stay off the SPA fallback.
+        .route("/api/", axum::routing::any(proxy_api))
         .route("/api/{*path}", axum::routing::any(proxy_api))
         .route("/ws/agent", axum::routing::any(ws_tunnel_excluded))
         .route("/ws/{*path}", axum::routing::any(proxy_ws))
@@ -961,6 +965,37 @@ mod tests {
         assert_eq!(json["method"], "GET");
     }
 
+    /// CR14①：`/api/`（尾斜杠，空余量）同样匹配不到 `/api/{*path}`，
+    /// 必须有独立精确路由，否则落 SPA 200 text/html。
+    #[tokio::test]
+    async fn trailing_slash_api_path_is_proxied_not_spa_fallback() {
+        // 死 Hub → 反代回 502；若落 SPA 会是 200 text/html。
+        let app = agent_app("http://127.0.0.1:1");
+        let resp = app.clone().oneshot(get("/api/")).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::BAD_GATEWAY,
+            "trailing-slash /api/ must reach the proxy, not the SPA fallback"
+        );
+        assert!(
+            !resp
+                .headers()
+                .get(axum::http::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .is_some_and(|ct| ct.starts_with("text/html")),
+            "trailing-slash /api/ must never answer text/html"
+        );
+
+        // 活 Hub → 路径原样转发（含尾斜杠）。
+        let hub = spawn_echo_hub().await;
+        let app = agent_app(&format!("http://{hub}"));
+        let resp = app.oneshot(get("/api/")).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let json = json_body(resp).await;
+        assert_eq!(json["path"], "/api/");
+        assert_eq!(json["method"], "GET");
+    }
+
     #[tokio::test]
     async fn api_proxy_rewrites_origin_host_and_adds_forwarded_headers() {
         let hub = spawn_echo_hub().await;
@@ -1236,6 +1271,7 @@ mod tests {
         // registers the same /api-prefixed routes the real hub serves.
         let app = Router::new()
             .route("/api", axum::routing::any(hub_echo))
+            .route("/api/", axum::routing::any(hub_echo))
             .route("/api/echo", axum::routing::any(hub_echo))
             .route("/api/slow", axum::routing::get(hub_slow))
             .route("/api/chunked", axum::routing::get(hub_chunked))
