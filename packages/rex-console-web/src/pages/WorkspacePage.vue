@@ -458,24 +458,28 @@ function statusColor(status: Tab['status']): StatusDotStatus {
   }
 }
 
+// Cycle active tab by step, wrapping around the tab list.
+function cycleTab(step: number) {
+  if (tabs.value.length === 0) return
+  const idx = tabs.value.findIndex(t => t.id === activeTab.value)
+  activeTab.value = tabs.value[(idx + step + tabs.value.length) % tabs.value.length]!.id
+}
+
 // 快捷键
 useKeyboardShortcuts([
-  { key: 't', ctrl: true, handler: () => {
-    // Ctrl+T 新建 SSH tab
+  // Alt+T: new SSH tab (replaces browser-reserved Ctrl+T)
+  { key: 't', alt: true, handler: () => {
     const id = nextTabId()
     tabs.value.push({ id, label: 'New Tab', protocol: 'ssh', status: 'connecting' })
     activeTab.value = id
   } },
-  { key: 'w', ctrl: true, handler: () => {
+  // Alt+W: close current tab (replaces browser-reserved Ctrl+W)
+  { key: 'w', alt: true, handler: () => {
     const idx = tabs.value.findIndex(t => t.id === activeTab.value)
     if (idx >= 0 && tabs.value.length > 1) {
       tabs.value.splice(idx, 1)
       activeTab.value = tabs.value[Math.max(0, idx - 1)]!.id
     }
-  } },
-  { key: 'Tab', ctrl: true, handler: () => {
-    const idx = tabs.value.findIndex(t => t.id === activeTab.value)
-    activeTab.value = tabs.value[(idx + 1) % tabs.value.length]!.id
   } },
   { key: '\\', ctrl: true, handler: splitHorizontal },
   { key: '\\', ctrl: true, shift: true, handler: splitVertical },
@@ -503,6 +507,10 @@ useKeyboardShortcuts([
   { key: 'ArrowLeft', ctrl: true, handler: goBack },
   // Cmd/Ctrl+→ : go forward in tab history
   { key: 'ArrowRight', ctrl: true, handler: goForward },
+  // Ctrl+Shift+→ : next tab (replaces browser-reserved Ctrl+Tab)
+  { key: 'ArrowRight', ctrl: true, shift: true, handler: () => cycleTab(1) },
+  // Ctrl+Shift+← : previous tab (replaces browser-reserved Ctrl+Shift+Tab)
+  { key: 'ArrowLeft', ctrl: true, shift: true, handler: () => cycleTab(-1) },
   // Cmd/Ctrl+Shift+T : reopen closed tab
   { key: 't', ctrl: true, shift: true, handler: reopenClosedTab },
 ])
