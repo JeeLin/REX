@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch, defineOptions, provide } from 'vue'
-import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useWorkspacePersistence } from '@/composables/useWorkspacePersistence'
 import { usePaneLayout } from '@/composables/usePaneLayout'
@@ -23,7 +22,6 @@ import { useShortcutsStore } from '@/stores/shortcuts'
 defineOptions({ name: 'WorkspacePage' })
 
 const { t } = useI18n()
-const router = useRouter()
 const wsStore = useWorkspaceStore()
 const shortcutsStore = useShortcutsStore()
 const notify = useNotificationStore()
@@ -510,8 +508,8 @@ useKeyboardShortcuts([
   { key: 'B', ctrl: true, shift: true, handler: () => {
     if (activeTab.value) toggleBroadcast(activeTab.value)
   } },
-  // Ctrl+Shift+N: 新建连接
-  { key: 'n', ctrl: true, shift: true, handler: () => { router.push('/resource-new') } },
+  // Ctrl+Shift+N: 新建连接（同标签右键菜单「新建连接」，原 /resource-new 路由不存在）
+  { key: 'n', ctrl: true, shift: true, handler: () => { showQuickConnect.value = true } },
   // Alt+1-9: jump to the 1st-9th tab
   { key: '1', alt: true, handler: () => jumpToTab(0) },
   { key: '2', alt: true, handler: () => jumpToTab(1) },
