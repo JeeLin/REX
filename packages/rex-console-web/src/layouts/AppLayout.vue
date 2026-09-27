@@ -62,11 +62,45 @@ useSwipeGesture(mainRef, {
 // 移动端虚拟键盘检测
 const { isKeyboardVisible } = useVirtualKeyboard()
 
-// F11 全屏切换
+// F11 全屏切换: real Fullscreen API, Vue flag only as fallback when unsupported.
+function syncFullscreen() {
+  fullscreen.value = !!document.fullscreenElement
+}
+
+async function toggleFullscreen() {
+  if (document.fullscreenEnabled === false) {
+    fullscreen.value = !fullscreen.value
+    return
+  }
+  try {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen()
+    } else {
+      await document.documentElement.requestFullscreen()
+    }
+    syncFullscreen()
+  } catch {
+    fullscreen.value = !fullscreen.value
+  }
+}
+
+async function exitFullscreen() {
+  if (document.fullscreenEnabled === false || !document.fullscreenElement) {
+    fullscreen.value = false
+    return
+  }
+  try {
+    await document.exitFullscreen()
+    syncFullscreen()
+  } catch {
+    fullscreen.value = false
+  }
+}
+
 function handleGlobalKeydown(e: KeyboardEvent) {
   if (e.key === 'F11') {
     e.preventDefault()
-    fullscreen.value = !fullscreen.value
+    toggleFullscreen()
   }
   // Cmd+K / Ctrl+K for global search
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -81,11 +115,13 @@ function onCommandPaletteToggle() {
 }
 onMounted(() => {
   document.addEventListener('keydown', handleGlobalKeydown)
+  document.addEventListener('fullscreenchange', syncFullscreen)
   document.addEventListener('rex:command-palette-toggle', onCommandPaletteToggle)
   appStore.checkMode()
 })
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleGlobalKeydown)
+  document.removeEventListener('fullscreenchange', syncFullscreen)
   document.removeEventListener('rex:command-palette-toggle', onCommandPaletteToggle)
 })
 
@@ -213,7 +249,7 @@ function openQuickConnect() {
         </button>
         <!-- 右侧按钮 + 头像 -->
         <div class="topbar-actions">
-          <button v-if="isWorkspace" class="topbar-icon-btn" :aria-label="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" :title="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" @click="fullscreen = !fullscreen">
+          <button v-if="isWorkspace" class="topbar-icon-btn" :aria-label="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" :title="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')" @click="toggleFullscreen">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline v-if="!fullscreen" points="15 3 21 3 21 9"/><polyline v-if="!fullscreen" points="9 21 3 21 3 15"/><line v-if="!fullscreen" x1="21" y1="3" x2="14" y2="10"/><line v-if="!fullscreen" x1="3" y1="21" x2="10" y2="14"/>
               <polyline v-if="fullscreen" points="14 14 4 14 4 4"/><polyline v-if="fullscreen" points="10 10 20 10 20 20"/><line v-if="fullscreen" x1="4" y1="14" x2="10" y2="10"/><line v-if="fullscreen" x1="20" y1="10" x2="14" y2="14"/>
@@ -244,7 +280,7 @@ function openQuickConnect() {
         class="exit-fullscreen-btn mono"
         :aria-label="t('common.exitFullscreen')"
         :title="t('common.exitFullscreen') + ' (Esc)'"
-        @click="fullscreen = false"
+        @click="exitFullscreen"
       >
         ⊟
       </button>
