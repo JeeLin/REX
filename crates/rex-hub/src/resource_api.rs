@@ -295,7 +295,6 @@ pub struct TestConnectionRequest {
     pub protocol: String,
     pub host: String,
     pub port: Option<u16>,
-    #[allow(dead_code)]
     pub username: Option<String>,
     pub config_json: Option<String>,
     pub environment_id: Option<String>,
@@ -306,6 +305,42 @@ pub struct TestConnectionResult {
     pub ok: bool,
     pub latency_ms: Option<u64>,
     pub error: Option<String>,
+}
+
+/// agent 模式「测试连接」下发给 Agent 的 connect config：host/port +
+/// 合并 `config_json`（凭证等）。
+///
+/// 顶层 `username` 在 merge **之后**写入为权威字段（空 → `root`，
+/// [`crate::resource_conn::normalize_username`]），口径与
+/// `file_api::agent_file_config` 同源：Agent 侧 `agent_ssh::parse_ssh_config`
+/// 以下发 config 的 username 认证，缺字段即以空用户认证，测试连接必被拒（CR15）。
+fn agent_test_connect_config(
+    host: &str,
+    port: u16,
+    username: Option<&str>,
+    config_json: Option<&str>,
+) -> serde_json::Value {
+    let mut cfg = serde_json::json!({
+        "host": host,
+        "port": port,
+    });
+    // 合并 config_json（含 password/private_key 等凭证）
+    if let Some(cfg_str) = config_json {
+        if let Ok(serde_json::Value::Object(m)) = serde_json::from_str::<serde_json::Value>(cfg_str)
+        {
+            for (k, v) in m {
+                cfg[k] = v;
+            }
+        }
+    }
+    if let serde_json::Value::Object(m) = &mut cfg {
+        // 资源顶层 username 为权威字段，不被 config_json 中的历史键覆盖
+        m.insert(
+            "username".to_string(),
+            crate::resource_conn::normalize_username(username.unwrap_or("")).into(),
+        );
+    }
+    cfg
 }
 
 pub async fn test_connection(
@@ -385,20 +420,12 @@ pub async fn test_connection(
                                         state.agent_tunnel.pending_requests.write().await;
                                     pending.insert(request_id.clone(), resp_tx);
                                 }
-                                let mut connect_config = serde_json::json!({
-                                    "host": host,
-                                    "port": port,
-                                });
-                                // 合并 config_json（含 password/private_key 等凭证）
-                                if let Some(ref cfg_str) = body.config_json {
-                                    if let Ok(serde_json::Value::Object(m)) =
-                                        serde_json::from_str::<serde_json::Value>(cfg_str)
-                                    {
-                                        for (k, v) in m {
-                                            connect_config[k] = v;
-                                        }
-                                    }
-                                }
+                                let connect_config = agent_test_connect_config(
+                                    &host,
+                                    port,
+                                    body.username.as_deref(),
+                                    body.config_json.as_deref(),
+                                );
                                 let connect_msg = serde_json::json!({
                                     "type": "connect",
                                     "payload": {
@@ -711,5 +738,47 @@ pub async fn test_connection(
             latency_ms: Some(latency),
             error: Some(e),
         })),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// CR15 回归：agent 模式测试连接的 connect config 必须透出顶层 username，
+    /// 空值归一为 `root`（与 `file_api::agent_file_config` 同源），
+    /// 否则 Agent 以空用户名认证，测试连接必被拒。
+    #[test]
+    fn agent_test_config_normalizes_empty_username() {
+        let cfg = agent_test_connect_config("10.0.0.1", 22, Some(""), Some(r#"{"password":"pw"}"#));
+        assert_eq!(
+            cfg.get("username").and_then(|v| v.as_str()),
+            Some("root"),
+            "empty top-level username must not be forwarded as an empty user"
+        );
+        assert_eq!(
+            cfg.get("username").and_then(|v| v.as_str()),
+            Some(crate::resource_conn::normalize_username("").as_str()),
+            "test connection and file entries must share one normalization source"
+        );
+        assert_eq!(cfg.get("host").and_then(|v| v.as_str()), Some("10.0.0.1"));
+        assert_eq!(cfg.get("port").and_then(|v| v.as_u64()), Some(22));
+        assert_eq!(cfg.get("password").and_then(|v| v.as_str()), Some("pw"));
+    }
+
+    /// 顶层 username 为权威：显式值保留，不被 config_json 中的历史键覆盖；
+    /// 缺失字段（`None`）同样按空值归一。
+    #[test]
+    fn agent_test_config_keeps_explicit_username() {
+        let cfg = agent_test_connect_config(
+            "10.0.0.1",
+            22,
+            Some("alice"),
+            Some(r#"{"username":"stale"}"#),
+        );
+        assert_eq!(cfg.get("username").and_then(|v| v.as_str()), Some("alice"));
+
+        let cfg = agent_test_connect_config("10.0.0.1", 22, None, None);
+        assert_eq!(cfg.get("username").and_then(|v| v.as_str()), Some("root"));
     }
 }

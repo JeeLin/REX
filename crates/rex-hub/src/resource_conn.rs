@@ -78,8 +78,9 @@ pub fn load_resource_config(
         host: resource.host,
         port: resource.port,
         // 原值透传：normalize_username 只在 SSH/SFTP 入口调用（terminal_ws.rs、
-        // file_api.rs 的 sftp/ssh 分支），全协议共用路径归一会破坏
-        // mongodb_api / rex-clickhouse 的 `username.is_empty()` 无凭据分支。
+        // file_api.rs 的 sftp/ssh 分支、resource_api.rs 测试连接的 agent 分支），
+        // 全协议共用路径归一会破坏 mongodb_api / rex-clickhouse 的
+        // `username.is_empty()` 无凭据分支。
         username: resource.username,
         config,
         subtype: resource.subtype.clone(),
@@ -90,10 +91,12 @@ pub fn load_resource_config(
 
 /// Fall back to `root` for an empty username. **Only called at SSH/SFTP
 /// entry points**: `terminal_ws::load_resource_conn`, the direct `sftp`/`ssh`
-/// branch of `file_api`, and `file_api::agent_file_config` (the agent-mode file
-/// entry, forwarded to the SSH/SFTP branch of `agent_file.rs`).
+/// branch of `file_api`, `file_api::agent_file_config` (the agent-mode file
+/// entry, forwarded to the SSH/SFTP branch of `agent_file.rs`) and
+/// `resource_api::agent_test_connect_config` (the agent-mode test-connection
+/// entry).
 ///
-/// 连接池键是 `user@host:port`（`rex_ssh::pool`），这两个入口口径不一致会让
+/// 连接池键是 `user@host:port`（`rex_ssh::pool`），这些入口口径不一致会让
 /// SFTP 拿到与终端不同的键 → 必然新建连接，且以空用户名认证必然失败。
 /// 不要挂回 [`load_resource_config`]：Mongo/ClickHouse 等协议以「username 为空」
 /// 判定走无凭据路径，空值是产品合法值。
