@@ -285,6 +285,20 @@ provide<PaneCtx>(PANE_CTX, {
 // Tab 右键菜单相关本地 UI 状态
 const showQuickConnect = ref(false)
 
+// The global palette's "New connection" command navigates here first, then
+// dispatches this event so the workspace opens the same quick-connect state.
+function onQuickConnectOpen() {
+  showQuickConnect.value = true
+}
+
+onMounted(() => {
+  document.addEventListener('rex:quick-connect-open', onQuickConnectOpen)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('rex:quick-connect-open', onQuickConnectOpen)
+})
+
 const paneContextMenu = ref<{ show: boolean; x: number; y: number; paneId: string }>({ show: false, x: 0, y: 0, paneId: '' })
 
 function onPaneContextMenu(e: MouseEvent, paneId: string) {

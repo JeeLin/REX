@@ -215,3 +215,45 @@ describe('command palette entry', () => {
     document.removeEventListener('rex:command-palette-toggle', listener)
   })
 })
+
+describe('quick-connect entry from the global palette', () => {
+  it('listens for rex:quick-connect-open while the page is mounted', async () => {
+    wrapper!.unmount()
+    wrapper = null
+
+    const addSpy = vi.spyOn(document, 'addEventListener')
+    wrapper = mount(WorkspacePage)
+    await nextTick()
+
+    const registration = addSpy.mock.calls.find((call) => call[0] === 'rex:quick-connect-open')
+    expect(registration).toBeTruthy()
+
+    const handler = registration![1] as EventListener
+    expect(() => handler(new CustomEvent('rex:quick-connect-open'))).not.toThrow()
+
+    addSpy.mockRestore()
+  })
+
+  it('releases the listener on unmount so later palette events are harmless', async () => {
+    wrapper!.unmount()
+    wrapper = null
+
+    const addSpy = vi.spyOn(document, 'addEventListener')
+    const removeSpy = vi.spyOn(document, 'removeEventListener')
+    wrapper = mount(WorkspacePage)
+    await nextTick()
+
+    const registration = addSpy.mock.calls.find((call) => call[0] === 'rex:quick-connect-open')
+    expect(registration).toBeTruthy()
+    const handler = registration![1] as EventListener
+
+    wrapper.unmount()
+    wrapper = null
+
+    expect(removeSpy).toHaveBeenCalledWith('rex:quick-connect-open', handler)
+    expect(() => document.dispatchEvent(new CustomEvent('rex:quick-connect-open'))).not.toThrow()
+
+    addSpy.mockRestore()
+    removeSpy.mockRestore()
+  })
+})

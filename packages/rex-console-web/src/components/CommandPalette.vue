@@ -1,12 +1,29 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 const store = useEnvironmentsStore()
+
+// ── Preference helpers ─────────────────────────────────────
+// Set semantics (unlike useTheme's toggle) so the palette can jump to a mode
+// directly; dark clears the attribute because the stylesheet default is dark.
+function setTheme(mode: 'dark' | 'light') {
+  localStorage.setItem('rex-theme', mode)
+  if (mode === 'light') {
+    document.documentElement.dataset.theme = 'light'
+  } else {
+    delete document.documentElement.dataset.theme
+  }
+}
+
+function setLanguage(mode: 'en' | 'zh') {
+  locale.value = mode
+  localStorage.setItem('rex-lang', mode)
+}
 
 // ── Props / Emits ──────────────────────────────────────────
 const props = defineProps<{
@@ -40,8 +57,28 @@ const searchItems = computed<SearchItem[]>(() => {
     { id: 'nav-workspace', title: t('nav.workspace'), description: 'Workspace', icon: '🖥️', action: () => router.push('/workspace'), category: 'Navigation' },
     { id: 'nav-dashboard', title: t('nav.dashboard'), description: 'Dashboard', icon: '📊', action: () => router.push('/dashboard'), category: 'Navigation' },
     { id: 'nav-environments', title: t('nav.environments'), description: 'Environments', icon: '📋', action: () => router.push('/environments'), category: 'Navigation' },
+    { id: 'nav-agents', title: t('nav.agents'), description: 'Agents', icon: '🤖', action: () => router.push('/agents'), category: 'Navigation' },
     { id: 'nav-audit', title: t('nav.auditLog'), description: 'Audit Log', icon: '📝', action: () => router.push('/audit-log'), category: 'Navigation' },
     { id: 'nav-settings', title: t('nav.settings'), description: 'Settings', icon: '⚙️', action: () => router.push('/settings'), category: 'Navigation' },
+  )
+
+  // Command items (merged from the former workspace palette)
+  items.push(
+    {
+      id: 'new-connection',
+      title: t('commandPalette.newConnection'),
+      description: 'New connection',
+      icon: '📡',
+      action: () => {
+        router.push('/workspace')
+        document.dispatchEvent(new CustomEvent('rex:quick-connect-open'))
+      },
+      category: 'Command',
+    },
+    { id: 'theme-dark', title: t('commandPalette.themeDark'), description: 'Switch to dark theme', icon: '🎨', action: () => setTheme('dark'), category: 'Setting' },
+    { id: 'theme-light', title: t('commandPalette.themeLight'), description: 'Switch to light theme', icon: '🎨', action: () => setTheme('light'), category: 'Setting' },
+    { id: 'language-en', title: t('commandPalette.languageEn'), description: 'Switch language to English', icon: '🌐', action: () => setLanguage('en'), category: 'Setting' },
+    { id: 'language-zh', title: t('commandPalette.languageZh'), description: 'Switch language to Chinese', icon: '🌐', action: () => setLanguage('zh'), category: 'Setting' },
   )
 
   // Environment items
@@ -80,7 +117,8 @@ const searchItems = computed<SearchItem[]>(() => {
 // ── Filtered Results ───────────────────────────────────────
 const results = computed(() => {
   const q = searchInput.value.toLowerCase()
-  if (!q) return searchItems.value.slice(0, 10) // Show top 10 items when empty
+  // Enough rows to show every static command plus the first environments.
+  if (!q) return searchItems.value.slice(0, 15)
 
   return searchItems.value.filter(item =>
     item.title.toLowerCase().includes(q) ||
