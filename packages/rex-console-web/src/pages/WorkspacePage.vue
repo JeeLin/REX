@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch, defineOptions, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { useWorkspacePersistence } from '@/composables/useWorkspacePersistence'
 import { usePaneLayout } from '@/composables/usePaneLayout'
 import { useTabs, nextTabId, type Tab } from '@/composables/useTabs'
@@ -22,6 +23,7 @@ import { useShortcutsStore } from '@/stores/shortcuts'
 defineOptions({ name: 'WorkspacePage' })
 
 const { t } = useI18n()
+const router = useRouter()
 const wsStore = useWorkspaceStore()
 const shortcutsStore = useShortcutsStore()
 const notify = useNotificationStore()
@@ -283,21 +285,6 @@ provide<PaneCtx>(PANE_CTX, {
 })
 
 // Tab 右键菜单相关本地 UI 状态
-const showQuickConnect = ref(false)
-
-// The global palette's "New connection" command navigates here first, then
-// dispatches this event so the workspace opens the same quick-connect state.
-function onQuickConnectOpen() {
-  showQuickConnect.value = true
-}
-
-onMounted(() => {
-  document.addEventListener('rex:quick-connect-open', onQuickConnectOpen)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('rex:quick-connect-open', onQuickConnectOpen)
-})
 
 const paneContextMenu = ref<{ show: boolean; x: number; y: number; paneId: string }>({ show: false, x: 0, y: 0, paneId: '' })
 
@@ -340,7 +327,7 @@ function localHandleTabCtxAction(action: string) {
   const id = tabContextMenu.value.tabId
   if (!id) return
   switch (action) {
-    case 'new': showQuickConnect.value = true; break
+    case 'new': router.push('/workspace'); break
     case 'props': openProperties(id); break
     case 'disconnect': disconnectTab(id); break
     case 'close': requestCloseTab(id); break
@@ -523,7 +510,7 @@ useKeyboardShortcuts([
     if (activeTab.value) toggleBroadcast(activeTab.value)
   } },
   // Ctrl+Shift+N: 新建连接（同标签右键菜单「新建连接」，原 /resource-new 路由不存在）
-  { key: 'n', ctrl: true, shift: true, handler: () => { showQuickConnect.value = true } },
+  { key: 'n', ctrl: true, shift: true, handler: () => { router.push('/workspace') } },
   // Alt+1-9: jump to the 1st-9th tab
   { key: '1', alt: true, handler: () => jumpToTab(0) },
   { key: '2', alt: true, handler: () => jumpToTab(1) },

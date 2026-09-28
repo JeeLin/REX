@@ -99,17 +99,11 @@ describe('merged workspace palette commands', () => {
     expect(h.push).toEqual(['/agents'])
   })
 
-  it('opens the workspace quick connect instead of the dead /resource-new route', async () => {
-    const listener = vi.fn()
-    document.addEventListener('rex:quick-connect-open', listener)
-
+  it('routes new-connection to the workspace instead of the dead /resource-new route', async () => {
     await runCommand('commandPalette.newConnection')
-
-    document.removeEventListener('rex:quick-connect-open', listener)
 
     expect(h.push).toEqual(['/workspace'])
     expect(h.push).not.toContain('/resource-new')
-    expect(listener).toHaveBeenCalledTimes(1)
   })
 
   it('applies the dark and light theme modes', async () => {

@@ -69,10 +69,10 @@ const searchItems = computed<SearchItem[]>(() => {
       title: t('commandPalette.newConnection'),
       description: 'New connection',
       icon: '📡',
-      action: () => {
-        router.push('/workspace')
-        document.dispatchEvent(new CustomEvent('rex:quick-connect-open'))
-      },
+      // The ResourcePanel sidebar is always mounted in AppLayout and owns the
+      // per-environment "+" wizard, so navigating to the workspace is the whole
+      // "new connection" entry point — there is no separate quick-connect dialog.
+      action: () => router.push('/workspace'),
       category: 'Command',
     },
     { id: 'theme-dark', title: t('commandPalette.themeDark'), description: 'Switch to dark theme', icon: '🎨', action: () => setTheme('dark'), category: 'Setting' },
