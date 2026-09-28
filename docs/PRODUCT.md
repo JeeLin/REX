@@ -353,6 +353,7 @@ CSS 变量（`--bg-deep` / `--bg-surface` / `--bg-elevated` / `--bg-hover` / `--
 | `Alt+T` | 新建 SSH 标签 |
 | `Alt+W` | 关闭当前标签 |
 | `Ctrl+Shift+→` / `Ctrl+Shift+←` | 切换下一个 / 上一个标签 |
+| `Alt+Shift+T` | 重开已关标签 |
 | `Alt+1~9` | 跳转到第 N 个标签 |
 | `Ctrl+Alt+1~5` | 布局预设：单面板/左右/上下/四宫格/主+侧边 |
 | `F11` | 全屏切换 |

@@ -25,6 +25,7 @@ export const SHORTCUT_PANEL_GROUPS: PanelGroup[] = [
       { keys: 'Alt+W', desc: 'shortcuts.closeTab' },
       { keys: 'Ctrl+Shift+→', desc: 'shortcuts.nextTab' },
       { keys: 'Ctrl+Shift+←', desc: 'shortcuts.prevTab' },
+      { keys: 'Alt+Shift+T', desc: 'shortcuts.reopenTab' },
       { keys: 'Alt+1~9', desc: 'shortcuts.jumpTab' },
       { keys: 'Ctrl+\\', desc: 'shortcuts.splitH' },
       { keys: 'Ctrl+Shift+\\', desc: 'shortcuts.splitV' },

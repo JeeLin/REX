@@ -486,13 +486,11 @@ useKeyboardShortcuts([
     tabs.value.push({ id, label: 'New Tab', protocol: 'ssh', status: 'connecting' })
     activeTab.value = id
   } },
-  // Alt+W: close current tab (replaces browser-reserved Ctrl+W)
+  // Alt+W: close current tab (replaces browser-reserved Ctrl+W).
+  // Routes through closeTab() so the tab lands in closedTabs and Alt+Shift+T
+  // can restore it — a bare splice made "reopen closed tab" dead in practice.
   { key: 'w', alt: true, handler: () => {
-    const idx = tabs.value.findIndex(t => t.id === activeTab.value)
-    if (idx >= 0 && tabs.value.length > 1) {
-      tabs.value.splice(idx, 1)
-      activeTab.value = tabs.value[Math.max(0, idx - 1)]!.id
-    }
+    if (activeTab.value) requestCloseTab(activeTab.value)
   } },
   { key: '\\', ctrl: true, handler: splitHorizontal },
   // Ctrl+Alt+1-5: layout presets
@@ -530,7 +528,7 @@ useKeyboardShortcuts([
   // Ctrl+Shift+← : previous tab (replaces browser-reserved Ctrl+Shift+Tab)
   { key: 'ArrowLeft', ctrl: true, shift: true, handler: () => cycleTab(-1) },
   // Cmd/Ctrl+Shift+T : reopen closed tab
-  { key: 't', ctrl: true, shift: true, handler: reopenClosedTab },
+  { key: 't', alt: true, shift: true, handler: reopenClosedTab },
 ])
 </script>
 

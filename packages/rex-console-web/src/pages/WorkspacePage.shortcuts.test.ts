@@ -215,3 +215,17 @@ describe('command palette entry', () => {
     document.removeEventListener('rex:command-palette-toggle', listener)
   })
 })
+
+describe('reopen closed tab', () => {
+  it('Alt+Shift+T reopens the last closed tab', async () => {
+    await newTab(2)
+    // close one tab with Alt+W
+    await pressAndFlush('w', { altKey: true })
+    expect(tabs().length).toBe(1)
+
+    // reopen with Alt+Shift+T
+    const ev = await pressAndFlush('t', { altKey: true, shiftKey: true })
+    expect(ev.defaultPrevented).toBe(true)
+    expect(tabs().length).toBe(2)
+  })
+})

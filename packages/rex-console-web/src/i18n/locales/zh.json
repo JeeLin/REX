@@ -633,6 +633,7 @@
     "prevTab": "切换上一个标签",
     "refreshFiles": "刷新",
     "renameFile": "重命名",
+    "reopenTab": "重开已关标签",
     "saveQuery": "保存查询",
     "splitH": "水平分屏",
     "splitV": "垂直分屏",

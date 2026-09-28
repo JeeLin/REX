@@ -249,6 +249,9 @@ export function useTabs(deps: UseTabsDeps) {
     const tab = closedTabs.value.pop()!
     tabs.value.push({ ...tab, status: 'connecting' })
     activeTab.value = tab.id
+    // Re-attach to a pane: closeTab() detaches the tab, so without this the
+    // restored tab exists in `tabs` but no pane renders it (invisible reopen).
+    setPaneTab(activePaneId.value, tab.id)
   }
 
   // ===== Workspace Export / Import =====

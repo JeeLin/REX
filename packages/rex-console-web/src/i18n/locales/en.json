@@ -633,6 +633,7 @@
     "prevTab": "Switch previous tab",
     "refreshFiles": "Refresh",
     "renameFile": "Rename",
+    "reopenTab": "Reopen closed tab",
     "saveQuery": "Save query",
     "splitH": "Split horizontal",
     "splitV": "Split vertical",

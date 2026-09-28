@@ -17,7 +17,7 @@ const shortcuts = [
   { keys: 'Ctrl+T', desc: 'New Tab' },
   { keys: 'Ctrl+W', desc: 'Close Tab' },
   { keys: 'Ctrl+← / Ctrl+→', desc: 'Tab History' },
-  { keys: 'Ctrl+Shift+T', desc: 'Reopen Closed Tab' },
+  { keys: 'Alt+Shift+T', desc: 'Reopen Closed Tab' },
   { keys: 'Ctrl+\\', desc: 'Split Horizontal' },
   { keys: 'Alt+1~5', desc: 'Layout Presets' },
 ]
