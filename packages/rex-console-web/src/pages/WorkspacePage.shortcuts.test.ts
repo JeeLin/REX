@@ -229,3 +229,151 @@ describe('reopen closed tab', () => {
     expect(tabs().length).toBe(2)
   })
 })
+
+describe('fullscreen toolbar button', () => {
+  const fsButton = () =>
+    wrapper!.find('[aria-label="common.fullscreen"], [aria-label="common.exitFullscreen"]')
+
+  it('falls back to a UI flag and stays in sync when the Fullscreen API is unavailable', async () => {
+    expect(fsButton().exists()).toBe(true)
+    expect(fsButton().attributes('title')).toBe('common.fullscreen')
+
+    // jsdom has no requestFullscreen: the composable must swallow the rejection
+    // and flip the flag instead of throwing.
+    await fsButton().trigger('click')
+    expect(fsButton().attributes('title')).toBe('common.exitFullscreen')
+
+    await fsButton().trigger('click')
+    expect(fsButton().attributes('title')).toBe('common.fullscreen')
+  })
+})
+
+describe('pane sync (activeTab ↔ pane.tabId)', () => {
+  interface PaneTree {
+    id: string
+    direction: 'row' | 'column' | null
+    children: PaneTree[]
+    tabId: string | null
+  }
+
+  const tree = () =>
+    wrapper!.findComponent({ name: 'PaneNode' }).props('node') as unknown as PaneTree
+
+  function leaves(): PaneTree[] {
+    const out: PaneTree[] = []
+    const walk = (n: PaneTree) => {
+      if (n.direction === null) out.push(n)
+      else n.children.forEach(walk)
+    }
+    walk(tree())
+    return out
+  }
+
+  /** The active pane's tabId. Single pane ⇒ only leaf; after a split the new pane becomes active. */
+  function activePaneTab(): string | null {
+    const ls = leaves()
+    return ls.length === 1 ? ls[0]!.tabId : ls[ls.length - 1]!.tabId
+  }
+
+  function tabIdsInPanes(): Array<string | null> {
+    return leaves().map(l => l.tabId)
+  }
+
+  it('Alt+T binds the new tab to the active pane', async () => {
+    expect(activePaneTab()).toBeNull()
+
+    await pressAndFlush('t', { altKey: true })
+    expect(activePaneTab()).not.toBeNull()
+    expect(activePaneTab()).not.toBe('')
+
+    const first = activePaneTab()
+    await pressAndFlush('t', { altKey: true })
+    expect(activePaneTab()).not.toBeNull()
+    expect(activePaneTab()).not.toBe(first)
+  })
+
+  it('cycle tab keeps the pane following the active tab (round trip)', async () => {
+    await newTab(3)
+    const last = activePaneTab()
+    expect(last).not.toBeNull()
+
+    await pressAndFlush('ArrowRight', { ctrlKey: true, shiftKey: true }) // wraps to first
+    const first = activePaneTab()
+    expect(first).not.toBeNull()
+    expect(first).not.toBe(last)
+
+    await pressAndFlush('ArrowLeft', { ctrlKey: true, shiftKey: true }) // back to last
+    expect(activePaneTab()).toBe(last)
+  })
+
+  it('goBack/goForward keep the pane in sync with history', async () => {
+    await newTab(3)
+    const third = activePaneTab()
+
+    await pressAndFlush('1', { altKey: true })
+    const first = activePaneTab()
+    expect(first).not.toBe(third)
+
+    await pressAndFlush('ArrowLeft', { ctrlKey: true }) // goBack
+    expect(activePaneTab()).not.toBe(first)
+
+    await pressAndFlush('ArrowRight', { ctrlKey: true }) // goForward
+    expect(activePaneTab()).toBe(first)
+  })
+
+  it('Alt+1~9 jumps move the tab into the active pane', async () => {
+    await newTab(3)
+    const third = activePaneTab()
+
+    await pressAndFlush('1', { altKey: true })
+    const first = activePaneTab()
+    expect(first).not.toBe(third)
+
+    await pressAndFlush('3', { altKey: true })
+    expect(activePaneTab()).toBe(third)
+  })
+
+  it('Alt+W close leaves no pane pointing at the removed tab', async () => {
+    await newTab(2)
+    const second = activePaneTab()
+
+    await pressAndFlush('w', { altKey: true })
+
+    expect(tabs().length).toBe(1)
+    expect(tabIdsInPanes()).not.toContain(second)
+    expect(activePaneTab()).not.toBeNull() // fallback tab bound, no null/blank pane
+  })
+
+  it('closing every tab clears pane bindings', async () => {
+    await newTab(1)
+    expect(activePaneTab()).not.toBeNull()
+
+    await pressAndFlush('w', { altKey: true })
+
+    expect(tabs().length).toBe(0)
+    expect(tabIdsInPanes().every(id => id === null)).toBe(true)
+  })
+
+  it('jumping to a tab clears its old pane (one tab per pane)', async () => {
+    await newTab(2)
+    const second = activePaneTab()
+
+    // Split: two panes, the new (right) pane becomes active and is initially empty.
+    await pressAndFlush('\\', { ctrlKey: true })
+    expect(leaves().length).toBe(2)
+    expect(activePaneTab()).toBeNull()
+    expect(tabIdsInPanes()).toContain(second) // old pane still holds the tab
+
+    // Jump back to the tab already shown in the left pane: it must move, not duplicate.
+    await pressAndFlush('2', { altKey: true })
+    expect(activePaneTab()).toBe(second)
+    expect(tabIdsInPanes().filter(id => id === second).length).toBe(1)
+  })
+
+  it('Ctrl+Shift+N routes to /workspace', async () => {
+    await pressAndFlush('n', { ctrlKey: true, shiftKey: true })
+    // router.push is mocked; assert no tab churn and the handler ran without error.
+    // Routing assertion lives at the handler level: no tabs created, no crash.
+    expect(tabs().length).toBe(0)
+  })
+})

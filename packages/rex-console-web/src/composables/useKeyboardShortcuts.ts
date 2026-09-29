@@ -1,4 +1,5 @@
 import { onMounted, onUnmounted } from 'vue'
+import { isTypingTarget } from '@/utils/isTypingTarget'
 
 interface Shortcut {
   key: string
@@ -11,10 +12,7 @@ interface Shortcut {
 export function useKeyboardShortcuts(shortcuts: Shortcut[]) {
   const onKeydown = (e: KeyboardEvent) => {
     // 跳过输入框内的快捷键（避免干扰文本编辑）
-    const tag = (e.target as HTMLElement)?.tagName
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) {
-      return
-    }
+    if (isTypingTarget(e.target)) return
 
     for (const s of shortcuts) {
       if (!e.key) continue

@@ -9,6 +9,8 @@ import StatusDot from '@/components/ui/StatusDot.vue'
 import type { StatusDotStatus } from '@/components/ui/StatusDot.vue'
 import ContextMenu from '@/components/ui/ContextMenu.vue'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
+import { useFullscreen } from '@/composables/useFullscreen'
+import { isTypingTarget } from '@/utils/isTypingTarget'
 import { useSftpDrawer } from '@/composables/useSftpDrawer'
 import ResourceProperties from '@/features/workspace/ResourceProperties.vue'
 import PaneNode from '@/features/workspace/PaneNode.vue'
@@ -54,6 +56,7 @@ const {
   tabColors,
   findTab,
   formatConnection,
+  activateTab,
   openResource,
   closeTab,
   toggleBroadcast,
@@ -78,7 +81,7 @@ const {
     // workspace export / import
     exportWorkspace,
     importWorkspace,
-  } = useTabs({ activePaneId, setPaneTab })
+  } = useTabs({ activePaneId, setPaneTab, allLeaves })
 
 watch(() => wsStore.pendingResource, (resource) => {
   if (!resource) return
@@ -279,7 +282,7 @@ provide<PaneCtx>(PANE_CTX, {
       protocol: protocol as 'ssh' | 'mysql' | 'redis' | 'postgresql' | 'sqlite' | 's3' | 'sftp' | 'sip' | 'sql',
       status: 'connecting',
     })
-    activeTab.value = id
+    activateTab(id)
     return id
   }
 })
@@ -327,7 +330,6 @@ function localHandleTabCtxAction(action: string) {
   const id = tabContextMenu.value.tabId
   if (!id) return
   switch (action) {
-    case 'new': router.push('/workspace'); break
     case 'props': openProperties(id); break
     case 'disconnect': disconnectTab(id); break
     case 'close': requestCloseTab(id); break
@@ -426,21 +428,25 @@ function splitVertical(paneId?: string) {
 // Ctrl+Shift+\ vertical split. With shift held the event key becomes '|' on most
 // layouts, so the character-based matcher never fires: match the physical key code.
 function handleSplitKeydown(e: KeyboardEvent) {
-  const target = e.target as HTMLElement | null
-  if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable) return
-  if (e.code === 'Backslash' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
-    e.preventDefault()
-    splitVertical()
-  }
+  if (isTypingTarget(e.target)) return
+  if (!(e.code === 'Backslash' && (e.ctrlKey || e.metaKey) && e.shiftKey)) return
+  if (isOverlayOpen()) return
+  e.preventDefault()
+  splitVertical()
 }
 
-function toggleFullscreen() {
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen()
-  } else {
-    document.exitFullscreen()
-  }
+// Modal/overlay surfaces that must swallow the split chord while open: the
+// local dialogs and context menus of this page, plus the AppLayout-owned
+// command palette / shortcut panel rendered outside this component tree.
+function isOverlayOpen(): boolean {
+  if (showConfirmClose.value || showImportDialog.value || showProps.value) return true
+  if (tabContextMenu.value.show || paneContextMenu.value.show) return true
+  return !!document.querySelector('.command-palette-overlay, .shortcut-overlay')
 }
+
+// Single fullscreen implementation shared with AppLayout: unsupported/rejected
+// requests fall back to a toggleable UI flag instead of throwing.
+const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
 
 // 快捷键面板状态由 shortcuts store 提供（顶栏按钮 + F1 / 状态栏共用）
 
@@ -467,15 +473,17 @@ function statusColor(status: Tab['status']): StatusDotStatus {
 function jumpToTab(index: number) {
   const tab = tabs.value[index]
   if (!tab) return
-  activeTab.value = tab.id
-  setPaneTab(activePaneId.value, tab.id)
+  // activateTab detaches the tab from any other pane first (one tab per pane)
+  // and binds it to the active pane.
+  activateTab(tab.id)
 }
 
 // Cycle active tab by step, wrapping around the tab list.
 function cycleTab(step: number) {
   if (tabs.value.length === 0) return
   const idx = tabs.value.findIndex(t => t.id === activeTab.value)
-  activeTab.value = tabs.value[(idx + step + tabs.value.length) % tabs.value.length]!.id
+  const nextId = tabs.value[(idx + step + tabs.value.length) % tabs.value.length]!.id
+  activateTab(nextId)
 }
 
 // 快捷键
@@ -484,7 +492,7 @@ useKeyboardShortcuts([
   { key: 't', alt: true, handler: () => {
     const id = nextTabId()
     tabs.value.push({ id, label: 'New Tab', protocol: 'ssh', status: 'connecting' })
-    activeTab.value = id
+    activateTab(id)
   } },
   // Alt+W: close current tab (replaces browser-reserved Ctrl+W).
   // Routes through closeTab() so the tab lands in closedTabs and Alt+Shift+T
@@ -494,11 +502,9 @@ useKeyboardShortcuts([
   } },
   { key: '\\', ctrl: true, handler: splitHorizontal },
   // Ctrl+Alt+1-5: layout presets
-  { key: '1', ctrl: true, alt: true, handler: () => applyLayout('single') },
-  { key: '2', ctrl: true, alt: true, handler: () => applyLayout('left-right') },
-  { key: '3', ctrl: true, alt: true, handler: () => applyLayout('top-bottom') },
-  { key: '4', ctrl: true, alt: true, handler: () => applyLayout('grid-four') },
-  { key: '5', ctrl: true, alt: true, handler: () => applyLayout('main-side') },
+  ...(['single', 'left-right', 'top-bottom', 'grid-four', 'main-side'] as const).map(
+    (preset, i) => ({ key: String(i + 1), ctrl: true, alt: true, handler: () => applyLayout(preset) }),
+  ),
   // 移动端隐藏桌面风格快捷键面板（触屏无键盘快捷键，改触屏友好交互）
   { key: 'F1', handler: () => { if (window.innerWidth >= 768) shortcutsStore.toggle() } },
   { key: 'b', ctrl: true, handler: () => {
@@ -507,18 +513,11 @@ useKeyboardShortcuts([
   { key: 'B', ctrl: true, shift: true, handler: () => {
     if (activeTab.value) toggleBroadcast(activeTab.value)
   } },
-  // Ctrl+Shift+N: 新建连接（同标签右键菜单「新建连接」，原 /resource-new 路由不存在）
+  // Ctrl+Shift+N: 新建连接（保留原绑定；右键菜单 no-op 项已删除，
+  // 真实新连接入口是 ResourcePanel 侧栏 wizard）
   { key: 'n', ctrl: true, shift: true, handler: () => { router.push('/workspace') } },
   // Alt+1-9: jump to the 1st-9th tab
-  { key: '1', alt: true, handler: () => jumpToTab(0) },
-  { key: '2', alt: true, handler: () => jumpToTab(1) },
-  { key: '3', alt: true, handler: () => jumpToTab(2) },
-  { key: '4', alt: true, handler: () => jumpToTab(3) },
-  { key: '5', alt: true, handler: () => jumpToTab(4) },
-  { key: '6', alt: true, handler: () => jumpToTab(5) },
-  { key: '7', alt: true, handler: () => jumpToTab(6) },
-  { key: '8', alt: true, handler: () => jumpToTab(7) },
-  { key: '9', alt: true, handler: () => jumpToTab(8) },
+  ...Array.from({ length: 9 }, (_, i) => ({ key: String(i + 1), alt: true, handler: () => jumpToTab(i) })),
   // Cmd/Ctrl+← : go back in tab history
   { key: 'ArrowLeft', ctrl: true, handler: goBack },
   // Cmd/Ctrl+→ : go forward in tab history
@@ -543,7 +542,7 @@ useKeyboardShortcuts([
         :class="{ 'ws-tab--active': activeTab === tab.id, 'ws-tab--dragging': dragTabId === tab.id }"
         draggable="true"
         :title="t('workspace.splitHint')"
-        @click="activeTab = tab.id; setPaneTab(activePaneId, tab.id)"
+        @click="activateTab(tab.id)"
         @dblclick="onTabDoubleClick(tab.id)"
         @contextmenu="onTabContextMenu($event, tab.id)"
         @dragstart="onTabDragStart($event, tab.id)"
@@ -583,8 +582,6 @@ useKeyboardShortcuts([
       @select="(action: string) => localHandleTabCtxAction(action)"
     >
       <template #default="{ choose }">
-        <div class="tab-ctx-item" @click="choose('new')">➕ {{ t('workspace.newConnection') }}</div>
-        <div class="tab-ctx-separator" />
         <div class="tab-ctx-item" @click="choose('rename')">✏️ {{ t('workspace.rename') }}</div>
         <div class="tab-ctx-item" @click="choose('duplicate')">📋 {{ t('workspace.duplicate') }}</div>
         <div class="tab-ctx-item" @click="choose('broadcast')">
@@ -659,7 +656,13 @@ useKeyboardShortcuts([
         </button>
       </span>
       <span class="ws-seg ws-seg--actions">
-        <button v-if="toolbarConfig.fullscreen" class="ws-action-btn" :title="t('common.fullscreen')" @click="toggleFullscreen">
+        <button
+          v-if="toolbarConfig.fullscreen"
+          class="ws-action-btn"
+          :title="isFullscreen ? t('common.exitFullscreen', 'Exit fullscreen') : t('common.fullscreen')"
+          :aria-label="isFullscreen ? t('common.exitFullscreen', 'Exit fullscreen') : t('common.fullscreen')"
+          @click="toggleFullscreen"
+        >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10 4 13l3 3M4 13h11M17 14l3-3-3-3M20 11H9"/></svg>
         </button>
       </span>

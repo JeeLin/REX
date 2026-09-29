@@ -42,6 +42,8 @@ export interface ResourceNode {
 export interface UseTabsDeps {
   activePaneId: Ref<string>
   setPaneTab: (paneId: string, tabId: string | null) => void
+  // Leaf list of the pane tree; used to detach a closed tab from every pane.
+  allLeaves?: Ref<Array<{ id: string; tabId: string | null }>>
 }
 
 const TAB_COLORS = ['#f85149', '#3fb950', '#58a6ff', '#d29922', '#8b5cf6', '#e8912d', '#f0883e', '#a371f7']
@@ -56,6 +58,7 @@ export function nextTabId(): string {
 
 export function useTabs(deps: UseTabsDeps) {
   const { activePaneId, setPaneTab } = deps
+  const allLeaves = deps.allLeaves
 
   const tabs = ref<Tab[]>([])
   const activeTab = ref<string>('')
@@ -71,6 +74,31 @@ export function useTabs(deps: UseTabsDeps) {
 
   const activeTabInfo = computed(() => tabs.value.find((t) => t.id === activeTab.value) ?? null)
 
+  // ===== activeTab ↔ pane 同步 =====
+  // activeTab 与 pane.tabId 是两份独立状态：所有切换 activeTab 的入口都必须
+  // 经 activateTab 回接活动 pane，否则 pane 会停留在旧 tab 上（错位 / 空白）。
+  // 同时维护「一个 tab 只挂在一个 pane」不变量：先从所有 pane 摘除目标 tab，
+  // 再绑定到活动 pane，防止切标签 / 跳转 / 历史导航造成同标签双 pane 双挂载。
+  function activateTab(id: string) {
+    if (allLeaves) {
+      for (const leaf of allLeaves.value) {
+        if (leaf.tabId === id) setPaneTab(leaf.id, null)
+      }
+    }
+    activeTab.value = id
+    const pane = activePaneId.value
+    if (pane) setPaneTab(pane, id)
+  }
+
+  // 从所有 pane 上摘除指定 tab：tab 被删除后 leaf.tabId 不能继续指向它，
+  // 否则 pane 渲染一个已不存在的 tab（空白 / 关闭后错位）。
+  function unbindTab(id: string) {
+    if (!allLeaves) return
+    for (const leaf of allLeaves.value) {
+      if (leaf.tabId === id) setPaneTab(leaf.id, null)
+    }
+  }
+
   function findTab(id: string): Tab | undefined {
     return tabs.value.find((t) => t.id === id)
   }
@@ -85,8 +113,7 @@ export function useTabs(deps: UseTabsDeps) {
     const protocol = (node.protocol || 'ssh') as Tab['protocol']
     const existing = tabs.value.find((t) => t.resourceId === resourceId && t.protocol === protocol)
     if (existing) {
-      activeTab.value = existing.id
-      setPaneTab(activePaneId.value, existing.id)
+      activateTab(existing.id)
       return
     }
 
@@ -100,8 +127,7 @@ export function useTabs(deps: UseTabsDeps) {
       subtype: node.subtype,
       status: 'connecting',
     })
-    activeTab.value = id
-    setPaneTab(activePaneId.value, id)
+    activateTab(id)
   }
 
   function closeTab(id: string) {
@@ -110,39 +136,54 @@ export function useTabs(deps: UseTabsDeps) {
     const tab = tabs.value[idx]!
     trackClosedTab(tab)
     tabs.value.splice(idx, 1)
+    unbindTab(id)
     if (tabs.value.length === 0) {
       activeTab.value = ''
       return
     }
     if (activeTab.value === id) {
-      activeTab.value = tabs.value[Math.min(idx, tabs.value.length - 1)]!.id
+      activateTab(tabs.value[Math.min(idx, tabs.value.length - 1)]!.id)
     }
   }
 
   function closeOtherTabs(id: string) {
+    const removed = tabs.value.filter((t) => t.id !== id)
     tabs.value = tabs.value.filter((t) => t.id === id)
-    activeTab.value = id
+    for (const t of removed) unbindTab(t.id)
+    activateTab(id)
   }
 
   function closeTabsRight(id: string) {
     const idx = tabs.value.findIndex((t) => t.id === id)
-    if (idx >= 0) tabs.value.splice(idx + 1)
+    if (idx >= 0) {
+      const removed = tabs.value.splice(idx + 1)
+      for (const t of removed) unbindTab(t.id)
+    }
     if (!tabs.value.find((t) => t.id === activeTab.value)) {
-      activeTab.value = tabs.value[tabs.value.length - 1]!.id
+      activateTab(tabs.value[tabs.value.length - 1]!.id)
     }
   }
 
   function closeTabsLeft(id: string) {
     const idx = tabs.value.findIndex((t) => t.id === id)
-    if (idx > 0) tabs.value.splice(0, idx)
+    if (idx > 0) {
+      const removed = tabs.value.splice(0, idx)
+      for (const t of removed) unbindTab(t.id)
+    }
     if (!tabs.value.find((t) => t.id === activeTab.value)) {
-      activeTab.value = tabs.value[0]!.id
+      activateTab(tabs.value[0]!.id)
     }
   }
 
   function closeAllTabs() {
+    const removed = tabs.value.filter((t) => !t.pinned)
     tabs.value = tabs.value.filter(t => t.pinned)
-    activeTab.value = tabs.value.length > 0 ? tabs.value[0]!.id : ''
+    for (const t of removed) unbindTab(t.id)
+    if (tabs.value.length > 0) {
+      activateTab(tabs.value[0]!.id)
+    } else {
+      activeTab.value = ''
+    }
   }
 
   // ===== Pin =====
@@ -157,7 +198,7 @@ export function useTabs(deps: UseTabsDeps) {
     if (!tab) return
     const newId = nextTabId()
     tabs.value.push({ ...tab, id: newId, status: 'connecting' })
-    activeTab.value = newId
+    activateTab(newId)
     tabContextMenu.value.show = false
   }
 
@@ -202,6 +243,9 @@ export function useTabs(deps: UseTabsDeps) {
   const MAX_HISTORY = 50
 
   function pushHistory(tabId: string) {
+    // goBack/goForward 导航到的就是当前位置 id：若不拦截，trim 会把前进分支
+    // 裁掉，goForward 永远失效（watch 在 activeTab 变化时无差别调用本函数）。
+    if (tabHistoryIndex.value >= 0 && tabHistory.value[tabHistoryIndex.value] === tabId) return
     // Trim forward history when navigating to a new position
     if (tabHistoryIndex.value < tabHistory.value.length - 1) {
       tabHistory.value = tabHistory.value.slice(0, tabHistoryIndex.value + 1)
@@ -231,7 +275,7 @@ export function useTabs(deps: UseTabsDeps) {
     tabHistoryIndex.value--
     const id = tabHistory.value[tabHistoryIndex.value]
     if (id && tabs.value.find(t => t.id === id)) {
-      activeTab.value = id
+      activateTab(id)
     }
   }
 
@@ -240,7 +284,7 @@ export function useTabs(deps: UseTabsDeps) {
     tabHistoryIndex.value++
     const id = tabHistory.value[tabHistoryIndex.value]
     if (id && tabs.value.find(t => t.id === id)) {
-      activeTab.value = id
+      activateTab(id)
     }
   }
 
@@ -248,10 +292,9 @@ export function useTabs(deps: UseTabsDeps) {
     if (closedTabs.value.length === 0) return
     const tab = closedTabs.value.pop()!
     tabs.value.push({ ...tab, status: 'connecting' })
-    activeTab.value = tab.id
-    // Re-attach to a pane: closeTab() detaches the tab, so without this the
-    // restored tab exists in `tabs` but no pane renders it (invisible reopen).
-    setPaneTab(activePaneId.value, tab.id)
+    // activateTab re-attaches the restored tab to the active pane: closeTab()
+    // detached it, so without this the tab exists but no pane renders it.
+    activateTab(tab.id)
   }
 
   // ===== Workspace Export / Import =====
@@ -415,6 +458,8 @@ export function useTabs(deps: UseTabsDeps) {
     // helpers
     findTab,
     formatConnection,
+    activateTab,
+    unbindTab,
     // open / close / manage
     openResource,
     closeTab,

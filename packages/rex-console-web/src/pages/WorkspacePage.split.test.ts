@@ -105,3 +105,44 @@ describe('split shortcuts', () => {
     expect(leaves(paneRoot()).length).toBe(1)
   })
 })
+
+describe('split is blocked while an overlay is open', () => {
+  afterEach(() => {
+    document.querySelectorAll('.command-palette-overlay, .shortcut-overlay').forEach(el => el.remove())
+  })
+
+  it.each(['.command-palette-overlay', '.shortcut-overlay'])(
+    'does not split behind an open %s',
+    async (selector) => {
+      document.body.insertAdjacentHTML('beforeend', `<div class="${selector.slice(1)}" />`)
+
+      const ev = await pressAndFlush('\\', { ctrlKey: true, shiftKey: true, code: 'Backslash' })
+
+      expect(ev.defaultPrevented).toBe(false)
+      expect(leaves(paneRoot()).length).toBe(1)
+    },
+  )
+
+  it('does not split while a tab context menu is open', async () => {
+    await pressAndFlush('t', { altKey: true })
+    await wrapper!.find('.ws-tab').trigger('contextmenu')
+
+    const ev = await pressAndFlush('\\', { ctrlKey: true, shiftKey: true, code: 'Backslash' })
+
+    expect(ev.defaultPrevented).toBe(false)
+    expect(leaves(paneRoot()).length).toBe(1)
+  })
+
+  it('splits again once the overlay is dismissed', async () => {
+    document.body.insertAdjacentHTML('beforeend', '<div class="command-palette-overlay" />')
+    await pressAndFlush('\\', { ctrlKey: true, shiftKey: true, code: 'Backslash' })
+    expect(leaves(paneRoot()).length).toBe(1)
+
+    document.querySelector('.command-palette-overlay')!.remove()
+
+    const ev = await pressAndFlush('\\', { ctrlKey: true, shiftKey: true, code: 'Backslash' })
+
+    expect(ev.defaultPrevented).toBe(true)
+    expect(leaves(paneRoot()).length).toBe(2)
+  })
+})
