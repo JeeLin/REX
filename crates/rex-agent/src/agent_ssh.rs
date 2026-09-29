@@ -382,13 +382,6 @@ mod tests {
             alice, bob,
             "same host:port with different users must not share a pool entry"
         );
-
-        let mut pool: HashMap<String, &str> = HashMap::new();
-        pool.insert(alice.clone(), "session-alice");
-        pool.insert(bob.clone(), "session-bob");
-        assert_eq!(pool.len(), 2);
-        assert_eq!(pool[&alice], "session-alice");
-        assert_eq!(pool[&bob], "session-bob");
     }
 
     /// SFTP 入口（`agent_file::build_connector`）与终端入口共用

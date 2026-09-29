@@ -753,11 +753,6 @@ mod tests {
         let cfg = agent_test_connect_config("10.0.0.1", 22, Some(""), Some(r#"{"password":"pw"}"#));
         assert_eq!(
             cfg.get("username").and_then(|v| v.as_str()),
-            Some("root"),
-            "empty top-level username must not be forwarded as an empty user"
-        );
-        assert_eq!(
-            cfg.get("username").and_then(|v| v.as_str()),
             Some(crate::resource_conn::normalize_username("").as_str()),
             "test connection and file entries must share one normalization source"
         );

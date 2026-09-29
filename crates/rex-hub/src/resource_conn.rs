@@ -178,45 +178,54 @@ pub fn load_sip_conn(info: &ResourceConnInfo) -> Result<rex_sip::SipConfig, Stri
     })
 }
 
+/// 测试专用 `AppState` 构造（tempdir SQLite + 自动生成的主密钥）。
+///
+/// 单元测试共用这一份构造，避免两处逐行重复后字段漂移：本模块（lib）
+/// 与 `src/rex-hub.rs`（bin target，独立 crate，看不到 `#[cfg(test)]` 项）
+/// 的 router 装配测试都调用它，故必须是 `pub`。字段取值与
+/// `tests/api_integration.rs` 自己那份构造同构（集成测试是独立 crate，
+/// 保留原构造，不在本次去重范围内）。
+///
+/// 不参与任何运行时逻辑，仅供测试调用。
+#[doc(hidden)]
+pub fn build_test_state(dir: &std::path::Path) -> AppState {
+    let db =
+        std::sync::Arc::new(crate::db::Database::open(&dir.join("rex.db")).expect("open sqlite"));
+    let auth = std::sync::Arc::new(crate::auth::AuthConfig::new(db.clone()).expect("auth config"));
+    let crypto =
+        std::sync::Arc::new(crate::crypto::CredentialCrypto::from_data_dir(dir).expect("crypto"));
+    let sql_pool: crate::sql_api::SqlState = std::sync::Arc::new(tokio::sync::Mutex::new(
+        crate::sql_api::SqlConnectionPool::new(),
+    ));
+    let redis_pool: crate::redis_api::RedisState =
+        std::sync::Arc::new(tokio::sync::Mutex::new(Default::default()));
+    let file_pool: crate::file_api::FileState = std::sync::Arc::new(tokio::sync::Mutex::new(
+        crate::file_api::FileConnectionPool::new(),
+    ));
+    let mongo_pool: crate::mongodb_api::MongoState = std::sync::Arc::default();
+
+    AppState {
+        db,
+        auth,
+        crypto,
+        sql_pool,
+        redis_pool,
+        file_pool,
+        mongo_pool,
+        agent_tunnel: std::sync::Arc::new(crate::agent_ws::AgentTunnelState::new()),
+        agent_binaries: std::sync::Arc::new(crate::update_api::AgentBinaries::new()),
+        sip_capture: std::sync::Arc::new(crate::sip_capture::SipCaptureRegistry::new()),
+        sip_recording: std::sync::Arc::new(crate::sip_recording::SipRecordingRegistry::new(
+            dir.to_path_buf(),
+        )),
+        data_dir: dir.to_path_buf(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::models::{NewEnvironment, NewResource};
-    use std::sync::Arc;
-
-    /// 完整 AppState（tempdir SQLite + 自动生成的主密钥），让
-    /// [`load_resource_config`] 走真实读库/解密路径。
-    fn test_state(dir: &std::path::Path) -> AppState {
-        let db = Arc::new(crate::db::Database::open(&dir.join("rex.db")).unwrap());
-        let auth = Arc::new(crate::auth::AuthConfig::new(db.clone()).unwrap());
-        let crypto = Arc::new(crate::crypto::CredentialCrypto::from_data_dir(dir).unwrap());
-        let sql_pool: crate::sql_api::SqlState = Arc::new(tokio::sync::Mutex::new(
-            crate::sql_api::SqlConnectionPool::new(),
-        ));
-        let redis_pool: crate::redis_api::RedisState =
-            Arc::new(tokio::sync::Mutex::new(Default::default()));
-        let file_pool: crate::file_api::FileState = Arc::new(tokio::sync::Mutex::new(
-            crate::file_api::FileConnectionPool::new(),
-        ));
-        let mongo_pool: crate::mongodb_api::MongoState = Arc::default();
-
-        AppState {
-            db,
-            auth,
-            crypto,
-            sql_pool,
-            redis_pool,
-            file_pool,
-            mongo_pool,
-            agent_tunnel: Arc::new(crate::agent_ws::AgentTunnelState::new()),
-            agent_binaries: Arc::new(crate::update_api::AgentBinaries::new()),
-            sip_capture: Arc::new(crate::sip_capture::SipCaptureRegistry::new()),
-            sip_recording: Arc::new(crate::sip_recording::SipRecordingRegistry::new(
-                dir.to_path_buf(),
-            )),
-            data_dir: dir.to_path_buf(),
-        }
-    }
 
     fn create_resource(state: &AppState, protocol: &str, username: &str) -> String {
         let env = state
@@ -253,7 +262,7 @@ mod tests {
     #[test]
     fn load_resource_config_keeps_empty_username_for_credentialless_protocols() {
         let dir = tempfile::tempdir().unwrap();
-        let state = test_state(dir.path());
+        let state = build_test_state(dir.path());
 
         for protocol in ["mongodb", "clickhouse"] {
             let id = create_resource(&state, protocol, "");

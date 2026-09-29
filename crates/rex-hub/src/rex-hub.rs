@@ -472,35 +472,13 @@ mod tests {
         )
     }
 
-    /// 完整 AppState（tempdir SQLite + 自动生成的主密钥），与
-    /// `tests/api_integration.rs` 同构，供 [`build_router`] 走真实路由装配。
-    fn test_state(dir: &std::path::Path) -> AppState {
-        let db = Arc::new(Database::open(&dir.join("rex.db")).expect("open sqlite"));
-        let auth = Arc::new(auth::AuthConfig::new(db.clone()).expect("auth config"));
-        let crypto = Arc::new(crypto::CredentialCrypto::from_data_dir(dir).expect("crypto"));
-
-        AppState {
-            db,
-            auth,
-            crypto,
-            sql_pool: Arc::new(Mutex::new(sql_api::SqlConnectionPool::new())),
-            redis_pool: Arc::new(Mutex::new(redis_api::RedisConnectionPool::new())),
-            file_pool: Arc::new(Mutex::new(file_api::FileConnectionPool::new())),
-            mongo_pool: Arc::default(),
-            agent_tunnel: Arc::new(agent_ws::AgentTunnelState::new()),
-            agent_binaries: Arc::new(update_api::AgentBinaries::new()),
-            sip_capture: Arc::new(SipCaptureRegistry::new()),
-            sip_recording: Arc::new(SipRecordingRegistry::new(dir.to_path_buf())),
-            data_dir: dir.to_path_buf(),
-        }
-    }
-
     /// CR14②：`/api` 前缀（精确、尾斜杠、任意子路径）一律 JSON 404，
     /// 绝不落 SPA fallback 的 200 text/html —— Agent 反代与浏览器直连共用此约束。
     #[tokio::test]
     async fn api_prefix_answers_json_404_not_spa_html() {
         let dir = tempfile::tempdir().expect("create tempdir");
-        let app = build_router(test_state(dir.path()));
+        // AppState 构造与 lib 侧单元测试共用 `resource_conn::build_test_state`。
+        let app = build_router(rex_hub::resource_conn::build_test_state(dir.path()));
 
         for path in ["/api", "/api/", "/api/anything"] {
             let resp = app
