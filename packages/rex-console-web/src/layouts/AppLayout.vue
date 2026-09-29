@@ -12,7 +12,7 @@ import type { Resource } from '@/api/resources'
 import { useRouter } from 'vue-router'
 import { useSwipeGesture } from '@/composables/useSwipeGesture'
 import { useVirtualKeyboard } from '@/composables/useVirtualKeyboard'
-import { toggleTheme } from '@/composables/useTheme'
+import { toggleTheme, setLanguage } from '@/composables/useTheme'
 import CommandPalette from '@/components/CommandPalette.vue'
 import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
 import { useShortcutsStore } from '@/stores/shortcuts'
@@ -46,6 +46,10 @@ const bottomNav = [
 ]
 
 const fullscreen = ref(false)
+// Guards against re-entering toggleFullscreen while a Fullscreen API promise is
+// still in flight (a second trigger would flip the Vue flag in the catch block
+// and desync it from the real fullscreenchange state).
+let fullscreenPending = false
 const mobileMenuOpen = ref(false)
 const commandPaletteVisible = ref(false)
 
@@ -68,10 +72,12 @@ function syncFullscreen() {
 }
 
 async function toggleFullscreen() {
+  if (fullscreenPending) return
   if (document.fullscreenEnabled === false) {
     fullscreen.value = !fullscreen.value
     return
   }
+  fullscreenPending = true
   try {
     if (document.fullscreenElement) {
       await document.exitFullscreen()
@@ -81,6 +87,8 @@ async function toggleFullscreen() {
     syncFullscreen()
   } catch {
     fullscreen.value = !fullscreen.value
+  } finally {
+    fullscreenPending = false
   }
 }
 
@@ -100,6 +108,7 @@ async function exitFullscreen() {
 function handleGlobalKeydown(e: KeyboardEvent) {
   if (e.key === 'F11') {
     e.preventDefault()
+    if (e.repeat) return
     toggleFullscreen()
   }
   // Cmd+K / Ctrl+K for global search
@@ -133,11 +142,10 @@ const currentTitle = computed(() => {
 })
 
 function toggleLanguage() {
-  locale.value = locale.value === 'zh' ? 'en' : 'zh'
-  localStorage.setItem('rex-lang', locale.value)
+  setLanguage(locale.value === 'zh' ? 'en' : 'zh', locale)
 }
 
-function openQuickConnect() {
+function gotoWorkspace() {
   router.push('/workspace')
 }
 
@@ -241,7 +249,7 @@ function openQuickConnect() {
         <div class="topbar-spacer" />
 
         <!-- Quick connect navigation button -->
-        <button class="topbar-nav-btn" @click="openQuickConnect" :title="t('topbar.goToWorkspace', 'Go to workspace')">
+        <button class="topbar-nav-btn" @click="gotoWorkspace" :title="t('topbar.goToWorkspace', 'Go to workspace')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="9 10 4 15 9 20"/><path d="M20 4v7H4"/>
           </svg>

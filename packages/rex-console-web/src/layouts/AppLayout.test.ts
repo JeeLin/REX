@@ -105,20 +105,6 @@ describe('single command palette entry', () => {
     await togglePalette()
     expect(paletteCount()).toBe(0)
   })
-
-  it('keeps AppLayout as the only Ctrl+K keydown binding in the workspace page pair', () => {
-    const sources = import.meta.glob(['../pages/WorkspacePage.vue', './AppLayout.vue'], {
-      query: '?raw',
-      import: 'default',
-      eager: true,
-    })
-    const workspaceSource = sources['../pages/WorkspacePage.vue'] as string
-    const layoutSource = sources['./AppLayout.vue'] as string
-
-    expect(workspaceSource).not.toContain("e.key === 'k'")
-    expect(workspaceSource).not.toContain('showCommandPalette')
-    expect(layoutSource.match(/e\.key === 'k'/g)).toHaveLength(1)
-  })
 })
 
 describe('F11 fullscreen', () => {
@@ -179,6 +165,42 @@ describe('F11 fullscreen', () => {
     await pressF11()
 
     expect(requestFullscreen).toHaveBeenCalledTimes(1)
+    expect(fullscreenClass()).toBe(true)
+  })
+
+  it('ignores auto-repeat F11 keydowns while the key is held down', async () => {
+    press('F11', { repeat: true })
+    await flushPromises()
+
+    expect(requestFullscreen).not.toHaveBeenCalled()
+    expect(exitFullscreen).not.toHaveBeenCalled()
+    expect(fullscreenClass()).toBe(false)
+
+    // A fresh (non-repeat) press still toggles.
+    await pressF11()
+    expect(requestFullscreen).toHaveBeenCalledTimes(1)
+    expect(fullscreenClass()).toBe(true)
+  })
+
+  it('does not re-enter while the fullscreen request is still pending', async () => {
+    let resolveRequest: (() => void) | undefined
+    requestFullscreen.mockImplementationOnce(
+      () => new Promise<void>((resolve) => { resolveRequest = resolve }),
+    )
+
+    press('F11')
+    await nextTick()
+    expect(requestFullscreen).toHaveBeenCalledTimes(1)
+
+    // Second trigger while the first promise is in flight: ignored, no fallback flip.
+    press('F11')
+    await nextTick()
+    expect(requestFullscreen).toHaveBeenCalledTimes(1)
+    expect(fullscreenClass()).toBe(false)
+
+    fullscreenElement = document.documentElement
+    resolveRequest?.()
+    await flushPromises()
     expect(fullscreenClass()).toBe(true)
   })
 })

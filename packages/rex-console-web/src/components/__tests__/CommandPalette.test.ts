@@ -7,10 +7,19 @@ import { nextTick } from 'vue'
 const h = vi.hoisted(() => ({
   locale: { value: 'en' },
   push: [] as string[],
+  tCalls: [] as string[],
 }))
 
 vi.mock('vue-i18n', () => ({
-  useI18n: () => ({ t: (k: string) => k, locale: h.locale }),
+  // Mirrors vue-i18n: return the fallback when the key is not yet translated,
+  // and record every key so tests can assert descriptions go through i18n.
+  useI18n: () => ({
+    t: (k: string, fallback?: string) => {
+      h.tCalls.push(k)
+      return fallback ?? k
+    },
+    locale: h.locale,
+  }),
 }))
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: (path: string) => h.push.push(path) }),
@@ -56,6 +65,7 @@ function titles(w: VueWrapper): string[] {
 
 beforeEach(() => {
   h.push.length = 0
+  h.tCalls.length = 0
   h.locale.value = 'en'
   localStorage.clear()
   delete document.documentElement.dataset.theme
@@ -90,6 +100,20 @@ describe('merged workspace palette commands', () => {
       'commandPalette.themeLight',
       'commandPalette.languageEn',
       'commandPalette.languageZh',
+    ])
+    // Setting descriptions must go through i18n keys (fallback shown until translated).
+    expect(h.tCalls).toEqual(expect.arrayContaining([
+      'commandPalette.newConnectionDesc',
+      'commandPalette.themeDarkDesc',
+      'commandPalette.themeLightDesc',
+      'commandPalette.languageEnDesc',
+      'commandPalette.languageZhDesc',
+    ]))
+    expect(w.findAll('.command-palette-item-desc').map(el => el.text())).toEqual([
+      'Switch to dark theme',
+      'Switch to light theme',
+      'Switch language to English',
+      'Switch language to Chinese',
     ])
   })
 

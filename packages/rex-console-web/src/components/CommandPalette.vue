@@ -3,27 +3,11 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
+import { setTheme, setLanguage } from '@/composables/useTheme'
 
 const { t, locale } = useI18n()
 const router = useRouter()
 const store = useEnvironmentsStore()
-
-// ── Preference helpers ─────────────────────────────────────
-// Set semantics (unlike useTheme's toggle) so the palette can jump to a mode
-// directly; dark clears the attribute because the stylesheet default is dark.
-function setTheme(mode: 'dark' | 'light') {
-  localStorage.setItem('rex-theme', mode)
-  if (mode === 'light') {
-    document.documentElement.dataset.theme = 'light'
-  } else {
-    delete document.documentElement.dataset.theme
-  }
-}
-
-function setLanguage(mode: 'en' | 'zh') {
-  locale.value = mode
-  localStorage.setItem('rex-lang', mode)
-}
 
 // ── Props / Emits ──────────────────────────────────────────
 const props = defineProps<{
@@ -67,7 +51,7 @@ const searchItems = computed<SearchItem[]>(() => {
     {
       id: 'new-connection',
       title: t('commandPalette.newConnection'),
-      description: 'New connection',
+      description: t('commandPalette.newConnectionDesc', 'New connection'),
       icon: '📡',
       // The ResourcePanel sidebar is always mounted in AppLayout and owns the
       // per-environment "+" wizard, so navigating to the workspace is the whole
@@ -75,10 +59,10 @@ const searchItems = computed<SearchItem[]>(() => {
       action: () => router.push('/workspace'),
       category: 'Command',
     },
-    { id: 'theme-dark', title: t('commandPalette.themeDark'), description: 'Switch to dark theme', icon: '🎨', action: () => setTheme('dark'), category: 'Setting' },
-    { id: 'theme-light', title: t('commandPalette.themeLight'), description: 'Switch to light theme', icon: '🎨', action: () => setTheme('light'), category: 'Setting' },
-    { id: 'language-en', title: t('commandPalette.languageEn'), description: 'Switch language to English', icon: '🌐', action: () => setLanguage('en'), category: 'Setting' },
-    { id: 'language-zh', title: t('commandPalette.languageZh'), description: 'Switch language to Chinese', icon: '🌐', action: () => setLanguage('zh'), category: 'Setting' },
+    { id: 'theme-dark', title: t('commandPalette.themeDark'), description: t('commandPalette.themeDarkDesc', 'Switch to dark theme'), icon: '🎨', action: () => setTheme('dark'), category: 'Setting' },
+    { id: 'theme-light', title: t('commandPalette.themeLight'), description: t('commandPalette.themeLightDesc', 'Switch to light theme'), icon: '🎨', action: () => setTheme('light'), category: 'Setting' },
+    { id: 'language-en', title: t('commandPalette.languageEn'), description: t('commandPalette.languageEnDesc', 'Switch language to English'), icon: '🌐', action: () => setLanguage('en', locale), category: 'Setting' },
+    { id: 'language-zh', title: t('commandPalette.languageZh'), description: t('commandPalette.languageZhDesc', 'Switch language to Chinese'), icon: '🌐', action: () => setLanguage('zh', locale), category: 'Setting' },
   )
 
   // Environment items
