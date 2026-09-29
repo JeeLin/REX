@@ -20,6 +20,7 @@ import Modal from '@/components/ui/Modal.vue'
 import Input from '@/components/ui/Input.vue'
 import Button from '@/components/ui/Button.vue'
 import { clipboard } from '@/utils/clipboard'
+import { isTypingTarget } from '@/utils/isTypingTarget'
 import { useSqlQuery } from './useSqlQuery'
 import {
   connect as sqlConnect,
@@ -31,7 +32,7 @@ import {
   type SavedQuery,
 } from '@/api/sql'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const emit = defineEmits<{
   'update:status': [status: string]
 }>()
@@ -297,9 +298,7 @@ onClickOutside(clipboardWrapRef, () => { showClipboard.value = false })
 // The format button lives in the editor toolbar: label the key with its
 // editor-scoped context so it is not read as the page-level global search.
 const formatTooltip = computed(() =>
-  locale.value === 'zh'
-    ? `${t('sql.format')}（Ctrl+Shift+F · 编辑器聚焦时）`
-    : `${t('sql.format')} (Ctrl+Shift+F · editor focused)`,
+  t('sql.formatTooltip', `${t('sql.format')} (Ctrl+Shift+F · editor focused)`),
 )
 
 function onFormat() { editorRef.value?.format() }
@@ -473,7 +472,15 @@ function isSqlEditorTarget(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('.sql-editor') !== null
 }
 
+// The split terminal owns Ctrl+Shift+F (toggle SFTP) while it is focused, so
+// the page-level global search must never race it.
+function isTerminalTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('.xterm') !== null
+}
+
 function handleKeydown(e: KeyboardEvent) {
+  // Skip shortcuts while typing in a form control / editable region
+  if (isTypingTarget(e.target)) return
   // Ctrl+Shift+Q: Global Query
   if (e.ctrlKey && e.shiftKey && e.key === 'Q') {
     e.preventDefault()
@@ -484,8 +491,10 @@ function handleKeydown(e: KeyboardEvent) {
     e.preventDefault()
     openAiAssistant()
   }
-  // Cmd/Ctrl+Shift+F: Global Search (skipped while the SQL editor is focused)
+  // Cmd/Ctrl+Shift+F: Global Search (skipped while the SQL editor or the
+  // split terminal is focused)
   if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'F') {
+    if (isTerminalTarget(e.target)) return
     if (isSqlEditorTarget(e.target)) return
     e.preventDefault()
     openGlobalSearch()

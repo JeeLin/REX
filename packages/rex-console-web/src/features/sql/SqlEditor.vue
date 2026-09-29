@@ -142,6 +142,16 @@ function openReplace() {
   return opened
 }
 
+// Keymap handlers shared by the Ctrl- / Cmd- variants below.
+function runOpenReplace() {
+  return openReplace()
+}
+
+function runFormat() {
+  format()
+  return true
+}
+
 function createTheme() {
   return EditorView.theme({
     '&': {
@@ -259,19 +269,19 @@ function createExtensions() {
       },
       {
         key: 'Ctrl-Shift-r',
-        run: () => openReplace(),
+        run: runOpenReplace,
       },
       {
         key: 'Cmd-Shift-r',
-        run: () => openReplace(),
+        run: runOpenReplace,
       },
       {
         key: 'Ctrl-Shift-f',
-        run: () => { format(); return true },
+        run: runFormat,
       },
       {
         key: 'Cmd-Shift-f',
-        run: () => { format(); return true },
+        run: runFormat,
       },
     ]),
     sql({
