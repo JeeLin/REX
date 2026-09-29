@@ -13,13 +13,15 @@ const recentItems = computed(() => favoritesStore.recent.slice(0, 5))
 
 const shortcuts = [
   { keys: 'Ctrl+K', desc: 'Command Palette' },
-  { keys: 'Ctrl+Shift+F', desc: 'Global Search' },
-  { keys: 'Ctrl+T', desc: 'New Tab' },
-  { keys: 'Ctrl+W', desc: 'Close Tab' },
-  { keys: 'Ctrl+← / Ctrl+→', desc: 'Tab History' },
+  { keys: 'Ctrl+Shift+N', desc: 'Open Workspace (new connection entry)' },
+  { keys: 'Alt+T', desc: 'New SSH Tab' },
+  { keys: 'Alt+W', desc: 'Close Tab' },
+  { keys: 'Ctrl+Shift+→ / Ctrl+Shift+←', desc: 'Next / Previous Tab' },
   { keys: 'Alt+Shift+T', desc: 'Reopen Closed Tab' },
+  { keys: 'Alt+1~9', desc: 'Jump to Tab N' },
+  { keys: 'Ctrl+Alt+1~5', desc: 'Layout Presets' },
   { keys: 'Ctrl+\\', desc: 'Split Horizontal' },
-  { keys: 'Alt+1~5', desc: 'Layout Presets' },
+  { keys: 'Ctrl+← / Ctrl+→', desc: 'Tab History' },
 ]
 
 function openRecent(item: { id: string; name: string; protocol: string }) {

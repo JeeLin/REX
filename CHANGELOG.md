@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+- **快捷键交还浏览器保留键（破坏性）**：`Ctrl+T` 新建标签 → `Alt+T`、`Ctrl+W` 关闭标签 → `Alt+W`、`Ctrl+Tab`/`Ctrl+Shift+Tab` 切换标签 → `Ctrl+Shift+→`/`Ctrl+Shift+←`、`Ctrl+N` 新建连接 → `Ctrl+Shift+N`；`Ctrl+T`/`Ctrl+W`/`Ctrl+N`/`Ctrl+Tab` 不再被应用拦截，交还浏览器原生行为
+- **布局预设键位迁移（破坏性）**：布局预设由 `Alt+1~5` 改为 `Ctrl+Alt+1~5`，`Alt+1~9` 改为跳转到第 N 个标签
+- **重开已关标签改键（破坏性）**：`Ctrl+Shift+T` → `Alt+Shift+T`，`Ctrl+Shift+T` 交还浏览器
+
 ## [0.88.0] - 2026-09-23
 
 ### Added

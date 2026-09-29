@@ -349,7 +349,7 @@ CSS 变量（`--bg-deep` / `--bg-surface` / `--bg-elevated` / `--bg-hover` / `--
 | 快捷键 | 功能 |
 |--------|------|
 | `Ctrl+K` | 全局搜索 / 命令面板 |
-| `Ctrl+Shift+N` | 新建连接 |
+| `Ctrl+Shift+N` | 打开工作区（新建连接入口） |
 | `Alt+T` | 新建 SSH 标签 |
 | `Alt+W` | 关闭当前标签 |
 | `Ctrl+Shift+→` / `Ctrl+Shift+←` | 切换下一个 / 上一个标签 |
