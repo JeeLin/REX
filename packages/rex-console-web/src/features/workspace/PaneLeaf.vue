@@ -110,6 +110,7 @@ function sqlDbType(tab: { protocol?: string; subtype?: string } | null): string 
     <FilesPage
       v-else-if="['sftp', 's3'].includes(tabInfo?.protocol || '')"
       :key="tabInfo?.id || ''"
+      :tab-id="tabInfo?.id"
       :resource-id="tabInfo?.resourceId"
       :protocol="tabInfo?.protocol === 's3' ? 's3' : 'sftp'"
       @update:status="(s: string) => tabInfo?.id && onStatus(tabInfo.id, s)"

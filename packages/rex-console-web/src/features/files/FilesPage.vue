@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onClickOutside } from '@vueuse/core'
 import * as filesApi from '@/api/files'
@@ -9,18 +9,24 @@ import MobileFilesBar from './MobileFilesBar.vue'
 import FileEditorDialog from './FileEditorDialog.vue'
 import FilePreview from './FilePreview.vue'
 import Button from '@/components/ui/Button.vue'
+import Toast from '@/components/ui/Toast.vue'
 import { clipboard } from '@/utils/clipboard'
+import { isTypingTarget } from '@/utils/isTypingTarget'
+import { PANE_CTX, type PaneCtx } from '@/features/workspace/paneContext'
 
 const { t } = useI18n()
 
 const props = defineProps<{
   resourceId?: string
   protocol?: 'sftp' | 's3'
+  /** Workspace tab that owns this instance (split panes mount one instance per tab). */
+  tabId?: string
 }>()
 const emit = defineEmits<{
   'update:status': [status: string]
 }>()
 
+const toast = ref<InstanceType<typeof Toast> | null>(null)
 
 // Connection
 const sessionId = ref<string | null>(null)
@@ -176,12 +182,24 @@ function isRenaming(side: Side, name: string) { return renamingId.value === `${s
 // Keyboard
 function activeSide(): Side { return panels.left.active ? 'left' : 'right' }
 
+// Document-level shortcuts are shared by every mounted instance; split panes
+// render one FilesPage per tab, so only the instance owning the keystroke may
+// react (and preventDefault) — otherwise one keypress fires twice, and any
+// mounted instance would hijack Ctrl+R. Falls back to the active tab when the
+// focused pane is empty, and always handles when rendered outside a pane tree.
+const paneCtx = inject<PaneCtx | null>(PANE_CTX, null)
+
+function ownsKeystroke(): boolean {
+  if (!props.tabId || !paneCtx) return true
+  const focusedTabId = paneCtx.allLeaves.value.find(l => l.id === paneCtx.activePaneId.value)?.tabId
+  if (focusedTabId) return focusedTabId === props.tabId
+  return paneCtx.activeTabInfo.value?.id === props.tabId
+}
+
 function onKeyDown(e: KeyboardEvent) {
+  if (!ownsKeystroke()) return
   if (renamingId.value) return
-  // Skip shortcuts while typing (mirrors the useKeyboardShortcuts guard)
-  const target = e.target as HTMLElement | null
-  const tag = target?.tagName
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return
+  if (isTypingTarget(e.target)) return
 
   if (e.key === 'F2') {
     e.preventDefault()
@@ -367,7 +385,12 @@ function newFolder(side: Side) {
   if (!sessionId.value) return
   const name = prompt(t('files.folderNamePrompt'))
   if (!name) return
-  filesApi.mkdir(sessionId.value, panels[side].path + name).then(() => loadPanel(side))
+  filesApi.mkdir(sessionId.value, panels[side].path + name)
+    .then(() => loadPanel(side))
+    .catch((e: unknown) => {
+      console.error('Create folder failed:', e)
+      toast.value?.push(t('files.createFolderFailed', 'Failed to create folder'), 'error')
+    })
 }
 function mfbNewFolder() { newFolder(mobileActiveSide.value) }
 function mfbRename() {
@@ -814,6 +837,8 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
       @permissions="mfbPermissions"
       @copy-path="mfbCopyPath"
     />
+
+    <Toast ref="toast" />
 
     <!-- Transfer Queue Toggle -->
     <button v-if="transferQueue.size > 0" class="tq-toggle" @click="showTransferQueue = !showTransferQueue">
