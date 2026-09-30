@@ -441,8 +441,7 @@ CSS 变量（`--bg-deep` / `--bg-surface` / `--bg-elevated` / `--bg-hover` / `--
 | `environments` | 环境列表 | 标准 | ✓ |
 | `environment` | 环境详情 | 标准 | ✓ |
 | `environment-new` | 创建环境 | 标准 | ✓ |
-| `resource-new` | 创建资源（向导） | 标准 | ✓ |
-| `app`（workspace） | 工作空间外壳 | 全屏工作区 | ✓（连接树侧栏） |
+| `app`（workspace） | 工作空间外壳 | 全屏工作区 | ✓（连接树侧栏；新建资源向导在侧栏内，无独立路由） |
 | `terminal` | SSH 终端 | 全屏 | ✗（含外壳） |
 | `sql` | SQL 控制台 | 全屏 | ✗（含外壳） |
 | `files` | SFTP 文件管理 | 全屏 | ✗（含外壳） |
