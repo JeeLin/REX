@@ -3,7 +3,8 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useEnvironmentsStore } from '@/stores/environments'
-import { setTheme, setLanguage } from '@/composables/useTheme'
+import { setTheme } from '@/composables/useTheme'
+import { setLanguage } from '@/composables/useLanguage'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -98,6 +99,19 @@ const searchItems = computed<SearchItem[]>(() => {
   return items
 })
 
+// Stable category ids map to i18n keys at render time so the chips follow the UI language.
+const CATEGORY_KEYS: Record<string, string> = {
+  Navigation: 'commandPalette.catNavigation',
+  Command: 'commandPalette.catCommand',
+  Setting: 'commandPalette.catSetting',
+  Environments: 'commandPalette.catEnvironments',
+  Resources: 'commandPalette.catResources',
+}
+
+function categoryLabel(category: string): string {
+  return CATEGORY_KEYS[category] ? t(CATEGORY_KEYS[category]!) : category
+}
+
 // ── Filtered Results ───────────────────────────────────────
 const results = computed(() => {
   const q = searchInput.value.toLowerCase()
@@ -181,7 +195,7 @@ watch(results, () => {
                 <span class="command-palette-item-title">{{ item.title }}</span>
                 <span class="command-palette-item-desc">{{ item.description }}</span>
               </div>
-              <span class="command-palette-item-category">{{ item.category }}</span>
+              <span class="command-palette-item-category">{{ categoryLabel(item.category) }}</span>
             </div>
           </div>
 

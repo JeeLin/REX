@@ -131,6 +131,11 @@
     "gotoPage": "Go to page"
   },
   "commandPalette": {
+    "catCommand": "Command",
+    "catEnvironments": "Environments",
+    "catNavigation": "Navigation",
+    "catResources": "Resources",
+    "catSetting": "Setting",
     "commands": "Commands",
     "environments": "Environments",
     "languageEn": "Language: English",
@@ -610,8 +615,6 @@
     "closeTab": "Close current tab",
     "copy": "Copy selection",
     "deleteFile": "Delete",
-    "download": "Download (active → opposite)",
-    "editFile": "Edit (temporary download)",
     "execute": "Execute (Run)",
     "find": "Find",
     "findReplace": "Find & Replace",
@@ -645,10 +648,8 @@
     "scopeTerminalFocused": "terminal focused",
     "splitH": "Split horizontal",
     "splitV": "Split vertical",
-    "switchPanel": "Switch active panel",
     "title": "Keyboard Shortcuts",
-    "toggleShortcuts": "Toggle shortcuts panel",
-    "upload": "Upload (active → opposite)"
+    "toggleShortcuts": "Toggle shortcuts panel"
   },
   "sidebar": {
     "connections": "Connections",

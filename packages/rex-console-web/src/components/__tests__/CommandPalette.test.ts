@@ -115,6 +115,13 @@ describe('merged workspace palette commands', () => {
       'Switch language to English',
       'Switch language to Chinese',
     ])
+    // Category chips must render through i18n keys, not raw English literals.
+    expect(w.findAll('.command-palette-item-category').map(el => el.text())).toEqual([
+      'commandPalette.catSetting',
+      'commandPalette.catSetting',
+      'commandPalette.catSetting',
+      'commandPalette.catSetting',
+    ])
   })
 
   it('routes nav-agents to /agents', async () => {

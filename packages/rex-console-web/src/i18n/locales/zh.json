@@ -131,6 +131,11 @@
     "gotoPage": "跳转到第几页"
   },
   "commandPalette": {
+    "catCommand": "命令",
+    "catEnvironments": "环境",
+    "catNavigation": "导航",
+    "catResources": "资源",
+    "catSetting": "设置",
     "commands": "命令",
     "environments": "环境",
     "languageEn": "语言: English",
@@ -611,8 +616,6 @@
     "closeTab": "关闭当前标签",
     "copy": "复制选中内容",
     "deleteFile": "删除",
-    "download": "下载（活动面板 → 对面）",
-    "editFile": "编辑（临时下载）",
     "execute": "执行（运行）",
     "find": "查找",
     "findReplace": "查找和替换",
@@ -646,10 +649,8 @@
     "scopeTerminalFocused": "终端聚焦时",
     "splitH": "水平分屏",
     "splitV": "垂直分屏",
-    "switchPanel": "切换活动面板",
     "title": "快捷键",
-    "toggleShortcuts": "切换快捷键面板",
-    "upload": "上传（活动面板 → 对面）"
+    "toggleShortcuts": "切换快捷键面板"
   },
   "sidebar": {
     "connections": "连接",
