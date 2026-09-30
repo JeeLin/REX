@@ -204,7 +204,7 @@ describe('command palette entry', () => {
     const ev = await pressAndFlush('k', { ctrlKey: true })
 
     expect(ev.defaultPrevented).toBe(false)
-    expect(document.querySelectorAll('.palette-overlay, .command-palette-overlay').length).toBe(0)
+    expect(document.querySelectorAll('.command-palette-overlay').length).toBe(0)
   })
 
   it('routes the status bar palette button to the global palette event', async () => {

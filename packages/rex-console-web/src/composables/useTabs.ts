@@ -44,6 +44,10 @@ export interface UseTabsDeps {
   setPaneTab: (paneId: string, tabId: string | null) => void
   // Leaf list of the pane tree; used to detach a closed tab from every pane.
   allLeaves?: Ref<Array<{ id: string; tabId: string | null }>>
+  // Unified focus write point of the pane layout (usePaneLayout.focusPane):
+  // every "this pane is now the focused one" decision goes through it so both
+  // refs move together. Optional for callers without a pane tree.
+  focusPane?: (paneId: string) => void
 }
 
 const TAB_COLORS = ['#f85149', '#3fb950', '#58a6ff', '#d29922', '#8b5cf6', '#e8912d', '#f0883e', '#a371f7']
@@ -59,6 +63,7 @@ export function nextTabId(): string {
 export function useTabs(deps: UseTabsDeps) {
   const { activePaneId, setPaneTab } = deps
   const allLeaves = deps.allLeaves
+  const focusPane = deps.focusPane
 
   const tabs = ref<Tab[]>([])
   const activeTab = ref<string>('')
@@ -78,15 +83,22 @@ export function useTabs(deps: UseTabsDeps) {
   // activeTab and pane.tabId are two separate states: every entry that switches
   // activeTab must go through activateTab to re-sync a pane, otherwise panes keep
   // rendering the previous tab (misaligned / blank).
-  // When the target tab already hangs on a leaf, only move activePaneId to that
-  // leaf (focus it): cycling / history navigation must not drain the other pane.
-  // Otherwise detach the tab from every pane first, then bind it to the active
-  // pane — keeping the "one tab on at most one pane" invariant.
+  // When the target tab already hangs on a leaf, focus that leaf (no move, no
+  // drain of the pane holding it): cycling / history navigation must leave the
+  // other pane untouched. focusing goes through focusPane — the single write
+  // point of "which pane is focused" — so lastFocusedPaneId follows too and the
+  // highlight, Ctrl+\, the toolbar splits and the DOM focus can't split three
+  // ways. Otherwise detach the tab from every pane first, then bind it to the
+  // active pane — keeping the "one tab on at most one pane" invariant.
   function activateTab(id: string) {
     const leaf = allLeaves?.value.find((l) => l.tabId === id)
     activeTab.value = id
     if (leaf) {
-      activePaneId.value = leaf.id
+      if (focusPane) {
+        focusPane(leaf.id)
+      } else {
+        activePaneId.value = leaf.id
+      }
       return
     }
     unbindTab(id)
@@ -141,7 +153,6 @@ export function useTabs(deps: UseTabsDeps) {
     trackClosedTab(tab)
     tabs.value.splice(idx, 1)
     unbindTab(id)
-    pruneHistory(id)
     if (tabs.value.length === 0) {
       activeTab.value = ''
       return
@@ -264,21 +275,6 @@ export function useTabs(deps: UseTabsDeps) {
     tabHistoryIndex.value = tabHistory.value.length - 1
   }
 
-  // Drop a closed tab from history so goBack/goForward never land on a deleted
-  // id. Entries before the current position shift left with it; removing the
-  // current entry keeps the index on the same position (clamped when it was the
-  // last entry), so the forward branch of pushHistory stays intact.
-  function pruneHistory(id: string) {
-    const pos = tabHistory.value.indexOf(id)
-    if (pos < 0) return
-    tabHistory.value.splice(pos, 1)
-    if (pos < tabHistoryIndex.value) {
-      tabHistoryIndex.value -= 1
-    } else if (tabHistoryIndex.value >= tabHistory.value.length) {
-      tabHistoryIndex.value = tabHistory.value.length - 1
-    }
-  }
-
   // ===== Closed tabs =====
   const closedTabs = ref<Tab[]>([])
   const MAX_CLOSED = 10
@@ -292,8 +288,9 @@ export function useTabs(deps: UseTabsDeps) {
 
   function goBack() {
     let idx = tabHistoryIndex.value
-    // Skip entries whose tab is gone (bulk closes bypass pruneHistory) so a
-    // single key press always lands on the nearest still-open tab.
+    // Skip entries whose tab is gone (closeTab and the bulk closes leave their
+    // ids in the list) so a single key press always lands on the nearest
+    // still-open tab.
     while (idx > 0) {
       idx -= 1
       const id = tabHistory.value[idx]

@@ -2,26 +2,35 @@ import { describe, it, expect, vi } from 'vitest'
 import { ref } from 'vue'
 import { useTabs } from '../useTabs'
 
-function createTabs() {
-  const activePaneId = ref('pane-1')
-  const setPaneTab = vi.fn()
-  const tabs = useTabs({ activePaneId, setPaneTab })
-  return { ...tabs, activePaneId, setPaneTab }
-}
-
-/** Two-leaf workspace whose setPaneTab mutates the leaves, like the real pane layout. */
-function createSplitTabs() {
-  const activePaneId = ref('pane-1')
-  const allLeaves = ref([
-    { id: 'pane-1', tabId: null as string | null },
-    { id: 'pane-2', tabId: null as string | null },
-  ])
-  const setPaneTab = (paneId: string, tabId: string | null) => {
+/**
+ * Single pane by default. Pass `allLeaves` for a real pane tree whose setPaneTab
+ * mutates the leaves; focusPane is a spy standing in for the layout's single
+ * focus write point.
+ */
+function createTabs(opts?: { allLeaves?: Array<{ id: string; tabId: string | null }> }) {
+  const allLeaves = ref(opts?.allLeaves ?? [{ id: 'pane-1', tabId: null as string | null }])
+  const activePaneId = ref(allLeaves.value[0]!.id)
+  const setPaneTab = vi.fn((paneId: string, tabId: string | null) => {
     const leaf = allLeaves.value.find((l) => l.id === paneId)
     if (leaf) leaf.tabId = tabId
-  }
-  const tabs = useTabs({ activePaneId, setPaneTab, allLeaves })
-  return { ...tabs, activePaneId, allLeaves, setPaneTab }
+  })
+  // Mirrors usePaneLayout.focusPane: the one write point that must also update
+  // lastFocusedPaneId, so activateTab's focus path is asserted against it.
+  const focusPane = vi.fn((paneId: string) => {
+    if (allLeaves.value.find((l) => l.id === paneId)) activePaneId.value = paneId
+  })
+  const tabs = useTabs({ activePaneId, setPaneTab, allLeaves, focusPane })
+  return { ...tabs, activePaneId, allLeaves, setPaneTab, focusPane }
+}
+
+/** Two-leaf split workspace sharing the scaffolding of createTabs. */
+function createSplitTabs() {
+  return createTabs({
+    allLeaves: [
+      { id: 'pane-1', tabId: null },
+      { id: 'pane-2', tabId: null },
+    ],
+  })
 }
 
 describe('useTabs', () => {
@@ -346,9 +355,11 @@ describe('useTabs', () => {
     const b = t.tabs.value[1]!.id
     expect(t.allLeaves.value.map((l) => l.tabId)).toEqual([a, b])
 
-    // Back to A: focus pane-1, do not drain it into pane-2.
+    // Back to A: focus pane-1 via the unified write point, do not drain A into pane-2.
+    t.focusPane.mockClear()
     t.activateTab(a)
     expect(t.activeTab.value).toBe(a)
+    expect(t.focusPane).toHaveBeenCalledWith('pane-1')
     expect(t.activePaneId.value).toBe('pane-1')
     expect(t.allLeaves.value.map((l) => l.tabId)).toEqual([a, b])
   })
@@ -385,17 +396,18 @@ describe('useTabs', () => {
     expect(t.tabHistory.value).toEqual([a, b, c])
 
     t.closeTab(b!)
-    expect(t.tabHistory.value).toEqual([a, c])
-    expect(t.tabHistoryIndex.value).toBe(1) // still pointing at the current tab (C)
+    // The closed id stays in the list; goBack/goForward skip it.
+    expect(t.tabHistory.value).toEqual([a, b, c])
+    expect(t.tabHistoryIndex.value).toBe(2) // still pointing at the current tab (C)
 
     t.goBack()
     expect(t.activeTab.value).toBe(a)
     expect(t.tabHistoryIndex.value).toBe(0)
 
-    // The forward branch survives the prune.
+    // The forward branch survives: the stale B entry is skipped, not consumed.
     t.goForward()
     expect(t.activeTab.value).toBe(c)
-    expect(t.tabHistoryIndex.value).toBe(1)
+    expect(t.tabHistoryIndex.value).toBe(2)
   })
 
   it('goBack/goForward skip history entries whose tab no longer exists', () => {
@@ -430,8 +442,8 @@ describe('useTabs', () => {
     t.closeTab(t.tabs.value[0]!.id)
 
     expect(t.tabs.value).toHaveLength(0)
-    expect(t.tabHistory.value).toHaveLength(0)
-    expect(t.tabHistoryIndex.value).toBe(-1)
+    // Stale ids are left in place and skipped on read, not pruned on close.
+    expect(t.tabHistory.value).toHaveLength(2)
 
     expect(() => { t.goBack(); t.goForward() }).not.toThrow()
     expect(t.activeTab.value).toBe('')

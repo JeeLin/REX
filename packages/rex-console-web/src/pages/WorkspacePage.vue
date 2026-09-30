@@ -81,7 +81,7 @@ const {
     // workspace export / import
     exportWorkspace,
     importWorkspace,
-  } = useTabs({ activePaneId, setPaneTab, allLeaves })
+  } = useTabs({ activePaneId, setPaneTab, allLeaves, focusPane })
 
 watch(() => wsStore.pendingResource, (resource) => {
   if (!resource) return
@@ -469,12 +469,12 @@ function statusColor(status: Tab['status']): StatusDotStatus {
   }
 }
 
-// Jump to the tab at the given index (1-based keys Alt+1~9), binding it to the active pane.
+// Jump to the tab at the given index (1-based keys Alt+1~9).
 function jumpToTab(index: number) {
   const tab = tabs.value[index]
   if (!tab) return
-  // activateTab detaches the tab from any other pane first (one tab per pane)
-  // and binds it to the active pane.
+  // activateTab focuses the pane already holding the tab (no move, no drain);
+  // only an unmounted tab is detached anywhere and bound to the active pane.
   activateTab(tab.id)
 }
 
