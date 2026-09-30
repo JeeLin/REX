@@ -142,11 +142,7 @@ function openReplace() {
   return opened
 }
 
-// Keymap handlers shared by the Ctrl- / Cmd- variants below.
-function runOpenReplace() {
-  return openReplace()
-}
-
+// Keymap handler shared by the Ctrl- / Cmd- variants below.
 function runFormat() {
   format()
   return true
@@ -269,11 +265,11 @@ function createExtensions() {
       },
       {
         key: 'Ctrl-Shift-r',
-        run: runOpenReplace,
+        run: openReplace,
       },
       {
         key: 'Cmd-Shift-r',
-        run: runOpenReplace,
+        run: openReplace,
       },
       {
         key: 'Ctrl-Shift-f',

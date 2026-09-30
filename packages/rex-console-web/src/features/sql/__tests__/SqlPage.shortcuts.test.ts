@@ -202,4 +202,53 @@ describe('SqlPage input-state guard', () => {
     expect(fromPage.defaultPrevented).toBe(true)
     expect(aiAssistantVisible()).toBe(true)
   })
+
+  it('ignores Ctrl+Shift+Q inside a <select> form control', async () => {
+    const select = document.createElement('select')
+    wrapper!.element.appendChild(select)
+
+    const event = press(select, 'Q')
+    await nextTick()
+    expect(event.defaultPrevented).toBe(false)
+    expect(globalQueryVisible()).toBe(false)
+  })
+})
+
+// The CodeMirror surface is contenteditable, but it is an editor — page-level
+// Ctrl+Shift+Q / Ctrl+Shift+A must not be swallowed while the SQL editor is
+// focused (the state users are in most of the time).
+describe('SqlPage CodeMirror editor focus', () => {
+  let cmContent: HTMLElement
+
+  beforeEach(async () => {
+    const editorRoot = await openQueryTab(wrapper!)
+    // CodeMirror builds its DOM asynchronously after the editor is created.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const content = editorRoot.querySelector('.cm-content')
+    expect(content, 'cm-content').toBeTruthy()
+    cmContent = content as HTMLElement
+  })
+
+  it('fires Ctrl+Shift+Q from the focused editor', async () => {
+    expect(cmContent.isContentEditable).toBe(true)
+
+    const event = press(cmContent, 'Q')
+    await nextTick()
+    expect(event.defaultPrevented).toBe(true)
+  })
+
+  it('fires Ctrl+Shift+A from the focused editor', async () => {
+    const event = press(cmContent, 'A')
+    await nextTick()
+    expect(event.defaultPrevented).toBe(true)
+    expect(aiAssistantVisible()).toBe(true)
+  })
+
+  it('does not let the page hijack Ctrl+Shift+F from the editor', async () => {
+    // CodeMirror owns Ctrl+Shift+F (format) while its surface is focused, so
+    // the page-level global search must stay closed.
+    press(cmContent, 'F')
+    await nextTick()
+    expect(globalSearchVisible()).toBe(false)
+  })
 })

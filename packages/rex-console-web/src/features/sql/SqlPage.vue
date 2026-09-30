@@ -478,9 +478,22 @@ function isTerminalTarget(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('.xterm') !== null
 }
 
+// Local typing guard: real form controls (plus <select>) stay quiet, but
+// contenteditable only counts outside the SQL editor — CodeMirror's
+// `.cm-content` is contenteditable yet is an editor, not a typing field, so
+// Ctrl+Shift+Q / Ctrl+Shift+A must still fire while it is focused.
+function isPageTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.isContentEditable) {
+    return !isSqlEditorTarget(target) && target.closest('.cm-content') === null
+  }
+  // INPUT/TEXTAREA (the terminal's hidden textarea included) + <select>.
+  return isTypingTarget(target) || target.tagName === 'SELECT'
+}
+
 function handleKeydown(e: KeyboardEvent) {
   // Skip shortcuts while typing in a form control / editable region
-  if (isTypingTarget(e.target)) return
+  if (isPageTypingTarget(e.target)) return
   // Ctrl+Shift+Q: Global Query
   if (e.ctrlKey && e.shiftKey && e.key === 'Q') {
     e.preventDefault()
