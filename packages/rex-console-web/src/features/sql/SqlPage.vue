@@ -478,17 +478,19 @@ function isTerminalTarget(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('.xterm') !== null
 }
 
-// Local typing guard: real form controls (plus <select>) stay quiet, but
-// contenteditable only counts outside the SQL editor — CodeMirror's
-// `.cm-content` is contenteditable yet is an editor, not a typing field, so
-// Ctrl+Shift+Q / Ctrl+Shift+A must still fire while it is focused.
+// Local typing guard on top of the shared one: real form controls stay quiet
+// (the terminal's hidden textarea included), and contenteditable counts as
+// typing everywhere except inside the SQL editor — the only CM6 surface in
+// this route hangs under `.sql-editor`, and it is an editor rather than a
+// typing field, so Ctrl+Shift+Q / Ctrl+Shift+A must still fire while it is
+// focused. CodeMirror outside this route (e.g. another pane's editor dialog)
+// is not exempt: the page must not swallow its shortcuts either way.
 function isPageTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   if (target.isContentEditable) {
-    return !isSqlEditorTarget(target) && target.closest('.cm-content') === null
+    return !isSqlEditorTarget(target)
   }
-  // INPUT/TEXTAREA (the terminal's hidden textarea included) + <select>.
-  return isTypingTarget(target) || target.tagName === 'SELECT'
+  return isTypingTarget(target)
 }
 
 function handleKeydown(e: KeyboardEvent) {

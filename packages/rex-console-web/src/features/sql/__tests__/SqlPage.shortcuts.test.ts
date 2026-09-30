@@ -122,9 +122,15 @@ function aiAssistantVisible(): boolean {
 // = global search.
 describe('SqlPage Ctrl+Shift+F scoping', () => {
   let editorRoot: HTMLElement
+  let cmContent: HTMLElement
 
   beforeEach(async () => {
     editorRoot = await openQueryTab(wrapper!)
+    // CodeMirror builds its DOM asynchronously after the editor is created.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const content = editorRoot.querySelector('.cm-content')
+    expect(content, 'cm-content').toBeTruthy()
+    cmContent = content as HTMLElement
   })
 
   it('yields to the SQL editor instead of opening global search', async () => {
@@ -143,6 +149,13 @@ describe('SqlPage Ctrl+Shift+F scoping', () => {
     expect(fromInner.defaultPrevented).toBe(false)
     expect(globalSearchVisible()).toBe(false)
     probe.remove()
+
+    // Keydown on CodeMirror's own contenteditable surface: it is still inside
+    // `.sql-editor`, so the page must not hijack the editor's shortcut.
+    const fromCm = press(cmContent, 'F')
+    await nextTick()
+    expect(fromCm.defaultPrevented).toBe(false)
+    expect(globalSearchVisible()).toBe(false)
   })
 
   it('yields to the split terminal instead of opening global search', async () => {
@@ -244,11 +257,26 @@ describe('SqlPage CodeMirror editor focus', () => {
     expect(aiAssistantVisible()).toBe(true)
   })
 
-  it('does not let the page hijack Ctrl+Shift+F from the editor', async () => {
-    // CodeMirror owns Ctrl+Shift+F (format) while its surface is focused, so
-    // the page-level global search must stay closed.
-    press(cmContent, 'F')
+  it('ignores page shortcuts from a CodeMirror outside the SQL editor', async () => {
+    // Another pane's CM6 (e.g. a file editor dialog) is contenteditable but
+    // not under `.sql-editor`, so the document-level handler must treat it as
+    // a typing field and leave the key to the editor instead of popping a
+    // page overlay.
+    const foreign = document.createElement('div')
+    foreign.className = 'cm-content'
+    foreign.setAttribute('contenteditable', 'true')
+    wrapper!.element.appendChild(foreign)
+
+    const fromForeignQ = press(foreign, 'Q')
     await nextTick()
+    expect(fromForeignQ.defaultPrevented).toBe(false)
+    expect(globalQueryVisible()).toBe(false)
+
+    const fromForeignF = press(foreign, 'F')
+    await nextTick()
+    expect(fromForeignF.defaultPrevented).toBe(false)
     expect(globalSearchVisible()).toBe(false)
+
+    foreign.remove()
   })
 })
