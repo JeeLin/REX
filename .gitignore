@@ -46,7 +46,7 @@ frontend/vite.config.js
 # AI agent context
 .cursorrules
 
-# Dev flow / milestones (local only)
+# mdflow milestones (local only)
 .mdflow/
 
 # Local analysis documents
