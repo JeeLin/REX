@@ -57,7 +57,7 @@ Hub API
 ## Agent Web 访问通道（v0.89 重设计）
 
 > 状态：设计裁决已定（S1 + S1′ 改判），实现已落地（S-fix `2e52cc0`、S4 `7e2083b` + `8947ad4`、S8 `73c2785`）。根因探查与方案评审的完整记录见
-> `.dev-flow/milestones/v0.89.0-agent-channel-redesign.md`（Context / 产品边界）。
+> `.mdflow/milestones/v0.89.0-agent-channel-redesign.md`（Context / 产品边界）。
 > **2026-09-24 用户确认改判**：由原「方案 C：隧道流式帧 + Hub 明文回环自代理」改判为
 > 「**Alt 1：Agent 标准反向代理直打 `REX_HUB_URL`**」，方案 C 否决理由见文末「方案 C 否决记录」。
 
@@ -170,7 +170,7 @@ agent 前端访问「本 agent 环境」资源为双跳 hairpin，**不做本地
    `build_loopback_request_head` 手写 HTTP/1.1 头为自制件。
 5. **原始动机复核无一关键**：ora-9 的单数据平面美学、Agent 纯管道、防 HOL 复核均不成立——
    Alt 1 反而更薄（删自定义机制换库代码），HOL 分连接后整类消失。
-6. **fix-32 残留全弃**：S2+S3 实现共 1031 行已存档全弃（patch 存于 `.dev-flow`，不入库）。
+6. **fix-32 残留全弃**：S2+S3 实现共 1031 行已存档全弃（patch 存于 `.mdflow`，不入库）。
 
 ## SIP 通道
 

@@ -47,7 +47,7 @@ frontend/vite.config.js
 .cursorrules
 
 # Dev flow / milestones (local only)
-.dev-flow/
+.mdflow/
 
 # Local analysis documents
 local/
