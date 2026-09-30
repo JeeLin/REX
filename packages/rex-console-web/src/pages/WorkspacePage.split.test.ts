@@ -27,6 +27,7 @@ vi.mock('@/features/workspace/ToolbarSettings.vue', () => ({
 }))
 
 import WorkspacePage from './WorkspacePage.vue'
+import { useShortcutsStore } from '@/stores/shortcuts'
 
 interface PaneNode {
   direction: 'row' | 'column' | null
@@ -107,21 +108,17 @@ describe('split shortcuts', () => {
 })
 
 describe('split is blocked while an overlay is open', () => {
-  afterEach(() => {
-    document.querySelectorAll('.command-palette-overlay, .shortcut-overlay').forEach(el => el.remove())
+  it.each([
+    ['command palette', (store: ReturnType<typeof useShortcutsStore>) => { store.paletteVisible = true }],
+    ['shortcut panel', (store: ReturnType<typeof useShortcutsStore>) => { store.show = true }],
+  ])('does not split behind an open %s', async (_name, openOverlay) => {
+    openOverlay(useShortcutsStore())
+
+    const ev = await pressAndFlush('\\', { ctrlKey: true, shiftKey: true, code: 'Backslash' })
+
+    expect(ev.defaultPrevented).toBe(false)
+    expect(leaves(paneRoot()).length).toBe(1)
   })
-
-  it.each(['.command-palette-overlay', '.shortcut-overlay'])(
-    'does not split behind an open %s',
-    async (selector) => {
-      document.body.insertAdjacentHTML('beforeend', `<div class="${selector.slice(1)}" />`)
-
-      const ev = await pressAndFlush('\\', { ctrlKey: true, shiftKey: true, code: 'Backslash' })
-
-      expect(ev.defaultPrevented).toBe(false)
-      expect(leaves(paneRoot()).length).toBe(1)
-    },
-  )
 
   it('does not split while a tab context menu is open', async () => {
     await pressAndFlush('t', { altKey: true })
@@ -134,11 +131,11 @@ describe('split is blocked while an overlay is open', () => {
   })
 
   it('splits again once the overlay is dismissed', async () => {
-    document.body.insertAdjacentHTML('beforeend', '<div class="command-palette-overlay" />')
+    useShortcutsStore().paletteVisible = true
     await pressAndFlush('\\', { ctrlKey: true, shiftKey: true, code: 'Backslash' })
     expect(leaves(paneRoot()).length).toBe(1)
 
-    document.querySelector('.command-palette-overlay')!.remove()
+    useShortcutsStore().paletteVisible = false
 
     const ev = await pressAndFlush('\\', { ctrlKey: true, shiftKey: true, code: 'Backslash' })
 

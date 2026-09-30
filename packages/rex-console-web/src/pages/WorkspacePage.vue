@@ -437,11 +437,11 @@ function handleSplitKeydown(e: KeyboardEvent) {
 
 // Modal/overlay surfaces that must swallow the split chord while open: the
 // local dialogs and context menus of this page, plus the AppLayout-owned
-// command palette / shortcut panel rendered outside this component tree.
+// command palette / shortcut panel whose open state lives in the shortcuts store.
 function isOverlayOpen(): boolean {
   if (showConfirmClose.value || showImportDialog.value || showProps.value) return true
   if (tabContextMenu.value.show || paneContextMenu.value.show) return true
-  return !!document.querySelector('.command-palette-overlay, .shortcut-overlay')
+  return shortcutsStore.show || shortcutsStore.paletteVisible
 }
 
 // Single fullscreen implementation shared with AppLayout: unsupported/rejected
@@ -526,7 +526,7 @@ useKeyboardShortcuts([
   { key: 'ArrowRight', ctrl: true, shift: true, handler: () => cycleTab(1) },
   // Ctrl+Shift+← : previous tab (replaces browser-reserved Ctrl+Shift+Tab)
   { key: 'ArrowLeft', ctrl: true, shift: true, handler: () => cycleTab(-1) },
-  // Cmd/Ctrl+Shift+T : reopen closed tab
+  // Alt+Shift+T : reopen closed tab
   { key: 't', alt: true, shift: true, handler: reopenClosedTab },
 ])
 </script>

@@ -12,7 +12,9 @@ import type { Resource } from '@/api/resources'
 import { useRouter } from 'vue-router'
 import { useSwipeGesture } from '@/composables/useSwipeGesture'
 import { useVirtualKeyboard } from '@/composables/useVirtualKeyboard'
-import { toggleTheme, setLanguage } from '@/composables/useTheme'
+import { toggleTheme } from '@/composables/useTheme'
+import { setLanguage } from '@/composables/useLanguage'
+import { useFullscreen } from '@/composables/useFullscreen'
 import CommandPalette from '@/components/CommandPalette.vue'
 import ShortcutPanel from '@/features/workspace/ShortcutPanel.vue'
 import { useShortcutsStore } from '@/stores/shortcuts'
@@ -45,14 +47,9 @@ const bottomNav = [
   { to: '/settings', key: 'nav.settings', icon: 'gear' },
 ]
 
-const fullscreen = ref(false)
-// Guards against re-entering toggleFullscreen while a Fullscreen API promise is
-// still in flight (a second trigger would flip the Vue flag in the catch block
-// and desync it from the real fullscreenchange state).
-let fullscreenPending = false
+// F11 / topbar fullscreen: single shared implementation (see useFullscreen).
+const { isFullscreen: fullscreen, toggle: toggleFullscreen, exit: exitFullscreen } = useFullscreen()
 const mobileMenuOpen = ref(false)
-const commandPaletteVisible = ref(false)
-
 
 const isWorkspace = computed(() => route.path === '/workspace')
 
@@ -66,45 +63,6 @@ useSwipeGesture(mainRef, {
 // 移动端虚拟键盘检测
 const { isKeyboardVisible } = useVirtualKeyboard()
 
-// F11 全屏切换: real Fullscreen API, Vue flag only as fallback when unsupported.
-function syncFullscreen() {
-  fullscreen.value = !!document.fullscreenElement
-}
-
-async function toggleFullscreen() {
-  if (fullscreenPending) return
-  if (document.fullscreenEnabled === false) {
-    fullscreen.value = !fullscreen.value
-    return
-  }
-  fullscreenPending = true
-  try {
-    if (document.fullscreenElement) {
-      await document.exitFullscreen()
-    } else {
-      await document.documentElement.requestFullscreen()
-    }
-    syncFullscreen()
-  } catch {
-    fullscreen.value = !fullscreen.value
-  } finally {
-    fullscreenPending = false
-  }
-}
-
-async function exitFullscreen() {
-  if (document.fullscreenEnabled === false || !document.fullscreenElement) {
-    fullscreen.value = false
-    return
-  }
-  try {
-    await document.exitFullscreen()
-    syncFullscreen()
-  } catch {
-    fullscreen.value = false
-  }
-}
-
 function handleGlobalKeydown(e: KeyboardEvent) {
   if (e.key === 'F11') {
     e.preventDefault()
@@ -114,23 +72,21 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   // Cmd+K / Ctrl+K for global search
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
     e.preventDefault()
-    commandPaletteVisible.value = !commandPaletteVisible.value
+    shortcutsStore.togglePalette()
   }
 }
 // Workspace toolbar entry: the workspace page dispatches this event so the
 // global palette stays the only Ctrl+K/command-palette instance in the app.
 function onCommandPaletteToggle() {
-  commandPaletteVisible.value = !commandPaletteVisible.value
+  shortcutsStore.togglePalette()
 }
 onMounted(() => {
   document.addEventListener('keydown', handleGlobalKeydown)
-  document.addEventListener('fullscreenchange', syncFullscreen)
   document.addEventListener('rex:command-palette-toggle', onCommandPaletteToggle)
   appStore.checkMode()
 })
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleGlobalKeydown)
-  document.removeEventListener('fullscreenchange', syncFullscreen)
   document.removeEventListener('rex:command-palette-toggle', onCommandPaletteToggle)
 })
 
@@ -360,8 +316,8 @@ function gotoWorkspace() {
   </div>
   
   <CommandPalette 
-    :visible="commandPaletteVisible" 
-    @close="commandPaletteVisible = false" 
+    :visible="shortcutsStore.paletteVisible" 
+    @close="shortcutsStore.closePalette()" 
   />
   <ShortcutPanel :show="shortcutsStore.show" @close="shortcutsStore.close()" />
 </template>

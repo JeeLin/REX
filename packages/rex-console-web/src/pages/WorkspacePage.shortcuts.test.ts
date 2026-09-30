@@ -4,7 +4,8 @@ import { nextTick } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
-vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+const { routerPush } = vi.hoisted(() => ({ routerPush: vi.fn() }))
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: routerPush }) }))
 
 // Heavy siblings never take part in shortcut handling.
 vi.mock('@/components/ui/StatusDot.vue', () => ({
@@ -58,6 +59,7 @@ beforeEach(() => {
   localStorage.clear()
   setActivePinia(createPinia())
   wrapper = mount(WorkspacePage)
+  routerPush.mockClear()
 })
 
 afterEach(() => {
@@ -354,7 +356,7 @@ describe('pane sync (activeTab ↔ pane.tabId)', () => {
     expect(tabIdsInPanes().every(id => id === null)).toBe(true)
   })
 
-  it('jumping to a tab clears its old pane (one tab per pane)', async () => {
+  it('jumping to a tab shown in another pane focuses that pane instead of draining it', async () => {
     await newTab(2)
     const second = activePaneTab()
 
@@ -364,16 +366,21 @@ describe('pane sync (activeTab ↔ pane.tabId)', () => {
     expect(activePaneTab()).toBeNull()
     expect(tabIdsInPanes()).toContain(second) // old pane still holds the tab
 
-    // Jump back to the tab already shown in the left pane: it must move, not duplicate.
+    // Jump to the tab already shown in the left pane: it stays there and the
+    // jump focuses its pane, instead of moving it (which would empty the pane
+    // it came from).
     await pressAndFlush('2', { altKey: true })
-    expect(activePaneTab()).toBe(second)
+    expect(tabIdsInPanes()).toEqual([second, null])
     expect(tabIdsInPanes().filter(id => id === second).length).toBe(1)
+    expect(activeTabIndex()).toBe(1)
   })
 
   it('Ctrl+Shift+N routes to /workspace', async () => {
-    await pressAndFlush('n', { ctrlKey: true, shiftKey: true })
-    // router.push is mocked; assert no tab churn and the handler ran without error.
-    // Routing assertion lives at the handler level: no tabs created, no crash.
+    const ev = await pressAndFlush('n', { ctrlKey: true, shiftKey: true })
+
+    expect(ev.defaultPrevented).toBe(true)
+    expect(routerPush).toHaveBeenCalledWith('/workspace')
+    expect(routerPush).toHaveBeenCalledTimes(1)
     expect(tabs().length).toBe(0)
   })
 })
