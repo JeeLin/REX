@@ -9,6 +9,21 @@ function createTabs() {
   return { ...tabs, activePaneId, setPaneTab }
 }
 
+/** Two-leaf workspace whose setPaneTab mutates the leaves, like the real pane layout. */
+function createSplitTabs() {
+  const activePaneId = ref('pane-1')
+  const allLeaves = ref([
+    { id: 'pane-1', tabId: null as string | null },
+    { id: 'pane-2', tabId: null as string | null },
+  ])
+  const setPaneTab = (paneId: string, tabId: string | null) => {
+    const leaf = allLeaves.value.find((l) => l.id === paneId)
+    if (leaf) leaf.tabId = tabId
+  }
+  const tabs = useTabs({ activePaneId, setPaneTab, allLeaves })
+  return { ...tabs, activePaneId, allLeaves, setPaneTab }
+}
+
 describe('useTabs', () => {
   it('opens a resource and binds it to the active pane', () => {
     const t = createTabs()
@@ -315,5 +330,110 @@ describe('useTabs', () => {
     expect(t.activeTabInfo.value).toBeNull()
     t.openResource({ id: 'r1', name: 'A', protocol: 'ssh' })
     expect(t.activeTabInfo.value?.label).toBe('A')
+  })
+
+  // ===== activateTab ↔ pane focus =====
+
+  it('activateTab focuses the pane already holding the tab instead of moving it', () => {
+    const t = createSplitTabs()
+    t.openResource({ id: 'r1', name: 'A', protocol: 'ssh' })
+    const a = t.tabs.value[0]!.id
+    expect(t.allLeaves.value.map((l) => l.tabId)).toEqual([a, null])
+    expect(t.activePaneId.value).toBe('pane-1')
+
+    t.activePaneId.value = 'pane-2'
+    t.openResource({ id: 'r2', name: 'B', protocol: 'ssh' })
+    const b = t.tabs.value[1]!.id
+    expect(t.allLeaves.value.map((l) => l.tabId)).toEqual([a, b])
+
+    // Back to A: focus pane-1, do not drain it into pane-2.
+    t.activateTab(a)
+    expect(t.activeTab.value).toBe(a)
+    expect(t.activePaneId.value).toBe('pane-1')
+    expect(t.allLeaves.value.map((l) => l.tabId)).toEqual([a, b])
+  })
+
+  it('activateTab binds an unmounted tab to the active pane', () => {
+    const t = createSplitTabs()
+    t.openResource({ id: 'r1', name: 'A', protocol: 'ssh' })
+    t.activePaneId.value = 'pane-2'
+    t.openResource({ id: 'r2', name: 'B', protocol: 'ssh' })
+    const a = t.tabs.value[0]!.id
+
+    t.tabs.value.push({ id: 'c', label: 'C', protocol: 'ssh', status: 'connecting' })
+    t.activateTab('c')
+
+    expect(t.activeTab.value).toBe('c')
+    expect(t.activePaneId.value).toBe('pane-2')
+    expect(t.allLeaves.value[1]!.tabId).toBe('c')
+    // One tab hangs on at most one pane.
+    expect(t.allLeaves.value.filter((l) => l.tabId === 'c')).toHaveLength(1)
+    expect(t.allLeaves.value[0]!.tabId).toBe(a)
+  })
+
+  // ===== tab history =====
+
+  it('goBack lands on the nearest earlier tab in a single press after a history entry was closed', () => {
+    const t = createTabs()
+    t.openResource({ id: 'r1', name: 'A', protocol: 'ssh' })
+    t.openResource({ id: 'r2', name: 'B', protocol: 'ssh' })
+    t.openResource({ id: 'r3', name: 'C', protocol: 'ssh' })
+    const [a, b, c] = t.tabs.value.map((x) => x.id)
+    t.pushHistory(a!)
+    t.pushHistory(b!)
+    t.pushHistory(c!)
+    expect(t.tabHistory.value).toEqual([a, b, c])
+
+    t.closeTab(b!)
+    expect(t.tabHistory.value).toEqual([a, c])
+    expect(t.tabHistoryIndex.value).toBe(1) // still pointing at the current tab (C)
+
+    t.goBack()
+    expect(t.activeTab.value).toBe(a)
+    expect(t.tabHistoryIndex.value).toBe(0)
+
+    // The forward branch survives the prune.
+    t.goForward()
+    expect(t.activeTab.value).toBe(c)
+    expect(t.tabHistoryIndex.value).toBe(1)
+  })
+
+  it('goBack/goForward skip history entries whose tab no longer exists', () => {
+    const t = createTabs()
+    t.openResource({ id: 'r1', name: 'A', protocol: 'ssh' })
+    t.openResource({ id: 'r2', name: 'B', protocol: 'ssh' })
+    const [a] = t.tabs.value.map((x) => x.id)
+    t.pushHistory(a!)
+    t.pushHistory('ghost') // stale id left behind by a bulk close
+    t.pushHistory(t.tabs.value[1]!.id)
+
+    t.goBack()
+    expect(t.activeTab.value).toBe(a)
+    expect(t.tabHistoryIndex.value).toBe(0)
+
+    t.goForward()
+    expect(t.activeTab.value).toBe(t.tabs.value[1]!.id)
+    expect(t.tabHistoryIndex.value).toBe(2)
+  })
+
+  it('goBack/goForward are safe no-ops on an empty or fully closed history', () => {
+    const t = createTabs()
+    expect(() => { t.goBack(); t.goForward() }).not.toThrow()
+    expect(t.activeTab.value).toBe('')
+    expect(t.tabHistoryIndex.value).toBe(-1)
+
+    t.openResource({ id: 'r1', name: 'A', protocol: 'ssh' })
+    t.openResource({ id: 'r2', name: 'B', protocol: 'ssh' })
+    t.pushHistory(t.tabs.value[0]!.id)
+    t.pushHistory(t.tabs.value[1]!.id)
+    t.closeTab(t.tabs.value[0]!.id)
+    t.closeTab(t.tabs.value[0]!.id)
+
+    expect(t.tabs.value).toHaveLength(0)
+    expect(t.tabHistory.value).toHaveLength(0)
+    expect(t.tabHistoryIndex.value).toBe(-1)
+
+    expect(() => { t.goBack(); t.goForward() }).not.toThrow()
+    expect(t.activeTab.value).toBe('')
   })
 })
