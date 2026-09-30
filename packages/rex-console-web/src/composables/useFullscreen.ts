@@ -1,4 +1,4 @@
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { ref } from 'vue'
 
 // Module-scope singleton: AppLayout (F11 / topbar button) and the WorkspacePage
 // toolbar button share one flag so both always show the same mode.
@@ -9,6 +9,27 @@ const isFullscreen = ref(false)
 // and desync it from the real fullscreenchange state).
 let pending = false
 
+// Evaluated on every call: document.fullscreenEnabled is not reactive, so a
+// computed would cache the first read (tests and embedded webviews flip it at
+// runtime).
+function supported(): boolean {
+  return typeof document !== 'undefined' && document.fullscreenEnabled !== false
+}
+
+function sync() {
+  // No-op under SSR / non-DOM test environments.
+  if (typeof document === 'undefined') return
+  isFullscreen.value = !!document.fullscreenElement
+}
+
+// The state is module-scope, so the listener is too: registering it per
+// instance would run the idempotent sync() once per mounted consumer
+// (AppLayout + WorkspacePage) for a single fullscreenchange event.
+if (typeof document !== 'undefined') {
+  document.addEventListener('fullscreenchange', sync)
+  sync()
+}
+
 /**
  * Shared fullscreen state for AppLayout (F11 / topbar button) and the
  * WorkspacePage toolbar button, so both always agree on the current mode.
@@ -16,21 +37,16 @@ let pending = false
  * - `isFullscreen` mirrors `document.fullscreenElement`; when the Fullscreen
  *   API is unavailable or a request is rejected it degrades to a plain
  *   toggleable UI flag instead of throwing.
- * - `supported` is a computed `document.fullscreenEnabled !== false`.
  * - `toggle()` / `exit()` never reject.
  */
 export function useFullscreen() {
-  // Evaluated lazily: callers may flip document.fullscreenEnabled at any time
-  // (tests and embedded webviews toggle it at runtime).
-  const supported = computed(() => typeof document !== 'undefined' && document.fullscreenEnabled !== false)
-
-  function sync() {
-    isFullscreen.value = !!document.fullscreenElement
-  }
+  // Re-read the document state on first consumer setup: the module-scope flag
+  // outlives any single mount, so each new consumer catches up (idempotent).
+  sync()
 
   async function toggle(): Promise<void> {
     if (pending) return
-    if (!supported.value) {
+    if (!supported()) {
       isFullscreen.value = !isFullscreen.value
       return
     }
@@ -51,7 +67,7 @@ export function useFullscreen() {
 
   async function exit(): Promise<void> {
     if (pending) return
-    if (!supported.value || !document.fullscreenElement) {
+    if (!supported() || !document.fullscreenElement) {
       isFullscreen.value = false
       return
     }
@@ -66,11 +82,5 @@ export function useFullscreen() {
     }
   }
 
-  onMounted(() => {
-    document.addEventListener('fullscreenchange', sync)
-    sync()
-  })
-  onUnmounted(() => document.removeEventListener('fullscreenchange', sync))
-
-  return { isFullscreen, supported, toggle, exit }
+  return { isFullscreen, toggle, exit }
 }

@@ -8,6 +8,8 @@ const h = vi.hoisted(() => ({
   locale: { value: 'en' },
   push: [] as string[],
   tCalls: [] as string[],
+  // Optional per-test translations, so a test can simulate a localized UI.
+  translations: {} as Record<string, string>,
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -16,7 +18,7 @@ vi.mock('vue-i18n', () => ({
   useI18n: () => ({
     t: (k: string, fallback?: string) => {
       h.tCalls.push(k)
-      return fallback ?? k
+      return h.translations[k] ?? fallback ?? k
     },
     locale: h.locale,
   }),
@@ -67,6 +69,7 @@ beforeEach(() => {
   h.push.length = 0
   h.tCalls.length = 0
   h.locale.value = 'en'
+  for (const k of Object.keys(h.translations)) delete h.translations[k]
   localStorage.clear()
   delete document.documentElement.dataset.theme
 })
@@ -121,6 +124,31 @@ describe('merged workspace palette commands', () => {
       'commandPalette.catSetting',
       'commandPalette.catSetting',
       'commandPalette.catSetting',
+    ])
+  })
+
+  it('matches entries by the localized category label', async () => {
+    // A zh UI renders these categories through i18n; searching the localized
+    // label must hit the same rows as the raw English category.
+    h.translations['commandPalette.catSetting'] = '设置'
+    const w = await mountPalette()
+
+    await w.find('.command-palette-input').setValue('设置')
+    expect(titles(w)).toEqual([
+      'commandPalette.themeDark',
+      'commandPalette.themeLight',
+      'commandPalette.languageEn',
+      'commandPalette.languageZh',
+    ])
+
+    // The raw English category still matches (plus the nav.settings title).
+    await w.find('.command-palette-input').setValue('setting')
+    expect(titles(w)).toEqual([
+      'nav.settings',
+      'commandPalette.themeDark',
+      'commandPalette.themeLight',
+      'commandPalette.languageEn',
+      'commandPalette.languageZh',
     ])
   })
 

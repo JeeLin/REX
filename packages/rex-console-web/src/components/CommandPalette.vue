@@ -121,7 +121,11 @@ const results = computed(() => {
   return searchItems.value.filter(item =>
     item.title.toLowerCase().includes(q) ||
     item.description.toLowerCase().includes(q) ||
-    item.category.toLowerCase().includes(q)
+    // Match the raw English category, the localized chip text and the i18n key
+    // so a zh UI can find e.g. the Setting category by typing「设置」.
+    item.category.toLowerCase().includes(q) ||
+    categoryLabel(item.category).toLowerCase().includes(q) ||
+    (CATEGORY_KEYS[item.category] ?? '').toLowerCase().includes(q)
   ).slice(0, 20)
 })
 
