@@ -55,7 +55,6 @@ const {
   dragTabId,
   tabColors,
   findTab,
-  formatConnection,
   activateTab,
   openResource,
   closeTab,
@@ -70,14 +69,10 @@ const {
   onTabDrop,
   onTabDragEnd,
   // history & pin
-  tabHistory,
-  tabHistoryIndex,
-  closedTabs,
   pushHistory,
   goBack,
   goForward,
   reopenClosedTab,
-    togglePinTab,
     // workspace export / import
     exportWorkspace,
     importWorkspace,

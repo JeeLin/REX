@@ -506,12 +506,10 @@ export function useTabs(deps: UseTabsDeps) {
     // history & pin
     tabHistory,
     tabHistoryIndex,
-    closedTabs,
     pushHistory,
     goBack,
     goForward,
     reopenClosedTab,
-    togglePinTab,
     // workspace export / import
     exportWorkspace,
     importWorkspace,
