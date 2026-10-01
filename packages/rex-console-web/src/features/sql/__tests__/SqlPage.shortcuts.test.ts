@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import SqlPage from '../SqlPage.vue'
 import SqlEditor from '../SqlEditor.vue'
+import { PANE_CTX, type PaneCtx } from '@/features/workspace/paneContext'
 
 vi.mock('vue-i18n', () => ({
   // Mirrors vue-i18n's `t(key, defaultMsg)` signature.
@@ -47,6 +48,22 @@ const aiAssistantStub = {
   template: '<div class="ai-stub" :data-visible="String(visible)" />',
 }
 
+// SqlEditor stays real: the scoping assertions walk its actual tree.
+const pageStubs = {
+  SqlResultGrid: true,
+  TableDesigner: true,
+  ExportWizard: true,
+  GlobalQueryModal: globalQueryStub,
+  AiAssistantDrawer: aiAssistantStub,
+  ImportWizard: true,
+  SqlFormView: true,
+  SavedQueryList: true,
+  DataCompare: true,
+  Modal: true,
+  Input: true,
+  Button: true,
+}
+
 function press(target: EventTarget, key: string): KeyboardEvent {
   const event = new KeyboardEvent('keydown', {
     key,
@@ -63,23 +80,7 @@ async function mountSqlPage(): Promise<VueWrapper> {
   return mount(SqlPage, {
     // Shortcuts are bound on `document`, so the page has to be in the tree.
     attachTo: document.body,
-    global: {
-      stubs: {
-        // SqlEditor stays real: the scoping assertions walk its actual tree.
-        SqlResultGrid: true,
-        TableDesigner: true,
-        ExportWizard: true,
-        GlobalQueryModal: globalQueryStub,
-        AiAssistantDrawer: aiAssistantStub,
-        ImportWizard: true,
-        SqlFormView: true,
-        SavedQueryList: true,
-        DataCompare: true,
-        Modal: true,
-        Input: true,
-        Button: true,
-      },
-    },
+    global: { stubs: pageStubs },
   })
 }
 
@@ -94,6 +95,7 @@ async function openQueryTab(wrapper: VueWrapper): Promise<HTMLElement> {
 }
 
 let wrapper: VueWrapper | null = null
+const extraWrappers: VueWrapper[] = []
 
 beforeEach(async () => {
   wrapper = await mountSqlPage()
@@ -102,6 +104,8 @@ beforeEach(async () => {
 afterEach(() => {
   wrapper?.unmount()
   wrapper = null
+  for (const w of extraWrappers) w.unmount()
+  extraWrappers.length = 0
   document.body.innerHTML = ''
 })
 
@@ -278,5 +282,89 @@ describe('SqlPage CodeMirror editor focus', () => {
     expect(globalSearchVisible()).toBe(false)
 
     foreign.remove()
+  })
+})
+
+// Split panes render one SqlPage per tab: only the instance owning the active
+// pane may react (and preventDefault) to a document-level keystroke.
+describe('SqlPage split-pane ownership', () => {
+  // PaneCtx stub with only the members SqlPage reads (split-pane ownership).
+  function buildPaneCtx(
+    leaves: { id: string; tabId: string | null }[],
+    activePaneId: string,
+    activeTabId: string,
+  ): PaneCtx {
+    return {
+      allLeaves: ref(leaves),
+      activePaneId: ref(activePaneId),
+      activeTabInfo: computed(() => ({ id: activeTabId, label: 'SQL', protocol: 'sql', status: 'connected' })),
+    } as unknown as PaneCtx
+  }
+
+  // The file-level default instance has no tabId (always owns keystrokes), so
+  // drop it before asserting per-instance ownership.
+  function releaseDefaultInstance() {
+    wrapper?.unmount()
+    wrapper = null
+  }
+
+  function mountInPane(tabId: string, ctx: PaneCtx): VueWrapper {
+    const w = mount(SqlPage, {
+      props: { tabId },
+      global: { provide: { [PANE_CTX]: ctx }, stubs: pageStubs },
+      attachTo: document.body,
+    })
+    extraWrappers.push(w)
+    return w
+  }
+
+  it('opens exactly one overlay, in the instance owning the active pane', async () => {
+    releaseDefaultInstance()
+    const ctx = buildPaneCtx(
+      [{ id: 'pane-1', tabId: 'tab-a' }, { id: 'pane-2', tabId: 'tab-b' }],
+      'pane-1',
+      'tab-b',
+    )
+    const a = mountInPane('tab-a', ctx)
+    const b = mountInPane('tab-b', ctx)
+    await nextTick()
+
+    const event = press(document.body, 'A')
+    await nextTick()
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(a.find('.ai-stub').attributes('data-visible')).toBe('true')
+    expect(b.find('.ai-stub').attributes('data-visible')).toBe('false')
+    const openLayers = Array.from(document.querySelectorAll('.ai-stub'))
+      .filter(el => el.getAttribute('data-visible') === 'true')
+    expect(openLayers).toHaveLength(1)
+  })
+
+  it('stays quiet while the active pane is a non-SQL pane', async () => {
+    releaseDefaultInstance()
+    const ctx = buildPaneCtx(
+      [{ id: 'pane-files', tabId: 'tab-files' }, { id: 'pane-sql', tabId: 'tab-sql' }],
+      'pane-files',
+      'tab-files',
+    )
+    const sql = mountInPane('tab-sql', ctx)
+    await nextTick()
+
+    // The Files pane owns the focus and the target is not a typing field —
+    // the SQL page must not hijack the keystroke anyway.
+    const fromQ = press(document.body, 'Q')
+    await nextTick()
+    expect(fromQ.defaultPrevented).toBe(false)
+    expect(sql.find('.gq-stub').attributes('data-visible')).toBe('false')
+
+    const fromA = press(document.body, 'A')
+    await nextTick()
+    expect(fromA.defaultPrevented).toBe(false)
+    expect(sql.find('.ai-stub').attributes('data-visible')).toBe('false')
+
+    const fromF = press(document.body, 'F')
+    await nextTick()
+    expect(fromF.defaultPrevented).toBe(false)
+    expect(sql.find('.gs-stub').attributes('data-visible')).toBe('false')
   })
 })

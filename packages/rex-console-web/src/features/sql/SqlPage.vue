@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onClickOutside } from '@vueuse/core'
 import { useSqlNav } from './useSqlNav'
@@ -21,6 +21,7 @@ import Input from '@/components/ui/Input.vue'
 import Button from '@/components/ui/Button.vue'
 import { clipboard } from '@/utils/clipboard'
 import { isTypingTarget } from '@/utils/isTypingTarget'
+import { PANE_CTX, type PaneCtx } from '@/features/workspace/paneContext'
 import { useSqlQuery } from './useSqlQuery'
 import {
   connect as sqlConnect,
@@ -40,6 +41,8 @@ const emit = defineEmits<{
 const props = defineProps<{
   resourceId?: string
   dbType?: string
+  /** Workspace tab that owns this instance (split panes mount one instance per tab). */
+  tabId?: string
 }>()
 
 const sessionId = ref<string | null>(null)
@@ -478,13 +481,9 @@ function isTerminalTarget(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('.xterm') !== null
 }
 
-// Local typing guard on top of the shared one: real form controls stay quiet
-// (the terminal's hidden textarea included), and contenteditable counts as
-// typing everywhere except inside the SQL editor — the only CM6 surface in
-// this route hangs under `.sql-editor`, and it is an editor rather than a
-// typing field, so Ctrl+Shift+Q / Ctrl+Shift+A must still fire while it is
-// focused. CodeMirror outside this route (e.g. another pane's editor dialog)
-// is not exempt: the page must not swallow its shortcuts either way.
+// Local typing guard on top of the shared one: form controls (the terminal's
+// hidden textarea included) stay quiet, and contenteditable counts as typing
+// everywhere except inside `.sql-editor`, the only CM6 surface here.
 function isPageTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   if (target.isContentEditable) {
@@ -493,7 +492,23 @@ function isPageTypingTarget(target: EventTarget | null): boolean {
   return isTypingTarget(target)
 }
 
+// Document-level shortcuts are shared by every mounted instance; split panes
+// render one SqlPage per tab, so only the instance owning the keystroke may
+// react (and preventDefault) — otherwise one keypress fires twice, and any
+// mounted instance would hijack Ctrl+Shift+Q. Falls back to the active tab
+// when the focused pane is empty, and always handles when rendered outside a
+// pane tree.
+const paneCtx = inject<PaneCtx | null>(PANE_CTX, null)
+
+function ownsKeystroke(): boolean {
+  if (!props.tabId || !paneCtx) return true
+  const focusedTabId = paneCtx.allLeaves.value.find(l => l.id === paneCtx.activePaneId.value)?.tabId
+  if (focusedTabId) return focusedTabId === props.tabId
+  return paneCtx.activeTabInfo.value?.id === props.tabId
+}
+
 function handleKeydown(e: KeyboardEvent) {
+  if (!ownsKeystroke()) return
   // Skip shortcuts while typing in a form control / editable region
   if (isPageTypingTarget(e.target)) return
   // Ctrl+Shift+Q: Global Query

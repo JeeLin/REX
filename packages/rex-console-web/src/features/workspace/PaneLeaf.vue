@@ -93,6 +93,7 @@ function sqlDbType(tab: { protocol?: string; subtype?: string } | null): string 
     <SqlPage
       v-else-if="['sql', 'mysql', 'postgresql', 'sqlite'].includes(tabInfo?.protocol || '')"
       :key="tabInfo?.id || ''"
+      :tab-id="tabInfo?.id"
       :resource-id="tabInfo?.resourceId"
       :db-type="sqlDbType(tabInfo)"
       @update:status="(s: string) => tabInfo?.id && onStatus(tabInfo.id, s)"
