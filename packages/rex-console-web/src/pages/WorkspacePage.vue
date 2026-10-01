@@ -374,7 +374,7 @@ function onPaneDrop(e: DragEvent, targetPaneId: string) {
   const targetLeaf = allLeaves.value.find((l) => l.id === targetPaneId)
   if (targetLeaf) {
     setPaneTab(targetLeaf.id, tabId)
-    activePaneId.value = targetLeaf.id
+    focusPane(targetLeaf.id)
   }
 }
 
@@ -473,8 +473,7 @@ function statusColor(status: Tab['status']): StatusDotStatus {
 function jumpToTab(index: number) {
   const tab = tabs.value[index]
   if (!tab) return
-  // activateTab focuses the pane already holding the tab (no move, no drain);
-  // only an unmounted tab is detached anywhere and bound to the active pane.
+  // activateTab handles the pane focus/binding itself; see useTabs.activateTab.
   activateTab(tab.id)
 }
 

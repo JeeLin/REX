@@ -46,8 +46,8 @@ export interface UseTabsDeps {
   allLeaves?: Ref<Array<{ id: string; tabId: string | null }>>
   // Unified focus write point of the pane layout (usePaneLayout.focusPane):
   // every "this pane is now the focused one" decision goes through it so both
-  // refs move together. Optional for callers without a pane tree.
-  focusPane?: (paneId: string) => void
+  // refs move together.
+  focusPane: (paneId: string) => void
 }
 
 const TAB_COLORS = ['#f85149', '#3fb950', '#58a6ff', '#d29922', '#8b5cf6', '#e8912d', '#f0883e', '#a371f7']
@@ -94,11 +94,7 @@ export function useTabs(deps: UseTabsDeps) {
     const leaf = allLeaves?.value.find((l) => l.tabId === id)
     activeTab.value = id
     if (leaf) {
-      if (focusPane) {
-        focusPane(leaf.id)
-      } else {
-        activePaneId.value = leaf.id
-      }
+      focusPane(leaf.id)
       return
     }
     unbindTab(id)
