@@ -482,7 +482,6 @@ export function useTabs(deps: UseTabsDeps) {
     findTab,
     formatConnection,
     activateTab,
-    unbindTab,
     // open / close / manage
     openResource,
     closeTab,

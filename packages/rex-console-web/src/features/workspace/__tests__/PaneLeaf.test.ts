@@ -18,21 +18,26 @@ vi.mock('@/features/sql/SqlPage.vue', () => ({
   default: { template: '<div class="ws-sql-stub" />', props: ['tabId', 'resourceId', 'dbType'] },
 }))
 vi.mock('@/features/redis/RedisPage.vue', () => ({
+  __esModule: true,
   default: { template: '<div class="ws-redis-stub" />', props: ['resourceId'] },
 }))
 vi.mock('@/features/files/FilesPage.vue', () => ({
+  __esModule: true,
   default: { template: '<div class="ws-files-stub" />', props: ['resourceId', 'protocol'] },
 }))
 vi.mock('@/features/files/FilesDrawer.vue', () => ({
+  __esModule: true,
   default: { template: '<div class="ws-sftp-drawer-stub" />', props: ['resourceId'] },
 }))
 vi.mock('@/features/sip/SipPage.vue', () => ({
+  __esModule: true,
   default: { template: '<div class="ws-sip-stub" />', props: ['resourceId', 'environmentId', 'name'] },
 }))
 
 // Import the component after mocks are registered so async imports resolve to stubs.
 import PaneLeaf from '../PaneLeaf.vue'
 import SqlPageStub from '@/features/sql/SqlPage.vue'
+import RedisPageStub from '@/features/redis/RedisPage.vue'
 
 function buildCtx(overrides: Partial<PaneCtx> = {}): PaneCtx {
   const leaves = ref([{ id: 'leaf-1', tabId: 'tab-1' }])
@@ -146,5 +151,26 @@ describe('PaneLeaf', () => {
     const sqlPage = wrapper.findComponent(SqlPageStub)
     expect(sqlPage.exists()).toBe(true)
     expect(sqlPage.props('tabId')).toBe('tab-1')
+  })
+
+  it('renders the redis stub for a redis pane', async () => {
+    const redisTab: Tab = {
+      id: 'tab-1',
+      label: 'Cache',
+      protocol: 'redis',
+      resourceId: 'res-redis',
+      status: 'connected',
+    }
+    ctx = buildCtx({ findTab: vi.fn(() => redisTab) })
+    const wrapper = mount(PaneLeaf, {
+      props: { leafId: 'leaf-1' },
+      global: { provide: { [PANE_CTX]: ctx } },
+    })
+
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.findComponent(RedisPageStub).exists()).toBe(true)
+    expect(wrapper.find('.ws-redis-stub').exists()).toBe(true)
   })
 })

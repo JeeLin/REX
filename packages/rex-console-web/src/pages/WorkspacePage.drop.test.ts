@@ -131,6 +131,13 @@ describe('pane drag & drop', () => {
     expect(target.tabId).toBe(null)
     expect(panes()[1]!.classes()).toContain('ws-pane--active')
 
+    // Focus the source pane so the drop target is NOT the active pane — the
+    // pre-drop highlight must diverge from the target for the post-drop
+    // assertion to prove drop actually moves activePaneId.
+    await panes()[0]!.trigger('click')
+    expect(panes()[0]!.classes()).toContain('ws-pane--active')
+    expect(panes()[1]!.classes()).not.toContain('ws-pane--active')
+
     await dragOver(1)
     expect(panes()[1]!.classes()).toContain('ws-pane--drag-over')
 
@@ -140,7 +147,8 @@ describe('pane drag & drop', () => {
     expect(leaves()[0]!.tabId).toBe(null)
     expect(leaves()[1]!.tabId).toBe(tabId)
     expect(panes()[1]!.classes()).not.toContain('ws-pane--drag-over')
-    // activePaneId points at the drop target.
+    // The active highlight migrated onto the drop target and left the source.
+    expect(panes().findIndex((p) => p.classes().includes('ws-pane--active'))).toBe(1)
     expect(panes()[1]!.classes()).toContain('ws-pane--active')
     expect(panes()[0]!.classes()).not.toContain('ws-pane--active')
 
