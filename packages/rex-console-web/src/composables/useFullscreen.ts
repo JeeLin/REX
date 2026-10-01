@@ -40,10 +40,6 @@ if (typeof document !== 'undefined') {
  * - `toggle()` / `exit()` never reject.
  */
 export function useFullscreen() {
-  // Re-read the document state on first consumer setup: the module-scope flag
-  // outlives any single mount, so each new consumer catches up (idempotent).
-  sync()
-
   async function toggle(): Promise<void> {
     if (pending) return
     if (!supported()) {

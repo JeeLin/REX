@@ -75,6 +75,9 @@ beforeEach(() => {
   })
   Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, get: () => fullscreenEnabled })
   Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => fullscreenElement })
+  // The composable only re-reads the document on fullscreenchange now, so a
+  // fresh mount must not inherit the flag left behind by the previous test.
+  document.dispatchEvent(new Event('fullscreenchange'))
   document.documentElement.requestFullscreen = requestFullscreen
   document.exitFullscreen = exitFullscreen
 
