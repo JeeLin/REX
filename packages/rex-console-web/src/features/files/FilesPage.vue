@@ -13,6 +13,7 @@ import Toast from '@/components/ui/Toast.vue'
 import { clipboard } from '@/utils/clipboard'
 import { isTypingTarget } from '@/utils/isTypingTarget'
 import { PANE_CTX, type PaneCtx } from '@/features/workspace/paneContext'
+import { ownsKeystroke } from '@/features/workspace/paneOwnership'
 
 const { t } = useI18n()
 
@@ -182,22 +183,10 @@ function isRenaming(side: Side, name: string) { return renamingId.value === `${s
 // Keyboard
 function activeSide(): Side { return panels.left.active ? 'left' : 'right' }
 
-// Document-level shortcuts are shared by every mounted instance; split panes
-// render one FilesPage per tab, so only the instance owning the keystroke may
-// react (and preventDefault) — otherwise one keypress fires twice, and any
-// mounted instance would hijack Ctrl+R. Falls back to the active tab when the
-// focused pane is empty, and always handles when rendered outside a pane tree.
 const paneCtx = inject<PaneCtx | null>(PANE_CTX, null)
 
-function ownsKeystroke(): boolean {
-  if (!props.tabId || !paneCtx) return true
-  const focusedTabId = paneCtx.allLeaves.value.find(l => l.id === paneCtx.activePaneId.value)?.tabId
-  if (focusedTabId) return focusedTabId === props.tabId
-  return paneCtx.activeTabInfo.value?.id === props.tabId
-}
-
 function onKeyDown(e: KeyboardEvent) {
-  if (!ownsKeystroke()) return
+  if (!ownsKeystroke(props.tabId, paneCtx)) return
   if (renamingId.value) return
   if (isTypingTarget(e.target)) return
 

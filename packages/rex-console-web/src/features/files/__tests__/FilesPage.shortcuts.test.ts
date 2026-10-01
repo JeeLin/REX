@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
-import { computed, ref } from 'vue'
 import FilesPage from '../FilesPage.vue'
-import { PANE_CTX, type PaneCtx } from '@/features/workspace/paneContext'
+import { buildPaneCtx, mountInPane } from '@/features/workspace/__tests__/paneCtx'
 
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
 
@@ -43,13 +42,15 @@ let wrapper: VueWrapper | undefined
 const extraWrappers: VueWrapper[] = []
 let promptMock: ReturnType<typeof vi.fn>
 
-// PaneCtx stub with only the members FilesPage reads (split-pane ownership).
-function buildPaneCtx(leaves: { id: string; tabId: string | null }[], activePaneId: string, activeTabId: string): PaneCtx {
-  return {
-    allLeaves: ref(leaves),
-    activePaneId: ref(activePaneId),
-    activeTabInfo: computed(() => ({ id: activeTabId, label: 'SFTP', protocol: 'sftp', status: 'connected' })),
-  } as unknown as PaneCtx
+// Mounts a FilesPage instance inside a pane context and registers it for cleanup.
+function mountFilesInPane(
+  resourceId: string,
+  tabId: string,
+  ctx: ReturnType<typeof buildPaneCtx>,
+): VueWrapper {
+  const w = mountInPane(FilesPage, ctx, { resourceId, protocol: 'sftp', tabId })
+  extraWrappers.push(w)
+  return w
 }
 
 function press(target: Element | Document, key: string, init: KeyboardEventInit = {}): KeyboardEvent {
@@ -189,18 +190,10 @@ describe('FilesPage shortcuts', () => {
       [{ id: 'pane-1', tabId: 'tab-a' }, { id: 'pane-2', tabId: 'tab-b' }],
       'pane-1',
       'tab-b',
+      { label: 'SFTP', protocol: 'sftp' },
     )
-    const a = mount(FilesPage, {
-      props: { resourceId: 'res-1', protocol: 'sftp', tabId: 'tab-a' },
-      global: { provide: { [PANE_CTX]: ctx } },
-      attachTo: document.body,
-    })
-    const b = mount(FilesPage, {
-      props: { resourceId: 'res-2', protocol: 'sftp', tabId: 'tab-b' },
-      global: { provide: { [PANE_CTX]: ctx } },
-      attachTo: document.body,
-    })
-    extraWrappers.push(a, b)
+    mountFilesInPane('res-1', 'tab-a', ctx)
+    mountFilesInPane('res-2', 'tab-b', ctx)
     await flushPromises()
 
     press(document.body, 'F7')
@@ -220,18 +213,10 @@ describe('FilesPage shortcuts', () => {
       [{ id: 'pane-1', tabId: 'tab-a' }, { id: 'pane-2', tabId: 'tab-b' }],
       'pane-empty',
       'tab-a',
+      { label: 'SFTP', protocol: 'sftp' },
     )
-    const a = mount(FilesPage, {
-      props: { resourceId: 'res-1', protocol: 'sftp', tabId: 'tab-a' },
-      global: { provide: { [PANE_CTX]: ctx } },
-      attachTo: document.body,
-    })
-    const b = mount(FilesPage, {
-      props: { resourceId: 'res-2', protocol: 'sftp', tabId: 'tab-b' },
-      global: { provide: { [PANE_CTX]: ctx } },
-      attachTo: document.body,
-    })
-    extraWrappers.push(a, b)
+    mountFilesInPane('res-1', 'tab-a', ctx)
+    mountFilesInPane('res-2', 'tab-b', ctx)
     await flushPromises()
 
     press(document.body, 'F7')

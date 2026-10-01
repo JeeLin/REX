@@ -22,6 +22,7 @@ import Button from '@/components/ui/Button.vue'
 import { clipboard } from '@/utils/clipboard'
 import { isTypingTarget } from '@/utils/isTypingTarget'
 import { PANE_CTX, type PaneCtx } from '@/features/workspace/paneContext'
+import { ownsKeystroke } from '@/features/workspace/paneOwnership'
 import { useSqlQuery } from './useSqlQuery'
 import {
   connect as sqlConnect,
@@ -492,23 +493,10 @@ function isPageTypingTarget(target: EventTarget | null): boolean {
   return isTypingTarget(target)
 }
 
-// Document-level shortcuts are shared by every mounted instance; split panes
-// render one SqlPage per tab, so only the instance owning the keystroke may
-// react (and preventDefault) — otherwise one keypress fires twice, and any
-// mounted instance would hijack Ctrl+Shift+Q. Falls back to the active tab
-// when the focused pane is empty, and always handles when rendered outside a
-// pane tree.
 const paneCtx = inject<PaneCtx | null>(PANE_CTX, null)
 
-function ownsKeystroke(): boolean {
-  if (!props.tabId || !paneCtx) return true
-  const focusedTabId = paneCtx.allLeaves.value.find(l => l.id === paneCtx.activePaneId.value)?.tabId
-  if (focusedTabId) return focusedTabId === props.tabId
-  return paneCtx.activeTabInfo.value?.id === props.tabId
-}
-
 function handleKeydown(e: KeyboardEvent) {
-  if (!ownsKeystroke()) return
+  if (!ownsKeystroke(props.tabId, paneCtx)) return
   // Skip shortcuts while typing in a form control / editable region
   if (isPageTypingTarget(e.target)) return
   // Ctrl+Shift+Q: Global Query

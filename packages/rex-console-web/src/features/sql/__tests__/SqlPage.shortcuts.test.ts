@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
-import { computed, nextTick, ref } from 'vue'
+import { nextTick } from 'vue'
 import SqlPage from '../SqlPage.vue'
 import SqlEditor from '../SqlEditor.vue'
-import { PANE_CTX, type PaneCtx } from '@/features/workspace/paneContext'
+import { buildPaneCtx, mountInPane } from '@/features/workspace/__tests__/paneCtx'
 
 vi.mock('vue-i18n', () => ({
   // Mirrors vue-i18n's `t(key, defaultMsg)` signature.
@@ -288,19 +288,6 @@ describe('SqlPage CodeMirror editor focus', () => {
 // Split panes render one SqlPage per tab: only the instance owning the active
 // pane may react (and preventDefault) to a document-level keystroke.
 describe('SqlPage split-pane ownership', () => {
-  // PaneCtx stub with only the members SqlPage reads (split-pane ownership).
-  function buildPaneCtx(
-    leaves: { id: string; tabId: string | null }[],
-    activePaneId: string,
-    activeTabId: string,
-  ): PaneCtx {
-    return {
-      allLeaves: ref(leaves),
-      activePaneId: ref(activePaneId),
-      activeTabInfo: computed(() => ({ id: activeTabId, label: 'SQL', protocol: 'sql', status: 'connected' })),
-    } as unknown as PaneCtx
-  }
-
   // The file-level default instance has no tabId (always owns keystrokes), so
   // drop it before asserting per-instance ownership.
   function releaseDefaultInstance() {
@@ -308,12 +295,8 @@ describe('SqlPage split-pane ownership', () => {
     wrapper = null
   }
 
-  function mountInPane(tabId: string, ctx: PaneCtx): VueWrapper {
-    const w = mount(SqlPage, {
-      props: { tabId },
-      global: { provide: { [PANE_CTX]: ctx }, stubs: pageStubs },
-      attachTo: document.body,
-    })
+  function mountPageInPane(tabId: string, ctx: ReturnType<typeof buildPaneCtx>): VueWrapper {
+    const w = mountInPane(SqlPage, ctx, { tabId }, pageStubs)
     extraWrappers.push(w)
     return w
   }
@@ -324,14 +307,39 @@ describe('SqlPage split-pane ownership', () => {
       [{ id: 'pane-1', tabId: 'tab-a' }, { id: 'pane-2', tabId: 'tab-b' }],
       'pane-1',
       'tab-b',
+      { label: 'SQL', protocol: 'sql' },
     )
-    const a = mountInPane('tab-a', ctx)
-    const b = mountInPane('tab-b', ctx)
+    const a = mountPageInPane('tab-a', ctx)
+    const b = mountPageInPane('tab-b', ctx)
     await nextTick()
 
     const event = press(document.body, 'A')
     await nextTick()
 
+    expect(event.defaultPrevented).toBe(true)
+    expect(a.find('.ai-stub').attributes('data-visible')).toBe('true')
+    expect(b.find('.ai-stub').attributes('data-visible')).toBe('false')
+    const openLayers = Array.from(document.querySelectorAll('.ai-stub'))
+      .filter(el => el.getAttribute('data-visible') === 'true')
+    expect(openLayers).toHaveLength(1)
+  })
+
+  it('falls back to the active tab when the focused pane is empty', async () => {
+    releaseDefaultInstance()
+    // The focused pane holds no tab, so ownership falls back to the active
+    // tab: the instance owning the active tab reacts, the other stays quiet.
+    const ctx = buildPaneCtx(
+      [{ id: 'pane-1', tabId: 'tab-a' }, { id: 'pane-2', tabId: 'tab-b' }],
+      'pane-empty',
+      'tab-a',
+      { label: 'SQL', protocol: 'sql' },
+    )
+    const a = mountPageInPane('tab-a', ctx)
+    const b = mountPageInPane('tab-b', ctx)
+    await nextTick()
+
+    const event = press(document.body, 'A')
+    await nextTick()
     expect(event.defaultPrevented).toBe(true)
     expect(a.find('.ai-stub').attributes('data-visible')).toBe('true')
     expect(b.find('.ai-stub').attributes('data-visible')).toBe('false')
@@ -346,8 +354,9 @@ describe('SqlPage split-pane ownership', () => {
       [{ id: 'pane-files', tabId: 'tab-files' }, { id: 'pane-sql', tabId: 'tab-sql' }],
       'pane-files',
       'tab-files',
+      { label: 'SQL', protocol: 'sql' },
     )
-    const sql = mountInPane('tab-sql', ctx)
+    const sql = mountPageInPane('tab-sql', ctx)
     await nextTick()
 
     // The Files pane owns the focus and the target is not a typing field —
