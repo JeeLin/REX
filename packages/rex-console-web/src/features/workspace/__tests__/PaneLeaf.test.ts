@@ -13,6 +13,8 @@ vi.mock('@/features/terminal/WorkspaceTerminal.vue', () => ({
 }))
 // __esModule marks the mock as a transpiled module so defineAsyncComponent
 // unwraps `default` instead of treating the mock namespace as the component.
+// Only defineAsyncComponent targets need this marker; statically imported
+// components (e.g. FilesDrawer) are resolved through Vite interop.
 vi.mock('@/features/sql/SqlPage.vue', () => ({
   __esModule: true,
   default: { template: '<div class="ws-sql-stub" />', props: ['tabId', 'resourceId', 'dbType'] },
@@ -23,10 +25,9 @@ vi.mock('@/features/redis/RedisPage.vue', () => ({
 }))
 vi.mock('@/features/files/FilesPage.vue', () => ({
   __esModule: true,
-  default: { template: '<div class="ws-files-stub" />', props: ['resourceId', 'protocol'] },
+  default: { template: '<div class="ws-files-stub" />', props: ['tabId', 'resourceId', 'protocol'] },
 }))
 vi.mock('@/features/files/FilesDrawer.vue', () => ({
-  __esModule: true,
   default: { template: '<div class="ws-sftp-drawer-stub" />', props: ['resourceId'] },
 }))
 vi.mock('@/features/sip/SipPage.vue', () => ({
@@ -38,6 +39,7 @@ vi.mock('@/features/sip/SipPage.vue', () => ({
 import PaneLeaf from '../PaneLeaf.vue'
 import SqlPageStub from '@/features/sql/SqlPage.vue'
 import RedisPageStub from '@/features/redis/RedisPage.vue'
+import FilesPageStub from '@/features/files/FilesPage.vue'
 
 function buildCtx(overrides: Partial<PaneCtx> = {}): PaneCtx {
   const leaves = ref([{ id: 'leaf-1', tabId: 'tab-1' }])
@@ -87,6 +89,21 @@ describe('PaneLeaf', () => {
   beforeEach(() => {
     ctx = buildCtx()
   })
+
+  // Shared skeleton for the protocol-specific pages (SqlPage / RedisPage / FilesPage):
+  // they are all reached through defineAsyncComponent, so the mount has to drain
+  // its resolution before any assertion can see the child.
+  async function mountPaneWithTab(tab: Tab) {
+    ctx = buildCtx({ findTab: vi.fn(() => tab) })
+    const wrapper = mount(PaneLeaf, {
+      props: { leafId: 'leaf-1' },
+      global: { provide: { [PANE_CTX]: ctx } },
+    })
+
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+    return wrapper
+  }
 
   it('renders with the base ws-pane class', () => {
     const wrapper = mount(PaneLeaf, {
@@ -139,21 +156,14 @@ describe('PaneLeaf', () => {
       resourceId: 'res-sql',
       status: 'connected',
     }
-    ctx = buildCtx({ findTab: vi.fn(() => sqlTab) })
-    const wrapper = mount(PaneLeaf, {
-      props: { leafId: 'leaf-1' },
-      global: { provide: { [PANE_CTX]: ctx } },
-    })
-
-    await flushPromises()
-    await wrapper.vm.$nextTick()
+    const wrapper = await mountPaneWithTab(sqlTab)
 
     const sqlPage = wrapper.findComponent(SqlPageStub)
     expect(sqlPage.exists()).toBe(true)
     expect(sqlPage.props('tabId')).toBe('tab-1')
   })
 
-  it('renders the redis stub for a redis pane', async () => {
+  it('passes the tab resourceId to RedisPage', async () => {
     const redisTab: Tab = {
       id: 'tab-1',
       label: 'Cache',
@@ -161,16 +171,25 @@ describe('PaneLeaf', () => {
       resourceId: 'res-redis',
       status: 'connected',
     }
-    ctx = buildCtx({ findTab: vi.fn(() => redisTab) })
-    const wrapper = mount(PaneLeaf, {
-      props: { leafId: 'leaf-1' },
-      global: { provide: { [PANE_CTX]: ctx } },
-    })
+    const wrapper = await mountPaneWithTab(redisTab)
 
-    await flushPromises()
-    await wrapper.vm.$nextTick()
+    const redisPage = wrapper.findComponent(RedisPageStub)
+    expect(redisPage.exists()).toBe(true)
+    expect(redisPage.props('resourceId')).toBe('res-redis')
+  })
 
-    expect(wrapper.findComponent(RedisPageStub).exists()).toBe(true)
-    expect(wrapper.find('.ws-redis-stub').exists()).toBe(true)
+  it('passes the leaf tab id to FilesPage as tabId', async () => {
+    const sftpTab: Tab = {
+      id: 'tab-1',
+      label: 'Assets',
+      protocol: 'sftp',
+      resourceId: 'res-sftp',
+      status: 'connected',
+    }
+    const wrapper = await mountPaneWithTab(sftpTab)
+
+    const filesPage = wrapper.findComponent(FilesPageStub)
+    expect(filesPage.exists()).toBe(true)
+    expect(filesPage.props('tabId')).toBe('tab-1')
   })
 })
