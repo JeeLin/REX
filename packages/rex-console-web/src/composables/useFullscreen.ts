@@ -1,7 +1,6 @@
 import { ref } from 'vue'
 
-// Module-scope singleton: AppLayout (F11 / topbar button) and the WorkspacePage
-// toolbar button share one flag so both always show the same mode.
+// Module-scope singleton shared by every consumer — see useFullscreen() below.
 const isFullscreen = ref(false)
 
 // Guards against re-entering toggle/exit while a Fullscreen API promise is

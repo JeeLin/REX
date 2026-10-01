@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { ref, computed } from 'vue'
 import type { PaneCtx } from '../paneContext'
 import { PANE_CTX } from '../paneContext'
@@ -11,8 +11,11 @@ vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
 vi.mock('@/features/terminal/WorkspaceTerminal.vue', () => ({
   default: { template: '<div class="ws-terminal-stub" />', props: ['tabId', 'resourceId', 'name'] },
 }))
+// __esModule marks the mock as a transpiled module so defineAsyncComponent
+// unwraps `default` instead of treating the mock namespace as the component.
 vi.mock('@/features/sql/SqlPage.vue', () => ({
-  default: { template: '<div class="ws-sql-stub" />', props: ['resourceId', 'dbType'] },
+  __esModule: true,
+  default: { template: '<div class="ws-sql-stub" />', props: ['tabId', 'resourceId', 'dbType'] },
 }))
 vi.mock('@/features/redis/RedisPage.vue', () => ({
   default: { template: '<div class="ws-redis-stub" />', props: ['resourceId'] },
@@ -29,6 +32,7 @@ vi.mock('@/features/sip/SipPage.vue', () => ({
 
 // Import the component after mocks are registered so async imports resolve to stubs.
 import PaneLeaf from '../PaneLeaf.vue'
+import SqlPageStub from '@/features/sql/SqlPage.vue'
 
 function buildCtx(overrides: Partial<PaneCtx> = {}): PaneCtx {
   const leaves = ref([{ id: 'leaf-1', tabId: 'tab-1' }])
@@ -120,5 +124,27 @@ describe('PaneLeaf', () => {
     })
     await wrapper.find('.ws-pane').trigger('click')
     expect(ctx.focusPane).toHaveBeenCalledWith('leaf-1')
+  })
+
+  it('passes the leaf tab id to SqlPage as tabId', async () => {
+    const sqlTab: Tab = {
+      id: 'tab-1',
+      label: 'Analytics',
+      protocol: 'sql',
+      resourceId: 'res-sql',
+      status: 'connected',
+    }
+    ctx = buildCtx({ findTab: vi.fn(() => sqlTab) })
+    const wrapper = mount(PaneLeaf, {
+      props: { leafId: 'leaf-1' },
+      global: { provide: { [PANE_CTX]: ctx } },
+    })
+
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    const sqlPage = wrapper.findComponent(SqlPageStub)
+    expect(sqlPage.exists()).toBe(true)
+    expect(sqlPage.props('tabId')).toBe('tab-1')
   })
 })
