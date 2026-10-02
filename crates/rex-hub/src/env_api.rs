@@ -4,13 +4,14 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
 
+use crate::error::{api_error as err, ErrorBody};
 use crate::models::{
     EnvironmentDetail, NewEnvironment, TopoEdge, TopoNode, Topology, UpdateEnvironment,
 };
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 
-type ApiResult<T> = Result<Json<T>, (StatusCode, Json<serde_json::Value>)>;
+type ApiResult<T> = Result<Json<T>, (StatusCode, Json<ErrorBody>)>;
 
 pub fn env_routes() -> axum::Router<AppState> {
     axum::Router::new()
@@ -27,13 +28,6 @@ pub fn env_routes() -> axum::Router<AppState> {
                 .delete(delete_environment),
         )
         .route("/topology", axum::routing::get(get_topology))
-}
-
-fn err(status: StatusCode, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
-    (
-        status,
-        Json(serde_json::json!({ "error": { "code": "ERROR", "message": msg } })),
-    )
 }
 
 async fn list_environments(State(state): State<AppState>) -> ApiResult<Vec<EnvironmentDetail>> {

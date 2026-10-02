@@ -4,16 +4,10 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Json;
 
+use crate::error::{api_error as err, ErrorBody};
 use crate::AppState;
 
-type ApiResult<T> = Result<Json<T>, (StatusCode, Json<serde_json::Value>)>;
-
-fn err(status: StatusCode, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
-    (
-        status,
-        Json(serde_json::json!({ "error": { "code": "ERROR", "message": msg } })),
-    )
-}
+type ApiResult<T> = Result<Json<T>, (StatusCode, Json<ErrorBody>)>;
 
 pub fn settings_routes() -> axum::Router<AppState> {
     axum::Router::new().route("/", axum::routing::get(get_settings).put(update_settings))

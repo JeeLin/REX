@@ -4,17 +4,11 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
 
+use crate::error::{api_error as err, ErrorBody};
 use crate::models::{NewResource, Resource};
 use crate::AppState;
 
-type ApiResult<T> = Result<Json<T>, (StatusCode, Json<serde_json::Value>)>;
-
-fn err(status: StatusCode, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
-    (
-        status,
-        Json(serde_json::json!({ "error": { "code": "ERROR", "message": msg } })),
-    )
-}
+type ApiResult<T> = Result<Json<T>, (StatusCode, Json<ErrorBody>)>;
 
 /// 资源路由（嵌套在 /api/environments 下）
 pub fn resource_routes() -> axum::Router<AppState> {

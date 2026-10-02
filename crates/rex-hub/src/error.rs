@@ -34,6 +34,55 @@ pub fn error_with_status(
     (status, error_response(code, message))
 }
 
+/// REST 错误码枚举：驼峰字面量统一在这里定义，`as_str()` → JSON `error.code`。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErrorCode {
+    /// 通用错误（历史默认，保持行为不变）。
+    Error,
+    AuthInvalid,
+    AuthRequired,
+    AgentUnavailable,
+    NotFound,
+    Conflict,
+    BadRequest,
+    Internal,
+    Unimplemented,
+}
+
+impl ErrorCode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ErrorCode::Error => "ERROR",
+            ErrorCode::AuthInvalid => "AUTH_INVALID",
+            ErrorCode::AuthRequired => "AUTH_REQUIRED",
+            ErrorCode::AgentUnavailable => "AGENT_UNAVAILABLE",
+            ErrorCode::NotFound => "NOT_FOUND",
+            ErrorCode::Conflict => "CONFLICT",
+            ErrorCode::BadRequest => "BAD_REQUEST",
+            ErrorCode::Internal => "INTERNAL",
+            ErrorCode::Unimplemented => "UNIMPLEMENTED",
+        }
+    }
+}
+
+impl Default for ErrorCode {
+    fn default() -> Self {
+        ErrorCode::Error
+    }
+}
+
+impl std::fmt::Display for ErrorCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// 统一的 handler 级错误构造：默认 code = `ErrorCode::Error`（"ERROR"），
+/// 供各 api handler `use crate::error::api_error as err`，消除逐文件复制的 `fn err`。
+pub fn api_error(status: StatusCode, message: &str) -> (StatusCode, Json<ErrorBody>) {
+    error_with_status(status, ErrorCode::default().as_str(), message)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -8,19 +8,13 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
 
+use crate::error::{api_error as err, ErrorBody};
 use crate::models::SipCaptureRecord;
 use crate::AppState;
 
 use rex_sip::capture::encode_pcap;
 
-type ApiResult<T> = Result<Json<T>, (StatusCode, Json<serde_json::Value>)>;
-
-fn err(status: StatusCode, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
-    (
-        status,
-        Json(serde_json::json!({ "error": { "code": "ERROR", "message": msg } })),
-    )
-}
+type ApiResult<T> = Result<Json<T>, (StatusCode, Json<ErrorBody>)>;
 
 pub fn sip_capture_routes() -> axum::Router<AppState> {
     axum::Router::new()
@@ -80,7 +74,7 @@ async fn list_packets(
 async fn export_pcap(
     State(state): State<AppState>,
     Path(resource_id): Path<String>,
-) -> Result<axum::response::Response, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<axum::response::Response, (StatusCode, Json<crate::error::ErrorBody>)> {
     let packets = state.sip_capture.snapshot(&resource_id);
     if packets.is_empty() {
         return Err(err(StatusCode::NOT_FOUND, "no capture data"));
