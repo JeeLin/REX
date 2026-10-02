@@ -89,6 +89,7 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
         "success",
         Some(format!("{}@{}", connect_req.protocol, connect_req.host)),
     );
+    let audit_target = format!("{}@{}", connect_req.protocol, connect_req.host);
 
     // 2. 查找 Agent 连接
     let agent_conn = {
@@ -99,6 +100,12 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
     let agent_conn = match agent_conn {
         Some(c) => c,
         None => {
+            audit_log(
+                &state.db,
+                "TUNNEL_CONNECT",
+                "failure",
+                Some(audit_target.clone()),
+            );
             let _ = send_error(&mut ws, "agent not connected").await;
             return;
         }
@@ -136,6 +143,12 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
         .await
         .is_err()
     {
+        audit_log(
+            &state.db,
+            "TUNNEL_CONNECT",
+            "failure",
+            Some(audit_target.clone()),
+        );
         let _ = send_error(&mut ws, "failed to send connect to agent").await;
         return;
     }
@@ -149,14 +162,32 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
             ..
         })) => id,
         Ok(Ok(ConnectResponse { error: Some(e), .. })) => {
+            audit_log(
+                &state.db,
+                "TUNNEL_CONNECT",
+                "failure",
+                Some(audit_target.clone()),
+            );
             let _ = send_error(&mut ws, &e).await;
             return;
         }
         Ok(Ok(ConnectResponse { .. })) => {
+            audit_log(
+                &state.db,
+                "TUNNEL_CONNECT",
+                "failure",
+                Some(audit_target.clone()),
+            );
             let _ = send_error(&mut ws, "agent returned empty response").await;
             return;
         }
         Ok(Err(_)) => {
+            audit_log(
+                &state.db,
+                "TUNNEL_CONNECT",
+                "failure",
+                Some(audit_target.clone()),
+            );
             let _ = send_error(&mut ws, "agent response channel closed").await;
             return;
         }
@@ -164,6 +195,12 @@ async fn handle_tunnel(mut ws: WebSocket, state: AppState, params: TunnelQuery) 
             // 超时 — 清理 pending request
             let mut pending = state.agent_tunnel.pending_requests.write().await;
             pending.remove(&request_id);
+            audit_log(
+                &state.db,
+                "TUNNEL_CONNECT",
+                "failure",
+                Some(audit_target.clone()),
+            );
             let _ = send_error(&mut ws, "agent response timeout").await;
             return;
         }
