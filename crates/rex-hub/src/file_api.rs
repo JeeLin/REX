@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::db::audit_log;
 use crate::resource_conn::{load_resource_config, normalize_username, ResourceConnInfo};
 use crate::AppState;
 use axum::extract::{Multipart, Query, State};
@@ -248,6 +249,12 @@ async fn connect(
                 Ok(c) => Box::new(c),
                 Err(e) => {
                     tracing::error!(action = "FILE_CONNECT", resource_id = %body.resource_id, resource_name = %res.name, protocol = %res.protocol, error = %e, "SFTP connection failed");
+                    audit_log(
+                        &state.db,
+                        "FILE_CONNECT",
+                        "failure",
+                        Some(body.resource_id.clone()),
+                    );
                     return crate::error::connect_error_response(
                         "failed to connect to SFTP server",
                         e,
@@ -295,11 +302,17 @@ async fn connect(
             match conn {
                 Ok(c) => Box::new(c),
                 Err(e) => {
+                    audit_log(
+                        &state.db,
+                        "FILE_CONNECT",
+                        "failure",
+                        Some(body.resource_id.clone()),
+                    );
                     return crate::error::connect_error_response(
                         "failed to connect to S3 storage",
                         e,
                     )
-                    .into_response()
+                    .into_response();
                 }
             }
         }

@@ -128,16 +128,28 @@ async fn connect(
     let options = match ClientOptions::parse(&conn_str).await {
         Ok(o) => o,
         Err(e) => {
+            audit_log(
+                &state.db,
+                "MONGO_CONNECT",
+                "failure",
+                Some(res.name.clone()),
+            );
             return error_response("INVALID_URI", &format!("invalid MongoDB URI: {}", e))
-                .into_response()
+                .into_response();
         }
     };
 
     let client = match Client::with_options(options) {
         Ok(c) => c,
         Err(e) => {
+            audit_log(
+                &state.db,
+                "MONGO_CONNECT",
+                "failure",
+                Some(res.name.clone()),
+            );
             return crate::error::connect_error_response("failed to create MongoDB client", e)
-                .into_response()
+                .into_response();
         }
     };
 
@@ -149,11 +161,17 @@ async fn connect(
     {
         Ok(_) => {}
         Err(e) => {
+            audit_log(
+                &state.db,
+                "MONGO_CONNECT",
+                "failure",
+                Some(res.name.clone()),
+            );
             return crate::error::connect_error_response(
                 &format!("MongoDB ping failed at {}:{}", host, port),
                 e,
             )
-            .into_response()
+            .into_response();
         }
     }
 

@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use url::form_urlencoded;
 
+use crate::db::audit_log;
 use crate::resource_conn::{load_resource_config, ResourceConnInfo};
 use crate::AppState;
 use axum::extract::{Query, State};
@@ -319,6 +320,12 @@ async fn connect(
                 host = %res.host,
                 error = %e,
                 "Redis connect failed"
+            );
+            audit_log(
+                &state.db,
+                "REDIS_CONNECT",
+                "failure",
+                Some(res.host.clone()),
             );
             crate::error::connect_error_response(
                 &format!(
