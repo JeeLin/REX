@@ -285,7 +285,9 @@ impl FileConnector for SftpConnector {
     }
 
     async fn close(&mut self) -> Result<()> {
+        tracing::info!(action = "SFTP_CLOSE", "SFTP session closing");
         self.session.close().await.ok();
+        tracing::debug!("SFTP session closed");
         Ok(())
     }
 
