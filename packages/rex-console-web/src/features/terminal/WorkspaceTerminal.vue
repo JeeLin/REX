@@ -396,11 +396,15 @@ function connectSession() {
         case 'terminal.disconnected':
           terminal?.writeln(`\r\n\x1b[33m[Session disconnected: ${msg.payload.reason}]\x1b[0m`)
           break
-        case 'terminal.error':
-          terminal?.write(`\r\n\x1b[31m[Error: ${msg.payload.message}]\x1b[0m`)
+        case 'terminal.error': {
+          const code = msg.payload?.code
+          const message = msg.payload?.message || 'Terminal error'
+          terminal?.write(`\r\n\x1b[31m[Error${code ? `: ${code}` : ''}: ${message}]\x1b[0m`)
           connectionStatus.value = 'error'
           emit('update:status', 'error')
+          toast.value?.push(message, 'error')
           break
+        }
         case 'pong':
           if (pingTimestamp) {
             latency.value = Date.now() - pingTimestamp
@@ -440,6 +444,7 @@ function connectSession() {
     if (ws !== currentWs) return // Stale handler, ignore
     connecting = false
     stopPing()
+    toast.value?.push(t('terminal.wsError', 'WebSocket connection error'), 'error')
   }
 }
 
