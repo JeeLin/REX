@@ -788,15 +788,15 @@ async fn handle_agent_terminal(
 }
 
 async fn send_ws_error(ws: &mut WebSocket, msg: &str) -> Result<(), axum::Error> {
-    ws.send(Message::Text(
-        serde_json::to_string(&ServerMsg::Error {
+    use crate::error::send_ws_json;
+    send_ws_json(
+        ws,
+        &ServerMsg::Error {
             payload: ErrorPayload {
                 message: msg.into(),
             },
-        })
-        .unwrap()
-        .into(),
-    ))
+        },
+    )
     .await
 }
 

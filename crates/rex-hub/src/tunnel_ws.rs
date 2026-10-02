@@ -295,9 +295,12 @@ async fn recv_connect_msg(ws: &mut WebSocket) -> Option<TunnelConnectRequest> {
 
 /// 发送错误消息到前端
 async fn send_error(ws: &mut WebSocket, msg: &str) -> Result<(), axum::Error> {
-    let err = serde_json::to_string(&TunnelMsg::Error {
-        message: msg.into(),
-    })
-    .unwrap();
-    ws.send(Message::Text(err.into())).await
+    use crate::error::send_ws_json;
+    send_ws_json(
+        ws,
+        &TunnelMsg::Error {
+            message: msg.into(),
+        },
+    )
+    .await
 }

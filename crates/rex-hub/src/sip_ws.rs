@@ -918,15 +918,15 @@ async fn dispatch_cmd<U: SipUaTrait + ?Sized>(ua: &U, cmd: ClientMsg) -> Result<
 }
 
 async fn send_ws_error(ws: &mut WebSocket, msg: &str) -> Result<(), axum::Error> {
-    ws.send(Message::Text(
-        serde_json::to_string(&ServerMsg::Error {
+    use crate::error::send_ws_json;
+    send_ws_json(
+        ws,
+        &ServerMsg::Error {
             payload: ReasonPayload {
                 reason: msg.to_string(),
             },
-        })
-        .unwrap_or_default()
-        .into(),
-    ))
+        },
+    )
     .await
 }
 

@@ -1,5 +1,6 @@
 //! 统一错误响应格式。
 
+use axum::extract::ws::{Message, WebSocket};
 use axum::http::StatusCode;
 use axum::Json;
 use serde::Serialize;
@@ -81,6 +82,18 @@ impl std::fmt::Display for ErrorCode {
 /// 供各 api handler `use crate::error::api_error as err`，消除逐文件复制的 `fn err`。
 pub fn api_error(status: StatusCode, message: &str) -> (StatusCode, Json<ErrorBody>) {
     error_with_status(status, ErrorCode::default().as_str(), message)
+}
+
+/// 统一的 WS 错误信令「序列化 + 发送」底座。
+///
+/// 各 ws handler（terminal / sip / tunnel）保留自己原有的负载形状
+/// （`ErrorPayload{message}` / `ReasonPayload{reason}` / `TunnelMsg::Error{message}`），
+/// 仅复用本函数的序列化-发送逻辑，**不改变线上信令格式**。
+pub async fn send_ws_json<T: Serialize>(ws: &mut WebSocket, msg: &T) -> Result<(), axum::Error> {
+    ws.send(Message::Text(
+        serde_json::to_string(msg).unwrap_or_default().into(),
+    ))
+    .await
 }
 
 #[cfg(test)]
