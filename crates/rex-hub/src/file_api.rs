@@ -452,6 +452,13 @@ async fn upload(
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
     };
+    audit_log(
+        &state.db,
+        "FILE_TRANSFER_START",
+        "success",
+        Some(remote_path.clone()),
+    );
+    tracing::info!(action = "TRANSFER_START", op = "upload", path = %remote_path, session_id = %session_id, "upload starting");
     match conn.upload(&remote_path, data, offset, None).await {
         Ok(result) => {
             tracing::info!(
@@ -461,6 +468,13 @@ async fn upload(
                 session_id = %session_id,
                 "file uploaded"
             );
+            audit_log(
+                &state.db,
+                "FILE_TRANSFER_COMPLETE",
+                "success",
+                Some(remote_path.clone()),
+            );
+            tracing::info!(action = "TRANSFER_COMPLETE", op = "upload", path = %remote_path, session_id = %session_id, "upload complete");
             (
                 StatusCode::OK,
                 Json(serde_json::json!({
@@ -470,7 +484,16 @@ async fn upload(
             )
                 .into_response()
         }
-        Err(e) => error_response("UPLOAD_FAILED", &e.to_string()).into_response(),
+        Err(e) => {
+            tracing::error!(action = "TRANSFER_FAIL", op = "upload", path = %remote_path, session_id = %session_id, error = %e, "upload failed");
+            audit_log(
+                &state.db,
+                "FILE_TRANSFER_FAILED",
+                "failure",
+                Some(remote_path.clone()),
+            );
+            error_response("UPLOAD_FAILED", &e.to_string()).into_response()
+        }
     }
 }
 
@@ -504,6 +527,14 @@ async fn download(
             }
         }
     }
+
+    audit_log(
+        &state.db,
+        "FILE_TRANSFER_START",
+        "success",
+        Some(params.path.clone()),
+    );
+    tracing::info!(action = "TRANSFER_START", op = "download", session_id = %params.session_id, path = %params.path, "download starting");
 
     // Check for Range header
 
@@ -543,6 +574,13 @@ async fn download(
                                 })
                             })
                             .await;
+                            audit_log(
+                                &state.db,
+                                "FILE_TRANSFER_COMPLETE",
+                                "success",
+                                Some(params.path.clone()),
+                            );
+                            tracing::info!(action = "TRANSFER_COMPLETE", op = "download", session_id = %params.session_id, path = %params.path, "download complete");
                             (
                                 StatusCode::OK,
                                 [
@@ -556,7 +594,16 @@ async fn download(
                             )
                                 .into_response()
                         }
-                        Err(e) => error_response("DOWNLOAD_FAILED", &e.to_string()).into_response(),
+                        Err(e) => {
+                            tracing::error!(action = "TRANSFER_FAIL", op = "download", session_id = %params.session_id, path = %params.path, error = %e, "download range failed");
+                            audit_log(
+                                &state.db,
+                                "FILE_TRANSFER_FAILED",
+                                "failure",
+                                Some(params.path.clone()),
+                            );
+                            error_response("DOWNLOAD_FAILED", &e.to_string()).into_response()
+                        }
                     }
                 } else {
                     error_response("INVALID_RANGE", "invalid range header").into_response()
@@ -591,6 +638,13 @@ async fn download(
                     })
                 })
                 .await;
+                audit_log(
+                    &state.db,
+                    "FILE_TRANSFER_COMPLETE",
+                    "success",
+                    Some(params.path.clone()),
+                );
+                tracing::info!(action = "TRANSFER_COMPLETE", op = "download", session_id = %params.session_id, path = %params.path, "download complete");
                 (
                     StatusCode::OK,
                     [
@@ -604,7 +658,16 @@ async fn download(
                 )
                     .into_response()
             }
-            Err(e) => error_response("DOWNLOAD_FAILED", &e.to_string()).into_response(),
+            Err(e) => {
+                tracing::error!(action = "TRANSFER_FAIL", op = "download", session_id = %params.session_id, path = %params.path, error = %e, "download failed");
+                audit_log(
+                    &state.db,
+                    "FILE_TRANSFER_FAILED",
+                    "failure",
+                    Some(params.path.clone()),
+                );
+                error_response("DOWNLOAD_FAILED", &e.to_string()).into_response()
+            }
         }
     }
 }
