@@ -8,14 +8,15 @@ export interface Notification {
   type: NotificationType
   message: string
   duration?: number
+  code?: string
 }
 
 export const useNotificationStore = defineStore('notification', () => {
   const notifications = ref<Notification[]>([])
 
-  function push(type: NotificationType, message: string, duration = 5000) {
+  function push(type: NotificationType, message: string, duration = 5000, code?: string) {
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
-    notifications.value.push({ id, type, message, duration })
+    notifications.value.push({ id, type, message, duration, code })
     if (duration > 0) {
       setTimeout(() => remove(id), duration)
     }
@@ -30,7 +31,7 @@ export const useNotificationStore = defineStore('notification', () => {
   }
 
   function success(message: string) { push('success', message) }
-  function error(message: string) { push('error', message, 8000) }
+  function error(message: string, code?: string) { push('error', message, 8000, code) }
   function warning(message: string) { push('warning', message) }
   function info(message: string) { push('info', message) }
 

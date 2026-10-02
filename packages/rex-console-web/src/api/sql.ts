@@ -1,11 +1,6 @@
-//! SQL 控制台 API 调用封装
+//! SQL 控制台 API 调用封装（统一走 ApiClient，错误携带 code，自动弹 toast）
 
-const API_BASE = '/api/sql'
-
-function authHeaders(): Record<string, string> {
-  const token = localStorage.getItem('rex-token')
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
+import { api } from './client'
 
 export interface ConnectRequest {
   type: string
@@ -32,58 +27,28 @@ export interface QueryResult {
 }
 
 export async function connect(req: ConnectRequest): Promise<string> {
-  const res = await fetch(`${API_BASE}/connect`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify(req),
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => null)
-    throw new Error(body?.error?.message || 'Connection failed')
-  }
-  return (await res.json()).session_id
+  const data = await api.post<{ session_id: string }>('/sql/connect', req)
+  return data.session_id
 }
 
 export async function disconnect(sessionId: string): Promise<void> {
-  await fetch(`${API_BASE}/disconnect`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ session_id: sessionId }),
-  })
+  await api.post<{ ok: boolean }>('/sql/disconnect', { session_id: sessionId })
 }
 
 export async function executeQuery(sessionId: string, sql: string): Promise<QueryResult> {
-  const res = await fetch(`${API_BASE}/query`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ session_id: sessionId, sql }),
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => null)
-    throw new Error(body?.error?.message || 'Query failed')
-  }
-  return await res.json()
+  return api.post<QueryResult>('/sql/query', { session_id: sessionId, sql })
 }
 
 export async function getDatabases(sessionId: string): Promise<string[]> {
-  const res = await fetch(`${API_BASE}/databases?session_id=${sessionId}`, { headers: authHeaders() })
-  if (!res.ok) throw new Error('Failed to fetch databases')
-  return await res.json()
+  return api.get<string[]>('/sql/databases', { session_id: sessionId })
 }
 
 export async function getTables(sessionId: string, db: string): Promise<TableInfo[]> {
-  const res = await fetch(`${API_BASE}/tables?session_id=${sessionId}&db=${encodeURIComponent(db)}`, { headers: authHeaders() })
-  if (!res.ok) throw new Error('Failed to fetch tables')
-  return await res.json()
+  return api.get<TableInfo[]>('/sql/tables', { session_id: sessionId, db })
 }
 
 export async function getColumns(sessionId: string, db: string, table: string): Promise<ColumnInfo[]> {
-  const res = await fetch(
-    `${API_BASE}/columns?session_id=${sessionId}&db=${encodeURIComponent(db)}&table=${encodeURIComponent(table)}`,
-    { headers: authHeaders() },
-  )
-  if (!res.ok) throw new Error('Failed to fetch columns')
-  return await res.json()
+  return api.get<ColumnInfo[]>('/sql/columns', { session_id: sessionId, db, table })
 }
 
 export interface IndexInfo {
@@ -107,30 +72,15 @@ export interface DdlResult {
 }
 
 export async function getIndexes(sessionId: string, db: string, table: string): Promise<IndexInfo[]> {
-  const res = await fetch(
-    `${API_BASE}/indexes?session_id=${sessionId}&db=${encodeURIComponent(db)}&table=${encodeURIComponent(table)}`,
-    { headers: authHeaders() },
-  )
-  if (!res.ok) throw new Error('Failed to fetch indexes')
-  return await res.json()
+  return api.get<IndexInfo[]>('/sql/indexes', { session_id: sessionId, db, table })
 }
 
 export async function getForeignKeys(sessionId: string, db: string, table: string): Promise<ForeignKeyInfo[]> {
-  const res = await fetch(
-    `${API_BASE}/foreign_keys?session_id=${sessionId}&db=${encodeURIComponent(db)}&table=${encodeURIComponent(table)}`,
-    { headers: authHeaders() },
-  )
-  if (!res.ok) throw new Error('Failed to fetch foreign keys')
-  return await res.json()
+  return api.get<ForeignKeyInfo[]>('/sql/foreign_keys', { session_id: sessionId, db, table })
 }
 
 export async function getDdl(sessionId: string, db: string, table: string): Promise<DdlResult> {
-  const res = await fetch(
-    `${API_BASE}/ddl?session_id=${sessionId}&db=${encodeURIComponent(db)}&table=${encodeURIComponent(table)}`,
-    { headers: authHeaders() },
-  )
-  if (!res.ok) throw new Error('Failed to fetch DDL')
-  return await res.json()
+  return api.get<DdlResult>('/sql/ddl', { session_id: sessionId, db, table })
 }
 
 // --- Saved SQL Queries (命名查询，持久化于 Hub settings 表) ---
@@ -144,30 +94,15 @@ export interface SavedQuery {
 }
 
 export async function listSavedQueries(): Promise<SavedQuery[]> {
-  const res = await fetch(`${API_BASE}/saved-queries`, { headers: authHeaders() })
-  if (!res.ok) throw new Error('Failed to fetch saved queries')
-  return await res.json()
+  return api.get<SavedQuery[]>('/sql/saved-queries')
 }
 
 export async function upsertSavedQuery(q: Partial<SavedQuery> & { name: string; sql: string }): Promise<SavedQuery> {
-  const res = await fetch(`${API_BASE}/saved-queries`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify(q),
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => null)
-    throw new Error(body?.error?.message || 'Failed to save query')
-  }
-  return await res.json()
+  return api.post<SavedQuery>('/sql/saved-queries', q)
 }
 
 export async function deleteSavedQuery(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/saved-queries/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: authHeaders(),
-  })
-  if (!res.ok) throw new Error('Failed to delete saved query')
+  await api.del<{ ok: boolean }>(`/sql/saved-queries/${encodeURIComponent(id)}`)
 }
 
 // --- Data Compare ---
@@ -202,19 +137,10 @@ export async function compare(
   sqlRight: string,
   keyColumns?: string[],
 ): Promise<CompareResult> {
-  const res = await fetch(`${API_BASE}/compare`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({
-      session_id: sessionId,
-      sql_left: sqlLeft,
-      sql_right: sqlRight,
-      key_columns: keyColumns,
-    }),
+  return api.post<CompareResult>('/sql/compare', {
+    session_id: sessionId,
+    sql_left: sqlLeft,
+    sql_right: sqlRight,
+    key_columns: keyColumns,
   })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body?.error?.message || `HTTP ${res.status}`)
-  }
-  return await res.json()
 }

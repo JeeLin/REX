@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { api, AuthError, ApiError, tokenRefreshEvent } from '../client'
+import { setActivePinia, createPinia } from 'pinia'
+import { api, AuthError, ApiError, tokenRefreshEvent, handleApiError } from '../client'
+import { useNotificationStore } from '../../stores/notification'
 
 describe('ApiClient', () => {
   let fetchSpy: ReturnType<typeof vi.fn>
@@ -98,5 +100,16 @@ describe('ApiClient', () => {
     expect(opts.body).toBe(fd)
     const headers = opts.headers as Record<string, string>
     expect(headers['Authorization']).toBe('Bearer test-token')
+  })
+
+  it('handleApiError toasts ApiError with code and returns true', () => {
+    setActivePinia(createPinia())
+    const store = useNotificationStore()
+    const spy = vi.spyOn(store, 'error')
+    const handled = handleApiError(new ApiError('SQL_FAIL', 'query failed'))
+    expect(handled).toBe(true)
+    expect(spy).toHaveBeenCalledWith('query failed', 'SQL_FAIL')
+    expect(handleApiError(new Error('other'))).toBe(false)
+    spy.mockRestore()
   })
 })

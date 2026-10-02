@@ -1,9 +1,6 @@
-const API_BASE = '/api/redis'
+//! Redis 控制台 API 调用封装（统一走 ApiClient，错误携带 code，自动弹 toast）
 
-function authHeaders(): Record<string, string> {
-  const token = localStorage.getItem('rex-token')
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
+import { api } from './client'
 
 export interface DbInfo {
   index: number
@@ -44,96 +41,59 @@ export interface RedisValue {
 }
 
 export async function connect(resourceId: string): Promise<string> {
-  const res = await fetch(`${API_BASE}/connect`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ resource_id: resourceId }),
-  })
-  if (!res.ok) throw new Error((await res.json()).error?.message || 'Connection failed')
-  return (await res.json()).session_id
+  const data = await api.post<{ session_id: string }>('/redis/connect', { resource_id: resourceId })
+  return data.session_id
 }
 
 export async function disconnect(sessionId: string): Promise<void> {
-  await fetch(`${API_BASE}/disconnect`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ session_id: sessionId }),
-  })
+  await api.post<{ ok: boolean }>('/redis/disconnect', { session_id: sessionId })
 }
 
 export async function getDatabases(sessionId: string): Promise<DbInfo[]> {
-  const res = await fetch(`${API_BASE}/databases?session_id=${sessionId}`, { headers: authHeaders() })
-  if (!res.ok) throw new Error('Failed to fetch databases')
-  return await res.json()
+  return api.get<DbInfo[]>('/redis/databases', { session_id: sessionId })
 }
 
 export async function selectDb(sessionId: string, db: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/select`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ session_id: sessionId, db }),
-  })
-  if (!res.ok) throw new Error('Failed to switch database')
+  await api.post<{ ok: boolean }>('/redis/select', { session_id: sessionId, db })
 }
 
 export async function scan(sessionId: string, pattern = '*', count = 100): Promise<KeyInfo[]> {
-  const res = await fetch(`${API_BASE}/scan?session_id=${sessionId}&pattern=${encodeURIComponent(pattern)}&count=${count}`, { headers: authHeaders() })
-  if (!res.ok) throw new Error('Failed to scan keys')
-  return await res.json()
+  return api.get<KeyInfo[]>('/redis/scan', {
+    session_id: sessionId,
+    pattern,
+    count: String(count),
+  })
 }
 
 export async function getValue(sessionId: string, key: string): Promise<RedisValue> {
-  const res = await fetch(`${API_BASE}/key?session_id=${sessionId}&key=${encodeURIComponent(key)}`, { headers: authHeaders() })
-  if (!res.ok) throw new Error('Failed to get value')
-  return await res.json()
+  return api.get<RedisValue>('/redis/key', { session_id: sessionId, key })
 }
 
 export async function setValue(sessionId: string, key: string, value: string): Promise<void> {
-  await fetch(`${API_BASE}/set`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ session_id: sessionId, key, value }),
-  })
+  await api.post<{ ok: boolean }>('/redis/set', { session_id: sessionId, key, value })
 }
 
 export async function delKeys(sessionId: string, keys: string[]): Promise<number> {
-  const res = await fetch(`${API_BASE}/del`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ session_id: sessionId, keys }),
-  })
-  if (!res.ok) throw new Error('Failed to delete keys')
-  return (await res.json()).deleted
+  const data = await api.post<{ deleted: number }>('/redis/del', { session_id: sessionId, keys })
+  return data.deleted
 }
 
 export async function getTtl(sessionId: string, key: string): Promise<number> {
-  const res = await fetch(`${API_BASE}/ttl?session_id=${sessionId}&key=${encodeURIComponent(key)}`, { headers: authHeaders() })
-  if (!res.ok) throw new Error('Failed to get TTL')
-  return (await res.json()).ttl
+  const data = await api.get<{ ttl: number }>('/redis/ttl', { session_id: sessionId, key })
+  return data.ttl
 }
 
 export async function setTtl(sessionId: string, key: string, seconds: number): Promise<void> {
-  await fetch(`${API_BASE}/set-ttl`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ session_id: sessionId, key, seconds }),
-  })
+  await api.post<{ ok: boolean }>('/redis/set-ttl', { session_id: sessionId, key, seconds })
 }
 
 export async function getInfo(sessionId: string): Promise<RedisInfo> {
-  const res = await fetch(`${API_BASE}/info?session_id=${sessionId}`, { headers: authHeaders() })
-  if (!res.ok) throw new Error('Failed to get info')
-  return await res.json()
+  return api.get<RedisInfo>('/redis/info', { session_id: sessionId })
 }
 
 export async function runCommand(sessionId: string, args: string[]): Promise<string> {
-  const res = await fetch(`${API_BASE}/command`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ session_id: sessionId, args }),
-  })
-  if (!res.ok) throw new Error('Failed to run command')
-  return (await res.json()).result
+  const data = await api.post<{ result: string }>('/redis/command', { session_id: sessionId, args })
+  return data.result
 }
 
 export interface PubSubMessage {
@@ -142,11 +102,10 @@ export interface PubSubMessage {
 }
 
 export async function pubsubPoll(sessionId: string, channels: string[], timeoutMs = 5000): Promise<PubSubMessage[]> {
-  const res = await fetch(`${API_BASE}/pubsub/poll`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ session_id: sessionId, channels, timeout_ms: timeoutMs }),
+  const data = await api.post<{ messages: PubSubMessage[] }>('/redis/pubsub/poll', {
+    session_id: sessionId,
+    channels,
+    timeout_ms: timeoutMs,
   })
-  if (!res.ok) throw new Error('Failed to poll pub/sub')
-  return (await res.json()).messages
+  return data.messages
 }

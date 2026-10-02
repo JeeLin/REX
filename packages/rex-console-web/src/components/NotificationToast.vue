@@ -24,6 +24,7 @@ function icon(type: string) {
         :class="`notification-toast--${n.type}`"
       >
         <span class="notification-icon">{{ icon(n.type) }}</span>
+        <span v-if="n.code" class="notification-code">[{{ n.code }}]</span>
         <span class="notification-message">{{ n.message }}</span>
         <button class="notification-close" @click="store.remove(n.id)">✕</button>
       </div>
@@ -66,6 +67,15 @@ function icon(type: string) {
 .notification-toast--error .notification-icon { color: var(--danger); }
 .notification-toast--warning .notification-icon { color: var(--warning); }
 .notification-toast--info .notification-icon { color: var(--info); }
+.notification-code {
+  font-family: var(--font-mono, ui-monospace);
+  font-size: var(--text-xs, 11px);
+  color: var(--danger, #e5484d);
+  background: rgba(0, 0, 0, 0.3);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
 .notification-message { flex: 1; }
 .notification-close {
   background: none;

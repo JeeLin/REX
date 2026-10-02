@@ -1,4 +1,5 @@
 //! 统一 HTTP API 客户端，自动注入 auth header、处理 401、统一错误格式。
+import { useNotificationStore } from '../stores/notification'
 
 export class AuthError extends Error {
   constructor(message: string) {
@@ -104,3 +105,19 @@ class ApiClient {
 }
 
 export const api = new ApiClient()
+
+/**
+ * 把 ApiError 转成统一错误 toast（带 code）。
+ * 由全局 unhandledrejection 拦截器或各处显式 catch 调用；返回是否处理了该错误。
+ */
+export function handleApiError(e: unknown): boolean {
+  if (e instanceof ApiError) {
+    try {
+      useNotificationStore().error(e.message, e.code)
+    } catch {
+      // pinia 未激活时静默忽略（避免早期测试/SSR 崩溃）
+    }
+    return true
+  }
+  return false
+}
