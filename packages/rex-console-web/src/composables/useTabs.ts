@@ -503,7 +503,7 @@ export function useTabs(deps: UseTabsDeps) {
     onTabDragOver,
     onTabDrop,
     onTabDragEnd,
-    // history & pin
+    // history
     tabHistory,
     tabHistoryIndex,
     pushHistory,

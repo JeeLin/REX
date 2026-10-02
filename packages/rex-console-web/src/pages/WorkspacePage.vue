@@ -68,7 +68,7 @@ const {
   onTabDragOver,
   onTabDrop,
   onTabDragEnd,
-  // history & pin
+  // history
   pushHistory,
   goBack,
   goForward,
