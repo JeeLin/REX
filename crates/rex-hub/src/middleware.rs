@@ -73,7 +73,12 @@ impl FromRequestParts<AppState> for AuthUser {
 }
 
 /// 请求日志中间件 — 记录 method、path、status、latency。
+/// 附加 `x-request-id` 追踪 id（缺失则生成），回写响应头并记录到日志，方便跨日志串联请求。
 pub async fn request_logger(req: Request<axum::body::Body>, next: Next) -> Response {
+    use axum::http::header;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static REQ_SEQ: AtomicU64 = AtomicU64::new(0);
+
     let method = req.method().clone();
     let uri = req.uri().clone();
     let path = uri.path().to_owned();
@@ -83,11 +88,24 @@ pub async fn request_logger(req: Request<axum::body::Body>, next: Next) -> Respo
         || path.ends_with(".css")
         || path.ends_with(".png")
         || path.ends_with(".ico");
+    let rid_name = axum::http::HeaderName::from_static("x-request-id");
+    let request_id = req
+        .headers()
+        .get(&rid_name)
+        .and_then(|v| v.to_str().ok())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_owned())
+        .unwrap_or_else(|| format!("req-{}", REQ_SEQ.fetch_add(1, Ordering::Relaxed)));
+
     let start = Instant::now();
-    let response = next.run(req).await;
+    let mut response = next.run(req).await;
     let latency = start.elapsed();
+    if let Ok(v) = header::HeaderValue::from_str(&request_id) {
+        response.headers_mut().insert(rid_name, v);
+    }
     if !is_static {
         tracing::info!(
+            request_id = %request_id,
             method = %method,
             path = %path,
             status = response.status().as_u16(),
