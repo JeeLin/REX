@@ -239,6 +239,26 @@ describe('useTabs', () => {
     expect(t.tabs.value).toHaveLength(0)
   })
 
+  it('handleTabCtxAction toggles pin on and off', () => {
+    const t = createTabs()
+    t.openResource({ id: 'r1', name: 'A', protocol: 'ssh' })
+    t.openResource({ id: 'r2', name: 'B', protocol: 'ssh' })
+    const second = t.tabs.value[1]!.id
+    const dispatchPin = (tabId: string) => {
+      t.tabContextMenu.value = { show: true, x: 0, y: 0, tabId }
+      t.handleTabCtxAction('pin')
+    }
+
+    dispatchPin(second)
+    expect(t.findTab(second)?.pinned).toBe(true)
+    expect(t.tabContextMenu.value.show).toBe(false)
+
+    // 二次 pin 取消置顶，且不动其它 tab
+    dispatchPin(second)
+    expect(t.findTab(second)?.pinned).toBe(false)
+    expect(t.tabs.value[0]!.pinned).toBeUndefined()
+  })
+
   it('duplicateTab opens a connected copy', () => {
     const t = createTabs()
     t.openResource({ id: 'r1', name: 'A', protocol: 'ssh' })
