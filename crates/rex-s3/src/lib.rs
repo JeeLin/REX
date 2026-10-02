@@ -9,6 +9,8 @@ use rex_common::file_transfer::{FileConnector, FileEntry, ProgressCallback, Uplo
 pub struct S3Connector {
     client: Client,
     bucket: String,
+    region: Option<String>,
+    endpoint: Option<String>,
 }
 
 impl S3Connector {
@@ -39,7 +41,19 @@ impl S3Connector {
         let sdk_config = config_loader.load().await;
         let client = Client::new(&sdk_config);
 
-        Ok(Self { client, bucket })
+        tracing::info!(
+            bucket = %bucket,
+            region = region.as_deref().unwrap_or("default"),
+            endpoint = endpoint.as_deref().unwrap_or("aws"),
+            "S3 connector configured"
+        );
+
+        Ok(Self {
+            client,
+            bucket,
+            region,
+            endpoint,
+        })
     }
 
     /// 从 FileConnectRequest 建立连接
@@ -67,15 +81,25 @@ impl FileConnector for S3Connector {
             format!("{p}/")
         };
 
+        let bucket = self.bucket.clone();
+        let region = self.region.clone();
+        let endpoint = self.endpoint.clone();
         let result = self
             .client
             .list_objects_v2()
-            .bucket(&self.bucket)
+            .bucket(&bucket)
             .prefix(&prefix)
             .delimiter("/")
             .send()
             .await
-            .context("failed to list S3 objects")?;
+            .with_context(|| {
+                format!(
+                    "failed to list S3 objects bucket={} region={} endpoint={}",
+                    bucket,
+                    region.as_deref().unwrap_or("default"),
+                    endpoint.as_deref().unwrap_or("aws")
+                )
+            })?;
 
         let mut entries = Vec::new();
 
