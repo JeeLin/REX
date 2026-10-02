@@ -136,7 +136,7 @@ async fn connect(
     let client = match Client::with_options(options) {
         Ok(c) => c,
         Err(e) => {
-            return error_response("CONNECT_FAILED", &format!("failed to create client: {}", e))
+            return crate::error::connect_error_response("failed to create MongoDB client", e)
                 .into_response()
         }
     };
@@ -149,7 +149,11 @@ async fn connect(
     {
         Ok(_) => {}
         Err(e) => {
-            return error_response("PING_FAILED", &format!("ping failed: {}", e)).into_response()
+            return crate::error::connect_error_response(
+                &format!("MongoDB ping failed at {}:{}", host, port),
+                e,
+            )
+            .into_response()
         }
     }
 

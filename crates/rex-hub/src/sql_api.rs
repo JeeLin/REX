@@ -402,7 +402,11 @@ async fn connect(
                 Some(res.name),
                 Some(e.to_string()),
             );
-            error_response("CONNECTION_FAILED", &e.to_string()).into_response()
+            crate::error::connect_error_response(
+                &format!("failed to connect to {} SQL database", db_type),
+                e,
+            )
+            .into_response()
         }
     }
 }

@@ -248,7 +248,11 @@ async fn connect(
                 Ok(c) => Box::new(c),
                 Err(e) => {
                     tracing::error!(action = "FILE_CONNECT", resource_id = %body.resource_id, resource_name = %res.name, protocol = %res.protocol, error = %e, "SFTP connection failed");
-                    return error_response("CONNECTION_FAILED", &e.to_string()).into_response();
+                    return crate::error::connect_error_response(
+                        "failed to connect to SFTP server",
+                        e,
+                    )
+                    .into_response();
                 }
             }
         }
@@ -291,7 +295,11 @@ async fn connect(
             match conn {
                 Ok(c) => Box::new(c),
                 Err(e) => {
-                    return error_response("CONNECTION_FAILED", &e.to_string()).into_response()
+                    return crate::error::connect_error_response(
+                        "failed to connect to S3 storage",
+                        e,
+                    )
+                    .into_response()
                 }
             }
         }

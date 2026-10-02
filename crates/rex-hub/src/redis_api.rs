@@ -316,10 +316,19 @@ async fn connect(
             tracing::warn!(
                 action = "REDIS_CONNECT",
                 resource_id = %body.resource_id,
+                host = %res.host,
                 error = %e,
                 "Redis connect failed"
             );
-            error_response("CONNECTION_FAILED", &e.to_string()).into_response()
+            crate::error::connect_error_response(
+                &format!(
+                    "failed to connect to Redis at {}:{}",
+                    res.host,
+                    res.port.unwrap_or(6379)
+                ),
+                e,
+            )
+            .into_response()
         }
     }
 }
