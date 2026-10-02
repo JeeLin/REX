@@ -90,6 +90,10 @@ function panes() {
 // assertion below reads, so a class rename only has to be fixed in one place.
 const ACTIVE_PANE_CLASS = 'ws-pane--active'
 
+// PaneLeaf's template class while a tab is dragged over it — same single-source
+// rule as ACTIVE_PANE_CLASS above.
+const DRAG_OVER_PANE_CLASS = 'ws-pane--drag-over'
+
 // Native drag events, mirroring what the browser delivers to PaneLeaf's
 // @dragover / @drop handlers (the drag payload rides on dataTransfer).
 async function dragOver(paneIndex: number) {
@@ -143,14 +147,14 @@ describe('pane drag & drop', () => {
     expect(panes()[1]!.classes()).not.toContain(ACTIVE_PANE_CLASS)
 
     await dragOver(1)
-    expect(panes()[1]!.classes()).toContain('ws-pane--drag-over')
+    expect(panes()[1]!.classes()).toContain(DRAG_OVER_PANE_CLASS)
 
     await drop(1, tabId)
 
     // The tab moved out of the source pane and onto the drop target.
     expect(leaves()[0]!.tabId).toBe(null)
     expect(leaves()[1]!.tabId).toBe(tabId)
-    expect(panes()[1]!.classes()).not.toContain('ws-pane--drag-over')
+    expect(panes()[1]!.classes()).not.toContain(DRAG_OVER_PANE_CLASS)
     // Drop moved the active highlight onto the target: it is the only active
     // pane left (and the source, the pre-drop active one, lost it).
     expect(panes().findIndex((p) => p.classes().includes(ACTIVE_PANE_CLASS))).toBe(1)
@@ -170,12 +174,12 @@ describe('pane drag & drop', () => {
     const bindingsBefore = leaves().map((l) => l.tabId)
 
     await dragOver(1)
-    expect(panes()[1]!.classes()).toContain('ws-pane--drag-over')
+    expect(panes()[1]!.classes()).toContain(DRAG_OVER_PANE_CLASS)
 
     await drop(1, '')
 
     expect(leaves().map((l) => l.tabId)).toEqual(bindingsBefore)
-    expect(panes()[1]!.classes()).not.toContain('ws-pane--drag-over')
+    expect(panes()[1]!.classes()).not.toContain(DRAG_OVER_PANE_CLASS)
     expect(panes()[1]!.classes()).toContain(ACTIVE_PANE_CLASS)
   })
 })
