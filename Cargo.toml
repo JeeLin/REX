@@ -32,6 +32,7 @@ tokio = { version = "1", features = ["full"] }
 anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "chrono"] }
+tracing-appender = { version = "0.2", features = ["parking_lot"] }
 clap = { version = "4", features = ["derive"] }
 axum = { version = "0.8", features = ["ws", "multipart"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
