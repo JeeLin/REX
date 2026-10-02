@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.90.0] - 2026-10-02
 
 ### Changed
 - **快捷键交还浏览器保留键（破坏性）**：`Ctrl+T` 新建标签 → `Alt+T`、`Ctrl+W` 关闭标签 → `Alt+W`、`Ctrl+Tab`/`Ctrl+Shift+Tab` 切换标签 → `Ctrl+Shift+→`/`Ctrl+Shift+←`、`Ctrl+N` 新建连接 → `Ctrl+Shift+N`；`Ctrl+T`/`Ctrl+W`/`Ctrl+N`/`Ctrl+Tab` 不再被应用拦截，交还浏览器原生行为
