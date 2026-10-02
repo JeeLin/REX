@@ -134,7 +134,7 @@ async fn handle_socket(mut ws: WebSocket, state: AppState, resource_id: String) 
     if conn_info.use_agent {
         handle_agent_terminal(ws, &state, &conn_info, &resource_id, &session_id).await;
     } else {
-        handle_direct_terminal(ws, &conn_info, &session_id).await;
+        handle_direct_terminal(ws, &state, &conn_info, &session_id).await;
     }
 
     tracing::info!(
@@ -318,7 +318,12 @@ async fn load_resource_conn(
 // 直连模式
 // ═══════════════════════════════════════
 
-async fn handle_direct_terminal(mut ws: WebSocket, conn: &ResourceConnInfo, session_id: &str) {
+async fn handle_direct_terminal(
+    mut ws: WebSocket,
+    state: &AppState,
+    conn: &ResourceConnInfo,
+    session_id: &str,
+) {
     tracing::info!(
         action = "SSH_DIRECT_CONNECT",
         session_id = %session_id,
@@ -356,6 +361,7 @@ async fn handle_direct_terminal(mut ws: WebSocket, conn: &ResourceConnInfo, sess
                 error = %e,
                 "SSH direct connection failed"
             );
+            audit_log(&state.db, "SSH_CONNECT", "failure", Some(conn.name.clone()));
             let _ = send_ws_error(&mut ws, &format!("SSH connection failed: {e}")).await;
             return;
         }
