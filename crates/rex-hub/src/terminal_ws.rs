@@ -67,6 +67,7 @@ struct DisconnectedPayload {
 
 #[derive(Debug, Serialize)]
 struct ErrorPayload {
+    code: String,
     message: String,
 }
 
@@ -789,10 +790,14 @@ async fn handle_agent_terminal(
 
 async fn send_ws_error(ws: &mut WebSocket, msg: &str) -> Result<(), axum::Error> {
     use crate::error::send_ws_json;
+    let code = crate::error::classify_connect_error(msg)
+        .as_str()
+        .to_string();
     send_ws_json(
         ws,
         &ServerMsg::Error {
             payload: ErrorPayload {
+                code,
                 message: msg.into(),
             },
         },
