@@ -119,6 +119,12 @@ pub(crate) async fn authenticate(
     handle: &mut client::Handle<SshHandler>,
     config: &SshConfig,
 ) -> Result<()> {
+    tracing::debug!(
+        username = %config.username,
+        has_password = config.password.is_some(),
+        has_private_key = config.private_key.is_some(),
+        "SSH authenticating"
+    );
     let mut attempts: Vec<String> = Vec::new();
 
     if let Some(ref key_pem) = config.private_key {
@@ -375,7 +381,15 @@ impl SshSession {
                             break;
                         }
                     }
-                    Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) => {
+                    Some(ChannelMsg::Eof) => {
+                        tracing::debug!("SSH channel EOF received");
+                        let _ = event_tx
+                            .send(TerminalEvent::Disconnected("session EOF".into()))
+                            .await;
+                        break;
+                    }
+                    Some(ChannelMsg::Close) => {
+                        tracing::debug!("SSH channel closed by remote");
                         let _ = event_tx
                             .send(TerminalEvent::Disconnected("session closed".into()))
                             .await;
@@ -421,7 +435,9 @@ impl SshSession {
 
     /// 断开 SSH 连接
     pub async fn disconnect(&self) -> Result<()> {
+        tracing::debug!("closing SSH channel");
         let _ = self.write_half.eof().await;
+        tracing::debug!("SSH channel EOF sent");
         Ok(())
     }
 
