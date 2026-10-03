@@ -48,8 +48,13 @@ vi.mock('@xterm/addon-unicode11', () => ({ Unicode11Addon: class { /* no-op */ }
 vi.mock('@/components/ui/Modal.vue', () => ({
   default: { name: 'ModalStub', template: '<div class="modal-stub" />', props: ['modelValue', 'title', 'width'] },
 }))
+const toastPush = vi.hoisted(() => vi.fn())
 vi.mock('@/components/ui/Toast.vue', () => ({
-  default: { name: 'ToastStub', template: '<div class="toast-stub" />' },
+  default: {
+    name: 'ToastStub',
+    methods: { push: toastPush },
+    template: '<div class="toast-stub" />',
+  },
 }))
 
 import WorkspaceTerminal from '../WorkspaceTerminal.vue'
@@ -83,6 +88,16 @@ class FakeWebSocket {
   simulateOpen() {
     this.readyState = FakeWebSocket.OPEN
     this.onopen?.()
+  }
+
+  /** Deliver a server→client JSON message to the component's onmessage handler. */
+  simulateMessage(type: string, payload: Record<string, unknown> = {}) {
+    this.onmessage?.({ data: JSON.stringify({ type, payload }) } as MessageEvent)
+  }
+
+  /** Trigger the transport-level error handler (ws.onerror). */
+  simulateError() {
+    this.onerror?.()
   }
 
   /** Transport failure before any session was opened (e.g. server refused the WS). */
@@ -193,5 +208,31 @@ describe('WorkspaceTerminal hub-direct failure hint', () => {
     // Overlay returns after the drop, but connectFailed stays false → no hub-direct hint.
     expect(wrapper.find('.wt-overlay').exists()).toBe(true)
     expect(wrapper.find('.wt-overlay-hint').exists()).toBe(false)
+  })
+
+  it('pushes an error toast with code/message when terminal.error arrives', async () => {
+    toastPush.mockClear()
+    wrapper = await mountTerminal('hub', 'direct')
+    const ws = FakeWebSocket.instances.at(-1)!
+    ws.simulateOpen()
+    await flushPromises()
+
+    ws.simulateMessage('terminal.error', { code: 'SSH_FAIL', message: 'boom' })
+    await flushPromises()
+
+    expect(toastPush).toHaveBeenCalledWith('boom', 'error')
+  })
+
+  it('pushes an error toast on ws.onerror', async () => {
+    toastPush.mockClear()
+    wrapper = await mountTerminal('hub', 'direct')
+    const ws = FakeWebSocket.instances.at(-1)!
+    ws.simulateOpen()
+    await flushPromises()
+
+    ws.simulateError()
+    await flushPromises()
+
+    expect(toastPush).toHaveBeenCalledWith('terminal.wsError', 'error')
   })
 })
