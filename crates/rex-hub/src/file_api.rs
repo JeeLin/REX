@@ -4,9 +4,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::db::audit_log;
+use crate::models::NewTransferTask;
 use crate::resource_conn::{load_resource_config, normalize_username, ResourceConnInfo};
 use crate::AppState;
-use axum::extract::{Multipart, Query, State};
+use axum::extract::{Multipart, Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
@@ -71,7 +72,116 @@ pub fn file_routes() -> axum::Router<AppState> {
         .route("/acl", axum::routing::get(get_acl).put(put_acl))
         .route("/read-for-edit", axum::routing::get(read_for_edit))
         .route("/save-from-edit", axum::routing::post(save_from_edit))
+        .route(
+            "/transfer",
+            axum::routing::get(list_transfer_tasks).post(create_transfer_task),
+        )
+        .route("/transfer/{id}", axum::routing::get(get_transfer_task))
+        .route(
+            "/transfer/{id}/cancel",
+            axum::routing::post(cancel_transfer_task),
+        )
 }
+
+// ---------------------------------------------------------------------------
+// Transfer task API (v0.91.0, T1)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+struct TransferListQuery {
+    limit: Option<u64>,
+    offset: Option<u64>,
+}
+
+async fn list_transfer_tasks(
+    State(state): State<AppState>,
+    Query(q): Query<TransferListQuery>,
+) -> axum::response::Response {
+    let limit = q.limit.unwrap_or(50).min(200);
+    let offset = q.offset.unwrap_or(0);
+    match state.db.list_transfer_tasks(limit, offset) {
+        Ok(items) => (StatusCode::OK, Json(items)).into_response(),
+        Err(e) => error_response("TRANSFER_LIST_FAILED", &e.to_string()).into_response(),
+    }
+}
+
+async fn get_transfer_task(
+    State(state): State<AppState>,
+    Path(task_id): Path<String>,
+) -> axum::response::Response {
+    match state.db.get_transfer_task(&task_id) {
+        Ok(Some(item)) => (StatusCode::OK, Json(item)).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "transfer task not found" })),
+        )
+            .into_response(),
+        Err(e) => error_response("TRANSFER_GET_FAILED", &e.to_string()).into_response(),
+    }
+}
+
+async fn create_transfer_task(
+    State(state): State<AppState>,
+    Json(body): Json<NewTransferTask>,
+) -> axum::response::Response {
+    let task_id = match state.db.create_transfer_task(&body) {
+        Ok(id) => id,
+        Err(e) => return error_response("TRANSFER_CREATE_FAILED", &e.to_string()).into_response(),
+    };
+    tracing::info!(
+        action = "FILE_TRANSFER_CREATED",
+        transfer_task_id = %task_id,
+        source_resource_id = %body.source_resource_id,
+        target_resource_id = %body.target_resource_id,
+        "transfer task created"
+    );
+    audit_log(
+        &state.db,
+        "FILE_TRANSFER_CREATED",
+        "success",
+        Some(task_id.clone()),
+    );
+    (
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "id": task_id, "status": "pending" })),
+    )
+        .into_response()
+}
+
+async fn cancel_transfer_task(
+    State(state): State<AppState>,
+    Path(task_id): Path<String>,
+) -> axum::response::Response {
+    // T1：持久化取消标记；T2 驱动引擎实际中止。
+    match state
+        .db
+        .set_transfer_task_status(&task_id, "canceled", None)
+    {
+        Ok(_) => {
+            tracing::info!(
+                action = "FILE_TRANSFER_CANCELED",
+                transfer_task_id = %task_id,
+                "transfer task canceled"
+            );
+            audit_log(
+                &state.db,
+                "FILE_TRANSFER_CANCELED",
+                "success",
+                Some(task_id.clone()),
+            );
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({ "id": task_id, "status": "canceled" })),
+            )
+                .into_response()
+        }
+        Err(e) => error_response("TRANSFER_CANCEL_FAILED", &e.to_string()).into_response(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Types

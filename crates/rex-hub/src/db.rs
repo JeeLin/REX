@@ -1217,6 +1217,140 @@ pub fn audit_log(
 }
 
 /// 异步写审计日志（带 detail）。
+/// transfer_task 持久化（v0.91.0，T1）。
+impl Database {
+    pub fn create_transfer_task(&self, task: &NewTransferTask) -> Result<String> {
+        let conn = self.conn()?;
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+        let policy = task
+            .conflict_policy
+            .clone()
+            .unwrap_or_else(|| "overwrite".to_string());
+        conn.execute(
+            "INSERT INTO transfer_task
+                (id, source_resource_id, target_resource_id, source_path, target_path,
+                 conflict_policy, status, total_bytes, transferred_bytes,
+                 speed_bytes_per_sec, eta_seconds, error, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', 0, 0, 0, NULL, '', ?7, ?7)",
+            rusqlite::params![
+                id,
+                task.source_resource_id,
+                task.target_resource_id,
+                task.source_path,
+                task.target_path,
+                policy,
+                now,
+            ],
+        )
+        .map_err(|e| RExError::Message(e.to_string()))?;
+        Ok(id)
+    }
+
+    pub fn get_transfer_task(&self, id: &str) -> Result<Option<TransferTaskRecord>> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, source_resource_id, target_resource_id, source_path, target_path,
+                    conflict_policy, status, total_bytes, transferred_bytes,
+                    speed_bytes_per_sec, eta_seconds, error, created_at, updated_at
+             FROM transfer_task WHERE id = ?1",
+            )
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let mut rows = stmt
+            .query_map(rusqlite::params![id], row_to_transfer_task)
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        match rows.next() {
+            Some(Ok(r)) => Ok(Some(r)),
+            Some(Err(e)) => Err(RExError::Message(e.to_string())),
+            None => Ok(None),
+        }
+    }
+
+    pub fn list_transfer_tasks(&self, limit: u64, offset: u64) -> Result<Vec<TransferTaskRecord>> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, source_resource_id, target_resource_id, source_path, target_path,
+                    conflict_policy, status, total_bytes, transferred_bytes,
+                    speed_bytes_per_sec, eta_seconds, error, created_at, updated_at
+             FROM transfer_task ORDER BY created_at DESC LIMIT ?1 OFFSET ?2",
+            )
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        let rows = stmt
+            .query_map(rusqlite::params![limit, offset], row_to_transfer_task)
+            .map_err(|e| RExError::Message(e.to_string()))?;
+        rows.map(|r| r.map_err(|e| RExError::Message(e.to_string())))
+            .collect()
+    }
+
+    pub fn update_transfer_task_progress(
+        &self,
+        id: &str,
+        total_bytes: u64,
+        transferred_bytes: u64,
+        speed: u64,
+        eta: Option<u64>,
+    ) -> Result<()> {
+        let conn = self.conn()?;
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE transfer_task
+             SET total_bytes = ?1, transferred_bytes = ?2, speed_bytes_per_sec = ?3,
+                 eta_seconds = ?4, updated_at = ?5
+             WHERE id = ?6",
+            rusqlite::params![total_bytes, transferred_bytes, speed, eta, now, id],
+        )
+        .map_err(|e| RExError::Message(e.to_string()))?;
+        Ok(())
+    }
+
+    pub fn set_transfer_task_status(
+        &self,
+        id: &str,
+        status: &str,
+        error: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.conn()?;
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE transfer_task SET status = ?1, error = ?2, updated_at = ?3 WHERE id = ?4",
+            rusqlite::params![status, error.unwrap_or(""), now, id],
+        )
+        .map_err(|e| RExError::Message(e.to_string()))?;
+        Ok(())
+    }
+
+    pub fn delete_transfer_task(&self, id: &str) -> Result<()> {
+        let conn = self.conn()?;
+        conn.execute(
+            "DELETE FROM transfer_task WHERE id = ?1",
+            rusqlite::params![id],
+        )
+        .map_err(|e| RExError::Message(e.to_string()))?;
+        Ok(())
+    }
+}
+
+fn row_to_transfer_task(row: &rusqlite::Row<'_>) -> rusqlite::Result<TransferTaskRecord> {
+    Ok(TransferTaskRecord {
+        id: row.get("id")?,
+        source_resource_id: row.get("source_resource_id")?,
+        target_resource_id: row.get("target_resource_id")?,
+        source_path: row.get("source_path")?,
+        target_path: row.get("target_path")?,
+        conflict_policy: row.get("conflict_policy")?,
+        status: row.get("status")?,
+        total_bytes: row.get::<_, i64>("total_bytes")?,
+        transferred_bytes: row.get::<_, i64>("transferred_bytes")?,
+        speed_bytes_per_sec: row.get::<_, i64>("speed_bytes_per_sec")?,
+        eta_seconds: row.get::<_, Option<i64>>("eta_seconds")?,
+        error: row.get::<_, Option<String>>("error")?,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+    })
+}
+
 pub fn audit_log_with_detail(
     db: &std::sync::Arc<Database>,
     action: &str,
@@ -1240,6 +1374,37 @@ pub fn audit_log_with_detail(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn transfer_task_crud_round_trip() {
+        let (_dir, db) = test_db();
+        let task = NewTransferTask {
+            source_resource_id: "res-src".into(),
+            target_resource_id: "res-dst".into(),
+            source_path: "/a.txt".into(),
+            target_path: "/b.txt".into(),
+            conflict_policy: Some("skip".into()),
+        };
+        let id = db.create_transfer_task(&task).unwrap();
+        let got = db.get_transfer_task(&id).unwrap().expect("exists");
+        assert_eq!(got.source_resource_id, "res-src");
+        assert_eq!(got.target_resource_id, "res-dst");
+        assert_eq!(got.status, "pending");
+        assert_eq!(got.conflict_policy, "skip");
+        db.update_transfer_task_progress(&id, 100, 40, 10, Some(6))
+            .unwrap();
+        let got2 = db.get_transfer_task(&id).unwrap().unwrap();
+        assert_eq!(got2.transferred_bytes, 40);
+        assert_eq!(got2.total_bytes, 100);
+        assert_eq!(got2.speed_bytes_per_sec, 10);
+        assert_eq!(got2.eta_seconds, Some(6));
+        db.set_transfer_task_status(&id, "completed", None).unwrap();
+        let got3 = db.get_transfer_task(&id).unwrap().unwrap();
+        assert_eq!(got3.status, "completed");
+        let list = db.list_transfer_tasks(10, 0).unwrap();
+        assert!(list.iter().any(|t| t.id == id));
+        db.delete_transfer_task(&id).unwrap();
+        assert!(db.get_transfer_task(&id).unwrap().is_none());
+    }
     use super::*;
     use tempfile::tempdir;
 

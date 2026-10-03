@@ -9,6 +9,9 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use rex_common::file_transfer::{FileConnector, FileEntry, ProgressCallback, UploadResult};
 
+pub mod task;
+pub use task::*;
+
 /// 默认分片大小（5MB），与 S3 multipart 最小分片对齐。
 pub const DEFAULT_PART_SIZE: u64 = 5 * 1024 * 1024;
 

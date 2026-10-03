@@ -169,6 +169,39 @@ pub struct Topology {
     pub edges: Vec<TopoEdge>,
 }
 
+// --- Transfer Task (v0.91.0) ---
+
+/// 传输任务持久化记录（DB 行）。`status` 以字符串形式存
+/// （`rex_transfer::TransferStatus::as_str_lossy()`），错误文本独存 `error` 列。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransferTaskRecord {
+    pub id: String,
+    pub source_resource_id: String,
+    pub target_resource_id: String,
+    pub source_path: String,
+    pub target_path: String,
+    pub conflict_policy: String,
+    pub status: String,
+    pub total_bytes: i64,
+    pub transferred_bytes: i64,
+    pub speed_bytes_per_sec: i64,
+    pub eta_seconds: Option<i64>,
+    pub error: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// 创建传输任务的入参（前端下发 source/target resource + path）。
+#[derive(Debug, Clone, Deserialize)]
+pub struct NewTransferTask {
+    pub source_resource_id: String,
+    pub target_resource_id: String,
+    pub source_path: String,
+    pub target_path: String,
+    #[serde(default)]
+    pub conflict_policy: Option<String>,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AuditStats {
     pub total: i64,
