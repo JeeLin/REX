@@ -35,6 +35,7 @@ fn test_state() -> (tempfile::TempDir, AppState) {
         )),
         mongo_pool: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
         data_dir: dir.path().to_path_buf(),
+        coordinator: Arc::new(rex_hub::transfer_coordinator::TransferCoordinator::new()),
     };
     (dir, state)
 }

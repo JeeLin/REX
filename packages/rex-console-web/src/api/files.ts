@@ -214,3 +214,67 @@ export async function saveFromEdit(sessionId: string, path: string, content: str
   })
   if (!res.ok) throw await raise(res)
 }
+
+// --- Transfer action (v0.91.0 T2): server-side move/copy ---
+// File bytes never transit the browser: the task is created server-side and
+// progress is polled from GET /api/files/transfer/{id}.
+
+export type TransferOp = 'move' | 'copy'
+export type TransferConflict = 'overwrite' | 'skip' | 'rename' | 'fail'
+export type TransferTaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'canceled'
+
+export interface TransferEndpoint {
+  resource_id: string
+  path: string
+}
+
+export interface TransferActionBody {
+  op: TransferOp
+  src: TransferEndpoint
+  dst: TransferEndpoint
+  conflict: TransferConflict
+}
+
+export interface TransferActionCreated {
+  id: string
+  status: string
+}
+
+/** Create a server-side move/copy task (POST /api/files/transfer/action). */
+export async function transferAction(body: TransferActionBody): Promise<TransferActionCreated> {
+  const res = await fetch(`${API_BASE}/transfer/action`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw await raise(res)
+  return await res.json()
+}
+
+/**
+ * Transfer task record returned by GET /api/files/transfer/{id} (T1 `TransferTaskRecord`).
+ * NOTE: progress fields are FLAT top-level (`total_bytes`, `transferred_bytes`,
+ * `speed_bytes_per_sec`, `eta_seconds`), not nested under a `progress` object.
+ */
+export interface TransferTaskRecord {
+  id: string
+  source_resource_id: string
+  target_resource_id: string
+  source_path: string
+  target_path: string
+  conflict_policy: string
+  status: TransferTaskStatus
+  total_bytes: number
+  transferred_bytes: number
+  speed_bytes_per_sec: number
+  eta_seconds: number | null
+  error: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Poll a transfer task (GET /api/files/transfer/{id}). */
+export async function getTransferTask(id: string): Promise<TransferTaskRecord> {
+  const res = await fetch(`${API_BASE}/transfer/${encodeURIComponent(id)}`, { headers: authHeaders() })
+  if (!res.ok) throw await raise(res)
+  return await res.json()
+}

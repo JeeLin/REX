@@ -13,6 +13,7 @@ use crate::redis_api::RedisState;
 use crate::sip_capture::SipCaptureRegistry;
 use crate::sip_recording::SipRecordingRegistry;
 use crate::sql_api::SqlState;
+use crate::transfer_coordinator::TransferCoordinator;
 use crate::update_api::AgentBinaries;
 
 #[derive(Clone)]
@@ -29,4 +30,6 @@ pub struct AppState {
     pub sip_capture: Arc<SipCaptureRegistry>,
     pub sip_recording: Arc<SipRecordingRegistry>,
     pub data_dir: PathBuf,
+    /// Hub 侧直连传输协调器（T2）：驱动 source-connector → target-connector。
+    pub coordinator: Arc<TransferCoordinator>,
 }

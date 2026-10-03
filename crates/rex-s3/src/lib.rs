@@ -316,15 +316,27 @@ impl FileConnector for S3Connector {
             Some(len) => format!("bytes={}-{}", offset, offset + len - 1),
             None => format!("bytes={offset}-"),
         };
-        let result = self
+        let send_result = self
             .client
             .get_object()
             .bucket(&self.bucket)
             .key(key)
             .range(range)
             .send()
-            .await
-            .with_context(|| format!("failed to download range of {key}"))?;
+            .await;
+
+        // HTTP 416 Range Not Satisfiable — 文件已结束，镜像 SSH/Agent 返回空 vec
+        if send_result
+            .as_ref()
+            .err()
+            .and_then(|e| e.raw_response())
+            .map(|r| r.status().as_u16() == 416)
+            .unwrap_or(false)
+        {
+            return Ok(Vec::new());
+        }
+
+        let result = send_result.with_context(|| format!("failed to download range of {key}"))?;
 
         let bytes = result
             .body

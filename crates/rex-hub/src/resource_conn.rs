@@ -219,6 +219,7 @@ pub fn build_test_state(dir: &std::path::Path) -> AppState {
             dir.to_path_buf(),
         )),
         data_dir: dir.to_path_buf(),
+        coordinator: std::sync::Arc::new(crate::transfer_coordinator::TransferCoordinator::new()),
     }
 }
 

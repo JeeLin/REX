@@ -30,6 +30,7 @@ pub mod sql_api;
 pub mod static_embed;
 pub mod terminal_ws;
 pub mod tls;
+pub mod transfer_coordinator;
 pub mod tunnel_ws;
 pub mod update_api;
 pub mod update_checker;

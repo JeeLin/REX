@@ -212,6 +212,7 @@ fn worker_main() {
             sip_capture: Arc::new(SipCaptureRegistry::new()),
             sip_recording: Arc::new(SipRecordingRegistry::new(data_dir.clone())),
             data_dir: data_dir.clone(),
+            coordinator: Arc::new(rex_hub::transfer_coordinator::TransferCoordinator::new()),
         };
 
         #[cfg(feature = "embedded-static")]

@@ -14,6 +14,7 @@ import { clipboard } from '@/utils/clipboard'
 import { isTypingTarget } from '@/utils/isTypingTarget'
 import { PANE_CTX, type PaneCtx } from '@/features/workspace/paneContext'
 import { ownsKeystroke } from '@/features/workspace/paneOwnership'
+import { useTransfer } from './composables/useTransfer'
 
 const { t } = useI18n()
 
@@ -268,16 +269,68 @@ function fmtPercent(transferred: number, total: number) {
   return `${Math.round((transferred / total) * 100)}%`
 }
 
-const completedCount = computed(() => {
-  let n = 0
-  transferQueue.value.forEach(item => { if (item.status === 'completed') n++ })
-  return n
+/* ---- Shared server-side transfer tasks (v0.91.0 T2) ---- */
+const transferStore = useTransfer()
+
+// Unified view-model so the existing transfer-queue panel can render both the
+// legacy browser upload/download items (transferQueue) and server-side move/copy
+// tasks (useTransfer store) from a single source of truth.
+interface QueueItem {
+  key: string
+  kind: 'upload' | 'download' | 'move' | 'copy'
+  fileName: string
+  path: string
+  status: 'pending' | 'transferring' | 'resuming' | 'completed' | 'failed' | 'canceled'
+  transferred: number
+  total: number
+  speed: number
+  error?: string
+  retryable: boolean
+}
+
+function baseName(path: string): string {
+  return path.split('/').pop() || path
+}
+
+const queueItems = computed<QueueItem[]>(() => {
+  const items: QueueItem[] = []
+  // Legacy browser upload/download items
+  transferQueue.value.forEach((item, key) => {
+    items.push({
+      key,
+      kind: item.type,
+      fileName: item.fileName,
+      path: item.remotePath,
+      status: item.status,
+      transferred: item.transferredBytes,
+      total: item.totalBytes,
+      speed: 0,
+      error: item.errorMessage,
+      retryable: true,
+    })
+  })
+  // Server-side move/copy tasks (shared store)
+  transferStore.tasks.value.forEach((task, id) => {
+    items.push({
+      key: id,
+      kind: task.op,
+      fileName: baseName(task.target_path),
+      path: `${task.source_path} → ${task.target_path}`,
+      status: task.status === 'running' ? 'transferring' : task.status,
+      transferred: task.transferred_bytes,
+      total: task.total_bytes,
+      speed: task.speed_bytes_per_sec,
+      error: task.error ?? undefined,
+      retryable: false,
+    })
+  })
+  return items
 })
-const activeCount = computed(() => {
-  let n = 0
-  transferQueue.value.forEach(item => { if (item.status === 'transferring' || item.status === 'resuming' || item.status === 'pending') n++ })
-  return n
-})
+
+const completedCount = computed(() => queueItems.value.filter(i => i.status === 'completed').length)
+const activeCount = computed(() =>
+  queueItems.value.filter(i => i.status === 'transferring' || i.status === 'resuming' || i.status === 'pending').length
+)
 
 async function uploadTo(side: Side) {
   if (!sessionId.value) return
@@ -349,6 +402,8 @@ function dismissCompleted() {
   const q = new Map(transferQueue.value)
   q.forEach((item, key) => { if (item.status === 'completed') q.delete(key) })
   transferQueue.value = q
+  // Also clear finished server-side tasks from the shared store
+  transferStore.dismissCompleted()
 }
 
 // Context menu
@@ -609,19 +664,14 @@ async function onDrop(e: DragEvent, targetSide: Side) {
     const dstPath = panels[targetSide].path + name
 
     try {
-      if (sourceSide === 'left' && targetSide === 'right') {
-        const blob = await filesApi.downloadFile(sessionId.value, srcPath)
-        await filesApi.uploadFile(sessionId.value, dstPath, new File([blob], name))
-      } else if (sourceSide === 'right' && targetSide === 'left') {
-        const blob = await filesApi.downloadFile(sessionId.value, srcPath)
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url; a.download = name; a.click()
-        URL.revokeObjectURL(url)
-      } else {
-        const blob = await filesApi.downloadFile(sessionId.value, srcPath)
-        await filesApi.uploadFile(sessionId.value, dstPath, new File([blob], name))
-      }
+      const resourceId = props.resourceId
+      if (!resourceId) continue
+      // Server-side move/copy: bytes never transit the browser. `copy` preserves
+      // the source (matches the previous download→upload non-destructive behavior).
+      await transferStore.copy(
+        { resource_id: resourceId, path: srcPath },
+        { resource_id: resourceId, path: dstPath },
+      )
     } catch (err) {
       console.error('Transfer failed:', err)
     }
@@ -830,8 +880,8 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
     <Toast ref="toast" />
 
     <!-- Transfer Queue Toggle -->
-    <button v-if="transferQueue.size > 0" class="tq-toggle" @click="showTransferQueue = !showTransferQueue">
-      📥 {{ transferQueue.size }} <span v-if="activeCount">· {{ activeCount }} {{ t('files.active') }}</span>
+    <button v-if="queueItems.length > 0" class="tq-toggle" @click="showTransferQueue = !showTransferQueue">
+      📥 {{ queueItems.length }} <span v-if="activeCount">· {{ activeCount }} {{ t('files.active') }}</span>
       <span v-if="completedCount" class="tq-badge tq-badge--done">{{ completedCount }} ✓</span>
     </button>
 
@@ -840,37 +890,44 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
       <Transition name="tq-slide">
         <div v-if="showTransferQueue" class="tq-panel">
           <div class="tq-header">
-            <span>{{ t('files.transferQueue') }} ({{ transferQueue.size }})</span>
+            <span>{{ t('files.transferQueue') }} ({{ queueItems.length }})</span>
             <div class="tq-header-actions">
               <button v-if="completedCount" class="tq-btn tq-btn--sm" @click="dismissCompleted">{{ t('files.clearDone') }}</button>
               <button class="tq-btn tq-btn--sm" @click="showTransferQueue = false">✕</button>
             </div>
           </div>
           <div class="tq-list">
-            <div v-for="[key, item] in transferQueue" :key="key" class="tq-item" :class="`tq-item--${item.status}`">
+            <div v-for="item in queueItems" :key="item.key" class="tq-item" :class="`tq-item--${item.status}`">
               <div class="tq-item-info">
-                <span class="tq-item-type">{{ item.type === 'upload' ? '⬆' : '⬇' }}</span>
+                <span class="tq-item-type">
+                  {{ item.kind === 'upload' ? '⬆' : item.kind === 'download' ? '⬇' : item.kind === 'move' ? '🔄' : '📄' }}
+                </span>
                 <div class="tq-item-details">
                   <span class="tq-item-name">{{ item.fileName }}</span>
-                  <span class="tq-item-path">{{ item.remotePath }}</span>
+                  <span class="tq-item-path">{{ item.path }}</span>
                 </div>
               </div>
               <div class="tq-item-status">
                 <!-- Progress bar for active transfers -->
                 <template v-if="item.status === 'transferring' || item.status === 'resuming'">
                   <div class="tq-progress">
-                    <div class="tq-progress-bar" :style="{ width: fmtPercent(item.transferredBytes, item.totalBytes) }"></div>
+                    <div class="tq-progress-bar" :style="{ width: fmtPercent(item.transferred, item.total) }"></div>
                   </div>
-                  <span class="tq-item-pct">{{ fmtPercent(item.transferredBytes, item.totalBytes) }}</span>
+                  <span class="tq-item-pct">{{ fmtPercent(item.transferred, item.total) }}</span>
+                  <span v-if="item.speed > 0" class="tq-item-pct">{{ fmtSize(item.speed) }}/s</span>
                 </template>
                 <!-- Failed: show error + retry -->
                 <template v-else-if="item.status === 'failed'">
-                  <span class="tq-item-error" :title="item.errorMessage">{{ item.errorMessage || t('files.failed') }}</span>
-                  <button class="tq-btn tq-btn--retry" @click="retryTransfer(key)">↻ {{ t('files.retry') }}</button>
+                  <span class="tq-item-error" :title="item.error">{{ item.error || t('files.failed') }}</span>
+                  <button v-if="item.retryable" class="tq-btn tq-btn--retry" @click="retryTransfer(item.key)">↻ {{ t('files.retry') }}</button>
                 </template>
                 <!-- Completed -->
                 <template v-else-if="item.status === 'completed'">
                   <span class="tq-item-done">✓</span>
+                </template>
+                <!-- Canceled -->
+                <template v-else-if="item.status === 'canceled'">
+                  <span class="tq-item-pending">{{ t('files.canceled', 'Canceled') }}</span>
                 </template>
                 <!-- Pending -->
                 <template v-else-if="item.status === 'pending'">
@@ -878,7 +935,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
                 </template>
               </div>
             </div>
-            <div v-if="!transferQueue.size" class="tq-empty">{{ t('files.noTransfers') }}</div>
+            <div v-if="!queueItems.length" class="tq-empty">{{ t('files.noTransfers') }}</div>
           </div>
         </div>
       </Transition>

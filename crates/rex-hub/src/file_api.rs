@@ -6,6 +6,7 @@ use std::sync::Arc;
 use crate::db::audit_log;
 use crate::models::NewTransferTask;
 use crate::resource_conn::{load_resource_config, normalize_username, ResourceConnInfo};
+use crate::transfer_coordinator::TransferOp;
 use crate::AppState;
 use axum::extract::{Multipart, Path, Query, State};
 use axum::http::StatusCode;
@@ -14,7 +15,9 @@ use axum::Json;
 use base64::Engine;
 use rex_common::file_transfer::{FileConnectRequest, FileConnector};
 use rex_common::resource_config::config_private_key;
+use rex_transfer::ConflictPolicy;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use tokio::sync::Mutex;
 
 use crate::error::{error_with_status, ErrorBody};
@@ -76,6 +79,7 @@ pub fn file_routes() -> axum::Router<AppState> {
             "/transfer",
             axum::routing::get(list_transfer_tasks).post(create_transfer_task),
         )
+        .route("/transfer/action", axum::routing::post(transfer_action))
         .route("/transfer/{id}", axum::routing::get(get_transfer_task))
         .route(
             "/transfer/{id}/cancel",
@@ -158,6 +162,9 @@ async fn cancel_transfer_task(
         .set_transfer_task_status(&task_id, "canceled", None)
     {
         Ok(_) => {
+            // T2：持久化取消标记后，中止进程内的后台传输流。run_stream 亦轮询 DB
+            // 状态作为协作式中止的兜底。
+            state.coordinator.abort(&task_id);
             tracing::info!(
                 action = "FILE_TRANSFER_CANCELED",
                 transfer_task_id = %task_id,
@@ -179,9 +186,73 @@ async fn cancel_transfer_task(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+/// 传输端点引用（resource + path）。
+#[derive(Debug, Clone, Deserialize)]
+pub struct TransferEndpointRef {
+    pub resource_id: String,
+    pub path: String,
+}
+
+/// POST `/transfer/action` 请求体：op（copy/move）+ 源/目标端点 + 冲突策略。
+#[derive(Debug, Deserialize)]
+pub struct TransferActionRequest {
+    pub op: TransferOp,
+    pub src: TransferEndpointRef,
+    pub dst: TransferEndpointRef,
+    /// 冲突策略：overwrite|skip|rename|fail（缺省 overwrite）。
+    #[serde(default)]
+    pub conflict: Option<String>,
+}
+
+/// T2 直连传输入口：创建任务 → 审计 → 提交后台传输流 → 立即返回 201 pending。
+///
+/// 文件数据在服务端 source-connector → target-connector 之间流式传输，不经过浏览器。
+async fn transfer_action(
+    State(state): State<AppState>,
+    Json(body): Json<TransferActionRequest>,
+) -> axum::response::Response {
+    let conflict = body
+        .conflict
+        .clone()
+        .unwrap_or_else(|| "overwrite".to_string());
+    if ConflictPolicy::from_str(&conflict).is_none() {
+        return error_response("INVALID_CONFLICT_POLICY", "invalid conflict policy")
+            .into_response();
+    }
+    let new_task = NewTransferTask {
+        source_resource_id: body.src.resource_id.clone(),
+        target_resource_id: body.dst.resource_id.clone(),
+        source_path: body.src.path.clone(),
+        target_path: body.dst.path.clone(),
+        conflict_policy: Some(conflict),
+    };
+    let task_id = match state.db.create_transfer_task(&new_task) {
+        Ok(id) => id,
+        Err(e) => return error_response("TRANSFER_CREATE_FAILED", &e.to_string()).into_response(),
+    };
+    tracing::info!(
+        action = "FILE_TRANSFER_CREATED",
+        transfer_task_id = %task_id,
+        source_resource_id = %body.src.resource_id,
+        target_resource_id = %body.dst.resource_id,
+        "transfer task created"
+    );
+    audit_log(
+        &state.db,
+        "FILE_TRANSFER_CREATED",
+        "success",
+        Some(task_id.clone()),
+    );
+    // T2：提交后台传输流（打开两个连接器并流式传输）。
+    state
+        .coordinator
+        .submit(state.clone(), task_id.clone(), body.op);
+    (
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "id": task_id, "status": "pending" })),
+    )
+        .into_response()
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -299,6 +370,163 @@ fn ssh_connect_config(res: &ResourceConnInfo) -> rex_ssh::SshConfig {
     }
 }
 
+/// 连接资源过程中可能产生的错误（供 `connect` 与 `connect_resource` 共用分类）。
+#[derive(Debug)]
+pub enum ConnectError {
+    AgentUnavailable,
+    AgentConnect(String),
+    SftpConnect(String),
+    S3Connect(String),
+    UnsupportedProtocol,
+    InvalidResource(String),
+}
+
+impl fmt::Display for ConnectError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::AgentUnavailable => write!(f, "no online agent for environment"),
+            Self::AgentConnect(e) => write!(f, "agent connect failed: {e}"),
+            Self::SftpConnect(e) => write!(f, "failed to connect to SFTP server: {e}"),
+            Self::S3Connect(e) => write!(f, "failed to connect to S3 storage: {e}"),
+            Self::UnsupportedProtocol => write!(f, "unsupported protocol"),
+            Self::InvalidResource(e) => write!(f, "invalid resource: {e}"),
+        }
+    }
+}
+
+/// 将 [`ConnectError`] 映射为与历史 `connect` 相同的 HTTP 错误码 + 审计行为：
+/// - SFTP/S3 连接失败：写 `FILE_CONNECT` failure 审计 + `connect_error_response`（自动分类根因码）。
+/// - Agent/协议错误：不写审计，返回对应错误码。
+fn connect_failure_response(
+    state: &AppState,
+    resource_id: &str,
+    res: &ResourceConnInfo,
+    e: ConnectError,
+) -> axum::response::Response {
+    match e {
+        ConnectError::AgentUnavailable => {
+            error_response("AGENT_UNAVAILABLE", "no online agent for environment").into_response()
+        }
+        ConnectError::AgentConnect(msg) => {
+            error_response("AGENT_CONNECT_FAILED", &msg).into_response()
+        }
+        ConnectError::SftpConnect(msg) => {
+            tracing::error!(action = "FILE_CONNECT", resource_id = %resource_id, resource_name = %res.name, protocol = %res.protocol, error = %msg, "SFTP connection failed");
+            audit_log(
+                &state.db,
+                "FILE_CONNECT",
+                "failure",
+                Some(resource_id.to_string()),
+            );
+            crate::error::connect_error_response("failed to connect to SFTP server", msg)
+                .into_response()
+        }
+        ConnectError::S3Connect(msg) => {
+            audit_log(
+                &state.db,
+                "FILE_CONNECT",
+                "failure",
+                Some(resource_id.to_string()),
+            );
+            crate::error::connect_error_response("failed to connect to S3 storage", msg)
+                .into_response()
+        }
+        ConnectError::UnsupportedProtocol => {
+            error_response("UNSUPPORTED_PROTOCOL", "unsupported protocol").into_response()
+        }
+        ConnectError::InvalidResource(msg) => {
+            error_response("INVALID_RESOURCE", &msg).into_response()
+        }
+    }
+}
+
+/// 从 `ResourceConnInfo` 构造 S3 连接请求（bucket/region/endpoint/keys 从 config 提取）。
+fn s3_connect_request(res: &ResourceConnInfo) -> FileConnectRequest {
+    FileConnectRequest {
+        protocol: "s3".to_string(),
+        host: res.host.clone(),
+        port: res.port.unwrap_or(443),
+        username: None,
+        password: None,
+        private_key: None,
+        keepalive_interval: None,
+        bucket: res
+            .config
+            .get("bucket")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        region: res
+            .config
+            .get("region")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        endpoint: res
+            .config
+            .get("endpoint")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        access_key: res
+            .config
+            .get("access_key")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        secret_key: res
+            .config
+            .get("secret_key")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+    }
+}
+
+/// 依据 `ResourceConnInfo` 打开对应的 `FileConnector`（agent / sftp / s3）。
+///
+/// `connect` 与 T2 的 [`connect_resource`] 共用此函数，保证两条入口的协议分发一致。
+async fn build_connector(
+    state: &AppState,
+    res: &ResourceConnInfo,
+    resource_id: &str,
+) -> Result<Box<dyn FileConnector>, ConnectError> {
+    if res.use_agent {
+        let agent_id = res.agent_id.clone().ok_or(ConnectError::AgentUnavailable)?;
+        let cfg = agent_file_config(res);
+        let channel_id =
+            crate::agent_ws::open_agent_session(state, &agent_id, resource_id, &res.protocol, cfg)
+                .await
+                .map_err(|e| ConnectError::AgentConnect(e.to_string()))?;
+        return Ok(Box::new(crate::agent_proxy::AgentFileProxy::new(
+            state.clone(),
+            channel_id,
+        )));
+    }
+    match res.protocol.as_str() {
+        "sftp" | "ssh" => {
+            let conn = rex_ssh::sftp::SftpConnector::connect_with_config(ssh_connect_config(res))
+                .await
+                .map_err(|e| ConnectError::SftpConnect(e.to_string()))?;
+            Ok(Box::new(conn))
+        }
+        "s3" => {
+            let conn = rex_s3::S3Connector::connect_from_request(&s3_connect_request(res))
+                .await
+                .map_err(|e| ConnectError::S3Connect(e.to_string()))?;
+            Ok(Box::new(conn))
+        }
+        _ => Err(ConnectError::UnsupportedProtocol),
+    }
+}
+
+/// 打开一个资源对应的文件连接器（agent + sftp/ssh + s3 分发）。
+///
+/// T2 传输协调器用它在服务端打开 source/target 两个连接器；与 `connect`
+/// 共享 [`build_connector`]，保证协议分发与错误分类一致。
+pub async fn connect_resource(
+    state: &AppState,
+    resource_id: &str,
+) -> Result<Box<dyn FileConnector>, ConnectError> {
+    let res = load_resource_config(state, resource_id).map_err(ConnectError::InvalidResource)?;
+    build_connector(state, &res, resource_id).await
+}
+
 async fn connect(
     State(state): State<AppState>,
     Json(body): Json<ConnectBody>,
@@ -309,124 +537,18 @@ async fn connect(
         Err(e) => return error_response("INVALID_RESOURCE", &e).into_response(),
     };
 
-    // v0.70.6 子任务 #7：agent 模式 —— 协议在 Agent 私网内终结，Hub 仅做隧道中转；
-    // 文件数据不经浏览器（AGENTS.md 硬性约束）。
-    if res.use_agent {
-        let agent_id = match res.agent_id.clone() {
-            Some(id) => id,
-            None => {
-                return error_response("AGENT_UNAVAILABLE", "no online agent for environment")
-                    .into_response()
-            }
-        };
-        let cfg = agent_file_config(&res);
-        let channel_id = match crate::agent_ws::open_agent_session(
-            &state,
-            &agent_id,
-            &body.resource_id,
-            &res.protocol,
-            cfg,
-        )
-        .await
-        {
-            Ok(c) => c,
-            Err(e) => {
-                return error_response("AGENT_CONNECT_FAILED", &e.to_string()).into_response()
-            }
-        };
-        let session_id = format!("file_{}", &uuid::Uuid::new_v4().to_string()[..8]);
-        state.file_pool.lock().await.insert(
-            session_id.clone(),
-            Box::new(crate::agent_proxy::AgentFileProxy::new(
-                state.clone(),
-                channel_id,
-            )),
-        );
-        tracing::info!(action = "FILE_CONNECT_AGENT", session_id = %session_id, resource_id = %body.resource_id, resource_name = %res.name, agent_id = %agent_id, protocol = %res.protocol, "file connected via agent");
-        return (StatusCode::OK, Json(ConnectResponse { session_id })).into_response();
+    if !res.use_agent {
+        tracing::info!(action = "FILE_CONNECT", resource_id = %body.resource_id, resource_name = %res.name, protocol = %res.protocol, use_agent = res.use_agent, "file connect request");
+        if !res.config.is_null() {
+            tracing::debug!(action = "FILE_CONNECT", resource_id = %body.resource_id, has_password = res.config.get("password").is_some(), has_private_key = config_private_key(&res.config).is_some(), "resource config loaded");
+        }
     }
 
-    tracing::info!(action = "FILE_CONNECT", resource_id = %body.resource_id, resource_name = %res.name, protocol = %res.protocol, use_agent = res.use_agent, "file connect request");
-    if !res.config.is_null() {
-        tracing::debug!(action = "FILE_CONNECT", resource_id = %body.resource_id, has_password = res.config.get("password").is_some(), has_private_key = config_private_key(&res.config).is_some(), "resource config loaded");
-    }
-
-    let conn: Box<dyn FileConnector> = match res.protocol.as_str() {
-        "sftp" | "ssh" => {
-            let conn =
-                rex_ssh::sftp::SftpConnector::connect_with_config(ssh_connect_config(&res)).await;
-            match conn {
-                Ok(c) => Box::new(c),
-                Err(e) => {
-                    tracing::error!(action = "FILE_CONNECT", resource_id = %body.resource_id, resource_name = %res.name, protocol = %res.protocol, error = %e, "SFTP connection failed");
-                    audit_log(
-                        &state.db,
-                        "FILE_CONNECT",
-                        "failure",
-                        Some(body.resource_id.clone()),
-                    );
-                    return crate::error::connect_error_response(
-                        "failed to connect to SFTP server",
-                        e,
-                    )
-                    .into_response();
-                }
-            }
+    let conn = match build_connector(&state, &res, &body.resource_id).await {
+        Ok(c) => c,
+        Err(e) => {
+            return connect_failure_response(&state, &body.resource_id, &res, e).into_response()
         }
-        "s3" => {
-            let req = FileConnectRequest {
-                protocol: "s3".to_string(),
-                host: res.host.clone(),
-                port: res.port.unwrap_or(443),
-                username: None,
-                password: None,
-                private_key: None,
-                keepalive_interval: None,
-                bucket: res
-                    .config
-                    .get("bucket")
-                    .and_then(|v| v.as_str())
-                    .map(String::from),
-                region: res
-                    .config
-                    .get("region")
-                    .and_then(|v| v.as_str())
-                    .map(String::from),
-                endpoint: res
-                    .config
-                    .get("endpoint")
-                    .and_then(|v| v.as_str())
-                    .map(String::from),
-                access_key: res
-                    .config
-                    .get("access_key")
-                    .and_then(|v| v.as_str())
-                    .map(String::from),
-                secret_key: res
-                    .config
-                    .get("secret_key")
-                    .and_then(|v| v.as_str())
-                    .map(String::from),
-            };
-            let conn = rex_s3::S3Connector::connect_from_request(&req).await;
-            match conn {
-                Ok(c) => Box::new(c),
-                Err(e) => {
-                    audit_log(
-                        &state.db,
-                        "FILE_CONNECT",
-                        "failure",
-                        Some(body.resource_id.clone()),
-                    );
-                    return crate::error::connect_error_response(
-                        "failed to connect to S3 storage",
-                        e,
-                    )
-                    .into_response();
-                }
-            }
-        }
-        _ => return error_response("UNSUPPORTED_PROTOCOL", "unsupported protocol").into_response(),
     };
 
     let session_id = format!("file_{}", &uuid::Uuid::new_v4().to_string()[..8]);
@@ -435,24 +557,29 @@ async fn connect(
         .lock()
         .await
         .insert(session_id.clone(), conn);
-    tracing::info!(
-        action = "FILE_CONNECT",
-        session_id = %session_id,
-        resource_id = %body.resource_id,
-        protocol = %res.protocol,
-        "file session connected"
-    );
-    let audit_db = state.db.clone();
-    let audit_target = body.resource_id.clone();
-    let _ = tokio::task::spawn_blocking(move || {
-        audit_db.write_audit_log(&crate::models::NewAuditEntry {
-            action: "FILE_CONNECT".into(),
-            target: Some(audit_target),
-            result: "success".into(),
-            ..Default::default()
+    if res.use_agent {
+        let agent_id = res.agent_id.clone().unwrap_or_default();
+        tracing::info!(action = "FILE_CONNECT_AGENT", session_id = %session_id, resource_id = %body.resource_id, resource_name = %res.name, agent_id = %agent_id, protocol = %res.protocol, "file connected via agent");
+    } else {
+        tracing::info!(
+            action = "FILE_CONNECT",
+            session_id = %session_id,
+            resource_id = %body.resource_id,
+            protocol = %res.protocol,
+            "file session connected"
+        );
+        let audit_db = state.db.clone();
+        let audit_target = body.resource_id.clone();
+        let _ = tokio::task::spawn_blocking(move || {
+            audit_db.write_audit_log(&crate::models::NewAuditEntry {
+                action: "FILE_CONNECT".into(),
+                target: Some(audit_target),
+                result: "success".into(),
+                ..Default::default()
+            })
         })
-    })
-    .await;
+        .await;
+    }
     (StatusCode::OK, Json(ConnectResponse { session_id })).into_response()
 }
 
