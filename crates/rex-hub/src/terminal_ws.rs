@@ -662,6 +662,12 @@ async fn handle_agent_terminal(
                 request_id = %request_id,
                 "agent connection timed out after 10s"
             );
+            audit_log(
+                &state.db,
+                "SSH_AGENT_TIMEOUT",
+                "failure",
+                Some(agent_id.to_string()),
+            );
             let _ = send_ws_error(&mut ws, "agent connection timeout").await;
             return;
         }
