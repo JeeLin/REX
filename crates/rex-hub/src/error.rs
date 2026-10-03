@@ -36,9 +36,10 @@ pub fn error_with_status(
 }
 
 /// REST 错误码枚举：驼峰字面量统一在这里定义，`as_str()` → JSON `error.code`。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ErrorCode {
     /// 通用错误（历史默认，保持行为不变）。
+    #[default]
     Error,
     AuthInvalid,
     AuthRequired,
@@ -77,12 +78,6 @@ impl ErrorCode {
             ErrorCode::TlsFailure => "TLS_FAILURE",
             ErrorCode::AuthFailed => "AUTH_FAILED",
         }
-    }
-}
-
-impl Default for ErrorCode {
-    fn default() -> Self {
-        ErrorCode::Error
     }
 }
 

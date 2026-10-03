@@ -413,7 +413,7 @@ async fn connect(
 
 /// 通过共享方言探测函数连接，返回已连接的 [`SqlConnector`]。
 async fn detect_dialect(req: ConnectRequest) -> anyhow::Result<Box<dyn SqlConnector>> {
-    let result = rex_common::sql::detect_dialect(req, |dt, r| connect_by_dialect(dt, r)).await?;
+    let result = rex_common::sql::detect_dialect(req, connect_by_dialect).await?;
     Ok(result.conn)
 }
 
