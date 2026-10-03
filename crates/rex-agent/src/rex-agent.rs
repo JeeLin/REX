@@ -243,23 +243,7 @@ fn worker_main() {
     let timer = tracing_subscriber::fmt::time::ChronoLocal::rfc_3339();
 
     // 日志轮转：滚动写入 data/logs/<name>.log，自动按小时切分 + 旧日志清理（REX_LOG_* 可配）。
-    let data_dir = std::env::var("REX_DATA_DIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| rex_common::config::default_data_dir());
-    let log_dir = std::env::var("REX_LOG_DIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| data_dir.join("logs"));
-    std::fs::create_dir_all(&log_dir).ok();
-    let max_log_files: usize = std::env::var("REX_LOG_MAX_FILES")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(7);
-    let appender = tracing_appender::rolling::RollingFileAppender::builder()
-        .rotation(tracing_appender::rolling::Rotation::HOURLY)
-        .filename_prefix("rex-agent.log")
-        .max_log_files(max_log_files)
-        .build(&log_dir)
-        .expect("failed to init rolling log appender");
+    let (appender, log_dir, max_log_files) = rex_common::logging::rolling_appender("rex-agent.log");
 
     tracing_subscriber::fmt()
         .with_env_filter(

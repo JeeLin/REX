@@ -86,6 +86,7 @@ pub mod agent_proto;
 pub mod cli;
 pub mod config;
 pub mod file_transfer;
+pub mod logging;
 pub mod process;
 pub mod redis;
 pub mod resource_config;

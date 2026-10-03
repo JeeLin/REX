@@ -32,6 +32,10 @@ pub fn default_config_path(kind: ServiceKind) -> PathBuf {
     }
 }
 
+/// 默认数据目录（无 REX_DATA_DIR 时）：
+/// - Linux/macOS：`$HOME/.rex`
+/// - Windows：`%LOCALAPPDATA%/rex`（无则当前目录下的 .rex）
+/// - 其他平台：`.rex`
 pub fn default_data_dir() -> PathBuf {
     #[cfg(windows)]
     {
