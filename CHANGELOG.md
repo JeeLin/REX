@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.90.1] - 2026-10-03
+
+### Added
+- **结构化日志与请求追踪**：HTTP `request_id` 中间件（MDC）；`tracing-appender` rolling-file 日志输出
+- **连接类错误分类**：`classify_connect_error` 把 DB/Redis/S3/SSH 连接根因（timeout/refused/DNS/TLS/auth）统一为可行动 `ErrorCode`；SQL/Redis/S3/Mongo/File 连接器与隧道失败时审计分类码
+- **REST 错误码枚举**：`ErrorCode` 枚举 + `as_str()`，统一构造 `ErrorBody { error: { code, message } }`
+
+### Changed
+- **WS 错误信令加 code**：terminal `ErrorPayload` 新增 `code` 字段（分类填充，加法兼容）；共享 `send_ws_error`/`send_ws_json` 减少重复
+- **文件传输审计**：file_api upload/download 记录 `FILE_TRANSFER_START/COMPLETE/FAILED`
+- **前端错误归一**：取消 `axios` 死依赖；`sql`/`redis`/`mongodb` 模块走 `ApiClient`（自动注入 auth / 401 拦截 / ApiError）；REST 错误统一弹 toast（notification store + 全局 `unhandledrejection`），不再 `console.error`
+
+### Fixed
+- **S3 连接错误上下文**：补充 bucket/region/endpoint 日志；懒连接（首 ops 报错而非 connect）
+- **SFTP 会话关闭日志**：记录 SFTP session close
+
 ## [0.90.0] - 2026-10-02
 
 ### Changed

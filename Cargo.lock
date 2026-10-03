@@ -1334,6 +1334,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossbeam-channel"
+version = "0.5.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98b0cc327b5bc766e7fda9c9260cc0fa81b43a8e240440422dff70788e3f9ef1"
+dependencies = [
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "crossbeam-queue"
 version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4161,7 +4170,7 @@ dependencies = [
 
 [[package]]
 name = "rex-agent"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4197,6 +4206,7 @@ dependencies = [
  "tokio-tungstenite 0.24.0",
  "tower",
  "tracing",
+ "tracing-appender",
  "tracing-subscriber",
  "url",
  "uuid",
@@ -4221,7 +4231,7 @@ dependencies = [
 
 [[package]]
 name = "rex-common"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4259,7 +4269,7 @@ dependencies = [
 
 [[package]]
 name = "rex-hub"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "aes-gcm 0.10.3",
  "anyhow",
@@ -4310,6 +4320,7 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
+ "tracing-appender",
  "tracing-subscriber",
  "url",
  "uuid",
@@ -4345,7 +4356,7 @@ dependencies = [
 
 [[package]]
 name = "rex-mysql"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4371,7 +4382,7 @@ dependencies = [
 
 [[package]]
 name = "rex-postgresql"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4383,7 +4394,7 @@ dependencies = [
 
 [[package]]
 name = "rex-redis"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4401,7 +4412,7 @@ dependencies = [
 
 [[package]]
 name = "rex-s3"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4414,7 +4425,7 @@ dependencies = [
 
 [[package]]
 name = "rex-sip"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4430,7 +4441,7 @@ dependencies = [
 
 [[package]]
 name = "rex-sqlite"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4443,7 +4454,7 @@ dependencies = [
 
 [[package]]
 name = "rex-ssh"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4463,7 +4474,7 @@ dependencies = [
 
 [[package]]
 name = "rex-transfer"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5527,6 +5538,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
+name = "symlink"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7973cce6668464ea31f176d85b13c7ab3bba2cb3b77a2ed26abd7801688010a"
+
+[[package]]
 name = "syn"
 version = "2.0.118"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5899,6 +5916,20 @@ dependencies = [
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
+]
+
+[[package]]
+name = "tracing-appender"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "050686193eb999b4bb3bc2acfa891a13da00f79734704c4b8b4ef1a10b368a3c"
+dependencies = [
+ "crossbeam-channel",
+ "parking_lot",
+ "symlink",
+ "thiserror 2.0.18",
+ "time",
+ "tracing-subscriber",
 ]
 
 [[package]]
