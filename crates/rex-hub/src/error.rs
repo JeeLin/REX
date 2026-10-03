@@ -35,20 +35,15 @@ pub fn error_with_status(
     (status, error_response(code, message))
 }
 
-/// REST 错误码枚举：驼峰字面量统一在这里定义，`as_str()` → JSON `error.code`。
+/// REST 错误码枚举：默认码与连接分类码定义在这里，`as_str()` → JSON `error.code`。
+///
+/// 历史业务码（`AUTH_INVALID` 等）仍由各 handler 以字面量产出（wire 行为不变），
+/// 全量清单见 `docs/reference/error-codes.md`。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ErrorCode {
     /// 通用错误（历史默认，保持行为不变）。
     #[default]
     Error,
-    AuthInvalid,
-    AuthRequired,
-    AgentUnavailable,
-    NotFound,
-    Conflict,
-    BadRequest,
-    Internal,
-    Unimplemented,
     /// 上游数据库/Redis/文件系统连接失败（分类后的根因码）。
     ConnectionFailed,
     ConnectionTimeout,
@@ -63,14 +58,6 @@ impl ErrorCode {
     pub fn as_str(self) -> &'static str {
         match self {
             ErrorCode::Error => "ERROR",
-            ErrorCode::AuthInvalid => "AUTH_INVALID",
-            ErrorCode::AuthRequired => "AUTH_REQUIRED",
-            ErrorCode::AgentUnavailable => "AGENT_UNAVAILABLE",
-            ErrorCode::NotFound => "NOT_FOUND",
-            ErrorCode::Conflict => "CONFLICT",
-            ErrorCode::BadRequest => "BAD_REQUEST",
-            ErrorCode::Internal => "INTERNAL",
-            ErrorCode::Unimplemented => "UNIMPLEMENTED",
             ErrorCode::ConnectionFailed => "CONNECTION_FAILED",
             ErrorCode::ConnectionTimeout => "CONNECTION_TIMEOUT",
             ErrorCode::ConnectionRefused => "CONNECTION_REFUSED",
