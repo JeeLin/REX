@@ -171,6 +171,7 @@ rex-agent = 所有 crate（无前端）
 | **v0.88.0** | HTTPS 证书逻辑真实现（minor，TLS serve 实装 + 自签名/手动两模式 + Agent 信任链；ACME 已砍：占 80 端口与宿主冲突） | — | ✅ 已完成（v0.88.0） |
 | **v0.89.0** | Agent 前端访问通道重设计（minor，Alt 1 边缘反代 + 删旧隧道机制 + direct 语义对齐 + token 脱敏 + HTTP server 默认关闭；三轮 code review + 验收通过） | — | ✅ 已完成（v0.89.0） |
 | **v0.90.0** | 快捷键治理（minor，浏览器保留键交还 + Ctrl+K 双触发收敛 + 注册表/死代码清理 + §5 规格补齐；9 轮审查 + 101 Bug 全清） | — | ✅ 已完成（v0.90.0） |
+| **v0.90.1** | 日志与接口错误信息优化（patch，结构化日志+请求追踪、tracing-appender 轮转/保留、REST/WS error 统一到 rex-common、前端 ApiError→toast 归一） | — | ✅ 已完成（v0.90.1）
 ### M0：项目骨架重建
 
 **核心功能**：清空 `packages/rex-console-web` 与 `crates/*` 源码，按新设计系统重建最小可运行骨架。
@@ -776,6 +777,15 @@ rex-agent = 所有 crate（无前端）
 - **版本号**：v0.90.0
 - **缺陷池 bug**：ctrl+K 同时打开两个搜索面板（🟡）、Ctrl+N 新建连接与浏览器冲突（🟡）、Ctrl+T 新建标签与浏览器冲突（🟡）、Ctrl+W 关闭当前标签与浏览器冲突（🟡）、Ctrl+Tab/Ctrl+Shift+Tab 切换标签与浏览器冲突（🟡）、Alt+1~9 面板宣称跳转标签实测切换布局（🟡）、Ctrl+Shift+\ 垂直分屏无效（🟡）（从 docs/BUGS.md 纳入，已在规划时从缺陷池删除）
 
+### v0.90.1：日志与接口错误信息优化 ✅ 已完成（v0.90.1）
+- **核心功能**：结构化日志（分级/上下文/请求追踪、`request_id` 中间件 + ws handler `connection_id`/`channel_id` span fields）、`tracing-appender` 轮转/保留（`data/logs/`，`REX_LOG_*` 可配）、REST 错误 `ErrorBody` 去重 + `ErrorCode` 枚举归一、WS `send_ws_error` 下沉 `rex-common`、前端 `files.ts`/`redis.ts`/`sql.ts` 等绕开 `ApiClient` 改走 `ApiClient` + 拦截→toast 归一、版本 `0.90.1` + CHANGELOG + `docs/reference/error-codes.md`
+- **不做**：本地日志接入外部观测系统、删除 `anyhow` 全面改结构化 error
+- **子任务预估**：6 个
+- **依赖**：v0.90.0
+- **版本类型**：patch
+- **版本号**：v0.90.1
+- **来源**：用户提出（原 `docs/DEVELOPMENT.md` 0.92.0 候选），@explorer 现场调研 `exp-10`，发现日志无轮转、REST error 代码散布、WS 错误三份复制、前端绕开 ApiClient 无法获取 error.code
+
 ### v0.91.0：文件操作逻辑重设计（SFTP/S3）
 - **核心功能**：基于 exp 勘察（14 项痛点）重设计文件域操作逻辑——**1)** 后端传输任务模型落地（TransferTask / 冲突策略 / 进度查询 API / 持久化，`rex-transfer` 现仅 220 行常量，架构文档承诺的任务模型/冲突处理零实现，文件域骨架）；**2)** 拖放/移动/复制改后端 source/target 连接器直连搬运，去浏览器化（现 `FilesPage.vue:577-589` 走 `download→blob→upload` 过浏览器，违背「文件传输数据不经过浏览器」硬约束）；**3)** FileConnector 能力标志（chmod/presigned/ACL/multipart）废除 `downcast_ref::<S3Connector>`，修 agent 模式 S3 专属能力全挂（presigned/ACL/multipart 恒 UNSUPPORTED_PROTOCOL）；**4)** 断链补齐：chmod 后端路由（现 404）、桌面端 mkdir 入口、SFTP `permissions` / S3 列表 ACL 数据、续传语义修正（SFTP APPEND 不 seek、S3 `upload` 忽略 offset）；**5)** 队列合一：FilesPage/FilesDrawer 两套内存队列 → 单一任务源（后端持久化 + 前端共享 store）；**6)** 前端结构重构：`FilesPage.vue`（968 行、约 45 函数）拆分 + 与 FilesDrawer 共享 composable、能力模型替代 `isS3` 模板散布（7 处）、死 API 清理（`statFile`/`listMultipartUploads`/`abortMultipartUpload`）、错误处理补 toast；**7)** ⚠️ TODO 文件同步：本版移除目录同步假 UI（`FolderSyncDialog.vue:46-57` 预览写死、`onSync` 仅刷新列表），**真实目录同步（diff 比较 + 冲突处理，基于本版传输任务模型）下版单独立项**（用户决策 2026-09-25，勿忘）；**8)** `docs/architecture/file-transfer.md` 与实现对齐修订 + PRODUCT §3.8/§11.7 设计核对
 - **不做**：remote↔remote 跨连接传输、调度式定时同步（列候选不占版本位）、非 S3 协议扩展
@@ -820,7 +830,7 @@ rex-agent = 所有 crate（无前端）
 | P2 | 文件管理交互 | 拖拽上传/移动 + 内联重命名 + 文件预览 | 📋 v0.77.0 已规划 |
 | P2 | SSH 终端增强 | 右键菜单增强 + 终端内搜索 + 多路复用 + 保活检测 | 📋 v0.77.0 已规划 |
 | P2 | AI 助手集成 | 选中文本→AI + AI 生成 SQL + 上下文感知 | 📋 v0.77.0 已规划 |
-| P1 | 日志与接口错误信息优化 | 结构化日志（分级/上下文/请求追踪）+ Hub↔Agent↔worker 接口错误统一（错误码 + 可读 message + 前端提示归一）+ 日志轮转与保留策略 | 📋 v0.92.0 候选（v0.90.0 收尾后规划，用户提出） |
+| P1 | 日志与接口错误信息优化 | 结构化日志（分级/上下文/请求追踪）+ Hub↔Agent↔worker 接口错误统一（错误码 + 可读 message + 前端提示归一）+ 日志轮转与保留策略 | ✅ v0.90.1（v0.90.0 收尾后，用户提出） |
 
 ### 设计约束
 
