@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 /// 构建滚动日志 appender：滚动写入 `REX_LOG_DIR`（默认 `data/logs/`），
-/// 按小时切分 + 旧日志清理，`REX_LOG_MAX_FILES` 控制保留个数（默认 7）。
+/// 按天切分 + 旧日志清理，`REX_LOG_MAX_FILES` 控制保留天数（默认 7）。
 ///
 /// 返回 `(appender, log_dir, max_log_files)` 供 worker 初始化订阅器与启动日志。
 pub fn rolling_appender(
@@ -25,7 +25,7 @@ pub fn rolling_appender(
         .and_then(|v| v.parse().ok())
         .unwrap_or(7);
     let appender = tracing_appender::rolling::RollingFileAppender::builder()
-        .rotation(tracing_appender::rolling::Rotation::HOURLY)
+        .rotation(tracing_appender::rolling::Rotation::DAILY)
         .filename_prefix(filename_prefix)
         .max_log_files(max_log_files)
         .build(&log_dir)

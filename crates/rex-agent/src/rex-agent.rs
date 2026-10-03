@@ -242,7 +242,7 @@ fn redirect_stdio(log_path: &std::path::Path) -> anyhow::Result<()> {
 fn worker_main() {
     let timer = tracing_subscriber::fmt::time::ChronoLocal::rfc_3339();
 
-    // 日志轮转：滚动写入 data/logs/<name>.log，自动按小时切分 + 旧日志清理（REX_LOG_* 可配）。
+    // 日志轮转：滚动写入 data/logs/<name>.log，自动按天切分 + 旧日志清理（REX_LOG_* 可配）。
     let (appender, log_dir, max_log_files) = rex_common::logging::rolling_appender("rex-agent.log");
 
     tracing_subscriber::fmt()
