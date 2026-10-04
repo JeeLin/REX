@@ -73,12 +73,6 @@ export async function listFiles(sessionId: string, path: string): Promise<FileEn
   return await res.json()
 }
 
-export async function statFile(sessionId: string, path: string): Promise<FileEntry> {
-  const res = await fetch(`${API_BASE}/stat?session_id=${sessionId}&path=${encodeURIComponent(path)}`, { headers: authHeaders() })
-  if (!res.ok) throw await raise(res)
-  return await res.json()
-}
-
 export async function uploadFile(sessionId: string, remotePath: string, file: File, offset: number = 0): Promise<{ upload_id?: string }> {
   const form = new FormData()
   form.append('session_id', sessionId)
@@ -177,35 +171,6 @@ export async function presignedUrl(sessionId: string, path: string, expires?: nu
   })
   if (!res.ok) throw await raise(res)
   return (await res.json()).url
-}
-
-export async function listMultipartUploads(sessionId: string, prefix: string): Promise<Array<{ key: string; upload_id: string }>> {
-  const res = await fetch(`${API_BASE}/s3/multipart-uploads?session_id=${sessionId}&prefix=${encodeURIComponent(prefix)}`, { headers: authHeaders() })
-  if (!res.ok) throw await raise(res)
-  return (await res.json()).uploads
-}
-
-export async function resumeMultipartUpload(
-  sessionId: string,
-  remotePath: string,
-  uploadId: string,
-  file: File,
-): Promise<void> {
-  const form = new FormData()
-  form.append('session_id', sessionId)
-  form.append('path', remotePath)
-  form.append('upload_id', uploadId)
-  form.append('file', file)
-  const res = await fetch(`${API_BASE}/s3/resume-upload`, { method: 'POST', headers: authHeaders(), body: form })
-  if (!res.ok) throw await raise(res)
-}
-
-export async function abortMultipartUpload(sessionId: string, path: string, uploadId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/s3/abort-upload`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ session_id: sessionId, path, upload_id: uploadId }),
-  })
-  if (!res.ok) throw await raise(res)
 }
 
 export async function getAcl(sessionId: string, path: string): Promise<string> {
