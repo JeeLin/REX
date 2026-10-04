@@ -44,6 +44,29 @@ export async function disconnect(sessionId: string): Promise<void> {
   })
 }
 
+// --- Connector capability (v0.91.0 T3/T6): capability-based UI instead of isS3 ---
+
+export type FileCapability = 'chmod' | 'presigned_url' | 'acl' | 'multipart'
+
+export interface FileCapabilities {
+  chmod: boolean
+  presigned_url: boolean
+  acl: boolean
+  multipart: boolean
+}
+
+export interface ConnectorCapabilityResponse {
+  protocol: string
+  capabilities: FileCapabilities
+}
+
+/** Query a connector's static capabilities (GET /api/files/connector/{resource_id}/capability). */
+export async function getCapability(resourceId: string): Promise<ConnectorCapabilityResponse> {
+  const res = await fetch(`${API_BASE}/connector/${encodeURIComponent(resourceId)}/capability`, { headers: authHeaders() })
+  if (!res.ok) throw await raise(res)
+  return await res.json()
+}
+
 export async function listFiles(sessionId: string, path: string): Promise<FileEntry[]> {
   const res = await fetch(`${API_BASE}/list?session_id=${sessionId}&path=${encodeURIComponent(path)}`, { headers: authHeaders() })
   if (!res.ok) throw await raise(res)
@@ -277,4 +300,12 @@ export async function getTransferTask(id: string): Promise<TransferTaskRecord> {
   const res = await fetch(`${API_BASE}/transfer/${encodeURIComponent(id)}`, { headers: authHeaders() })
   if (!res.ok) throw await raise(res)
   return await res.json()
+}
+
+/** Cancel a transfer task (POST /api/files/transfer/{id}/cancel). */
+export async function cancelTransferTask(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/transfer/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+  })
+  if (!res.ok) throw await raise(res)
 }
