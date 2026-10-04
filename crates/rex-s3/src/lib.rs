@@ -133,6 +133,9 @@ impl FileConnector for S3Connector {
                 if let Some(key) = obj.key {
                     let name = key.strip_prefix(&prefix).unwrap_or(&key);
                     if !name.is_empty() && !name.ends_with('/') {
+                        // N+1: 对每个对象补一次 get_acl。S3 ACL 仅 Canned ACL，
+                        // 单次 HeadObject/GetObjectAcl 开销可控（PRODUCT §3.8）。
+                        let acl = self.get_acl(&key).await.ok();
                         entries.push(FileEntry {
                             name: name.to_string(),
                             path: key,
@@ -147,7 +150,7 @@ impl FileConnector for S3Connector {
                                 .storage_class
                                 .as_ref()
                                 .map(|sc| sc.as_str().to_string()),
-                            acl: None,
+                            acl,
                         });
                     }
                 }
@@ -203,14 +206,79 @@ impl FileConnector for S3Connector {
         &mut self,
         remote_path: &str,
         data: Vec<u8>,
-        _offset: u64,
+        offset: u64,
         progress: Option<&ProgressCallback>,
     ) -> Result<rex_common::file_transfer::UploadResult> {
         let key = remote_path.trim_start_matches('/');
         let total = data.len() as u64;
+        let part_size = Self::MULTIPART_THRESHOLD;
 
-        // 小文件直接上传，大文件分片
-        if total <= 5 * 1024 * 1024 {
+        // offset > 0: S3 PutObject 无 seek，必须走 multipart；
+        // 从 offset 对应的 part 号开始上传（T4 resume 语义）。
+        if offset > 0 {
+            let start_part = (offset / part_size) as i32 + 1;
+
+            let multipart = self
+                .client
+                .create_multipart_upload()
+                .bucket(&self.bucket)
+                .key(key)
+                .send()
+                .await
+                .context("failed to initiate multipart upload for resume")?;
+            let upload_id = multipart.upload_id().context("no upload id")?;
+
+            let mut parts = Vec::new();
+            let mut uploaded = 0u64;
+
+            for (i, chunk) in data.chunks(part_size as usize).enumerate() {
+                let part_number = start_part + i as i32;
+                let result = self
+                    .client
+                    .upload_part()
+                    .bucket(&self.bucket)
+                    .key(key)
+                    .upload_id(upload_id)
+                    .part_number(part_number)
+                    .body(chunk.to_vec().into())
+                    .send()
+                    .await
+                    .context("failed to upload part for resume")?;
+
+                parts.push(
+                    aws_sdk_s3::types::CompletedPart::builder()
+                        .part_number(part_number)
+                        .e_tag(result.e_tag().unwrap_or_default())
+                        .build(),
+                );
+
+                uploaded += chunk.len() as u64;
+                if let Some(cb) = progress {
+                    cb(offset + uploaded, offset + total);
+                }
+            }
+
+            self.client
+                .complete_multipart_upload()
+                .bucket(&self.bucket)
+                .key(key)
+                .upload_id(upload_id)
+                .multipart_upload(
+                    aws_sdk_s3::types::CompletedMultipartUpload::builder()
+                        .set_parts(Some(parts))
+                        .build(),
+                )
+                .send()
+                .await
+                .context("failed to complete multipart upload for resume")?;
+
+            return Ok(UploadResult {
+                upload_id: Some(upload_id.to_string()),
+            });
+        }
+
+        // offset == 0：小文件直接上传，大文件分片（保持原有行为）
+        if total <= part_size {
             // 5MB 以下直接上传
             self.client
                 .put_object()
@@ -226,7 +294,6 @@ impl FileConnector for S3Connector {
             Ok(UploadResult::default())
         } else {
             // 分片上传
-            let part_size = 5 * 1024 * 1024; // 5MB
             let multipart = self
                 .client
                 .create_multipart_upload()
@@ -240,7 +307,7 @@ impl FileConnector for S3Connector {
             let mut parts = Vec::new();
             let mut offset = 0u64;
 
-            for (i, chunk) in data.chunks(part_size).enumerate() {
+            for (i, chunk) in data.chunks(part_size as usize).enumerate() {
                 let part_number = (i as i32) + 1;
                 let result = self
                     .client

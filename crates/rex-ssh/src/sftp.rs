@@ -4,8 +4,9 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use rex_common::file_transfer::{FileConnector, FileEntry, ProgressCallback, UploadResult};
 use russh_sftp::client::SftpSession;
-use russh_sftp::protocol::OpenFlags;
-use tokio::io::AsyncWriteExt;
+use russh_sftp::protocol::{FileAttributes, OpenFlags};
+use std::io::SeekFrom;
+use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 
 /// SFTP 连接器
 pub struct SftpConnector {
@@ -154,7 +155,7 @@ impl FileConnector for SftpConnector {
                 is_dir: meta.is_dir(),
                 size: meta.len(),
                 modified,
-                permissions: None,
+                permissions: Some(format!("{}", meta.permissions())),
                 storage_class: None,
                 acl: None,
             });
@@ -165,7 +166,13 @@ impl FileConnector for SftpConnector {
 
     async fn stat(&mut self, path: &str) -> Result<FileEntry> {
         let name = path.rsplit('/').next().unwrap_or(path).to_string();
-        // 简化：尝试读取路径，成功则为文件
+        // 查询元数据以填充权限位（SFTP v3 无独立 stat API，metadata() 走 SSH_FXP_STAT）。
+        let permissions = self
+            .session
+            .metadata(path)
+            .await
+            .ok()
+            .map(|attrs| format!("{}", attrs.permissions()));
         match self.session.canonicalize(path).await {
             Ok(resolved) => Ok(FileEntry {
                 name,
@@ -173,7 +180,7 @@ impl FileConnector for SftpConnector {
                 is_dir: false,
                 size: 0,
                 modified: None,
-                permissions: None,
+                permissions,
                 storage_class: None,
                 acl: None,
             }),
@@ -183,7 +190,7 @@ impl FileConnector for SftpConnector {
                 is_dir: false,
                 size: 0,
                 modified: None,
-                permissions: None,
+                permissions,
                 storage_class: None,
                 acl: None,
             }),
@@ -202,10 +209,12 @@ impl FileConnector for SftpConnector {
         // Clamp offset to data length to prevent panic
         let offset = offset.min(total);
 
-        // If offset > 0, open existing file for append; otherwise create new
+        // offset > 0: 打开已有文件用于续传；否则创建新文件。
+        // SFTP APPEND 在 EOF 追加，不能 byte-accurate 恢复指定 offset；
+        // 改用 WRITE|CREAT + seek 到 offset，镜像 S3 multipart resume 语义。
         let mut file = if offset > 0 {
             self.session
-                .open_with_flags(remote_path, OpenFlags::WRITE | OpenFlags::APPEND)
+                .open_with_flags(remote_path, OpenFlags::WRITE | OpenFlags::CREATE)
                 .await
                 .with_context(|| format!("failed to open {remote_path} for resume"))?
         } else {
@@ -214,6 +223,12 @@ impl FileConnector for SftpConnector {
                 .await
                 .with_context(|| format!("failed to create {remote_path}"))?
         };
+
+        if offset > 0 {
+            file.seek(SeekFrom::Start(offset))
+                .await
+                .with_context(|| format!("failed to seek to offset {offset} in {remote_path}"))?;
+        }
 
         let chunk_size = 64 * 1024;
         let mut written = offset;
@@ -316,10 +331,24 @@ impl FileConnector for SftpConnector {
         Ok(())
     }
 
-    /// SFTP 当前零可选能力：chmod 实现属 T4（届时翻 true），
-    /// presigned URL / ACL / multipart 是 S3 专属，SFTP 永不支持。
+    async fn chmod(&mut self, path: &str, mode: &str) -> Result<()> {
+        let perms =
+            u32::from_str_radix(mode, 8).with_context(|| format!("invalid octal mode '{mode}'"))?;
+        let mut attrs = FileAttributes::empty();
+        attrs.permissions = Some(perms);
+        self.session
+            .set_metadata(path, attrs)
+            .await
+            .with_context(|| format!("failed to chmod {path} to {mode}"))?;
+        Ok(())
+    }
+
+    /// SFTP chmod 已实现（T4）；presigned URL / ACL / multipart 是 S3 专属。
     fn capability(&self) -> rex_common::file_transfer::FileCapabilitySet {
-        rex_common::file_transfer::FileCapabilitySet::default()
+        rex_common::file_transfer::FileCapabilitySet {
+            chmod: true,
+            ..rex_common::file_transfer::FileCapabilitySet::default()
+        }
     }
 }
 
@@ -712,22 +741,26 @@ mod tests {
         SftpConnector { session }
     }
 
-    /// 能力上报：SFTP 当前零可选能力（chmod 属 T4，届时翻 true）。
+    /// 能力上报：SFTP chmod 已实现 (T4) → chmod=true；
+    /// presigned URL / ACL / multipart 是 S3 专属，SFTP 永不支持。
     #[tokio::test]
-    async fn sftp_capability_reports_no_optional_operations() {
+    async fn sftp_capability_reports_chmod_supported() {
         use rex_common::file_transfer::FileCapabilitySet;
 
         let conn = offline_connector().await;
         let caps = conn.capability();
+        assert!(caps.chmod, "SFTP must report chmod support (T4)");
+        assert!(!caps.presigned_url, "presigned URL is S3-only");
+        assert!(!caps.acl, "ACL is S3-only");
+        assert!(!caps.multipart, "multipart is S3-only");
+        // 其余字段仍为默认 false，与 FileCapabilitySet 其它 S3-only 字段一致
         assert_eq!(
             caps,
-            FileCapabilitySet::default(),
-            "SFTP must honestly report an empty capability set"
+            FileCapabilitySet {
+                chmod: true,
+                ..FileCapabilitySet::default()
+            }
         );
-        assert!(!caps.chmod, "chmod lands in T4, not before");
-        assert!(!caps.presigned_url);
-        assert!(!caps.acl);
-        assert!(!caps.multipart);
     }
 
     /// S3 专属操作在 SFTP 上必须走 trait 默认实现 → `UnsupportedProtocolError`

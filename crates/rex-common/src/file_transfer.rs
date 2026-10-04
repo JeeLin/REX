@@ -197,6 +197,12 @@ pub trait FileConnector: Send + Sync {
         let _ = (key, canned_acl);
         Err(unsupported_protocol("only supported for S3"))
     }
+
+    /// 修改文件权限（SFTP-only）。
+    async fn chmod(&mut self, path: &str, mode: &str) -> Result<()> {
+        let _ = (path, mode);
+        Err(unsupported_protocol("chmod only supported for SFTP"))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -418,6 +424,12 @@ pub async fn dispatch_file(
             let req: PutAclRequest = serde_json::from_value(payload.clone())?;
             conn.put_acl(&req.path, &req.acl).await?;
             Ok(serde_json::to_value(OkResponse { ok: true })?)
+        }
+        "chmod" => {
+            let path = payload.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            let mode = payload.get("mode").and_then(|v| v.as_str()).unwrap_or("");
+            conn.chmod(path, mode).await?;
+            Ok(serde_json::json!({ "ok": true }))
         }
         other => anyhow::bail!("unsupported file request kind: {other}"),
     }
@@ -677,10 +689,36 @@ mod tests {
     #[tokio::test]
     async fn dispatch_file_unknown_kind_is_rejected_as_unsupported() {
         let mut conn = RecordingConnector::default();
-        let err = dispatch_file(&mut conn, "chmod", &serde_json::json!({ "path": "/a" }))
-            .await
-            .expect_err("chmod kind is T4 scope, not implemented yet");
-        assert_eq!(err.to_string(), "unsupported file request kind: chmod");
+        let err = dispatch_file(
+            &mut conn,
+            "nonexistent_op",
+            &serde_json::json!({ "path": "/a" }),
+        )
+        .await
+        .expect_err("unknown kind must be rejected");
+        assert_eq!(
+            err.to_string(),
+            "unsupported file request kind: nonexistent_op"
+        );
+    }
+
+    /// chmod kind 路由到 trait 方法：RecordingConnector 继承 trait 默认实现
+    /// → UnsupportedProtocolError("chmod only supported for SFTP")，
+    /// 与历史 downcast 分支文案一致。
+    #[tokio::test]
+    async fn dispatch_file_routes_chmod_to_trait_default() {
+        let mut conn = RecordingConnector::default();
+        let err = dispatch_file(
+            &mut conn,
+            "chmod",
+            &serde_json::json!({ "path": "/a", "mode": "755" }),
+        )
+        .await
+        .expect_err("RecordingConnector inherits default chmod = unsupported");
+        let u = err
+            .downcast_ref::<UnsupportedProtocolError>()
+            .expect("must be UnsupportedProtocolError");
+        assert_eq!(u.message, "chmod only supported for SFTP");
     }
 
     #[tokio::test]

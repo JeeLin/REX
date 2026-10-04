@@ -61,6 +61,7 @@ pub fn file_routes() -> axum::Router<AppState> {
         .route("/delete", axum::routing::post(delete))
         .route("/rename", axum::routing::post(rename))
         .route("/mkdir", axum::routing::post(mkdir))
+        .route("/chmod", axum::routing::post(chmod))
         .route("/presigned-url", axum::routing::post(presigned_url))
         .route(
             "/s3/multipart-uploads",
@@ -305,6 +306,13 @@ struct MkdirBody {
 }
 
 #[derive(Debug, Deserialize)]
+struct ChmodBody {
+    session_id: String,
+    path: String,
+    mode: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct SaveFromEditBody {
     session_id: String,
     path: String,
@@ -345,7 +353,8 @@ pub struct ConnectorCapabilityResponse {
 /// 下 S3 专属能力不再是恒 false（修复 downcast 根因）。
 ///
 /// - `s3`：presigned URL / ACL / multipart 为 true；chmod 无实现保持 false。
-/// - `sftp` / `ssh`（及其它）：当前全 false；chmod 实现属 T4，届时翻 true。
+/// - `sftp` / `ssh`：chmod 为 true（SFTP 实现，T4）；其余 S3 专属能力保持 false。
+/// - 其它协议：全 false。
 pub fn capabilities_for_protocol(protocol: &str) -> FileCapabilitySet {
     match protocol {
         "s3" => FileCapabilitySet {
@@ -353,6 +362,12 @@ pub fn capabilities_for_protocol(protocol: &str) -> FileCapabilitySet {
             presigned_url: true,
             acl: true,
             multipart: true,
+        },
+        "sftp" | "ssh" => FileCapabilitySet {
+            chmod: true,
+            presigned_url: false,
+            acl: false,
+            multipart: false,
         },
         _ => FileCapabilitySet::default(),
     }
@@ -1157,6 +1172,48 @@ async fn mkdir(
     }
 }
 
+async fn chmod(
+    State(state): State<AppState>,
+    Json(body): Json<ChmodBody>,
+) -> axum::response::Response {
+    tracing::debug!(
+        action = "FILE_CHMOD",
+        session_id = %body.session_id,
+        path = %body.path,
+        mode = %body.mode,
+        "file chmod"
+    );
+    let mut pool = state.file_pool.lock().await;
+    let conn = match pool.connectors.get_mut(&body.session_id) {
+        Some(c) => c,
+        None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
+    };
+    match conn.chmod(&body.path, &body.mode).await {
+        Ok(()) => {
+            tracing::info!(
+                action = "FILE_CHMOD",
+                session_id = %body.session_id,
+                path = %body.path,
+                mode = %body.mode,
+                "file chmod applied"
+            );
+            let audit_db = state.db.clone();
+            let chmod_path = body.path.clone();
+            let _ = tokio::task::spawn_blocking(move || {
+                audit_db.write_audit_log(&crate::models::NewAuditEntry {
+                    action: "FILE_CHMOD".into(),
+                    target: Some(chmod_path),
+                    result: "success".into(),
+                    ..Default::default()
+                })
+            })
+            .await;
+            (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response()
+        }
+        Err(e) => connector_op_error("CHMOD_FAILED", &e).into_response(),
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct PresignedUrlBody {
     session_id: String,
@@ -1531,14 +1588,24 @@ mod tests {
                 multipart: true,
             }
         );
-        // SFTP/SSH/其它协议全部走默认全 false。
+        // SFTP/SSH：chmod 已实现 (T4)，其余 S3 专属能力为 false。
         assert_eq!(
             capabilities_for_protocol("sftp"),
-            FileCapabilitySet::default()
+            FileCapabilitySet {
+                chmod: true,
+                presigned_url: false,
+                acl: false,
+                multipart: false,
+            }
         );
         assert_eq!(
             capabilities_for_protocol("ssh"),
-            FileCapabilitySet::default()
+            FileCapabilitySet {
+                chmod: true,
+                presigned_url: false,
+                acl: false,
+                multipart: false,
+            }
         );
         assert_eq!(
             capabilities_for_protocol("oss"),

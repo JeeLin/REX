@@ -540,6 +540,22 @@ impl FileConnector for AgentFileProxy {
         .await?;
         Ok(())
     }
+
+    /// chmod 是 SFTP-only：S3 无 POSIX 权限模型，直接回 UnsupportedProtocolError，
+    /// 不走隧道；SFTP/SSH 协议经隧道转发给 Agent 执行 `connector.chmod`。
+    async fn chmod(&mut self, path: &str, mode: &str) -> Result<()> {
+        if self.protocol == "s3" {
+            return Err(unsupported_protocol("chmod only supported for SFTP"));
+        }
+        let _ = agent_session_request(
+            &self.state,
+            &self.channel_id,
+            "chmod",
+            json!({ "path": path, "mode": mode }),
+        )
+        .await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -565,9 +581,13 @@ mod tests {
     }
 
     #[test]
-    fn agent_file_proxy_capability_sftp_reports_empty() {
+    fn agent_file_proxy_capability_sftp_reports_chmod() {
         let proxy = make_proxy("sftp");
-        assert_eq!(proxy.capability(), FileCapabilitySet::default());
+        let caps = proxy.capability();
+        assert!(caps.chmod, "SFTP via agent must report chmod support (T4)");
+        assert!(!caps.presigned_url, "presigned URL is S3-only");
+        assert!(!caps.acl, "ACL is S3-only");
+        assert!(!caps.multipart, "multipart is S3-only");
     }
 
     #[test]
@@ -602,5 +622,22 @@ mod tests {
                 "must be UnsupportedProtocolError so handlers map UNSUPPORTED_PROTOCOL"
             );
         }
+    }
+
+    /// chmod 是 SFTP-only：S3 协议下调 AgentFileProxy::chmod 必须短路回
+    /// UnsupportedProtocolError，不建立隧道（与 require_s3 对称）。
+    #[tokio::test]
+    async fn agent_file_proxy_s3_chmod_unsupported_without_tunnel() {
+        use rex_common::file_transfer::UnsupportedProtocolError;
+
+        let mut proxy = make_proxy("s3");
+        let err = proxy
+            .chmod("/tmp/f", "755")
+            .await
+            .expect_err("S3 must not relay chmod");
+        let u = err
+            .downcast_ref::<UnsupportedProtocolError>()
+            .expect("must be UnsupportedProtocolError");
+        assert_eq!(u.message, "chmod only supported for SFTP");
     }
 }
