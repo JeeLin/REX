@@ -316,12 +316,10 @@ impl FileConnector for SftpConnector {
         Ok(())
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
+    /// SFTP 当前零可选能力：chmod 实现属 T4（届时翻 true），
+    /// presigned URL / ACL / multipart 是 S3 专属，SFTP 永不支持。
+    fn capability(&self) -> rex_common::file_transfer::FileCapabilitySet {
+        rex_common::file_transfer::FileCapabilitySet::default()
     }
 }
 
@@ -682,5 +680,94 @@ mod tests {
         assert!(msg.contains("password"), "{msg}");
         assert!(msg.contains("partial_success"), "{msg}");
         assert!(!msg.contains("Disconnected"), "{msg}");
+    }
+
+    /// 在内存 duplex 上完成一次 SFTP 握手（SSH_FXP_INIT → SSH_FXP_VERSION），
+    /// 得到零网络的 `SftpConnector` 实例，用于不触达任何服务器的 trait 断言。
+    async fn offline_connector() -> SftpConnector {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let (client_io, mut server_io) = tokio::io::duplex(64 * 1024);
+        tokio::spawn(async move {
+            let mut len = [0u8; 4];
+            if server_io.read_exact(&mut len).await.is_err() {
+                return;
+            }
+            let mut init = vec![0u8; u32::from_be_bytes(len) as usize];
+            if server_io.read_exact(&mut init).await.is_err() {
+                return;
+            }
+            let body = russh_sftp::ser::to_bytes(&russh_sftp::protocol::Version::new())
+                .expect("serialize SSH_FXP_VERSION");
+            // 帧 = [len BE][type=2 (SSH_FXP_VERSION)][Version payload]
+            let mut frame = ((body.len() + 1) as u32).to_be_bytes().to_vec();
+            frame.push(2u8);
+            frame.extend_from_slice(&body);
+            let _ = server_io.write_all(&frame).await;
+        });
+
+        let session = SftpSession::new(client_io)
+            .await
+            .expect("in-memory sftp session");
+        SftpConnector { session }
+    }
+
+    /// 能力上报：SFTP 当前零可选能力（chmod 属 T4，届时翻 true）。
+    #[tokio::test]
+    async fn sftp_capability_reports_no_optional_operations() {
+        use rex_common::file_transfer::FileCapabilitySet;
+
+        let conn = offline_connector().await;
+        let caps = conn.capability();
+        assert_eq!(
+            caps,
+            FileCapabilitySet::default(),
+            "SFTP must honestly report an empty capability set"
+        );
+        assert!(!caps.chmod, "chmod lands in T4, not before");
+        assert!(!caps.presigned_url);
+        assert!(!caps.acl);
+        assert!(!caps.multipart);
+    }
+
+    /// S3 专属操作在 SFTP 上必须走 trait 默认实现 → `UnsupportedProtocolError`
+    /// （Hub handler 据此映射 `UNSUPPORTED_PROTOCOL`，文案与历史 downcast 分支一致）。
+    #[tokio::test]
+    async fn sftp_default_s3_operations_are_unsupported() {
+        use rex_common::file_transfer::{FileConnector, UnsupportedProtocolError};
+
+        let conn = offline_connector().await;
+        let conn: &dyn FileConnector = &conn;
+
+        let errors = [
+            conn.presigned_url("k", 60).await.unwrap_err(),
+            conn.list_multipart_uploads("p").await.unwrap_err(),
+            conn.resume_multipart_upload("k", "u", Vec::new(), None)
+                .await
+                .unwrap_err(),
+            conn.abort_multipart_upload("k", "u").await.unwrap_err(),
+            conn.get_acl("k").await.unwrap_err(),
+            conn.put_acl("k", "private").await.unwrap_err(),
+        ];
+        let messages: Vec<String> = errors
+            .iter()
+            .map(|e| {
+                e.downcast_ref::<UnsupportedProtocolError>()
+                    .expect("must be UnsupportedProtocolError for UNSUPPORTED_PROTOCOL mapping")
+                    .message
+                    .clone()
+            })
+            .collect();
+        assert_eq!(
+            messages,
+            vec![
+                "presigned URL only supported for S3",
+                "only supported for S3",
+                "only supported for S3",
+                "only supported for S3",
+                "only supported for S3",
+                "only supported for S3",
+            ]
+        );
     }
 }

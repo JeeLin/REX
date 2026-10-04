@@ -441,12 +441,44 @@ impl FileConnector for S3Connector {
         Ok(())
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
+    /// S3 支持 presigned URL / ACL / multipart；chmod 无实现（保持 false）。
+    fn capability(&self) -> rex_common::file_transfer::FileCapabilitySet {
+        rex_common::file_transfer::FileCapabilitySet {
+            chmod: false,
+            presigned_url: true,
+            acl: true,
+            multipart: true,
+        }
     }
 
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
+    async fn presigned_url(&self, key: &str, expires_in_secs: u64) -> Result<String> {
+        S3Connector::presigned_url(self, key, expires_in_secs).await
+    }
+
+    async fn list_multipart_uploads(&self, prefix: &str) -> Result<Vec<(String, String)>> {
+        S3Connector::list_multipart_uploads(self, prefix).await
+    }
+
+    async fn resume_multipart_upload(
+        &self,
+        key: &str,
+        upload_id: &str,
+        data: Vec<u8>,
+        progress: Option<&ProgressCallback>,
+    ) -> Result<()> {
+        S3Connector::resume_multipart_upload(self, key, upload_id, data, progress).await
+    }
+
+    async fn abort_multipart_upload(&self, key: &str, upload_id: &str) -> Result<()> {
+        S3Connector::abort_multipart_upload(self, key, upload_id).await
+    }
+
+    async fn get_acl(&self, key: &str) -> Result<String> {
+        S3Connector::get_acl(self, key).await
+    }
+
+    async fn put_acl(&self, key: &str, canned_acl: &str) -> Result<()> {
+        S3Connector::put_acl(self, key, canned_acl).await
     }
 }
 
@@ -725,5 +757,29 @@ mod tests {
             S3Connector::canned_acl_from_str(""),
             ObjectCannedAcl::Private
         );
+    }
+
+    /// 能力上报：S3 三项专属能力为 true，chmod 无实现保持 false。
+    ///
+    /// 构造走显式 region + 显式凭据路径（provider chain 不介入 → 零网络）。
+    #[tokio::test]
+    async fn capability_enables_s3_only_operations() {
+        use rex_common::file_transfer::FileConnector;
+
+        let conn = S3Connector::connect(
+            "bucket".to_string(),
+            Some("us-east-1".to_string()),
+            None,
+            Some("ak".to_string()),
+            Some("sk".to_string()),
+        )
+        .await
+        .expect("construct S3 connector without network");
+
+        let caps = conn.capability();
+        assert!(caps.presigned_url, "S3 must report presigned URL support");
+        assert!(caps.acl, "S3 must report ACL support");
+        assert!(caps.multipart, "S3 must report multipart support");
+        assert!(!caps.chmod, "chmod is unimplemented for S3 (T4 scope)");
     }
 }

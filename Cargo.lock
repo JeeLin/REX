@@ -4306,6 +4306,7 @@ dependencies = [
  "rex-sip",
  "rex-sqlite",
  "rex-ssh",
+ "rex-transfer",
  "rusqlite",
  "rustls 0.23.40",
  "rustls-pemfile",
@@ -4478,6 +4479,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "rex-common",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 

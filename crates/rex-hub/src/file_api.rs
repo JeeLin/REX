@@ -13,7 +13,9 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
 use base64::Engine;
-use rex_common::file_transfer::{FileConnectRequest, FileConnector};
+use rex_common::file_transfer::{
+    FileCapabilitySet, FileConnectRequest, FileConnector, UnsupportedProtocolError,
+};
 use rex_common::resource_config::config_private_key;
 use rex_transfer::ConflictPolicy;
 use serde::{Deserialize, Serialize};
@@ -73,6 +75,10 @@ pub fn file_routes() -> axum::Router<AppState> {
             axum::routing::post(abort_multipart_upload),
         )
         .route("/acl", axum::routing::get(get_acl).put(put_acl))
+        .route(
+            "/connector/{resource_id}/capability",
+            axum::routing::get(connector_capability),
+        )
         .route("/read-for-edit", axum::routing::get(read_for_edit))
         .route("/save-from-edit", axum::routing::post(save_from_edit))
         .route(
@@ -309,6 +315,81 @@ fn error_response(code: &str, message: &str) -> (StatusCode, Json<ErrorBody>) {
     error_with_status(StatusCode::BAD_REQUEST, code, message)
 }
 
+/// S3-only 操作的统一错误映射：`UnsupportedProtocolError` 保持历史
+/// `UNSUPPORTED_PROTOCOL` 错误码 + 原文案，其余错误走各自业务码。
+///
+/// 取代原先的 `downcast::<S3Connector>` 失败分支（v0.91.0 T3）。
+fn connector_op_error(code: &str, e: &anyhow::Error) -> (StatusCode, Json<ErrorBody>) {
+    match e.downcast_ref::<UnsupportedProtocolError>() {
+        Some(u) => error_response("UNSUPPORTED_PROTOCOL", &u.message),
+        None => error_response(code, &e.to_string()),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 能力查询 API（v0.91.0 T3）
+// ---------------------------------------------------------------------------
+
+/// 能力查询响应：`{"protocol": "s3", "capabilities": {...}}`。
+///
+/// `protocol` 供前端替代 `isS3` 判断（T6）。
+#[derive(Debug, Serialize)]
+pub struct ConnectorCapabilityResponse {
+    pub protocol: String,
+    pub capabilities: FileCapabilitySet,
+}
+
+/// 协议 → 静态能力集：**不建立连接**，只按资源配置推导。
+///
+/// agent 与直连同源 —— `AgentFileProxy::capability` 也走这里，因此 agent 模式
+/// 下 S3 专属能力不再是恒 false（修复 downcast 根因）。
+///
+/// - `s3`：presigned URL / ACL / multipart 为 true；chmod 无实现保持 false。
+/// - `sftp` / `ssh`（及其它）：当前全 false；chmod 实现属 T4，届时翻 true。
+pub fn capabilities_for_protocol(protocol: &str) -> FileCapabilitySet {
+    match protocol {
+        "s3" => FileCapabilitySet {
+            chmod: false,
+            presigned_url: true,
+            acl: true,
+            multipart: true,
+        },
+        _ => FileCapabilitySet::default(),
+    }
+}
+
+/// 只读能力查询：读资源配置 → protocol → 静态能力集，全程不打开连接。
+///
+/// 错误：`(状态码, 错误码, 文案)` —— 资源不存在回 404。
+fn load_connector_capability(
+    state: &AppState,
+    resource_id: &str,
+) -> Result<ConnectorCapabilityResponse, (StatusCode, &'static str, String)> {
+    let res = load_resource_config(state, resource_id).map_err(|e| {
+        if e.starts_with("resource not found") {
+            (StatusCode::NOT_FOUND, "RESOURCE_NOT_FOUND", e)
+        } else {
+            (StatusCode::BAD_REQUEST, "INVALID_RESOURCE", e)
+        }
+    })?;
+    Ok(ConnectorCapabilityResponse {
+        protocol: res.protocol.clone(),
+        capabilities: capabilities_for_protocol(&res.protocol),
+    })
+}
+
+/// GET `/connector/{resource_id}/capability`。
+async fn connector_capability(
+    State(state): State<AppState>,
+    Path(resource_id): Path<String>,
+) -> axum::response::Response {
+    tracing::debug!(action = "FILE_CONNECTOR_CAPABILITY", resource_id = %resource_id, "file connector capability");
+    match load_connector_capability(&state, &resource_id) {
+        Ok(resp) => (StatusCode::OK, Json(resp)).into_response(),
+        Err((status, code, msg)) => error_with_status(status, code, &msg).into_response(),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
@@ -496,6 +577,7 @@ async fn build_connector(
         return Ok(Box::new(crate::agent_proxy::AgentFileProxy::new(
             state.clone(),
             channel_id,
+            res.protocol.clone(),
         )));
     }
     match res.protocol.as_str() {
@@ -1103,21 +1185,11 @@ async fn presigned_url(
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
     };
 
-    // Downcast to S3Connector to call presigned_url
-    let s3_conn = match conn.as_any().downcast_ref::<rex_s3::S3Connector>() {
-        Some(c) => c,
-        None => {
-            return error_response(
-                "UNSUPPORTED_PROTOCOL",
-                "presigned URL only supported for S3",
-            )
-            .into_response()
-        }
-    };
-
-    match s3_conn.presigned_url(&body.path, body.expires_in).await {
+    // S3-only 操作直接走 trait 方法：非 S3 连接器由默认实现回
+    // UnsupportedProtocolError（下同），错误码与历史 downcast 分支一致。
+    match conn.presigned_url(&body.path, body.expires_in).await {
         Ok(url) => (StatusCode::OK, Json(PresignedUrlResponse { url })).into_response(),
-        Err(e) => error_response("PRESIGNED_URL_FAILED", &e.to_string()).into_response(),
+        Err(e) => connector_op_error("PRESIGNED_URL_FAILED", &e).into_response(),
     }
 }
 
@@ -1149,14 +1221,7 @@ async fn list_multipart_uploads(
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
     };
 
-    let s3_conn = match conn.as_any().downcast_ref::<rex_s3::S3Connector>() {
-        Some(c) => c,
-        None => {
-            return error_response("UNSUPPORTED_PROTOCOL", "only supported for S3").into_response()
-        }
-    };
-
-    match s3_conn.list_multipart_uploads(&params.prefix).await {
+    match conn.list_multipart_uploads(&params.prefix).await {
         Ok(uploads) => {
             let resp = ListMultipartUploadsResponse {
                 uploads: uploads
@@ -1166,7 +1231,7 @@ async fn list_multipart_uploads(
             };
             (StatusCode::OK, Json(resp)).into_response()
         }
-        Err(e) => error_response("LIST_UPLOADS_FAILED", &e.to_string()).into_response(),
+        Err(e) => connector_op_error("LIST_UPLOADS_FAILED", &e).into_response(),
     }
 }
 
@@ -1213,19 +1278,12 @@ async fn resume_multipart_upload(
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
     };
 
-    let s3_conn = match conn.as_any_mut().downcast_mut::<rex_s3::S3Connector>() {
-        Some(c) => c,
-        None => {
-            return error_response("UNSUPPORTED_PROTOCOL", "only supported for S3").into_response()
-        }
-    };
-
-    match s3_conn
+    match conn
         .resume_multipart_upload(&remote_path, &upload_id, data, None)
         .await
     {
         Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
-        Err(e) => error_response("RESUME_UPLOAD_FAILED", &e.to_string()).into_response(),
+        Err(e) => connector_op_error("RESUME_UPLOAD_FAILED", &e).into_response(),
     }
 }
 
@@ -1247,19 +1305,12 @@ async fn abort_multipart_upload(
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
     };
 
-    let s3_conn = match conn.as_any_mut().downcast_mut::<rex_s3::S3Connector>() {
-        Some(c) => c,
-        None => {
-            return error_response("UNSUPPORTED_PROTOCOL", "only supported for S3").into_response()
-        }
-    };
-
-    match s3_conn
+    match conn
         .abort_multipart_upload(&body.path, &body.upload_id)
         .await
     {
         Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
-        Err(e) => error_response("ABORT_UPLOAD_FAILED", &e.to_string()).into_response(),
+        Err(e) => connector_op_error("ABORT_UPLOAD_FAILED", &e).into_response(),
     }
 }
 
@@ -1282,14 +1333,7 @@ async fn get_acl(
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
     };
 
-    let s3_conn = match conn.as_any().downcast_ref::<rex_s3::S3Connector>() {
-        Some(c) => c,
-        None => {
-            return error_response("UNSUPPORTED_PROTOCOL", "only supported for S3").into_response()
-        }
-    };
-
-    match s3_conn.get_acl(&params.path).await {
+    match conn.get_acl(&params.path).await {
         Ok(acl) => {
             tracing::info!(
                 action = "FILE_ACL",
@@ -1312,7 +1356,7 @@ async fn get_acl(
             .await;
             (StatusCode::OK, Json(AclResponse { acl })).into_response()
         }
-        Err(e) => error_response("GET_ACL_FAILED", &e.to_string()).into_response(),
+        Err(e) => connector_op_error("GET_ACL_FAILED", &e).into_response(),
     }
 }
 
@@ -1333,14 +1377,7 @@ async fn put_acl(
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
     };
 
-    let s3_conn = match conn.as_any_mut().downcast_mut::<rex_s3::S3Connector>() {
-        Some(c) => c,
-        None => {
-            return error_response("UNSUPPORTED_PROTOCOL", "only supported for S3").into_response()
-        }
-    };
-
-    match s3_conn.put_acl(&body.path, &body.acl).await {
+    match conn.put_acl(&body.path, &body.acl).await {
         Ok(()) => {
             tracing::info!(
                 action = "FILE_ACL",
@@ -1363,7 +1400,7 @@ async fn put_acl(
             .await;
             (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response()
         }
-        Err(e) => error_response("PUT_ACL_FAILED", &e.to_string()).into_response(),
+        Err(e) => connector_op_error("PUT_ACL_FAILED", &e).into_response(),
     }
 }
 
@@ -1450,5 +1487,107 @@ mod tests {
     fn agent_file_entry_keeps_explicit_username() {
         let cfg = agent_file_config(&info("alice", r#"{"password":"pw"}"#));
         assert_eq!(cfg.get("username").and_then(|v| v.as_str()), Some("alice"));
+    }
+
+    fn create_s3_resource(state: &AppState) -> String {
+        let env = state
+            .db
+            .create_environment(&crate::models::NewEnvironment {
+                name: format!("env-{}", uuid::Uuid::new_v4()),
+                description: None,
+                connection_mode: Some("direct".into()),
+            })
+            .unwrap();
+        state
+            .db
+            .create_resource(
+                &env.id,
+                &crate::models::NewResource {
+                    name: "files-s3".into(),
+                    protocol: "s3".into(),
+                    host: "10.0.0.1".into(),
+                    port: Some(4566),
+                    username: Some("root".into()),
+                    config_json: None,
+                    subtype: None,
+                    color: None,
+                    sort_order: None,
+                },
+            )
+            .unwrap()
+            .id
+    }
+
+    // ---- 能力查询 API（v0.91.0 T3）----
+
+    #[test]
+    fn capabilities_for_protocol_mapping() {
+        assert_eq!(
+            capabilities_for_protocol("s3"),
+            FileCapabilitySet {
+                chmod: false,
+                presigned_url: true,
+                acl: true,
+                multipart: true,
+            }
+        );
+        // SFTP/SSH/其它协议全部走默认全 false。
+        assert_eq!(
+            capabilities_for_protocol("sftp"),
+            FileCapabilitySet::default()
+        );
+        assert_eq!(
+            capabilities_for_protocol("ssh"),
+            FileCapabilitySet::default()
+        );
+        assert_eq!(
+            capabilities_for_protocol("oss"),
+            FileCapabilitySet::default()
+        );
+    }
+
+    #[test]
+    fn load_connector_capability_404_for_missing_resource() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = crate::resource_conn::build_test_state(dir.path());
+
+        let err = load_connector_capability(&state, "no-such-resource").unwrap_err();
+        assert_eq!(err.0, StatusCode::NOT_FOUND);
+        assert_eq!(err.1, "RESOURCE_NOT_FOUND");
+        assert!(err.2.contains("no-such-resource"));
+    }
+
+    #[test]
+    fn load_connector_capability_reports_s3_operations() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = crate::resource_conn::build_test_state(dir.path());
+        let id = create_s3_resource(&state);
+
+        let resp = load_connector_capability(&state, &id).unwrap();
+        assert_eq!(resp.protocol, "s3");
+        assert!(resp.capabilities.presigned_url);
+        assert!(resp.capabilities.acl);
+        assert!(resp.capabilities.multipart);
+        assert!(!resp.capabilities.chmod);
+    }
+
+    /// `connector_op_error` 把 `UnsupportedProtocolError` 映射为
+    /// `UNSUPPORTED_PROTOCOL`（文案不变），其它错误保留原业务码。
+    #[test]
+    fn connector_op_error_maps_unsupported_protocol_code() {
+        let err = anyhow::Error::from(UnsupportedProtocolError::new("only supported for S3"));
+        let (status, body) = connector_op_error("PRESIGNED_URL_FAILED", &err);
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body.error.code, "UNSUPPORTED_PROTOCOL");
+        assert_eq!(body.error.message, "only supported for S3");
+    }
+
+    #[test]
+    fn connector_op_error_passes_other_errors_through() {
+        let err = anyhow::anyhow!("s3 backend connection refused");
+        let (status, body) = connector_op_error("PUT_ACL_FAILED", &err);
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body.error.code, "PUT_ACL_FAILED");
+        assert_eq!(body.error.message, "s3 backend connection refused");
     }
 }

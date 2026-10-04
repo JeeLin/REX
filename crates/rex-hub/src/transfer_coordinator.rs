@@ -537,14 +537,6 @@ mod tests {
         async fn close(&mut self) -> anyhow::Result<()> {
             Ok(())
         }
-
-        fn as_any(&self) -> &dyn std::any::Any {
-            self
-        }
-
-        fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-            self
-        }
     }
 
     fn make_state() -> (tempfile::TempDir, AppState) {
@@ -924,5 +916,32 @@ mod tests {
             split_stem_ext("file."),
             ("file".to_string(), ".".to_string())
         );
+    }
+
+    /// MockConnector (non-S3) 调 6 trait S3-only 方法 → trait 默认实现
+    /// 回 `UnsupportedProtocolError`，Handler 据此映射 `UNSUPPORTED_PROTOCOL`。
+    #[tokio::test]
+    async fn mock_connector_s3_only_operations_are_unsupported() {
+        use rex_common::file_transfer::UnsupportedProtocolError;
+
+        let conn = MockConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        let conn: &dyn FileConnector = &conn;
+
+        let errors = vec![
+            conn.presigned_url("k", 60).await.unwrap_err(),
+            conn.list_multipart_uploads("p").await.unwrap_err(),
+            conn.resume_multipart_upload("k", "u", Vec::new(), None)
+                .await
+                .unwrap_err(),
+            conn.abort_multipart_upload("k", "u").await.unwrap_err(),
+            conn.get_acl("k").await.unwrap_err(),
+            conn.put_acl("k", "private").await.unwrap_err(),
+        ];
+        for e in &errors {
+            assert!(
+                e.downcast_ref::<UnsupportedProtocolError>().is_some(),
+                "non-S3 connector must return UnsupportedProtocolError for S3-only ops"
+            );
+        }
     }
 }
