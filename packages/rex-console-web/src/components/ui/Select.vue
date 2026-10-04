@@ -144,8 +144,8 @@ watch(open, async (v) => {
         <div v-if="open" ref="dropdownRef" class="select-dropdown" :class="`select-dropdown--${size}`" :style="dropdownStyle" role="listbox">
           <div
             v-for="(option, idx) in options"
-            :key="option.value"
             :id="`select-option-${idx}`"
+            :key="option.value"
             class="select-option"
             :class="{
               'select-option--selected': option.value === modelValue,

@@ -1172,7 +1172,7 @@ function clearPubSubLog() {
       </div>
     </Teleport>
 
-      <!-- Memory Analysis Modal -->
+    <!-- Memory Analysis Modal -->
     <Teleport to="body">
       <div v-if="showMemoryAnalysis" class="modal-overlay" @click.self="showMemoryAnalysis = false">
         <div class="modal-content modal-wide">

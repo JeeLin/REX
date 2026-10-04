@@ -212,7 +212,9 @@ const commonColumns = computed(() => {
                   v-for="(cell, ci) in row"
                   :key="ci"
                   :class="{ 'dc-cell-diff': hasDiffCell(ri, result.left.columns[ci]?.name ?? '') }"
-                >{{ cell === null ? 'NULL' : cell }}</td>
+                >
+                  {{ cell === null ? 'NULL' : cell }}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -239,7 +241,9 @@ const commonColumns = computed(() => {
                   v-for="(cell, ci) in row"
                   :key="ci"
                   :class="{ 'dc-cell-diff': hasDiffCell(ri, result.right.columns[ci]?.name ?? '') }"
-                >{{ cell === null ? 'NULL' : cell }}</td>
+                >
+                  {{ cell === null ? 'NULL' : cell }}
+                </td>
               </tr>
             </tbody>
           </table>

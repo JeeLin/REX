@@ -474,7 +474,9 @@ const colorOptions = [
                   v-if="sipAccounts.length > 1"
                   class="sip-account-remove"
                   @click="removeSipAccount(acc.id)"
-                >✕</button>
+                >
+                  ✕
+                </button>
               </div>
               <label class="form-label">
                 <span>{{ t('wizard.sipServer') }}</span>

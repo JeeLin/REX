@@ -563,7 +563,7 @@ useKeyboardShortcuts([
         <span v-if="tab.broadcast" class="ws-tab-broadcast" title="Broadcast mode active">📡</span>
         <StatusDot :status="statusColor(tab.status)" style="margin-left: auto" />
         <button class="ws-tab-close" @click.stop="requestCloseTab(tab.id)">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
         </button>
       </div>
     </div>
@@ -643,10 +643,10 @@ useKeyboardShortcuts([
       <span class="ws-seg ws-seg--spacer" />
       <span class="ws-seg ws-seg--actions">
         <button v-if="toolbarConfig.splitH" class="ws-action-btn" :title="t('workspace.toolbarSettings.splitH')" @click="() => splitHorizontal()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="7" height="16" rx="1"/><rect x="14" y="4" width="7" height="16" rx="1"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="7" height="16" rx="1" /><rect x="14" y="4" width="7" height="16" rx="1" /></svg>
         </button>
         <button v-if="toolbarConfig.splitV" class="ws-action-btn" :title="t('workspace.toolbarSettings.splitV')" @click="() => splitVertical()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="7" rx="1"/><rect x="4" y="14" width="16" height="7" rx="1"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="7" rx="1" /><rect x="4" y="14" width="16" height="7" rx="1" /></svg>
         </button>
       </span>
       <span class="ws-seg ws-seg--actions">
@@ -657,22 +657,22 @@ useKeyboardShortcuts([
           :aria-label="isFullscreen ? t('common.exitFullscreen', 'Exit fullscreen') : t('common.fullscreen')"
           @click="toggleFullscreen"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10 4 13l3 3M4 13h11M17 14l3-3-3-3M20 11H9"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10 4 13l3 3M4 13h11M17 14l3-3-3-3M20 11H9" /></svg>
         </button>
       </span>
       <span v-if="toolbarConfig.f1Help" class="ws-seg ws-seg--help" :title="t('workspace.statusbar.f1Help', 'F1 help')" @click="shortcutsStore.toggle()">{{ t('workspace.statusbar.f1Help', 'F1 help') }}</span>
       <span v-if="toolbarConfig.commandPalette" class="ws-seg ws-seg--help" title="Command palette (Ctrl+K)" @click="toggleGlobalCommandPalette">⌘ {{ t('workspace.commandPalette', 'Command palette') }}</span>
       <span class="ws-seg ws-seg--actions">
         <button class="ws-action-btn" :title="t('workspace.exportWorkspace')" @click="handleExportWorkspace">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
         </button>
         <button class="ws-action-btn" :title="t('workspace.importWorkspace')" @click="handleImportPick">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
         </button>
       </span>
       <span class="ws-seg ws-seg--help" style="position: relative">
         <button class="ws-action-btn" :title="t('workspace.toolbarSettings.title')" @click="showToolbarSettings = !showToolbarSettings">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3" /><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" /></svg>
         </button>
         <Teleport to="body">
           <Transition name="menu">

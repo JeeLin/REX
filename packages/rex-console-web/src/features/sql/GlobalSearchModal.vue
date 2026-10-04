@@ -178,7 +178,7 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- Results -->
-          <div class="gs-modal-body" v-if="results.length > 0">
+          <div v-if="results.length > 0" class="gs-modal-body">
             <div v-for="group in results" :key="group.tabId" class="gs-modal-group">
               <div class="gs-modal-group-header">
                 <span class="gs-modal-group-icon">📄</span>

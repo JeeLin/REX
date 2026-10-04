@@ -137,7 +137,7 @@ onBeforeUnmount(() => {
         <Button v-if="!connected" :disabled="loading" @click="onConnect">
           {{ loading ? t('mongo.connecting', 'Connecting...') : t('mongo.connect', 'Connect') }}
         </Button>
-        <Button v-else @click="onDisconnect" variant="danger">
+        <Button v-else variant="danger" @click="onDisconnect">
           {{ t('mongo.disconnect', 'Disconnect') }}
         </Button>
       </div>
@@ -161,7 +161,9 @@ onBeforeUnmount(() => {
               class="mp-tree-item"
               :class="{ 'mp-tree-active': selectedDb === db }"
               @click="loadCollections(db)"
-            >📁 {{ db }}</div>
+            >
+              📁 {{ db }}
+            </div>
             <div v-if="selectedDb === db" class="mp-tree-children">
               <div
                 v-for="coll in collections"
@@ -169,7 +171,9 @@ onBeforeUnmount(() => {
                 class="mp-tree-item mp-tree-coll"
                 :class="{ 'mp-tree-active': selectedColl === coll }"
                 @click="selectedColl = coll"
-              >📄 {{ coll }}</div>
+              >
+                📄 {{ coll }}
+              </div>
             </div>
           </div>
         </div>

@@ -37,10 +37,10 @@ onUnmounted(() => {
     <div class="toast-stack" role="status" aria-live="polite">
       <TransitionGroup name="toast">
         <div v-for="t in toasts" :key="t.id" class="toast" :class="`toast--${t.tone}`">
-          <span class="toast-icon" v-if="t.tone === 'success'">✓</span>
-          <span class="toast-icon" v-else-if="t.tone === 'error'">✕</span>
-          <span class="toast-icon" v-else-if="t.tone === 'warning'">⚠</span>
-          <span class="toast-icon" v-else>ℹ</span>
+          <span v-if="t.tone === 'success'" class="toast-icon">✓</span>
+          <span v-else-if="t.tone === 'error'" class="toast-icon">✕</span>
+          <span v-else-if="t.tone === 'warning'" class="toast-icon">⚠</span>
+          <span v-else class="toast-icon">ℹ</span>
           <span class="toast-msg">{{ t.message }}</span>
           <button class="toast-close" @click="dismiss(t.id)">✕</button>
         </div>

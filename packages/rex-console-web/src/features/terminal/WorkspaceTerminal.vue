@@ -634,10 +634,10 @@ onBeforeUnmount(() => {
       </div>
       <div class="wt-spacer"></div>
       <div class="wt-actions">
-        <button class="wt-btn" @click="clearTerminal" :title="t('terminal.clear', 'Clear')">⌫</button>
-        <button class="wt-btn" @click="doPaste" :title="t('terminal.paste', 'Paste')">📋</button>
-        <button class="wt-btn" :class="{ active: showSearch }" @click="showSearch = !showSearch" :title="t('terminal.find', 'Find')">🔍</button>
-        <button class="wt-btn" @click="emit('toggle-sftp')" :title="t('terminal.sftp', 'SFTP')">📁</button>
+        <button class="wt-btn" :title="t('terminal.clear', 'Clear')" @click="clearTerminal">⌫</button>
+        <button class="wt-btn" :title="t('terminal.paste', 'Paste')" @click="doPaste">📋</button>
+        <button class="wt-btn" :class="{ active: showSearch }" :title="t('terminal.find', 'Find')" @click="showSearch = !showSearch">🔍</button>
+        <button class="wt-btn" :title="t('terminal.sftp', 'SFTP')" @click="emit('toggle-sftp')">📁</button>
         <span class="wt-sep"></span>
         <span class="wt-protocol">{{ protocol?.toUpperCase() || 'SSH' }}</span>
         <span class="wt-encoding">{{ terminalEncoding }}</span>

@@ -334,14 +334,18 @@ onMounted(async () => {
           class="filter-chip"
           :class="{ 'filter-chip--on': !environmentFilter }"
           @click="environmentFilter = ''"
-        >{{ t('auditLog.allEnvironments') }}</button>
+        >
+          {{ t('auditLog.allEnvironments') }}
+        </button>
         <button
           v-for="env in store.environments"
           :key="env.id"
           class="filter-chip"
           :class="{ 'filter-chip--on': environmentFilter === env.id }"
           @click="environmentFilter = env.id"
-        >{{ env.name }}</button>
+        >
+          {{ env.name }}
+        </button>
       </div>
       <div class="filter-chips">
         <span class="filter-chips-label">{{ t('auditLog.type', 'Type') }}</span>
@@ -349,21 +353,25 @@ onMounted(async () => {
           class="filter-chip"
           :class="{ 'filter-chip--on': !actionFilter }"
           @click="actionFilter = ''"
-        >{{ t('auditLog.allResults') }}</button>
+        >
+          {{ t('auditLog.allResults') }}
+        </button>
         <button
           v-for="opt in actionOptions.filter(o => o.value)"
           :key="opt.value"
           class="filter-chip"
           :class="{ 'filter-chip--on': actionFilter === opt.value }"
           @click="actionFilter = opt.value"
-        >{{ opt.value }}</button>
+        >
+          {{ opt.value }}
+        </button>
       </div>
       <span class="spacer"></span>
       <Button variant="ghost" size="sm" @click="actionFilter = ''; resultFilter = ''; environmentFilter = ''; timeRange = 'all'">
         {{ t('auditLog.clearFilters') }}
       </Button>
       <Button variant="primary" size="sm" @click="exportCsv">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
         {{ t('auditLog.exportCsv') }}
       </Button>
     </div>
@@ -465,7 +473,7 @@ onMounted(async () => {
                       </template>
                     </dl>
                     <pre v-if="entry.detail" class="detail-code mono"><span class="cm">{{ t('auditLog.detail', 'Detail') }}</span>
-{{ formatDetail(entry.detail) }}</pre>
+                    {{ formatDetail(entry.detail) }}</pre>
                   </div>
                 </td>
               </tr>

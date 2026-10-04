@@ -198,7 +198,7 @@ async function handleImport(event: Event) {
       <Button variant="ghost" size="sm" :loading="importLoading" @click="triggerImport">{{ t('environments.import') }}</Button>
       <input ref="importFileInput" type="file" accept=".json" style="display:none" @change="handleImport" />
       <Button variant="primary" size="sm" @click="openCreate">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" /></svg>
         {{ t('environments.newEnvironment') }}
       </Button>
     </div>
@@ -319,10 +319,12 @@ async function handleImport(event: Event) {
         </label>
         <label class="form-label" @click.stop>
           <span class="form-label-text">{{ t('environments.connectionMode') }}</span>
-          <Select v-model="formMode" :options="[
-            { label: t('environments.direct'), value: 'direct' },
-            { label: t('environments.agent'), value: 'agent' },
-          ]" />
+          <Select
+            v-model="formMode" :options="[
+              { label: t('environments.direct'), value: 'direct' },
+              { label: t('environments.agent'), value: 'agent' },
+            ]"
+          />
         </label>
         <div v-if="formError" class="form-error">{{ formError }}</div>
         <div class="form-actions">

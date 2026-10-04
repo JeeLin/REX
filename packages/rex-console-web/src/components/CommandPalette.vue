@@ -184,7 +184,7 @@ watch(results, () => {
             <kbd class="command-palette-kbd">ESC</kbd>
           </div>
 
-          <div class="command-palette-results" v-if="results.length">
+          <div v-if="results.length" class="command-palette-results">
             <div
               v-for="(item, index) in results"
               :key="item.id"
