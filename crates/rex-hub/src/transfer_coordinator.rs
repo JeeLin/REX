@@ -214,10 +214,21 @@ impl TransferCoordinator {
         Self::set_status(state, task_id, TransferStatus::Running, None);
 
         // 源文件总大小
-        let src_entry = source
-            .stat(src_path)
-            .await
-            .map_err(|e| TransferError::SourceStat(e.to_string()))?;
+        let src_entry = match source.stat(src_path).await {
+            Ok(entry) => entry,
+            Err(e) => {
+                let msg = format!("source stat failed: {e}");
+                if !Self::is_canceled(state, task_id) {
+                    Self::set_status(
+                        state,
+                        task_id,
+                        TransferStatus::Failed(msg.clone()),
+                        Some(&msg),
+                    );
+                }
+                return Err(TransferError::SourceStat(msg));
+            }
+        };
         let total = src_entry.size;
 
         // 冲突处理（事先 stat 目标）
@@ -243,22 +254,51 @@ impl TransferCoordinator {
             // 在请求超出文件范围前短路：避免 S3 等返回 416（Range Not Satisfiable）
             // 的 connector 与 SSH/Agent 返回空 vec 的不一致；此守卫对所有 connector 生效。
             if offset >= total {
+                // 最后一片轮询后、进入 Verifying 之前重新检查取消标记：
+                // 若取消在此窗口被打，则不应 clobber DB 中的 canceled 标记。
+                if Self::is_canceled(state, task_id) {
+                    let _ = target.delete(&temp).await;
+                    Self::set_status(state, task_id, TransferStatus::Canceled, None);
+                    return Err(TransferError::Canceled);
+                }
                 break;
             }
 
-            let chunk = source
+            let chunk = match source
                 .download_range(src_path, offset, Some(CHUNK_SIZE))
                 .await
-                .map_err(|e| TransferError::Download(e.to_string()))?;
+            {
+                Ok(c) => c,
+                Err(e) => {
+                    let msg = format!("download failed: {e}");
+                    if !Self::is_canceled(state, task_id) {
+                        Self::set_status(
+                            state,
+                            task_id,
+                            TransferStatus::Failed(msg.clone()),
+                            Some(&msg),
+                        );
+                    }
+                    return Err(TransferError::Download(msg));
+                }
+            };
             if chunk.is_empty() {
                 break;
             }
             let chunk_len = chunk.len() as u64;
             // upload(chunk, offset=cumulative) — 目标以累计偏移追加分片
-            target
-                .upload(&temp, chunk, offset, None)
-                .await
-                .map_err(|e| TransferError::Upload(e.to_string()))?;
+            if let Err(e) = target.upload(&temp, chunk, offset, None).await {
+                let msg = format!("upload failed: {e}");
+                if !Self::is_canceled(state, task_id) {
+                    Self::set_status(
+                        state,
+                        task_id,
+                        TransferStatus::Failed(msg.clone()),
+                        Some(&msg),
+                    );
+                }
+                return Err(TransferError::Upload(msg));
+            };
             offset += chunk_len;
             state
                 .db
@@ -271,10 +311,21 @@ impl TransferCoordinator {
 
         // 校验：temp 尺寸 == 源尺寸
         Self::set_status(state, task_id, TransferStatus::Verifying, None);
-        let temp_entry = target
-            .stat(&temp)
-            .await
-            .map_err(|e| TransferError::TargetStat(e.to_string()))?;
+        let temp_entry = match target.stat(&temp).await {
+            Ok(entry) => entry,
+            Err(e) => {
+                let msg = format!("target stat failed: {e}");
+                if !Self::is_canceled(state, task_id) {
+                    Self::set_status(
+                        state,
+                        task_id,
+                        TransferStatus::Failed(msg.clone()),
+                        Some(&msg),
+                    );
+                }
+                return Err(TransferError::TargetStat(msg));
+            }
+        };
         if temp_entry.size != total {
             let _ = target.delete(&temp).await;
             let msg = format!("size mismatch: src={} dst={}", total, temp_entry.size);
@@ -401,21 +452,40 @@ mod tests {
     /// `simulate_s3_eof`: 模拟 S3 416 — 越界时返回 Err 而非空 vec。
     /// `fail_rename`: rename 始终失败。
     /// `fail_delete`: delete 始终失败。
-    #[derive(Clone, Default)]
+    #[derive(Clone)]
     struct MockConnector {
         store: Arc<Mutex<HashMap<String, Vec<u8>>>>,
         simulate_s3_eof: bool,
         fail_rename: bool,
         fail_delete: bool,
+        fail_upload: bool,
+        fail_download: bool,
+        fail_stat: bool,
+        /// Hook called at the start of every upload — used to simulate a
+        /// concurrent cancel (DB write from another task/thread).
+        cancel_hook: Option<Arc<dyn Fn() + Send + Sync>>,
+    }
+
+    impl Default for MockConnector {
+        fn default() -> Self {
+            Self {
+                store: Arc::new(Mutex::new(HashMap::new())),
+                simulate_s3_eof: false,
+                fail_rename: false,
+                fail_delete: false,
+                fail_upload: false,
+                fail_download: false,
+                fail_stat: false,
+                cancel_hook: None,
+            }
+        }
     }
 
     impl MockConnector {
         fn new(store: Arc<Mutex<HashMap<String, Vec<u8>>>>) -> Self {
             Self {
                 store,
-                simulate_s3_eof: false,
-                fail_rename: false,
-                fail_delete: false,
+                ..Default::default()
             }
         }
 
@@ -430,7 +500,32 @@ mod tests {
                 simulate_s3_eof,
                 fail_rename,
                 fail_delete,
+                ..Default::default()
             }
+        }
+
+        /// Builder for setting fail_upload.
+        fn with_fail_upload(mut self, val: bool) -> Self {
+            self.fail_upload = val;
+            self
+        }
+
+        /// Builder for setting fail_download.
+        fn with_fail_download(mut self, val: bool) -> Self {
+            self.fail_download = val;
+            self
+        }
+
+        /// Builder for setting fail_stat.
+        fn with_fail_stat(mut self, val: bool) -> Self {
+            self.fail_stat = val;
+            self
+        }
+
+        /// Builder for installing a cancel-on-upload hook.
+        fn with_cancel_hook(mut self, hook: Arc<dyn Fn() + Send + Sync>) -> Self {
+            self.cancel_hook = Some(hook);
+            self
         }
     }
 
@@ -441,6 +536,9 @@ mod tests {
         }
 
         async fn stat(&mut self, path: &str) -> anyhow::Result<FileEntry> {
+            if self.fail_stat {
+                anyhow::bail!("stat failed (simulated)");
+            }
             let store = self.store.lock().unwrap();
             match store.get(path) {
                 Some(v) => Ok(FileEntry {
@@ -464,6 +562,12 @@ mod tests {
             offset: u64,
             _progress: Option<&ProgressCallback>,
         ) -> anyhow::Result<UploadResult> {
+            if let Some(hook) = &self.cancel_hook {
+                hook();
+            }
+            if self.fail_upload {
+                anyhow::bail!("upload failed (simulated)");
+            }
             let mut store = self.store.lock().unwrap();
             let buf = store.entry(remote_path.to_string()).or_default();
             let start = offset as usize;
@@ -489,6 +593,9 @@ mod tests {
             offset: u64,
             limit: Option<u64>,
         ) -> anyhow::Result<Vec<u8>> {
+            if self.fail_download {
+                anyhow::bail!("download range failed (simulated)");
+            }
             let data = self.download(path).await?;
             if self.simulate_s3_eof && offset >= data.len() as u64 {
                 anyhow::bail!("HTTP 416 Range Not Satisfiable");
@@ -943,5 +1050,265 @@ mod tests {
                 "non-S3 connector must return UnsupportedProtocolError for S3-only ops"
             );
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Bug 1: cancel-clobber window — cancel set during the last upload
+    // (when offset reaches total) must not be clobbered by Verifying/Completed.
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn cancel_during_last_upload_preserves_canceled_not_clobbered_by_verify() {
+        let (_dir, state) = make_state();
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/w.bin".into(),
+                target_path: "/dst/w.bin".into(),
+                conflict_policy: Some("overwrite".into()),
+            })
+            .unwrap();
+
+        // File of exactly CHUNK_SIZE so offset reaches total after one upload.
+        let payload: Vec<u8> = (0..CHUNK_SIZE).map(|i| (i as u8).wrapping_add(9)).collect();
+        let src_store = Arc::new(Mutex::new(HashMap::new()));
+        src_store
+            .lock()
+            .unwrap()
+            .insert("/src/w.bin".to_string(), payload);
+        let dst_store = Arc::new(Mutex::new(HashMap::new()));
+
+        // Cancel hook: set DB to "canceled" during the target's upload.
+        let cancel_state = state.clone();
+        let cancel_tid = task_id.clone();
+        let hook: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
+            let _ = cancel_state
+                .db
+                .set_transfer_task_status(&cancel_tid, "canceled", None);
+        });
+
+        let mut source = MockConnector::new(src_store);
+        let mut target = MockConnector::new(dst_store.clone()).with_cancel_hook(hook);
+
+        let res = TransferCoordinator::run_stream(
+            &state,
+            &task_id,
+            TransferSpec {
+                op: TransferOp::Copy,
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src/w.bin",
+            "/dst/w.bin",
+        )
+        .await;
+
+        assert!(
+            matches!(res, Err(TransferError::Canceled)),
+            "cancel during transfer must abort with Canceled, got {res:?}"
+        );
+
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        assert_eq!(
+            rec.status, "canceled",
+            "canceled status must not be clobbered to verifying/completed"
+        );
+        assert!(
+            dst_store
+                .lock()
+                .unwrap()
+                .get("/dst/w.bin.rex.part")
+                .is_none(),
+            "temp file must be cleaned up on cancel"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Bug 2: error paths must set Failed status (unless already canceled).
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn source_stat_failure_sets_failed_status() {
+        let (_dir, state) = make_state();
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/missing.bin".into(),
+                target_path: "/dst/missing.bin".into(),
+                conflict_policy: Some("overwrite".into()),
+            })
+            .unwrap();
+
+        // /src/missing.bin is NOT in the store → stat fails
+        let src_store = Arc::new(Mutex::new(HashMap::new()));
+        let dst_store = Arc::new(Mutex::new(HashMap::new()));
+
+        let mut source = MockConnector::new(src_store);
+        let mut target = MockConnector::new(dst_store);
+
+        let res = TransferCoordinator::run_stream(
+            &state,
+            &task_id,
+            TransferSpec {
+                op: TransferOp::Copy,
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src/missing.bin",
+            "/dst/missing.bin",
+        )
+        .await;
+
+        assert!(matches!(res, Err(TransferError::SourceStat(_))));
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        assert_eq!(rec.status, "failed");
+        assert!(rec.error.is_some());
+    }
+
+    #[tokio::test]
+    async fn download_failure_sets_failed_status() {
+        let (_dir, state) = make_state();
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/dl.bin".into(),
+                target_path: "/dst/dl.bin".into(),
+                conflict_policy: Some("overwrite".into()),
+            })
+            .unwrap();
+
+        let payload: Vec<u8> = (0..CHUNK_SIZE + 5)
+            .map(|i| (i as u8).wrapping_add(3))
+            .collect();
+        let src_store = Arc::new(Mutex::new(HashMap::new()));
+        src_store
+            .lock()
+            .unwrap()
+            .insert("/src/dl.bin".to_string(), payload);
+        let dst_store = Arc::new(Mutex::new(HashMap::new()));
+
+        let mut source = MockConnector::new(src_store).with_fail_download(true);
+        let mut target = MockConnector::new(dst_store);
+
+        let res = TransferCoordinator::run_stream(
+            &state,
+            &task_id,
+            TransferSpec {
+                op: TransferOp::Copy,
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src/dl.bin",
+            "/dst/dl.bin",
+        )
+        .await;
+
+        assert!(matches!(res, Err(TransferError::Download(_))));
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        assert_eq!(rec.status, "failed");
+    }
+
+    #[tokio::test]
+    async fn upload_failure_sets_failed_status() {
+        let (_dir, state) = make_state();
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/up.bin".into(),
+                target_path: "/dst/up.bin".into(),
+                conflict_policy: Some("overwrite".into()),
+            })
+            .unwrap();
+
+        let payload: Vec<u8> = (0..CHUNK_SIZE + 5)
+            .map(|i| (i as u8).wrapping_add(5))
+            .collect();
+        let src_store = Arc::new(Mutex::new(HashMap::new()));
+        src_store
+            .lock()
+            .unwrap()
+            .insert("/src/up.bin".to_string(), payload);
+        let dst_store = Arc::new(Mutex::new(HashMap::new()));
+
+        let mut source = MockConnector::new(src_store);
+        let mut target = MockConnector::new(dst_store).with_fail_upload(true);
+
+        let res = TransferCoordinator::run_stream(
+            &state,
+            &task_id,
+            TransferSpec {
+                op: TransferOp::Copy,
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src/up.bin",
+            "/dst/up.bin",
+        )
+        .await;
+
+        assert!(matches!(res, Err(TransferError::Upload(_))));
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        assert_eq!(rec.status, "failed");
+    }
+
+    #[tokio::test]
+    async fn target_stat_failure_sets_failed_status() {
+        let (_dir, state) = make_state();
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/ts.bin".into(),
+                target_path: "/dst/ts.bin".into(),
+                conflict_policy: Some("overwrite".into()),
+            })
+            .unwrap();
+
+        let payload: Vec<u8> = vec![1u8, 2, 3, 4, 5];
+        let src_store = Arc::new(Mutex::new(HashMap::new()));
+        src_store
+            .lock()
+            .unwrap()
+            .insert("/src/ts.bin".to_string(), payload);
+        let dst_store = Arc::new(Mutex::new(HashMap::new()));
+
+        let mut source = MockConnector::new(src_store);
+        // fail_stat makes target.stat fail: resolve_conflict treats target
+        // as non-existent (proceeds), uploads succeed, then verify stat
+        // of the temp file fails → TargetStat error → Failed.
+        let mut target = MockConnector::new(dst_store).with_fail_stat(true);
+
+        let res = TransferCoordinator::run_stream(
+            &state,
+            &task_id,
+            TransferSpec {
+                op: TransferOp::Copy,
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src/ts.bin",
+            "/dst/ts.bin",
+        )
+        .await;
+
+        assert!(matches!(res, Err(TransferError::TargetStat(_))));
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        // Must be "failed", not "verifying" (which was set just before the stat).
+        assert_eq!(rec.status, "failed");
+        assert!(rec.error.is_some());
     }
 }
