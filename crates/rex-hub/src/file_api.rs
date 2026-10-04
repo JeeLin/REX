@@ -55,7 +55,6 @@ pub fn file_routes() -> axum::Router<AppState> {
         .route("/connect", axum::routing::post(connect))
         .route("/disconnect", axum::routing::post(disconnect))
         .route("/list", axum::routing::get(list))
-        .route("/stat", axum::routing::get(stat))
         .route("/upload", axum::routing::post(upload))
         .route("/download", axum::routing::get(download))
         .route("/delete", axum::routing::post(delete))
@@ -63,18 +62,6 @@ pub fn file_routes() -> axum::Router<AppState> {
         .route("/mkdir", axum::routing::post(mkdir))
         .route("/chmod", axum::routing::post(chmod))
         .route("/presigned-url", axum::routing::post(presigned_url))
-        .route(
-            "/s3/multipart-uploads",
-            axum::routing::get(list_multipart_uploads),
-        )
-        .route(
-            "/s3/resume-upload",
-            axum::routing::post(resume_multipart_upload),
-        )
-        .route(
-            "/s3/abort-upload",
-            axum::routing::post(abort_multipart_upload),
-        )
         .route("/acl", axum::routing::get(get_acl).put(put_acl))
         .route(
             "/connector/{resource_id}/capability",
@@ -725,22 +712,6 @@ async fn list(
     }
 }
 
-async fn stat(
-    State(state): State<AppState>,
-    Query(params): Query<PathQuery>,
-) -> axum::response::Response {
-    tracing::debug!(action = "FILE_STAT", session_id = %params.session_id, path = %params.path, "file stat");
-    let mut pool = state.file_pool.lock().await;
-    let conn = match pool.connectors.get_mut(&params.session_id) {
-        Some(c) => c,
-        None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
-    };
-    match conn.stat(&params.path).await {
-        Ok(entry) => (StatusCode::OK, Json(entry)).into_response(),
-        Err(e) => error_response("STAT_FAILED", &e.to_string()).into_response(),
-    }
-}
-
 async fn upload(
     State(state): State<AppState>,
     mut multipart: Multipart,
@@ -1247,127 +1218,6 @@ async fn presigned_url(
     match conn.presigned_url(&body.path, body.expires_in).await {
         Ok(url) => (StatusCode::OK, Json(PresignedUrlResponse { url })).into_response(),
         Err(e) => connector_op_error("PRESIGNED_URL_FAILED", &e).into_response(),
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct ListMultipartUploadsQuery {
-    session_id: String,
-    prefix: String,
-}
-
-#[derive(Debug, Serialize)]
-struct MultipartUploadInfo {
-    key: String,
-    upload_id: String,
-}
-
-#[derive(Debug, Serialize)]
-struct ListMultipartUploadsResponse {
-    uploads: Vec<MultipartUploadInfo>,
-}
-
-async fn list_multipart_uploads(
-    State(state): State<AppState>,
-    Query(params): Query<ListMultipartUploadsQuery>,
-) -> axum::response::Response {
-    tracing::debug!(action = "FILE_LIST_MULTIPART", session_id = %params.session_id, "file list_multipart_uploads");
-    let pool = state.file_pool.lock().await;
-    let conn = match pool.connectors.get(&params.session_id) {
-        Some(c) => c,
-        None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
-    };
-
-    match conn.list_multipart_uploads(&params.prefix).await {
-        Ok(uploads) => {
-            let resp = ListMultipartUploadsResponse {
-                uploads: uploads
-                    .into_iter()
-                    .map(|(key, upload_id)| MultipartUploadInfo { key, upload_id })
-                    .collect(),
-            };
-            (StatusCode::OK, Json(resp)).into_response()
-        }
-        Err(e) => connector_op_error("LIST_UPLOADS_FAILED", &e).into_response(),
-    }
-}
-
-async fn resume_multipart_upload(
-    State(state): State<AppState>,
-    mut multipart: Multipart,
-) -> axum::response::Response {
-    let mut session_id = String::new();
-    let mut remote_path = String::new();
-    let mut upload_id = String::new();
-    let mut file_data: Option<Vec<u8>> = None;
-
-    while let Some(field) = multipart.next_field().await.unwrap_or(None) {
-        let name = field.name().unwrap_or_default().to_string();
-        match name.as_str() {
-            "session_id" => {
-                session_id =
-                    String::from_utf8_lossy(&field.bytes().await.unwrap_or_default()).to_string();
-            }
-            "path" => {
-                remote_path =
-                    String::from_utf8_lossy(&field.bytes().await.unwrap_or_default()).to_string();
-            }
-            "upload_id" => {
-                upload_id =
-                    String::from_utf8_lossy(&field.bytes().await.unwrap_or_default()).to_string();
-            }
-            "file" => {
-                file_data = Some(field.bytes().await.unwrap_or_default().to_vec());
-            }
-            _ => {}
-        }
-    }
-
-    let data = match file_data {
-        Some(d) => d,
-        None => return error_response("MISSING_FILE", "no file uploaded").into_response(),
-    };
-
-    tracing::info!(action = "FILE_RESUME_MULTIPART", session_id = %session_id, "file resume_multipart_upload");
-    let mut pool = state.file_pool.lock().await;
-    let conn = match pool.connectors.get_mut(&session_id) {
-        Some(c) => c,
-        None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
-    };
-
-    match conn
-        .resume_multipart_upload(&remote_path, &upload_id, data, None)
-        .await
-    {
-        Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
-        Err(e) => connector_op_error("RESUME_UPLOAD_FAILED", &e).into_response(),
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct AbortMultipartUploadBody {
-    session_id: String,
-    path: String,
-    upload_id: String,
-}
-
-async fn abort_multipart_upload(
-    State(state): State<AppState>,
-    Json(body): Json<AbortMultipartUploadBody>,
-) -> axum::response::Response {
-    tracing::info!(action = "FILE_ABORT_MULTIPART", session_id = %body.session_id, "file abort_multipart_upload");
-    let mut pool = state.file_pool.lock().await;
-    let conn = match pool.connectors.get_mut(&body.session_id) {
-        Some(c) => c,
-        None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
-    };
-
-    match conn
-        .abort_multipart_upload(&body.path, &body.upload_id)
-        .await
-    {
-        Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
-        Err(e) => connector_op_error("ABORT_UPLOAD_FAILED", &e).into_response(),
     }
 }
 
