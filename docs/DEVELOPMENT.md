@@ -172,7 +172,7 @@ rex-agent = 所有 crate（无前端）
 | **v0.89.0** | Agent 前端访问通道重设计（minor，Alt 1 边缘反代 + 删旧隧道机制 + direct 语义对齐 + token 脱敏 + HTTP server 默认关闭；三轮 code review + 验收通过） | — | ✅ 已完成（v0.89.0） |
 | **v0.90.0** | 快捷键治理（minor，浏览器保留键交还 + Ctrl+K 双触发收敛 + 注册表/死代码清理 + §5 规格补齐；9 轮审查 + 101 Bug 全清） | — | ✅ 已完成（v0.90.0） |
 | **v0.90.1** | 日志与接口错误信息优化（patch，结构化日志+请求追踪、tracing-appender 轮转/保留、REST/WS error 统一到 rex-common、前端 ApiError→toast 归一） | — | ✅ 已完成（v0.90.1） |
-| **v0.91.0** | 文件操作逻辑重设计（SFTP/S3）（minor，后端传输任务模型 + server-side 直连搬运 + FileConnector 能力模型 + chmod/mkdir/ACL/续传 + WS 进度推送 + 前端结构重构 + FolderSyncDialog 移除） | — | 🔄 |
+| **v0.91.0** | 文件操作逻辑重设计（SFTP/S3）（minor，后端传输任务模型 + server-side 直连搬运 + FileConnector 能力模型 + chmod/mkdir/ACL/续传 + WS 进度推送 + 前端结构重构 + FolderSyncDialog 移除） | — | ✅ 已完成（v0.91.0） |
 ### M0：项目骨架重建
 
 **核心功能**：清空 `packages/rex-console-web` 与 `crates/*` 源码，按新设计系统重建最小可运行骨架。
