@@ -1,6 +1,6 @@
 [package]
 name = "rex-mariadb"
-version = "0.86.0"
+version.workspace = true
 edition.workspace = true
 description = "MariaDB protocol implementation for REX (reuses MySQL driver)"
 

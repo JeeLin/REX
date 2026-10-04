@@ -1,6 +1,6 @@
 [package]
 name = "rex-mssql"
-version = "0.86.0"
+version.workspace = true
 edition.workspace = true
 description = "SQL Server (MSSQL) protocol implementation for REX"
 
@@ -12,5 +12,5 @@ serde_json.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 rex-common.workspace = true
-tiberius = { version = "0.12", features = ["tds73", "chrono"] }
+tiberius = { workspace = true }
 async-trait.workspace = true

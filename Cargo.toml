@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.90.1"
+version = "0.91.0"
 edition = "2021"
 
 [workspace.dependencies]
@@ -85,6 +85,9 @@ zstd = "0.13"
 libc = "0.2"
 include_dir = "0.7"
 mime_guess = "2"
+csv = "1"
+urlencoding = "2"
+tiberius = { version = "0.12", features = ["tds73", "chrono"] }
 windows-sys = { version = "0.59", features = ["Win32_System_Threading", "Win32_Foundation", "Win32_System_Services", "Win32_System_WindowsProgramming"] }
 
 [profile.release]

@@ -1,6 +1,6 @@
 [package]
 name = "rex-oracle"
-version = "0.86.0"
+version.workspace = true
 edition.workspace = true
 description = "Oracle database implementation for REX (stub - real driver TBD)"
 
