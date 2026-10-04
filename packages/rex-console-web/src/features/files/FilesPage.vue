@@ -1,27 +1,29 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount, inject } from 'vue'
+//! FilesPage.vue — rendering layer (v0.91.0 T6).
+//! Delegates all behaviour to useFiles / useTransfer composables; this file
+//! only wires props → options, exposes a notify → toast bridge, and renders
+//! the template using child components (FilesToolbar, FilesGrid, MobileFilesBar,
+//! FileEditorDialog, FilePreview) plus inline dialogs (chmod, ACL, delete).
+
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { onClickOutside } from '@vueuse/core'
-import * as filesApi from '@/api/files'
-import type { FileEntry } from '@/api/files'
-import FolderSyncDialog from './FolderSyncDialog.vue'
+import FilesToolbar from './FilesToolbar.vue'
+import FilesGrid from './FilesGrid.vue'
 import MobileFilesBar from './MobileFilesBar.vue'
 import FileEditorDialog from './FileEditorDialog.vue'
 import FilePreview from './FilePreview.vue'
-import Button from '@/components/ui/Button.vue'
 import Toast from '@/components/ui/Toast.vue'
-import { clipboard } from '@/utils/clipboard'
-import { isTypingTarget } from '@/utils/isTypingTarget'
-import { PANE_CTX, type PaneCtx } from '@/features/workspace/paneContext'
-import { ownsKeystroke } from '@/features/workspace/paneOwnership'
-import { useTransfer } from './composables/useTransfer'
+import Button from '@/components/ui/Button.vue'
+import { fmtSize } from '@/features/files/format'
+import { useFiles } from '@/features/files/composables/useFiles'
+import { useTransfer } from '@/features/files/composables/useTransfer'
+import type { ToastTone } from '@/features/files/types'
 
 const { t } = useI18n()
 
 const props = defineProps<{
   resourceId?: string
   protocol?: 'sftp' | 's3'
-  /** Workspace tab that owns this instance (split panes mount one instance per tab). */
   tabId?: string
 }>()
 const emit = defineEmits<{
@@ -29,684 +31,110 @@ const emit = defineEmits<{
 }>()
 
 const toast = ref<InstanceType<typeof Toast> | null>(null)
+function notify(message: string, tone: ToastTone) {
+  toast.value?.push(message, tone)
+}
 
-// Connection
-const sessionId = ref<string | null>(null)
-const showConnect = ref(!props.resourceId)
-const connProtocol = ref(props.protocol || 'sftp')
-const connError = ref('')
-const connLoading = ref(false)
+const transfer = useTransfer()
 
-// Inline rename
-const renamingId = ref<string | null>(null)
-const renameValue = ref('')
+const editorProtocol = computed(() => connProtocol.value as 'sftp' | 's3')
 
-// Auto-connect on mount if props provided
-onMounted(async () => {
-  document.addEventListener('keydown', onKeyDown)
-  if (props.resourceId) {
-    await doConnect()
-  }
+const {  sessionId,
+  showConnect,
+  connProtocol,
+  showDeleteConfirm,
+  confirmDelete,
+  executeDelete,
+  cancelDelete,
+  ctx,
+  ctxRef,
+  onCtx,
+  ctxCopy,
+  ctxPresignedUrl,
+  ctxDelete,
+  hasCap,
+  canShowDualPanel,
+  panels,
+  mobileActiveSide,
+  loadPanel,
+  navigate,
+  activate,
+  goUp,
+  toggleSelect,
+  syncBrowsing,
+  renamingId,
+  renameValue,
+  startRename,
+  submitRename,
+  cancelRename,
+  isRenaming,
+  downloadSelected,
+  uploadTo,
+  newFolder,
+  mfbNewFolder,
+  mfbRename,
+  mfbDelete,
+  mfbPermissions,
+  mfbCopyPath,
+  mfbSelectedCount,
+  showAclDialog,
+  aclPath,
+  aclValue,
+  openAclDialog,
+  applyAcl,
+  showChmod,
+  chmodPath,
+  chmodPerms,
+  openChmod,
+  calcOctal,
+  applyChmod,
+  editorVisible,
+  editorFilePath,
+  editFile,
+  onEditorSaved,
+  previewVisible,
+  previewFile,
+  isPreviewable,
+  activateEntry,
+  openPreview,
+  leftW,
+  dragging,
+  onDS,
+  onDE,
+  dragData,
+  dropTarget,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onDragEnd,
+} = useFiles({
+  resourceId: props.resourceId,
+  protocol: props.protocol || 'sftp',
+  tabId: props.tabId,
+  onStatus: (status) => emit('update:status', status),
+  notify,
 })
-
-async function doConnect() {
-  if (!props.resourceId) return
-  connLoading.value = true; connError.value = ''
-  emit('update:status', 'connecting')
-  try {
-    sessionId.value = await filesApi.connect(props.resourceId)
-    showConnect.value = false
-    emit('update:status', 'online')
-    await loadPanel('left'); await loadPanel('right')
-  } catch (e: unknown) {
-    connError.value = e instanceof Error ? e.message : String(e)
-    emit('update:status', 'error')
-  }
-  finally { connLoading.value = false }
-}
-
-// Panels
-const panels = reactive({
-  left: { path: '/', entries: [] as FileEntry[], loading: false, selected: new Set<string>(), active: true },
-  right: { path: '/', entries: [] as FileEntry[], loading: false, selected: new Set<string>(), active: false },
-})
-type Side = 'left' | 'right'
-const mobileActiveSide = ref<Side>('left')
-
-async function loadPanel(side: Side) {
-  const p = panels[side]; if (!sessionId.value) return
-  p.loading = true
-  try { p.entries = await filesApi.listFiles(sessionId.value, p.path) }
-  catch { p.entries = [] } finally { p.loading = false }
-}
-
-// Sync browsing
-const syncBrowsing = ref(false)
-
-function navigate(side: Side, entry: FileEntry) {
-  if (entry.is_dir) {
-    panels[side].path = entry.path.endsWith('/') ? entry.path : entry.path + '/'
-    panels[side].selected.clear()
-    loadPanel(side)
-
-    // Sync browsing: navigate other panel to relative path
-    if (syncBrowsing.value) {
-      const otherSide = other(side)
-      const currentPath = panels[side].path
-      const basePath = panels[side].path.split('/').slice(0, -2).join('/') + '/'
-      const relativePath = currentPath.replace(basePath, '')
-      if (relativePath && relativePath !== currentPath) {
-        const targetPath = panels[otherSide].path + relativePath
-        panels[otherSide].path = targetPath
-        panels[otherSide].selected.clear()
-        loadPanel(otherSide)
-      }
-    }
-  }
-}
-
-function activate(side: Side) { panels.left.active = side === 'left'; panels.right.active = side === 'right' }
-function other(side: Side): Side { return side === 'left' ? 'right' : 'left' }
-function goUp(side: Side) {
-  const parts = panels[side].path.replace(/\/$/, '').split('/'); parts.pop()
-  panels[side].path = parts.length ? parts.join('/') + '/' : '/'; panels[side].selected.clear(); loadPanel(side)
-}
-function toggleSelect(side: Side, name: string, e: MouseEvent) {
-  const sel = panels[side].selected
-  if (e.shiftKey && sel.size > 0) {
-    const entries = panels[side].entries; const last = Array.from(sel).pop()!
-    const si = entries.findIndex(x => x.name === last), ei = entries.findIndex(x => x.name === name)
-    const [a, b] = si < ei ? [si, ei] : [ei, si]; for (let i = a; i <= b; i++) sel.add(entries[i]!.name)
-  } else if (e.ctrlKey || e.metaKey) { if (sel.has(name)) sel.delete(name); else sel.add(name) }
-  else { sel.clear(); sel.add(name) }
-  panels[side].selected = new Set(sel)
-}
-
-// Delete confirmation
-const showDeleteConfirm = ref(false)
-const pendingDelete = ref<{ side: Side; names: string[] } | null>(null)
-const pendingCtxDelete = ref(false)
-
-function confirmDelete(side: Side) {
-  if (!sessionId.value || panels[side].selected.size === 0) return
-  pendingDelete.value = { side, names: Array.from(panels[side].selected) }
-  showDeleteConfirm.value = true
-}
-async function executeDelete() {
-  if (!sessionId.value || !pendingDelete.value) return
-  if (pendingCtxDelete.value) {
-    // Context menu delete
-    await filesApi.deleteFile(sessionId.value, ctx.value.path)
-    pendingCtxDelete.value = false
-    await loadPanel('left'); await loadPanel('right')
-  } else {
-    // Toolbar/bulk delete
-    const { side, names } = pendingDelete.value
-    for (const name of names) {
-      const entry = panels[side].entries.find(e => e.name === name)
-      if (entry) await filesApi.deleteFile(sessionId.value, entry.path)
-    }
-    panels[side].selected.clear(); loadPanel(side)
-  }
-  showDeleteConfirm.value = false; pendingDelete.value = null
-}
-function cancelDelete() { showDeleteConfirm.value = false; pendingDelete.value = null }
-function confirmCtxDelete() { pendingCtxDelete.value = true; showDeleteConfirm.value = true; pendingDelete.value = { side: ctx.value.side, names: [ctx.value.name] } }
-async function ctxDelete() { confirmCtxDelete(); ctx.value.show = false }
-
-// Inline rename
-function startRename(side: Side, entry: FileEntry) {
-  renamingId.value = `${side}:${entry.name}`
-  renameValue.value = entry.name
-  ctx.value.show = false
-}
-
-async function submitRename(side: Side) {
-  if (!sessionId.value || !renamingId.value) return
-  const entry = panels[side].entries.find(e => `${side}:${e.name}` === renamingId.value)
-  if (!entry) { renamingId.value = null; return }
-  const newName = renameValue.value.trim()
-  if (newName && newName !== entry.name) {
-    try {
-      await filesApi.renameFile(sessionId.value, panels[side].path + entry.name, panels[side].path + newName)
-    } catch (e) {
-      console.error('Rename failed:', e)
-    }
-  }
-  renamingId.value = null
-  await loadPanel(side)
-}
-
-function cancelRename() { renamingId.value = null }
-
-function isRenaming(side: Side, name: string) { return renamingId.value === `${side}:${name}` }
-
-// Keyboard
-function activeSide(): Side { return panels.left.active ? 'left' : 'right' }
-
-const paneCtx = inject<PaneCtx | null>(PANE_CTX, null)
-
-function onKeyDown(e: KeyboardEvent) {
-  if (!ownsKeystroke(props.tabId, paneCtx)) return
-  if (renamingId.value) return
-  if (isTypingTarget(e.target)) return
-
-  if (e.key === 'F2') {
-    e.preventDefault()
-    const side = activeSide()
-    const sel = Array.from(panels[side].selected)
-    if (sel.length === 1) {
-      const entry = panels[side].entries.find(en => en.name === sel[0])
-      if (entry) startRename(side, entry)
-    }
-    return
-  }
-  if (e.key === 'F7') {
-    e.preventDefault()
-    newFolder(activeSide())
-    return
-  }
-  if (e.key === 'F8' || e.key === 'Delete') {
-    e.preventDefault()
-    confirmDelete(activeSide())
-    return
-  }
-  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'r' || e.key === 'R')) {
-    e.preventDefault()
-    loadPanel('left')
-    loadPanel('right')
-  }
-}
-
-async function downloadSelected(side: Side) {
-  if (!sessionId.value || panels[side].selected.size === 0) return
-  const names = Array.from(panels[side].selected)
-  for (const name of names) {
-    const entry = panels[side].entries.find(e => e.name === name)
-    if (!entry || entry.is_dir) continue
-    const key = `${sessionId.value}:dl:${entry.path}`
-    const item: TransferItem = {
-      sessionId: sessionId.value, remotePath: entry.path, fileName: entry.name,
-      type: 'download', status: 'transferring', transferredBytes: 0, totalBytes: entry.size,
-      side,
-    }
-    transferQueue.value.set(key, item)
-    transferQueue.value = new Map(transferQueue.value)
-    try {
-      const blob = await filesApi.downloadFile(sessionId.value, entry.path)
-      const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = entry.name; a.click(); URL.revokeObjectURL(url)
-      item.status = 'completed'; item.transferredBytes = item.totalBytes || blob.size
-    } catch (e) {
-      item.status = 'failed'
-      item.errorMessage = e instanceof Error ? e.message : String(e)
-      console.error('Download failed:', e)
-    }
-  }
-  transferQueue.value = new Map(transferQueue.value)
-}
-
-/* ---- Transfer queue ---- */
-interface TransferItem {
-  sessionId: string
-  remotePath: string
-  fileName: string
-  type: 'upload' | 'download'
-  status: 'pending' | 'transferring' | 'resuming' | 'failed' | 'completed'
-  transferredBytes: number
-  totalBytes: number
-  side?: Side
-  // Upload-specific
-  file?: File
-  uploadId?: string
-  errorMessage?: string
-}
-const transferQueue = ref<Map<string, TransferItem>>(new Map())
-const showTransferQueue = ref(false)
-const PART_SIZE = 5 * 1024 * 1024 // 5MB
-
-function fmtPercent(transferred: number, total: number) {
-  if (!total) return '0%'
-  return `${Math.round((transferred / total) * 100)}%`
-}
-
-/* ---- Shared server-side transfer tasks (v0.91.0 T2) ---- */
-const transferStore = useTransfer()
-
-// Unified view-model so the existing transfer-queue panel can render both the
-// legacy browser upload/download items (transferQueue) and server-side move/copy
-// tasks (useTransfer store) from a single source of truth.
-interface QueueItem {
-  key: string
-  kind: 'upload' | 'download' | 'move' | 'copy'
-  fileName: string
-  path: string
-  status: 'pending' | 'transferring' | 'resuming' | 'completed' | 'failed' | 'canceled'
-  transferred: number
-  total: number
-  speed: number
-  error?: string
-  retryable: boolean
-}
-
-function baseName(path: string): string {
-  return path.split('/').pop() || path
-}
-
-const queueItems = computed<QueueItem[]>(() => {
-  const items: QueueItem[] = []
-  // Legacy browser upload/download items
-  transferQueue.value.forEach((item, key) => {
-    items.push({
-      key,
-      kind: item.type,
-      fileName: item.fileName,
-      path: item.remotePath,
-      status: item.status,
-      transferred: item.transferredBytes,
-      total: item.totalBytes,
-      speed: 0,
-      error: item.errorMessage,
-      retryable: true,
-    })
-  })
-  // Server-side move/copy tasks (shared store)
-  transferStore.tasks.value.forEach((task, id) => {
-    items.push({
-      key: id,
-      kind: task.op,
-      fileName: baseName(task.target_path),
-      path: `${task.source_path} → ${task.target_path}`,
-      status: task.status === 'running' ? 'transferring' : task.status,
-      transferred: task.transferred_bytes,
-      total: task.total_bytes,
-      speed: task.speed_bytes_per_sec,
-      error: task.error ?? undefined,
-      retryable: false,
-    })
-  })
-  return items
-})
-
-const completedCount = computed(() => queueItems.value.filter(i => i.status === 'completed').length)
-const activeCount = computed(() =>
-  queueItems.value.filter(i => i.status === 'transferring' || i.status === 'resuming' || i.status === 'pending').length
-)
-
-async function uploadTo(side: Side) {
-  if (!sessionId.value) return
-  const input = document.createElement('input'); input.type = 'file'; input.multiple = true
-  input.onchange = async () => {
-    if (!sessionId.value) return
-    for (const file of Array.from(input.files || [])) {
-      const remotePath = panels[side].path + file.name
-      const key = `${sessionId.value}:ul:${remotePath}`
-      const item: TransferItem = {
-        sessionId: sessionId.value, remotePath, fileName: file.name,
-        type: 'upload', status: 'transferring', transferredBytes: 0, totalBytes: file.size,
-        file, side,
-      }
-      transferQueue.value.set(key, item)
-      transferQueue.value = new Map(transferQueue.value)
-      try {
-        if (file.size > PART_SIZE) {
-          const result = await filesApi.uploadFileWithProgress(sessionId.value, remotePath, file, (_pct, loaded) => {
-            item.transferredBytes = loaded
-            transferQueue.value = new Map(transferQueue.value)
-          })
-          item.uploadId = result.upload_id
-          item.status = 'completed'
-        } else {
-          await filesApi.uploadFile(sessionId.value, remotePath, file)
-          item.status = 'completed'
-        }
-      } catch (e) {
-        item.status = 'failed'
-        item.errorMessage = e instanceof Error ? e.message : String(e)
-        console.error('Upload failed:', e)
-      }
-    }
-    transferQueue.value = new Map(transferQueue.value)
-    loadPanel(side)
-  }; input.click()
-}
-
-async function retryTransfer(key: string) {
-  const item = transferQueue.value.get(key)
-  if (!item) return
-  item.status = item.uploadId ? 'resuming' : 'transferring'
-  item.errorMessage = undefined
-  transferQueue.value = new Map(transferQueue.value)
-  try {
-    if (item.type === 'upload') {
-      if (item.uploadId && item.file) {
-        await filesApi.resumeMultipartUpload(item.sessionId, item.remotePath, item.uploadId, item.file)
-      } else if (item.file) {
-        await filesApi.uploadFile(item.sessionId, item.remotePath, item.file, item.transferredBytes)
-      }
-      item.status = 'completed'
-    } else {
-      // Download retry: use Range header for resume
-      const blob = await filesApi.downloadFile(item.sessionId, item.remotePath, item.transferredBytes > 0 ? item.transferredBytes : undefined)
-      const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = item.fileName; a.click(); URL.revokeObjectURL(url)
-      item.status = 'completed'; item.transferredBytes = item.totalBytes || blob.size
-    }
-  } catch (e) {
-    item.status = 'failed'
-    item.errorMessage = e instanceof Error ? e.message : String(e)
-    console.error('Transfer retry failed:', e)
-  }
-  transferQueue.value = new Map(transferQueue.value)
-}
-
-function dismissCompleted() {
-  const q = new Map(transferQueue.value)
-  q.forEach((item, key) => { if (item.status === 'completed') q.delete(key) })
-  transferQueue.value = q
-  // Also clear finished server-side tasks from the shared store
-  transferStore.dismissCompleted()
-}
-
-// Context menu
-const ctx = ref({ show: false, x: 0, y: 0, path: '', name: '', side: 'left' as Side })
-const ctxRef = ref<HTMLElement | null>(null)
-onClickOutside(ctxRef, () => { ctx.value.show = false })
-function onCtx(e: MouseEvent, entry: FileEntry, side: Side) { e.preventDefault(); ctx.value = { show: true, x: e.clientX, y: e.clientY, path: entry.path, name: entry.name, side } }
-function ctxCopy() { clipboard.writeText(ctx.value.path); ctx.value.show = false }
-async function ctxPresignedUrl() {
-  if (!sessionId.value) return
-  try {
-    const url = await filesApi.presignedUrl(sessionId.value, ctx.value.path)
-    clipboard.writeText(url)
-    // TODO: show toast "Presigned URL copied to clipboard"
-  } catch (e) {
-    console.error('Failed to generate presigned URL:', e)
-  }
-  ctx.value.show = false
-}
-
-// New folder (desktop shortcut + mobile bar)
-function newFolder(side: Side) {
-  if (!sessionId.value) return
-  const name = prompt(t('files.folderNamePrompt'))
-  if (!name) return
-  filesApi.mkdir(sessionId.value, panels[side].path + name)
-    .then(() => loadPanel(side))
-    .catch((e: unknown) => {
-      console.error('Create folder failed:', e)
-      toast.value?.push(t('files.createFolderFailed', 'Failed to create folder'), 'error')
-    })
-}
-function mfbNewFolder() { newFolder(mobileActiveSide.value) }
-function mfbRename() {
-  if (!sessionId.value) return
-  const side = mobileActiveSide.value
-  const sel = Array.from(panels[side].selected)
-  if (sel.length !== 1) return
-  const entry = panels[side].entries.find(e => e.name === sel[0])
-  if (!entry) return
-  const newName = prompt(t('files.newNamePrompt'), entry.name)
-  if (!newName || newName === entry.name) return
-  filesApi.renameFile(sessionId.value, entry.path, panels[side].path + newName).then(() => loadPanel(side))
-}
-function mfbDelete() { confirmDelete(mobileActiveSide.value) }
-function mfbPermissions() {
-  const side = mobileActiveSide.value
-  const sel = Array.from(panels[side].selected)
-  if (sel.length !== 1) return
-  const entry = panels[side].entries.find(e => e.name === sel[0])
-  if (entry) openChmod(entry.path)
-}
-function mfbCopyPath() {
-  const side = mobileActiveSide.value
-  const sel = Array.from(panels[side].selected)
-  if (sel.length !== 1) return
-  const entry = panels[side].entries.find(e => e.name === sel[0])
-  if (entry) clipboard.writeText(entry.path)
-}
-const mfbSelectedCount = computed(() => panels[mobileActiveSide.value].selected.size)
-const isS3 = computed(() => connProtocol.value === 's3')
-
-// ACL dialog
-const showAclDialog = ref(false)
-const aclPath = ref('')
-const aclValue = ref('private')
-
-function openAclDialog(path: string) {
-  aclPath.value = path
-  aclValue.value = 'private'
-  showAclDialog.value = true
-  // Load current ACL
-  if (sessionId.value) {
-    filesApi.getAcl(sessionId.value, path).then(acl => { aclValue.value = acl }).catch(() => {})
-  }
-}
-
-async function applyAcl() {
-  if (!sessionId.value) return
-  await filesApi.putAcl(sessionId.value, aclPath.value, aclValue.value)
-  showAclDialog.value = false
-  await loadPanel('left')
-  await loadPanel('right')
-}
-
-// Chmod permissions
-const showChmod = ref(false)
-const chmodPath = ref('')
-const chmodPerms = reactive({
-  owner: { read: true, write: true, exec: false },
-  group: { read: true, write: false, exec: false },
-  other: { read: false, write: false, exec: false },
-})
-
-function openChmod(path: string) {
-  chmodPath.value = path
-  showChmod.value = true
-}
-
-function calcOctal(): number {
-  let octal = 0
-  if (chmodPerms.owner.read) octal += 400
-  if (chmodPerms.owner.write) octal += 200
-  if (chmodPerms.owner.exec) octal += 100
-  if (chmodPerms.group.read) octal += 40
-  if (chmodPerms.group.write) octal += 20
-  if (chmodPerms.group.exec) octal += 10
-  if (chmodPerms.other.read) octal += 4
-  if (chmodPerms.other.write) octal += 2
-  if (chmodPerms.other.exec) octal += 1
-  return octal
-}
-
-async function applyChmod() {
-  if (!sessionId.value) return
-  const octal = calcOctal()
-  await filesApi.chmod(sessionId.value, chmodPath.value, octal.toString(8))
-  showChmod.value = false
-  await loadPanel('left')
-  await loadPanel('right')
-}
-
-// Edit file
-const editorVisible = ref(false)
-const editorFilePath = ref('')
-function editFile(path: string) {
-  if (!sessionId.value) return
-  editorFilePath.value = path
-  editorVisible.value = true
-  ctx.value.show = false
-}
-function onEditorSaved() {
-  editorVisible.value = false
-  loadPanel('left'); loadPanel('right')
-}
-
-// File preview
-const previewVisible = ref(false)
-const previewFile = ref<{ name: string; path: string; mime?: string } | null>(null)
-
-const IMAGE_EXTS = /\.(png|jpe?g|gif|webp|bmp|svg|ico)(\?|$)/i
-const TEXT_EXTS = /\.(txt|md|json|js|ts|tsx|jsx|vue|css|scss|less|html|xml|yaml|yml|toml|ini|cfg|conf|sh|bash|zsh|py|rb|go|rs|java|c|cpp|h|hpp|sql|log|csv|env|makefile|dockerfile|docker-compose)(\?|$)/i
-
-function isPreviewable(entry: FileEntry): boolean {
-  if (entry.is_dir) return false
-  return IMAGE_EXTS.test(entry.name) || TEXT_EXTS.test(entry.name)
-}
-
-function openPreview(entry: FileEntry) {
-  if (!isPreviewable(entry)) return
-  previewFile.value = { name: entry.name, path: entry.path }
-  previewVisible.value = true
-}
-
-// Resize
-const leftW = ref(400); const dragging = ref(false); let sx = 0, sw = 0
-function onDS(e: MouseEvent) { dragging.value = true; sx = e.clientX; sw = leftW.value; document.addEventListener('mousemove', onDM); document.addEventListener('mouseup', onDE); document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none' }
-function onDM(e: MouseEvent) { leftW.value = Math.min(800, Math.max(250, sw + (e.clientX - sx))) }
-function onDE() { dragging.value = false; document.removeEventListener('mousemove', onDM); document.removeEventListener('mouseup', onDE); document.body.style.cursor = ''; document.body.style.userSelect = '' }
-onBeforeUnmount(async () => {
-  document.removeEventListener('keydown', onKeyDown)
-  document.removeEventListener('mousemove', onDM)
-  document.removeEventListener('mouseup', onDE)
-  if (sessionId.value) {
-    try { await filesApi.disconnect(sessionId.value) } catch { /* ignore */ }
-  }
-})
-
-function fmtSize(b: number) { if (!b) return '-'; const u = ['B','KB','MB','GB']; let i = 0, s = b; while (s >= 1024 && i < 3) { s /= 1024; i++ } return `${s.toFixed(i ? 1 : 0)} ${u[i]}` }
-
-/* ---- drag & drop transfer ---- */
-const dragData = ref<{ side: Side; names: string[] } | null>(null)
-const dropTarget = ref<Side | null>(null)
-
-function onDragStart(e: DragEvent, side: Side, name: string) {
-  // Include all selected items if the dragged one is selected, filter out directories
-  const sel = panels[side].selected
-  const allNames = sel.has(name) ? Array.from(sel) : [name]
-  const names = allNames.filter(n => {
-    const entry = panels[side].entries.find(en => en.name === n)
-    return entry && !entry.is_dir
-  })
-  if (names.length === 0) return
-  dragData.value = { side, names }
-  if (e.dataTransfer) {
-    e.dataTransfer.effectAllowed = 'copy'
-    e.dataTransfer.setData('text/plain', names.join(','))
-  }
-}
-
-function onDragOver(e: DragEvent, side: Side) {
-  e.preventDefault()
-  // Skip drop indicator for same-side internal drag
-  if (dragData.value && dragData.value.side === side) return
-  e.dataTransfer!.dropEffect = 'copy'
-  dropTarget.value = side
-}
-
-function onDragLeave(e: DragEvent) {
-  // Don't clear drop indicator when moving between child elements inside the panel
-  const related = e.relatedTarget as HTMLElement | null
-  if (related && (e.currentTarget as HTMLElement).contains(related)) return
-  dropTarget.value = null
-}
-
-async function handleExternalFileDrop(files: FileList, side: Side) {
-  if (!sessionId.value) return
-  for (const file of Array.from(files)) {
-    const remotePath = panels[side].path + file.name
-    const key = `${sessionId.value}:ul:${remotePath}`
-    const item: TransferItem = {
-      sessionId: sessionId.value, remotePath, fileName: file.name,
-      type: 'upload', status: 'transferring', transferredBytes: 0, totalBytes: file.size,
-      file, side,
-    }
-    transferQueue.value.set(key, item)
-    transferQueue.value = new Map(transferQueue.value)
-    try {
-      if (file.size > PART_SIZE) {
-        const result = await filesApi.uploadFileWithProgress(sessionId.value, remotePath, file, (_pct, loaded) => {
-          item.transferredBytes = loaded
-          transferQueue.value = new Map(transferQueue.value)
-        })
-        item.uploadId = result.upload_id
-        item.status = 'completed'
-      } else {
-        await filesApi.uploadFile(sessionId.value, remotePath, file)
-        item.status = 'completed'
-      }
-    } catch (e) {
-      item.status = 'failed'
-      item.errorMessage = e instanceof Error ? e.message : String(e)
-      console.error('Upload failed:', e)
-    }
-  }
-  transferQueue.value = new Map(transferQueue.value)
-  loadPanel(side)
-}
-
-async function onDrop(e: DragEvent, targetSide: Side) {
-  e.preventDefault()
-  dropTarget.value = null
-  if (!sessionId.value) return
-  // Handle external file drops from OS file manager
-  if (e.dataTransfer?.files.length) {
-    await handleExternalFileDrop(e.dataTransfer.files, targetSide)
-    return
-  }
-  if (!dragData.value) return
-  const { side: sourceSide, names } = dragData.value
-
-  for (const name of names) {
-    const srcEntry = panels[sourceSide].entries.find(en => en.name === name)
-    if (!srcEntry) continue
-    if (srcEntry.is_dir) continue
-
-    const srcPath = srcEntry.path
-    const dstPath = panels[targetSide].path + name
-
-    try {
-      const resourceId = props.resourceId
-      if (!resourceId) continue
-      // Server-side move/copy: bytes never transit the browser. `copy` preserves
-      // the source (matches the previous download→upload non-destructive behavior).
-      await transferStore.copy(
-        { resource_id: resourceId, path: srcPath },
-        { resource_id: resourceId, path: dstPath },
-      )
-    } catch (err) {
-      console.error('Transfer failed:', err)
-    }
-  }
-
-  dragData.value = null
-  loadPanel(targetSide)
-}
-
-function onDragEnd() {
-  dragData.value = null
-  dropTarget.value = null
-}
-
-/* ---- folder sync dialog ---- */
-const showSyncDialog = ref(false)
-
-function openSyncDialog() {
-  showSyncDialog.value = true
-}
-
-function onSync(_options: { direction: string; compareSize: boolean; compareTime: boolean; includePattern: string; excludePattern: string; deleteOrphans: boolean }) {
-  showSyncDialog.value = false
-  // In real implementation: call backend API to perform sync
-  loadPanel('left')
-  loadPanel('right')
-}
 </script>
 
 <template>
   <div class="fp" @mousemove.prevent>
     <!-- Mobile panel switcher -->
     <div class="fp-switcher">
-      <button class="fp-switcher-btn" :class="{ 'fp-switcher-btn--active': mobileActiveSide === 'left' }" @click="mobileActiveSide = 'left'">{{ t('files.left') }}</button>
-      <button class="fp-switcher-btn" :class="{ 'fp-switcher-btn--active': mobileActiveSide === 'right' }" @click="mobileActiveSide = 'right'">{{ t('files.right') }}</button>
+      <button
+        class="fp-switcher-btn"
+        :class="{ 'fp-switcher-btn--active': mobileActiveSide === 'left' }"
+        @click="mobileActiveSide = 'left'"
+      >
+        {{ t('files.left') }}
+      </button>
+      <button
+        class="fp-switcher-btn"
+        :class="{ 'fp-switcher-btn--active': mobileActiveSide === 'right' }"
+        @click="mobileActiveSide = 'right'"
+      >
+        {{ t('files.right') }}
+      </button>
     </div>
 
     <div v-if="showConnect" class="fp-overlay">
@@ -718,47 +146,100 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
       </div>
     </div>
 
-    <template v-for="side in (['left','right'] as const)" :key="side">
-      <!-- S3 单 bucket/prefix 模型双栏无意义，合并为单栏（仅渲染 left 面板） -->
-      <div v-if="!(isS3 && side === 'right')" class="fp-panel" :class="{ 'fp-panel--active': panels[side].active, 'fp-panel--drop': dropTarget === side, 'fp-panel--mobile-hidden': mobileActiveSide !== side }" :style="isS3 ? {flex:'1',minWidth:'0'} : (side==='left' ? {width:leftW+'px'} : {flex:'1',minWidth:'0'})" @click="activate(side)" @dragover="onDragOver($event, side)" @dragleave="onDragLeave" @drop="onDrop($event, side)">
-        <div class="ptb">
-          <Button variant="ghost" icon :title="t('files.up')" @click="goUp(side)">↑</Button>
-          <span class="pp mono">{{ panels[side].path }}</span>
-          <Button variant="ghost" icon :class="{ 'pb--active': syncBrowsing }" :title="t('files.syncBrowsing')" @click="syncBrowsing = !syncBrowsing">🔗</Button>
-          <Button variant="ghost" icon :title="t('files.folderSync')" @click="openSyncDialog">🔄</Button>
-          <Button variant="ghost" icon :title="t('files.upload')" @click="uploadTo(side)">⬆</Button>
-          <Button variant="ghost" icon :title="t('files.refresh')" @click="loadPanel(side)">↻</Button>
-        </div>
-        <div class="pf">
-          <div class="fr fh"><span class="cn">{{ t('files.name') }}</span><span class="cs">{{ t('files.size') }}</span><span class="cm">{{ t('files.modified') }}</span><span v-if="isS3" class="csc">{{ t('files.storageClass') }}</span><span v-if="isS3" class="csc">{{ t('files.acl') }}</span></div>
-          <div v-for="e in panels[side].entries" :key="e.name" class="fr" :class="{ 'fr--sel': panels[side].selected.has(e.name) }" draggable="true" @dragstart="onDragStart($event, side, e.name)" @dragend="onDragEnd" @click="toggleSelect(side, e.name, $event)" @dblclick="!renamingId && (isPreviewable(e) ? openPreview(e) : navigate(side, e))" @contextmenu="onCtx($event, e, side)">
-            <span v-if="!isRenaming(side, e.name)" class="cn"><span class="fi">{{ e.is_dir ? '📁' : '📄' }}</span> {{ e.name }}</span>
-            <input v-else v-model="renameValue" class="fp-rename-input" autofocus @blur="cancelRename" @keydown.enter="submitRename(side)" @keydown.escape="cancelRename" @click.stop @keydown.stop />
-            <span class="cs mu">{{ e.is_dir ? '-' : fmtSize(e.size) }}</span>
-            <span class="cm mu">{{ e.modified || '-' }}</span>
-            <span v-if="isS3" class="csc mu">{{ e.storage_class || '-' }}</span>
-            <span v-if="isS3" class="csc mu">{{ e.acl || '-' }}</span>
-          </div>
-          <div v-if="!panels[side].loading && !panels[side].entries.length" class="pe">{{ t('files.empty') }}</div>
-        </div>
+    <template v-for="side in (['left', 'right'] as const)" :key="side">
+      <!-- S3 single-bucket/prefix model: dual-panel is pointless → render left only -->
+      <div
+        v-if="!(canShowDualPanel !== true && side === 'right')"
+        class="fp-panel"
+        :class="{
+          'fp-panel--active': panels[side].active,
+          'fp-panel--drop': dropTarget === side,
+          'fp-panel--mobile-hidden': mobileActiveSide !== side,
+        }"
+        :style="canShowDualPanel ? (side === 'left' ? { width: leftW + 'px' } : { flex: '1', minWidth: '0' }) : { flex: '1', minWidth: '0' }"
+        @click="activate(side)"
+        @dragover="onDragOver($event, side)"
+        @dragleave="onDragLeave"
+        @drop="onDrop($event, side)"
+      >
+        <FilesToolbar
+          :path="panels[side].path"
+          :sync-browsing="syncBrowsing"
+          @go-up="goUp(side)"
+          @toggle-sync="syncBrowsing = !syncBrowsing"
+          @upload="uploadTo(side)"
+          @refresh="loadPanel(side)"
+        />
+        <FilesGrid
+          :side="side"
+          :panel="panels[side]"
+          :renaming-id="renamingId"
+          :rename-value="renameValue"
+          :show-storage-class="hasCap('acl')"
+          @select="toggleSelect"
+          @activate="activateEntry"
+          @context="onCtx"
+          @update:rename-value="renameValue = $event"
+          @rename-submit="submitRename"
+          @rename-cancel="cancelRename"
+          @drag-start="onDragStart"
+          @drag-end="onDragEnd"
+        />
         <div v-if="panels[side].selected.size > 0" class="batch-bar">
           <span class="batch-bar-count">{{ panels[side].selected.size }} {{ t('files.selected') }}</span>
           <div class="batch-bar-actions">
-            <Button variant="ghost" icon @click="downloadSelected(side)" title="Download selected">⬇</Button>
-            <Button variant="danger" icon @click="confirmDelete(side)" title="Delete selected">🗑</Button>
+            <Button variant="ghost" icon title="Download selected" @click="downloadSelected(side)">⬇</Button>
+            <Button variant="danger" icon title="Delete selected" @click="confirmDelete(side)">🗑</Button>
           </div>
         </div>
-        <div class="ps">{{ panels[side].entries.length }} {{ t('files.items') }}<template v-if="panels[side].selected.size"> · {{ panels[side].selected.size }} {{ t('files.selected') }}</template></div>
+        <div class="ps">
+          {{ panels[side].entries.length }} {{ t('files.items') }}
+          <template v-if="panels[side].selected.size">
+            · {{ panels[side].selected.size }} {{ t('files.selected') }}
+          </template>
+        </div>
       </div>
-      <div v-if="side==='left' && !isS3" class="fh2" :class="{ 'fh2--a': dragging }" @mousedown.prevent="onDS" />
+      <div
+        v-if="side === 'left' && canShowDualPanel"
+        class="fh2"
+        :class="{ 'fh2--a': dragging }"
+        @mousedown.prevent="onDS"
+      />
     </template>
 
-    <div v-if="ctx.show" ref="ctxRef" class="fctx" :style="{top:ctx.y+'px',left:ctx.x+'px'}">
+    <!-- Context menu -->
+    <div
+      v-if="ctx.show"
+      ref="ctxRef"
+      class="fctx"
+      :style="{ top: ctx.y + 'px', left: ctx.x + 'px' }"
+    >
       <div class="ci" @click="editFile(ctx.path)">{{ t('files.edit') }}</div>
-      <div class="ci" @click="() => { const entry = panels[ctx.side].entries.find(e => e.name === ctx.name); if (entry) startRename(ctx.side, entry) }">{{ t('files.rename') }}</div>
+      <div
+        class="ci"
+        @click="
+          (() => {
+            const entry = panels[ctx.side].entries.find((e) => e.name === ctx.name)
+            if (entry) startRename(ctx.side, entry)
+          })()
+        "
+      >
+        {{ t('files.rename') }}
+      </div>
       <div class="ci" @click="ctxCopy">{{ t('files.copyPath') }}</div>
-      <div v-if="isS3" class="ci" @click="ctxPresignedUrl">{{ t('files.copyPresignedUrl') }}</div>
-      <div class="ci" @click="isS3 ? openAclDialog(ctx.path) : openChmod(ctx.path)">{{ t('files.permissions') }}</div>
+      <div
+        v-if="hasCap('presigned_url')"
+        class="ci"
+        @click="ctxPresignedUrl"
+      >
+        {{ t('files.copyPresignedUrl') }}
+      </div>
+      <div
+        class="ci"
+        @click="hasCap('acl') ? openAclDialog(ctx.path) : openChmod(ctx.path)"
+      >
+        {{ t('files.permissions') }}
+      </div>
       <div class="ci ci--d" @click="ctxDelete">{{ t('files.delete') }}</div>
     </div>
 
@@ -809,7 +290,10 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
           <h3>{{ t('files.acl') }}: {{ aclPath }}</h3>
           <div style="margin:var(--space-3) 0">
             <label style="display:block;font-size:var(--text-sm);color:var(--text-muted);margin-bottom:var(--space-1)">{{ t('files.cannedAcl') }}</label>
-            <select v-model="aclValue" style="width:100%;padding:var(--space-2);background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:var(--text-sm)">
+            <select
+              v-model="aclValue"
+              style="width:100%;padding:var(--space-2);background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:var(--text-sm)"
+            >
               <option value="private">private</option>
               <option value="public-read">public-read</option>
               <option value="public-read-write">public-read-write</option>
@@ -824,20 +308,11 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
       </div>
     </Teleport>
 
-    <!-- Folder Sync Dialog -->
-    <FolderSyncDialog
-      :visible="showSyncDialog"
-      :source-path="panels.left.path"
-      :target-path="panels.right.path"
-      @close="showSyncDialog = false"
-      @sync="onSync"
-    />
-
     <FileEditorDialog
       :visible="editorVisible"
       :session-id="sessionId || ''"
       :file-path="editorFilePath"
-      :protocol="connProtocol"
+      :protocol="editorProtocol"
       @close="editorVisible = false"
       @saved="onEditorSaved"
     />
@@ -880,49 +355,71 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
     <Toast ref="toast" />
 
     <!-- Transfer Queue Toggle -->
-    <button v-if="queueItems.length > 0" class="tq-toggle" @click="showTransferQueue = !showTransferQueue">
-      📥 {{ queueItems.length }} <span v-if="activeCount">· {{ activeCount }} {{ t('files.active') }}</span>
-      <span v-if="completedCount" class="tq-badge tq-badge--done">{{ completedCount }} ✓</span>
+    <button
+      v-if="transfer.queueItems.length > 0"
+      class="tq-toggle"
+      @click="transfer.showTransferQueue = !transfer.showTransferQueue"
+    >
+      📥 {{ transfer.queueItems.length }}
+      <span v-if="transfer.activeCount">· {{ transfer.activeCount }} {{ t('files.active') }}</span>
+      <span v-if="transfer.completedCount" class="tq-badge tq-badge--done">{{ transfer.completedCount }} ✓</span>
     </button>
 
     <!-- Transfer Queue Panel -->
     <Teleport to="body">
       <Transition name="tq-slide">
-        <div v-if="showTransferQueue" class="tq-panel">
+        <div v-if="transfer.showTransferQueue" class="tq-panel">
           <div class="tq-header">
-            <span>{{ t('files.transferQueue') }} ({{ queueItems.length }})</span>
+            <span>{{ t('files.transferQueue') }} ({{ transfer.queueItems.length }})</span>
             <div class="tq-header-actions">
-              <button v-if="completedCount" class="tq-btn tq-btn--sm" @click="dismissCompleted">{{ t('files.clearDone') }}</button>
-              <button class="tq-btn tq-btn--sm" @click="showTransferQueue = false">✕</button>
+              <button
+                v-if="transfer.completedCount"
+                class="tq-btn tq-btn--sm"
+                @click="transfer.dismissCompleted"
+              >
+                {{ t('files.clearDone') }}
+              </button>
+              <button class="tq-btn tq-btn--sm" @click="transfer.showTransferQueue = false">✕</button>
             </div>
           </div>
           <div class="tq-list">
-            <div v-for="item in queueItems" :key="item.key" class="tq-item" :class="`tq-item--${item.status}`">
+            <div
+              v-for="item in transfer.queueItems"
+              :key="item.id"
+              class="tq-item"
+              :class="`tq-item--${item.status}`"
+            >
               <div class="tq-item-info">
                 <span class="tq-item-type">
-                  {{ item.kind === 'upload' ? '⬆' : item.kind === 'download' ? '⬇' : item.kind === 'move' ? '🔄' : '📄' }}
+                  {{ item.kind === 'browser' ? (item.direction === 'up' ? '⬆' : '⬇') : item.op === 'move' ? '🔄' : '📄' }}
                 </span>
                 <div class="tq-item-details">
-                  <span class="tq-item-name">{{ item.fileName }}</span>
-                  <span class="tq-item-path">{{ item.path }}</span>
+                  <span class="tq-item-name">{{ item.name }}</span>
+                  <span class="tq-item-path">{{ transfer.taskPath(item) }}</span>
                 </div>
               </div>
               <div class="tq-item-status">
                 <!-- Progress bar for active transfers -->
-                <template v-if="item.status === 'transferring' || item.status === 'resuming'">
+                <template v-if="item.status === 'running'">
                   <div class="tq-progress">
-                    <div class="tq-progress-bar" :style="{ width: fmtPercent(item.transferred, item.total) }"></div>
+                    <div class="tq-progress-bar" :style="{ width: item.progress + '%' }"></div>
                   </div>
-                  <span class="tq-item-pct">{{ fmtPercent(item.transferred, item.total) }}</span>
+                  <span class="tq-item-pct">{{ item.progress }}%</span>
                   <span v-if="item.speed > 0" class="tq-item-pct">{{ fmtSize(item.speed) }}/s</span>
                 </template>
-                <!-- Failed: show error + retry -->
-                <template v-else-if="item.status === 'failed'">
-                  <span class="tq-item-error" :title="item.error">{{ item.error || t('files.failed') }}</span>
-                  <button v-if="item.retryable" class="tq-btn tq-btn--retry" @click="retryTransfer(item.key)">↻ {{ t('files.retry') }}</button>
+                <!-- Error: show error + retry (browser tasks only) -->
+                <template v-else-if="item.status === 'error'">
+                  <span class="tq-item-error" :title="item.error ?? undefined">{{ item.error || t('files.failed') }}</span>
+                  <button
+                    v-if="item.kind === 'browser'"
+                    class="tq-btn tq-btn--retry"
+                    @click="transfer.retryTransfer(item.id)"
+                  >
+                    ↻ {{ t('files.retry') }}
+                  </button>
                 </template>
-                <!-- Completed -->
-                <template v-else-if="item.status === 'completed'">
+                <!-- Done -->
+                <template v-else-if="item.status === 'done'">
                   <span class="tq-item-done">✓</span>
                 </template>
                 <!-- Canceled -->
@@ -935,7 +432,7 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
                 </template>
               </div>
             </div>
-            <div v-if="!queueItems.length" class="tq-empty">{{ t('files.noTransfers') }}</div>
+            <div v-if="!transfer.queueItems.length" class="tq-empty">{{ t('files.noTransfers') }}</div>
           </div>
         </div>
       </Transition>
@@ -1018,8 +515,8 @@ function onSync(_options: { direction: string; compareSize: boolean; compareTime
 .tq-list{flex:1;overflow-y:auto;padding:var(--space-1) 0}
 .tq-item{display:flex;align-items:flex-start;justify-content:space-between;padding:var(--space-2) var(--space-3);font-size:var(--text-sm);border-bottom:1px solid var(--border);gap:var(--space-3)}
 .tq-item:last-child{border-bottom:none}
-.tq-item--failed{background:rgba(239,68,68,0.04)}
-.tq-item--completed{opacity:0.6}
+.tq-item--error{background:rgba(239,68,68,0.04)}
+.tq-item--done{opacity:0.6}
 .tq-item-info{display:flex;align-items:center;gap:var(--space-2);min-width:0;flex:1}
 .tq-item-type{font-size:14px;flex-shrink:0}
 .tq-item-details{display:flex;flex-direction:column;min-width:0}

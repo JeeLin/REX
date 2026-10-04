@@ -10,6 +10,9 @@
 //! Browser-blob tasks: local panel I/O (upload from browser → remote, or
 //! download from remote → browser). Progress is driven by XHR upload/download
 //! events and pushed into the same queue via updateBrowserTask.
+//!
+//! T5.5: A WebSocket connection to `/ws/files` carries live progress broadcasts
+//! from TransferCoordinator. WS is preferred; HTTP polling remains as fallback.
 
 import { ref, type Ref } from 'vue'
 import { defineStore } from 'pinia'
@@ -67,46 +70,32 @@ export interface TransferItem {
 
 const TERMINAL: ReadonlySet<TransferStatus> = new Set(['done', 'error', 'canceled'])
 const POLL_MS = 1000
+const RECONNECT_BASE_MS = 1000
+const RECONNECT_MAX_MS = 30000
+const RECONNECT_FACTOR = 1.5
 
-// --- WebSocket-driven updates (T5.5) ---
-// The Hub exposes `/ws/files?resource_id=<id>&token=<jwt>`. Frames are text JSON:
-//
-//   { "type": "transfer.progress", "task_id": "...", "total_bytes": ..., "transferred_bytes": ..., "speed_bytes_per_sec": ..., "eta_seconds": ... }
-//   { "type": "transfer.done",     "task_id": "...", "status": "completed" | "failed" | "canceled", "error": "..." | null }
-//
-// WS is the *preferred* live channel; polling (`monitor`) always remains as a
-// fallback so a dropped WS connection never stalls task tracking.
-
-export type FilesWsMessage =
-  | {
-      type: 'transfer.progress'
-      task_id: string
-      total_bytes?: number
-      transferred_bytes?: number
-      speed_bytes_per_sec?: number
-      eta_seconds?: number | null
-      error?: string | null
-    }
-  | {
-      type: 'transfer.done'
-      task_id: string
-      status: filesApi.TransferTaskStatus
-      error?: string | null
-    }
-
-function isFilesWsMessage(v: unknown): v is FilesWsMessage {
-  return (
-    typeof v === 'object' &&
-    v !== null &&
-    typeof (v as { type?: unknown }).type === 'string'
-  )
+/** Progress event embedded in the `payload` field of a backend WS frame. */
+interface WsProgressPayload {
+  task_id: string
+  transferred_bytes: number
+  total_bytes: number
+  speed_bytes_per_sec: number
+  status: string
+  eta_seconds?: number | null
+  error?: string | null
 }
 
+/** Normalized WS message: both backend `progress` and spec `transfer.*` shapes. */
+type WsMessage =
+  | { type: 'progress'; payload: WsProgressPayload }
+  | { type: 'transfer.progress'; task_id: string } & Partial<WsProgressPayload>
+  | { type: 'transfer.done'; task_id: string } & Partial<WsProgressPayload>
+
 /** Build a WebSocket URL using the same scheme/host as the page (Hub origin). */
-function filesWsUrl(resourceId: string): string {
+function filesWsUrl(): string {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
   const token = localStorage.getItem('rex-token') || ''
-  return `${proto}//${location.host}/ws/files?resource_id=${encodeURIComponent(resourceId)}&token=${encodeURIComponent(token)}`
+  return `${proto}//${location.host}/ws/files?token=${encodeURIComponent(token)}`
 }
 
 /** Map server-side status enum to unified status enum. */
@@ -128,10 +117,7 @@ function baseName(path: string): string {
 export const useTransferStore = defineStore('transfer', () => {
   const tasks: Ref<Map<string, TransferItem>> = ref(new Map())
   const monitors = new Map<string, ReturnType<typeof setInterval>>()
-  // Per-resource WebSocket sockets keyed by resource_id. Multiple FilesPage
-  // instances (one per open tab) may connect different resources; each gets its
-  // own socket so frames route to the right tasks.
-  const wsConnections = new Map<string, WebSocket>()
+  const ws: Ref<WebSocket | null> = ref(null)
 
   /** Reassign the Map so Map-backed refs trigger reactivity on mutation. */
   function commit(): void {
@@ -146,73 +132,111 @@ export const useTransferStore = defineStore('transfer', () => {
     }
   }
 
-  /** Apply a WebSocket frame to the matching task (server tasks only). */
-  function handleWsMessage(raw: string): void {
-    let msg: FilesWsMessage
-    try {
-      const parsed: unknown = JSON.parse(raw)
-      if (!isFilesWsMessage(parsed)) return
-      msg = parsed
-    } catch {
-      return
+  /** Normalize either backend `progress` or spec `transfer.*` frame into a task_id + partial record. */
+  function normalizeWsMessage(msg: WsMessage): { task_id: string; record: Partial<TransferTaskRecord> } | null {
+    if (msg.type === 'progress' && msg.payload) {
+      const p = msg.payload
+      return { task_id: p.task_id, record: { status: p.status as filesApi.TransferTaskStatus, total_bytes: p.total_bytes, transferred_bytes: p.transferred_bytes, speed_bytes_per_sec: p.speed_bytes_per_sec, eta_seconds: p.eta_seconds, error: p.error } }
     }
-    if (msg.type === 'transfer.progress') {
-      applyRecord(msg.task_id, {
-        total_bytes: msg.total_bytes,
-        transferred_bytes: msg.transferred_bytes,
-        speed_bytes_per_sec: msg.speed_bytes_per_sec,
-        eta_seconds: msg.eta_seconds,
-        error: msg.error,
-      })
-    } else if (msg.type === 'transfer.done') {
-      applyRecord(msg.task_id, {
-        status: msg.status,
-        error: msg.error,
-      })
+    // spec format: { type: 'transfer.progress'|'transfer.done', task_id, ...fields }
+    const { task_id, type, ...rest } = msg as { type: string; task_id: string } & Partial<WsProgressPayload>
+    if (!task_id) return null
+    const isDone = type === 'transfer.done'
+    return {
+      task_id,
+      record: {
+        // transfer.done is terminal; default to completed if no explicit status given.
+        status: isDone && !rest.status
+          ? ('completed' satisfies filesApi.TransferTaskStatus)
+          : (rest.status as filesApi.TransferTaskStatus | undefined),
+        total_bytes: rest.total_bytes,
+        transferred_bytes: rest.transferred_bytes,
+        speed_bytes_per_sec: rest.speed_bytes_per_sec,
+        eta_seconds: rest.eta_seconds,
+        error: rest.error,
+      },
     }
   }
 
+  let reconnectAttempts = 0
+  let wsIntentionallyClosed = false
+
   /**
-   * Open a WebSocket to `/ws/files` for a resource so the store is updated in
-   * real time. Safe to call repeatedly — a connection is only created once per
-   * resource while it stays open. If the endpoint is unavailable the polling
-   * `monitor` fallback keeps tasks in sync.
+   * Open a WebSocket to `/ws/files` and subscribe every server task that is
+   * currently tracked. Safe to call repeatedly — a single socket is reused.
+   * If the endpoint is unavailable the polling `monitor` fallback keeps tasks
+   * in sync. On disconnect, reconnects with exponential backoff (1s → 1.5x → 30s cap).
    */
-  function connectWs(resourceId: string): void {
-    const existing = wsConnections.get(resourceId)
-    if (existing && existing.readyState === WebSocket.OPEN) return
-    if (existing) wsConnections.delete(resourceId)
+  function connectWs(): void {
+    if (ws.value && ws.value.readyState === WebSocket.OPEN) return
+    if (ws.value) {
+      ws.value.close()
+      ws.value = null
+    }
+    wsIntentionallyClosed = false
     let socket: WebSocket
     try {
-      socket = new WebSocket(filesWsUrl(resourceId))
+      socket = new WebSocket(filesWsUrl())
     } catch {
       // Non-browser/construct failure: rely on polling fallback.
+      reconnectWs()
       return
     }
-    wsConnections.set(resourceId, socket)
+    ws.value = socket
     socket.onmessage = (ev: MessageEvent) => {
-      if (typeof ev.data === 'string') handleWsMessage(ev.data)
+      if (typeof ev.data !== 'string') return
+      let msg: unknown
+      try {
+        msg = JSON.parse(ev.data)
+      } catch {
+        return
+      }
+      const normalized = normalizeWsMessage(msg as WsMessage)
+      if (normalized) applyRecord(normalized.task_id, normalized.record)
+    }
+    socket.onopen = () => {
+      // Reset backoff on successful connection.
+      reconnectAttempts = 0
+      // Subscribe to every tracked server task.
+      tasks.value.forEach((t) => {
+        if (t.kind === 'server' && t.task_id) {
+          socket.send(JSON.stringify({ type: 'subscribe', task_id: t.task_id }))
+        }
+      })
     }
     socket.onclose = () => {
-      wsConnections.delete(resourceId)
+      ws.value = null
+      if (!wsIntentionallyClosed) reconnectWs()
     }
     socket.onerror = () => {
       socket.close()
-      wsConnections.delete(resourceId)
+      ws.value = null
+      if (!wsIntentionallyClosed) reconnectWs()
     }
   }
 
-  /** Close (and forget) the WebSocket for a resource, if any. */
-  function disconnectWs(resourceId: string): void {
-    const socket = wsConnections.get(resourceId)
-    if (socket) {
-      socket.close()
-      wsConnections.delete(resourceId)
+  /** Reconnect with exponential backoff: 1s, 1.5x, capped at 30s. */
+  function reconnectWs(): void {
+    reconnectAttempts++
+    const delay = Math.min(
+      RECONNECT_BASE_MS * Math.pow(RECONNECT_FACTOR, reconnectAttempts - 1),
+      RECONNECT_MAX_MS,
+    )
+    setTimeout(() => connectWs(), delay)
+  }
+
+  /** Close the WebSocket and stop reconnecting. */
+  function disconnectWs(): void {
+    wsIntentionallyClosed = true
+    if (ws.value) {
+      ws.value.close()
+      ws.value = null
     }
+    reconnectAttempts = 0
   }
 
   // Accepts a *partial* record so it can be driven both by the polling
-  // endpoint (full TransferTaskRecord) and by WebSocket progress/done frames
+  // endpoint (full TransferTaskRecord) and by WebSocket progress frames
   // (only the fields that changed).
   function applyRecord(id: string, rec: Partial<TransferTaskRecord>): void {
     const task = tasks.value.get(id)
@@ -233,6 +257,7 @@ export const useTransferStore = defineStore('transfer', () => {
   /**
    * Poll GET /api/files/transfer/{id} ~1s until a terminal status, updating the
    * shared store. Idempotent — repeated calls for the same id are ignored.
+   * Also opens the WS socket so progress arrives in real time.
    */
   async function monitor(id: string): Promise<void> {
     if (monitors.has(id)) return
@@ -254,6 +279,12 @@ export const useTransferStore = defineStore('transfer', () => {
       }
     }
     monitors.set(id, setInterval(tick, POLL_MS))
+    // Lazily open WS so a single socket serves all tracked tasks.
+    connectWs()
+    // If WS already open, subscribe this specific task now.
+    if (ws.value && ws.value.readyState === WebSocket.OPEN) {
+      ws.value.send(JSON.stringify({ type: 'subscribe', task_id: id }))
+    }
     tick()
   }
 
@@ -373,6 +404,7 @@ export const useTransferStore = defineStore('transfer', () => {
     cancel,
     dismissCompleted,
     connectWs,
+    reconnectWs,
     disconnectWs,
   }
 })

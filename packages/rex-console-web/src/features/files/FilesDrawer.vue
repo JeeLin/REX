@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import * as filesApi from '@/api/files'
 import type { FileEntry } from '@/api/files'
 import Button from '@/components/ui/Button.vue'
 import { useI18n } from 'vue-i18n'
 import { clipboard } from '@/utils/clipboard'
+import { useTransferStore } from '@/stores/transfer'
+import type { TransferItem } from '@/stores/transfer'
 
 const { t } = useI18n()
 
@@ -24,20 +26,16 @@ const currentPath = ref('/')
 const entries = ref<FileEntry[]>([])
 const selected = ref(new Set<string>())
 
-// Transfer queue
-interface TransferItem {
-  id: string
-  fileName: string
-  direction: 'upload' | 'download'
-  progress: number
-  speed: number
-  totalSize: number
-  transferred: number
-  status: 'pending' | 'transferring' | 'completed' | 'error' | 'cancelled'
-  xhr?: XMLHttpRequest
-}
-const transfers = ref<TransferItem[]>([])
+// Shared transfer store
+const store = useTransferStore()
+
+// Transfer queue (unified: browser tasks + running server tasks)
 const showTransfers = ref(true)
+const drawerTransfers = computed(() => {
+  return Array.from(store.tasks.values()).filter(
+    t => t.direction === 'up' || t.direction === 'down' || t.status === 'running'
+  )
+})
 
 // Inline rename
 const renaming = ref<{ name: string; value: string } | null>(null)
@@ -110,25 +108,36 @@ function upload() {
   input.onchange = () => {
     for (const file of Array.from(input.files || [])) {
       const id = `tr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-      const item: TransferItem = {
-        id, fileName: file.name, direction: 'upload', progress: 0, speed: 0,
-        totalSize: file.size, transferred: 0, status: 'transferring',
-      }
-      transfers.value.push(item)
+      store.pushBrowserTask({
+        id,
+        direction: 'up',
+        name: file.name,
+        size: file.size,
+        status: 'running',
+        progress: 0,
+        transferred: 0,
+        target_path: currentPath.value + file.name,
+        sessionId: sessionId.value!,
+        file,
+      })
       let lastLoaded = 0, lastTime = Date.now()
       filesApi.uploadFileWithProgress(sessionId.value!, currentPath.value + file.name, file,
-        (pct, loaded) => {
-          item.progress = pct; item.transferred = loaded
+        (_pct, loaded) => {
           const now = Date.now(), dt = (now - lastTime) / 1000
           if (dt >= 0.5) {
-            item.speed = Math.round((loaded - lastLoaded) / dt)
+            store.updateBrowserTask(id, {
+              transferred: loaded,
+              progress: file.size > 0 ? Math.round((loaded / file.size) * 100) : 0,
+              speed: Math.round((loaded - lastLoaded) / dt),
+            })
             lastLoaded = loaded; lastTime = now
           }
         }).then(() => {
-          item.status = 'completed'; item.progress = 100
-          setTimeout(() => { transfers.value = transfers.value.filter(t => t.id !== id) }, 30000)
+          store.updateBrowserTask(id, { status: 'done', progress: 100, transferred: file.size })
           loadDir()
-        }).catch(() => { item.status = 'error' })
+        }).catch(() => {
+          store.updateBrowserTask(id, { status: 'error' })
+        })
     }
   }
   input.click()
@@ -138,24 +147,30 @@ function upload() {
 function download(entry: FileEntry) {
   if (!sessionId.value || entry.is_dir) return
   const id = `tr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-  const item: TransferItem = {
-    id, fileName: entry.name, direction: 'download', progress: -1, speed: 0,
-    totalSize: entry.size, transferred: 0, status: 'transferring',
-  }
-  transfers.value.push(item)
+  store.pushBrowserTask({
+    id,
+    direction: 'down',
+    name: entry.name,
+    size: entry.size,
+    status: 'running',
+    progress: 0,
+    transferred: 0,
+    source_path: entry.path,
+    target_path: entry.name,
+    sessionId: sessionId.value!,
+  })
   filesApi.downloadFile(sessionId.value, entry.path).then(blob => {
-    item.status = 'completed'; item.progress = 100
-    setTimeout(() => { transfers.value = transfers.value.filter(t => t.id !== id) }, 30000)
+    store.updateBrowserTask(id, { status: 'done', progress: 100, transferred: entry.size || blob.size })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a'); a.href = url; a.download = entry.name; a.click()
     URL.revokeObjectURL(url)
-  }).catch(() => { item.status = 'error' })
+  }).catch(() => {
+    store.updateBrowserTask(id, { status: 'error' })
+  })
 }
 
 function cancelTransfer(item: TransferItem) {
-  item.xhr?.abort()
-  item.status = 'cancelled'
-  transfers.value = transfers.value.filter(t => t.id !== item.id)
+  store.cancel(item.id)
 }
 
 
@@ -288,25 +303,27 @@ onBeforeUnmount(async () => {
       </template>
     </div>
 
-    <!-- Transfer queue -->
-    <div v-if="transfers.length" class="fd-transfers">
+    <!-- Transfer queue (unified: browser tasks + running server tasks) -->
+    <div v-if="drawerTransfers.length" class="fd-transfers">
       <div class="fd-transfer-header" @click="showTransfers = !showTransfers">
-        <span>Transfers ({{ transfers.length }})</span>
+        <span>Transfers ({{ drawerTransfers.length }})</span>
         <span class="fd-transfer-toggle">{{ showTransfers ? '▾' : '▸' }}</span>
       </div>
       <div v-if="showTransfers" class="fd-transfer-list">
-        <div v-for="t in transfers" :key="t.id" class="fd-transfer-item">
-          <span class="fd-transfer-dir">{{ t.direction === 'upload' ? '⬆' : '⬇' }}</span>
-          <span class="fd-transfer-name">{{ t.fileName }}</span>
-          <span v-if="t.totalSize" class="fd-transfer-size mono muted">{{ fmtSize(t.transferred) }} / {{ fmtSize(t.totalSize) }}</span>
-          <div v-if="t.status === 'transferring'" class="fd-transfer-bar">
+        <div v-for="t in drawerTransfers" :key="t.id" class="fd-transfer-item">
+          <span class="fd-transfer-dir">
+            {{ t.kind === 'browser' ? (t.direction === 'up' ? '⬆' : '⬇') : t.op === 'move' ? '🔄' : '📄' }}
+          </span>
+          <span class="fd-transfer-name">{{ t.name }}</span>
+          <span v-if="t.size" class="fd-transfer-size mono muted">{{ fmtSize(t.transferred) }} / {{ fmtSize(t.size) }}</span>
+          <div v-if="t.status === 'running'" class="fd-transfer-bar">
             <div v-if="t.progress >= 0" class="fd-transfer-fill" :style="{ width: t.progress + '%' }" />
             <div v-else class="fd-transfer-fill fd-transfer-fill--indeterminate" />
           </div>
-          <span v-if="t.status === 'completed'" class="fd-transfer-status fd-transfer-status--ok">✓</span>
+          <span v-if="t.status === 'done'" class="fd-transfer-status fd-transfer-status--ok">✓</span>
           <span v-else-if="t.status === 'error'" class="fd-transfer-status fd-transfer-status--err">✗</span>
           <span v-else-if="t.speed > 0" class="fd-transfer-speed mono muted">{{ fmtSpeed(t.speed) }}</span>
-          <button v-if="t.status === 'transferring'" class="fd-transfer-cancel" @click="cancelTransfer(t)">×</button>
+          <button v-if="t.status === 'running'" class="fd-transfer-cancel" @click="cancelTransfer(t)">×</button>
         </div>
       </div>
     </div>

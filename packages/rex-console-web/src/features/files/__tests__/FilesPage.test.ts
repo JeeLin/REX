@@ -1,17 +1,44 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { setActivePinia, createPinia } from 'pinia'
 import { mount, flushPromises } from '@vue/test-utils'
 import FilesPage from '../FilesPage.vue'
 
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
 
-const mockConnect = vi.fn()
-const mockListFiles = vi.fn()
-const mockDisconnect = vi.fn()
+const { mockConnect, mockDisconnect, mockListFiles, mockGetCapability } = vi.hoisted(() => ({
+  mockConnect: vi.fn(),
+  mockDisconnect: vi.fn(),
+  mockListFiles: vi.fn(),
+  mockGetCapability: vi.fn(),
+}))
+
+const { mockStoreConnectWs, mockStoreDisconnectWs, mockStoreReconnectWs } = vi.hoisted(() => ({
+  mockStoreConnectWs: vi.fn(),
+  mockStoreDisconnectWs: vi.fn(),
+  mockStoreReconnectWs: vi.fn(),
+}))
 
 vi.mock('@/api/files', () => ({
   connect: (...args: unknown[]) => mockConnect(...args),
   disconnect: (...args: unknown[]) => mockDisconnect(...args),
   listFiles: (...args: unknown[]) => mockListFiles(...args),
+  getCapability: (...args: unknown[]) => mockGetCapability(...args),
+}))
+
+vi.mock('@/stores/transfer', () => ({
+  useTransferStore: () => ({
+    tasks: new Map(),
+    pushBrowserTask: vi.fn(),
+    updateBrowserTask: vi.fn(),
+    move: vi.fn(),
+    copy: vi.fn(),
+    monitor: vi.fn(),
+    cancel: vi.fn(),
+    dismissCompleted: vi.fn(),
+    connectWs: mockStoreConnectWs,
+    reconnectWs: mockStoreReconnectWs,
+    disconnectWs: mockStoreDisconnectWs,
+  }),
 }))
 
 vi.mock('@/components/ui/Button.vue', () => ({
@@ -19,10 +46,6 @@ vi.mock('@/components/ui/Button.vue', () => ({
     template: '<button><slot /></button>',
     props: ['variant', 'icon', 'size', 'disabled'],
   },
-}))
-
-vi.mock('../FolderSyncDialog.vue', () => ({
-  default: { template: '<div class="folder-sync-dialog-stub" />', props: ['visible', 'sourcePath', 'targetPath'] },
 }))
 
 vi.mock('../MobileFilesBar.vue', () => ({
@@ -34,6 +57,7 @@ vi.mock('../FileEditorDialog.vue', () => ({
 }))
 
 beforeEach(() => {
+  setActivePinia(createPinia())
   vi.clearAllMocks()
   mockConnect.mockResolvedValue('test-session-123')
   mockListFiles.mockResolvedValue([])
