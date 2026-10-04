@@ -13,6 +13,7 @@ pub mod db;
 pub mod env_api;
 pub mod error;
 pub mod file_api;
+pub mod file_ws;
 pub mod middleware;
 pub mod models;
 pub mod mongodb_api;

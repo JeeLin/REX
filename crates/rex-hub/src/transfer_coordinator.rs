@@ -21,7 +21,7 @@ use std::sync::Arc;
 use rex_common::file_transfer::FileConnector;
 use rex_transfer::{ConflictPolicy, TransferStatus};
 
-use crate::app::AppState;
+use crate::app::{AppState, TransferProgressEvent};
 
 /// 流式传输分片大小 — 1 MiB。与 S3 multipart 最小分片无关，仅为服务端直连
 /// 的直连→直连传输分片。
@@ -304,6 +304,8 @@ impl TransferCoordinator {
                 .db
                 .update_transfer_task_progress(task_id, total, offset, 0, None)
                 .ok();
+            // T5.4：进度变化时广播给 WS 订阅者
+            Self::broadcast_progress(state, task_id, "running", total, offset, 0);
             if chunk_len < CHUNK_SIZE {
                 break;
             }
@@ -416,10 +418,42 @@ impl TransferCoordinator {
             .unwrap_or(false)
     }
 
+    /// 发布传输进度/状态变更到 WS 广播通道（T5.4）。
+    /// `total`/`transferred`/`speed` 来自 DB 任务记录的当前快照。
+    fn broadcast_progress(
+        state: &AppState,
+        task_id: &str,
+        status: &str,
+        total: u64,
+        transferred: u64,
+        speed: u64,
+    ) {
+        let event = TransferProgressEvent {
+            task_id: task_id.to_string(),
+            transferred_bytes: transferred,
+            total_bytes: total,
+            speed_bytes_per_sec: speed,
+            status: status.to_string(),
+        };
+        // 忽略发送错误（无订阅者时）
+        let _ = state.transfer_bcast.send(event);
+    }
+
     fn set_status(state: &AppState, task_id: &str, status: TransferStatus, error: Option<&str>) {
         let _ = state
             .db
             .set_transfer_task_status(task_id, status.as_str_lossy(), error);
+        // T5.4：状态变更时广播，顺便携带当前进度快照。
+        if let Ok(Some(rec)) = state.db.get_transfer_task(task_id) {
+            Self::broadcast_progress(
+                state,
+                task_id,
+                status.as_str_lossy(),
+                rec.total_bytes as u64,
+                rec.transferred_bytes as u64,
+                rec.speed_bytes_per_sec as u64,
+            );
+        }
     }
 }
 

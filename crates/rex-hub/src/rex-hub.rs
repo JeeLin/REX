@@ -17,6 +17,7 @@ use rex_hub::dashboard_api;
 use rex_hub::db::Database;
 use rex_hub::env_api;
 use rex_hub::file_api::{self, FileState};
+use rex_hub::file_ws;
 use rex_hub::middleware::{self, AuthUser};
 use rex_hub::mongodb_api;
 use rex_hub::redis_api::{self, RedisState};
@@ -213,6 +214,7 @@ fn worker_main() {
             sip_recording: Arc::new(SipRecordingRegistry::new(data_dir.clone())),
             data_dir: data_dir.clone(),
             coordinator: Arc::new(rex_hub::transfer_coordinator::TransferCoordinator::new()),
+            transfer_bcast: tokio::sync::broadcast::channel(128).0,
         };
 
         #[cfg(feature = "embedded-static")]
@@ -402,6 +404,7 @@ fn build_router(state: AppState) -> Router {
         .nest("/api/mongodb", mongodb_api::mongodb_routes())
         .nest("/api/files", file_api::file_routes())
         .route("/ws/terminal", axum::routing::get(terminal_ws::ws_handler))
+        .route("/ws/files", axum::routing::get(file_ws::ws_handler))
         .route("/ws/sip", axum::routing::get(sip_ws::ws_handler))
         .route("/ws/tunnel", axum::routing::get(tunnel_ws::ws_handler))
         .layer(axum::middleware::from_extractor_with_state::<
