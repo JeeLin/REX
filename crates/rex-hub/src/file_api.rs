@@ -287,10 +287,22 @@ async fn preview_sync(
             return error_response("SYNC_PREVIEW_CONNECT_FAILED", &e.to_string()).into_response()
         }
     };
+    preview_sync_with(&mut *source, &mut *target, &body).await
+}
 
+/// `preview_sync` 的主体：连接器已打开，按请求里的根路径与选项做 dry-run 计划。
+///
+/// 与 handler 分开是为了让端点语义（响应体形状、掩码透传、空计划）能在单测里用
+/// [`rex_transfer::MemConnector`] 注入：真实 connector 需要 SFTP/S3/agent 网络，既有
+/// 端点夹具（`build_test_state`）拿不到可用的连接器。生产路径与本函数之前的实现等价。
+async fn preview_sync_with(
+    source: &mut dyn FileConnector,
+    target: &mut dyn FileConnector,
+    body: &SyncRequestBody,
+) -> axum::response::Response {
     let plan = SyncCoordinator::preview_plan(
-        &mut *source,
-        &mut *target,
+        source,
+        target,
         &body.source.path,
         &body.target.path,
         &body.options,
@@ -1784,9 +1796,10 @@ mod tests {
 
     // ---- dry-run 预览 API（v0.92.0 子任务 3）----
     //
-    // 端点层只校验参数 / 映射错误码；计划的生成语义（掩码、方向、孤儿、空计划）
-    // 由 `sync_coordinator::preview_plan` 的单测覆盖——端点用真实 connector，
-    // 离线不可构造。
+    // 端点层的参数校验 / 错误码映射见下；计划的生成语义（掩码、方向、孤儿、空计划）
+    // 由 `sync_coordinator::preview_plan` 的单测覆盖，而「请求 → 响应体」的映射
+    // （含掩码透传与空计划）由本模块末尾的 `preview_sync_with` 端点语义测试覆盖——
+    // `preview_sync` 走真实 connector（离线连不上），因此主体拆成可注入的函数。
 
     /// 预览与创建共用同一套校验：非法冲突策略、缺路径都回同一错误码。
     #[tokio::test]
@@ -1901,6 +1914,94 @@ mod tests {
         assert_eq!(
             body["error"]["code"], "SYNC_PATH_REQUIRED",
             "the response must come from the preview handler"
+        );
+    }
+
+    // ---- 预览端点语义（v0.92.0 子任务 6）----
+    //
+    // `preview_sync` 需要真实 connector（sftp / s3 / agent）才能跑通，`build_test_state`
+    // 拿不到可连接的资源；因此这里对拆分出的 `preview_sync_with` 注入
+    // `rex_transfer::MemConnector`，覆盖「请求 → 响应体」这一层的映射：
+    // 正常计划 / 空计划 / 掩码过滤后为空。引擎内部的 diff 语义仍由
+    // `sync_coordinator` 的测试负责，两层不重叠。
+
+    /// Seed an in-memory tree. `MemConnector` keys are prefix-matched against the
+    /// root passed to `list` (`"/src"` → prefix `src`), so seed keys carry no leading slash.
+    async fn mem_tree(files: &[(&str, &[u8])]) -> rex_transfer::MemConnector {
+        let mut conn = rex_transfer::MemConnector::default();
+        for (path, data) in files {
+            conn.upload(path.trim_start_matches('/'), data.to_vec(), 0, None)
+                .await
+                .unwrap();
+        }
+        conn
+    }
+
+    /// 正常计划：目标侧缺失的文件进 `actions`，内容与大小一致的同路径文件不进计划；
+    /// 响应体字段名即前端 `SyncPlanPreview` 消费的 snake_case 形状。
+    #[tokio::test]
+    async fn preview_endpoint_returns_actions_and_summary_for_pending_copy() {
+        let mut source =
+            mem_tree(&[("/src/keep.txt", b"same"), ("/src/new.txt", b"new content")]).await;
+        let mut target = mem_tree(&[("/dst/keep.txt", b"same")]).await;
+
+        let resp = preview_sync_with(&mut source, &mut target, &sync_body("/src")).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = body_json(resp).await;
+
+        let actions = body["actions"].as_array().expect("actions array");
+        assert_eq!(
+            actions.len(),
+            1,
+            "equal-size pair must not be copied: {body}"
+        );
+        assert_eq!(actions[0]["rel_path"], "new.txt");
+        assert_eq!(actions[0]["action"], "copy");
+        assert_eq!(actions[0]["dir"], "to_target");
+        assert_eq!(actions[0]["size"], 11u64);
+        assert_eq!(body["summary"]["copies"], 1);
+        assert_eq!(body["summary"]["deletes"], 0);
+        assert_eq!(body["summary"]["conflicts"], 0);
+        assert_eq!(
+            body["summary"]["total_bytes"], 11u64,
+            "summary drives the progress bar: {body}"
+        );
+    }
+
+    /// 空计划：两侧已是最新 → `actions` 为空、汇总全零（前端据此显示「无需同步」）。
+    #[tokio::test]
+    async fn preview_endpoint_returns_empty_plan_when_sides_match() {
+        let mut source = mem_tree(&[("/src/a.txt", b"same"), ("/src/b.txt", b"other")]).await;
+        let mut target = mem_tree(&[("/dst/a.txt", b"same"), ("/dst/b.txt", b"other")]).await;
+
+        let resp = preview_sync_with(&mut source, &mut target, &sync_body("/src")).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = body_json(resp).await;
+
+        assert_eq!(body["actions"].as_array().unwrap().len(), 0, "{body}");
+        assert_eq!(body["summary"]["copies"], 0);
+        assert_eq!(body["summary"]["deletes"], 0);
+        assert_eq!(body["summary"]["total_bytes"], 0);
+    }
+
+    /// 掩码过滤后为空：请求里的 `exclude` 必须透传到扫描期——被排除的源文件不可见、
+    /// 被排除的目标文件不算孤儿（否则掩码会把目标侧清空）。
+    #[tokio::test]
+    async fn preview_endpoint_mask_filtering_collapses_plan_to_empty() {
+        let mut source =
+            mem_tree(&[("/src/debug.log", b"log"), ("/src/vendor/lib.js", b"lib")]).await;
+        let mut target = mem_tree(&[("/dst/vendor/lib.js", b"lib")]).await;
+
+        let mut body = sync_body("/src");
+        body.options.exclude = vec!["*.log".into(), "vendor".into()];
+        let resp = preview_sync_with(&mut source, &mut target, &body).await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = body_json(resp).await;
+        assert_eq!(
+            body["actions"].as_array().unwrap().len(),
+            0,
+            "excluded files must be invisible and must not become orphans: {body}"
         );
     }
 }
