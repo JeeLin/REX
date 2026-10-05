@@ -214,6 +214,7 @@ fn worker_main() {
             sip_recording: Arc::new(SipRecordingRegistry::new(data_dir.clone())),
             data_dir: data_dir.clone(),
             coordinator: Arc::new(rex_hub::transfer_coordinator::TransferCoordinator::new()),
+            sync_coordinator: Arc::new(rex_hub::sync_coordinator::SyncCoordinator::new()),
             transfer_bcast: tokio::sync::broadcast::channel(128).0,
         };
 

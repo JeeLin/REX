@@ -169,6 +169,8 @@ async fn cancel_task(
             // T2：持久化取消标记后，中止进程内的后台传输流。run_stream 亦轮询 DB
             // 状态作为协作式中止的兜底。
             state.coordinator.abort(task_id);
+            // v0.92.0：同步引擎同样轮询 DB 取消标记，这里一并中止后台任务。
+            state.sync_coordinator.abort(task_id);
             tracing::info!(
                 action = audit_action,
                 transfer_task_id = %task_id,
@@ -261,6 +263,11 @@ async fn create_sync_task(
         "success",
         Some(task_id.clone()),
     );
+    // 子任务 2：提交同步引擎（scanning → planning → running → verifying）。
+    // 文件字节仅在服务端 source/target 连接器之间搬运，不经过浏览器。
+    state
+        .sync_coordinator
+        .submit(state.clone(), task_id.clone());
     (
         StatusCode::CREATED,
         Json(serde_json::json!({ "id": task_id, "status": "pending" })),

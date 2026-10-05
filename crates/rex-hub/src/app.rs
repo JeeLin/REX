@@ -16,6 +16,7 @@ use crate::redis_api::RedisState;
 use crate::sip_capture::SipCaptureRegistry;
 use crate::sip_recording::SipRecordingRegistry;
 use crate::sql_api::SqlState;
+use crate::sync_coordinator::SyncCoordinator;
 use crate::transfer_coordinator::TransferCoordinator;
 use crate::update_api::AgentBinaries;
 
@@ -46,6 +47,8 @@ pub struct AppState {
     pub data_dir: PathBuf,
     /// Hub 侧直连传输协调器（T2）：驱动 source-connector → target-connector。
     pub coordinator: Arc<TransferCoordinator>,
+    /// 目录同步协调器（v0.92.0）：compare → diff → apply，数据仍只走连接器直连。
+    pub sync_coordinator: Arc<SyncCoordinator>,
     /// 传输进度 WS 广播通道（T5.4）。
     pub transfer_bcast: broadcast::Sender<TransferProgressEvent>,
 }

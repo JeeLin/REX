@@ -52,6 +52,10 @@ impl ConflictPolicy {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TransferStatus {
     Pending,
+    /// 目录同步扫描阶段（v0.92.0）。
+    Scanning,
+    /// 目录同步计划阶段（v0.92.0）。
+    Planning,
     Running,
     Paused,
     Canceling,
@@ -71,6 +75,8 @@ impl TransferStatus {
     pub fn as_str_lossy(&self) -> &'static str {
         match self {
             Self::Pending => "pending",
+            Self::Scanning => "scanning",
+            Self::Planning => "planning",
             Self::Running => "running",
             Self::Paused => "paused",
             Self::Canceling => "canceling",
@@ -84,6 +90,8 @@ impl TransferStatus {
     /// 从状态字符串恢复（`Failed` 的错误文本单独回填）。
     pub fn from_str_lossy(s: &str) -> Self {
         match s {
+            "scanning" => Self::Scanning,
+            "planning" => Self::Planning,
             "running" => Self::Running,
             "paused" => Self::Paused,
             "canceling" => Self::Canceling,
@@ -159,6 +167,17 @@ mod tests {
         assert_eq!(
             TransferStatus::from_str_lossy("unknown"),
             TransferStatus::Pending
+        );
+        // v0.92.0 目录同步阶段
+        assert_eq!(TransferStatus::Scanning.as_str_lossy(), "scanning");
+        assert_eq!(TransferStatus::Planning.as_str_lossy(), "planning");
+        assert_eq!(
+            TransferStatus::from_str_lossy("scanning"),
+            TransferStatus::Scanning
+        );
+        assert_eq!(
+            TransferStatus::from_str_lossy("planning"),
+            TransferStatus::Planning
         );
     }
 
