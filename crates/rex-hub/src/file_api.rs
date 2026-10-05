@@ -6,6 +6,7 @@ use std::sync::Arc;
 use crate::db::audit_log;
 use crate::models::{NewSyncTask, NewTransferTask};
 use crate::resource_conn::{load_resource_config, normalize_username, ResourceConnInfo};
+use crate::sync_coordinator::SyncCoordinator;
 use crate::transfer_coordinator::TransferOp;
 use crate::AppState;
 use axum::extract::{Multipart, Path, Query, State};
@@ -79,7 +80,9 @@ pub fn file_routes() -> axum::Router<AppState> {
             "/transfer/{id}/cancel",
             axum::routing::post(cancel_transfer_task),
         )
-        // v0.92.0：目录同步任务（create/get/cancel；preview 于子任务 3 接入）
+        // v0.92.0：目录同步任务（create/preview/get/cancel）
+        // 静态路径必须先于 `/sync/{id}` 注册，避免 `preview` 被当作任务 id。
+        .route("/sync/preview", axum::routing::post(preview_sync))
         .route("/sync", axum::routing::post(create_sync_task))
         .route(
             "/sync/{id}",
@@ -203,7 +206,7 @@ async fn cancel_transfer_task(
 // Sync task API (v0.92.0, 子任务 1)
 // ---------------------------------------------------------------------------
 
-/// `POST /api/files/sync`（与子任务 3 的 preview 共用）请求体：
+/// `POST /api/files/sync` 与 `POST /api/files/sync/preview` 共用请求体：
 /// 源/目标端点 + 同步选项 + 可选冲突策略。
 #[derive(Debug, Clone, Deserialize)]
 pub struct SyncRequestBody {
@@ -215,6 +218,66 @@ pub struct SyncRequestBody {
     pub conflict: Option<String>,
 }
 
+/// 校验同步请求参数（create 与 preview 共用同一份逻辑）：冲突策略合法 +
+/// 源/目标路径非空。返回归一后的冲突策略（缺省 `overwrite`）。
+///
+/// 预览与执行必须对同一组选项给出一致的判定，否则预览承诺会与实际落盘不符。
+fn validate_sync_request(body: &SyncRequestBody) -> Result<String, (&'static str, &'static str)> {
+    let conflict = body
+        .conflict
+        .clone()
+        .unwrap_or_else(|| "overwrite".to_string());
+    if ConflictPolicy::from_str(&conflict).is_none() {
+        return Err(("INVALID_CONFLICT_POLICY", "invalid conflict policy"));
+    }
+    if body.source.path.is_empty() || body.target.path.is_empty() {
+        return Err(("SYNC_PATH_REQUIRED", "source and target path are required"));
+    }
+    Ok(conflict)
+}
+
+/// `POST /api/files/sync/preview`（dry-run）：开两侧连接器 → 扫描 → `diff` →
+/// 返回 `SyncPlan`。**不落盘、不入库、不推进任务状态机**（无任务即无 running）。
+///
+/// 计划与真实执行同源（同一扫描 + 同一 `diff`），因此「预览即所得」；扫描 /
+/// 连接失败只回错误码，不落任何副作用。
+async fn preview_sync(
+    State(state): State<AppState>,
+    Json(body): Json<SyncRequestBody>,
+) -> axum::response::Response {
+    if let Err((code, message)) = validate_sync_request(&body) {
+        return error_response(code, message).into_response();
+    }
+    let mut source = match connect_resource(&state, &body.source.resource_id).await {
+        Ok(c) => c,
+        Err(e) => {
+            return error_response("SYNC_PREVIEW_CONNECT_FAILED", &e.to_string()).into_response()
+        }
+    };
+    let mut target = match connect_resource(&state, &body.target.resource_id).await {
+        Ok(c) => c,
+        Err(e) => {
+            return error_response("SYNC_PREVIEW_CONNECT_FAILED", &e.to_string()).into_response()
+        }
+    };
+
+    let plan = SyncCoordinator::preview_plan(
+        &mut *source,
+        &mut *target,
+        &body.source.path,
+        &body.target.path,
+        &body.options,
+    )
+    .await;
+    let _ = source.close().await;
+    let _ = target.close().await;
+
+    match plan {
+        Ok(plan) => (StatusCode::OK, Json(plan)).into_response(),
+        Err(e) => error_response("SYNC_PREVIEW_FAILED", &e.to_string()).into_response(),
+    }
+}
+
 /// 创建同步任务：校验参数 → 入库（kind=sync）→ 审计 → 返回 201 pending。
 ///
 /// 同步 diff/apply 全部在服务端完成，浏览器只负责创建任务与查看进度。
@@ -222,18 +285,10 @@ async fn create_sync_task(
     State(state): State<AppState>,
     Json(body): Json<SyncRequestBody>,
 ) -> axum::response::Response {
-    let conflict = body
-        .conflict
-        .clone()
-        .unwrap_or_else(|| "overwrite".to_string());
-    if ConflictPolicy::from_str(&conflict).is_none() {
-        return error_response("INVALID_CONFLICT_POLICY", "invalid conflict policy")
-            .into_response();
-    }
-    if body.source.path.is_empty() || body.target.path.is_empty() {
-        return error_response("SYNC_PATH_REQUIRED", "source and target path are required")
-            .into_response();
-    }
+    let conflict = match validate_sync_request(&body) {
+        Ok(c) => c,
+        Err((code, message)) => return error_response(code, message).into_response(),
+    };
     let sync_options = match serde_json::to_string(&body.options) {
         Ok(s) => s,
         Err(e) => return error_response("INVALID_SYNC_OPTIONS", &e.to_string()).into_response(),
@@ -1698,5 +1753,95 @@ mod tests {
         let resp = create_sync_task(State(state.clone()), Json(sync_body(""))).await;
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
         assert_eq!(body_json(resp).await["error"]["code"], "SYNC_PATH_REQUIRED");
+    }
+
+    // ---- dry-run 预览 API（v0.92.0 子任务 3）----
+    //
+    // 端点层只校验参数 / 映射错误码；计划的生成语义（掩码、方向、孤儿、空计划）
+    // 由 `sync_coordinator::preview_plan` 的单测覆盖——端点用真实 connector，
+    // 离线不可构造。
+
+    /// 预览与创建共用同一套校验：非法冲突策略、缺路径都回同一错误码。
+    #[tokio::test]
+    async fn preview_shares_validation_with_create() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = crate::resource_conn::build_test_state(dir.path());
+
+        let mut bad = sync_body("/src/");
+        bad.conflict = Some("nope".into());
+        let resp = preview_sync(State(state.clone()), Json(bad.clone())).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            body_json(resp).await["error"]["code"],
+            "INVALID_CONFLICT_POLICY"
+        );
+        let resp = create_sync_task(State(state.clone()), Json(bad)).await;
+        assert_eq!(
+            body_json(resp).await["error"]["code"],
+            "INVALID_CONFLICT_POLICY"
+        );
+
+        let resp = preview_sync(State(state.clone()), Json(sync_body(""))).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(body_json(resp).await["error"]["code"], "SYNC_PATH_REQUIRED");
+    }
+
+    /// 资源连不上时预览回错，且不产生任何任务记录（dry-run 无副作用）。
+    #[tokio::test]
+    async fn preview_reports_connect_failure_without_persisting_task() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = crate::resource_conn::build_test_state(dir.path());
+
+        let resp = preview_sync(State(state.clone()), Json(sync_body("/src/"))).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let body = body_json(resp).await;
+        assert_eq!(body["error"]["code"], "SYNC_PREVIEW_CONNECT_FAILED");
+        assert!(
+            body["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("res-src"),
+            "message must name the failing resource, got {body}"
+        );
+        assert!(
+            state.db.list_transfer_tasks(10, 0).unwrap().is_empty(),
+            "preview must not persist a task"
+        );
+    }
+
+    /// `preview` 是静态路径，不被 `/sync/{id}` 吞掉：POST 命中预览处理器
+    /// （空 body → JSON 提取失败 400），而非 `{id}` 路由的 405。
+    #[tokio::test]
+    async fn preview_route_is_not_shadowed_by_task_id_route() {
+        use axum::body::Body;
+        use tower::ServiceExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let state = crate::resource_conn::build_test_state(dir.path());
+        let req = axum::http::Request::builder()
+            .method("POST")
+            .uri("/sync/preview")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"source":{"resource_id":"res-src","path":""},
+                    "target":{"resource_id":"res-dst","path":"/dst/"},
+                    "options":{}}"#,
+            ))
+            .unwrap();
+
+        let resp = file_routes().with_state(state).oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::BAD_REQUEST,
+            "POST /sync/preview must reach the preview handler (405 = shadowed by /sync/{{id}})"
+        );
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(
+            body["error"]["code"], "SYNC_PATH_REQUIRED",
+            "the response must come from the preview handler"
+        );
     }
 }

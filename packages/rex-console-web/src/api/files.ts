@@ -332,6 +332,20 @@ export interface SyncRequestBody {
   conflict?: TransferConflict
 }
 
+/**
+ * Dry-run preview (POST /api/files/sync/preview): compute the plan without
+ * persisting a task or copying anything — the Hub only lists both trees and
+ * returns the diff. No file bytes transit the browser.
+ */
+export async function previewSync(body: SyncRequestBody): Promise<SyncPlan> {
+  const res = await fetch(`${API_BASE}/sync/preview`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw await raise(res)
+  return await res.json()
+}
+
 /** Create a server-side sync task (POST /api/files/sync). */
 export async function createSync(body: SyncRequestBody): Promise<TransferActionCreated> {
   const res = await fetch(`${API_BASE}/sync`, {

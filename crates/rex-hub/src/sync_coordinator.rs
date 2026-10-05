@@ -196,9 +196,10 @@ impl SyncCoordinator {
 
         // --- scanning：递归列两侧文件清单 ---
         Self::set_status(state, task_id, TransferStatus::Scanning);
+        let is_canceled = || Self::is_canceled(state, task_id);
         let (source_entries, target_entries) = match (
-            Self::scan_tree(state, task_id, source, source_root, opts).await,
-            Self::scan_tree(state, task_id, target, target_root, opts).await,
+            Self::scan_tree(source, source_root, opts, &is_canceled).await,
+            Self::scan_tree(target, target_root, opts, &is_canceled).await,
         ) {
             (Ok(s), Ok(t)) => (s, t),
             (Err(e), _) | (_, Err(e)) => {
@@ -311,16 +312,33 @@ impl SyncCoordinator {
         Ok(plan)
     }
 
+    /// 扫描两侧目录树并生成计划，**不搬运、不删除、不写任务状态**（dry-run）。
+    ///
+    /// 预览没有任务可取消，因此取消钩子恒为 `false`；预览与执行的 diff 输入
+    /// 完全同源（同一 [`Self::scan_tree`] + [`diff`]），所列即所得。
+    pub async fn preview_plan(
+        source: &mut dyn FileConnector,
+        target: &mut dyn FileConnector,
+        source_root: &str,
+        target_root: &str,
+        opts: &SyncOptions,
+    ) -> Result<SyncPlan, SyncError> {
+        let never_canceled = || false;
+        let source_entries = Self::scan_tree(source, source_root, opts, &never_canceled).await?;
+        let target_entries = Self::scan_tree(target, target_root, opts, &never_canceled).await?;
+        Ok(diff(&source_entries, &target_entries, opts))
+    }
+
     /// 递归扫描一侧目录树，返回相对根的文件清单（目录不进清单）。
     ///
     /// 显式工作栈（而非递归 async fn，避免无限大的 future），`exclude` 命中的
-    /// 子树不再下钻——掩码在扫描期即生效。
+    /// 子树不再下钻——掩码在扫描期即生效。`is_canceled` 由调用方注入：执行路径
+    /// 轮询任务取消标记，dry-run 路径传恒 false。
     async fn scan_tree(
-        state: &AppState,
-        task_id: &str,
         conn: &mut dyn FileConnector,
         root: &str,
         opts: &SyncOptions,
+        is_canceled: &(dyn Fn() -> bool + Send + Sync),
     ) -> Result<Vec<SyncEntry>, SyncError> {
         let mut out = Vec::new();
         let mut stack: Vec<(String, usize)> = vec![(String::new(), 0)];
@@ -331,7 +349,7 @@ impl SyncCoordinator {
                     "directory tree too deep at {rel_dir}"
                 )));
             }
-            if Self::is_canceled(state, task_id) {
+            if is_canceled() {
                 return Err(SyncError::Canceled);
             }
 
@@ -342,7 +360,7 @@ impl SyncCoordinator {
                 .map_err(|e| SyncError::Scan(format!("list {abs} failed: {e}")))?;
 
             for entry in entries {
-                if Self::is_canceled(state, task_id) {
+                if is_canceled() {
                     return Err(SyncError::Canceled);
                 }
                 let name = file_name(&entry.name);
@@ -1260,6 +1278,186 @@ mod tests {
         let (_dir, state) = make_state();
         let res = SyncCoordinator::run(&state, "no-such-task").await;
         assert!(matches!(res, Err(SyncError::TaskNotFound)));
+    }
+
+    // ---- dry-run 预览（v0.92.0 子任务 3）----
+
+    /// 预览给出计划，但两侧目录树一字未动（不搬运、不删除、不建目录）。
+    #[tokio::test]
+    async fn preview_plan_lists_actions_without_touching_any_tree() {
+        let src = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        let dst = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        src.put("/src/app.rs", b"fn main() {}");
+        src.put("/src/deep/nested.txt", b"nested");
+        dst.put("/dst/orphan.txt", b"orphan");
+
+        let mut source = src.clone();
+        let mut target = dst.clone();
+
+        let plan = SyncCoordinator::preview_plan(
+            &mut source,
+            &mut target,
+            "/src",
+            "/dst",
+            &SyncOptions {
+                delete_orphans: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("preview must produce a plan");
+
+        assert_eq!(plan.summary.copies, 2);
+        assert_eq!(plan.summary.deletes, 1);
+        assert_eq!(plan.summary.conflicts, 0);
+        assert_eq!(
+            plan.summary.total_bytes,
+            (b"fn main() {}".len() + b"nested".len()) as u64
+        );
+        assert_eq!(
+            plan.actions
+                .iter()
+                .map(|a| (a.rel_path.as_str(), a.action))
+                .collect::<Vec<_>>(),
+            vec![
+                ("app.rs", SyncActionKind::Copy),
+                ("deep/nested.txt", SyncActionKind::Copy),
+                ("orphan.txt", SyncActionKind::Delete),
+            ],
+            "preview lists copies and orphan deletes in path order"
+        );
+
+        // 干跑：目标侧仍是原样，源侧也没有新增目标侧才有的文件。
+        assert_eq!(dst.store.lock().unwrap().len(), 1);
+        assert!(!dst.contains("/dst/app.rs"));
+        assert!(!src.contains("/dst/app.rs"));
+        assert!(dst.contains("/dst/orphan.txt"));
+    }
+
+    /// 两侧一致 → 空计划（前端据此显示「已是最新」）。
+    #[tokio::test]
+    async fn preview_plan_is_empty_when_sides_match() {
+        let src = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        let dst = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        src.put("/src/same.txt", b"same");
+        dst.put("/dst/same.txt", b"same");
+
+        let mut source = src.clone();
+        let mut target = dst.clone();
+        let plan = SyncCoordinator::preview_plan(
+            &mut source,
+            &mut target,
+            "/src",
+            "/dst",
+            &SyncOptions::default(),
+        )
+        .await
+        .expect("preview must succeed");
+
+        assert!(plan.actions.is_empty());
+        assert_eq!(plan.summary, rex_transfer::SyncSummary::default());
+    }
+
+    /// 掩码过滤后为空 → 同样返回空计划（不列被排除的文件，也不把它们判为孤儿）。
+    #[tokio::test]
+    async fn preview_plan_empty_after_mask_filtering() {
+        let src = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        let dst = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        // 两侧各自的文件都命中 exclude，因此既不可见，也不构成孤儿。
+        src.put("/src/debug.log", b"log");
+        src.put("/src/vendor/lib.js", b"lib");
+        dst.put("/dst/vendor/lib.js", b"lib");
+
+        let mut source = src.clone();
+        let mut target = dst.clone();
+        let plan = SyncCoordinator::preview_plan(
+            &mut source,
+            &mut target,
+            "/src",
+            "/dst",
+            &SyncOptions {
+                exclude: vec!["*.log".into(), "vendor".into()],
+                delete_orphans: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("preview must succeed");
+
+        assert!(
+            plan.actions.is_empty(),
+            "masked source files must be invisible and masked-away targets must not be orphans: {:?}",
+            plan.actions
+        );
+    }
+
+    /// 双向冲突行带双侧时间，供预览展示「较新者为准」。
+    #[tokio::test]
+    async fn preview_plan_exposes_bidirectional_conflict_details() {
+        let src = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        let dst = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        src.put("/src/conflict.txt", b"old");
+        src.put("/src/only-src.txt", b"src-only");
+        dst.put("/dst/conflict.txt", b"newer content");
+
+        let mut source = src.clone();
+        let mut target = dst.clone();
+        let plan = SyncCoordinator::preview_plan(
+            &mut source,
+            &mut target,
+            "/src",
+            "/dst",
+            &SyncOptions {
+                direction: rex_transfer::SyncDirection::Bidirectional,
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("preview must succeed");
+
+        let conflict = plan
+            .actions
+            .iter()
+            .find(|a| a.rel_path == "conflict.txt")
+            .expect("conflict planned");
+        assert_eq!(conflict.action, SyncActionKind::Conflict);
+        assert_eq!(conflict.dir, SyncActionDir::ToTarget);
+        assert_eq!(
+            conflict.size,
+            b"old".len() as u64,
+            "conflict size comes from the newer (winning) side"
+        );
+        assert_eq!(
+            plan.summary.conflicts, 1,
+            "conflict counted separately from copies"
+        );
+        assert_eq!(
+            plan.summary.copies, 1,
+            "single-sided file stays a plain copy"
+        );
+        // mtime 两侧均未知时退化为仅比大小 → 只按尺寸判定冲突，不误报。
+        assert_eq!(conflict.source_mtime, None);
+        assert_eq!(conflict.target_mtime, None);
+    }
+
+    /// 扫描失败回错（预览不吞异常）。
+    #[tokio::test]
+    async fn preview_plan_reports_scan_failure() {
+        let src = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        let dst = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        let mut source = src.with_list_failure();
+        let mut target = dst.clone();
+
+        let res = SyncCoordinator::preview_plan(
+            &mut source,
+            &mut target,
+            "/src",
+            "/dst",
+            &SyncOptions::default(),
+        )
+        .await;
+
+        assert!(matches!(res, Err(SyncError::Scan(_))), "got {res:?}");
     }
 
     #[test]
