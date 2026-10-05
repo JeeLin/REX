@@ -111,6 +111,58 @@ pending → running → verifying → completed
 
 ---
 
+## 目录同步（SyncCoordinator，v0.92.0）
+
+真实目录同步（文件管理右键文件夹「同步」）复用同一套 connector 与 WS 通道：**diff 与 apply 全部在 Hub 侧完成**，浏览器只创建任务、选源/目标、看预览与进度、取消。
+
+### 分层
+
+| 层 | 位置 | 职责 |
+|----|------|------|
+| REST | `file_api`：`POST /api/files/sync`、`POST /api/files/sync/preview`、`GET /api/files/sync/{id}`、`DELETE /api/files/sync/{id}` | 创建 / dry-run 预览 / 查询 / 取消。create 与 preview 共用 `validate_sync_request`（端点 + `SyncOptions` + 掩码上限：≤64 条、单条 ≤512 字符、不得全空白，违反返回 `SYNC_MASKS_INVALID`），因此不会出现「预览通过、执行被拒」 |
+| 引擎 | `rex-hub::sync_coordinator::SyncCoordinator` | `submit`（建任务 + 后台 `run`）/ `abort` / `run`（按任务记录拉起两侧 connector）/ `run_plan`（执行）/ `preview_plan`（dry-run，不写任务状态） |
+| 纯函数 | `rex-transfer::sync`：`diff` / `needs_copy` / `newer_side` / `mask_matches` / `SyncOptions` / `SyncPlan` | compare/diff 语义无 IO，可在单测穷举 |
+| 进度 | `TransferProgressEvent` → `/ws/files` | 与传输任务**同一个广播通道、同一个事件结构**，前端按 `TransferTaskRecord.kind`（`transfer` \| `sync`）分流，无需新事件类型 |
+
+### 任务状态机
+
+```text
+pending → scanning → planning → running → verifying → completed
+   ↓           ↓          ↓          ↓           ↓
+canceled ────┴──────────┴──────────┴──────────┴─── failed
+     （取消优先：失败路径不得覆盖已置 canceled 的任务）
+```
+
+| 状态 | 含义 |
+|------|------|
+| `pending` | 任务已创建，等待后台 `run` 拉起两侧 connector |
+| `scanning` | 递归列两侧文件清单；掩码在扫描期即生效，命中 `exclude` 的子树不再下钻 |
+| `planning` | `diff` 纯函数产出 `SyncPlan`（复制 / 删除 / 冲突动作 + 汇总字节） |
+| `running` | 逐 action 直连搬运或删除；每个动作完成后广播进度 |
+| `verifying` | 全部动作完成后、落 `completed` 前再查一次取消标记，防止 cancel-clobber |
+| `completed` / `failed` / `canceled` | 终态。`failed` 带错误文本落库（任务记录 `error` 字段） |
+
+### 广播点（`/ws/files`）
+
+`SyncCoordinator` 在下列各点向 `transfer_bcast` 发布 `TransferProgressEvent`，`file_ws` 转发为 `{"type":"progress","payload":<event>}`：
+
+- **阶段切换**：`set_status` 内部即广播（scanning / planning / running / verifying / completed / canceled）。
+- **拷贝动作**：每个复制完成后按累计字节广播（进度由此推进）。
+- **删除动作**：每个删除后广播（删除不搬运字节，字节数沿用计划值，**进度不因删除而伪造推进**）。
+- **失败终态**：沿用记录里已累计的字节（不被清零），前端因此能看到「同步到哪一步停的」。
+- **取消终态（4 条路径全部广播）**：运行前已取消 / action 循环中取消 / verifying 后取消 / 扫描期与拷贝期经 `SyncError::Canceled` 中止。第四条路径原先在 `fail()` 的取消分支静默早退、完全不广播（订阅者会永远停在 scanning/running），现已补 `canceled` 终态广播；该分支仍**不落 `failed`**（取消不得被失败覆盖）。
+- **兜底**：WS 未就绪或断连时走 ~1s 轮询（`GET /api/files/sync/{id}`）；`stores/transfer.ts` 对 `kind === 'sync'` 的任务走该端点，取消走 `DELETE /api/files/sync/{id}`。
+
+### 语义限制（既定设计，非缺陷）
+
+1. **孤儿只删文件，不删空目录。** `delete_orphans` 只对 diff 判定为孤儿的**文件**执行 `delete`，不递归删除目录，避免误删被掩码保留的目录内容。
+2. **清单只含文件，空目录不同步。** 两侧扫描只收集文件条目，`diff` 注释明确「目录不进计划」；只存在于一侧的空目录不会被创建（父目录由 apply 阶段按需 `mkdir`）。
+3. **mtime 不可解析时退化为仅比大小。** S3 返回 Unix 秒字符串、SFTP 返回 `%Y-%m-%d %H:%M:%S`；任一侧时间未知时 `needs_copy` 只比大小。
+4. **`Conflict` 取较新一侧的字节数。** 双向同步的冲突按 `newer_side`（mtime，时间未知或相等时以源侧为准）决定拷贝方向，字节数取被选中的一侧，因此执行期的**进度总量可能与预览求和不一致**；UI 只展示服务端给的总量，不做等式承诺。
+5. **双向同步不删除任何文件。** `diff` 在 `Bidirectional` 分支不产出删除动作；前端同时禁用「删除孤儿」开关并提示，后端 `delete_orphans` 亦恒为关。
+
+---
+
 ## 前端交互
 
 文件传输页面和标签页只负责：
@@ -141,6 +193,10 @@ pending → running → verifying → completed
 | `POST /transfer/action` | 创建搬运任务（source/target server-side 直连） |
 | `GET /transfer/{id}` | 查询任务详情（status/progress） |
 | `POST /transfer/{id}/cancel` | 取消任务（持久化 canceled 标记） |
+| `POST /sync` | 创建目录同步任务（v0.92.0，Hub 侧 diff + apply） |
+| `POST /sync/preview` | 目录同步 dry-run 计划（与 `POST /sync` 共用同一份参数校验） |
+| `GET /sync/{id}` | 查询同步任务详情（status/progress） |
+| `DELETE /sync/{id}` | 取消同步任务（持久化 canceled 标记） |
 | `GET /read-for-edit` | 读取小文件内容（编辑器，最大 5MB） |
 | `POST /save-from-edit` | 保存编辑内容 |
 
@@ -152,11 +208,10 @@ pending → running → verifying → completed
 /ws/files?token=jwt
 ```
 
-- 订阅服务器端传输任务进度。
-- 客户端发送 `{"type":"subscribe","task_id":"..."}` 订阅指定任务。
-- 服务端广播 `{"type":"transfer.progress","task_id":"...","transferred":N,"total":N,"speed":N}` 实时进度。
-- 任务结束时广播 `{"type":"transfer.done","task_id":"...","status":"completed|failed|canceled"}`。
-- Hub 侧 `TransferCoordinator` 在状态变更时触发广播，前端 `stores/transfer.ts` 订阅并更新 store。
+- 订阅服务器端传输任务进度（单文件搬运与目录同步任务共用该通道）。
+- 客户端发送 `{"type":"subscribe","task_id":"..."}` 订阅指定任务（连接上不带 `task_id` 时，订阅集合为空 = 转发所有任务的事件）。
+- 服务端广播 `{"type":"progress","payload":<TransferProgressEvent>}`，`payload` 字段为 `task_id` / `transferred_bytes` / `total_bytes` / `speed_bytes_per_sec` / `status`（`status` 取 `TransferStatus::as_str_lossy()`）。
+- Hub 侧协调器在状态/进度变更时发布 `TransferProgressEvent`，前端 `stores/transfer.ts` 订阅并更新 store；终态（`completed` / `failed` / `canceled`）同样经该通道广播。
 - Polling 作为 fallback，WS 断连时回退到轮询。
 
 ### 跨连接传输路径（v0.91.0 T2）
@@ -184,6 +239,7 @@ Move 操作完成后 source.delete(src_path)
 前端通过 Pinia `stores/transfer.ts` 管理统一传输队列，单一数据源：
 
 - **服务器端任务**：`POST /transfer/action` 创建，WS `/ws/files` 推送进度，轮询为 fallback。
+- **目录同步任务（v0.92.0）**：`POST /sync` 创建后由 `trackSync()` 登记进同一队列；`task_kind: 'sync'` + `phase`（原始服务端状态，`scanning`/`planning`/`verifying` 归一为行内 `running`）渲染阶段文案，行内显示源 → 目标、进度条，进行中可「取消」；任务到达终态后自动刷新两侧面板。
 - **浏览器任务**：浏览器直传/下载（如编辑器保存）通过 `store.pushBrowserTask()` 加入队列，XHR 事件驱动进度。
 - 队列显示：FilesPage 底部抽屉 + FilesDrawer 右侧面板，共享同一 store。
 - 冲突处理：`overwrite` / `skip` / `rename` / `fail`，前端在 transfer.action 请求前弹窗选择。
