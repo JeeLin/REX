@@ -12,7 +12,7 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount, inject } from 'vue
 import { useI18n } from 'vue-i18n'
 import { onClickOutside } from '@vueuse/core'
 import * as filesApi from '@/api/files'
-import type { FileEntry, FileCapabilities, FileCapability } from '@/api/files'
+import type { FileEntry, FileCapabilities, FileCapability, TransferEndpoint } from '@/api/files'
 import { PANE_CTX, type PaneCtx } from '@/features/workspace/paneContext'
 import { ownsKeystroke } from '@/features/workspace/paneOwnership'
 import { useTransferStore } from '@/stores/transfer'
@@ -463,6 +463,7 @@ export function useFiles(opts: UseFilesOptions) {
     path: '',
     name: '',
     side: 'left' as Side,
+    isDir: false,
   })
   const ctxRef = ref<HTMLElement | null>(null)
   onClickOutside(ctxRef, () => {
@@ -478,6 +479,7 @@ export function useFiles(opts: UseFilesOptions) {
       path: entry.path,
       name: entry.name,
       side,
+      isDir: entry.is_dir,
     }
   }
 
@@ -500,6 +502,33 @@ export function useFiles(opts: UseFilesOptions) {
       )
     }
     ctx.value.show = false
+  }
+
+  // --- Folder sync dialog (v0.92.0 子任务 4) ---
+  // 右键选中的目录 = 源，对面面板当前目录 = 目标；两端都指向本资源。
+  // 差异计算与搬运在 Hub 侧完成，浏览器只提交选项与查看 dry-run 计划。
+  const showSyncDialog = ref(false)
+  const syncSource = ref<TransferEndpoint | null>(null)
+  const syncTarget = ref<TransferEndpoint | null>(null)
+
+  /** 目录路径补尾斜杠：同步根按目录处理（引擎内部亦 trim 尾斜杠）。 */
+  function asDirPath(path: string): string {
+    return path.endsWith('/') ? path : path + '/'
+  }
+
+  function openSync() {
+    if (!resourceId || !ctx.value.isDir) return
+    const other = otherSide(ctx.value.side)
+    syncSource.value = { resource_id: resourceId, path: asDirPath(ctx.value.path) }
+    syncTarget.value = { resource_id: resourceId, path: panels[other].path }
+    showSyncDialog.value = true
+    ctx.value.show = false
+  }
+
+  function closeSync() {
+    showSyncDialog.value = false
+    syncSource.value = null
+    syncTarget.value = null
   }
 
   // --- New folder ---
@@ -870,6 +899,12 @@ export function useFiles(opts: UseFilesOptions) {
     ctxCopy,
     ctxPresignedUrl,
     ctxDelete,
+    // folder sync dialog
+    showSyncDialog,
+    syncSource,
+    syncTarget,
+    openSync,
+    closeSync,
     // new folder / mobile
     newFolder,
     mfbNewFolder,

@@ -218,8 +218,33 @@ pub struct SyncRequestBody {
     pub conflict: Option<String>,
 }
 
+/// 单类掩码的最大条数（include / exclude 各算一份）与单条最大长度。
+///
+/// 掩码在扫描期对每个条目逐条匹配（见 `rex_transfer::mask_matches`），
+/// 条数与长度无界会放大单次同步的 CPU 成本；这里在 API 层给出硬上限，
+/// create 与 preview 共用同一份判定，前端因此不能「预览通过、执行被拒」。
+const MAX_SYNC_MASKS: usize = 64;
+const MAX_SYNC_MASK_LEN: usize = 512;
+
+/// 校验掩码列表：条数有界、单条长度有界、至少一条非空白。
+fn validate_sync_masks(masks: &[String]) -> Result<(), (&'static str, &'static str)> {
+    if masks.len() > MAX_SYNC_MASKS {
+        return Err(("SYNC_MASKS_INVALID", "too many include/exclude masks"));
+    }
+    if masks.iter().any(|m| m.trim().len() > MAX_SYNC_MASK_LEN) {
+        return Err(("SYNC_MASKS_INVALID", "include/exclude mask is too long"));
+    }
+    if masks.iter().any(|m| m.trim().is_empty()) {
+        return Err((
+            "SYNC_MASKS_INVALID",
+            "include/exclude mask must not be empty",
+        ));
+    }
+    Ok(())
+}
+
 /// 校验同步请求参数（create 与 preview 共用同一份逻辑）：冲突策略合法 +
-/// 源/目标路径非空。返回归一后的冲突策略（缺省 `overwrite`）。
+/// 源/目标路径非空 + 掩码有界。返回归一后的冲突策略（缺省 `overwrite`）。
 ///
 /// 预览与执行必须对同一组选项给出一致的判定，否则预览承诺会与实际落盘不符。
 fn validate_sync_request(body: &SyncRequestBody) -> Result<String, (&'static str, &'static str)> {
@@ -233,6 +258,8 @@ fn validate_sync_request(body: &SyncRequestBody) -> Result<String, (&'static str
     if body.source.path.is_empty() || body.target.path.is_empty() {
         return Err(("SYNC_PATH_REQUIRED", "source and target path are required"));
     }
+    validate_sync_masks(&body.options.include)?;
+    validate_sync_masks(&body.options.exclude)?;
     Ok(conflict)
 }
 
@@ -1807,6 +1834,38 @@ mod tests {
             state.db.list_transfer_tasks(10, 0).unwrap().is_empty(),
             "preview must not persist a task"
         );
+    }
+
+    /// 掩码上限与空白掩码：create 与 preview 共用同一份判定（同一错误码）。
+    #[tokio::test]
+    async fn sync_masks_are_validated_for_create_and_preview() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = crate::resource_conn::build_test_state(dir.path());
+
+        // 超过条数上限
+        let mut many = sync_body("/src/");
+        many.options.include = (0..MAX_SYNC_MASKS + 1).map(|i| format!("m{i}")).collect();
+        let resp = create_sync_task(State(state.clone()), Json(many.clone())).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(body_json(resp).await["error"]["code"], "SYNC_MASKS_INVALID");
+        let resp = preview_sync(State(state.clone()), Json(many)).await;
+        assert_eq!(body_json(resp).await["error"]["code"], "SYNC_MASKS_INVALID");
+
+        // 单条超长
+        let mut long = sync_body("/src/");
+        long.options.exclude = vec!["x".repeat(MAX_SYNC_MASK_LEN + 1)];
+        let resp = create_sync_task(State(state.clone()), Json(long)).await;
+        assert_eq!(body_json(resp).await["error"]["code"], "SYNC_MASKS_INVALID");
+
+        // 空白掩码（会被 `mask_matches` 永久判为不命中，直接拒掉更安全）
+        let mut blank = sync_body("/src/");
+        blank.options.exclude = vec!["  ".into()];
+        let resp = preview_sync(State(state.clone()), Json(blank)).await;
+        assert_eq!(body_json(resp).await["error"]["code"], "SYNC_MASKS_INVALID");
+
+        // 空掩码列表始终合法（include 空 = 全选）
+        let resp = create_sync_task(State(state.clone()), Json(sync_body("/src/"))).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
     }
 
     /// `preview` 是静态路径，不被 `/sync/{id}` 吞掉：POST 命中预览处理器

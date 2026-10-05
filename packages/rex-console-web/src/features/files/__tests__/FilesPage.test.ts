@@ -5,11 +5,13 @@ import FilesPage from '../FilesPage.vue'
 
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
 
-const { mockConnect, mockDisconnect, mockListFiles, mockGetCapability } = vi.hoisted(() => ({
+const { mockConnect, mockDisconnect, mockListFiles, mockGetCapability, mockPreviewSync, mockCreateSync } = vi.hoisted(() => ({
   mockConnect: vi.fn(),
   mockDisconnect: vi.fn(),
   mockListFiles: vi.fn(),
   mockGetCapability: vi.fn(),
+  mockPreviewSync: vi.fn(),
+  mockCreateSync: vi.fn(),
 }))
 
 const { mockStoreConnectWs, mockStoreDisconnectWs, mockStoreReconnectWs } = vi.hoisted(() => ({
@@ -23,6 +25,8 @@ vi.mock('@/api/files', () => ({
   disconnect: (...args: unknown[]) => mockDisconnect(...args),
   listFiles: (...args: unknown[]) => mockListFiles(...args),
   getCapability: (...args: unknown[]) => mockGetCapability(...args),
+  previewSync: (...args: unknown[]) => mockPreviewSync(...args),
+  createSync: (...args: unknown[]) => mockCreateSync(...args),
 }))
 
 vi.mock('@/stores/transfer', () => ({

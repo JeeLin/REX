@@ -12,6 +12,7 @@ import FilesGrid from './FilesGrid.vue'
 import MobileFilesBar from './MobileFilesBar.vue'
 import FileEditorDialog from './FileEditorDialog.vue'
 import FilePreview from './FilePreview.vue'
+import FolderSyncDialog from './FolderSyncDialog.vue'
 import Toast from '@/components/ui/Toast.vue'
 import Button from '@/components/ui/Button.vue'
 import { fmtSize } from '@/features/files/format'
@@ -52,6 +53,11 @@ const {  sessionId,
   ctxCopy,
   ctxPresignedUrl,
   ctxDelete,
+  showSyncDialog,
+  syncSource,
+  syncTarget,
+  openSync,
+  closeSync,
   hasCap,
   canShowDualPanel,
   panels,
@@ -240,6 +246,8 @@ const {  sessionId,
       >
         {{ t('files.permissions') }}
       </div>
+      <!-- PRODUCT §3.8：文件夹右键才有「同步」入口（文件无同步语义）。 -->
+      <div v-if="ctx.isDir" class="ci" @click="openSync">{{ t('files.folderSync') }}</div>
       <div class="ci ci--d" @click="ctxDelete">{{ t('files.delete') }}</div>
     </div>
 
@@ -322,6 +330,16 @@ const {  sessionId,
       :file="previewFile"
       :session-id="sessionId || ''"
       @close="previewVisible = false"
+    />
+
+    <!-- Folder Sync Dialog: browser only configures options / reads the plan. -->
+    <FolderSyncDialog
+      :open="showSyncDialog"
+      :source="syncSource"
+      :target="syncTarget"
+      @close="closeSync"
+      @created="notify(t('files.syncCreated'), 'success')"
+      @error="(msg) => notify(msg, 'error')"
     />
 
     <!-- Delete Confirmation -->
