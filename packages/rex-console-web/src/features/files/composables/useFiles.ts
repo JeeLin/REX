@@ -8,7 +8,7 @@
 //! GET /api/files/connector/{resource_id}/capability and gate the UI via
 //! hasCap(), replacing the previous protocol-based isS3 branching.
 
-import { ref, reactive, computed, onMounted, onBeforeUnmount, inject } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onClickOutside } from '@vueuse/core'
 import * as filesApi from '@/api/files'
@@ -531,6 +531,43 @@ export function useFiles(opts: UseFilesOptions) {
     syncTarget.value = null
   }
 
+  // --- Sync progress (v0.92.0 子任务 5) ---
+  // 对话框 POST /api/files/sync 之后，把任务登记进共享 transfer store：
+  // 队列行显示「源 → 目标」+ 阶段文案 + 进度条，进度由 `/ws/files` 推送驱动，
+  // GET /api/files/sync/{id} 轮询兜底。传输数据仍不经过浏览器。
+  const trackedSyncIds = new Set<string>()
+  const settledSyncTasks = new Set<string>()
+
+  function trackSyncTask(taskId: string) {
+    if (!syncSource.value || !syncTarget.value) return
+    store.trackSync(taskId, syncSource.value, syncTarget.value)
+    trackedSyncIds.add(taskId)
+  }
+
+  // 本页创建的同步任务到达终态后自动刷新两侧面板：用户无需手动刷新即可看到同步结果。
+  // 只处理 trackedSyncIds，避免其它面板实例创建的同步任务触发无谓 reload。
+  watch(
+    () =>
+      Array.from(store.tasks.values())
+        .filter((i) => i.task_kind === 'sync' && trackedSyncIds.has(i.id))
+        .map((i) => `${i.id}:${i.status}`),
+    (entries) => {
+      for (const entry of entries) {
+        const settled = entry.endsWith(':done') || entry.endsWith(':error') || entry.endsWith(':canceled')
+        if (!settled || settledSyncTasks.has(entry)) continue
+        settledSyncTasks.add(entry)
+        void loadPanel('left')
+        void loadPanel('right')
+      }
+      // 任务被「清除已完成」移出队列后丢掉去重记录，避免集合无限增长。
+      for (const seen of Array.from(settledSyncTasks)) {
+        if (!entries.includes(seen)) {
+          settledSyncTasks.delete(seen)
+        }
+      }
+    },
+  )
+
   // --- New folder ---
   function newFolder(side: Side) {
     if (!sessionId.value) return
@@ -905,6 +942,7 @@ export function useFiles(opts: UseFilesOptions) {
     syncTarget,
     openSync,
     closeSync,
+    trackSyncTask,
     // new folder / mobile
     newFolder,
     mfbNewFolder,

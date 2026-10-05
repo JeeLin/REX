@@ -58,6 +58,7 @@ const {  sessionId,
   syncTarget,
   openSync,
   closeSync,
+  trackSyncTask,
   hasCap,
   canShowDualPanel,
   panels,
@@ -121,6 +122,12 @@ const {  sessionId,
   onStatus: (status) => emit('update:status', status),
   notify,
 })
+
+/** 同步任务创建后登记进队列：源→目标、阶段文案与进度条由 transfer store 渲染。 */
+function onSyncCreated(taskId: string) {
+  trackSyncTask(taskId)
+  notify(t('files.syncCreated'), 'success')
+}
 </script>
 
 <template>
@@ -338,7 +345,7 @@ const {  sessionId,
       :source="syncSource"
       :target="syncTarget"
       @close="closeSync"
-      @created="notify(t('files.syncCreated'), 'success')"
+      @created="onSyncCreated"
       @error="(msg) => notify(msg, 'error')"
     />
 
@@ -409,7 +416,7 @@ const {  sessionId,
             >
               <div class="tq-item-info">
                 <span class="tq-item-type">
-                  {{ item.kind === 'browser' ? (item.direction === 'up' ? '⬆' : '⬇') : item.op === 'move' ? '🔄' : '📄' }}
+                  {{ transfer.taskIcon(item) }}
                 </span>
                 <div class="tq-item-details">
                   <span class="tq-item-name">{{ item.name }}</span>
@@ -417,13 +424,24 @@ const {  sessionId,
                 </div>
               </div>
               <div class="tq-item-status">
-                <!-- Progress bar for active transfers -->
+                <!-- Progress bar for active transfers (sync rows add the phase word + cancel) -->
                 <template v-if="item.status === 'running'">
+                  <span
+                    v-if="item.task_kind === 'sync'"
+                    class="tq-item-phase"
+                  >{{ transfer.phaseLabel(item) }}</span>
                   <div class="tq-progress">
                     <div class="tq-progress-bar" :style="{ width: item.progress + '%' }"></div>
                   </div>
                   <span class="tq-item-pct">{{ item.progress }}%</span>
                   <span v-if="item.speed > 0" class="tq-item-pct">{{ fmtSize(item.speed) }}/s</span>
+                  <button
+                    v-if="item.task_kind === 'sync'"
+                    class="tq-btn tq-btn--cancel"
+                    @click="transfer.cancel(item.id)"
+                  >
+                    {{ t('files.cancel') }}
+                  </button>
                 </template>
                 <!-- Error: show error + retry (browser tasks only) -->
                 <template v-else-if="item.status === 'error'">
@@ -447,6 +465,13 @@ const {  sessionId,
                 <!-- Pending -->
                 <template v-else-if="item.status === 'pending'">
                   <span class="tq-item-pending">{{ t('files.waiting') }}</span>
+                  <button
+                    v-if="item.task_kind === 'sync'"
+                    class="tq-btn tq-btn--cancel"
+                    @click="transfer.cancel(item.id)"
+                  >
+                    {{ t('files.cancel') }}
+                  </button>
                 </template>
               </div>
             </div>
@@ -542,6 +567,7 @@ const {  sessionId,
 .tq-item-path{font-size:var(--text-xs);color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tq-item-status{display:flex;align-items:center;gap:var(--space-2);flex-shrink:0}
 .tq-item-pct{font-size:var(--text-xs);color:var(--text-muted);min-width:36px;text-align:right}
+.tq-item-phase{font-size:var(--text-xs);color:var(--accent);white-space:nowrap}
 .tq-item-error{font-size:var(--text-xs);color:var(--danger);max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tq-item-done{color:var(--success);font-weight:600}
 .tq-item-pending{font-size:var(--text-xs);color:var(--text-muted)}
@@ -555,6 +581,8 @@ const {  sessionId,
 .tq-btn:hover{background:var(--bg-deep)}
 .tq-btn--retry{color:var(--accent);border-color:var(--accent)}
 .tq-btn--retry:hover{background:var(--accent-soft)}
+.tq-btn--cancel{color:var(--danger);border-color:var(--danger)}
+.tq-btn--cancel:hover{background:var(--danger-soft)}
 .tq-btn--sm{padding:2px var(--space-2);font-size:var(--text-xs)}
 .tq-empty{padding:var(--space-4);text-align:center;color:var(--text-muted);font-size:var(--text-sm)}
 

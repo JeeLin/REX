@@ -21,7 +21,9 @@ import type {
   TransferConflict,
   TransferEndpoint,
   TransferOp,
+  TransferTaskKind,
   TransferTaskRecord,
+  TransferTaskStatus,
 } from '@/api/files'
 
 // --- preserved from original useTransfer (fields unchanged) ---
@@ -60,6 +62,14 @@ export interface TransferItem {
   target_path?: string
   op?: TransferOp
   task_id?: string
+  /** Server task kind (`transfer_task.kind`): transfer (single file) | sync (v0.92.0). */
+  task_kind?: TransferTaskKind
+  /**
+   * Raw server status, kept alongside the coarse `status`: sync phases
+   * (scanning / planning / verifying) all map to `running`, so the queue shows
+   * the real phase word instead of a generic "running".
+   */
+  phase?: TransferTaskStatus
   error?: string | null
   // browser-only
   file?: File
@@ -249,7 +259,12 @@ export const useTransferStore = defineStore('transfer', () => {
   function applyRecord(id: string, rec: Partial<TransferTaskRecord>): void {
     const task = tasks.value.get(id)
     if (!task || task.kind !== 'server') return
-    if (rec.status !== undefined) task.status = mapServerStatus(rec.status)
+    if (rec.kind !== undefined) task.task_kind = rec.kind
+    if (rec.status !== undefined) {
+      task.status = mapServerStatus(rec.status)
+      // 同步的扫描/规划/校验阶段都塌缩成 `running`，原始状态留在 `phase` 上。
+      task.phase = rec.status
+    }
     if (rec.total_bytes !== undefined) task.size = rec.total_bytes
     if (rec.transferred_bytes !== undefined) task.transferred = rec.transferred_bytes
     if (rec.speed_bytes_per_sec !== undefined) task.speed = rec.speed_bytes_per_sec
@@ -263,8 +278,48 @@ export const useTransferStore = defineStore('transfer', () => {
   }
 
   /**
-   * Poll GET /api/files/transfer/{id} ~1s until a terminal status, updating the
-   * shared store. Idempotent — repeated calls for the same id are ignored.
+   * Track an already-created sync task (POST /api/files/sync done by the caller).
+   * Progress arrives over the shared `/ws/files` channel, with ~1s polling
+   * (GET /api/files/sync/{id}) as the fallback. File bytes never transit the
+   * browser — the Hub diffs and copies between the two connectors.
+   */
+  function trackSync(
+    id: string,
+    source: TransferEndpoint,
+    target: TransferEndpoint,
+  ): TransferItem {
+    const item: TransferItem = {
+      id,
+      kind: 'server',
+      // A sync has no single-file direction: the phase/direction words come
+      // from `phase` and the source → target path pair.
+      direction: 'copy',
+      // Target roots are directories (`/dst/dir/`): trim the trailing slash so
+      // the row name is the directory name instead of the whole path again.
+      name: baseName(target.path.replace(/\/+$/, '')),
+      size: 0,
+      transferred: 0,
+      progress: 0,
+      speed: 0,
+      status: 'pending',
+      eta: null,
+      source_path: source.path,
+      target_path: target.path,
+      task_id: id,
+      task_kind: 'sync',
+      phase: 'pending',
+      error: null,
+    }
+    tasks.value.set(id, item)
+    commit()
+    monitor(id)
+    return item
+  }
+
+  /**
+   * Poll the task ~1s until a terminal status, updating the shared store.
+   * Idempotent — repeated calls for the same id are ignored. Sync tasks poll
+   * their own endpoint so the queue keeps working if transfer routes change.
    * Also opens the WS socket so progress arrives in real time.
    */
   async function monitor(id: string): Promise<void> {
@@ -275,7 +330,8 @@ export const useTransferStore = defineStore('transfer', () => {
         return
       }
       try {
-        applyRecord(id, await filesApi.getTransferTask(id))
+        const isSync = tasks.value.get(id)?.task_kind === 'sync'
+        applyRecord(id, await (isSync ? filesApi.getSyncTask(id) : filesApi.getTransferTask(id)))
       } catch (e) {
         const task = tasks.value.get(id)
         if (task) {
@@ -318,6 +374,8 @@ export const useTransferStore = defineStore('transfer', () => {
       target_path: dst.path,
       op,
       task_id: created.id,
+      task_kind: 'transfer',
+      phase: 'pending',
       error: null,
     }
     tasks.value.set(created.id, item)
@@ -344,15 +402,20 @@ export const useTransferStore = defineStore('transfer', () => {
     return submit('copy', src, dst, conflict)
   }
 
-  /** Cancel a running/pending task. Server tasks notify the backend;
-   * browser tasks abort the in-flight XHR if available. */
+  /** Cancel a running/pending task. Server tasks notify the backend (sync tasks
+   * through DELETE /api/files/sync/{id}); browser tasks abort the in-flight XHR
+   * if available. */
   async function cancel(id: string): Promise<void> {
     stopMonitor(id)
     const task = tasks.value.get(id)
     if (!task) return
     if (task.kind === 'server' && task.task_id) {
       try {
-        await filesApi.cancelTransferTask(task.task_id)
+        if (task.task_kind === 'sync') {
+          await filesApi.cancelSyncTask(task.task_id)
+        } else {
+          await filesApi.cancelTransferTask(task.task_id)
+        }
       } catch (e) {
         console.error('Cancel request failed:', e)
       }
@@ -408,6 +471,7 @@ export const useTransferStore = defineStore('transfer', () => {
     updateBrowserTask,
     move,
     copy,
+    trackSync,
     monitor,
     cancel,
     dismissCompleted,

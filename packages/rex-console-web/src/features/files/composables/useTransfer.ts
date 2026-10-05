@@ -4,12 +4,14 @@
 //! and its derived helpers in one place.
 
 import { ref, computed, reactive } from 'vue'
+import { useI18n } from 'vue-i18n'
 import * as filesApi from '@/api/files'
 import { useTransferStore } from '@/stores/transfer'
 import type { TransferItem } from '@/stores/transfer'
 
 export function useTransfer() {
   const store = useTransferStore()
+  const { t } = useI18n()
   const showTransferQueue = ref(false)
 
   /** Unified queue items read directly from the shared transfer store. */
@@ -31,6 +33,42 @@ export function useTransfer() {
     return item.direction === 'up'
       ? item.target_path || ''
       : item.source_path || ''
+  }
+
+  /** Queue-row glyph: sync gets its own mark, transfers keep the existing ones. */
+  function taskIcon(item: TransferItem): string {
+    if (item.task_kind === 'sync') return '🔁'
+    if (item.kind === 'browser') return item.direction === 'up' ? '⬆' : '⬇'
+    return item.op === 'move' ? '🔄' : '📄'
+  }
+
+  /**
+   * Server phase word for a queue row. A sync walks
+   * pending → scanning → planning → running → verifying → completed/failed,
+   * but the store collapses every in-flight phase to `running` so the progress
+   * bar shows; the raw server status is kept on `item.phase` and rendered here.
+   */
+  function phaseLabel(item: TransferItem): string {
+    switch (item.phase ?? 'running') {
+      case 'scanning':
+        return t('files.syncPhaseScanning')
+      case 'planning':
+        return t('files.syncPhasePlanning')
+      case 'verifying':
+        return t('files.syncPhaseVerifying')
+      case 'running':
+        return item.task_kind === 'sync' ? t('files.syncPhaseSyncing') : t('files.transferring')
+      case 'pending':
+        return t('files.waiting')
+      case 'completed':
+        return t('files.completed')
+      case 'failed':
+        return t('files.failed')
+      case 'canceled':
+        return t('files.canceled', 'Canceled')
+      default:
+        return t('files.transferring')
+    }
   }
 
   /** Retry a failed browser-blob transfer. Server tasks are created server-side
@@ -101,12 +139,15 @@ export function useTransfer() {
     completedCount,
     activeCount,
     taskPath,
+    taskIcon,
+    phaseLabel,
     retryTransfer,
     dismissCompleted,
     pushBrowserTask: store.pushBrowserTask,
     updateBrowserTask: store.updateBrowserTask,
     move: store.move,
     copy: store.copy,
+    trackSync: store.trackSync,
     monitor: store.monitor,
     cancel: store.cancel,
     connectWs: store.connectWs,

@@ -243,6 +243,16 @@ impl SyncCoordinator {
                     Self::fail(state, task_id, &err);
                     return Err(err);
                 }
+                // 删除阶段同样广播（v0.92.0 子任务 5：扫描/拷贝/删除各阶段都要
+                // 让 `/ws/files` 有事件）。删除不搬运字节，字节数沿用计划值，
+                // 因此进度不会因删除而推进。
+                Self::broadcast_progress(
+                    state,
+                    task_id,
+                    TransferStatus::Running.as_str_lossy(),
+                    plan.summary.total_bytes,
+                    transferred,
+                );
                 continue;
             }
 
@@ -496,8 +506,13 @@ impl SyncCoordinator {
     }
 
     /// 错误落 `failed`——但已被取消的任务不得被覆盖（Bug 1/2 范式）。
+    ///
+    /// 取消路径同样要广播终态：扫描期 / 拷贝期的取消经 `SyncError::Canceled` 进入
+    /// 这里，若静默返回，`/ws/files` 订阅者只会看到 scanning / running，队列行会
+    /// 一直显示「进行中」（1s 轮询只是兜底，不是主通道）。
     fn fail(state: &AppState, task_id: &str, err: &SyncError) {
         if matches!(err, SyncError::Canceled) || Self::is_canceled(state, task_id) {
+            Self::broadcast_terminal(state, task_id, TransferStatus::Canceled.as_str_lossy());
             return;
         }
         let msg = err.to_string();
@@ -506,14 +521,25 @@ impl SyncCoordinator {
             TransferStatus::Failed(msg.clone()).as_str_lossy(),
             Some(&msg),
         );
-        Self::broadcast_progress(
+        Self::broadcast_terminal(
             state,
             task_id,
             TransferStatus::Failed(msg.clone()).as_str_lossy(),
-            0,
-            0,
         );
         tracing::error!(action = "FILE_SYNC_FAILED", transfer_task_id = %task_id, error = %msg, "sync task failed");
+    }
+
+    /// 终态广播（完成 / 失败 / 取消）：沿用记录里已累计的字节数，前端因此能看到
+    /// 「同步到哪一步停的」，而不是被清零的进度条。记录缺失时按 0 广播。
+    fn broadcast_terminal(state: &AppState, task_id: &str, status: &str) {
+        let (total, transferred) = match state.db.get_transfer_task(task_id) {
+            Ok(Some(rec)) => (
+                rec.total_bytes.max(0) as u64,
+                rec.transferred_bytes.max(0) as u64,
+            ),
+            _ => (0, 0),
+        };
+        Self::broadcast_progress(state, task_id, status, total, transferred);
     }
 
     fn set_status(state: &AppState, task_id: &str, status: TransferStatus) {
@@ -1103,6 +1129,8 @@ mod tests {
         let dst = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
         src.put("/src/a.txt", b"a");
 
+        // 与 file_ws.rs 同款订阅：取消终态必须广播，订阅者不能只停在 pending。
+        let mut rx = state.transfer_bcast.subscribe();
         let mut source = src.clone();
         let mut target = dst.clone();
 
@@ -1124,6 +1152,14 @@ mod tests {
         let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
         assert_eq!(rec.status, "canceled", "canceled must not be clobbered");
         assert!(!dst.contains("/dst/a.txt"), "no bytes moved after cancel");
+
+        let events: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+        let statuses: Vec<&str> = events.iter().map(|e| e.status.as_str()).collect();
+        assert_eq!(
+            statuses,
+            ["canceled"],
+            "pre-canceled task broadcasts exactly the canceled terminal event"
+        );
     }
 
     #[tokio::test]
@@ -1209,6 +1245,10 @@ mod tests {
         let mut source = src.clone();
         let mut target = dst.clone().with_cancel_hook(hook);
 
+        // 与 file_ws.rs 同款订阅：拷贝期取消走 `fail(Canceled)` 早退分支，
+        // 该分支此前静默返回 —— 终态广播必须仍然到达。
+        let mut rx = state.transfer_bcast.subscribe();
+
         let res = SyncCoordinator::run_plan(
             &state,
             &task_id,
@@ -1231,6 +1271,133 @@ mod tests {
         assert_eq!(
             rec.status, "canceled",
             "canceled must not be clobbered to failed/completed"
+        );
+
+        let events: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+        assert_eq!(
+            events.last().map(|e| e.status.as_str()),
+            Some("canceled"),
+            "cancel path must broadcast the canceled terminal event, got {events:?}"
+        );
+    }
+
+    /// v0.92.0 子任务 5：每个阶段与终态都要广播到 `/ws/files`——扫描 / 规划 /
+    /// 运行 / 校验 / 完成，且删除动作也要推进事件（前端靠事件驱动进度与阶段文案）。
+    #[tokio::test]
+    async fn run_plan_broadcasts_phase_delete_and_terminal_events() {
+        let (_dir, state) = make_state();
+        let opts = SyncOptions {
+            delete_orphans: true,
+            ..Default::default()
+        };
+        let task_id = make_sync_task(&state, &opts);
+
+        let src = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        let dst = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        src.put("/src/new.txt", b"hello");
+        dst.put("/dst/keep.txt", b"keep");
+        dst.put("/dst/orphan.txt", b"orphan");
+
+        // 与 file_ws.rs 同款订阅：先 subscribe 再跑计划，事件才会被收到。
+        let mut rx = state.transfer_bcast.subscribe();
+        let mut source = src.clone();
+        let mut target = dst.clone();
+
+        let plan = SyncCoordinator::run_plan(
+            &state,
+            &task_id,
+            SyncSpec {
+                opts: &opts,
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src",
+            "/dst",
+        )
+        .await
+        .expect("sync must complete");
+
+        let mut events = Vec::new();
+        while let Ok(ev) = rx.try_recv() {
+            events.push(ev);
+        }
+        assert!(!events.is_empty(), "run_plan must broadcast progress");
+        let statuses: Vec<&str> = events.iter().map(|e| e.status.as_str()).collect();
+
+        for phase in ["scanning", "planning", "running", "verifying", "completed"] {
+            assert!(
+                statuses.contains(&phase),
+                "missing broadcast for {phase}: {statuses:?}"
+            );
+        }
+        assert_eq!(statuses[0], "scanning", "first event is the scanning phase");
+        assert_eq!(
+            *statuses.last().unwrap(),
+            "completed",
+            "terminal event must be the last one"
+        );
+
+        // 1 次复制 + 2 次删除 → 每个动作都要推进一次广播。
+        assert!(
+            statuses.iter().filter(|s| **s == "running").count() >= plan.actions.len(),
+            "every action must broadcast, got {statuses:?}"
+        );
+
+        // 删除不搬运字节：事件字节数沿用计划值。
+        let last = events.last().unwrap();
+        assert_eq!(last.task_id, task_id);
+        assert_eq!(last.total_bytes, plan.summary.total_bytes);
+        assert_eq!(last.transferred_bytes, plan.summary.total_bytes);
+    }
+
+    /// 失败终态广播沿用累计字节数（前端能看到「同步到哪一步停的」）。
+    #[tokio::test]
+    async fn run_plan_failure_broadcast_keeps_accumulated_bytes() {
+        let (_dir, state) = make_state();
+        let task_id = make_sync_task(&state, &SyncOptions::default());
+
+        let src_store: Arc<Mutex<HashMap<String, Vec<u8>>>> = Arc::new(Mutex::new(HashMap::new()));
+        let src = TreeConnector::new(Arc::clone(&src_store));
+        src.put("/src/a.bin", b"aaaaaaaa");
+        src.put("/src/b.bin", b"bbbbbbbb");
+        let dst = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+
+        // 第一个文件复制成功后（upload 钩子触发）从源侧摘掉第二个文件 → 第二个
+        // 文件 stat 失败，让失败发生在已累计字节之后。
+        let hook: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
+            src_store.lock().unwrap().remove("/src/b.bin");
+        });
+        let mut source = src.clone();
+        let mut target = dst.clone().with_cancel_hook(hook);
+
+        let mut rx = state.transfer_bcast.subscribe();
+        let res = SyncCoordinator::run_plan(
+            &state,
+            &task_id,
+            SyncSpec {
+                opts: &SyncOptions::default(),
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src",
+            "/dst",
+        )
+        .await;
+
+        assert!(matches!(res, Err(SyncError::Scan(_))), "got {res:?}");
+        let mut failed = Vec::new();
+        while let Ok(ev) = rx.try_recv() {
+            if ev.status == "failed" {
+                failed.push(ev);
+            }
+        }
+        assert_eq!(failed.len(), 1, "exactly one failed broadcast");
+        assert_eq!(failed[0].total_bytes, 16, "keep the planned total");
+        assert_eq!(
+            failed[0].transferred_bytes, 8,
+            "keep the bytes already copied"
         );
     }
 

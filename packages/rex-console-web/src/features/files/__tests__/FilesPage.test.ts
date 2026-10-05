@@ -36,6 +36,7 @@ vi.mock('@/stores/transfer', () => ({
     updateBrowserTask: vi.fn(),
     move: vi.fn(),
     copy: vi.fn(),
+    trackSync: vi.fn(),
     monitor: vi.fn(),
     cancel: vi.fn(),
     dismissCompleted: vi.fn(),
