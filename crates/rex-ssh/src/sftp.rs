@@ -15,7 +15,17 @@ pub struct SftpConnector {
 
 impl SftpConnector {
     /// 从 SSH channel 建立 SFTP 连接
+    ///
+    /// 必须在握手前请求 `sftp` 子系统：session channel 打开后远端只是建好了一条
+    /// 空 channel，不会自行启动 `sftp-server`。缺这一步时客户端发出的
+    /// SSH_FXP_INIT 无人应答，`SftpSession::new` 只能等到超时并报
+    /// "failed to create SFTP session"。所有入口（`connect_from_handle` 复用池化
+    /// 句柄 / `open_session_channel` 新建连接）都收敛到这里。
     pub async fn connect(channel: russh::Channel<russh::client::Msg>) -> Result<Self> {
+        channel
+            .request_subsystem(true, "sftp")
+            .await
+            .context("failed to request SFTP subsystem")?;
         let session = SftpSession::new(channel.into_stream())
             .await
             .context("failed to create SFTP session")?;
@@ -375,6 +385,8 @@ mod tests {
         max_sessions: usize,
         accept_auth: bool,
         server_handles: StdMutex<Vec<server::Handle>>,
+        /// 记录所有收到的 subsystem 请求名（如 "sftp"），供测试断言
+        subsystems: StdMutex<Vec<String>>,
     }
 
     struct TestServer {
@@ -389,6 +401,7 @@ mod tests {
             TestHandler {
                 state: self.state.clone(),
                 sessions: 0,
+                channels: Vec::new(),
             }
         }
     }
@@ -397,6 +410,8 @@ mod tests {
         state: Arc<ServerState>,
         /// 本条连接上已接受的 session channel 数（模拟 sshd MaxSessions）
         sessions: usize,
+        /// 已打开但尚未被 subsystem 认领的 session channel
+        channels: Vec<Channel<server::Msg>>,
     }
 
     impl TestHandler {
@@ -426,7 +441,7 @@ mod tests {
 
         async fn channel_open_session(
             &mut self,
-            _channel: Channel<server::Msg>,
+            channel: Channel<server::Msg>,
             reply: ChannelOpenHandle,
             _session: &mut Session,
         ) -> Result<(), Self::Error> {
@@ -436,7 +451,33 @@ mod tests {
                     .await;
             } else {
                 self.sessions += 1;
+                // 存下 channel 供 subsystem_request 交给进程内 SFTP 服务端
+                self.channels.push(channel);
                 reply.accept().await;
+            }
+            Ok(())
+        }
+
+        /// 模拟 sshd：只有收到 `sftp` 子系统请求才真正启动 sftp-server。
+        /// 客户端漏发该请求时，其 SSH_FXP_INIT 不会得到 SSH_FXP_VERSION 应答。
+        async fn subsystem_request(
+            &mut self,
+            channel: ChannelId,
+            name: &str,
+            session: &mut Session,
+        ) -> Result<(), Self::Error> {
+            self.state
+                .subsystems
+                .lock()
+                .expect("lock subsystems")
+                .push(name.to_string());
+            if name != "sftp" {
+                let _ = session.channel_failure(channel);
+                return Ok(());
+            }
+            let _ = session.channel_success(channel);
+            if let Some(channel) = self.channels.pop() {
+                russh_sftp::server::run(channel.into_stream(), TestSftpHandler).await;
             }
             Ok(())
         }
@@ -466,6 +507,40 @@ mod tests {
         }
     }
 
+    /// 极简进程内 SFTP 服务端：`init` 用 trait 默认实现回 SSH_FXP_VERSION，
+    /// REALPATH 原样回显路径，STAT 回固定大小，用于验证客户端不仅握手成功
+    /// 还能真正收发 SFTP 请求。
+    struct TestSftpHandler;
+
+    impl russh_sftp::server::Handler for TestSftpHandler {
+        type Error = russh_sftp::protocol::StatusCode;
+
+        fn unimplemented(&self) -> Self::Error {
+            russh_sftp::protocol::StatusCode::OpUnsupported
+        }
+
+        async fn realpath(
+            &mut self,
+            id: u32,
+            path: String,
+        ) -> Result<russh_sftp::protocol::Name, Self::Error> {
+            Ok(russh_sftp::protocol::Name {
+                id,
+                files: vec![russh_sftp::protocol::File::dummy(path)],
+            })
+        }
+
+        async fn stat(
+            &mut self,
+            id: u32,
+            _path: String,
+        ) -> Result<russh_sftp::protocol::Attrs, Self::Error> {
+            let mut attrs = russh_sftp::protocol::FileAttributes::empty();
+            attrs.size = Some(1024);
+            Ok(russh_sftp::protocol::Attrs { id, attrs })
+        }
+    }
+
     /// 回环测试 SSH server：可配置 MaxSessions 与认证是否放行
     struct Harness {
         addr: SocketAddr,
@@ -484,6 +559,7 @@ mod tests {
                 max_sessions,
                 accept_auth,
                 server_handles: StdMutex::new(Vec::new()),
+                subsystems: StdMutex::new(Vec::new()),
             });
 
             let server_config = server::Config {
@@ -532,6 +608,15 @@ mod tests {
             self.state.conns.load(Ordering::SeqCst)
         }
 
+        /// 服务端收到的 subsystem 请求名序列
+        fn subsystems(&self) -> Vec<String> {
+            self.state
+                .subsystems
+                .lock()
+                .expect("lock subsystems")
+                .clone()
+        }
+
         fn config(&self) -> SshConfig {
             SshConfig {
                 host: "127.0.0.1".to_string(),
@@ -558,6 +643,62 @@ mod tests {
                     .await;
             }
         }
+    }
+
+    /// 回归（v0.92.0 Bugs🔴1）：SFTP 必须在 session channel 上先请求 `sftp` 子系统。
+    /// 漏发该请求时远端不会启动 sftp-server，SSH_FXP_INIT 得不到
+    /// SSH_FXP_VERSION，`SftpSession::new` 超时并报 "failed to create SFTP session"。
+    #[tokio::test]
+    async fn sftp_requests_subsystem_before_handshake_and_serves_operations() {
+        let harness = Harness::start(usize::MAX, true).await;
+        let cfg = harness.config();
+        let mut conn = SftpConnector::connect_with_config(cfg)
+            .await
+            .expect("sftp session must be established once the subsystem is requested");
+
+        assert_eq!(
+            harness.subsystems(),
+            vec!["sftp".to_string()],
+            "the client must ask sshd to start the sftp subsystem on the session channel"
+        );
+
+        // 端到端：会话不仅握手成功，还能真正跑一次 STAT/REALPATH 往返。
+        let entry = conn
+            .stat("/var/data")
+            .await
+            .expect("sftp session must answer file operations");
+        assert_eq!(entry.path, "/var/data");
+        assert_eq!(entry.name, "data");
+    }
+
+    /// 回归：agent 模式复用终端 Handle 的路径（`connect_from_handle`）同样要请求子系统
+    #[tokio::test]
+    async fn sftp_from_pooled_terminal_handle_requests_subsystem() {
+        let harness = Harness::start(usize::MAX, true).await;
+        let cfg = harness.config();
+        let (handle, _terminal) = SshSession::connect_with_handle(cfg)
+            .await
+            .expect("terminal connect");
+
+        let mut conn = SftpConnector::connect_from_handle(&handle, "127.0.0.1")
+            .await
+            .expect("sftp over the terminal handle must be established");
+
+        assert_eq!(
+            harness.subsystems(),
+            vec!["sftp".to_string()],
+            "the pooled-handle path must request the sftp subsystem too"
+        );
+        let entry = conn
+            .stat("/home")
+            .await
+            .expect("sftp session over the terminal handle must answer file operations");
+        assert_eq!(entry.path, "/home");
+        assert_eq!(
+            harness.conns(),
+            1,
+            "the handle path must still reuse the terminal's TCP connection"
+        );
     }
 
     /// 方向 a：SFTP 在终端已建立的连接上开 channel，不新建第二条连接
