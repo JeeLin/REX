@@ -107,7 +107,7 @@ pending → running → verifying → completed
 - `run_stream` 从 Redis 获取 `TransferTask`，建立 source/target connector，按 `CHUNK_SIZE`（1 MiB）分片传输。
 - 每轮循环检查 `is_canceled()`，如取消则中止。
 - 传输完成前检查 `is_canceled()`，再进入 `verifying` 阶段，防止 cancel-clobber。
-- 错误路径（`SourceStat`/`Download`/`Upload`/`TargetStat`）通过 `?` 傳播前，呼叫 `set_status(Failed, ...)` 記錄失敗狀態。
+- 错误路径（`SourceStat`/`Download`/`Upload`/`TargetStat`）通过 `?` 传播前，呼叫 `set_status(Failed, ...)` 记录失败状态。
 
 ---
 
@@ -156,8 +156,8 @@ pending → running → verifying → completed
 - 客户端发送 `{"type":"subscribe","task_id":"..."}` 订阅指定任务。
 - 服务端广播 `{"type":"transfer.progress","task_id":"...","transferred":N,"total":N,"speed":N}` 实时进度。
 - 任务结束时广播 `{"type":"transfer.done","task_id":"...","status":"completed|failed|canceled"}`。
-- Hub 侧 `TransferCoordinator` 在状态变更时觸發廣播，前端 `stores/transfer.ts` 訂閱並更新 store。
-- Polling 作为 fallback，WS 断连時回退到輪询。
+- Hub 侧 `TransferCoordinator` 在状态变更时触发广播，前端 `stores/transfer.ts` 订阅并更新 store。
+- Polling 作为 fallback，WS 断连时回退到轮询。
 
 ### 跨连接传输路径（v0.91.0 T2）
 
