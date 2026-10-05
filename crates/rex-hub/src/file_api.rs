@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::db::audit_log;
-use crate::models::NewTransferTask;
+use crate::models::{NewSyncTask, NewTransferTask};
 use crate::resource_conn::{load_resource_config, normalize_username, ResourceConnInfo};
 use crate::transfer_coordinator::TransferOp;
 use crate::AppState;
@@ -79,6 +79,12 @@ pub fn file_routes() -> axum::Router<AppState> {
             "/transfer/{id}/cancel",
             axum::routing::post(cancel_transfer_task),
         )
+        // v0.92.0：目录同步任务（create/get/cancel；preview 于子任务 3 接入）
+        .route("/sync", axum::routing::post(create_sync_task))
+        .route(
+            "/sync/{id}",
+            axum::routing::get(get_sync_task).delete(cancel_sync_task),
+        )
 }
 
 // ---------------------------------------------------------------------------
@@ -103,11 +109,9 @@ async fn list_transfer_tasks(
     }
 }
 
-async fn get_transfer_task(
-    State(state): State<AppState>,
-    Path(task_id): Path<String>,
-) -> axum::response::Response {
-    match state.db.get_transfer_task(&task_id) {
+/// 取任务记录并序列化为响应（transfer / sync 共用；未命中回 404）。
+async fn task_response(state: &AppState, task_id: &str) -> axum::response::Response {
+    match state.db.get_transfer_task(task_id) {
         Ok(Some(item)) => (StatusCode::OK, Json(item)).into_response(),
         Ok(None) => (
             StatusCode::NOT_FOUND,
@@ -116,6 +120,13 @@ async fn get_transfer_task(
             .into_response(),
         Err(e) => error_response("TRANSFER_GET_FAILED", &e.to_string()).into_response(),
     }
+}
+
+async fn get_transfer_task(
+    State(state): State<AppState>,
+    Path(task_id): Path<String>,
+) -> axum::response::Response {
+    task_response(&state, &task_id).await
 }
 
 async fn create_transfer_task(
@@ -146,29 +157,28 @@ async fn create_transfer_task(
         .into_response()
 }
 
-async fn cancel_transfer_task(
-    State(state): State<AppState>,
-    Path(task_id): Path<String>,
+/// 取消任务（transfer / sync 共用）：持久化取消标记 → 中止进程内后台流。
+async fn cancel_task(
+    state: &AppState,
+    task_id: &str,
+    audit_action: &'static str,
 ) -> axum::response::Response {
     // T1：持久化取消标记；T2 驱动引擎实际中止。
-    match state
-        .db
-        .set_transfer_task_status(&task_id, "canceled", None)
-    {
+    match state.db.set_transfer_task_status(task_id, "canceled", None) {
         Ok(_) => {
             // T2：持久化取消标记后，中止进程内的后台传输流。run_stream 亦轮询 DB
             // 状态作为协作式中止的兜底。
-            state.coordinator.abort(&task_id);
+            state.coordinator.abort(task_id);
             tracing::info!(
-                action = "FILE_TRANSFER_CANCELED",
+                action = audit_action,
                 transfer_task_id = %task_id,
                 "transfer task canceled"
             );
             audit_log(
                 &state.db,
-                "FILE_TRANSFER_CANCELED",
+                audit_action,
                 "success",
-                Some(task_id.clone()),
+                Some(task_id.to_string()),
             );
             (
                 StatusCode::OK,
@@ -180,13 +190,104 @@ async fn cancel_transfer_task(
     }
 }
 
+async fn cancel_transfer_task(
+    State(state): State<AppState>,
+    Path(task_id): Path<String>,
+) -> axum::response::Response {
+    cancel_task(&state, &task_id, "FILE_TRANSFER_CANCELED").await
+}
+
+// ---------------------------------------------------------------------------
+// Sync task API (v0.92.0, 子任务 1)
+// ---------------------------------------------------------------------------
+
+/// `POST /api/files/sync`（与子任务 3 的 preview 共用）请求体：
+/// 源/目标端点 + 同步选项 + 可选冲突策略。
+#[derive(Debug, Clone, Deserialize)]
+pub struct SyncRequestBody {
+    pub source: TransferEndpointRef,
+    pub target: TransferEndpointRef,
+    pub options: rex_transfer::SyncOptions,
+    /// 冲突策略：overwrite|skip|rename|fail（缺省 overwrite），沿用 v0.91.0 语义。
+    #[serde(default)]
+    pub conflict: Option<String>,
+}
+
+/// 创建同步任务：校验参数 → 入库（kind=sync）→ 审计 → 返回 201 pending。
+///
+/// 同步 diff/apply 全部在服务端完成，浏览器只负责创建任务与查看进度。
+async fn create_sync_task(
+    State(state): State<AppState>,
+    Json(body): Json<SyncRequestBody>,
+) -> axum::response::Response {
+    let conflict = body
+        .conflict
+        .clone()
+        .unwrap_or_else(|| "overwrite".to_string());
+    if ConflictPolicy::from_str(&conflict).is_none() {
+        return error_response("INVALID_CONFLICT_POLICY", "invalid conflict policy")
+            .into_response();
+    }
+    if body.source.path.is_empty() || body.target.path.is_empty() {
+        return error_response("SYNC_PATH_REQUIRED", "source and target path are required")
+            .into_response();
+    }
+    let sync_options = match serde_json::to_string(&body.options) {
+        Ok(s) => s,
+        Err(e) => return error_response("INVALID_SYNC_OPTIONS", &e.to_string()).into_response(),
+    };
+    let new_task = NewSyncTask {
+        source_resource_id: body.source.resource_id.clone(),
+        target_resource_id: body.target.resource_id.clone(),
+        source_path: body.source.path.clone(),
+        target_path: body.target.path.clone(),
+        sync_options,
+        conflict_policy: Some(conflict),
+    };
+    let task_id = match state.db.create_sync_task(&new_task) {
+        Ok(id) => id,
+        Err(e) => return error_response("SYNC_CREATE_FAILED", &e.to_string()).into_response(),
+    };
+    tracing::info!(
+        action = "FILE_SYNC_CREATED",
+        transfer_task_id = %task_id,
+        source_resource_id = %body.source.resource_id,
+        target_resource_id = %body.target.resource_id,
+        "sync task created"
+    );
+    audit_log(
+        &state.db,
+        "FILE_SYNC_CREATED",
+        "success",
+        Some(task_id.clone()),
+    );
+    (
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "id": task_id, "status": "pending" })),
+    )
+        .into_response()
+}
+
+async fn get_sync_task(
+    State(state): State<AppState>,
+    Path(task_id): Path<String>,
+) -> axum::response::Response {
+    task_response(&state, &task_id).await
+}
+
+async fn cancel_sync_task(
+    State(state): State<AppState>,
+    Path(task_id): Path<String>,
+) -> axum::response::Response {
+    cancel_task(&state, &task_id, "FILE_SYNC_CANCELED").await
+}
+
 /// 传输端点引用（resource + path）。
 #[derive(Debug, Clone, Deserialize)]
 pub struct TransferEndpointRef {
     pub resource_id: String,
     pub path: String,
 }
-
 /// POST `/transfer/action` 请求体：op（copy/move）+ 源/目标端点 + 冲突策略。
 #[derive(Debug, Deserialize)]
 pub struct TransferActionRequest {
@@ -1506,5 +1607,89 @@ mod tests {
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_eq!(body.error.code, "PUT_ACL_FAILED");
         assert_eq!(body.error.message, "s3 backend connection refused");
+    }
+
+    // ---- Sync task API（v0.92.0 子任务 1）----
+
+    fn sync_body(path: &str) -> SyncRequestBody {
+        SyncRequestBody {
+            source: TransferEndpointRef {
+                resource_id: "res-src".into(),
+                path: path.into(),
+            },
+            target: TransferEndpointRef {
+                resource_id: "res-dst".into(),
+                path: "/dst/".into(),
+            },
+            options: rex_transfer::SyncOptions {
+                direction: rex_transfer::SyncDirection::Upload,
+                delete_orphans: true,
+                ..Default::default()
+            },
+            conflict: None,
+        }
+    }
+
+    async fn body_json(resp: axum::response::Response) -> serde_json::Value {
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        serde_json::from_slice(&bytes).unwrap()
+    }
+
+    #[tokio::test]
+    async fn sync_task_create_get_cancel_endpoints() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = crate::resource_conn::build_test_state(dir.path());
+
+        let resp = create_sync_task(State(state.clone()), Json(sync_body("/src/"))).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let created = body_json(resp).await;
+        let id = created["id"].as_str().unwrap().to_string();
+        assert_eq!(created["status"], "pending");
+
+        // 入库：kind=sync，选项以 JSON 落库，状态 pending
+        let rec = state.db.get_transfer_task(&id).unwrap().unwrap();
+        assert_eq!(rec.kind, "sync");
+        assert_eq!(rec.status, "pending");
+        assert!(rec.sync_options.contains("\"delete_orphans\":true"));
+
+        // 查询
+        let resp = get_sync_task(State(state.clone()), Path(id.clone())).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let got = body_json(resp).await;
+        assert_eq!(got["id"], id.as_str());
+        assert_eq!(got["kind"], "sync");
+
+        // 取消
+        let resp = cancel_sync_task(State(state.clone()), Path(id.clone())).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            state.db.get_transfer_task(&id).unwrap().unwrap().status,
+            "canceled"
+        );
+
+        // 未知任务 404
+        let resp = get_sync_task(State(state), Path("missing".into())).await;
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn sync_create_rejects_invalid_conflict_and_missing_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = crate::resource_conn::build_test_state(dir.path());
+
+        let mut bad = sync_body("/src/");
+        bad.conflict = Some("nope".into());
+        let resp = create_sync_task(State(state.clone()), Json(bad)).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            body_json(resp).await["error"]["code"],
+            "INVALID_CONFLICT_POLICY"
+        );
+
+        let resp = create_sync_task(State(state.clone()), Json(sync_body(""))).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(body_json(resp).await["error"]["code"], "SYNC_PATH_REQUIRED");
     }
 }

@@ -64,6 +64,13 @@ impl Database {
         // 幂等补充 v0.70.7 新增列：通用「子类」列（subtype），合并 SQL 资源后回写方言。
         // CREATE TABLE IF NOT EXISTS 不会为存量库追加列，故单独 ALTER（列已存在时忽略）。
         let _ = conn.execute_batch("ALTER TABLE resources ADD COLUMN subtype TEXT;");
+        // 幂等补充 v0.92.0 同步任务列（存量库）；新库由 migrations.sql 直接建出。
+        let _ = conn.execute_batch(
+            "ALTER TABLE transfer_task ADD COLUMN kind TEXT NOT NULL DEFAULT 'transfer';",
+        );
+        let _ = conn.execute_batch(
+            "ALTER TABLE transfer_task ADD COLUMN sync_options TEXT NOT NULL DEFAULT '';",
+        );
         // 幂等合并存量 mysql/postgresql/sqlite 资源为单一 sql 协议（subtype 回写旧协议）。
         let _ = self.migrate_unified_sql_resources();
         Ok(())
@@ -1216,30 +1223,65 @@ pub fn audit_log(
     });
 }
 
+/// transfer_task 插入行（transfer / sync 共用，`kind` + `sync_options` 区分两类任务）。
+struct TransferTaskInsert<'a> {
+    source_resource_id: &'a str,
+    target_resource_id: &'a str,
+    source_path: &'a str,
+    target_path: &'a str,
+    conflict_policy: Option<&'a str>,
+    kind: &'a str,
+    sync_options: &'a str,
+}
+
 /// 异步写审计日志（带 detail）。
-/// transfer_task 持久化（v0.91.0，T1）。
+/// transfer_task 持久化（v0.91.0，T1；v0.92.0 扩展 sync 任务）。
 impl Database {
     pub fn create_transfer_task(&self, task: &NewTransferTask) -> Result<String> {
+        self.insert_transfer_task(&TransferTaskInsert {
+            source_resource_id: &task.source_resource_id,
+            target_resource_id: &task.target_resource_id,
+            source_path: &task.source_path,
+            target_path: &task.target_path,
+            conflict_policy: task.conflict_policy.as_deref(),
+            kind: "transfer",
+            sync_options: "",
+        })
+    }
+
+    /// v0.92.0：目录同步任务（同表，`kind='sync'` + SyncOptions JSON）。
+    pub fn create_sync_task(&self, task: &NewSyncTask) -> Result<String> {
+        self.insert_transfer_task(&TransferTaskInsert {
+            source_resource_id: &task.source_resource_id,
+            target_resource_id: &task.target_resource_id,
+            source_path: &task.source_path,
+            target_path: &task.target_path,
+            conflict_policy: task.conflict_policy.as_deref(),
+            kind: "sync",
+            sync_options: &task.sync_options,
+        })
+    }
+
+    fn insert_transfer_task(&self, t: &TransferTaskInsert<'_>) -> Result<String> {
         let conn = self.conn()?;
         let id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
-        let policy = task
-            .conflict_policy
-            .clone()
-            .unwrap_or_else(|| "overwrite".to_string());
+        let policy = t.conflict_policy.unwrap_or("overwrite");
         conn.execute(
             "INSERT INTO transfer_task
                 (id, source_resource_id, target_resource_id, source_path, target_path,
-                 conflict_policy, status, total_bytes, transferred_bytes,
+                 conflict_policy, kind, sync_options, status, total_bytes, transferred_bytes,
                  speed_bytes_per_sec, eta_seconds, error, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', 0, 0, 0, NULL, '', ?7, ?7)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'pending', 0, 0, 0, NULL, '', ?9, ?9)",
             rusqlite::params![
                 id,
-                task.source_resource_id,
-                task.target_resource_id,
-                task.source_path,
-                task.target_path,
+                t.source_resource_id,
+                t.target_resource_id,
+                t.source_path,
+                t.target_path,
                 policy,
+                t.kind,
+                t.sync_options,
                 now,
             ],
         )
@@ -1252,7 +1294,7 @@ impl Database {
         let mut stmt = conn
             .prepare(
                 "SELECT id, source_resource_id, target_resource_id, source_path, target_path,
-                    conflict_policy, status, total_bytes, transferred_bytes,
+                    conflict_policy, kind, sync_options, status, total_bytes, transferred_bytes,
                     speed_bytes_per_sec, eta_seconds, error, created_at, updated_at
              FROM transfer_task WHERE id = ?1",
             )
@@ -1272,7 +1314,7 @@ impl Database {
         let mut stmt = conn
             .prepare(
                 "SELECT id, source_resource_id, target_resource_id, source_path, target_path,
-                    conflict_policy, status, total_bytes, transferred_bytes,
+                    conflict_policy, kind, sync_options, status, total_bytes, transferred_bytes,
                     speed_bytes_per_sec, eta_seconds, error, created_at, updated_at
              FROM transfer_task ORDER BY created_at DESC LIMIT ?1 OFFSET ?2",
             )
@@ -1340,6 +1382,8 @@ fn row_to_transfer_task(row: &rusqlite::Row<'_>) -> rusqlite::Result<TransferTas
         source_path: row.get("source_path")?,
         target_path: row.get("target_path")?,
         conflict_policy: row.get("conflict_policy")?,
+        kind: row.get("kind")?,
+        sync_options: row.get("sync_options")?,
         status: row.get("status")?,
         total_bytes: row.get::<_, i64>("total_bytes")?,
         transferred_bytes: row.get::<_, i64>("transferred_bytes")?,
@@ -1404,6 +1448,37 @@ mod tests {
         assert!(list.iter().any(|t| t.id == id));
         db.delete_transfer_task(&id).unwrap();
         assert!(db.get_transfer_task(&id).unwrap().is_none());
+    }
+    #[test]
+    fn sync_task_kind_and_options_round_trip() {
+        let (_dir, db) = test_db();
+        let task = NewSyncTask {
+            source_resource_id: "res-a".into(),
+            target_resource_id: "res-b".into(),
+            source_path: "/src/".into(),
+            target_path: "/dst/".into(),
+            sync_options: r#"{"direction":"upload"}"#.into(),
+            conflict_policy: None,
+        };
+        let id = db.create_sync_task(&task).unwrap();
+        let got = db.get_transfer_task(&id).unwrap().expect("exists");
+        assert_eq!(got.kind, "sync");
+        assert_eq!(got.sync_options, r#"{"direction":"upload"}"#);
+        assert_eq!(got.status, "pending");
+        assert_eq!(got.conflict_policy, "overwrite");
+        // 普通传输任务默认 kind=transfer
+        let plain = db
+            .create_transfer_task(&NewTransferTask {
+                source_resource_id: "res-a".into(),
+                target_resource_id: "res-b".into(),
+                source_path: "/a".into(),
+                target_path: "/b".into(),
+                conflict_policy: None,
+            })
+            .unwrap();
+        let rec = db.get_transfer_task(&plain).unwrap().unwrap();
+        assert_eq!(rec.kind, "transfer");
+        assert_eq!(rec.sync_options, "");
     }
     use super::*;
     use tempfile::tempdir;

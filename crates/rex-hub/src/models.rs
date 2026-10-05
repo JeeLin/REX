@@ -181,6 +181,10 @@ pub struct TransferTaskRecord {
     pub source_path: String,
     pub target_path: String,
     pub conflict_policy: String,
+    /// 任务类型：`transfer`（单文件复制/移动）| `sync`（目录同步，v0.92.0）。
+    pub kind: String,
+    /// kind=sync 时的 `rex_transfer::SyncOptions` JSON，其余为空串。
+    pub sync_options: String,
     pub status: String,
     pub total_bytes: i64,
     pub transferred_bytes: i64,
@@ -198,6 +202,20 @@ pub struct NewTransferTask {
     pub target_resource_id: String,
     pub source_path: String,
     pub target_path: String,
+    #[serde(default)]
+    pub conflict_policy: Option<String>,
+}
+
+/// 创建目录同步任务的入参（v0.92.0）：复用 transfer_task 表，
+/// `kind='sync'`，选项序列化为 JSON 存 `sync_options` 列。
+#[derive(Debug, Clone, Deserialize)]
+pub struct NewSyncTask {
+    pub source_resource_id: String,
+    pub target_resource_id: String,
+    pub source_path: String,
+    pub target_path: String,
+    /// `rex_transfer::SyncOptions` JSON。
+    pub sync_options: String,
     #[serde(default)]
     pub conflict_policy: Option<String>,
 }

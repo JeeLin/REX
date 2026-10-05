@@ -209,7 +209,17 @@ export async function saveFromEdit(sessionId: string, path: string, content: str
 
 export type TransferOp = 'move' | 'copy'
 export type TransferConflict = 'overwrite' | 'skip' | 'rename' | 'fail'
-export type TransferTaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'canceled'
+export type TransferTaskStatus =
+  | 'pending'
+  | 'scanning'
+  | 'planning'
+  | 'running'
+  | 'verifying'
+  | 'completed'
+  | 'failed'
+  | 'canceled'
+/** 任务类型：transfer（单文件）| sync（目录同步，v0.92.0）。 */
+export type TransferTaskKind = 'transfer' | 'sync'
 
 export interface TransferEndpoint {
   resource_id: string
@@ -250,6 +260,8 @@ export interface TransferTaskRecord {
   source_path: string
   target_path: string
   conflict_policy: string
+  kind: TransferTaskKind
+  sync_options: string
   status: TransferTaskStatus
   total_bytes: number
   transferred_bytes: number
@@ -271,6 +283,76 @@ export async function getTransferTask(id: string): Promise<TransferTaskRecord> {
 export async function cancelTransferTask(id: string): Promise<void> {
   const res = await fetch(`${API_BASE}/transfer/${encodeURIComponent(id)}/cancel`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+  })
+  if (!res.ok) throw await raise(res)
+}
+
+// --- Folder sync (v0.92.0): server-side directory sync ---
+// The browser only creates tasks / requests previews / watches progress;
+// diff + apply run entirely in the Hub (data never transits the browser).
+
+export type SyncDirection = 'upload' | 'download' | 'bidirectional'
+export type SyncCompareBasis = 'size' | 'modified_time'
+export type SyncActionKind = 'copy' | 'delete' | 'conflict'
+export type SyncActionDir = 'to_target' | 'to_source'
+
+export interface SyncOptions {
+  direction: SyncDirection
+  compare: SyncCompareBasis
+  include: string[]
+  exclude: string[]
+  delete_orphans: boolean
+}
+
+export interface SyncAction {
+  rel_path: string
+  action: SyncActionKind
+  dir: SyncActionDir
+  size: number
+  source_mtime?: number | null
+  target_mtime?: number | null
+}
+
+export interface SyncSummary {
+  copies: number
+  deletes: number
+  conflicts: number
+  total_bytes: number
+}
+
+export interface SyncPlan {
+  actions: SyncAction[]
+  summary: SyncSummary
+}
+
+export interface SyncRequestBody {
+  source: TransferEndpoint
+  target: TransferEndpoint
+  options: SyncOptions
+  conflict?: TransferConflict
+}
+
+/** Create a server-side sync task (POST /api/files/sync). */
+export async function createSync(body: SyncRequestBody): Promise<TransferActionCreated> {
+  const res = await fetch(`${API_BASE}/sync`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw await raise(res)
+  return await res.json()
+}
+
+/** Fetch a sync task (GET /api/files/sync/{id}). */
+export async function getSyncTask(id: string): Promise<TransferTaskRecord> {
+  const res = await fetch(`${API_BASE}/sync/${encodeURIComponent(id)}`, { headers: authHeaders() })
+  if (!res.ok) throw await raise(res)
+  return await res.json()
+}
+
+/** Cancel a sync task (DELETE /api/files/sync/{id}). */
+export async function cancelSyncTask(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/sync/${encodeURIComponent(id)}`, {
+    method: 'DELETE', headers: { 'Content-Type': 'application/json', ...authHeaders() },
   })
   if (!res.ok) throw await raise(res)
 }

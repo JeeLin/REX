@@ -105,6 +105,14 @@ function mapServerStatus(status: filesApi.TransferTaskStatus): TransferStatus {
       return 'done'
     case 'failed':
       return 'error'
+    // Sync phases (scanning/planning/verifying) and paused states all render
+    // as an in-flight row; canceling is on its way to canceled.
+    case 'scanning':
+    case 'planning':
+    case 'verifying':
+      return 'running'
+    case 'canceled':
+      return 'canceled'
     default:
       return status
   }

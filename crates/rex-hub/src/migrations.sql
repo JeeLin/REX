@@ -87,6 +87,7 @@ CREATE INDEX IF NOT EXISTS idx_cdr_resource_id ON cdr(resource_id);
 CREATE INDEX IF NOT EXISTS idx_cdr_start_time ON cdr(start_time);
 
 -- v0.91.0：传输任务持久化（TransferTask 模型 + 进度查询 API 的事实源）。
+-- v0.92.0：新增 kind（transfer|sync）与 sync_options（SyncOptions JSON）。
 CREATE TABLE IF NOT EXISTS transfer_task (
   id              TEXT PRIMARY KEY,
   source_resource_id TEXT NOT NULL,
@@ -94,6 +95,8 @@ CREATE TABLE IF NOT EXISTS transfer_task (
   source_path     TEXT NOT NULL,
   target_path     TEXT NOT NULL,
   conflict_policy TEXT NOT NULL DEFAULT 'overwrite',
+  kind            TEXT NOT NULL DEFAULT 'transfer',
+  sync_options    TEXT NOT NULL DEFAULT '',
   status          TEXT NOT NULL DEFAULT 'pending',
   total_bytes     INTEGER NOT NULL DEFAULT 0,
   transferred_bytes INTEGER NOT NULL DEFAULT 0,

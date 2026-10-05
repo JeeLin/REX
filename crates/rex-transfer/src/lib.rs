@@ -9,6 +9,9 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use rex_common::file_transfer::{FileConnector, FileEntry, ProgressCallback, UploadResult};
 
+pub mod sync;
+pub use sync::*;
+
 pub mod task;
 pub use task::*;
 
