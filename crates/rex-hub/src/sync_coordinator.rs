@@ -138,24 +138,59 @@ impl SyncCoordinator {
     }
 
     /// 驱动一次完整同步：加载任务记录 → 打开 source/target 连接器 → `run_plan`。
+    ///
+    /// 记录加载与连接器建立（preflight）阶段的错误在此**落 `failed` + 广播终态**
+    /// 后再返回：`submit` 丢弃后台 `JoinHandle` 的返回值，这些早退若无终态，
+    /// 任务行会永远停在 `pending`（`connect` 失败是日常可达的：agent 离线 /
+    /// SFTP 握手失败 / S3 连接失败）。`run_plan` 内部的错误仍由 `run_plan` 自行
+    /// `fail()`，此处不重复处理。
     pub async fn run(state: &AppState, task_id: &str) -> Result<SyncPlan, SyncError> {
-        let task = state
-            .db
-            .get_transfer_task(task_id)
-            .map_err(|e| SyncError::Db(e.to_string()))?
-            .ok_or(SyncError::TaskNotFound)?;
+        let task = match state.db.get_transfer_task(task_id) {
+            Ok(Some(task)) => task,
+            Ok(None) => return Err(SyncError::TaskNotFound),
+            Err(e) => {
+                let err = SyncError::Db(e.to_string());
+                Self::fail(state, task_id, &err);
+                return Err(err);
+            }
+        };
 
-        let opts: SyncOptions = serde_json::from_str(&task.sync_options)
-            .map_err(|e| SyncError::InvalidOptions(e.to_string()))?;
-        let conflict = rex_transfer::ConflictPolicy::from_str(&task.conflict_policy)
-            .ok_or_else(|| SyncError::InvalidConflictPolicy(task.conflict_policy.clone()))?;
+        let opts: SyncOptions = match serde_json::from_str(&task.sync_options) {
+            Ok(opts) => opts,
+            Err(e) => {
+                let err = SyncError::InvalidOptions(e.to_string());
+                Self::fail(state, task_id, &err);
+                return Err(err);
+            }
+        };
+        let conflict = match rex_transfer::ConflictPolicy::from_str(&task.conflict_policy) {
+            Some(c) => c,
+            None => {
+                let err = SyncError::InvalidConflictPolicy(task.conflict_policy.clone());
+                Self::fail(state, task_id, &err);
+                return Err(err);
+            }
+        };
 
-        let mut source = crate::file_api::connect_resource(state, &task.source_resource_id)
-            .await
-            .map_err(|e| SyncError::Connect(e.to_string()))?;
-        let mut target = crate::file_api::connect_resource(state, &task.target_resource_id)
-            .await
-            .map_err(|e| SyncError::Connect(e.to_string()))?;
+        let mut source =
+            match crate::file_api::connect_resource(state, &task.source_resource_id).await {
+                Ok(c) => c,
+                Err(e) => {
+                    let err = SyncError::Connect(e.to_string());
+                    Self::fail(state, task_id, &err);
+                    return Err(err);
+                }
+            };
+        let mut target =
+            match crate::file_api::connect_resource(state, &task.target_resource_id).await {
+                Ok(c) => c,
+                Err(e) => {
+                    let err = SyncError::Connect(e.to_string());
+                    Self::fail(state, task_id, &err);
+                    let _ = source.close().await;
+                    return Err(err);
+                }
+            };
 
         let res = Self::run_plan(
             state,
@@ -1329,6 +1364,75 @@ mod tests {
         assert!(
             !dst.contains("/dst/a (1).txt.rex.part"),
             "no temp left behind"
+        );
+    }
+
+    /// preflight（加载记录 + 建立连接器）失败必须落 `failed` + 广播终态：
+    /// `submit` 丢弃后台 `JoinHandle` 的返回值，这些早退若无终态，任务行会永远停在
+    /// `pending`（连接失败是日常可达的：agent 离线 / SFTP 握手失败 / S3 连接失败）。
+    #[tokio::test]
+    async fn run_preflight_connect_failure_sets_failed_and_broadcasts_reason() {
+        let (_dir, state) = make_state();
+        // `make_sync_task` 写的 resource_id（src/dst）在测试库里不存在 → connect 失败
+        let task_id = make_sync_task(&state, &SyncOptions::default());
+
+        let mut rx = state.transfer_bcast.subscribe();
+        let res = SyncCoordinator::run(&state, &task_id).await;
+
+        assert!(matches!(res, Err(SyncError::Connect(_))), "got {res:?}");
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        assert_eq!(rec.status, "failed", "must not stay pending");
+        let reason = rec.error.clone().unwrap_or_default();
+        assert!(
+            !reason.is_empty() && reason.contains("connect"),
+            "failed must carry the connect reason, got {reason:?}"
+        );
+
+        let mut failed = Vec::new();
+        while let Ok(ev) = rx.try_recv() {
+            if ev.status == "failed" {
+                failed.push(ev);
+            }
+        }
+        assert_eq!(failed.len(), 1, "exactly one failed terminal broadcast");
+        assert_eq!(
+            failed[0].error.as_deref(),
+            Some(reason.as_str()),
+            "terminal event must carry the same reason as the DB row"
+        );
+    }
+
+    /// preflight 失败时若任务已被取消，终态必须是 `canceled`（不带 error）——
+    /// 不得被写成 `failed`，也不得广播第二个终态。
+    #[tokio::test]
+    async fn run_preflight_failure_does_not_clobber_canceled() {
+        let (_dir, state) = make_state();
+        let task_id = make_sync_task(&state, &SyncOptions::default());
+        state
+            .db
+            .set_transfer_task_status(&task_id, "canceled", None)
+            .unwrap();
+
+        let mut rx = state.transfer_bcast.subscribe();
+        let res = SyncCoordinator::run(&state, &task_id).await;
+
+        assert!(matches!(res, Err(SyncError::Connect(_))), "got {res:?}");
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        assert_eq!(rec.status, "canceled", "canceled must not be clobbered");
+
+        let mut terminals = Vec::new();
+        while let Ok(ev) = rx.try_recv() {
+            terminals.push(ev);
+        }
+        let canceled: Vec<_> = terminals
+            .iter()
+            .filter(|e| e.status == "canceled")
+            .collect();
+        assert_eq!(canceled.len(), 1, "exactly one canceled terminal broadcast");
+        assert_eq!(canceled[0].error, None, "canceled carries no reason");
+        assert!(
+            !terminals.iter().any(|e| e.status == "failed"),
+            "canceled task must not be reported as failed: {terminals:?}"
         );
     }
 
