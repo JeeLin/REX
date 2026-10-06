@@ -516,11 +516,29 @@ export function useFiles(opts: UseFilesOptions) {
     return path.endsWith('/') ? path : path + '/'
   }
 
-  /** 去掉尾斜杠（根 `/` 保留），使 `/srv/` 与 `/srv` 判为同一个目录。 */
+  /**
+   * 目录路径归一：去首尾空白、折叠 `.` 段、弹栈 `..` 段、合并重复 `/`、
+   * 去掉尾斜杠（根 `/` 保留）。
+   *
+   * 与 Hub 侧 `file_api::normalize_dir_path` 同规则（两侧各写一份，无法共享代码）：
+   * 面板路径只由 `navigate`/`goUp` 产生，本身不含 `.`/`..`，但同步请求的路径
+   * 由 API 直接接收——这里提前按同一规则判定，提示与 Hub 的硬拦截才一致。
+   */
   function trimDir(path: string): string {
-    let p = path.trim()
-    while (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1)
-    return p
+    const trimmed = path.trim()
+    const absolute = trimmed.startsWith('/')
+    const segs: string[] = []
+    for (const seg of trimmed.split('/')) {
+      if (seg === '' || seg === '.') continue
+      if (seg === '..') {
+        segs.pop()
+        continue
+      }
+      segs.push(seg)
+    }
+    const body = segs.join('/')
+    if (!absolute) return body
+    return body === '' ? '/' : `/${body}`
   }
 
   /** `inner` 是否为 `outer` 自身或其子目录（只认目录边界：`/x` 不算 `/xy`）。 */
@@ -532,7 +550,7 @@ export function useFiles(opts: UseFilesOptions) {
   /**
    * 双面板的两端指向同一资源，目标若落在源子树内，Hub 侧会拒（SYNC_PATH_NESTED）：
    * 写出的副本会进入下一轮源树，体积按轮次翻倍。这里在打开对话框前就拦，
-   * 避免用户填完选项才看到失败。
+   * 避免用户填完选项才看到失败。归一规则与 Hub 侧一致（见 `trimDir`）。
    */
   function openSync() {
     if (!resourceId || !ctx.value.isDir) return

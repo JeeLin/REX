@@ -293,4 +293,30 @@ describe('FilesPage — 同步路径嵌套拦截（v0.92.0 step5 F-2）', () => 
     expect(vm.syncTarget).toEqual({ resource_id: 'res-1', path: '/xy' })
     expect(w.find('.toast--error').exists()).toBe(false)
   })
+
+  // v0.92.0 step5 F-2 补充：归一 `.`/`..`/重复斜杠后才能与 Hub 的硬拦截一致。
+  it('refuses when dot segments make the source resolve onto the target', async () => {
+    const w = await openSyncWith('/srv/backup/..', '/srv')
+    expect((w.vm as unknown as Vm).showSyncDialog).toBe(false)
+  })
+
+  it('refuses when dot segments nest the target inside the source', async () => {
+    const w = await openSyncWith('/srv', '/srv/backup/..')
+    expect((w.vm as unknown as Vm).showSyncDialog).toBe(false)
+  })
+
+  it('refuses when repeated slashes and a trailing . resolve to the same folder', async () => {
+    const w = await openSyncWith('/srv//backup', '/srv/backup/.')
+    expect((w.vm as unknown as Vm).showSyncDialog).toBe(false)
+  })
+
+  it('still opens for folders that only become siblings after normalizing', async () => {
+    const w = await openSyncWith('/srv/log/../backup', '/srv/bak')
+    const vm = w.vm as unknown as Vm
+
+    expect(vm.showSyncDialog).toBe(true)
+    expect(vm.syncSource).toEqual({ resource_id: 'res-1', path: '/srv/log/../backup/' })
+    expect(vm.syncTarget).toEqual({ resource_id: 'res-1', path: '/srv/bak' })
+    expect(w.find('.toast--error').exists()).toBe(false)
+  })
 })

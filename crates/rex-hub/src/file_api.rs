@@ -244,26 +244,51 @@ fn validate_sync_masks(masks: &[String]) -> Result<(), (&'static str, &'static s
     Ok(())
 }
 
-/// 判定 `inner` 是否为 `outer` 自身或其子目录。
-///
-/// 只认目录边界：`/x` 不算 `/xy` 的前缀。`outer` 假定已去掉尾斜杠。
+/// 判定 `inner` 是否为 `outer` 自身或其子目录。两端先经 [`normalize_dir_path`]
+/// 归一，再只认目录边界：`/x` 不算 `/xy` 的前缀。
 fn is_path_nested(inner: &str, outer: &str) -> bool {
+    let inner = normalize_dir_path(inner);
+    let outer = normalize_dir_path(outer);
     if inner == outer || outer == "/" {
         return true;
     }
     inner
-        .strip_prefix(outer)
+        .strip_prefix(&outer)
         .is_some_and(|rest| rest.starts_with('/'))
 }
 
-/// 去掉首尾空白与尾斜杠（根 `/` 保留），使 `/srv/` 与 `/srv` 判为同一个目录。
-fn trim_path_prefix(path: &str) -> &str {
-    let p = path.trim();
-    let mut e = p.len();
-    while e > 1 && p.as_bytes()[e - 1] == b'/' {
-        e -= 1;
+/// 归一目录路径：去首尾空白、折叠 `.` 段、弹栈 `..` 段、合并重复 `/`、
+/// 去掉尾斜杠（根 `/` 保留）。
+///
+/// 嵌套守卫必须按**引擎真正解析后的路径**比较：`scan_tree` 的 `join_path` 只是
+/// 字符串拼接，`..` 会被原样交给 connector，`/srv/backup/..` 落到的就是 `/srv`。
+/// 只 trim 尾斜杠的话，`/srv/backup/..` 与 `/srv` 比不出嵌套，自噬路径被放行。
+///
+/// 返回 `String` 而非切片：弹栈后长度不定，无法借用输入。
+fn normalize_dir_path(path: &str) -> String {
+    let trimmed = path.trim();
+    let absolute = trimmed.starts_with('/');
+    let mut segs: Vec<&str> = Vec::new();
+    for seg in trimmed.split('/') {
+        match seg {
+            "" | "." => {}
+            ".." => {
+                // 弹到根就丢弃：绝对路径 `..` 上溯不出根，保留反而会造出
+                // 引擎侧不存在的路径。
+                segs.pop();
+            }
+            s => segs.push(s),
+        }
     }
-    &p[..e]
+    let body = segs.join("/");
+    if !absolute {
+        return body;
+    }
+    if body.is_empty() {
+        "/".to_string()
+    } else {
+        format!("/{body}")
+    }
 }
 
 /// 同步请求的源/目标必须落在不同资源，或在同资源下互不嵌套。
@@ -272,13 +297,16 @@ fn trim_path_prefix(path: &str) -> &str {
 /// 第一轮写出的副本就会成为第二轮源树的一部分（`/srv` → `/srv/backup` →
 /// `/srv/backup/backup`…），体积按轮次翻倍，且孤儿清理拦不住（副本是源侧条目）。
 /// 这里在 API 层给出硬拦截，create 与 preview 共用同一判定。
+///
+/// 比较前按 [`normalize_dir_path`] 归一：`.` / `..` / 重复斜杠能指向同一目录，
+/// 归一后与尾斜杠归一同属一条规则，不给守卫留绕行口子。
 fn validate_sync_path_nesting(body: &SyncRequestBody) -> Result<(), (&'static str, &'static str)> {
     if body.source.resource_id != body.target.resource_id {
         return Ok(());
     }
-    let source = trim_path_prefix(&body.source.path);
-    let target = trim_path_prefix(&body.target.path);
-    if is_path_nested(target, source) || is_path_nested(source, target) {
+    let source = normalize_dir_path(&body.source.path);
+    let target = normalize_dir_path(&body.target.path);
+    if is_path_nested(&target, &source) || is_path_nested(&source, &target) {
         return Err((
             "SYNC_PATH_NESTED",
             "source and target must not be nested in each other",
@@ -1928,6 +1956,36 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::CREATED);
     }
 
+    /// 路径归一内核：折叠 `.`、弹栈 `..`、合并重复 `/`、保前导 `/`、去尾斜杠。
+    ///
+    /// `..` 上溯不出根（绝对路径语义），否则会造出引擎侧不存在的路径。
+    #[test]
+    fn normalize_dir_path_folds_dot_segments_and_slashes() {
+        let cases = [
+            ("/srv", "/srv"),
+            ("  /srv/  ", "/srv"),
+            ("/srv//", "/srv"),
+            ("/srv///backup", "/srv/backup"),
+            ("/srv/./backup", "/srv/backup"),
+            ("/srv/backup/.", "/srv/backup"),
+            ("/srv/backup/..", "/srv"),
+            ("/srv/backup/../..", "/"),
+            ("/srv/backup/../log", "/srv/log"),
+            ("/../srv", "/srv"),
+            ("/..", "/"),
+            ("/", "/"),
+            ("//", "/"),
+            ("/./", "/"),
+        ];
+        for (input, want) in cases {
+            assert_eq!(
+                normalize_dir_path(input),
+                want,
+                "normalize {input:?} must yield {want:?}"
+            );
+        }
+    }
+
     /// 同资源内源/目标互不嵌套：同一路径、任一方为另一方子目录都必须拒，
     /// 尾斜杠归一；`/x` 与 `/xy` 是兄弟目录而非嵌套，必须放行。
     #[test]
@@ -1970,6 +2028,94 @@ mod tests {
         assert!(
             validate_sync_request(&diff_res).is_ok(),
             "不同 resource_id 的同路径是合法同步（跨主机）"
+        );
+    }
+
+    /// v0.92.0 step5 F-2 补充：`.` / `..` / 重复斜杠能指向同一目录，守卫必须按
+    /// 归一后的路径比较，否则 `/srv/backup/..`（引擎侧实为 `/srv`）能绕过嵌套拦截，
+    /// 落成源与目标同根的自噬同步。
+    #[test]
+    fn sync_path_nesting_compares_normalized_dot_segments() {
+        let same_res = |source: &str, target: &str| {
+            let mut b = sync_body("/src/");
+            b.source.resource_id = "res-a".into();
+            b.source.path = source.into();
+            b.target.resource_id = "res-a".into();
+            b.target.path = target.into();
+            validate_sync_request(&b).map_err(|(code, _)| code)
+        };
+
+        // 归一后互为同一目录或互为祖先：必须拒
+        assert_eq!(
+            same_res("/srv/backup/..", "/srv"),
+            Err("SYNC_PATH_NESTED"),
+            "`/srv/backup/..` 归一后就是 `/srv`（引擎侧同根），必须拦"
+        );
+        assert_eq!(
+            same_res("/srv", "/srv/backup/.."),
+            Err("SYNC_PATH_NESTED"),
+            "反向同样要拦"
+        );
+        assert_eq!(
+            same_res("/srv/backup/../..", "/"),
+            Err("SYNC_PATH_NESTED"),
+            "`..` 弹到根 = 目标是源的祖先"
+        );
+        assert_eq!(
+            same_res("/srv/./a", "/srv/a"),
+            Err("SYNC_PATH_NESTED"),
+            "`./` 段与重复斜杠不改变指向"
+        );
+        assert_eq!(
+            same_res("/srv//backup", "/srv/backup/."),
+            Err("SYNC_PATH_NESTED"),
+            "重复斜杠与尾 `.` 同样归一后判为同路径"
+        );
+        assert_eq!(
+            same_res("/srv/a/../b", "/srv/b"),
+            Err("SYNC_PATH_NESTED"),
+            "源侧的 `..` 也必须先归一再比较"
+        );
+        assert_eq!(
+            same_res("/srv/log/../backup", "/srv/backup"),
+            Err("SYNC_PATH_NESTED"),
+            "源归一后与目标同路径"
+        );
+
+        // 归一后确为兄弟目录：必须放行（归一不得退化成「路径里有 `..` 就拒」）
+        assert!(
+            same_res("/srv/log/../backup", "/srv/bak").is_ok(),
+            "`..` 弹回后落在同级目录，必须放行"
+        );
+        assert!(
+            same_res("/srv/a/../x", "/srv/xy").is_ok(),
+            "归一后的 `/srv/x` 与 `/srv/xy` 不是嵌套（目录边界语义不变）"
+        );
+    }
+
+    /// create 与 preview 共用同一份嵌套判定，`..` 归一也必须在两个端点同效：
+    /// 预览通过即执行通过的不变式不能因归一化而破掉。
+    #[tokio::test]
+    async fn sync_dot_segment_nesting_is_rejected_by_create_and_preview() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = crate::resource_conn::build_test_state(dir.path());
+
+        let mut body = sync_body("/srv/backup/..");
+        body.source.resource_id = "res-a".into();
+        body.target.resource_id = "res-a".into();
+        body.target.path = "/srv".into();
+
+        let resp = create_sync_task(State(state.clone()), Json(body.clone())).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(body_json(resp).await["error"]["code"], "SYNC_PATH_NESTED");
+
+        let resp = preview_sync(State(state.clone()), Json(body)).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(body_json(resp).await["error"]["code"], "SYNC_PATH_NESTED");
+
+        assert!(
+            state.db.list_transfer_tasks(10, 0).unwrap().is_empty(),
+            "dot-segment nested sync must not persist a task"
         );
     }
 
