@@ -22,7 +22,7 @@ use rex_transfer::{
 };
 
 use crate::app::{AppState, TransferProgressEvent};
-use crate::transfer_coordinator::{CHUNK_SIZE, TEMP_SUFFIX};
+use crate::transfer_coordinator::{unique_name, CHUNK_SIZE, TEMP_SUFFIX};
 
 /// 扫描时的最大递归深度，防御环形目录/软链导致的无限下钻。
 const MAX_SCAN_DEPTH: usize = 32;
@@ -433,7 +433,9 @@ impl SyncCoordinator {
                 return Err(SyncError::AlreadyExists(to.to_string()))
             }
             rex_transfer::ConflictPolicy::Rename if writer.stat(to).await.is_ok() => {
-                unique_name(writer, to).await?
+                unique_name(writer, to)
+                    .await
+                    .ok_or_else(|| SyncError::AlreadyExists(to.to_string()))?
             }
             _ => to.to_string(),
         };
@@ -608,21 +610,6 @@ fn join_path(root: &str, rel_dir: &str) -> String {
         return root.to_string();
     }
     format!("{}/{}", root.trim_end_matches('/'), rel_dir)
-}
-
-/// 为 `Rename` 冲突生成不存在的目标名：`name (1).ext` ...
-async fn unique_name(target: &mut dyn FileConnector, dst_path: &str) -> Result<String, SyncError> {
-    let (stem, ext) = match dst_path.rsplit_once('.') {
-        Some((s, e)) if !s.is_empty() && !s.ends_with('/') => (s.to_string(), format!(".{e}")),
-        _ => (dst_path.to_string(), String::new()),
-    };
-    for i in 1..1000u32 {
-        let candidate = format!("{stem} ({i}){ext}");
-        if target.stat(&candidate).await.is_err() {
-            return Ok(candidate);
-        }
-    }
-    Err(SyncError::AlreadyExists(dst_path.to_string()))
 }
 
 /// `FileEntry.modified` → Unix 秒。S3 给 unix 秒字符串，SFTP 给
@@ -1516,6 +1503,55 @@ mod tests {
         assert!(
             rec.transferred_bytes < rec.total_bytes,
             "progress must not reach 100% while a file was skipped: {rec:?}"
+        );
+    }
+
+    /// sync 侧的 `Rename` 冲突与 transfer 走同一份 `unique_name`
+    /// （`transfer_coordinator::unique_name`），重命名规则只有一处实现。
+    #[tokio::test]
+    async fn run_plan_rename_conflict_lands_on_shared_unique_name() {
+        let (_dir, state) = make_state();
+        let opts = SyncOptions::default();
+        let task_id = make_sync_task(&state, &opts);
+
+        let src = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        let dst = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        // 尺寸不同才会被计划为复制（两侧 mtime 均未知 → diff 退化为比大小）；
+        // 目标已存在 → Rename 策略生成新名
+        src.put("/src/a.txt", b"new source bytes");
+        dst.put("/dst/a.txt", b"old");
+
+        let mut source = src.clone();
+        let mut target = dst.clone();
+
+        SyncCoordinator::run_plan(
+            &state,
+            &task_id,
+            SyncSpec {
+                opts: &opts,
+                conflict: ConflictPolicy::Rename,
+            },
+            &mut source,
+            &mut target,
+            "/src",
+            "/dst",
+        )
+        .await
+        .expect("rename conflict must not fail the run");
+
+        assert_eq!(
+            dst.get("/dst/a (1).txt"),
+            Some(b"new source bytes".to_vec()),
+            "rename conflict must land on the shared unique_name result"
+        );
+        assert_eq!(
+            dst.get("/dst/a.txt"),
+            Some(b"old".to_vec()),
+            "the existing target must stay untouched"
+        );
+        assert!(
+            !dst.contains("/dst/a (1).txt.rex.part"),
+            "no temp left behind"
         );
     }
 

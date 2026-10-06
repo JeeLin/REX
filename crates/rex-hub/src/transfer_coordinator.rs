@@ -411,25 +411,12 @@ impl TransferCoordinator {
             ConflictPolicy::Skip => Ok(ConflictOutcome::Skip),
             ConflictPolicy::Fail => Err(TransferError::AlreadyExists(dst_path.to_string())),
             ConflictPolicy::Rename => {
-                let renamed = Self::unique_name(target, dst_path).await?;
+                let renamed = unique_name(target, dst_path)
+                    .await
+                    .ok_or_else(|| TransferError::AlreadyExists(dst_path.to_string()))?;
                 Ok(ConflictOutcome::Path(renamed))
             }
         }
-    }
-
-    /// 为 `Rename` 冲突生成不存在的目标名：`name (1).ext`, `name (2).ext`, ...
-    async fn unique_name(
-        target: &mut dyn FileConnector,
-        dst_path: &str,
-    ) -> Result<String, TransferError> {
-        let (stem, ext) = split_stem_ext(dst_path);
-        for i in 1..1000u32 {
-            let candidate = format!("{stem} ({i}){ext}");
-            if target.stat(&candidate).await.is_err() {
-                return Ok(candidate);
-            }
-        }
-        Err(TransferError::AlreadyExists(dst_path.to_string()))
     }
 
     fn is_canceled(state: &AppState, task_id: &str) -> bool {
@@ -489,6 +476,21 @@ impl TransferCoordinator {
 enum ConflictOutcome {
     Path(String),
     Skip,
+}
+
+/// 为 `Rename` 冲突生成不存在的目标名：`name (1).ext`, `name (2).ext`, ...
+///
+/// transfer / sync 两个引擎共用（重命名产出的文件名是用户可见行为，规则不能分叉）。
+/// 序号上限 1000：区间内全部被占用即视为失败，由调用方映射为各自的错误类型。
+pub(crate) async fn unique_name(target: &mut dyn FileConnector, dst_path: &str) -> Option<String> {
+    let (stem, ext) = split_stem_ext(dst_path);
+    for i in 1..1000u32 {
+        let candidate = format!("{stem} ({i}){ext}");
+        if target.stat(&candidate).await.is_err() {
+            return Some(candidate);
+        }
+    }
+    None
 }
 
 /// 拆分路径 stem/ext，不改变目录结构。
@@ -1091,6 +1093,118 @@ mod tests {
         assert_eq!(
             split_stem_ext("file."),
             ("file".to_string(), ".".to_string())
+        );
+    }
+
+    /// `unique_name` 是 transfer / sync 共用的重命名内核：重命名产出的文件名是用户
+    /// 可见行为，五种命名情形在此钉住，两个引擎的 `Rename` 路径都经由它。
+    #[tokio::test]
+    async fn unique_name_naming_rules_are_shared() {
+        let store: Arc<Mutex<HashMap<String, Vec<u8>>>> = Arc::new(Mutex::new(HashMap::new()));
+
+        // 1) 目标已存在 → 追加 `(1)`，序号跳到第一个空位
+        store.lock().unwrap().insert("/d/a.txt".into(), vec![]);
+        store.lock().unwrap().insert("/d/a (1).txt".into(), vec![]);
+        let mut conn = MockConnector::new(Arc::clone(&store));
+        assert_eq!(
+            unique_name(&mut conn, "/d/a.txt").await,
+            Some("/d/a (2).txt".to_string())
+        );
+
+        // 2) 点文件：`.bashrc` 的 stem 判空 → 整个名字当 stem，产出 `.bashrc (1)`
+        let mut conn = MockConnector::new(Arc::clone(&store));
+        assert_eq!(
+            unique_name(&mut conn, "/d/.bashrc").await,
+            Some("/d/.bashrc (1)".to_string())
+        );
+
+        // 3) 无扩展名：不追加 `.`
+        let mut conn = MockConnector::new(Arc::clone(&store));
+        assert_eq!(
+            unique_name(&mut conn, "/d/noext").await,
+            Some("/d/noext (1)".to_string())
+        );
+
+        // 4) 尾斜杠路径：`.` 落在目录段上（`/d.v2/` 按 `stem=/d` + `ext=.v2/` 拆），
+        //    序号插在最后一段之前。文件路径不会带尾斜杠（`join_path` 不产生），
+        //    此处钉住现状以防规则改动。
+        let mut conn = MockConnector::new(Arc::clone(&store));
+        assert_eq!(
+            unique_name(&mut conn, "/d.v2/").await,
+            Some("/d (1).v2/".to_string())
+        );
+
+        // 4b) 目录下的点文件：`stem` 判到 `/dir/`（尾斜杠）→ 整名当 stem，不拆扩展名
+        let mut conn = MockConnector::new(Arc::clone(&store));
+        assert_eq!(
+            unique_name(&mut conn, "/dir/.bashrc").await,
+            Some("/dir/.bashrc (1)".to_string())
+        );
+
+        // 5) 序号上限：`1..1000` 全部占用 → None，由调用方映射为 AlreadyExists
+        let full: Arc<Mutex<HashMap<String, Vec<u8>>>> = Arc::new(Mutex::new(HashMap::new()));
+        for i in 1..1000u32 {
+            full.lock()
+                .unwrap()
+                .insert(format!("/f/x ({i}).txt"), Vec::new());
+        }
+        let mut conn = MockConnector::new(Arc::clone(&full));
+        assert_eq!(unique_name(&mut conn, "/f/x.txt").await, None);
+    }
+
+    /// transfer 侧的 `Rename` 冲突经由共享内核落到 `name (1).ext` 并真正落盘。
+    #[tokio::test]
+    async fn run_stream_rename_conflict_lands_on_shared_unique_name() {
+        let (_dir, state) = make_state();
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/a.txt".into(),
+                target_path: "/dst/a.txt".into(),
+                conflict_policy: Some("rename".into()),
+                ..Default::default()
+            })
+            .unwrap();
+
+        let src = MockConnector::new(Arc::new(Mutex::new(HashMap::from([(
+            "/src/a.txt".to_string(),
+            b"new".to_vec(),
+        )]))));
+        let dst_store: Arc<Mutex<HashMap<String, Vec<u8>>>> = Arc::new(Mutex::new(HashMap::new()));
+        dst_store
+            .lock()
+            .unwrap()
+            .insert("/dst/a.txt".to_string(), b"old".to_vec());
+
+        let mut source = src.clone();
+        let mut target = MockConnector::new(Arc::clone(&dst_store));
+
+        TransferCoordinator::run_stream(
+            &state,
+            &task_id,
+            TransferSpec {
+                op: TransferOp::Copy,
+                conflict: ConflictPolicy::Rename,
+            },
+            &mut source,
+            &mut target,
+            "/src/a.txt",
+            "/dst/a.txt",
+        )
+        .await
+        .expect("rename conflict must complete");
+
+        assert_eq!(
+            dst_store.lock().unwrap().get("/dst/a (1).txt"),
+            Some(&b"new".to_vec()),
+            "rename conflict must land on the shared unique_name result"
+        );
+        assert_eq!(
+            dst_store.lock().unwrap().get("/dst/a.txt"),
+            Some(&b"old".to_vec()),
+            "the existing target must stay untouched"
         );
     }
 
