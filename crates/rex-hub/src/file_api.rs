@@ -160,7 +160,7 @@ async fn create_transfer_task(
         .into_response()
 }
 
-/// 取消任务（transfer / sync 共用）：持久化取消标记 → 中止进程内后台流。
+/// 取消任务（transfer / sync 共用）：持久化取消标记 → 后台流协作式中止。
 async fn cancel_task(
     state: &AppState,
     task_id: &str,
@@ -169,12 +169,10 @@ async fn cancel_task(
     // T1：持久化取消标记；T2 驱动引擎实际中止。
     match state.db.set_transfer_task_status(task_id, "canceled", None) {
         Ok(_) => {
-            // T2：持久化取消标记后，中止进程内的后台传输流。run_stream 亦轮询 DB
-            // 状态作为协作式中止的兜底。
-            state.coordinator.abort(task_id);
-            // v0.92.0：同步引擎**不**用 abort——掐断 future 会跳过 copy_file 的
-            // `{dst}.rex.part` 清理与终态广播，目标侧留半截文件。它按分片轮询
-            // 这里的取消标记，协作式中止即可（见 `SyncCoordinator::submit`）。
+            // T1/T2：持久化取消标记即中止手段。两个引擎都**不** abort——掐断 future
+            // 会跳过 run_stream / copy_file 的 `{dst}.rex.part` 清理与终态落库，目标侧
+            // 留半截文件。二者均按分片轮询这里的取消标记，协作式中止即可
+            // （见 `TransferCoordinator::submit` / `SyncCoordinator::submit`）。
             tracing::info!(
                 action = audit_action,
                 transfer_task_id = %task_id,

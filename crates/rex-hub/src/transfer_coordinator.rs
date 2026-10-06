@@ -14,7 +14,6 @@
 //! - 校验目标 temp 文件尺寸==源文件尺寸，然后 `rename(temp → dst)`；
 //! - `Move` 操作完成后 `source.delete(src_path)`。
 
-use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
@@ -102,60 +101,23 @@ impl fmt::Display for TransferError {
 
 impl std::error::Error for TransferError {}
 
-/// 直连传输协调器。`Arc` 封装以允许 `submit` 克隆自身进入后台任务。
-#[derive(Clone)]
-pub struct TransferCoordinator {
-    pub handles: Arc<std::sync::Mutex<HashMap<String, tokio::task::AbortHandle>>>,
-}
-
-impl Default for TransferCoordinator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+/// 直连传输协调器。取消走协作式中止（引擎轮询 DB 取消标记），不持有句柄表。
+#[derive(Clone, Default)]
+pub struct TransferCoordinator;
 
 impl TransferCoordinator {
-    /// 注册一个已中止句柄（用于测试/外部驱动）。
-    pub fn register(&self, task_id: String, handle: tokio::task::AbortHandle) {
-        self.handles.lock().unwrap().insert(task_id, handle);
-    }
-
     pub fn new() -> Self {
-        Self {
-            handles: Arc::new(std::sync::Mutex::new(HashMap::new())),
-        }
+        Self
     }
 
-    /// 提交传输任务：后台驱动 [`TransferCoordinator::run`]，并注册 AbortHandle，
-    /// 供 [`TransferCoordinator::abort`] 中止。
+    /// 提交传输任务：后台驱动 [`TransferCoordinator::run`]。
     ///
-    /// `self: &Arc<Self>` 使得后台任务能克隆 `Arc` 并在完成后回收句柄。
+    /// 不注册 `AbortHandle`：`handle.abort()` 会在下一个 await 点丢弃整个 future，
+    /// `run_stream` 的 `{dst}.rex.part` 清理与 `set_status(Canceled)` 全被跳过，目标侧
+    /// 留下半截文件（还会被下一轮扫描当正常文件复制回去）。`run_stream` 已按分片轮询
+    /// DB 的取消标记（`cancel_task` 负责持久化），协作式中止足够及时。
     pub fn submit(self: &Arc<Self>, state: AppState, task_id: String, op: TransferOp) {
-        let coord = Arc::clone(self);
-        let tid = task_id.clone();
-        let handle = tokio::spawn(async move {
-            let r = Self::run(&state, &tid, op).await;
-            coord.handles.lock().unwrap().remove(&tid);
-            r
-        });
-        self.handles
-            .lock()
-            .unwrap()
-            .insert(task_id, handle.abort_handle());
-    }
-
-    /// 中止指定任务的后台传输流。返回是否找到并中止了一个活跃句柄。
-    ///
-    /// 仅中止进程内任务；DB 状态仍由 `cancel_transfer_task` 持久化为 `canceled`，
-    /// `run_stream` 亦轮询 DB 状态作为兜底。
-    pub fn abort(&self, task_id: &str) -> bool {
-        match self.handles.lock().unwrap().remove(task_id) {
-            Some(handle) => {
-                handle.abort();
-                true
-            }
-            None => false,
-        }
+        tokio::spawn(async move { Self::run(&state, &task_id, op).await });
     }
 
     /// preflight（加载记录 + 建立连接器）失败的终态落库并返回该错误。
@@ -1167,6 +1129,101 @@ mod tests {
                 .is_none(),
             "temp file must be cleaned up on cancel"
         );
+    }
+
+    /// 取消走**协作式中止**的真实入口（`cancel_task` 写 DB 取消标记 → `run_stream`
+    /// 按分片轮询）：跨分片搬运中途被取消时，目标侧不得留下 `{dst}.rex.part` 残片，
+    /// DB 落 `canceled`，末条终态事件是 `canceled` 且不带 error。
+    ///
+    /// 这条用例守着 v0.92.0 step5 F-3：`cancel_task` 曾对传输引擎调
+    /// `handle.abort()`，future 在下一个 await 点被丢弃，`run_stream` 的 temp 清理与
+    /// `set_status(Canceled)` 全被跳过。现在传输取消不再 abort（见
+    /// `TransferCoordinator::submit`），与同步引擎同一处置。
+    #[tokio::test]
+    async fn cancel_task_entry_midway_leaves_no_temp_and_broadcasts_canceled() {
+        let (_dir, state) = make_state();
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/c.bin".into(),
+                target_path: "/dst/c.bin".into(),
+                conflict_policy: Some("overwrite".into()),
+                ..Default::default()
+            })
+            .unwrap();
+
+        // 跨两个分片：取消发生在第一片写完之后，temp 里已有真实内容。
+        let payload: Vec<u8> = (0..CHUNK_SIZE + 5).map(|i| (i % 251) as u8).collect();
+        let src_store = Arc::new(Mutex::new(HashMap::from([(
+            "/src/c.bin".to_string(),
+            payload,
+        )])));
+        let dst_store = Arc::new(Mutex::new(HashMap::new()));
+
+        // 等价性说明：hook 与 `file_api::cancel_task` 写的是同一行、同一状态值
+        // （`db.set_transfer_task_status(&task_id, "canceled", None)`）。hook 只负责
+        // 制造「取消发生在第几片」这一时机；`cancel_task` 之外的调度（HTTP 路由 /
+        // 审计 / JSON 响应）对引擎行为无影响，且 F-3 修复后已无第二条中止路径。
+        let hook: Arc<dyn Fn() + Send + Sync> = Arc::new({
+            let cancel_state = state.clone();
+            let cancel_tid = task_id.clone();
+            move || {
+                let _ = cancel_state
+                    .db
+                    .set_transfer_task_status(&cancel_tid, "canceled", None);
+            }
+        });
+
+        let mut source = TreeConnector::new(src_store);
+        let mut target = TreeConnector::new(Arc::clone(&dst_store)).with_cancel_hook(hook);
+        let mut rx = state.transfer_bcast.subscribe();
+
+        let res = TransferCoordinator::run_stream(
+            &state,
+            &task_id,
+            TransferSpec {
+                op: TransferOp::Copy,
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src/c.bin",
+            "/dst/c.bin",
+        )
+        .await;
+
+        assert!(
+            matches!(res, Err(TransferError::Canceled)),
+            "cancel during copy must abort with Canceled, got {res:?}"
+        );
+
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        assert_eq!(
+            rec.status, "canceled",
+            "canceled must not be clobbered to verifying/completed/failed"
+        );
+        assert!(
+            rec.error.as_deref().unwrap_or("").is_empty(),
+            "cancel is not a failure, got error {:?}",
+            rec.error
+        );
+
+        let left: Vec<String> = dst_store.lock().unwrap().keys().cloned().collect();
+        assert!(
+            !left.iter().any(|k| k.ends_with(TEMP_SUFFIX)),
+            "cancel must not leave a .rex.part remnant on the target: {left:?}"
+        );
+        assert!(
+            !left.contains(&"/dst/c.bin".to_string()),
+            "an unverified temp must never be renamed into place: {left:?}"
+        );
+
+        let events = drain(&mut rx);
+        let last = events.last().expect("cancel path must broadcast");
+        assert_eq!(last.status, "canceled", "got {events:?}");
+        assert_eq!(last.error, None, "cancel terminal carries no error");
     }
 
     // -----------------------------------------------------------------------
