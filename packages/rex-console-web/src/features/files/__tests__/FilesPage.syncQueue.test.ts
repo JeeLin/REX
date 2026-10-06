@@ -238,3 +238,59 @@ describe('FilesPage — folder sync queue row (v0.92.0 子任务 5)', () => {
     expect(mockListFiles.mock.calls.length).toBe(before + 2)
   })
 })
+
+describe('FilesPage — 同步路径嵌套拦截（v0.92.0 step5 F-2）', () => {
+  type Vm = {
+    panels: { left: { path: string }; right: { path: string } }
+    ctx: Record<string, unknown>
+    showSyncDialog: boolean
+    syncSource: unknown
+    syncTarget: unknown
+    openSync: () => void
+  }
+
+  /** 布置「右键某个目录 + 对侧面板停在某个路径」，等价于用户点开同步前的状态。 */
+  async function openSyncWith(
+    sourcePath: string,
+    targetPath: string,
+  ): Promise<Awaited<ReturnType<typeof mountPage>>> {
+    const w = await mountPage()
+    const vm = w.vm as unknown as Vm
+    vm.panels.right.path = targetPath
+    vm.ctx = { show: true, x: 0, y: 0, path: sourcePath, name: 'dir', side: 'left', isDir: true }
+    vm.openSync()
+    await nextTick()
+    return w
+  }
+
+  it('refuses to open the dialog when the target sits inside the source folder', async () => {
+    const w = await openSyncWith('/srv', '/srv/backup')
+    const vm = w.vm as unknown as Vm
+
+    expect(vm.showSyncDialog).toBe(false)
+    expect(vm.syncSource).toBeNull()
+    expect(w.find('.toast--error').text()).toContain(
+      '目标位于源文件夹内部',
+    )
+  })
+
+  it('refuses when the source sits inside the target folder (reverse nesting)', async () => {
+    const w = await openSyncWith('/srv/backup/deep', '/srv')
+    expect((w.vm as unknown as Vm).showSyncDialog).toBe(false)
+  })
+
+  it('refuses when both sides are the same folder (trailing slash normalized)', async () => {
+    const w = await openSyncWith('/srv/', '/srv')
+    expect((w.vm as unknown as Vm).showSyncDialog).toBe(false)
+  })
+
+  it('opens the dialog for sibling folders, and for /x vs /xy (not nested)', async () => {
+    const w = await openSyncWith('/x', '/xy')
+    const vm = w.vm as unknown as Vm
+
+    expect(vm.showSyncDialog).toBe(true)
+    expect(vm.syncSource).toEqual({ resource_id: 'res-1', path: '/x/' })
+    expect(vm.syncTarget).toEqual({ resource_id: 'res-1', path: '/xy' })
+    expect(w.find('.toast--error').exists()).toBe(false)
+  })
+})

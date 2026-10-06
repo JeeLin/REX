@@ -365,6 +365,7 @@
     "syncOrphanSideDownload": "删除源侧（目录源）孤立文件——清空后的目录会保留。",
     "syncOrphanSideNone": "双向同步两侧都保留，不会删除任何文件。",
     "syncOrphanSideUpload": "删除目标侧（目录目标）孤立文件——清空后的目录会保留。",
+    "syncPathNested": "目标位于源文件夹内部，每轮同步都会复制上一轮的产物。请选择同级文件夹。",
     "syncPhasePlanning": "规划中",
     "syncPhaseScanning": "扫描中",
     "syncPhaseSyncing": "同步中",

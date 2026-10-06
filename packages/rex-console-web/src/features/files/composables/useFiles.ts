@@ -516,11 +516,37 @@ export function useFiles(opts: UseFilesOptions) {
     return path.endsWith('/') ? path : path + '/'
   }
 
+  /** 去掉尾斜杠（根 `/` 保留），使 `/srv/` 与 `/srv` 判为同一个目录。 */
+  function trimDir(path: string): string {
+    let p = path.trim()
+    while (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1)
+    return p
+  }
+
+  /** `inner` 是否为 `outer` 自身或其子目录（只认目录边界：`/x` 不算 `/xy`）。 */
+  function isNestedPath(inner: string, outer: string): boolean {
+    if (inner === outer || outer === '/') return true
+    return inner.startsWith(outer) && inner.charAt(outer.length) === '/'
+  }
+
+  /**
+   * 双面板的两端指向同一资源，目标若落在源子树内，Hub 侧会拒（SYNC_PATH_NESTED）：
+   * 写出的副本会进入下一轮源树，体积按轮次翻倍。这里在打开对话框前就拦，
+   * 避免用户填完选项才看到失败。
+   */
   function openSync() {
     if (!resourceId || !ctx.value.isDir) return
     const other = otherSide(ctx.value.side)
-    syncSource.value = { resource_id: resourceId, path: asDirPath(ctx.value.path) }
-    syncTarget.value = { resource_id: resourceId, path: panels[other].path }
+    const source = asDirPath(ctx.value.path)
+    const target = panels[other].path
+    const a = trimDir(source)
+    const b = trimDir(target)
+    if (isNestedPath(b, a) || isNestedPath(a, b)) {
+      notify(t('files.syncPathNested', 'Target is inside the source folder'), 'error')
+      return
+    }
+    syncSource.value = { resource_id: resourceId, path: source }
+    syncTarget.value = { resource_id: resourceId, path: target }
     showSyncDialog.value = true
     ctx.value.show = false
   }
