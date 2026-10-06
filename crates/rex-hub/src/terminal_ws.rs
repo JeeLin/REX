@@ -17,7 +17,7 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio::time::Interval;
 
 use crate::agent_ws::{AgentEvent, ConnectResponse};
-use crate::db::audit_log;
+use crate::db::{audit_log_scoped, AuditScope};
 use crate::AppState;
 
 /// 前端 → 后端的消息（连接建立后的控制消息）
@@ -81,6 +81,7 @@ pub struct TerminalQuery {
 /// 资源连接信息
 struct ResourceConnInfo {
     name: String,
+    environment_id: String,
     host: String,
     port: u16,
     username: String,
@@ -90,6 +91,18 @@ struct ResourceConnInfo {
     agent_id: Option<String>,
     keepalive_interval: Option<u32>,
     init_script: Option<String>,
+}
+
+impl ResourceConnInfo {
+    /// 审计归属：SSH 会话事件必须带上环境 / 资源 / Agent，
+    /// 否则按环境或按 Agent 过滤的审计查看器查不到任何记录。
+    fn audit_scope(&self, resource_id: &str) -> AuditScope {
+        AuditScope {
+            environment_id: Some(self.environment_id.clone()),
+            resource_id: Some(resource_id.to_string()),
+            agent_id: self.agent_id.clone(),
+        }
+    }
 }
 
 /// GET /ws/terminal?token=jwt&resourceId=xxx
@@ -115,6 +128,7 @@ async fn handle_socket(mut ws: WebSocket, state: AppState, resource_id: String) 
         }
     };
 
+    let scope = conn_info.audit_scope(&resource_id);
     tracing::info!(
         action = "SSH_CONNECT",
         resource_id = %resource_id,
@@ -124,17 +138,18 @@ async fn handle_socket(mut ws: WebSocket, state: AppState, resource_id: String) 
         use_agent = conn_info.use_agent,
         "SSH connection initiated"
     );
-    audit_log(
+    audit_log_scoped(
         &state.db,
         "SSH_CONNECT",
         "success",
         Some(conn_info.name.clone()),
+        scope.clone(),
     );
 
     if conn_info.use_agent {
         handle_agent_terminal(ws, &state, &conn_info, &resource_id, &session_id).await;
     } else {
-        handle_direct_terminal(ws, &state, &conn_info, &session_id).await;
+        handle_direct_terminal(ws, &state, &conn_info, &resource_id, &session_id).await;
     }
 
     tracing::info!(
@@ -143,7 +158,13 @@ async fn handle_socket(mut ws: WebSocket, state: AppState, resource_id: String) 
         name = %conn_info.name,
         "SSH session ended"
     );
-    audit_log(&state.db, "SSH_DISCONNECT", "success", Some(conn_info.name));
+    audit_log_scoped(
+        &state.db,
+        "SSH_DISCONNECT",
+        "success",
+        Some(conn_info.name),
+        scope,
+    );
 }
 
 /// 从 DB 读取资源连接信息
@@ -299,6 +320,7 @@ async fn load_resource_conn(
 
         Ok(ResourceConnInfo {
             name: resource.name.clone(),
+            environment_id: resource.environment_id.clone(),
             host,
             port,
             username,
@@ -322,6 +344,7 @@ async fn handle_direct_terminal(
     mut ws: WebSocket,
     state: &AppState,
     conn: &ResourceConnInfo,
+    resource_id: &str,
     session_id: &str,
 ) {
     tracing::info!(
@@ -361,7 +384,13 @@ async fn handle_direct_terminal(
                 error = %e,
                 "SSH direct connection failed"
             );
-            audit_log(&state.db, "SSH_CONNECT", "failure", Some(conn.name.clone()));
+            audit_log_scoped(
+                &state.db,
+                "SSH_CONNECT",
+                "failure",
+                Some(conn.name.clone()),
+                conn.audit_scope(resource_id),
+            );
             let _ = send_ws_error(&mut ws, &format!("SSH connection failed: {e}")).await;
             return;
         }
@@ -662,11 +691,12 @@ async fn handle_agent_terminal(
                 request_id = %request_id,
                 "agent connection timed out after 10s"
             );
-            audit_log(
+            audit_log_scoped(
                 &state.db,
                 "SSH_AGENT_TIMEOUT",
                 "failure",
                 Some(agent_id.to_string()),
+                conn.audit_scope(resource_id),
             );
             let _ = send_ws_error(&mut ws, "agent connection timeout").await;
             return;

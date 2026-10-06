@@ -60,6 +60,7 @@ fn build_test_router(state: AppState) -> axum::Router {
                 .merge(rex_hub::resource_api::resource_routes())
                 .merge(rex_hub::agent_api::env_agent_routes()),
         )
+        .nest("/api/audit-log", rex_hub::audit_api::audit_routes())
         .layer(axum::middleware::from_extractor_with_state::<
             AuthUser,
             AppState,
@@ -215,4 +216,143 @@ async fn test_create_and_list_environment() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(json.is_array());
     assert!(!json.as_array().unwrap().is_empty());
+}
+
+/// Regression for the empty audit/log viewer: SSH sessions connected fine but the
+/// in-app audit list showed nothing. Two independent causes, both covered here.
+///
+/// 1. `/api/audit-log/stats` returned 500 whenever the filtered set was empty
+///    (SQL `SUM()` over no rows is NULL, read as i64 → InvalidColumnType). The audit
+///    page issues list+stats via `Promise.all`, so that 500 rejected the pair and the
+///    catch handler blanked the already-fetched entries — an empty table with no error.
+///    Zero matches must answer 200 with zeroed counters.
+/// 2. SSH session audit rows were written without environment/resource/agent
+///    attribution, so any viewer scoped by environment (audit page env chips) or by
+///    agent (agent log panel, `?agent_id=`) could never match an SSH event.
+#[tokio::test]
+async fn test_audit_log_viewer_returns_scoped_ssh_events_and_zeroed_stats() {
+    let (_dir, state) = test_state();
+    let app = build_test_router(state.clone());
+
+    // set_password returns the token used by the bearer-protected routes.
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/password")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({"password": "test123"}).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let token: String = serde_json::from_slice::<serde_json::Value>(&body).unwrap()["token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let auth = format!("Bearer {token}");
+
+    // Empty filtered set: stats must answer 200 + zeros, list must answer 200 + [].
+    for (uri, expect_total_zero) in [
+        ("/api/audit-log/stats?environment_id=env-absent", true),
+        ("/api/audit-log?environment_id=env-absent", false),
+    ] {
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(uri)
+                    .header("authorization", auth.clone())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "{uri} must not 500 (it would blank the viewer)"
+        );
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        if expect_total_zero {
+            assert_eq!(json["total"], 0, "{uri}");
+            assert_eq!(json["success_count"], 0, "{uri}");
+            assert_eq!(json["failure_count"], 0, "{uri}");
+        } else {
+            assert_eq!(json.as_array().expect("array").len(), 0, "{uri}");
+        }
+    }
+
+    // A scoped SSH event must be reachable through both the env chip and the agent
+    // log panel, which query the exact shapes the frontend sends.
+    state
+        .db
+        .write_audit_log(&rex_hub::models::NewAuditEntry {
+            action: "SSH_CONNECT".into(),
+            target: Some("prod-web".into()),
+            environment_id: Some("env-1".into()),
+            resource_id: Some("res-1".into()),
+            agent_id: Some("agent-1".into()),
+            result: "success".into(),
+            ..Default::default()
+        })
+        .unwrap();
+
+    let fetch = |app: axum::Router, uri: &'static str| {
+        let auth = auth.clone();
+        async move {
+            let resp = app
+                .oneshot(
+                    Request::builder()
+                        .uri(uri)
+                        .header("authorization", auth)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(resp.status(), StatusCode::OK, "{uri}");
+            let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap()
+        }
+    };
+
+    // Audit page, environment chip selected.
+    let json = fetch(app.clone(), "/api/audit-log?environment_id=env-1&limit=50").await;
+    let rows = json.as_array().expect("array");
+    assert_eq!(
+        rows.len(),
+        1,
+        "env-scoped audit query must return the SSH event"
+    );
+    assert_eq!(rows[0]["action"], "SSH_CONNECT");
+    assert_eq!(rows[0]["resource_id"], "res-1");
+
+    // Agent log panel: /api/audit-log?agent_id=<id>&limit=100.
+    let json = fetch(app.clone(), "/api/audit-log?agent_id=agent-1&limit=100").await;
+    let rows = json.as_array().expect("array");
+    assert_eq!(
+        rows.len(),
+        1,
+        "agent-scoped audit query must return the SSH event"
+    );
+    assert_eq!(rows[0]["action"], "SSH_CONNECT");
+    assert_eq!(rows[0]["environment_id"], "env-1");
+
+    // Stats on the same scope must count the event instead of erroring.
+    let json = fetch(app.clone(), "/api/audit-log/stats?environment_id=env-1").await;
+    assert_eq!(json["total"], 1);
+    assert_eq!(json["success_count"], 1);
+    assert_eq!(json["failure_count"], 0);
 }

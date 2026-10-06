@@ -289,10 +289,12 @@ impl Database {
 
     pub fn query_audit_stats(&self, filter: &AuditFilter) -> Result<AuditStats> {
         let conn = self.conn()?;
+        // COALESCE：过滤后无匹配行时 SUM 返回 NULL，rusqlite 按 i64 读取会报
+        // InvalidColumnType → /audit-log/stats 500 → 前端把已取回的列表清空。
         let mut sql = String::from(
             "SELECT COUNT(*) AS total,
-                    SUM(CASE WHEN result = 'success' THEN 1 ELSE 0 END) AS success_count,
-                    SUM(CASE WHEN result = 'failure' THEN 1 ELSE 0 END) AS failure_count
+                    COALESCE(SUM(CASE WHEN result = 'success' THEN 1 ELSE 0 END), 0) AS success_count,
+                    COALESCE(SUM(CASE WHEN result = 'failure' THEN 1 ELSE 0 END), 0) AS failure_count
              FROM audit_log WHERE 1=1",
         );
         let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -1204,11 +1206,31 @@ impl Database {
 }
 
 /// 异步写审计日志的便捷方法，在 spawn_blocking 中执行。
+/// 审计事件归属：写入 environment / resource / agent 维度，
+/// 让按环境或按 agent 过滤的查看器（审计日志页、Agent 日志面板）能查到该事件。
+#[derive(Debug, Clone, Default)]
+pub struct AuditScope {
+    pub environment_id: Option<String>,
+    pub resource_id: Option<String>,
+    pub agent_id: Option<String>,
+}
+
 pub fn audit_log(
     db: &std::sync::Arc<Database>,
     action: &str,
     result: &str,
     target: Option<String>,
+) {
+    audit_log_scoped(db, action, result, target, AuditScope::default());
+}
+
+/// 带归属信息的审计写入（environment_id / resource_id / agent_id）。
+pub fn audit_log_scoped(
+    db: &std::sync::Arc<Database>,
+    action: &str,
+    result: &str,
+    target: Option<String>,
+    scope: AuditScope,
 ) {
     let db = db.clone();
     let action = action.to_string();
@@ -1218,6 +1240,9 @@ pub fn audit_log(
             action,
             target,
             result,
+            environment_id: scope.environment_id,
+            resource_id: scope.resource_id,
+            agent_id: scope.agent_id,
             ..Default::default()
         })
     });
@@ -1609,6 +1634,104 @@ mod tests {
         let entries = db.query_audit_log(&AuditFilter::default()).unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].action, "SSH_CONNECT");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_audit_log_scoped_write_is_visible_to_env_and_agent_filters() {
+        let (_dir, db) = test_db();
+        let scoped = std::sync::Arc::new(db);
+        audit_log_scoped(
+            &scoped,
+            "SSH_CONNECT",
+            "success",
+            Some("res-name".into()),
+            AuditScope {
+                environment_id: Some("env-1".into()),
+                resource_id: Some("res-1".into()),
+                agent_id: Some("agent-1".into()),
+            },
+        );
+        // audit_log_scoped is fire-and-forget on a blocking task; wait for the write.
+        let db = scoped.clone();
+        for _ in 0..200 {
+            if !db
+                .query_audit_log(&AuditFilter::default())
+                .unwrap()
+                .is_empty()
+            {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+
+        // The agent log panel queries /audit-log?agent_id=<id>; it must find the SSH event.
+        let by_agent = scoped
+            .query_audit_log(&AuditFilter {
+                agent_id: Some("agent-1".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(
+            by_agent.len(),
+            1,
+            "agent-scoped audit query must return the SSH event"
+        );
+        assert_eq!(by_agent[0].action, "SSH_CONNECT");
+        assert_eq!(by_agent[0].resource_id.as_deref(), Some("res-1"));
+
+        // The audit page filters by environment chip; it must find the same event.
+        let by_env = scoped
+            .query_audit_log(&AuditFilter {
+                environment_id: Some("env-1".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(by_env.len(), 1);
+        assert_eq!(by_env[0].agent_id.as_deref(), Some("agent-1"));
+
+        // A different environment must not match.
+        let other_env = scoped
+            .query_audit_log(&AuditFilter {
+                environment_id: Some("env-2".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(other_env.is_empty());
+    }
+
+    #[test]
+    fn test_audit_stats_on_empty_filter_returns_zeros() {
+        let (_dir, db) = test_db();
+        db.write_audit_log(&NewAuditEntry {
+            action: "SSH_CONNECT".into(),
+            result: "success".into(),
+            environment_id: Some("env-1".into()),
+            agent_id: Some("agent-1".into()),
+            ..Default::default()
+        })
+        .unwrap();
+
+        // Matching filter: counts as expected.
+        let hit = db
+            .query_audit_stats(&AuditFilter {
+                environment_id: Some("env-1".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(hit.total, 1);
+        assert_eq!(hit.success_count, 1);
+        assert_eq!(hit.failure_count, 0);
+
+        // Empty filtered set: SUM() is NULL, so it must read back as 0 rather than erroring.
+        let miss = db
+            .query_audit_stats(&AuditFilter {
+                environment_id: Some("env-absent".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(miss.total, 0);
+        assert_eq!(miss.success_count, 0);
+        assert_eq!(miss.failure_count, 0);
     }
 
     #[test]
