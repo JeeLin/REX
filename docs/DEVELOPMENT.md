@@ -173,6 +173,7 @@ rex-agent = 所有 crate（无前端）
 | **v0.90.0** | 快捷键治理（minor，浏览器保留键交还 + Ctrl+K 双触发收敛 + 注册表/死代码清理 + §5 规格补齐；9 轮审查 + 101 Bug 全清） | — | ✅ 已完成（v0.90.0） |
 | **v0.90.1** | 日志与接口错误信息优化（patch，结构化日志+请求追踪、tracing-appender 轮转/保留、REST/WS error 统一到 rex-common、前端 ApiError→toast 归一） | — | ✅ 已完成（v0.90.1） |
 | **v0.91.0** | 文件操作逻辑重设计（SFTP/S3）（minor，后端传输任务模型 + server-side 直连搬运 + FileConnector 能力模型 + chmod/mkdir/ACL/续传 + WS 进度推送 + 前端结构重构 + FolderSyncDialog 移除） | — | ✅ 已完成（v0.91.0） |
+| **v0.92.0** | 真实目录同步（SFTP+S3）（minor，server-side 直连搬运 + 传输任务模型 + 双面板 diff 比较/冲突处理 + chmod/Sync 浏览/右键菜单 + 前端结构重构 + WS 进度推送；SSH 终端错误分类与会话生命周期修复：解密/配置/资源缺失失败→ fatal 帧止无限重连、关闭 tab 释放 Hub session、Agent SSH 错误码/阶段透传） | — | ✅ 已完成（v0.92.0） |
 ### M0：项目骨架重建
 
 **核心功能**：清空 `packages/rex-console-web` 与 `crates/*` 源码，按新设计系统重建最小可运行骨架。
@@ -795,6 +796,14 @@ rex-agent = 所有 crate（无前端）
 - **版本类型**：minor
 - **版本号**：v0.91.0
 - **来源**：exp 勘察（v0.89 期间发起的文件域现状勘察），痛点 1/2/3/13 等作为缺陷行纳入该里程碑 Bugs 表（来源标内部勘察）
+
+### v0.92.0：真实目录同步（SFTP+S3）
+- **核心功能**：v0.91 传输任务模型落地 → server-side 真实目录同步（双面板 diff 比较 + 冲突处理）、传输队列抽屉（进度/吞吐/暂停恢复/续传）、chmod 矩阵/Sync 浏览/右键菜单、前端 `FilesPage.vue` 拆分 + 能力模型替代 `isS3` 散布 + 共享 composable、WebSocket 进度推送；SSH 终端修复：`config_json` 解密/配置/资源缺失失败→ fatal 错误帧 + 前端 `terminal.error` 停止自动重连；关闭 tab 时 Hub `select!` abort 余下子任务 + 通知 Agent close；Agent 侧 `russh`/`io` 错误展为 `stage/code/detail` 透传前端
+- **Bugs**：Round-1 回归 8 条 + 3 条 SSH 终端 bug（🔴 解密→无限重连 / 🔴 tab 关闭后台重连 / 🟡 Agent SSH 错误不足）
+- **依赖**：v0.91.0
+- **版本类型**：minor
+- **版本号**：v0.92.0
+- **状态**：✅ 已完成（centralized `cargo test --workspace` + `bun run type-check/lint/build/vitest` 全绿；v0.91 文件传输语义不变）
 
 ### 候选（已裁决待排期）：数据密钥守卫与解密失败指引
 - **背景**：用户实测——Docker 升级/清理时 `.master-key` 丢失，DB 保留 → 静默生成新 key → SSH 报 `decrypt failed: aead::Error`，错误延迟到连接时且无法联想到密钥丢失（2026-09-24）
