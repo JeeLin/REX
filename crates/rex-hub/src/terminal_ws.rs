@@ -789,14 +789,15 @@ async fn handle_agent_terminal(
 
     // 服务端 keepalive ping（每 25 秒发送 ping，防止中间件/代理超时断开）
     let mut ping_interval = create_server_ping_interval();
-    let agent_ping_task = tokio::spawn(async move {
+    let agent_for_ping = agent_conn.clone();
+    let mut agent_ping_task = tokio::spawn(async move {
         loop {
             ping_interval.tick().await;
             let ping_msg = serde_json::json!({
                 "type": "ping",
                 "payload": {}
             });
-            if agent_conn
+            if agent_for_ping
                 .sender
                 .send(AgentEvent::Text(ping_msg.to_string()))
                 .await
@@ -807,10 +808,38 @@ async fn handle_agent_terminal(
         }
     });
 
+    // 任一子任务退出（前端 WS 关闭 / Agent 通道断开）→ 取消其它子任务并
+    // 通知 Agent 关闭 channel。否则 agent 侧 russh session 与 out/in task
+    // 会滞留，表现为「关了 tab 后台仍在重连」。见 Bug 2 回报。
     tokio::select! {
-        _ = frontend_to_agent => {},
-        _ = agent_to_frontend => {},
-        _ = agent_ping_task => {},
+        _ = &mut frontend_to_agent => {},
+        _ = &mut agent_to_frontend => {},
+        _ = &mut agent_ping_task => {},
+    }
+    frontend_to_agent.abort();
+    agent_to_frontend.abort();
+    agent_ping_task.abort();
+
+    // 显式告知 Agent 关闭该 channel：Agent 侧 `run_ssh_session` 于是退出，
+    // russh handle 从池中移除，SSH 连接在 Agent 内被动断开。
+    // 帧形状与 `resource_api` 的测试连接收尾一致（`channel_id`）。
+    let close_msg = serde_json::json!({
+        "type": "close",
+        "payload": { "channel_id": channel_id.clone() }
+    })
+    .to_string();
+    if agent_conn
+        .sender
+        .send(AgentEvent::Text(close_msg))
+        .await
+        .is_err()
+    {
+        tracing::debug!(
+            action = "SSH_AGENT_CLOSE",
+            session_id = %session_id,
+            channel_id = %channel_id,
+            "agent connection already gone when sending close frame"
+        );
     }
 
     // 清理

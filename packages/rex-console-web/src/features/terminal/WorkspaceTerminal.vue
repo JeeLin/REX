@@ -604,15 +604,20 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  // 清理全局主题观察者
-  if (themeObserver) { themeObserver.disconnect(); themeObserver = null }
-  inputBuffer = ''
-  stopPing()
+  // Mark the disconnect as manual BEFORE closing the socket: `ws.close()` fires
+  // its `onclose` handler asynchronously (after this hook returns), and that
+  // handler would otherwise schedule a reconnect timer that nothing clears —
+  // leaving the terminal reconnecting forever behind a closed tab.
+  manualDisconnect = true
   if (reconnectTimer) {
     clearTimeout(reconnectTimer)
     reconnectTimer = null
   }
-  ws?.close()
+  // 清理全局主题观察者
+  if (themeObserver) { themeObserver.disconnect(); themeObserver = null }
+  inputBuffer = ''
+  stopPing()
+   ws?.close()
   ws = null
   resizeObserver?.disconnect()
   terminal?.dispose()
