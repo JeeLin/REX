@@ -172,8 +172,9 @@ async fn cancel_task(
             // T2：持久化取消标记后，中止进程内的后台传输流。run_stream 亦轮询 DB
             // 状态作为协作式中止的兜底。
             state.coordinator.abort(task_id);
-            // v0.92.0：同步引擎同样轮询 DB 取消标记，这里一并中止后台任务。
-            state.sync_coordinator.abort(task_id);
+            // v0.92.0：同步引擎**不**用 abort——掐断 future 会跳过 copy_file 的
+            // `{dst}.rex.part` 清理与终态广播，目标侧留半截文件。它按分片轮询
+            // 这里的取消标记，协作式中止即可（见 `SyncCoordinator::submit`）。
             tracing::info!(
                 action = audit_action,
                 transfer_task_id = %task_id,

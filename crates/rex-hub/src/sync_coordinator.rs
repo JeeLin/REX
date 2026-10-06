@@ -11,7 +11,6 @@
 //! 掩码（include / exclude）在扫描期即生效：`exclude` 命中的子树不再下钻，
 //! 被排除的文件既不复制也不参与孤儿判定。
 
-use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
@@ -88,53 +87,23 @@ pub struct SyncSpec<'a> {
     pub conflict: rex_transfer::ConflictPolicy,
 }
 
-/// 目录同步协调器。`Arc` 封装以允许 `submit` 克隆自身进入后台任务。
-#[derive(Clone)]
-pub struct SyncCoordinator {
-    pub handles: Arc<std::sync::Mutex<HashMap<String, tokio::task::AbortHandle>>>,
-}
-
-impl Default for SyncCoordinator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+/// 目录同步协调器。取消走协作式中止（引擎轮询 DB 取消标记），不持有句柄表。
+#[derive(Clone, Default)]
+pub struct SyncCoordinator;
 
 impl SyncCoordinator {
     pub fn new() -> Self {
-        Self {
-            handles: Arc::new(std::sync::Mutex::new(HashMap::new())),
-        }
+        Self
     }
 
-    /// 提交同步任务：后台驱动 [`SyncCoordinator::run`]，并注册 AbortHandle 供
-    /// [`SyncCoordinator::abort`] 中止。
-    pub fn submit(self: &Arc<Self>, state: AppState, task_id: String) {
-        let coord = Arc::clone(self);
-        let tid = task_id.clone();
-        let handle = tokio::spawn(async move {
-            let r = Self::run(&state, &tid).await;
-            coord.handles.lock().unwrap().remove(&tid);
-            r
-        });
-        self.handles
-            .lock()
-            .unwrap()
-            .insert(task_id, handle.abort_handle());
-    }
-
-    /// 中止同步任务的后台任务。返回是否命中活跃句柄。
+    /// 提交同步任务：后台驱动 [`SyncCoordinator::run`]。
     ///
-    /// 仅中止进程内任务；DB 状态仍由 `cancel_task` 持久化为 `canceled`，
-    /// 引擎各阶段亦轮询 DB 状态作为兜底。
-    pub fn abort(&self, task_id: &str) -> bool {
-        match self.handles.lock().unwrap().remove(task_id) {
-            Some(handle) => {
-                handle.abort();
-                true
-            }
-            None => false,
-        }
+    /// 不注册 `AbortHandle`：`handle.abort()` 会在下一个 await 点丢弃整个 future，
+    /// `copy_file` 的 `{dst}.rex.part` 清理与终态广播全被跳过，目标侧留下半截
+    /// 文件（还会被下一轮扫描当正常文件复制回去）。`copy_file` 已按分片轮询 DB
+    /// 的取消标记（`cancel_task` 负责持久化），协作式中止足够及时。
+    pub fn submit(self: &Arc<Self>, state: AppState, task_id: String) {
+        tokio::spawn(async move { Self::run(&state, &task_id).await });
     }
 
     /// 驱动一次完整同步：加载任务记录 → 打开 source/target 连接器 → `run_plan`。
@@ -412,6 +381,12 @@ impl SyncCoordinator {
                 }
                 let name = file_name(&entry.name);
                 if name == "." || name == ".." || name.is_empty() {
+                    continue;
+                }
+                // `{dst}.rex.part` 是搬运中途的临时文件：被取消的单文件传输或
+                // 进程异常终止会留下残片，它不是用户数据——进计划只会被
+                // 「同步」当正常文件复制回去，把垃圾扩散到另一侧。
+                if name.ends_with(TEMP_SUFFIX) {
                     continue;
                 }
                 let rel = if rel_dir.is_empty() {
@@ -972,6 +947,115 @@ mod tests {
             statuses,
             ["canceled"],
             "pre-canceled task broadcasts exactly the canceled terminal event"
+        );
+    }
+
+    /// 取消走**协作式中止**的真实入口（`cancel_task` 写 DB 取消标记 → 引擎按分片
+    /// 轮询）：跨分片搬运中途被取消时，目标侧不得留下 `{dst}.rex.part` 残片，
+    /// 且必须广播 `canceled` 终态。
+    ///
+    /// 这条用例守着 v0.92.0 step5 F-3：`cancel_task` 曾对同步引擎调
+    /// `handle.abort()`，future 在下一个 await 点被丢弃，`copy_file` 的 temp 清理
+    /// 与终态广播全被跳过。现在同步取消不再 abort（见 `SyncCoordinator::submit`）。
+    #[tokio::test]
+    async fn run_plan_canceled_midway_leaves_no_temp_and_broadcasts_canceled() {
+        let (_dir, state) = make_state();
+        let task_id = make_sync_task(&state, &SyncOptions::default());
+
+        // 跨两个分片：取消发生在第一片写完之后，temp 里已有真实内容。
+        let payload: Vec<u8> = (0..CHUNK_SIZE + 5).map(|i| (i % 251) as u8).collect();
+        let src = TreeConnector::new(Arc::new(Mutex::new(HashMap::from([(
+            "/src/big.bin".to_string(),
+            payload.clone(),
+        )]))));
+        let dst_store: Arc<Mutex<HashMap<String, Vec<u8>>>> = Arc::new(Mutex::new(HashMap::new()));
+        let dst = TreeConnector::new(Arc::clone(&dst_store));
+
+        // 与 `cancel_task` 写的是同一行、同一状态值。
+        let cancel_state = state.clone();
+        let cancel_tid = task_id.clone();
+        let hook: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
+            let _ = cancel_state
+                .db
+                .set_transfer_task_status(&cancel_tid, "canceled", None);
+        });
+
+        let mut source = src.clone();
+        let mut target = dst.clone().with_cancel_hook(hook);
+        let mut rx = state.transfer_bcast.subscribe();
+
+        let res = SyncCoordinator::run_plan(
+            &state,
+            &task_id,
+            SyncSpec {
+                opts: &SyncOptions::default(),
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src",
+            "/dst",
+        )
+        .await;
+
+        assert!(
+            matches!(res, Err(SyncError::Canceled)),
+            "cancel during copy must abort with Canceled, got {res:?}"
+        );
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        assert_eq!(
+            rec.status, "canceled",
+            "canceled must not be clobbered to failed/completed"
+        );
+
+        let left: Vec<String> = dst_store.lock().unwrap().keys().cloned().collect();
+        assert!(
+            !left.iter().any(|k| k.ends_with(TEMP_SUFFIX)),
+            "cancel must not leave a .rex.part remnant on the target: {left:?}"
+        );
+        assert!(
+            !left.contains(&"/dst/big.bin".to_string()),
+            "an unverified temp must never be renamed into place: {left:?}"
+        );
+
+        let events: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+        assert_eq!(
+            events.last().map(|e| e.status.as_str()),
+            Some("canceled"),
+            "cancel path must broadcast the canceled terminal event, got {events:?}"
+        );
+    }
+
+    /// `{dst}.rex.part` 是搬运残片，不是用户数据：扫描期必须排除，否则 `diff` 会把
+    /// 它当正常文件复制到另一侧（双向模式下还会被带回源树），垃圾就此扩散。
+    #[tokio::test]
+    async fn scan_tree_excludes_temp_part_files_from_the_plan() {
+        let src = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        src.put("/src/keep.txt", b"keep");
+        // 被取消的单文件传输（transfer 引擎同款 TEMP_SUFFIX）留下的残片，根目录与子目录各一个
+        src.put("/src/a.txt.rex.part", b"partial");
+        src.put("/src/dir/b.bin.rex.part", b"partial");
+        src.put("/src/dir/keep2.txt", b"keep2");
+        let mut target = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+
+        let plan = SyncCoordinator::preview_plan(
+            &mut src.clone(),
+            &mut target,
+            "/src",
+            "/dst",
+            &SyncOptions::default(),
+        )
+        .await
+        .expect("preview must not fail on temp remnants");
+
+        let planned: Vec<&str> = plan.actions.iter().map(|a| a.rel_path.as_str()).collect();
+        assert!(
+            planned.contains(&"keep.txt") && planned.contains(&"dir/keep2.txt"),
+            "real files must still be planned: {planned:?}"
+        );
+        assert!(
+            !planned.iter().any(|p| p.ends_with(TEMP_SUFFIX)),
+            ".rex.part remnants must never enter the sync plan: {planned:?}"
         );
     }
 
