@@ -261,6 +261,30 @@ impl TransferCoordinator {
                     Self::set_status(state, task_id, TransferStatus::Canceled, None);
                     return Err(TransferError::Canceled);
                 }
+                // 零字节源文件：上面的守卫在第一轮就成立，循环体一次都不执行，
+                // temp 从未在目标侧生成 —— 随后的 `stat temp` 必然失败，整任务落
+                // `TargetStat`。此处补落一个空分片，让 temp 真正存在，校验与
+                // rename 才有对象可依（S3 `offset == 0` 走 PutObject 可写空对象，
+                // SFTP 走 create 建空文件）。与 sync_coordinator::copy_file 同构。
+                if total == 0 {
+                    if let Err(e) = target.upload(&temp, Vec::new(), 0, None).await {
+                        let msg = format!("upload failed: {e}");
+                        if !Self::is_canceled(state, task_id) {
+                            Self::set_status(
+                                state,
+                                task_id,
+                                TransferStatus::Failed(msg.clone()),
+                                Some(&msg),
+                            );
+                        }
+                        return Err(TransferError::Upload(msg));
+                    };
+                    state
+                        .db
+                        .update_transfer_task_progress(task_id, total, offset, 0, None)
+                        .ok();
+                    Self::broadcast_progress(state, task_id, "running", total, offset, 0);
+                }
                 break;
             }
 
@@ -1344,5 +1368,308 @@ mod tests {
         // Must be "failed", not "verifying" (which was set just before the stat).
         assert_eq!(rec.status, "failed");
         assert!(rec.error.is_some());
+    }
+
+    // -----------------------------------------------------------------------
+    // Bug: zero-byte source — the `offset >= total` guard fires on the very
+    // first iteration, so the loop body never uploads anything and the temp
+    // file is never created on the target. The following `stat temp` then
+    // fails and the whole task lands in `failed`.
+    // -----------------------------------------------------------------------
+
+    /// Copy of a zero-byte source must produce a zero-byte destination file
+    /// (target connector = SFTP-like, source connector = S3-like 416 on
+    /// out-of-range). Both directions of the temp lifecycle are covered:
+    /// the temp object must exist and must be renamed away.
+    #[tokio::test]
+    async fn run_stream_zero_byte_source_copies_empty_file() {
+        let (_dir, state) = make_state();
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/empty.bin".into(),
+                target_path: "/dst/empty.bin".into(),
+                conflict_policy: Some("overwrite".into()),
+            })
+            .unwrap();
+
+        let src_store = Arc::new(Mutex::new(HashMap::new()));
+        src_store
+            .lock()
+            .unwrap()
+            .insert("/src/empty.bin".to_string(), Vec::new());
+        let dst_store = Arc::new(Mutex::new(HashMap::new()));
+
+        // source simulates S3: any download_range at offset 0 on an empty
+        // object is out of range (416). The engine must never ask.
+        let mut source = MockConnector::with_flags(src_store.clone(), true, false, false);
+        let mut target = MockConnector::new(dst_store.clone());
+
+        TransferCoordinator::run_stream(
+            &state,
+            &task_id,
+            TransferSpec {
+                op: TransferOp::Copy,
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src/empty.bin",
+            "/dst/empty.bin",
+        )
+        .await
+        .expect("zero-byte transfer must complete");
+
+        let dst = dst_store.lock().unwrap();
+        assert_eq!(
+            dst.get("/dst/empty.bin"),
+            Some(&Vec::new()),
+            "destination must exist and be empty"
+        );
+        assert!(
+            !dst.contains_key("/dst/empty.bin.rex.part"),
+            "temp file must be renamed away"
+        );
+        drop(dst);
+
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        assert_eq!(rec.status, "completed");
+        assert_eq!(rec.total_bytes, 0);
+        assert_eq!(rec.transferred_bytes, 0);
+        assert!(
+            src_store.lock().unwrap().contains_key("/src/empty.bin"),
+            "Copy must preserve the zero-byte source"
+        );
+    }
+
+    /// Move of a zero-byte source: the empty file lands at the destination and
+    /// the source is removed, same as any non-empty transfer.
+    #[tokio::test]
+    async fn run_stream_zero_byte_move_deletes_source() {
+        let (_dir, state) = make_state();
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/empty-move.bin".into(),
+                target_path: "/dst/empty-move.bin".into(),
+                conflict_policy: Some("overwrite".into()),
+            })
+            .unwrap();
+
+        let src_store = Arc::new(Mutex::new(HashMap::new()));
+        src_store
+            .lock()
+            .unwrap()
+            .insert("/src/empty-move.bin".to_string(), Vec::new());
+        let dst_store = Arc::new(Mutex::new(HashMap::new()));
+
+        let mut source = MockConnector::new(src_store.clone());
+        let mut target = MockConnector::new(dst_store.clone());
+
+        TransferCoordinator::run_stream(
+            &state,
+            &task_id,
+            TransferSpec {
+                op: TransferOp::Move,
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src/empty-move.bin",
+            "/dst/empty-move.bin",
+        )
+        .await
+        .expect("zero-byte move must complete");
+
+        assert_eq!(
+            dst_store.lock().unwrap().get("/dst/empty-move.bin"),
+            Some(&Vec::new())
+        );
+        assert!(
+            !src_store
+                .lock()
+                .unwrap()
+                .contains_key("/src/empty-move.bin"),
+            "Move must delete the zero-byte source"
+        );
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        assert_eq!(rec.status, "completed");
+    }
+
+    /// Skip on an existing destination short-circuits before any upload, so it
+    /// already worked for zero-byte sources. Pin it so the new empty-shard
+    /// upload cannot regress that path (e.g. by running before the conflict
+    /// check and clobbering the existing file).
+    #[tokio::test]
+    async fn run_stream_zero_byte_skip_leaves_destination_untouched() {
+        let (_dir, state) = make_state();
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/empty-skip.bin".into(),
+                target_path: "/dst/empty-skip.bin".into(),
+                conflict_policy: Some("skip".into()),
+            })
+            .unwrap();
+
+        let src_store = Arc::new(Mutex::new(HashMap::new()));
+        src_store
+            .lock()
+            .unwrap()
+            .insert("/src/empty-skip.bin".to_string(), Vec::new());
+        let dst_store = Arc::new(Mutex::new(HashMap::new()));
+        dst_store
+            .lock()
+            .unwrap()
+            .insert("/dst/empty-skip.bin".to_string(), b"kept".to_vec());
+
+        let mut source = MockConnector::new(src_store);
+        let mut target = MockConnector::new(dst_store.clone());
+
+        TransferCoordinator::run_stream(
+            &state,
+            &task_id,
+            TransferSpec {
+                op: TransferOp::Copy,
+                conflict: ConflictPolicy::Skip,
+            },
+            &mut source,
+            &mut target,
+            "/src/empty-skip.bin",
+            "/dst/empty-skip.bin",
+        )
+        .await
+        .expect("skip must complete");
+
+        assert_eq!(
+            dst_store.lock().unwrap().get("/dst/empty-skip.bin"),
+            Some(&b"kept".to_vec()),
+            "Skip must not touch an existing destination"
+        );
+        assert!(
+            !dst_store
+                .lock()
+                .unwrap()
+                .contains_key("/dst/empty-skip.bin.rex.part"),
+            "Skip must not create a temp file"
+        );
+    }
+
+    /// A zero-byte source whose empty-shard upload fails must still land in
+    /// `failed` with an `Upload` error — the new branch must not swallow the
+    /// error or fall through to the temp stat.
+    #[tokio::test]
+    async fn run_stream_zero_byte_upload_failure_sets_failed() {
+        let (_dir, state) = make_state();
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/empty-up.bin".into(),
+                target_path: "/dst/empty-up.bin".into(),
+                conflict_policy: Some("overwrite".into()),
+            })
+            .unwrap();
+
+        let src_store = Arc::new(Mutex::new(HashMap::new()));
+        src_store
+            .lock()
+            .unwrap()
+            .insert("/src/empty-up.bin".to_string(), Vec::new());
+        let dst_store = Arc::new(Mutex::new(HashMap::new()));
+
+        let mut source = MockConnector::new(src_store);
+        let mut target = MockConnector::new(dst_store).with_fail_upload(true);
+
+        let res = TransferCoordinator::run_stream(
+            &state,
+            &task_id,
+            TransferSpec {
+                op: TransferOp::Copy,
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src/empty-up.bin",
+            "/dst/empty-up.bin",
+        )
+        .await;
+
+        assert!(
+            matches!(res, Err(TransferError::Upload(_))),
+            "empty-shard upload failure must surface as TransferError::Upload, got {res:?}"
+        );
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        assert_eq!(rec.status, "failed");
+        assert!(rec.error.is_some());
+    }
+
+    /// A zero-byte source whose empty-shard upload races a cancel must stay
+    /// `canceled`: the cancel re-check inside the `offset >= total` branch runs
+    /// before the upload, and the error path guards on `is_canceled`.
+    #[tokio::test]
+    async fn run_stream_zero_byte_canceled_keeps_canceled() {
+        let (_dir, state) = make_state();
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/empty-cancel.bin".into(),
+                target_path: "/dst/empty-cancel.bin".into(),
+                conflict_policy: Some("overwrite".into()),
+            })
+            .unwrap();
+
+        let src_store = Arc::new(Mutex::new(HashMap::new()));
+        src_store
+            .lock()
+            .unwrap()
+            .insert("/src/empty-cancel.bin".to_string(), Vec::new());
+        let dst_store = Arc::new(Mutex::new(HashMap::new()));
+
+        let mut source = MockConnector::new(src_store);
+        let mut target = MockConnector::new(dst_store.clone());
+
+        // Pre-canceled: the loop-top cancel guard returns before the
+        // `offset >= total` branch, so the new empty-shard upload must never
+        // run — no temp file, no destination file.
+        state
+            .db
+            .set_transfer_task_status(&task_id, "canceled", None)
+            .unwrap();
+
+        let res = TransferCoordinator::run_stream(
+            &state,
+            &task_id,
+            TransferSpec {
+                op: TransferOp::Copy,
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src/empty-cancel.bin",
+            "/dst/empty-cancel.bin",
+        )
+        .await;
+
+        assert!(matches!(res, Err(TransferError::Canceled)));
+        let dst = dst_store.lock().unwrap();
+        assert!(
+            dst.get("/dst/empty-cancel.bin").is_none()
+                && !dst.contains_key("/dst/empty-cancel.bin.rex.part"),
+            "pre-canceled zero-byte transfer must not write anything, got {:?}",
+            dst.keys().collect::<Vec<_>>()
+        );
+        drop(dst);
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        assert_eq!(rec.status, "canceled", "canceled must not be clobbered");
     }
 }
