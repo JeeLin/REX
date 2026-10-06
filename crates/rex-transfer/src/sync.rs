@@ -58,23 +58,6 @@ pub enum CompareBasis {
     ModifiedTime,
 }
 
-impl CompareBasis {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Size => "size",
-            Self::ModifiedTime => "modified_time",
-        }
-    }
-
-    pub fn from_str(s: &str) -> Option<Self> {
-        Some(match s {
-            "size" => Self::Size,
-            "modified_time" => Self::ModifiedTime,
-            _ => return None,
-        })
-    }
-}
-
 /// 同步任务选项（创建 / 预览共用的请求参数）。
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct SyncOptions {
@@ -491,11 +474,6 @@ mod tests {
         );
         let back: CompareBasis = serde_json::from_str("\"size\"").unwrap();
         assert_eq!(back, CompareBasis::Size);
-        assert_eq!(
-            CompareBasis::from_str("modified_time"),
-            Some(CompareBasis::ModifiedTime)
-        );
-        assert_eq!(CompareBasis::from_str("hash"), None);
     }
 
     #[test]
