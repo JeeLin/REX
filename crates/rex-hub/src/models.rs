@@ -184,6 +184,7 @@ pub struct TransferTaskRecord {
     /// 任务类型：`transfer`（单文件复制/移动）| `sync`（目录同步，v0.92.0）。
     pub kind: String,
     /// kind=sync 时的 `rex_transfer::SyncOptions` JSON，其余为空串。
+    /// 仅落库留痕（人工排查用），UI 目前不读取。
     pub sync_options: String,
     pub status: String,
     pub total_bytes: i64,

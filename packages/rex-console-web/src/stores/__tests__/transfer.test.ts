@@ -81,7 +81,6 @@ function record(over: Partial<TransferTaskRecord> = {}): TransferTaskRecord {
     target_path: DST.path,
     conflict_policy: 'overwrite',
     kind: 'sync',
-    sync_options: '{}',
     status: 'pending',
     total_bytes: 0,
     transferred_bytes: 0,

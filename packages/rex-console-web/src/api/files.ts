@@ -261,7 +261,6 @@ export interface TransferTaskRecord {
   target_path: string
   conflict_policy: string
   kind: TransferTaskKind
-  sync_options: string
   status: TransferTaskStatus
   total_bytes: number
   transferred_bytes: number
