@@ -65,7 +65,7 @@ export function useTransfer() {
       case 'failed':
         return t('files.failed')
       case 'canceled':
-        return t('files.canceled', 'Canceled')
+        return t('files.canceled')
       default:
         return t('files.transferring')
     }
