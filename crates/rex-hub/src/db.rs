@@ -1205,9 +1205,8 @@ impl Database {
     }
 }
 
-/// 异步写审计日志的便捷方法，在 spawn_blocking 中执行。
-/// 审计事件归属：写入 environment / resource / agent 维度，
-/// 让按环境或按 agent 过滤的查看器（审计日志页、Agent 日志面板）能查到该事件。
+/// 审计事件的归属维度：写入 environment / resource / agent，让按环境或按 agent
+/// 过滤的查看器（审计日志页、Agent 日志面板）能查到该事件。
 #[derive(Debug, Clone, Default)]
 pub struct AuditScope {
     pub environment_id: Option<String>,
@@ -1215,6 +1214,7 @@ pub struct AuditScope {
     pub agent_id: Option<String>,
 }
 
+/// 异步写审计日志的便捷方法，在 spawn_blocking 中执行（不带归属维度）。
 pub fn audit_log(
     db: &std::sync::Arc<Database>,
     action: &str,
