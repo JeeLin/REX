@@ -195,8 +195,11 @@ pub struct TransferTaskRecord {
     pub updated_at: String,
 }
 
-/// 创建传输任务的入参（前端下发 source/target resource + path）。
-#[derive(Debug, Clone, Deserialize)]
+/// 创建传输 / 同步任务的入参（前端下发 source/target resource + path）。
+///
+/// 两类任务共用 `transfer_task` 表：`kind` 与 `sync_options` 区分单文件传输与
+/// 目录同步（v0.92.0），两者都由服务端写入，请求体缺省即普通传输任务。
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct NewTransferTask {
     pub source_resource_id: String,
     pub target_resource_id: String,
@@ -204,20 +207,12 @@ pub struct NewTransferTask {
     pub target_path: String,
     #[serde(default)]
     pub conflict_policy: Option<String>,
-}
-
-/// 创建目录同步任务的入参（v0.92.0）：复用 transfer_task 表，
-/// `kind='sync'`，选项序列化为 JSON 存 `sync_options` 列。
-#[derive(Debug, Clone, Deserialize)]
-pub struct NewSyncTask {
-    pub source_resource_id: String,
-    pub target_resource_id: String,
-    pub source_path: String,
-    pub target_path: String,
-    /// `rex_transfer::SyncOptions` JSON。
-    pub sync_options: String,
+    /// `transfer`（默认，单文件传输）| `sync`（目录同步，v0.92.0）。
     #[serde(default)]
-    pub conflict_policy: Option<String>,
+    pub kind: String,
+    /// kind=sync 时的 `rex_transfer::SyncOptions` JSON，其余为空串。
+    #[serde(default)]
+    pub sync_options: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

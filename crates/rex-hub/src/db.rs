@@ -1248,50 +1248,28 @@ pub fn audit_log_scoped(
     });
 }
 
-/// transfer_task 插入行（transfer / sync 共用，`kind` + `sync_options` 区分两类任务）。
-struct TransferTaskInsert<'a> {
-    source_resource_id: &'a str,
-    target_resource_id: &'a str,
-    source_path: &'a str,
-    target_path: &'a str,
-    conflict_policy: Option<&'a str>,
-    kind: &'a str,
-    sync_options: &'a str,
-}
-
 /// 异步写审计日志（带 detail）。
 /// transfer_task 持久化（v0.91.0，T1；v0.92.0 扩展 sync 任务）。
 impl Database {
+    /// 创建单文件传输任务：`kind` / `sync_options` 由服务端定死，请求体（同结构）
+    /// 不允许伪造任务类型。
     pub fn create_transfer_task(&self, task: &NewTransferTask) -> Result<String> {
-        self.insert_transfer_task(&TransferTaskInsert {
-            source_resource_id: &task.source_resource_id,
-            target_resource_id: &task.target_resource_id,
-            source_path: &task.source_path,
-            target_path: &task.target_path,
-            conflict_policy: task.conflict_policy.as_deref(),
-            kind: "transfer",
-            sync_options: "",
-        })
+        let mut t = task.clone();
+        t.kind = "transfer".to_string();
+        t.sync_options.clear();
+        self.insert_transfer_task(&t)
     }
 
     /// v0.92.0：目录同步任务（同表，`kind='sync'` + SyncOptions JSON）。
-    pub fn create_sync_task(&self, task: &NewSyncTask) -> Result<String> {
-        self.insert_transfer_task(&TransferTaskInsert {
-            source_resource_id: &task.source_resource_id,
-            target_resource_id: &task.target_resource_id,
-            source_path: &task.source_path,
-            target_path: &task.target_path,
-            conflict_policy: task.conflict_policy.as_deref(),
-            kind: "sync",
-            sync_options: &task.sync_options,
-        })
+    pub fn create_sync_task(&self, task: &NewTransferTask) -> Result<String> {
+        self.insert_transfer_task(task)
     }
 
-    fn insert_transfer_task(&self, t: &TransferTaskInsert<'_>) -> Result<String> {
+    fn insert_transfer_task(&self, t: &NewTransferTask) -> Result<String> {
         let conn = self.conn()?;
         let id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
-        let policy = t.conflict_policy.unwrap_or("overwrite");
+        let policy = t.conflict_policy.as_deref().unwrap_or("overwrite");
         conn.execute(
             "INSERT INTO transfer_task
                 (id, source_resource_id, target_resource_id, source_path, target_path,
@@ -1452,6 +1430,7 @@ mod tests {
             source_path: "/a.txt".into(),
             target_path: "/b.txt".into(),
             conflict_policy: Some("skip".into()),
+            ..Default::default()
         };
         let id = db.create_transfer_task(&task).unwrap();
         let got = db.get_transfer_task(&id).unwrap().expect("exists");
@@ -1477,13 +1456,14 @@ mod tests {
     #[test]
     fn sync_task_kind_and_options_round_trip() {
         let (_dir, db) = test_db();
-        let task = NewSyncTask {
+        let task = NewTransferTask {
             source_resource_id: "res-a".into(),
             target_resource_id: "res-b".into(),
             source_path: "/src/".into(),
             target_path: "/dst/".into(),
-            sync_options: r#"{"direction":"upload"}"#.into(),
             conflict_policy: None,
+            kind: "sync".into(),
+            sync_options: r#"{"direction":"upload"}"#.into(),
         };
         let id = db.create_sync_task(&task).unwrap();
         let got = db.get_transfer_task(&id).unwrap().expect("exists");
@@ -1491,7 +1471,7 @@ mod tests {
         assert_eq!(got.sync_options, r#"{"direction":"upload"}"#);
         assert_eq!(got.status, "pending");
         assert_eq!(got.conflict_policy, "overwrite");
-        // 普通传输任务默认 kind=transfer
+        // 普通传输任务固定 kind=transfer
         let plain = db
             .create_transfer_task(&NewTransferTask {
                 source_resource_id: "res-a".into(),
@@ -1499,9 +1479,15 @@ mod tests {
                 source_path: "/a".into(),
                 target_path: "/b".into(),
                 conflict_policy: None,
+                ..Default::default()
             })
             .unwrap();
         let rec = db.get_transfer_task(&plain).unwrap().unwrap();
+        assert_eq!(rec.kind, "transfer");
+        assert_eq!(rec.sync_options, "");
+        // 同结构入参走传输路径：kind / sync_options 由服务端定死，客户端不能伪造
+        let spoofed = db.create_transfer_task(&task).unwrap();
+        let rec = db.get_transfer_task(&spoofed).unwrap().unwrap();
         assert_eq!(rec.kind, "transfer");
         assert_eq!(rec.sync_options, "");
     }

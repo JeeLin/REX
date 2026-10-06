@@ -726,6 +726,7 @@ mod tests {
                 source_path: "/src/a.bin".into(),
                 target_path: "/dst/a.bin".into(),
                 conflict_policy: Some("overwrite".into()),
+                ..Default::default()
             })
             .unwrap();
 
@@ -793,6 +794,7 @@ mod tests {
                 source_path: "/src/m.bin".into(),
                 target_path: "/dst/m.bin".into(),
                 conflict_policy: Some("overwrite".into()),
+                ..Default::default()
             })
             .unwrap();
 
@@ -846,6 +848,7 @@ mod tests {
                 source_path: "/src/c.bin".into(),
                 target_path: "/dst/c.bin".into(),
                 conflict_policy: Some("overwrite".into()),
+                ..Default::default()
             })
             .unwrap();
 
@@ -892,6 +895,7 @@ mod tests {
                 source_path: "/src/exact.bin".into(),
                 target_path: "/dst/exact.bin".into(),
                 conflict_policy: Some("overwrite".into()),
+                ..Default::default()
             })
             .unwrap();
 
@@ -964,6 +968,7 @@ mod tests {
                 source_path: "/src/r.bin".into(),
                 target_path: "/dst/r.bin".into(),
                 conflict_policy: Some("overwrite".into()),
+                ..Default::default()
             })
             .unwrap();
 
@@ -1031,6 +1036,7 @@ mod tests {
                 source_path: "/src/d.bin".into(),
                 target_path: "/dst/d.bin".into(),
                 conflict_policy: Some("overwrite".into()),
+                ..Default::default()
             })
             .unwrap();
 
@@ -1131,6 +1137,7 @@ mod tests {
                 source_path: "/src/w.bin".into(),
                 target_path: "/dst/w.bin".into(),
                 conflict_policy: Some("overwrite".into()),
+                ..Default::default()
             })
             .unwrap();
 
@@ -1204,6 +1211,7 @@ mod tests {
                 source_path: "/src/missing.bin".into(),
                 target_path: "/dst/missing.bin".into(),
                 conflict_policy: Some("overwrite".into()),
+                ..Default::default()
             })
             .unwrap();
 
@@ -1245,6 +1253,7 @@ mod tests {
                 source_path: "/src/dl.bin".into(),
                 target_path: "/dst/dl.bin".into(),
                 conflict_policy: Some("overwrite".into()),
+                ..Default::default()
             })
             .unwrap();
 
@@ -1291,6 +1300,7 @@ mod tests {
                 source_path: "/src/up.bin".into(),
                 target_path: "/dst/up.bin".into(),
                 conflict_policy: Some("overwrite".into()),
+                ..Default::default()
             })
             .unwrap();
 
@@ -1337,6 +1347,7 @@ mod tests {
                 source_path: "/src/ts.bin".into(),
                 target_path: "/dst/ts.bin".into(),
                 conflict_policy: Some("overwrite".into()),
+                ..Default::default()
             })
             .unwrap();
 
@@ -1397,6 +1408,7 @@ mod tests {
                 source_path: "/src/empty.bin".into(),
                 target_path: "/dst/empty.bin".into(),
                 conflict_policy: Some("overwrite".into()),
+                ..Default::default()
             })
             .unwrap();
 
@@ -1462,6 +1474,7 @@ mod tests {
                 source_path: "/src/empty-move.bin".into(),
                 target_path: "/dst/empty-move.bin".into(),
                 conflict_policy: Some("overwrite".into()),
+                ..Default::default()
             })
             .unwrap();
 
@@ -1520,6 +1533,7 @@ mod tests {
                 source_path: "/src/empty-skip.bin".into(),
                 target_path: "/dst/empty-skip.bin".into(),
                 conflict_policy: Some("skip".into()),
+                ..Default::default()
             })
             .unwrap();
 
@@ -1580,6 +1594,7 @@ mod tests {
                 source_path: "/src/empty-up.bin".into(),
                 target_path: "/dst/empty-up.bin".into(),
                 conflict_policy: Some("overwrite".into()),
+                ..Default::default()
             })
             .unwrap();
 
@@ -1630,6 +1645,7 @@ mod tests {
                 source_path: "/src/empty-cancel.bin".into(),
                 target_path: "/dst/empty-cancel.bin".into(),
                 conflict_policy: Some("overwrite".into()),
+                ..Default::default()
             })
             .unwrap();
 
@@ -1700,6 +1716,7 @@ mod tests {
                 source_path: "/src/e.bin".into(),
                 target_path: "/dst/e.bin".into(),
                 conflict_policy: Some("overwrite".into()),
+                ..Default::default()
             })
             .unwrap();
 
@@ -1764,6 +1781,7 @@ mod tests {
                 source_path: "/src/ok.bin".into(),
                 target_path: "/dst/ok.bin".into(),
                 conflict_policy: Some("overwrite".into()),
+                ..Default::default()
             })
             .unwrap();
 
@@ -1821,6 +1839,7 @@ mod tests {
                 source_path: "/src/cancel.bin".into(),
                 target_path: "/dst/cancel.bin".into(),
                 conflict_policy: Some("overwrite".into()),
+                ..Default::default()
             })
             .unwrap();
 

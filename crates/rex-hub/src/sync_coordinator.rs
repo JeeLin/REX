@@ -882,13 +882,14 @@ mod tests {
     fn make_sync_task(state: &AppState, opts: &SyncOptions) -> String {
         state
             .db
-            .create_sync_task(&crate::models::NewSyncTask {
+            .create_sync_task(&crate::models::NewTransferTask {
                 source_resource_id: "src".into(),
                 target_resource_id: "dst".into(),
                 source_path: "/src".into(),
                 target_path: "/dst".into(),
-                sync_options: serde_json::to_string(opts).unwrap(),
                 conflict_policy: Some("overwrite".into()),
+                kind: "sync".into(),
+                sync_options: serde_json::to_string(opts).unwrap(),
             })
             .unwrap()
     }

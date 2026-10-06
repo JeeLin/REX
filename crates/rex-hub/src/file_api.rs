@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::db::audit_log;
-use crate::models::{NewSyncTask, NewTransferTask};
+use crate::models::NewTransferTask;
 use crate::resource_conn::{load_resource_config, normalize_username, ResourceConnInfo};
 use crate::sync_coordinator::SyncCoordinator;
 use crate::transfer_coordinator::TransferOp;
@@ -332,13 +332,14 @@ async fn create_sync_task(
         Ok(s) => s,
         Err(e) => return error_response("INVALID_SYNC_OPTIONS", &e.to_string()).into_response(),
     };
-    let new_task = NewSyncTask {
+    let new_task = NewTransferTask {
         source_resource_id: body.source.resource_id.clone(),
         target_resource_id: body.target.resource_id.clone(),
         source_path: body.source.path.clone(),
         target_path: body.target.path.clone(),
-        sync_options,
         conflict_policy: Some(conflict),
+        kind: "sync".to_string(),
+        sync_options,
     };
     let task_id = match state.db.create_sync_task(&new_task) {
         Ok(id) => id,
@@ -421,6 +422,7 @@ async fn transfer_action(
         source_path: body.src.path.clone(),
         target_path: body.dst.path.clone(),
         conflict_policy: Some(conflict),
+        ..Default::default()
     };
     let task_id = match state.db.create_transfer_task(&new_task) {
         Ok(id) => id,
