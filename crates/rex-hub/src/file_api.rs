@@ -243,8 +243,51 @@ fn validate_sync_masks(masks: &[String]) -> Result<(), (&'static str, &'static s
     Ok(())
 }
 
+/// 判定 `inner` 是否为 `outer` 自身或其子目录。
+///
+/// 只认目录边界：`/x` 不算 `/xy` 的前缀。`outer` 假定已去掉尾斜杠。
+fn is_path_nested(inner: &str, outer: &str) -> bool {
+    if inner == outer || outer == "/" {
+        return true;
+    }
+    inner
+        .strip_prefix(outer)
+        .is_some_and(|rest| rest.starts_with('/'))
+}
+
+/// 去掉首尾空白与尾斜杠（根 `/` 保留），使 `/srv/` 与 `/srv` 判为同一个目录。
+fn trim_path_prefix(path: &str) -> &str {
+    let p = path.trim();
+    let mut e = p.len();
+    while e > 1 && p.as_bytes()[e - 1] == b'/' {
+        e -= 1;
+    }
+    &p[..e]
+}
+
+/// 同步请求的源/目标必须落在不同资源，或在同资源下互不嵌套。
+///
+/// 双面板对同一主机上的两个目录做同步时 `resource_id` 必然相同，若目标落在源子树内，
+/// 第一轮写出的副本就会成为第二轮源树的一部分（`/srv` → `/srv/backup` →
+/// `/srv/backup/backup`…），体积按轮次翻倍，且孤儿清理拦不住（副本是源侧条目）。
+/// 这里在 API 层给出硬拦截，create 与 preview 共用同一判定。
+fn validate_sync_path_nesting(body: &SyncRequestBody) -> Result<(), (&'static str, &'static str)> {
+    if body.source.resource_id != body.target.resource_id {
+        return Ok(());
+    }
+    let source = trim_path_prefix(&body.source.path);
+    let target = trim_path_prefix(&body.target.path);
+    if is_path_nested(target, source) || is_path_nested(source, target) {
+        return Err((
+            "SYNC_PATH_NESTED",
+            "source and target must not be nested in each other",
+        ));
+    }
+    Ok(())
+}
+
 /// 校验同步请求参数（create 与 preview 共用同一份逻辑）：冲突策略合法 +
-/// 源/目标路径非空 + 掩码有界。返回归一后的冲突策略（缺省 `overwrite`）。
+/// 源/目标路径非空 + 掩码有界 + 源/目标互不嵌套。返回归一后的冲突策略（缺省 `overwrite`）。
 ///
 /// 预览与执行必须对同一组选项给出一致的判定，否则预览承诺会与实际落盘不符。
 fn validate_sync_request(body: &SyncRequestBody) -> Result<String, (&'static str, &'static str)> {
@@ -258,6 +301,7 @@ fn validate_sync_request(body: &SyncRequestBody) -> Result<String, (&'static str
     if body.source.path.is_empty() || body.target.path.is_empty() {
         return Err(("SYNC_PATH_REQUIRED", "source and target path are required"));
     }
+    validate_sync_path_nesting(body)?;
     validate_sync_masks(&body.options.include)?;
     validate_sync_masks(&body.options.exclude)?;
     Ok(conflict)
@@ -1881,6 +1925,77 @@ mod tests {
         // 空掩码列表始终合法（include 空 = 全选）
         let resp = create_sync_task(State(state.clone()), Json(sync_body("/src/"))).await;
         assert_eq!(resp.status(), StatusCode::CREATED);
+    }
+
+    /// 同资源内源/目标互不嵌套：同一路径、任一方为另一方子目录都必须拒，
+    /// 尾斜杠归一；`/x` 与 `/xy` 是兄弟目录而非嵌套，必须放行。
+    #[test]
+    fn sync_path_nesting_rejects_self_and_descendants_only() {
+        let same_res = |source: &str, target: &str| {
+            let mut b = sync_body("/src/");
+            b.source.resource_id = "res-a".into();
+            b.source.path = source.into();
+            b.target.resource_id = "res-a".into();
+            b.target.path = target.into();
+            validate_sync_request(&b).map_err(|(code, _)| code)
+        };
+
+        // 必须拒：同路径 / 目标在源内 / 源在目标内 / 尾斜杠归一后仍嵌套
+        assert_eq!(same_res("/srv", "/srv"), Err("SYNC_PATH_NESTED"));
+        assert_eq!(same_res("/srv/", "/srv/"), Err("SYNC_PATH_NESTED"));
+        assert_eq!(same_res("/srv", "/srv/backup"), Err("SYNC_PATH_NESTED"));
+        assert_eq!(same_res("/srv/", "/srv/backup/"), Err("SYNC_PATH_NESTED"));
+        assert_eq!(same_res("/srv/backup", "/srv"), Err("SYNC_PATH_NESTED"));
+        assert_eq!(
+            same_res("/srv/backup/deep", "/srv"),
+            Err("SYNC_PATH_NESTED"),
+            "反向嵌套（源在目标内）同样会自噬，必须拦"
+        );
+        assert_eq!(
+            same_res("/srv", "/"),
+            Err("SYNC_PATH_NESTED"),
+            "目标是根目录 = 目标是源的祖先"
+        );
+
+        // 必须放行：兄弟目录 / 前缀相同但非目录边界 / 不同资源
+        assert!(same_res("/x", "/xy").is_ok(), "/x 与 /xy 不是嵌套");
+        assert!(same_res("/srv/a", "/srv/b").is_ok());
+        assert!(same_res("/srv", "/srv2/backup").is_ok());
+
+        let mut diff_res = sync_body("/srv");
+        diff_res.source.resource_id = "res-a".into();
+        diff_res.target.resource_id = "res-b".into();
+        diff_res.target.path = "/srv/backup".into();
+        assert!(
+            validate_sync_request(&diff_res).is_ok(),
+            "不同 resource_id 的同路径是合法同步（跨主机）"
+        );
+    }
+
+    /// create 与 preview 共用同一份嵌套判定：两端都 400 + `SYNC_PATH_NESTED`，
+    /// 预览通过即执行通过的不变式不能因新增校验而破掉。
+    #[tokio::test]
+    async fn sync_nested_paths_are_rejected_by_create_and_preview() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = crate::resource_conn::build_test_state(dir.path());
+
+        let mut body = sync_body("/srv");
+        body.source.resource_id = "res-a".into();
+        body.target.resource_id = "res-a".into();
+        body.target.path = "/srv/backup".into();
+
+        let resp = create_sync_task(State(state.clone()), Json(body.clone())).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(body_json(resp).await["error"]["code"], "SYNC_PATH_NESTED");
+
+        let resp = preview_sync(State(state.clone()), Json(body)).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(body_json(resp).await["error"]["code"], "SYNC_PATH_NESTED");
+
+        assert!(
+            state.db.list_transfer_tasks(10, 0).unwrap().is_empty(),
+            "nested sync must not persist a task"
+        );
     }
 
     /// `preview` 是静态路径，不被 `/sync/{id}` 吞掉：POST 命中预览处理器

@@ -61,6 +61,7 @@ fn build_test_router(state: AppState) -> axum::Router {
                 .merge(rex_hub::agent_api::env_agent_routes()),
         )
         .nest("/api/audit-log", rex_hub::audit_api::audit_routes())
+        .nest("/api/files", rex_hub::file_api::file_routes())
         .layer(axum::middleware::from_extractor_with_state::<
             AuthUser,
             AppState,
@@ -355,4 +356,79 @@ async fn test_audit_log_viewer_returns_scoped_ssh_events_and_zeroed_stats() {
     assert_eq!(json["total"], 1);
     assert_eq!(json["success_count"], 1);
     assert_eq!(json["failure_count"], 0);
+}
+
+/// 端点级回归：同资源内目标嵌套在源目录下的同步请求必须在 HTTP 层被拒（400 +
+/// `SYNC_PATH_NESTED`），且不落库。否则第一轮写出的副本会成为第二轮源树的一部分，
+/// 目录体积按轮次翻倍。`/x` 与 `/xy` 是兄弟目录，不得误杀。
+#[tokio::test]
+async fn test_sync_rejects_target_nested_in_source() {
+    let (_dir, state) = test_state();
+    let app = build_test_router(state.clone());
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/auth/password")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({"password": "test123"}).to_string(),
+        ))
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let token = json["token"].as_str().unwrap().to_string();
+
+    let post_sync = |app: axum::Router, token: String, source: String, target: String| async move {
+        let body = serde_json::json!({
+            "source": {"resource_id": "res-a", "path": source},
+            "target": {"resource_id": "res-a", "path": target},
+            "options": {"direction": "upload", "delete_orphans": true},
+        })
+        .to_string();
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/files/sync")
+            .header("content-type", "application/json")
+            .header("authorization", format!("Bearer {token}"))
+            .body(Body::from(body))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let status = resp.status();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        (
+            status,
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+        )
+    };
+
+    let (status, json) = post_sync(
+        app.clone(),
+        token.clone(),
+        "/srv".into(),
+        "/srv/backup".into(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(json["error"]["code"], "SYNC_PATH_NESTED");
+
+    let (status, json) = post_sync(app.clone(), token.clone(), "/srv/".into(), "/srv".into()).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(json["error"]["code"], "SYNC_PATH_NESTED");
+
+    let (status, _) = post_sync(app.clone(), token.clone(), "/x".into(), "/xy".into()).await;
+    assert_eq!(
+        status,
+        StatusCode::CREATED,
+        "/x 与 /xy 是兄弟目录，不得被嵌套判定误杀"
+    );
+
+    assert!(
+        state.db.list_transfer_tasks(10, 0).unwrap().len() == 1,
+        "只有放行的那次创建落了任务"
+    );
 }
