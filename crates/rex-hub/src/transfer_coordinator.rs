@@ -158,23 +158,79 @@ impl TransferCoordinator {
         }
     }
 
+    /// preflight（加载记录 + 建立连接器）失败的终态落库并返回该错误。
+    ///
+    /// `submit` 丢弃后台 `JoinHandle` 的返回值，这些早退若无终态，任务行会永远
+    /// 停在 `pending`（连接失败是日常可达的：agent 离线 / SFTP 握手失败 / S3 连接失败）。
+    /// 已被取消的任务不得被写成 `failed`——与 `run_stream` 内的取消优先约定一致。
+    fn fail_preflight(state: &AppState, task_id: &str, err: TransferError) -> TransferError {
+        if Self::is_canceled(state, task_id) {
+            Self::set_status(state, task_id, TransferStatus::Canceled, None);
+        } else {
+            let msg = err.to_string();
+            Self::set_status(
+                state,
+                task_id,
+                TransferStatus::Failed(msg.clone()),
+                Some(&msg),
+            );
+            tracing::error!(action = "FILE_TRANSFER", outcome = "failed", error = %msg, "传输 preflight 失败");
+        }
+        err
+    }
+
     /// 驱动一次完整传输：加载任务记录 → 打开 source/target 连接器 → `run_stream`。
+    ///
+    /// preflight 阶段的错误经 [`Self::fail_preflight`] 落终态后再返回；
+    /// `run_stream` 内部的错误仍由 `run_stream` 自行落终态，此处不重复处理。
     pub async fn run(state: &AppState, task_id: &str, op: TransferOp) -> Result<(), TransferError> {
-        let task = state
-            .db
-            .get_transfer_task(task_id)
-            .map_err(|e| TransferError::Db(e.to_string()))?
-            .ok_or(TransferError::TaskNotFound)?;
+        let task = match state.db.get_transfer_task(task_id) {
+            Ok(Some(task)) => task,
+            // 任务记录不存在：无行可更新，也不广播（订阅者本就不会持有该 id）。
+            Ok(None) => return Err(TransferError::TaskNotFound),
+            Err(e) => {
+                return Err(Self::fail_preflight(
+                    state,
+                    task_id,
+                    TransferError::Db(e.to_string()),
+                ))
+            }
+        };
 
-        let conflict = ConflictPolicy::from_str(&task.conflict_policy)
-            .ok_or_else(|| TransferError::InvalidConflictPolicy(task.conflict_policy.clone()))?;
+        let conflict = match ConflictPolicy::from_str(&task.conflict_policy) {
+            Some(c) => c,
+            None => {
+                return Err(Self::fail_preflight(
+                    state,
+                    task_id,
+                    TransferError::InvalidConflictPolicy(task.conflict_policy.clone()),
+                ))
+            }
+        };
 
-        let mut source = crate::file_api::connect_resource(state, &task.source_resource_id)
-            .await
-            .map_err(|e| TransferError::Connect(e.to_string()))?;
-        let mut target = crate::file_api::connect_resource(state, &task.target_resource_id)
-            .await
-            .map_err(|e| TransferError::Connect(e.to_string()))?;
+        let mut source =
+            match crate::file_api::connect_resource(state, &task.source_resource_id).await {
+                Ok(c) => c,
+                Err(e) => {
+                    return Err(Self::fail_preflight(
+                        state,
+                        task_id,
+                        TransferError::Connect(e.to_string()),
+                    ))
+                }
+            };
+        let mut target =
+            match crate::file_api::connect_resource(state, &task.target_resource_id).await {
+                Ok(c) => c,
+                Err(e) => {
+                    let _ = source.close().await;
+                    return Err(Self::fail_preflight(
+                        state,
+                        task_id,
+                        TransferError::Connect(e.to_string()),
+                    ));
+                }
+            };
 
         let res = Self::run_stream(
             state,
@@ -1635,6 +1691,90 @@ mod tests {
         rx: &mut tokio::sync::broadcast::Receiver<crate::app::TransferProgressEvent>,
     ) -> Vec<crate::app::TransferProgressEvent> {
         std::iter::from_fn(|| rx.try_recv().ok()).collect()
+    }
+
+    /// preflight（加载记录 + 建立连接器）失败必须落 `failed` + 广播终态：
+    /// `submit` 丢弃后台 `JoinHandle` 的返回值，这些早退若无终态，任务行会永远停在
+    /// `pending`（连接失败是日常可达的：agent 离线 / SFTP 握手失败 / S3 连接失败）。
+    #[tokio::test]
+    async fn run_preflight_connect_failure_sets_failed_and_broadcasts_reason() {
+        let (_dir, state) = make_state();
+        // resource_id（src/dst）在测试库里不存在 → connect 失败
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/a.bin".into(),
+                target_path: "/dst/a.bin".into(),
+                conflict_policy: Some("overwrite".into()),
+                ..Default::default()
+            })
+            .unwrap();
+
+        let mut rx = state.transfer_bcast.subscribe();
+        let res = TransferCoordinator::run(&state, &task_id, TransferOp::Copy).await;
+
+        assert!(matches!(res, Err(TransferError::Connect(_))), "got {res:?}");
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        assert_eq!(rec.status, "failed", "must not stay pending");
+        let reason = rec.error.clone().unwrap_or_default();
+        assert!(
+            !reason.is_empty() && reason.contains("connect"),
+            "failed must carry the connect reason, got {reason:?}"
+        );
+
+        let failed: Vec<_> = drain(&mut rx)
+            .into_iter()
+            .filter(|e| e.status == "failed")
+            .collect();
+        assert_eq!(failed.len(), 1, "exactly one failed terminal broadcast");
+        assert_eq!(
+            failed[0].error.as_deref(),
+            Some(reason.as_str()),
+            "terminal event must carry the same reason as the DB row"
+        );
+    }
+
+    /// preflight 失败时若任务已被取消，终态必须是 `canceled`（不带 error）——
+    /// 不得被写成 `failed`，也不得广播第二个终态。
+    #[tokio::test]
+    async fn run_preflight_failure_does_not_clobber_canceled() {
+        let (_dir, state) = make_state();
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/a.bin".into(),
+                target_path: "/dst/a.bin".into(),
+                conflict_policy: Some("overwrite".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        state
+            .db
+            .set_transfer_task_status(&task_id, "canceled", None)
+            .unwrap();
+
+        let mut rx = state.transfer_bcast.subscribe();
+        let res = TransferCoordinator::run(&state, &task_id, TransferOp::Copy).await;
+
+        assert!(matches!(res, Err(TransferError::Connect(_))), "got {res:?}");
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        assert_eq!(rec.status, "canceled", "canceled must not be clobbered");
+
+        let terminals = drain(&mut rx);
+        let canceled: Vec<_> = terminals
+            .iter()
+            .filter(|e| e.status == "canceled")
+            .collect();
+        assert_eq!(canceled.len(), 1, "exactly one canceled terminal broadcast");
+        assert_eq!(canceled[0].error, None, "canceled carries no reason");
+        assert!(
+            !terminals.iter().any(|e| e.status == "failed"),
+            "canceled task must not be reported as failed: {terminals:?}"
+        );
     }
 
     #[tokio::test]
