@@ -147,7 +147,6 @@ export function useTransfer() {
     updateBrowserTask: store.updateBrowserTask,
     move: store.move,
     copy: store.copy,
-    trackSync: store.trackSync,
     monitor: store.monitor,
     cancel: store.cancel,
     connectWs: store.connectWs,
