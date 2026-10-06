@@ -323,7 +323,7 @@ onMounted(async () => {
       </div>
     </header>
 
-    <p class="page-desc">{{ t('auditLog.subtitle', 'System activity log') }}</p>
+    <p class="page-desc">{{ t('auditLog.subtitle') }}</p>
 
     <!-- Toolbar: filters + actions -->
     <!-- Toolbar: chip filters + actions -->
@@ -447,20 +447,20 @@ onMounted(async () => {
                     <dl class="kv">
                       <dt>ID</dt>
                       <dd class="mono">{{ entry.id }}</dd>
-                      <dt>{{ t('auditLog.time', 'Time') }}</dt>
+                      <dt>{{ t('auditLog.time') }}</dt>
                       <dd class="mono">{{ entry.time }}</dd>
-                      <dt>{{ t('auditLog.action', 'Action') }}</dt>
+                      <dt>{{ t('auditLog.action') }}</dt>
                       <dd class="mono">{{ entry.action }}</dd>
-                      <dt>{{ t('auditLog.result', 'Result') }}</dt>
+                      <dt>{{ t('auditLog.result') }}</dt>
                       <dd>
                         <span class="rc" :class="entry.result === 'success' ? 'ok' : 'fail'">{{ entry.result }}</span>
                       </dd>
                       <template v-if="entry.target">
-                        <dt>{{ t('auditLog.target', 'Target') }}</dt>
+                        <dt>{{ t('auditLog.target') }}</dt>
                         <dd>{{ entry.target }}</dd>
                       </template>
                       <template v-if="entry.environment_id">
-                        <dt>{{ t('auditLog.environment', 'Environment') }}</dt>
+                        <dt>{{ t('auditLog.environment') }}</dt>
                         <dd>{{ envName(entry.environment_id) }}</dd>
                       </template>
                       <template v-if="entry.agent_id">
@@ -468,7 +468,7 @@ onMounted(async () => {
                         <dd><span>{{ agentName(entry.agent_id) }}</span> <span v-if="agentsMap.get(entry.agent_id!)" class="muted" style="font-size:0.85em">({{ entry.agent_id }})</span></dd>
                       </template>
                       <template v-if="entry.resource_id">
-                        <dt>{{ t('auditLog.resource', 'Resource') }}</dt>
+                        <dt>{{ t('auditLog.resource') }}</dt>
                         <dd>{{ resourceName(entry.resource_id) }}</dd>
                       </template>
                     </dl>
@@ -486,13 +486,13 @@ onMounted(async () => {
     <!-- Pagination -->
     <div class="audit-table-footer">
       <span class="page-total muted">{{ t('auditLog.totalCount', { n: totalCount }) }}</span>
-      <span class="field-label">{{ t('auditLog.pageSize', 'Page size') }}</span>
+      <span class="field-label">{{ t('auditLog.pageSize') }}</span>
       <Select v-model="pageSize" :options="pageSizeOptions" size="sm" />
       <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--">← {{ t('common.prev', 'Prev') }}</button>
       <span class="page-info mono">{{ currentPage }} / {{ totalPages }}</span>
       <button class="page-btn" :disabled="currentPage >= totalPages" @click="currentPage++">{{ t('common.next', 'Next') }} →</button>
       <span class="page-goto">
-        <span class="muted">{{ t('auditLog.gotoPage', 'Go to page') }}</span>
+        <span class="muted">{{ t('auditLog.gotoPage') }}</span>
         <input
           v-model.number="gotoPage"
           class="page-goto-input mono"
@@ -501,7 +501,7 @@ onMounted(async () => {
           :max="totalPages"
           @keyup.enter="applyGoto"
         />
-        <span class="muted">{{ t('auditLog.pageUnit', 'Page') }}</span>
+        <span class="muted">{{ t('auditLog.pageUnit') }}</span>
       </span>
     </div>
 

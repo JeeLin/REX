@@ -260,9 +260,9 @@ onBeforeUnmount(async () => {
         </span>
       </div>
       <div class="fd-actions">
-        <Button variant="ghost" size="sm" icon :title="t('filesDrawer.goUp', 'Go up')" @click="goUp">↑</Button>
-        <Button variant="ghost" size="sm" icon :title="t('filesDrawer.refresh', 'Refresh')" @click="loadDir">↻</Button>
-        <Button variant="ghost" size="sm" icon :title="t('filesDrawer.upload', 'Upload')" @click="upload">⬆</Button>
+        <Button variant="ghost" size="sm" icon :title="t('filesDrawer.goUp')" @click="goUp">↑</Button>
+        <Button variant="ghost" size="sm" icon :title="t('filesDrawer.refresh')" @click="loadDir">↻</Button>
+        <Button variant="ghost" size="sm" icon :title="t('filesDrawer.upload')" @click="upload">⬆</Button>
         <span class="fd-count muted">{{ entries.length }} {{ t('filesDrawer.items', 'items') }}<template v-if="selected.size"> · {{ selected.size }} {{ t('filesDrawer.selected', 'sel') }}</template></span>
       </div>
     </div>
@@ -270,7 +270,7 @@ onBeforeUnmount(async () => {
     <!-- File list -->
     <div class="fd-list">
       <div v-if="error" class="fd-error">{{ error }}</div>
-      <div v-else-if="!connected && loading" class="fd-status muted">{{ t('filesDrawer.connecting', 'Connecting...') }}</div>
+      <div v-else-if="!connected && loading" class="fd-status muted">{{ t('filesDrawer.connecting') }}</div>
       <div v-else-if="loading" class="fd-status muted">{{ t('filesDrawer.loading', 'Loading...') }}</div>
       <template v-else>
         <div
@@ -299,7 +299,7 @@ onBeforeUnmount(async () => {
             @blur="showNewFolder = false" @keydown.enter="createFolder" @keydown.escape="showNewFolder = false"
           />
         </div>
-        <div v-if="!entries.length && !showNewFolder" class="fd-status muted">{{ t('filesDrawer.empty', 'Empty') }}</div>
+        <div v-if="!entries.length && !showNewFolder" class="fd-status muted">{{ t('filesDrawer.empty') }}</div>
       </template>
     </div>
 
@@ -334,15 +334,15 @@ onBeforeUnmount(async () => {
       <div v-if="ctx.show" ref="ctxRef" class="fd-ctx" :style="{ top: ctx.y + 'px', left: ctx.x + 'px' }">
         <template v-if="ctx.name">
           <div class="fd-ctx-item" @click="() => { const e = entries.find(x => x.name === ctx.name); if (e) navigate(e) }">{{ t('filesDrawer.open', 'Open') }}</div>
-          <div class="fd-ctx-item" @click="ctxRename">{{ t('filesDrawer.rename', 'Rename') }}</div>
-          <div v-if="!ctx.isDir" class="fd-ctx-item" @click="() => { const e = entries.find(x => x.name === ctx.name); if (e) download(e); ctx.show = false }">{{ t('filesDrawer.download', 'Download') }}</div>
-          <div class="fd-ctx-item" @click="ctxDelete">{{ t('filesDrawer.delete', 'Delete') }}</div>
+          <div class="fd-ctx-item" @click="ctxRename">{{ t('filesDrawer.rename') }}</div>
+          <div v-if="!ctx.isDir" class="fd-ctx-item" @click="() => { const e = entries.find(x => x.name === ctx.name); if (e) download(e); ctx.show = false }">{{ t('filesDrawer.download') }}</div>
+          <div class="fd-ctx-item" @click="ctxDelete">{{ t('filesDrawer.delete') }}</div>
           <div class="fd-ctx-sep" />
         </template>
-        <div class="fd-ctx-item" @click="startNewFolder">{{ t('filesDrawer.newFolder', 'New Folder') }}</div>
-        <div class="fd-ctx-item" @click="upload">{{ t('filesDrawer.uploadHere', 'Upload Here') }}</div>
+        <div class="fd-ctx-item" @click="startNewFolder">{{ t('filesDrawer.newFolder') }}</div>
+        <div class="fd-ctx-item" @click="upload">{{ t('filesDrawer.uploadHere') }}</div>
         <div class="fd-ctx-sep" />
-        <div class="fd-ctx-item" @click="ctxCopy">{{ t('filesDrawer.copyPath', 'Copy Path') }}</div>
+        <div class="fd-ctx-item" @click="ctxCopy">{{ t('filesDrawer.copyPath') }}</div>
       </div>
     </Teleport>
   </div>

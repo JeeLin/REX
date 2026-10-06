@@ -634,9 +634,9 @@ useKeyboardShortcuts([
     <div class="ws-statusbar mono">
       <span class="ws-seg ws-seg--brand">
         <span class="ws-seg-dot" />
-        {{ t('workspace.statusbar.workspace', 'workspace') }}
+        {{ t('workspace.statusbar.workspace') }}
       </span>
-      <span class="ws-seg">{{ tabs.length }} {{ t('workspace.statusbar.resourcesOpen', 'resource(s) open') }}</span>
+      <span class="ws-seg">{{ tabs.length }} {{ t('workspace.statusbar.resourcesOpen') }}</span>
       <span v-if="activeTabInfo?.protocol === 'ssh' && terminalSize" class="ws-seg">{{ terminalSize.cols }}×{{ terminalSize.rows }}</span>
       <span v-if="activeTabInfo?.protocol === 'ssh'" class="ws-seg">{{ activeTabInfo.encoding || 'UTF-8' }}</span>
       <span v-if="activeTabInfo?.broadcast" class="ws-seg ws-broadcast-indicator">📡 {{ t('workspace.broadcastIndicator') }}</span>
@@ -653,14 +653,14 @@ useKeyboardShortcuts([
         <button
           v-if="toolbarConfig.fullscreen"
           class="ws-action-btn"
-          :title="isFullscreen ? t('common.exitFullscreen', 'Exit fullscreen') : t('common.fullscreen')"
-          :aria-label="isFullscreen ? t('common.exitFullscreen', 'Exit fullscreen') : t('common.fullscreen')"
+          :title="isFullscreen ? t('common.exitFullscreen') : t('common.fullscreen')"
+          :aria-label="isFullscreen ? t('common.exitFullscreen') : t('common.fullscreen')"
           @click="toggleFullscreen"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10 4 13l3 3M4 13h11M17 14l3-3-3-3M20 11H9" /></svg>
         </button>
       </span>
-      <span v-if="toolbarConfig.f1Help" class="ws-seg ws-seg--help" :title="t('workspace.statusbar.f1Help', 'F1 help')" @click="shortcutsStore.toggle()">{{ t('workspace.statusbar.f1Help', 'F1 help') }}</span>
+      <span v-if="toolbarConfig.f1Help" class="ws-seg ws-seg--help" :title="t('workspace.statusbar.f1Help')" @click="shortcutsStore.toggle()">{{ t('workspace.statusbar.f1Help') }}</span>
       <span v-if="toolbarConfig.commandPalette" class="ws-seg ws-seg--help" title="Command palette (Ctrl+K)" @click="toggleGlobalCommandPalette">⌘ {{ t('workspace.commandPalette', 'Command palette') }}</span>
       <span class="ws-seg ws-seg--actions">
         <button class="ws-action-btn" :title="t('workspace.exportWorkspace')" @click="handleExportWorkspace">

@@ -460,7 +460,7 @@ function onSyncCreated(taskId: string) {
                 </template>
                 <!-- Canceled -->
                 <template v-else-if="item.status === 'canceled'">
-                  <span class="tq-item-pending">{{ t('files.canceled', 'Canceled') }}</span>
+                  <span class="tq-item-pending">{{ t('files.canceled') }}</span>
                 </template>
                 <!-- Pending -->
                 <template v-else-if="item.status === 'pending'">

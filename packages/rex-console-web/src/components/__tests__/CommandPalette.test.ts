@@ -13,12 +13,12 @@ const h = vi.hoisted(() => ({
 }))
 
 vi.mock('vue-i18n', () => ({
-  // Mirrors vue-i18n: return the fallback when the key is not yet translated,
-  // and record every key so tests can assert descriptions go through i18n.
+  // Mirrors vue-i18n: return the translation when the key has one, otherwise the key
+  // itself, and record every key so tests can assert descriptions go through i18n.
   useI18n: () => ({
-    t: (k: string, fallback?: string) => {
+    t: (k: string) => {
       h.tCalls.push(k)
-      return h.translations[k] ?? fallback ?? k
+      return h.translations[k] ?? k
     },
     locale: h.locale,
   }),
@@ -37,6 +37,17 @@ vi.mock('@/stores/environments', () => ({
 }))
 
 import CommandPalette from '../CommandPalette.vue'
+// The palette's descriptions resolve through en.json in production (the keys exist in
+// both locales), so seed the real strings instead of an inline default message.
+import enMessages from '../../i18n/locales/en.json'
+
+const EN_DESCRIPTIONS: Record<string, string> = {
+  'commandPalette.newConnectionDesc': enMessages.commandPalette.newConnectionDesc,
+  'commandPalette.themeDarkDesc': enMessages.commandPalette.themeDarkDesc,
+  'commandPalette.themeLightDesc': enMessages.commandPalette.themeLightDesc,
+  'commandPalette.languageEnDesc': enMessages.commandPalette.languageEnDesc,
+  'commandPalette.languageZhDesc': enMessages.commandPalette.languageZhDesc,
+}
 
 let wrapper: VueWrapper | null = null
 
@@ -70,6 +81,7 @@ beforeEach(() => {
   h.tCalls.length = 0
   h.locale.value = 'en'
   for (const k of Object.keys(h.translations)) delete h.translations[k]
+  for (const [k, text] of Object.entries(EN_DESCRIPTIONS)) h.translations[k] = text
   localStorage.clear()
   delete document.documentElement.dataset.theme
 })
@@ -104,19 +116,13 @@ describe('merged workspace palette commands', () => {
       'commandPalette.languageEn',
       'commandPalette.languageZh',
     ])
-    // Setting descriptions must go through i18n keys (fallback shown until translated).
-    expect(h.tCalls).toEqual(expect.arrayContaining([
-      'commandPalette.newConnectionDesc',
-      'commandPalette.themeDarkDesc',
-      'commandPalette.themeLightDesc',
-      'commandPalette.languageEnDesc',
-      'commandPalette.languageZhDesc',
-    ]))
+    // Setting descriptions must go through i18n keys (en.json supplies the text).
+    expect(h.tCalls).toEqual(expect.arrayContaining(Object.keys(EN_DESCRIPTIONS)))
     expect(w.findAll('.command-palette-item-desc').map(el => el.text())).toEqual([
-      'Switch to dark theme',
-      'Switch to light theme',
-      'Switch language to English',
-      'Switch language to Chinese',
+      enMessages.commandPalette.themeDarkDesc,
+      enMessages.commandPalette.themeLightDesc,
+      enMessages.commandPalette.languageEnDesc,
+      enMessages.commandPalette.languageZhDesc,
     ])
     // Category chips must render through i18n keys, not raw English literals.
     expect(w.findAll('.command-palette-item-category').map(el => el.text())).toEqual([

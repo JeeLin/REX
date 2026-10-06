@@ -352,9 +352,9 @@ function connectSession() {
     connectionStatus.value = 'error'
     connectFailed.value = true
     emit('update:status', 'error')
-    terminal?.write(`\r\n\x1b[31m[${t('terminal.wsCreateFailed', 'Failed to create WebSocket connection')}]\x1b[0m`)
+    terminal?.write(`\r\n\x1b[31m[${t('terminal.wsCreateFailed')}]\x1b[0m`)
     if (hubDirect.value) {
-      terminal?.write(`\r\n\x1b[33m[${t('terminal.hintHubDirect', 'Direct resources are reached from the Hub\'s network, not this Agent\'s network')}]\x1b[0m`)
+      terminal?.write(`\r\n\x1b[33m[${t('terminal.hintHubDirect')}]\x1b[0m`)
     }
     return
   }
@@ -435,7 +435,7 @@ function connectSession() {
     } else if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
       terminal?.write(`\r\n\x1b[31m[Connection lost. Click reconnect to try again.]\x1b[0m\r\n`)
       if (hubDirect.value) {
-        terminal?.write(`\r\n\x1b[33m[${t('terminal.hintHubDirect', 'Direct resources are reached from the Hub\'s network, not this Agent\'s network')}]\x1b[0m\r\n`)
+        terminal?.write(`\r\n\x1b[33m[${t('terminal.hintHubDirect')}]\x1b[0m\r\n`)
       }
     }
   }
@@ -527,7 +527,7 @@ async function handleCopyAddress() {
   const address = props.host ? `${props.host}:${props.port || 22}` : ''
   if (address) {
     await clipboard.writeText(address)
-    toast.value?.push(t('terminal.copyAddress', 'Address copied'), 'success')
+    toast.value?.push(t('terminal.copyAddress'), 'success')
   }
 }
 
@@ -634,9 +634,9 @@ onBeforeUnmount(() => {
       </div>
       <div class="wt-spacer"></div>
       <div class="wt-actions">
-        <button class="wt-btn" :title="t('terminal.clear', 'Clear')" @click="clearTerminal">⌫</button>
-        <button class="wt-btn" :title="t('terminal.paste', 'Paste')" @click="doPaste">📋</button>
-        <button class="wt-btn" :class="{ active: showSearch }" :title="t('terminal.find', 'Find')" @click="showSearch = !showSearch">🔍</button>
+        <button class="wt-btn" :title="t('terminal.clear')" @click="clearTerminal">⌫</button>
+        <button class="wt-btn" :title="t('terminal.paste')" @click="doPaste">📋</button>
+        <button class="wt-btn" :class="{ active: showSearch }" :title="t('terminal.find')" @click="showSearch = !showSearch">🔍</button>
         <button class="wt-btn" :title="t('terminal.sftp', 'SFTP')" @click="emit('toggle-sftp')">📁</button>
         <span class="wt-sep"></span>
         <span class="wt-protocol">{{ protocol?.toUpperCase() || 'SSH' }}</span>
@@ -663,13 +663,13 @@ onBeforeUnmount(() => {
         <div class="wt-overlay-content">
           <div class="wt-overlay-icon">⚡</div>
           <p class="wt-overlay-text">
-            {{ connectionStatus === 'error' ? t('terminal.connectionError', 'Connection error') : t('terminal.sessionDisconnected', 'Session disconnected') }}
+            {{ connectionStatus === 'error' ? t('terminal.connectionError') : t('terminal.sessionDisconnected') }}
           </p>
           <p v-if="showHubDirectHint" class="wt-overlay-hint">
-            {{ t('terminal.hintHubDirect', 'Direct resources are reached from the Hub\'s network, not this Agent\'s network') }}
+            {{ t('terminal.hintHubDirect') }}
           </p>
           <button class="wt-reconnect-btn" @click="handleReconnect">
-            {{ t('terminal.reconnect', 'Reconnect') }}
+            {{ t('terminal.reconnect') }}
           </button>
         </div>
       </div>
@@ -720,8 +720,8 @@ onBeforeUnmount(() => {
         {{ t('terminal.disconnect.desc', 'Are you sure you want to disconnect?') }}
       </p>
       <div class="form-actions">
-        <Button variant="secondary" @click="showDisconnectDialog = false">{{ t('common.cancel', 'Cancel') }}</Button>
-        <Button variant="danger" @click="doDisconnect">{{ t('common.confirm', 'Confirm') }}</Button>
+        <Button variant="secondary" @click="showDisconnectDialog = false">{{ t('common.cancel') }}</Button>
+        <Button variant="danger" @click="doDisconnect">{{ t('common.confirm') }}</Button>
       </div>
     </Modal>
 

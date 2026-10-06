@@ -80,7 +80,7 @@ const protoLabel: Record<string, string> = {
 const statCards = computed(() => [
   {
     key: 'environments',
-    label: t('dashboard.environments', 'Environments'),
+    label: t('dashboard.environments'),
     icon: 'layers',
     colorClass: 'brand',
     value: stats.value.environment_count,
@@ -88,28 +88,28 @@ const statCards = computed(() => [
   },
   {
     key: 'resources',
-    label: t('dashboard.resources', 'Resources'),
+    label: t('dashboard.resources'),
     icon: 'grid',
     colorClass: 'green',
     value: stats.value.resource_count,
-    trend: t('dashboard.statProtocols', '8 protocols'),
+    trend: t('dashboard.statProtocols'),
   },
   {
     key: 'agentsOnline',
-    label: t('dashboard.agentsOnline', 'Agents online'),
+    label: t('dashboard.agentsOnline'),
     icon: 'shield',
     colorClass: 'blue',
     value: stats.value.online_agents,
-    trend: t('dashboard.statAllCovered', 'all environments covered'),
+    trend: t('dashboard.statAllCovered'),
     valueSuffix: `/${Math.max(stats.value.online_agents, 1)}`,
   },
   {
     key: 'todayOps',
-    label: t('dashboard.statOperationsToday', 'Operations today'),
+    label: t('dashboard.statOperationsToday'),
     icon: 'activity',
     colorClass: 'teal',
     value: recentResources.value.length,
-    trend: t('dashboard.statTrendUp', '▲ 12% vs yesterday'),
+    trend: t('dashboard.statTrendUp'),
     trendClass: 'stat-trend--up',
   },
 ])
@@ -129,8 +129,8 @@ const timeAgo = (dateStr: string): string => {
   <div class="dashboard">
     <!-- Header -->
     <header class="page-header">
-      <h1 class="page-title">{{ t('dashboard.title', 'Dashboard') }}</h1>
-      <p class="page-sub">{{ t('dashboard.subtitle', 'System overview across all environments and agents.') }}</p>
+      <h1 class="page-title">{{ t('dashboard.title') }}</h1>
+      <p class="page-sub">{{ t('dashboard.subtitle') }}</p>
     </header>
 
     <!-- Loading -->
@@ -170,7 +170,7 @@ const timeAgo = (dateStr: string): string => {
         <!-- Quick Connect Panel -->
         <div class="panel">
           <div class="panel-head">
-            <h3>{{ t('dashboard.quickConnect', 'Quick connect') }}</h3>
+            <h3>{{ t('dashboard.quickConnect') }}</h3>
             <span class="panel-count muted">{{ t('dashboard.recentCount', { count: recentResources.length }) }}</span>
           </div>
           <div v-if="recentResources.length" class="quick-grid">
@@ -189,23 +189,23 @@ const timeAgo = (dateStr: string): string => {
               </div>
             </button>
           </div>
-          <div v-else class="panel-empty muted">{{ t('dashboard.noRecentConnections', 'No recent connections') }}</div>
+          <div v-else class="panel-empty muted">{{ t('dashboard.noRecentConnections') }}</div>
         </div>
 
         <!-- Agent Health Panel -->
         <div class="panel">
           <div class="panel-head">
-            <h3>{{ t('dashboard.agentHealth', 'Agent health') }}</h3>
+            <h3>{{ t('dashboard.agentHealth') }}</h3>
             <StatusDot :status="agentHealthEnvironments.some(e => e.agent_status === 'online') ? 'online' : 'offline'" />
           </div>
           <div class="agent-table-wrap">
             <table v-if="agentHealthEnvironments.length" class="agent-table">
               <thead>
                 <tr>
-                  <th>{{ t('dashboard.tableAgent', 'Agent') }}</th>
-                  <th>{{ t('dashboard.tableEnv', 'Env') }}</th>
-                  <th>{{ t('dashboard.tableLatency', 'Latency') }}</th>
-                  <th>{{ t('dashboard.tableState', 'State') }}</th>
+                  <th>{{ t('dashboard.tableAgent') }}</th>
+                  <th>{{ t('dashboard.tableEnv') }}</th>
+                  <th>{{ t('dashboard.tableLatency') }}</th>
+                  <th>{{ t('dashboard.tableState') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -221,13 +221,13 @@ const timeAgo = (dateStr: string): string => {
                 </tr>
               </tbody>
             </table>
-            <div v-else class="panel-empty muted">{{ t('dashboard.noAgentEnvironments', 'No agent-connected environments') }}</div>
+            <div v-else class="panel-empty muted">{{ t('dashboard.noAgentEnvironments') }}</div>
           </div>
         </div>
       </div>
 
       <!-- Environments Section -->
-      <h3 class="section-heading">{{ t('dashboard.environmentsSection', 'Environments') }}</h3>
+      <h3 class="section-heading">{{ t('dashboard.environmentsSection') }}</h3>
       <div class="env-grid">
         <button
           v-for="env in filteredEnvironments"
@@ -249,7 +249,7 @@ const timeAgo = (dateStr: string): string => {
               {{ t('dashboard.resCount', { count: env.resource_count }) }}
             </span>
             <span class="env-chip">
-              ⟡ {{ env.connection_mode === 'agent' ? t('dashboard.agentMode', '1 agent') : t('dashboard.directMode', 'direct') }}
+              ⟡ {{ env.connection_mode === 'agent' ? t('dashboard.agentMode') : t('dashboard.directMode') }}
             </span>
             <span class="env-chip muted">{{ timeAgo(env.updated_at) }}</span>
           </div>
@@ -267,7 +267,7 @@ const timeAgo = (dateStr: string): string => {
         <button class="env-card env-card--new" @click="router.push('/environments')">
           <div class="env-card-new-inner">
             <div class="env-new-plus">+</div>
-            <div>{{ t('dashboard.newEnvironment', 'New environment') }}</div>
+            <div>{{ t('dashboard.newEnvironment') }}</div>
           </div>
         </button>
       </div>

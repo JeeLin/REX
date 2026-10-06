@@ -52,7 +52,7 @@ const searchItems = computed<SearchItem[]>(() => {
     {
       id: 'new-connection',
       title: t('commandPalette.newConnection'),
-      description: t('commandPalette.newConnectionDesc', 'New connection'),
+      description: t('commandPalette.newConnectionDesc'),
       icon: '📡',
       // The ResourcePanel sidebar is always mounted in AppLayout and owns the
       // per-environment "+" wizard, so navigating to the workspace is the whole
@@ -60,10 +60,10 @@ const searchItems = computed<SearchItem[]>(() => {
       action: () => router.push('/workspace'),
       category: 'Command',
     },
-    { id: 'theme-dark', title: t('commandPalette.themeDark'), description: t('commandPalette.themeDarkDesc', 'Switch to dark theme'), icon: '🎨', action: () => setTheme('dark'), category: 'Setting' },
-    { id: 'theme-light', title: t('commandPalette.themeLight'), description: t('commandPalette.themeLightDesc', 'Switch to light theme'), icon: '🎨', action: () => setTheme('light'), category: 'Setting' },
-    { id: 'language-en', title: t('commandPalette.languageEn'), description: t('commandPalette.languageEnDesc', 'Switch language to English'), icon: '🌐', action: () => setLanguage('en', locale), category: 'Setting' },
-    { id: 'language-zh', title: t('commandPalette.languageZh'), description: t('commandPalette.languageZhDesc', 'Switch language to Chinese'), icon: '🌐', action: () => setLanguage('zh', locale), category: 'Setting' },
+    { id: 'theme-dark', title: t('commandPalette.themeDark'), description: t('commandPalette.themeDarkDesc'), icon: '🎨', action: () => setTheme('dark'), category: 'Setting' },
+    { id: 'theme-light', title: t('commandPalette.themeLight'), description: t('commandPalette.themeLightDesc'), icon: '🎨', action: () => setTheme('light'), category: 'Setting' },
+    { id: 'language-en', title: t('commandPalette.languageEn'), description: t('commandPalette.languageEnDesc'), icon: '🌐', action: () => setLanguage('en', locale), category: 'Setting' },
+    { id: 'language-zh', title: t('commandPalette.languageZh'), description: t('commandPalette.languageZhDesc'), icon: '🌐', action: () => setLanguage('zh', locale), category: 'Setting' },
   )
 
   // Environment items
@@ -203,7 +203,7 @@ watch(results, () => {
           </div>
 
           <div v-else class="command-palette-empty">
-            {{ t('commandPalette.noResults', 'No results found') }}
+            {{ t('commandPalette.noResults') }}
           </div>
         </div>
       </div>

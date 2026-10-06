@@ -482,8 +482,8 @@ async function importData() {
               v-model.number="settings.session_timeout"
               :options="[
                 { label: '30 ' + t('settings.minutes'), value: 30 },
-                { label: '1 ' + t('settings.hours', 'h'), value: 60 },
-                { label: t('settings.never', 'Never'), value: 0 },
+                { label: '1 ' + t('settings.hours'), value: 60 },
+                { label: t('settings.never'), value: 0 },
               ]"
               class="field-select"
             />
@@ -690,15 +690,15 @@ async function importData() {
           </div>
           <div class="about-grid">
             <div class="about-item">
-              <span class="about-item-label">{{ t('settings.serverOs', 'Server OS') }}</span>
+              <span class="about-item-label">{{ t('settings.serverOs') }}</span>
               <span class="about-item-value mono">{{ serverInfo.os || '—' }}</span>
             </div>
             <div class="about-item">
-              <span class="about-item-label">{{ t('settings.serverArch', 'Architecture') }}</span>
+              <span class="about-item-label">{{ t('settings.serverArch') }}</span>
               <span class="about-item-value mono">{{ serverInfo.arch || '—' }}</span>
             </div>
             <div class="about-item">
-              <span class="about-item-label">{{ t('settings.serverHostname', 'Hostname') }}</span>
+              <span class="about-item-label">{{ t('settings.serverHostname') }}</span>
               <span class="about-item-value mono">{{ serverInfo.hostname || '—' }}</span>
             </div>
             <div class="about-item">

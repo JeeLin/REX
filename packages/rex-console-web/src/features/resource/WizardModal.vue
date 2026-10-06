@@ -221,7 +221,7 @@ async function submit() {
     selectedProtocol.value === 'sip' &&
     !sipAccounts.value.some((a) => a.username.trim())
   ) {
-    error.value = t('wizard.sipAccountRequired', 'SIP resource requires at least one valid account (provide a username)')
+    error.value = t('wizard.sipAccountRequired')
     loading.value = false
     return
   }

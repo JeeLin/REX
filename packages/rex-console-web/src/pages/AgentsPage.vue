@@ -256,7 +256,7 @@ const filteredLogs = computed(() => {
     <header class="page-header">
       <div class="page-header-left">
         <h1 class="page-title mono">{{ t('agents.title') }}</h1>
-        <span class="page-subtitle">{{ t('agents.subtitle', 'Registered agent nodes') }}</span>
+        <span class="page-subtitle">{{ t('agents.subtitle') }}</span>
       </div>
     </header>
 
