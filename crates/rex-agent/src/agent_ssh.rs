@@ -10,6 +10,7 @@
 //! 不新建通道。
 
 use std::collections::HashMap;
+use std::io;
 use std::sync::Arc;
 
 use crate::agent_ws::SshHandlePool;
@@ -65,6 +66,215 @@ pub fn parse_ssh_config(cfg: &Value) -> SshConfig {
         private_key,
         keepalive_interval,
         init_script,
+    }
+}
+
+// ── SSH connect failure diagnosis ────────────────────────────────
+//
+// rex_ssh::SshSession::connect_with_handle 把 TCP / KEX / 认证 / 通道
+// 阶段的底层 russh::Error 串在 anyhow 上下文链上；anyhow 的非 alternate
+// Display (`{}`) 仅显示最外层 context（例如 "SSH connection failed"），
+// 正因如此 Agent 日志才只见 `error=SSH connection failed`。
+//
+// 这里用 `{err:#}` 展开整条链；并从链上分类出失败阶段 + 稳定错误码，既写日志
+// 也回传 Hub。注意：该栈用的是 `russh`（非 ssh2/libssh2），错误码用
+// `SSH_ERR_*` 映射 russh / std::io 的语义。
+
+/// Agent 侧 SSH 建连失败的阶段。
+///
+/// 对标「TCP 连接 / 版本协商与握手 / 认证」三大阶段，额外加一档 `session`
+///（认证成功后打开 channel / PTY / shell 失败）。握手阶段命名为 `kex`
+/// 而非 `handshake`，是因为 Hub 侧 `error::classify_connect_error` 把
+/// 文案中含 "handshake" 判为 TlsFailure —— SSH 版本协商与密钥交换本非
+/// TLS，用 `kex` 即可精确、又不误判。
+pub(crate) const STAGE_TCP: &str = "tcp";
+pub(crate) const STAGE_KEX: &str = "kex";
+pub(crate) const STAGE_AUTH: &str = "auth";
+pub(crate) const STAGE_SESSION: &str = "session";
+
+/// 一次 SSH 建连失败的结构化诊断。`detail` 由 anyhow 整链拼接，不含密码/密钥。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SshConnectDiag {
+    pub stage: &'static str,
+    pub code: &'static str,
+    pub detail: String,
+}
+
+impl SshConnectDiag {
+    /// 发给 Hub 前端的可展示文案。Hub 仅把该字符串原样回传给前端
+    /// （终端错误行 + toast），前端已预留渲染 `code`/`message`。
+    pub(crate) fn message(&self) -> String {
+        format!(
+            "SSH connect failed: stage={}, code={}, {}",
+            self.stage, self.code, self.detail
+        )
+    }
+}
+
+/// 将 `SshSession::connect_with_handle` 抛出的 anyhow 错误分类为
+/// (阶段, 错误码, 完整链)。纯函数，便于单元测试。
+pub(crate) fn diagnose_ssh_failure(err: &anyhow::Error) -> SshConnectDiag {
+    let detail = format!("{err:#}");
+    let lower = detail.to_lowercase();
+
+    // 1. 认证阶段：rex_ssh 聚合 "SSH authentication failed (...)"，或
+    //    私钥解码 / 公钥认证调用链上的失败。须在 TCP 文本匹配前判定，
+    //    否则 "password: Connection refused" 会被误判为 TCP 错误。
+    if is_auth_failure(&lower) {
+        let code = if lower.contains("failed to decode private key") {
+            "SSH_ERR_PRIVATE_KEY_DECODE"
+        } else {
+            "SSH_ERR_AUTH_FAILED"
+        };
+        return SshConnectDiag {
+            stage: STAGE_AUTH,
+            code,
+            detail,
+        };
+    }
+
+    // 2. 会话阶段：认证通过后打开 channel / 请求 PTY / 请求 shell。
+    if let Some(code) = session_code(&lower) {
+        return SshConnectDiag {
+            stage: STAGE_SESSION,
+            code,
+            detail,
+        };
+    }
+
+    // 3. TCP 传输阶段：优先从 io::ErrorKind 判定；若为未分类错误，
+    //    退而用文本关键词细化（DNS / 拒绝 / 超时 …）。
+    if let Some(ioe) = find_io_error(err) {
+        let code = refine_io_code(ioe.kind(), &lower);
+        return SshConnectDiag {
+            stage: STAGE_TCP,
+            code,
+            detail,
+        };
+    }
+    if let Some(code) = tcp_text_code(&lower) {
+        return SshConnectDiag {
+            stage: STAGE_TCP,
+            code,
+            detail,
+        };
+    }
+
+    // 4. 握手 / KEX 阶段：russh 版本协商、算法协商、密钥交换。
+    if let Some(code) = kex_code(&lower) {
+        return SshConnectDiag {
+            stage: STAGE_KEX,
+            code,
+            detail,
+        };
+    }
+
+    // 5. 回源不到具体原因但带 "SSH connection failed" 上下文 → 握手阶段。
+    if lower.contains("ssh connection failed") {
+        return SshConnectDiag {
+            stage: STAGE_KEX,
+            code: "SSH_ERR_CONNECT_FAILED",
+            detail,
+        };
+    }
+
+    // 6. 兜底。
+    SshConnectDiag {
+        stage: STAGE_TCP,
+        code: "SSH_ERR_CONNECT_FAILED",
+        detail,
+    }
+}
+
+fn is_auth_failure(lower: &str) -> bool {
+    lower.contains("authentication failed")
+        || lower.contains("public key authentication failed")
+        || lower.contains("failed to decode private key")
+}
+
+/// 从 anyhow 错误链中取出首个 `std::io::Error`（russh::Error::IO 在链上传播）。
+fn find_io_error(err: &anyhow::Error) -> Option<&io::Error> {
+    err.chain()
+        .find_map(|link| link.downcast_ref::<io::Error>())
+}
+
+fn io_kind_code(kind: io::ErrorKind) -> &'static str {
+    match kind {
+        io::ErrorKind::ConnectionRefused => "SSH_ERR_CONNECTION_REFUSED",
+        io::ErrorKind::ConnectionReset => "SSH_ERR_CONNECTION_RESET",
+        io::ErrorKind::ConnectionAborted => "SSH_ERR_CONNECTION_ABORTED",
+        io::ErrorKind::NotConnected => "SSH_ERR_DISCONNECTED",
+        io::ErrorKind::TimedOut => "SSH_ERR_TIMEOUT",
+        io::ErrorKind::HostUnreachable => "SSH_ERR_HOST_UNREACHABLE",
+        io::ErrorKind::NetworkUnreachable => "SSH_ERR_NETWORK_UNREACHABLE",
+        io::ErrorKind::AddrInUse => "SSH_ERR_ADDR_IN_USE",
+        io::ErrorKind::AddrNotAvailable => "SSH_ERR_ADDR_NOT_AVAILABLE",
+        io::ErrorKind::PermissionDenied => "SSH_ERR_PERMISSION_DENIED",
+        io::ErrorKind::NotFound => "SSH_ERR_NOT_FOUND",
+        io::ErrorKind::InvalidInput => "SSH_ERR_INVALID_INPUT",
+        _ => "SSH_ERR_IO",
+    }
+}
+
+/// io::ErrorKind 未细分时，用错误文本关键词补充更有区分度的码。
+fn refine_io_code(kind: io::ErrorKind, lower: &str) -> &'static str {
+    let code = io_kind_code(kind);
+    if code != "SSH_ERR_IO" {
+        return code;
+    }
+    tcp_text_code(lower).unwrap_or(code)
+}
+
+fn tcp_text_code(lower: &str) -> Option<&'static str> {
+    if lower.contains("dns")
+        || lower.contains("no such host")
+        || lower.contains("failed to resolve")
+        || lower.contains("no addresses resolved")
+        || lower.contains("lookup")
+        || lower.contains("name or service not known")
+    {
+        Some("SSH_ERR_DNS_FAILURE")
+    } else if lower.contains("connection refused") {
+        Some("SSH_ERR_CONNECTION_REFUSED")
+    } else if lower.contains("timed out") || lower.contains("timeout") || lower.contains("deadline")
+    {
+        Some("SSH_ERR_TIMEOUT")
+    } else if lower.contains("unreachable") {
+        Some("SSH_ERR_NET_UNREACHABLE")
+    } else if lower.contains("address already in use") {
+        Some("SSH_ERR_ADDR_IN_USE")
+    } else {
+        None
+    }
+}
+
+fn session_code(lower: &str) -> Option<&'static str> {
+    if lower.contains("failed to open session") {
+        Some("SSH_ERR_SESSION_OPEN")
+    } else if lower.contains("failed to request pty") {
+        Some("SSH_ERR_PTY_REQUEST")
+    } else if lower.contains("failed to request shell") {
+        Some("SSH_ERR_SHELL_REQUEST")
+    } else {
+        None
+    }
+}
+
+fn kex_code(lower: &str) -> Option<&'static str> {
+    if lower.contains("no common") || lower.contains("algorithm") {
+        Some("SSH_ERR_KEX_NO_COMMON_ALGO")
+    } else if lower.contains("invalid ssh version") {
+        Some("SSH_ERR_SSH_VERSION")
+    } else if lower.contains("unknown algorithm") {
+        Some("SSH_ERR_UNKNOWN_ALGO")
+    } else if lower.contains("key exchange") {
+        Some("SSH_ERR_KEX")
+    } else if lower.contains("connection closed by the remote side") {
+        Some("SSH_ERR_REMOTE_CLOSED")
+    } else if lower.contains("strict key exchange") {
+        Some("SSH_ERR_STRICT_KEX_VIOLATION")
+    } else {
+        None
     }
 }
 
@@ -254,16 +464,26 @@ pub async fn handle_connect_ssh(
     let (handle, session) = match SshSession::connect_with_handle(ssh_cfg.clone()).await {
         Ok(s) => s,
         Err(e) => {
+            // 展开底层 russh/io 错误，标出失败阶段与稳定码。`%e` 仅显示
+            // anyhow 最外层 context，必然丢失 “Connection refused / No common
+            // Kex algorithm” 这类可诊断信息，故改用 `diagnose_ssh_failure`。
+            let diag = diagnose_ssh_failure(&e);
             tracing::warn!(
                 action = "AGENT_SSH_FAILED",
                 request_id = %request_id,
-                error = %e,
+                host = %ssh_cfg.host,
+                port = ssh_cfg.port,
+                username = %ssh_cfg.username,
+                auth_method = auth_method,
+                stage = %diag.stage,
+                code = %diag.code,
+                error = %diag.detail,
                 "agent SSH connect failed"
             );
             let err = serde_json::to_string(&crate::agent_ws::AgentMsg::ConnectError {
                 payload: crate::agent_ws::ConnectErrorPayload {
                     request_id,
-                    error: format!("SSH connection failed: {e}"),
+                    error: diag.message(),
                 },
             })
             .unwrap_or_default();
@@ -334,6 +554,7 @@ pub async fn handle_connect_ssh(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io;
 
     /// 锁定 Agent 侧 SSH 配置解析与 Hub 下发字段的契约
     /// （`terminal_ws::handle_agent_terminal` 的 connect payload 用
@@ -403,5 +624,161 @@ mod tests {
             crate::agent_ws::ssh_pool_key_from_cfg(&bare),
             "@10.0.0.5:2222"
         );
+    }
+
+    // ── SSH failure diagnosis (Bug fix: surface underlying error + stage) ──
+
+    /// 模拟 rex_ssh 建连路径把底层错误串在 anyhow 上下文链上。
+    /// `anyhow!(io_err).context(...)` 让 `find_io_error` 能 `downcast_ref::<io::Error>`
+    /// 拿到 `ErrorKind`，同时 `format!("{e:#}")` 展开整条链 —— 即是
+    /// `handle_connect_ssh` 见到的形态。
+    fn io_chain(kind: io::ErrorKind, msg: &str) -> anyhow::Error {
+        anyhow::anyhow!(io::Error::new(kind, msg)).context("SSH connection failed")
+    }
+
+    #[test]
+    fn diag_tcp_refused_is_distinct_from_auth() {
+        let e = io_chain(
+            io::ErrorKind::ConnectionRefused,
+            "Connection refused (os error 111)",
+        );
+        let d = diagnose_ssh_failure(&e);
+        assert_eq!(d.stage, STAGE_TCP);
+        assert_eq!(d.code, "SSH_ERR_CONNECTION_REFUSED");
+        assert!(d.detail.contains("Connection refused (os error 111)"));
+        assert!(d.message().contains("stage=tcp"));
+    }
+
+    #[test]
+    fn diag_tcp_timeout_maps_to_distinct_code() {
+        let e = io_chain(
+            io::ErrorKind::TimedOut,
+            "Connection timed out (os error 110)",
+        );
+        let d = diagnose_ssh_failure(&e);
+        assert_eq!(d.stage, STAGE_TCP);
+        assert_eq!(d.code, "SSH_ERR_TIMEOUT");
+    }
+
+    #[test]
+    fn diag_dns_failure_is_tcp_stage() {
+        // rex_ssh resolve_dual_stack 用 lookup_host → io::Error，用 context 包装。
+        let e = anyhow::anyhow!(io::Error::new(
+            io::ErrorKind::Other,
+            "failed to lookup address information: Name or service not known"
+        ))
+        .context("DNS resolution failed");
+        let d = diagnose_ssh_failure(&e);
+        assert_eq!(d.stage, STAGE_TCP);
+        assert_eq!(d.code, "SSH_ERR_DNS_FAILURE");
+        assert!(d.detail.contains("DNS resolution failed"));
+    }
+
+    #[test]
+    fn diag_no_addresses_resolved_is_distinct_from_refused() {
+        let e = anyhow::anyhow!("no addresses resolved for 172.20.100.11");
+        let d = diagnose_ssh_failure(&e);
+        assert_eq!(d.stage, STAGE_TCP);
+        assert_eq!(d.code, "SSH_ERR_DNS_FAILURE");
+        assert_ne!(d.code, "SSH_ERR_CONNECTION_REFUSED");
+    }
+
+    #[test]
+    fn diag_kex_no_common_algo_is_handshake_stage() {
+        let e = anyhow::anyhow!(
+            "No common Kex algorithm - ours: [\"diffie-hellman-group14-sha256\"], theirs: [\"ecdh-sha2-nistp256\"]"
+        )
+        .context("SSH connection failed");
+        let d = diagnose_ssh_failure(&e);
+        assert_eq!(d.stage, STAGE_KEX);
+        assert_eq!(d.code, "SSH_ERR_KEX_NO_COMMON_ALGO");
+        assert!(d.detail.contains("No common Kex algorithm"));
+        assert!(d.message().contains("stage=kex"));
+    }
+
+    #[test]
+    fn diag_invalid_ssh_version_is_handshake_stage() {
+        let e = anyhow::anyhow!("invalid SSH version string").context("SSH connection failed");
+        let d = diagnose_ssh_failure(&e);
+        assert_eq!(d.stage, STAGE_KEX);
+        assert_eq!(d.code, "SSH_ERR_SSH_VERSION");
+    }
+
+    #[test]
+    fn diag_auth_failure_is_distinct_stage_and_keeps_chain_text() {
+        // rex_ssh `auth_failed` 聚合文案，包含方法名但不含密钥/密码。
+        let e = anyhow::anyhow!(
+            "SSH authentication failed (password: partial_success=false, remaining methods: MethodSet([PublicKey]))"
+        );
+        let d = diagnose_ssh_failure(&e);
+        assert_eq!(d.stage, STAGE_AUTH);
+        assert_eq!(d.code, "SSH_ERR_AUTH_FAILED");
+        // 文案保留 "authentication failed"，使 Hub classify_connect_error 仍判为 Fatal / AUTH_FAILED。
+        assert!(d.message().contains("authentication failed"));
+        assert!(d.message().contains("stage=auth"));
+    }
+
+    #[test]
+    fn diag_private_key_decode_is_auth_stage() {
+        let e = anyhow::anyhow!("failed to decode private key PEM")
+            .context("SSH public key authentication failed");
+        let d = diagnose_ssh_failure(&e);
+        assert_eq!(d.stage, STAGE_AUTH);
+        assert_eq!(d.code, "SSH_ERR_PRIVATE_KEY_DECODE");
+    }
+
+    #[test]
+    fn diag_remote_closed_during_connect_is_handshake() {
+        // russh::Error::HUP（远端在 handshake/TCP 阶段关闭）。
+        let e = anyhow::anyhow!("Connection closed by the remote side")
+            .context("SSH connection failed");
+        let d = diagnose_ssh_failure(&e);
+        assert_eq!(d.stage, STAGE_KEX);
+        assert_eq!(d.code, "SSH_ERR_REMOTE_CLOSED");
+    }
+
+    #[test]
+    fn diag_session_open_failure_is_session_stage() {
+        let e = anyhow::anyhow!("Channel closed").context("failed to open session");
+        let d = diagnose_ssh_failure(&e);
+        assert_eq!(d.stage, STAGE_SESSION);
+        assert_eq!(d.code, "SSH_ERR_SESSION_OPEN");
+    }
+
+    #[test]
+    fn diag_distinct_stages_are_not_collapsed() {
+        let tcp = diagnose_ssh_failure(&io_chain(
+            io::ErrorKind::ConnectionRefused,
+            "Connection refused (os error 111)",
+        ));
+        let auth = diagnose_ssh_failure(&anyhow::anyhow!(
+            "SSH authentication failed (password: partial_success=false)"
+        ));
+        let kex = diagnose_ssh_failure(
+            &anyhow::anyhow!("No common Kex algorithm - ours: [a], theirs: [b]")
+                .context("SSH connection failed"),
+        );
+        assert_ne!(tcp.code, auth.code);
+        assert_ne!(auth.code, kex.code);
+        assert_ne!(tcp.code, kex.code);
+        // 面向前端/Hub：三种失败的 message 互不相同。
+        assert_ne!(tcp.message(), auth.message());
+        assert_ne!(auth.message(), kex.message());
+    }
+
+    #[test]
+    fn diag_message_format_is_stable_and_excludes_secrets() {
+        let planted_secret = "s3cr3t-pw-1234";
+        // 现实中 rex_ssh 的 auth 文案只含方法名与 partial_success，不含密码。
+        let e = anyhow::anyhow!(
+            "SSH authentication failed (password: partial_success=false, remaining methods: MethodSet([PublicKey]))"
+        );
+        let d = diagnose_ssh_failure(&e);
+        let msg = d.message();
+        assert!(msg.starts_with("SSH connect failed: stage="));
+        assert!(msg.contains("code=SSH_ERR_AUTH_FAILED"));
+        // 绝不泄露任何秘密。
+        assert!(!msg.contains(planted_secret));
+        assert!(!msg.contains("s3cr3t"));
     }
 }
