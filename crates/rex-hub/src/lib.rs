@@ -31,6 +31,8 @@ pub mod sql_api;
 pub mod static_embed;
 pub mod sync_coordinator;
 pub mod terminal_ws;
+#[cfg(test)]
+mod testutil;
 pub mod tls;
 pub mod transfer_coordinator;
 pub mod tunnel_ws;

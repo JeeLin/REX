@@ -632,239 +632,10 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
 
-    use async_trait::async_trait;
-    use rex_common::file_transfer::{FileEntry, ProgressCallback, UploadResult};
     use rex_transfer::ConflictPolicy;
 
     use super::*;
-
-    /// 内存目录树 FileConnector：`store` 存文件，目录由文件键前缀虚拟推导。
-    ///
-    /// `fail_*` 标志模拟底层故障；`cancel_hook` 在每次 upload 时回调（模拟
-    /// 并发取消，DB 由另一线程写入）。
-    #[derive(Clone, Default)]
-    struct TreeConnector {
-        store: Arc<Mutex<HashMap<String, Vec<u8>>>>,
-        fail_list: bool,
-        fail_upload: bool,
-        fail_download: bool,
-        cancel_hook: Option<Arc<dyn Fn() + Send + Sync>>,
-    }
-
-    impl TreeConnector {
-        fn new(store: Arc<Mutex<HashMap<String, Vec<u8>>>>) -> Self {
-            Self {
-                store,
-                ..Default::default()
-            }
-        }
-
-        fn with_list_failure(mut self) -> Self {
-            self.fail_list = true;
-            self
-        }
-
-        fn with_upload_failure(mut self) -> Self {
-            self.fail_upload = true;
-            self
-        }
-
-        fn with_cancel_hook(mut self, hook: Arc<dyn Fn() + Send + Sync>) -> Self {
-            self.cancel_hook = Some(hook);
-            self
-        }
-
-        /// 直接落文件（绕过引擎，用于布置测试场景）。
-        fn put(&self, path: &str, data: &[u8]) {
-            self.store
-                .lock()
-                .unwrap()
-                .insert(path.to_string(), data.to_vec());
-        }
-
-        fn get(&self, path: &str) -> Option<Vec<u8>> {
-            self.store.lock().unwrap().get(path).cloned()
-        }
-
-        fn contains(&self, path: &str) -> bool {
-            self.store.lock().unwrap().contains_key(path)
-        }
-
-        fn children(&self, dir: &str) -> Vec<FileEntry> {
-            let prefix = format!("{}/", dir.trim_end_matches('/'));
-            let store = self.store.lock().unwrap();
-            let mut seen: HashMap<String, bool> = HashMap::new();
-            for key in store.keys() {
-                let Some(rest) = key.strip_prefix(&prefix) else {
-                    continue;
-                };
-                let (name, rest) = match rest.split_once('/') {
-                    Some((n, tail)) => (n.to_string(), Some(tail)),
-                    None => (rest.to_string(), None),
-                };
-                if name.is_empty() {
-                    continue;
-                }
-                let is_dir = rest.is_some();
-                seen.entry(name)
-                    .and_modify(|d| *d |= is_dir)
-                    .or_insert(is_dir);
-            }
-            let mut out: Vec<FileEntry> = seen
-                .into_iter()
-                .map(|(name, is_dir)| {
-                    let path = format!("{prefix}{name}");
-                    let size = if is_dir {
-                        0
-                    } else {
-                        // 列表条目必须携带真实尺寸，否则 diff 的「按大小比较」会被
-                        // 全 0 尺寸误导（引擎按 list 结果判定 Copy/Conflict）。
-                        // 注意复用上方已持有的 store 锁（std::sync::Mutex 不可重入）。
-                        store.get(&path).map(|v| v.len() as u64).unwrap_or(0)
-                    };
-                    FileEntry {
-                        name,
-                        path,
-                        is_dir,
-                        size,
-                        modified: None,
-                        permissions: None,
-                        storage_class: None,
-                        acl: None,
-                    }
-                })
-                .collect();
-            out.sort_by(|a, b| a.name.cmp(&b.name));
-            out
-        }
-    }
-
-    #[async_trait]
-    impl FileConnector for TreeConnector {
-        async fn list(&mut self, path: &str) -> anyhow::Result<Vec<FileEntry>> {
-            if self.fail_list {
-                anyhow::bail!("list failed (simulated)");
-            }
-            Ok(self.children(path))
-        }
-
-        async fn stat(&mut self, path: &str) -> anyhow::Result<FileEntry> {
-            let store = self.store.lock().unwrap();
-            if let Some(v) = store.get(path) {
-                return Ok(FileEntry {
-                    name: file_name(path),
-                    path: path.to_string(),
-                    is_dir: false,
-                    size: v.len() as u64,
-                    modified: None,
-                    permissions: None,
-                    storage_class: None,
-                    acl: None,
-                });
-            }
-            let prefix = format!("{}/", path.trim_end_matches('/'));
-            if store.keys().any(|k| k.starts_with(&prefix)) {
-                return Ok(FileEntry {
-                    name: file_name(path),
-                    path: path.to_string(),
-                    is_dir: true,
-                    size: 0,
-                    modified: None,
-                    permissions: None,
-                    storage_class: None,
-                    acl: None,
-                });
-            }
-            anyhow::bail!("not found: {path}")
-        }
-
-        async fn upload(
-            &mut self,
-            remote_path: &str,
-            data: Vec<u8>,
-            offset: u64,
-            _progress: Option<&ProgressCallback>,
-        ) -> anyhow::Result<UploadResult> {
-            if let Some(hook) = &self.cancel_hook {
-                hook();
-            }
-            if self.fail_upload {
-                anyhow::bail!("upload failed (simulated)");
-            }
-            let mut store = self.store.lock().unwrap();
-            let buf = store.entry(remote_path.to_string()).or_default();
-            let start = offset as usize;
-            if buf.len() < start + data.len() {
-                buf.resize(start + data.len(), 0);
-            }
-            buf[start..start + data.len()].copy_from_slice(&data);
-            Ok(UploadResult::default())
-        }
-
-        async fn download(&mut self, path: &str) -> anyhow::Result<Vec<u8>> {
-            self.store
-                .lock()
-                .unwrap()
-                .get(path)
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("not found: {path}"))
-        }
-
-        async fn download_range(
-            &mut self,
-            path: &str,
-            offset: u64,
-            limit: Option<u64>,
-        ) -> anyhow::Result<Vec<u8>> {
-            if self.fail_download {
-                anyhow::bail!("download failed (simulated)");
-            }
-            let data = self.download(path).await?;
-            let start = (offset as usize).min(data.len());
-            let end = match limit {
-                Some(l) => ((offset + l) as usize).min(data.len()),
-                None => data.len(),
-            };
-            Ok(data[start..end].to_vec())
-        }
-
-        async fn delete(&mut self, path: &str) -> anyhow::Result<()> {
-            self.store.lock().unwrap().remove(path);
-            Ok(())
-        }
-
-        async fn rename(&mut self, from: &str, to: &str) -> anyhow::Result<()> {
-            let mut store = self.store.lock().unwrap();
-            let data = store
-                .remove(from)
-                .ok_or_else(|| anyhow::anyhow!("not found: {from}"))?;
-            store.insert(to.to_string(), data);
-            Ok(())
-        }
-
-        async fn mkdir(&mut self, _path: &str) -> anyhow::Result<()> {
-            Ok(())
-        }
-
-        async fn read_for_edit(&mut self, path: &str) -> anyhow::Result<Vec<u8>> {
-            self.download(path).await
-        }
-
-        async fn save_from_edit(&mut self, path: &str, data: Vec<u8>) -> anyhow::Result<()> {
-            self.store.lock().unwrap().insert(path.to_string(), data);
-            Ok(())
-        }
-
-        async fn close(&mut self) -> anyhow::Result<()> {
-            Ok(())
-        }
-    }
-
-    fn make_state() -> (tempfile::TempDir, AppState) {
-        let dir = tempfile::tempdir().unwrap();
-        let state = crate::resource_conn::build_test_state(dir.path());
-        (dir, state)
-    }
+    use crate::testutil::{make_state, FailFlags, TreeConnector};
 
     fn make_sync_task(state: &AppState, opts: &SyncOptions) -> String {
         state
@@ -1177,7 +948,10 @@ mod tests {
         let src = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
         let dst = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
 
-        let mut source = src.with_list_failure();
+        let mut source = src.with_fail(FailFlags {
+            fail_list: true,
+            ..Default::default()
+        });
         let mut target = dst.clone();
 
         let res = SyncCoordinator::run_plan(
@@ -1210,7 +984,10 @@ mod tests {
         src.put("/src/a.bin", b"payload");
 
         let mut source = src.clone();
-        let mut target = dst.with_upload_failure();
+        let mut target = dst.with_fail(FailFlags {
+            fail_upload: true,
+            ..Default::default()
+        });
 
         let res = SyncCoordinator::run_plan(
             &state,
@@ -1727,7 +1504,10 @@ mod tests {
     async fn preview_plan_reports_scan_failure() {
         let src = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
         let dst = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
-        let mut source = src.with_list_failure();
+        let mut source = src.with_fail(FailFlags {
+            fail_list: true,
+            ..Default::default()
+        });
         let mut target = dst.clone();
 
         let res = SyncCoordinator::preview_plan(
@@ -1803,7 +1583,10 @@ mod tests {
 
         let mut rx = state.transfer_bcast.subscribe();
         let mut source = src.clone();
-        let mut target = dst.clone().with_upload_failure();
+        let mut target = dst.clone().with_fail(FailFlags {
+            fail_upload: true,
+            ..Default::default()
+        });
 
         let res = SyncCoordinator::run_plan(
             &state,

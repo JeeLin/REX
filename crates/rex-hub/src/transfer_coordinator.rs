@@ -506,216 +506,10 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
 
-    use async_trait::async_trait;
-    use rex_common::file_transfer::{FileConnector, FileEntry, ProgressCallback, UploadResult};
+    use rex_common::file_transfer::FileConnector;
 
     use super::*;
-
-    /// 内存 FileConnector：以 append-at-offset 语义捕获上传字节，
-    /// download_range 返回固定范围 — 用于验证 T2 流式合约。
-    ///
-    /// `simulate_s3_eof`: 模拟 S3 416 — 越界时返回 Err 而非空 vec。
-    /// `fail_rename`: rename 始终失败。
-    /// `fail_delete`: delete 始终失败。
-    #[derive(Clone)]
-    struct MockConnector {
-        store: Arc<Mutex<HashMap<String, Vec<u8>>>>,
-        simulate_s3_eof: bool,
-        fail_rename: bool,
-        fail_delete: bool,
-        fail_upload: bool,
-        fail_download: bool,
-        fail_stat: bool,
-        /// Hook called at the start of every upload — used to simulate a
-        /// concurrent cancel (DB write from another task/thread).
-        cancel_hook: Option<Arc<dyn Fn() + Send + Sync>>,
-    }
-
-    impl Default for MockConnector {
-        fn default() -> Self {
-            Self {
-                store: Arc::new(Mutex::new(HashMap::new())),
-                simulate_s3_eof: false,
-                fail_rename: false,
-                fail_delete: false,
-                fail_upload: false,
-                fail_download: false,
-                fail_stat: false,
-                cancel_hook: None,
-            }
-        }
-    }
-
-    impl MockConnector {
-        fn new(store: Arc<Mutex<HashMap<String, Vec<u8>>>>) -> Self {
-            Self {
-                store,
-                ..Default::default()
-            }
-        }
-
-        fn with_flags(
-            store: Arc<Mutex<HashMap<String, Vec<u8>>>>,
-            simulate_s3_eof: bool,
-            fail_rename: bool,
-            fail_delete: bool,
-        ) -> Self {
-            Self {
-                store,
-                simulate_s3_eof,
-                fail_rename,
-                fail_delete,
-                ..Default::default()
-            }
-        }
-
-        /// Builder for setting fail_upload.
-        fn with_fail_upload(mut self, val: bool) -> Self {
-            self.fail_upload = val;
-            self
-        }
-
-        /// Builder for setting fail_download.
-        fn with_fail_download(mut self, val: bool) -> Self {
-            self.fail_download = val;
-            self
-        }
-
-        /// Builder for setting fail_stat.
-        fn with_fail_stat(mut self, val: bool) -> Self {
-            self.fail_stat = val;
-            self
-        }
-
-        /// Builder for installing a cancel-on-upload hook.
-        fn with_cancel_hook(mut self, hook: Arc<dyn Fn() + Send + Sync>) -> Self {
-            self.cancel_hook = Some(hook);
-            self
-        }
-    }
-
-    #[async_trait]
-    impl FileConnector for MockConnector {
-        async fn list(&mut self, _path: &str) -> anyhow::Result<Vec<FileEntry>> {
-            Ok(vec![])
-        }
-
-        async fn stat(&mut self, path: &str) -> anyhow::Result<FileEntry> {
-            if self.fail_stat {
-                anyhow::bail!("stat failed (simulated)");
-            }
-            let store = self.store.lock().unwrap();
-            match store.get(path) {
-                Some(v) => Ok(FileEntry {
-                    name: path.to_string(),
-                    path: path.to_string(),
-                    is_dir: false,
-                    size: v.len() as u64,
-                    modified: None,
-                    permissions: None,
-                    storage_class: None,
-                    acl: None,
-                }),
-                None => anyhow::bail!("not found: {path}"),
-            }
-        }
-
-        async fn upload(
-            &mut self,
-            remote_path: &str,
-            data: Vec<u8>,
-            offset: u64,
-            _progress: Option<&ProgressCallback>,
-        ) -> anyhow::Result<UploadResult> {
-            if let Some(hook) = &self.cancel_hook {
-                hook();
-            }
-            if self.fail_upload {
-                anyhow::bail!("upload failed (simulated)");
-            }
-            let mut store = self.store.lock().unwrap();
-            let buf = store.entry(remote_path.to_string()).or_default();
-            let start = offset as usize;
-            if buf.len() < start + data.len() {
-                buf.resize(start + data.len(), 0);
-            }
-            buf[start..start + data.len()].copy_from_slice(&data);
-            Ok(UploadResult::default())
-        }
-
-        async fn download(&mut self, path: &str) -> anyhow::Result<Vec<u8>> {
-            self.store
-                .lock()
-                .unwrap()
-                .get(path)
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("not found: {path}"))
-        }
-
-        async fn download_range(
-            &mut self,
-            path: &str,
-            offset: u64,
-            limit: Option<u64>,
-        ) -> anyhow::Result<Vec<u8>> {
-            if self.fail_download {
-                anyhow::bail!("download range failed (simulated)");
-            }
-            let data = self.download(path).await?;
-            if self.simulate_s3_eof && offset >= data.len() as u64 {
-                anyhow::bail!("HTTP 416 Range Not Satisfiable");
-            }
-            let start = (offset as usize).min(data.len());
-            let end = match limit {
-                Some(l) => ((offset + l) as usize).min(data.len()),
-                None => data.len(),
-            };
-            Ok(data[start..end].to_vec())
-        }
-
-        async fn delete(&mut self, path: &str) -> anyhow::Result<()> {
-            if self.fail_delete {
-                anyhow::bail!("delete failed (simulated)");
-            }
-            self.store.lock().unwrap().remove(path);
-            Ok(())
-        }
-
-        async fn rename(&mut self, from: &str, to: &str) -> anyhow::Result<()> {
-            if self.fail_rename {
-                anyhow::bail!("rename failed (simulated)");
-            }
-            let mut store = self.store.lock().unwrap();
-            let data = store
-                .remove(from)
-                .ok_or_else(|| anyhow::anyhow!("not found: {from}"))?;
-            store.insert(to.to_string(), data);
-            Ok(())
-        }
-
-        async fn mkdir(&mut self, _path: &str) -> anyhow::Result<()> {
-            Ok(())
-        }
-
-        async fn read_for_edit(&mut self, path: &str) -> anyhow::Result<Vec<u8>> {
-            self.download(path).await
-        }
-
-        async fn save_from_edit(&mut self, path: &str, data: Vec<u8>) -> anyhow::Result<()> {
-            self.store.lock().unwrap().insert(path.to_string(), data);
-            Ok(())
-        }
-
-        async fn close(&mut self) -> anyhow::Result<()> {
-            Ok(())
-        }
-    }
-
-    fn make_state() -> (tempfile::TempDir, AppState) {
-        let dir = tempfile::tempdir().unwrap();
-        let state = crate::resource_conn::build_test_state(dir.path());
-        (dir, state)
-    }
+    use crate::testutil::{make_state, FailFlags, TreeConnector};
 
     #[tokio::test]
     async fn run_stream_copies_bytes_and_marks_completed() {
@@ -745,8 +539,8 @@ mod tests {
             .insert("/src/a.bin".to_string(), payload.clone());
         let dst_store = Arc::new(Mutex::new(HashMap::new()));
 
-        let mut source = MockConnector::new(src_store.clone());
-        let mut target = MockConnector::new(dst_store.clone());
+        let mut source = TreeConnector::new(src_store.clone());
+        let mut target = TreeConnector::new(dst_store.clone());
 
         TransferCoordinator::run_stream(
             &state,
@@ -808,8 +602,8 @@ mod tests {
             .insert("/src/m.bin".to_string(), payload.clone());
         let dst_store = Arc::new(Mutex::new(HashMap::new()));
 
-        let mut source = MockConnector::new(src_store.clone());
-        let mut target = MockConnector::new(dst_store.clone());
+        let mut source = TreeConnector::new(src_store.clone());
+        let mut target = TreeConnector::new(dst_store.clone());
 
         TransferCoordinator::run_stream(
             &state,
@@ -867,8 +661,8 @@ mod tests {
             .insert("/src/c.bin".to_string(), vec![9u8; 1024]);
         let dst_store = Arc::new(Mutex::new(HashMap::new()));
 
-        let mut source = MockConnector::new(src_store.clone());
-        let mut target = MockConnector::new(dst_store.clone());
+        let mut source = TreeConnector::new(src_store.clone());
+        let mut target = TreeConnector::new(dst_store.clone());
 
         let res = TransferCoordinator::run_stream(
             &state,
@@ -914,8 +708,11 @@ mod tests {
         let dst_store = Arc::new(Mutex::new(HashMap::new()));
 
         // source 模拟 S3：越界 download_range 返回 Err (416)
-        let mut source = MockConnector::with_flags(src_store.clone(), true, false, false);
-        let mut target = MockConnector::new(dst_store.clone());
+        let mut source = TreeConnector::new(src_store.clone()).with_fail(FailFlags {
+            simulate_s3_eof: true,
+            ..Default::default()
+        });
+        let mut target = TreeConnector::new(dst_store.clone());
 
         TransferCoordinator::run_stream(
             &state,
@@ -983,8 +780,11 @@ mod tests {
         let dst_store = Arc::new(Mutex::new(HashMap::new()));
 
         // target rename 始终失败 → temp 应被清理，status=Failed
-        let mut source = MockConnector::new(src_store.clone());
-        let mut target = MockConnector::with_flags(dst_store.clone(), false, true, false);
+        let mut source = TreeConnector::new(src_store.clone());
+        let mut target = TreeConnector::new(dst_store.clone()).with_fail(FailFlags {
+            fail_rename: true,
+            ..Default::default()
+        });
 
         let res = TransferCoordinator::run_stream(
             &state,
@@ -1051,8 +851,11 @@ mod tests {
         let dst_store = Arc::new(Mutex::new(HashMap::new()));
 
         // source delete 始终失败 → status=Failed (非 verifying)
-        let mut source = MockConnector::with_flags(src_store.clone(), false, false, true);
-        let mut target = MockConnector::new(dst_store.clone());
+        let mut source = TreeConnector::new(src_store.clone()).with_fail(FailFlags {
+            fail_delete: true,
+            ..Default::default()
+        });
+        let mut target = TreeConnector::new(dst_store.clone());
 
         let res = TransferCoordinator::run_stream(
             &state,
@@ -1105,21 +908,21 @@ mod tests {
         // 1) 目标已存在 → 追加 `(1)`，序号跳到第一个空位
         store.lock().unwrap().insert("/d/a.txt".into(), vec![]);
         store.lock().unwrap().insert("/d/a (1).txt".into(), vec![]);
-        let mut conn = MockConnector::new(Arc::clone(&store));
+        let mut conn = TreeConnector::new(Arc::clone(&store));
         assert_eq!(
             unique_name(&mut conn, "/d/a.txt").await,
             Some("/d/a (2).txt".to_string())
         );
 
         // 2) 点文件：`.bashrc` 的 stem 判空 → 整个名字当 stem，产出 `.bashrc (1)`
-        let mut conn = MockConnector::new(Arc::clone(&store));
+        let mut conn = TreeConnector::new(Arc::clone(&store));
         assert_eq!(
             unique_name(&mut conn, "/d/.bashrc").await,
             Some("/d/.bashrc (1)".to_string())
         );
 
         // 3) 无扩展名：不追加 `.`
-        let mut conn = MockConnector::new(Arc::clone(&store));
+        let mut conn = TreeConnector::new(Arc::clone(&store));
         assert_eq!(
             unique_name(&mut conn, "/d/noext").await,
             Some("/d/noext (1)".to_string())
@@ -1128,14 +931,14 @@ mod tests {
         // 4) 尾斜杠路径：`.` 落在目录段上（`/d.v2/` 按 `stem=/d` + `ext=.v2/` 拆），
         //    序号插在最后一段之前。文件路径不会带尾斜杠（`join_path` 不产生），
         //    此处钉住现状以防规则改动。
-        let mut conn = MockConnector::new(Arc::clone(&store));
+        let mut conn = TreeConnector::new(Arc::clone(&store));
         assert_eq!(
             unique_name(&mut conn, "/d.v2/").await,
             Some("/d (1).v2/".to_string())
         );
 
         // 4b) 目录下的点文件：`stem` 判到 `/dir/`（尾斜杠）→ 整名当 stem，不拆扩展名
-        let mut conn = MockConnector::new(Arc::clone(&store));
+        let mut conn = TreeConnector::new(Arc::clone(&store));
         assert_eq!(
             unique_name(&mut conn, "/dir/.bashrc").await,
             Some("/dir/.bashrc (1)".to_string())
@@ -1148,7 +951,7 @@ mod tests {
                 .unwrap()
                 .insert(format!("/f/x ({i}).txt"), Vec::new());
         }
-        let mut conn = MockConnector::new(Arc::clone(&full));
+        let mut conn = TreeConnector::new(Arc::clone(&full));
         assert_eq!(unique_name(&mut conn, "/f/x.txt").await, None);
     }
 
@@ -1168,7 +971,7 @@ mod tests {
             })
             .unwrap();
 
-        let src = MockConnector::new(Arc::new(Mutex::new(HashMap::from([(
+        let src = TreeConnector::new(Arc::new(Mutex::new(HashMap::from([(
             "/src/a.txt".to_string(),
             b"new".to_vec(),
         )]))));
@@ -1179,7 +982,7 @@ mod tests {
             .insert("/dst/a.txt".to_string(), b"old".to_vec());
 
         let mut source = src.clone();
-        let mut target = MockConnector::new(Arc::clone(&dst_store));
+        let mut target = TreeConnector::new(Arc::clone(&dst_store));
 
         TransferCoordinator::run_stream(
             &state,
@@ -1208,13 +1011,13 @@ mod tests {
         );
     }
 
-    /// MockConnector (non-S3) 调 6 trait S3-only 方法 → trait 默认实现
+    /// TreeConnector (non-S3) 调 6 trait S3-only 方法 → trait 默认实现
     /// 回 `UnsupportedProtocolError`，Handler 据此映射 `UNSUPPORTED_PROTOCOL`。
     #[tokio::test]
-    async fn mock_connector_s3_only_operations_are_unsupported() {
+    async fn tree_connector_s3_only_operations_are_unsupported() {
         use rex_common::file_transfer::UnsupportedProtocolError;
 
-        let conn = MockConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        let conn = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
         let conn: &dyn FileConnector = &conn;
 
         let errors = vec![
@@ -1273,8 +1076,8 @@ mod tests {
                 .set_transfer_task_status(&cancel_tid, "canceled", None);
         });
 
-        let mut source = MockConnector::new(src_store);
-        let mut target = MockConnector::new(dst_store.clone()).with_cancel_hook(hook);
+        let mut source = TreeConnector::new(src_store);
+        let mut target = TreeConnector::new(dst_store.clone()).with_cancel_hook(hook);
 
         let res = TransferCoordinator::run_stream(
             &state,
@@ -1333,8 +1136,8 @@ mod tests {
         let src_store = Arc::new(Mutex::new(HashMap::new()));
         let dst_store = Arc::new(Mutex::new(HashMap::new()));
 
-        let mut source = MockConnector::new(src_store);
-        let mut target = MockConnector::new(dst_store);
+        let mut source = TreeConnector::new(src_store);
+        let mut target = TreeConnector::new(dst_store);
 
         let res = TransferCoordinator::run_stream(
             &state,
@@ -1381,8 +1184,11 @@ mod tests {
             .insert("/src/dl.bin".to_string(), payload);
         let dst_store = Arc::new(Mutex::new(HashMap::new()));
 
-        let mut source = MockConnector::new(src_store).with_fail_download(true);
-        let mut target = MockConnector::new(dst_store);
+        let mut source = TreeConnector::new(src_store).with_fail(FailFlags {
+            fail_download: true,
+            ..Default::default()
+        });
+        let mut target = TreeConnector::new(dst_store);
 
         let res = TransferCoordinator::run_stream(
             &state,
@@ -1428,8 +1234,11 @@ mod tests {
             .insert("/src/up.bin".to_string(), payload);
         let dst_store = Arc::new(Mutex::new(HashMap::new()));
 
-        let mut source = MockConnector::new(src_store);
-        let mut target = MockConnector::new(dst_store).with_fail_upload(true);
+        let mut source = TreeConnector::new(src_store);
+        let mut target = TreeConnector::new(dst_store).with_fail(FailFlags {
+            fail_upload: true,
+            ..Default::default()
+        });
 
         let res = TransferCoordinator::run_stream(
             &state,
@@ -1473,11 +1282,14 @@ mod tests {
             .insert("/src/ts.bin".to_string(), payload);
         let dst_store = Arc::new(Mutex::new(HashMap::new()));
 
-        let mut source = MockConnector::new(src_store);
+        let mut source = TreeConnector::new(src_store);
         // fail_stat makes target.stat fail: resolve_conflict treats target
         // as non-existent (proceeds), uploads succeed, then verify stat
         // of the temp file fails → TargetStat error → Failed.
-        let mut target = MockConnector::new(dst_store).with_fail_stat(true);
+        let mut target = TreeConnector::new(dst_store).with_fail(FailFlags {
+            fail_stat: true,
+            ..Default::default()
+        });
 
         let res = TransferCoordinator::run_stream(
             &state,
@@ -1535,8 +1347,11 @@ mod tests {
 
         // source simulates S3: any download_range at offset 0 on an empty
         // object is out of range (416). The engine must never ask.
-        let mut source = MockConnector::with_flags(src_store.clone(), true, false, false);
-        let mut target = MockConnector::new(dst_store.clone());
+        let mut source = TreeConnector::new(src_store.clone()).with_fail(FailFlags {
+            simulate_s3_eof: true,
+            ..Default::default()
+        });
+        let mut target = TreeConnector::new(dst_store.clone());
 
         TransferCoordinator::run_stream(
             &state,
@@ -1599,8 +1414,8 @@ mod tests {
             .insert("/src/empty-move.bin".to_string(), Vec::new());
         let dst_store = Arc::new(Mutex::new(HashMap::new()));
 
-        let mut source = MockConnector::new(src_store.clone());
-        let mut target = MockConnector::new(dst_store.clone());
+        let mut source = TreeConnector::new(src_store.clone());
+        let mut target = TreeConnector::new(dst_store.clone());
 
         TransferCoordinator::run_stream(
             &state,
@@ -1662,8 +1477,8 @@ mod tests {
             .unwrap()
             .insert("/dst/empty-skip.bin".to_string(), b"kept".to_vec());
 
-        let mut source = MockConnector::new(src_store);
-        let mut target = MockConnector::new(dst_store.clone());
+        let mut source = TreeConnector::new(src_store);
+        let mut target = TreeConnector::new(dst_store.clone());
 
         TransferCoordinator::run_stream(
             &state,
@@ -1719,8 +1534,11 @@ mod tests {
             .insert("/src/empty-up.bin".to_string(), Vec::new());
         let dst_store = Arc::new(Mutex::new(HashMap::new()));
 
-        let mut source = MockConnector::new(src_store);
-        let mut target = MockConnector::new(dst_store).with_fail_upload(true);
+        let mut source = TreeConnector::new(src_store);
+        let mut target = TreeConnector::new(dst_store).with_fail(FailFlags {
+            fail_upload: true,
+            ..Default::default()
+        });
 
         let res = TransferCoordinator::run_stream(
             &state,
@@ -1770,8 +1588,8 @@ mod tests {
             .insert("/src/empty-cancel.bin".to_string(), Vec::new());
         let dst_store = Arc::new(Mutex::new(HashMap::new()));
 
-        let mut source = MockConnector::new(src_store);
-        let mut target = MockConnector::new(dst_store.clone());
+        let mut source = TreeConnector::new(src_store);
+        let mut target = TreeConnector::new(dst_store.clone());
 
         // Pre-canceled: the loop-top cancel guard returns before the
         // `offset >= total` branch, so the new empty-shard upload must never
@@ -1845,8 +1663,11 @@ mod tests {
         let dst_store = Arc::new(Mutex::new(HashMap::new()));
 
         let mut rx = state.transfer_bcast.subscribe();
-        let mut source = MockConnector::new(src_store);
-        let mut target = MockConnector::new(dst_store).with_fail_upload(true);
+        let mut source = TreeConnector::new(src_store);
+        let mut target = TreeConnector::new(dst_store).with_fail(FailFlags {
+            fail_upload: true,
+            ..Default::default()
+        });
 
         let res = TransferCoordinator::run_stream(
             &state,
@@ -1907,8 +1728,8 @@ mod tests {
         let dst_store = Arc::new(Mutex::new(HashMap::new()));
 
         let mut rx = state.transfer_bcast.subscribe();
-        let mut source = MockConnector::new(src_store);
-        let mut target = MockConnector::new(dst_store);
+        let mut source = TreeConnector::new(src_store);
+        let mut target = TreeConnector::new(dst_store);
 
         TransferCoordinator::run_stream(
             &state,
@@ -1969,8 +1790,8 @@ mod tests {
             .unwrap();
 
         let mut rx = state.transfer_bcast.subscribe();
-        let mut source = MockConnector::new(src_store);
-        let mut target = MockConnector::new(dst_store);
+        let mut source = TreeConnector::new(src_store);
+        let mut target = TreeConnector::new(dst_store);
 
         let res = TransferCoordinator::run_stream(
             &state,
