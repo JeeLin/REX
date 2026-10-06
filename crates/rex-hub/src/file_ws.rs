@@ -144,9 +144,65 @@ mod tests {
             total_bytes: 1000,
             speed_bytes_per_sec: 50,
             status: "running".into(),
+            error: None,
         };
         let json = serde_json::to_string(&ev).unwrap();
         assert!(json.contains("\"task_id\":\"t1\""));
         assert!(json.contains("\"status\":\"running\""));
+    }
+
+    /// Non-failure events must not carry an `error` key at all: a spurious
+    /// `error: null` would be indistinguishable from "the backend reported a
+    /// failure with no reason" for consumers that only check presence.
+    #[test]
+    fn transfer_progress_event_omits_error_when_absent() {
+        let ev = TransferProgressEvent {
+            task_id: "t1".into(),
+            transferred_bytes: 100,
+            total_bytes: 1000,
+            speed_bytes_per_sec: 50,
+            status: "running".into(),
+            error: None,
+        };
+        let json = serde_json::to_value(&ev).unwrap();
+        assert!(
+            json.get("error").is_none(),
+            "event without a failure reason must omit the key, got {json}"
+        );
+    }
+
+    /// Failure events carry the reason under the wire name the frontend reads.
+    #[test]
+    fn transfer_progress_event_carries_failure_reason() {
+        let ev = TransferProgressEvent {
+            task_id: "t1".into(),
+            transferred_bytes: 0,
+            total_bytes: 0,
+            speed_bytes_per_sec: 0,
+            status: "failed".into(),
+            error: Some("upload failed: connection reset".into()),
+        };
+        let json = serde_json::to_value(&ev).unwrap();
+        assert_eq!(json["status"], "failed");
+        assert_eq!(json["error"], "upload failed: connection reset");
+
+        // Round-trip back (the field is Deserialize too, with `default`).
+        let back: TransferProgressEvent = serde_json::from_value(json).unwrap();
+        assert_eq!(
+            back.error.as_deref(),
+            Some("upload failed: connection reset")
+        );
+    }
+
+    /// A payload produced before the field existed must still deserialize
+    /// (`default` on the new field), so the additive change is wire-compatible.
+    #[test]
+    fn transfer_progress_event_deserializes_payload_without_error() {
+        let back: TransferProgressEvent = serde_json::from_str(
+            r#"{"task_id":"t1","transferred_bytes":1,"total_bytes":2,"speed_bytes_per_sec":0,"status":"running"}"#,
+        )
+        .unwrap();
+        assert_eq!(back.status, "running");
+        assert!(back.error.is_none());
     }
 }

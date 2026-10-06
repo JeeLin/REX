@@ -180,6 +180,45 @@ describe('FilesPage — folder sync queue row (v0.92.0 子任务 5)', () => {
     expect(w.find('.tq-item-phase').text()).toBe('校验中')
   })
 
+  it('renders the failure reason on a failed queue row', async () => {
+    storeStub.tasks.set(
+      'sync-9',
+      syncItem({
+        status: 'error',
+        phase: 'failed',
+        progress: 30,
+        error: 'upload failed: connection reset',
+      }),
+    )
+    const w = await mountPage()
+    ;(w.vm as unknown as { transfer: { showTransferQueue: boolean } }).transfer.showTransferQueue = true
+    await nextTick()
+
+    const el = w.find('.tq-item-error')
+    expect(el.exists()).toBe(true)
+    expect(el.text()).toBe('upload failed: connection reset')
+    expect(el.attributes('title')).toBe('upload failed: connection reset')
+  })
+
+  it('falls back to the generic label when a failed row carries no reason', async () => {
+    storeStub.tasks.set('sync-9', syncItem({ status: 'error', phase: 'failed', error: null }))
+    const w = await mountPage()
+    ;(w.vm as unknown as { transfer: { showTransferQueue: boolean } }).transfer.showTransferQueue = true
+    await nextTick()
+
+    expect(w.find('.tq-item-error').text()).toBe('失败')
+  })
+
+  it('shows the canceled state, never a failure reason', async () => {
+    storeStub.tasks.set('sync-9', syncItem({ status: 'canceled', phase: 'canceled', error: null }))
+    const w = await mountPage()
+    ;(w.vm as unknown as { transfer: { showTransferQueue: boolean } }).transfer.showTransferQueue = true
+    await nextTick()
+
+    expect(w.find('.tq-item-pending').text()).toBe('已取消')
+    expect(w.find('.tq-item-error').exists()).toBe(false)
+  })
+
   it('reloads both panels once a tracked sync task reaches a terminal state', async () => {
     const w = await mountPage()
     setEndpoints(w)

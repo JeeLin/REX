@@ -277,4 +277,101 @@ describe('transfer store — folder sync tracking (v0.92.0)', () => {
     expect(mockGetSyncTask).toHaveBeenCalledTimes(2)
     expect(store.tasks.get('sync-1')!.status).toBe('done')
   })
+
+  // The Hub sends `error` only on failed events (`skip_serializing_if`), so a
+  // running/terminal-success frame must arrive with the key absent — and must
+  // not wipe a reason already recorded on the row.
+  it('keeps a recorded reason when a later frame carries no error key', async () => {
+    const store = useTransferStore()
+    store.trackSync('sync-1', SRC, DST)
+    await settle()
+    const socket = FakeSocket.instances.at(-1)!
+    socket.open()
+
+    socket.emit({
+      type: 'progress',
+      payload: {
+        task_id: 'sync-1',
+        status: 'failed',
+        total_bytes: 10,
+        transferred_bytes: 3,
+        speed_bytes_per_sec: 0,
+        eta_seconds: null,
+        error: 'upload failed: connection reset',
+      },
+    })
+    expect(store.tasks.get('sync-1')!.error).toBe('upload failed: connection reset')
+
+    // Same shape the Hub emits without `error` (running / completed).
+    const noErrorFrame = progressFrame('completed', 10, 10) as {
+      payload: Record<string, unknown>
+    }
+    expect('error' in noErrorFrame.payload).toBe(true)
+    delete noErrorFrame.payload.error
+    socket.emit(noErrorFrame)
+
+    expect(store.tasks.get('sync-1')!.error).toBe('upload failed: connection reset')
+  })
+
+  // Polling is the fallback when the WS never delivers the terminal frame (or
+  // the socket is down). The reason comes from the task record, not the event,
+  // so the row must still show why it failed.
+  it('fills the failure reason from the polled task record when WS is silent', async () => {
+    vi.useFakeTimers()
+    const store = useTransferStore()
+    store.trackSync('sync-1', SRC, DST)
+    await vi.advanceTimersByTimeAsync(0)
+
+    mockGetSyncTask.mockResolvedValue(
+      record({
+        status: 'failed',
+        total_bytes: 10,
+        transferred_bytes: 3,
+        error: 'verify failed: size mismatch: src=10 dst=0',
+      }),
+    )
+    await vi.advanceTimersByTimeAsync(POLL_MS)
+
+    const item = store.tasks.get('sync-1')!
+    expect(item.status).toBe('error')
+    expect(item.error).toBe('verify failed: size mismatch: src=10 dst=0')
+  })
+
+  // The backend persists an empty string for "no error" (`error.unwrap_or("")`),
+  // so the polled reason can be falsy — the row must fall back to its generic
+  // "failed" label rather than rendering an empty cell.
+  it('leaves the reason empty when the polled record has none', async () => {
+    vi.useFakeTimers()
+    const store = useTransferStore()
+    store.trackSync('sync-1', SRC, DST)
+    await vi.advanceTimersByTimeAsync(0)
+
+    mockGetSyncTask.mockResolvedValue(record({ status: 'failed', error: '' }))
+    await vi.advanceTimersByTimeAsync(POLL_MS)
+
+    const item = store.tasks.get('sync-1')!
+    expect(item.status).toBe('error')
+    expect(item.error).toBeFalsy()
+  })
+
+  // Single-file transfers must get the same treatment as sync tasks.
+  it('surfaces the failure reason on a single-file transfer row', async () => {
+    vi.useFakeTimers()
+    const store = useTransferStore()
+    await store.copy(SRC, DST)
+    await vi.advanceTimersByTimeAsync(0)
+
+    const id = [...store.tasks.keys()][0]!
+    mockGetTransferTask.mockResolvedValue({
+      ...record({ id, kind: 'transfer' }),
+      status: 'failed',
+      error: 'source stat failed: no such file',
+    })
+    await vi.advanceTimersByTimeAsync(POLL_MS)
+
+    expect(store.tasks.get(id)).toMatchObject({
+      status: 'error',
+      error: 'source stat failed: no such file',
+    })
+  })
 })

@@ -283,7 +283,7 @@ impl TransferCoordinator {
                         .db
                         .update_transfer_task_progress(task_id, total, offset, 0, None)
                         .ok();
-                    Self::broadcast_progress(state, task_id, "running", total, offset, 0);
+                    Self::broadcast_progress(state, task_id, "running", total, offset, 0, None);
                 }
                 break;
             }
@@ -328,8 +328,8 @@ impl TransferCoordinator {
                 .db
                 .update_transfer_task_progress(task_id, total, offset, 0, None)
                 .ok();
-            // T5.4：进度变化时广播给 WS 订阅者
-            Self::broadcast_progress(state, task_id, "running", total, offset, 0);
+            // T5.4：进度变化时广播给 WS 订阅者（进行中无失败原因）
+            Self::broadcast_progress(state, task_id, "running", total, offset, 0, None);
             if chunk_len < CHUNK_SIZE {
                 break;
             }
@@ -444,6 +444,8 @@ impl TransferCoordinator {
 
     /// 发布传输进度/状态变更到 WS 广播通道（T5.4）。
     /// `total`/`transferred`/`speed` 来自 DB 任务记录的当前快照。
+    ///
+    /// `error` 只在失败终态携带，供前端直接显示失败原因而不必等轮询兜底。
     fn broadcast_progress(
         state: &AppState,
         task_id: &str,
@@ -451,6 +453,7 @@ impl TransferCoordinator {
         total: u64,
         transferred: u64,
         speed: u64,
+        error: Option<&str>,
     ) {
         let event = TransferProgressEvent {
             task_id: task_id.to_string(),
@@ -458,6 +461,7 @@ impl TransferCoordinator {
             total_bytes: total,
             speed_bytes_per_sec: speed,
             status: status.to_string(),
+            error: error.map(|e| e.to_string()),
         };
         // 忽略发送错误（无订阅者时）
         let _ = state.transfer_bcast.send(event);
@@ -476,6 +480,7 @@ impl TransferCoordinator {
                 rec.total_bytes as u64,
                 rec.transferred_bytes as u64,
                 rec.speed_bytes_per_sec as u64,
+                error,
             );
         }
     }
@@ -1671,5 +1676,190 @@ mod tests {
         drop(dst);
         let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
         assert_eq!(rec.status, "canceled", "canceled must not be clobbered");
+    }
+
+    // -----------------------------------------------------------------------
+    // Failure reason on the terminal WS event: the queue row must be able to
+    // show *why* a transfer failed without waiting for the polling fallback.
+    // -----------------------------------------------------------------------
+
+    fn drain(
+        rx: &mut tokio::sync::broadcast::Receiver<crate::app::TransferProgressEvent>,
+    ) -> Vec<crate::app::TransferProgressEvent> {
+        std::iter::from_fn(|| rx.try_recv().ok()).collect()
+    }
+
+    #[tokio::test]
+    async fn failed_terminal_event_carries_the_failure_reason() {
+        let (_dir, state) = make_state();
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/e.bin".into(),
+                target_path: "/dst/e.bin".into(),
+                conflict_policy: Some("overwrite".into()),
+            })
+            .unwrap();
+
+        let payload: Vec<u8> = (0..CHUNK_SIZE + 5)
+            .map(|i| (i as u8).wrapping_add(1))
+            .collect();
+        let src_store = Arc::new(Mutex::new(HashMap::new()));
+        src_store
+            .lock()
+            .unwrap()
+            .insert("/src/e.bin".to_string(), payload);
+        let dst_store = Arc::new(Mutex::new(HashMap::new()));
+
+        let mut rx = state.transfer_bcast.subscribe();
+        let mut source = MockConnector::new(src_store);
+        let mut target = MockConnector::new(dst_store).with_fail_upload(true);
+
+        let res = TransferCoordinator::run_stream(
+            &state,
+            &task_id,
+            TransferSpec {
+                op: TransferOp::Copy,
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src/e.bin",
+            "/dst/e.bin",
+        )
+        .await;
+        assert!(matches!(res, Err(TransferError::Upload(_))));
+
+        let events = drain(&mut rx);
+        let failed = events
+            .iter()
+            .find(|e| e.status == "failed")
+            .expect("a failed terminal event must be broadcast");
+        assert_eq!(
+            failed.error.as_deref(),
+            Some("upload failed: upload failed (simulated)"),
+            "the failed event must carry the reason the queue row shows"
+        );
+
+        // Non-terminal events must stay reason-free.
+        for e in events.iter().filter(|e| e.status != "failed") {
+            assert!(
+                e.error.is_none(),
+                "non-failed event {} must not carry an error",
+                e.status
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn cancel_and_completed_terminal_events_carry_no_failure_reason() {
+        let (_dir, state) = make_state();
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/ok.bin".into(),
+                target_path: "/dst/ok.bin".into(),
+                conflict_policy: Some("overwrite".into()),
+            })
+            .unwrap();
+
+        let src_store = Arc::new(Mutex::new(HashMap::new()));
+        src_store
+            .lock()
+            .unwrap()
+            .insert("/src/ok.bin".to_string(), b"payload".to_vec());
+        let dst_store = Arc::new(Mutex::new(HashMap::new()));
+
+        let mut rx = state.transfer_bcast.subscribe();
+        let mut source = MockConnector::new(src_store);
+        let mut target = MockConnector::new(dst_store);
+
+        TransferCoordinator::run_stream(
+            &state,
+            &task_id,
+            TransferSpec {
+                op: TransferOp::Copy,
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src/ok.bin",
+            "/dst/ok.bin",
+        )
+        .await
+        .expect("transfer must complete");
+
+        let events = drain(&mut rx);
+        let completed = events
+            .iter()
+            .find(|e| e.status == "completed")
+            .expect("a completed terminal event must be broadcast");
+        assert!(
+            completed.error.is_none(),
+            "a completed transfer has no failure reason"
+        );
+        assert!(
+            !events.iter().any(|e| e.status == "failed"),
+            "a successful transfer must not broadcast failed: {events:?}"
+        );
+    }
+
+    /// A canceled transfer is not a failure: the terminal event must stay
+    /// reason-free and the row must not be told why it "failed".
+    #[tokio::test]
+    async fn canceled_terminal_event_carries_no_failure_reason() {
+        let (_dir, state) = make_state();
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/cancel.bin".into(),
+                target_path: "/dst/cancel.bin".into(),
+                conflict_policy: Some("overwrite".into()),
+            })
+            .unwrap();
+
+        let src_store = Arc::new(Mutex::new(HashMap::new()));
+        src_store
+            .lock()
+            .unwrap()
+            .insert("/src/cancel.bin".to_string(), b"data".to_vec());
+        let dst_store = Arc::new(Mutex::new(HashMap::new()));
+        state
+            .db
+            .set_transfer_task_status(&task_id, "canceled", None)
+            .unwrap();
+
+        let mut rx = state.transfer_bcast.subscribe();
+        let mut source = MockConnector::new(src_store);
+        let mut target = MockConnector::new(dst_store);
+
+        let res = TransferCoordinator::run_stream(
+            &state,
+            &task_id,
+            TransferSpec {
+                op: TransferOp::Copy,
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src/cancel.bin",
+            "/dst/cancel.bin",
+        )
+        .await;
+        assert!(matches!(res, Err(TransferError::Canceled)));
+
+        for e in drain(&mut rx) {
+            assert!(
+                e.error.is_none(),
+                "cancel terminal event ({}) must not carry a failure reason",
+                e.status
+            );
+        }
     }
 }

@@ -29,6 +29,13 @@ pub struct TransferProgressEvent {
     pub total_bytes: u64,
     pub speed_bytes_per_sec: u64,
     pub status: String,
+    /// 失败原因：仅 `status == "failed"` 时携带，其余状态为 `None`。
+    ///
+    /// `skip_serializing_if` 让非失败事件不带 `error` 字段（避免给现有消费者
+    /// 带来 `error: null` 噪声），`default` 让旧 payload 仍能反序列化。
+    /// 字段名与前端 `WsProgressPayload.error` 对齐。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 #[derive(Clone)]

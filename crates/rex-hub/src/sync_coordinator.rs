@@ -252,6 +252,7 @@ impl SyncCoordinator {
                     TransferStatus::Running.as_str_lossy(),
                     plan.summary.total_bytes,
                     transferred,
+                    None,
                 );
                 continue;
             }
@@ -303,6 +304,7 @@ impl SyncCoordinator {
                         TransferStatus::Running.as_str_lossy(),
                         plan.summary.total_bytes,
                         transferred,
+                        None,
                     );
                 }
                 Err(e) => {
@@ -512,7 +514,13 @@ impl SyncCoordinator {
     /// 一直显示「进行中」（1s 轮询只是兜底，不是主通道）。
     fn fail(state: &AppState, task_id: &str, err: &SyncError) {
         if matches!(err, SyncError::Canceled) || Self::is_canceled(state, task_id) {
-            Self::broadcast_terminal(state, task_id, TransferStatus::Canceled.as_str_lossy());
+            // 取消不是失败：终态事件不带 error。
+            Self::broadcast_terminal(
+                state,
+                task_id,
+                TransferStatus::Canceled.as_str_lossy(),
+                None,
+            );
             return;
         }
         let msg = err.to_string();
@@ -525,13 +533,17 @@ impl SyncCoordinator {
             state,
             task_id,
             TransferStatus::Failed(msg.clone()).as_str_lossy(),
+            Some(&msg),
         );
         tracing::error!(action = "FILE_SYNC_FAILED", transfer_task_id = %task_id, error = %msg, "sync task failed");
     }
 
     /// 终态广播（完成 / 失败 / 取消）：沿用记录里已累计的字节数，前端因此能看到
     /// 「同步到哪一步停的」，而不是被清零的进度条。记录缺失时按 0 广播。
-    fn broadcast_terminal(state: &AppState, task_id: &str, status: &str) {
+    ///
+    /// `error` 只在失败终态携带；取消终态恒为 `None`（取消不是失败，
+    /// 前端不应显示失败原因）。
+    fn broadcast_terminal(state: &AppState, task_id: &str, status: &str, error: Option<&str>) {
         let (total, transferred) = match state.db.get_transfer_task(task_id) {
             Ok(Some(rec)) => (
                 rec.total_bytes.max(0) as u64,
@@ -539,7 +551,7 @@ impl SyncCoordinator {
             ),
             _ => (0, 0),
         };
-        Self::broadcast_progress(state, task_id, status, total, transferred);
+        Self::broadcast_progress(state, task_id, status, total, transferred, error);
     }
 
     fn set_status(state: &AppState, task_id: &str, status: TransferStatus) {
@@ -553,16 +565,19 @@ impl SyncCoordinator {
                 status.as_str_lossy(),
                 rec.total_bytes.max(0) as u64,
                 rec.transferred_bytes.max(0) as u64,
+                None,
             );
         }
     }
 
+    /// `error` 只在失败终态携带，供前端直接显示失败原因而不必等轮询兜底。
     fn broadcast_progress(
         state: &AppState,
         task_id: &str,
         status: &str,
         total: u64,
         transferred: u64,
+        error: Option<&str>,
     ) {
         let _ = state.transfer_bcast.send(TransferProgressEvent {
             task_id: task_id.to_string(),
@@ -570,6 +585,7 @@ impl SyncCoordinator {
             total_bytes: total,
             speed_bytes_per_sec: 0,
             status: status.to_string(),
+            error: error.map(|e| e.to_string()),
         });
     }
 }
@@ -1664,5 +1680,158 @@ mod tests {
             "destination already exists: /a"
         );
         assert_eq!(SyncError::TaskNotFound.to_string(), "sync task not found");
+    }
+
+    // -----------------------------------------------------------------------
+    // Failure reason on the terminal WS event: a failed sync row must show why
+    // it failed without waiting for the polling fallback.
+    // -----------------------------------------------------------------------
+
+    fn drain(
+        rx: &mut tokio::sync::broadcast::Receiver<TransferProgressEvent>,
+    ) -> Vec<TransferProgressEvent> {
+        std::iter::from_fn(|| rx.try_recv().ok()).collect()
+    }
+
+    #[tokio::test]
+    async fn run_plan_failed_terminal_event_carries_the_reason() {
+        let (_dir, state) = make_state();
+        let task_id = make_sync_task(&state, &SyncOptions::default());
+
+        let src = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        src.put("/src/a.bin", b"payload");
+        let dst = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+
+        let mut rx = state.transfer_bcast.subscribe();
+        let mut source = src.clone();
+        let mut target = dst.clone().with_upload_failure();
+
+        let res = SyncCoordinator::run_plan(
+            &state,
+            &task_id,
+            SyncSpec {
+                opts: &SyncOptions::default(),
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src",
+            "/dst",
+        )
+        .await;
+        let err = res.expect_err("upload failure must fail the task");
+
+        let events = drain(&mut rx);
+        let failed = events
+            .iter()
+            .find(|e| e.status == "failed")
+            .expect("a failed terminal event must be broadcast");
+        assert_eq!(
+            failed.error.as_deref(),
+            Some(err.to_string().as_str()),
+            "the failed event must carry the same reason the DB record does"
+        );
+        assert!(!failed.error.as_deref().unwrap().is_empty());
+
+        // The DB record carries the same text (polling fallback reads it).
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        assert_eq!(rec.error.as_deref(), Some(err.to_string().as_str()));
+
+        // Non-terminal events stay reason-free.
+        for e in events.iter().filter(|e| e.status != "failed") {
+            assert!(
+                e.error.is_none(),
+                "non-failed event {} must not carry an error",
+                e.status
+            );
+        }
+    }
+
+    /// Cancel is not a failure: the canceled terminal event must stay
+    /// reason-free, and no failed event may be broadcast for it.
+    #[tokio::test]
+    async fn run_plan_canceled_terminal_event_carries_no_reason() {
+        let (_dir, state) = make_state();
+        let task_id = make_sync_task(&state, &SyncOptions::default());
+        state
+            .db
+            .set_transfer_task_status(&task_id, "canceled", None)
+            .unwrap();
+
+        let src = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        src.put("/src/a.txt", b"a");
+        let dst = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+
+        let mut rx = state.transfer_bcast.subscribe();
+        let mut source = src.clone();
+        let mut target = dst.clone();
+
+        let res = SyncCoordinator::run_plan(
+            &state,
+            &task_id,
+            SyncSpec {
+                opts: &SyncOptions::default(),
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src",
+            "/dst",
+        )
+        .await;
+        assert!(matches!(res, Err(SyncError::Canceled)));
+
+        let events = drain(&mut rx);
+        assert!(
+            events.iter().all(|e| e.error.is_none()),
+            "cancel must not broadcast a failure reason: {events:?}"
+        );
+        assert!(
+            !events.iter().any(|e| e.status == "failed"),
+            "cancel must never be broadcast as failed: {events:?}"
+        );
+        assert_eq!(
+            events.last().map(|e| e.status.as_str()),
+            Some("canceled"),
+            "terminal event must be canceled"
+        );
+    }
+
+    /// A successful sync must not carry a reason on any event, including the
+    /// completed terminal — otherwise the queue row would show a bogus error.
+    #[tokio::test]
+    async fn run_plan_completed_events_carry_no_reason() {
+        let (_dir, state) = make_state();
+        let task_id = make_sync_task(&state, &SyncOptions::default());
+
+        let src = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        src.put("/src/ok.txt", b"ok");
+        let dst = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+
+        let mut rx = state.transfer_bcast.subscribe();
+        let mut source = src.clone();
+        let mut target = dst.clone();
+
+        SyncCoordinator::run_plan(
+            &state,
+            &task_id,
+            SyncSpec {
+                opts: &SyncOptions::default(),
+                conflict: ConflictPolicy::Overwrite,
+            },
+            &mut source,
+            &mut target,
+            "/src",
+            "/dst",
+        )
+        .await
+        .expect("sync must complete");
+
+        let events = drain(&mut rx);
+        assert_eq!(events.last().map(|e| e.status.as_str()), Some("completed"));
+        assert!(
+            events.iter().all(|e| e.error.is_none()),
+            "a successful sync must not carry any failure reason: {events:?}"
+        );
     }
 }
