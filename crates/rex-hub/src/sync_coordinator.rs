@@ -408,6 +408,7 @@ impl SyncCoordinator {
     ///
     /// 字节从 `reader` 的 `download_range` 读出写入 `writer` 的 `upload`，
     /// 不经过浏览器。读写两侧由动作方向决定（`ToSource` 时互换）。
+    /// 冲突策略 `skip` 且目标已存在时未搬运任何字节，返回 0。
     async fn copy_file(
         state: &AppState,
         task_id: &str,
@@ -424,7 +425,9 @@ impl SyncCoordinator {
 
         let final_dst = match conflict {
             rex_transfer::ConflictPolicy::Skip if writer.stat(to).await.is_ok() => {
-                return Ok(total)
+                // 一个字节都没传：按 0 计入 `transferred`，否则进度条会按满字节
+                // 提前显示 100%（与 `transfer_coordinator` 的 Skip 同语义）。
+                return Ok(0);
             }
             rex_transfer::ConflictPolicy::Fail if writer.stat(to).await.is_ok() => {
                 return Err(SyncError::AlreadyExists(to.to_string()))
@@ -1454,6 +1457,65 @@ mod tests {
             "skip keeps the existing target file"
         );
         assert!(!dst.contains("/dst/a.txt.rex.part"), "no temp left behind");
+    }
+
+    /// `skip` 跳过的文件一个字节都没传，不能按满字节计入 `transferred_bytes`
+    /// （否则进度条提前 100%）。混合「新增文件 + 目标已存在」：只累加真正搬运的字节。
+    #[tokio::test]
+    async fn run_plan_skip_conflict_excludes_bytes_from_transferred() {
+        let (_dir, state) = make_state();
+        let opts = SyncOptions::default();
+        let task_id = make_sync_task(&state, &opts);
+
+        let src = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        let dst = TreeConnector::new(Arc::new(Mutex::new(HashMap::new())));
+        // 新增文件：真正搬运 5 字节
+        src.put("/src/new.txt", b"hello");
+        // 尺寸不同才会被计划为复制；目标已存在 + skip → 一个字节都不传
+        src.put("/src/conflict.txt", b"source version");
+        dst.put("/dst/conflict.txt", b"older target version");
+
+        let mut source = src.clone();
+        let mut target = dst.clone();
+
+        let plan = SyncCoordinator::run_plan(
+            &state,
+            &task_id,
+            SyncSpec {
+                opts: &opts,
+                conflict: ConflictPolicy::Skip,
+            },
+            &mut source,
+            &mut target,
+            "/src",
+            "/dst",
+        )
+        .await
+        .expect("skip must not fail the run");
+
+        assert_eq!(plan.summary.copies, 2, "both files planned as copies");
+        assert_eq!(
+            dst.get("/dst/new.txt"),
+            Some(b"hello".to_vec()),
+            "new file copied"
+        );
+        assert_eq!(
+            dst.get("/dst/conflict.txt"),
+            Some(b"older target version".to_vec()),
+            "skipped file untouched"
+        );
+
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        assert_eq!(rec.status, "completed");
+        assert_eq!(rec.total_bytes, plan.summary.total_bytes as i64);
+        assert_eq!(
+            rec.transferred_bytes, 5,
+            "skipped file must not inflate transferred_bytes"
+        );
+        assert!(
+            rec.transferred_bytes < rec.total_bytes,
+            "progress must not reach 100% while a file was skipped: {rec:?}"
+        );
     }
 
     #[tokio::test]
