@@ -83,6 +83,7 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 const MAX_RECONNECT_ATTEMPTS = 5
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000]
 let manualDisconnect = false
+let fatalError = false // set when server sends retryable=false (unrecoverable)
 let connecting = false  // Prevent duplicate connection attempts
 let sessionOpened = false  // Current WS attempt completed a handshake at least once
 
@@ -337,6 +338,7 @@ function connectSession() {
   
   connectionStatus.value = 'connecting'
   manualDisconnect = false
+  fatalError = false
   sessionOpened = false
   emit('update:status', 'connecting')
 
@@ -403,6 +405,11 @@ function connectSession() {
           connectionStatus.value = 'error'
           emit('update:status', 'error')
           toast.value?.push(message, 'error')
+          // Unrecoverable error (decrypt failure / auth / missing resource):
+          // `retryable=false` → stop auto-reconnect, surface permanently.
+          if (msg.payload?.retryable === false) {
+            fatalError = true
+          }
           break
         }
         case 'pong':
@@ -424,8 +431,9 @@ function connectSession() {
     if (!sessionOpened) connectFailed.value = true
     emit('update:status', 'offline')
 
-    // Auto-reconnect
-    if (!manualDisconnect && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+    // Auto-reconnect. `fatalError` means the server reported an unrecoverable
+    // error (retryable=false); retrying would loop on the same failure.
+    if (!manualDisconnect && !fatalError && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
       const delay = RECONNECT_DELAYS[Math.min(reconnectAttempts, RECONNECT_DELAYS.length - 1)]
       reconnectAttempts++
       terminal?.write(`\r\n\x1b[33m[Reconnecting... ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}]\x1b[0m\r\n`)

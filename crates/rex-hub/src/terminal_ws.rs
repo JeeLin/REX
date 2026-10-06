@@ -69,6 +69,55 @@ struct DisconnectedPayload {
 struct ErrorPayload {
     code: String,
     message: String,
+    /// 该错误重连是否有可能自愈。前端据此决定是否自动重连：
+    /// `false` = 终止性（配置/凭据类，重试多少次都是同一结果）→ 停止重连并
+    /// 把 `message` 呈现给用户；`true` / 缺省 = 可重试（传输中断等）。
+    #[serde(rename = "retryable")]
+    retryable: bool,
+}
+
+/// 终端建连失败的分类：决定是否值得让前端重连。
+///
+/// 只有「重试一次可能变成成功」的错误才算可重试。凭据解密失败、config_json
+/// 不是合法 JSON、资源不存在、host 为空 —— 这些重连多少次都会在同一处失败，
+/// 继续重连既刷 `/ws/terminal` 日志又让用户看到终端反复回到初始状态却看不到
+/// 原因，因此按终止性错误上报。DB / spawn_blocking 这类基础设施抖动仍可重试。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConnFailure {
+    /// 终止性：重连无法改变结果。
+    Fatal,
+    /// 可重试：传输或数据库层的瞬时故障。
+    Transient,
+}
+
+impl ConnFailure {
+    fn retryable(self) -> bool {
+        matches!(self, ConnFailure::Transient)
+    }
+}
+
+/// 带分类的资源加载失败。`String` 版本无法区分二者，会让前端对解密失败
+/// 也走自动重连，形成无限重连。
+#[derive(Debug)]
+struct ConnError {
+    message: String,
+    failure: ConnFailure,
+}
+
+impl ConnError {
+    fn fatal(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            failure: ConnFailure::Fatal,
+        }
+    }
+
+    fn transient(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            failure: ConnFailure::Transient,
+        }
+    }
 }
 
 /// URL 查询参数
@@ -122,8 +171,17 @@ async fn handle_socket(mut ws: WebSocket, state: AppState, resource_id: String) 
     let conn_info = match load_resource_conn(&state, &resource_id).await {
         Ok(info) => info,
         Err(e) => {
-            tracing::warn!(action = "SSH_RESOURCE_LOAD", resource_id = %resource_id, error = %e, "SSH resource load failed");
-            let _ = send_ws_error(&mut ws, &e).await;
+            // 终止性错误（解密失败 / 配置非法 / 资源不存在）标 fatal：前端据此
+            // 停止重连。若沿用可重试语义，用户会看到终端无限重连且每次都回到
+            // 第一次的状态，却始终拿不到真正的原因。
+            tracing::warn!(
+                action = "SSH_RESOURCE_LOAD",
+                resource_id = %resource_id,
+                retryable = e.failure.retryable(),
+                error = %e.message,
+                "SSH resource load failed"
+            );
+            let _ = send_ws_error_classified(&mut ws, &e.message, e.failure).await;
             return;
         }
     };
@@ -172,7 +230,7 @@ async fn handle_socket(mut ws: WebSocket, state: AppState, resource_id: String) 
 async fn load_resource_conn(
     state: &AppState,
     resource_id: &str,
-) -> Result<ResourceConnInfo, String> {
+) -> Result<ResourceConnInfo, ConnError> {
     let db = state.db.clone();
     let rid = resource_id.to_string();
     let crypto = state.crypto.clone();
@@ -184,11 +242,11 @@ async fn load_resource_conn(
             .get_resource(&rid)
             .map_err(|e| {
                 tracing::error!(action = "SSH_RESOURCE_LOAD", resource_id = %rid, error = %e, "database query failed");
-                format!("db error: {e}")
+                ConnError::transient(format!("db error: {e}"))
             })?
             .ok_or_else(|| {
                 tracing::warn!(action = "SSH_RESOURCE_LOAD", resource_id = %rid, "resource not found in database");
-                "resource not found".to_string()
+                ConnError::fatal(format!("resource not found: {rid}"))
             })?;
 
         tracing::debug!(
@@ -206,7 +264,7 @@ async fn load_resource_conn(
         // 从 Resource 顶层字段获取连接信息
         let host = resource.host.clone();
         if host.is_empty() {
-            return Err(format!("resource {rid}: host is empty, please fill in host in resource settings"));
+            return Err(ConnError::fatal(format!("resource {rid}: host is empty, please fill in host in resource settings")));
         }
         let port = resource.port.unwrap_or(22);
         // 与 SFTP/其它协议共用同一兜底口径，保证连接池键 user@host:port 一致
@@ -217,15 +275,15 @@ async fn load_resource_conn(
         let (password, private_key, init_script) =
             if !resource.config_json.is_empty() && resource.config_json != "{}" {
             let config_str = crypto
-                .decrypt(&resource.config_json)
-                .map_err(|e| {
-                    tracing::error!(action = "SSH_CONFIG_DECRYPT", resource_id = %rid, resource_name = %resource.name, error = %e, "config_json decryption failed");
-                    format!("decrypt failed: {e}")
-                })?;
+                    .decrypt(&resource.config_json)
+                    .map_err(|e| {
+                        tracing::error!(action = "SSH_CONFIG_DECRYPT", resource_id = %rid, resource_name = %resource.name, error = %e, "config_json decryption failed");
+                        ConnError::fatal(format!("SSH credential decryption failed: decrypt failed: {e}; please re-save the resource credentials (the master key that encrypted them no longer matches this Hub)"))
+                    })?;
 
             let config: serde_json::Value = serde_json::from_str(&config_str).map_err(|e| {
                 tracing::error!(action = "SSH_CONFIG_PARSE", resource_id = %rid, resource_name = %resource.name, error = %e, "config_json parse failed");
-                format!("invalid config json: {e}")
+                ConnError::fatal(format!("invalid config json: {e}"))
             })?;
 
             let pw = config
@@ -275,11 +333,11 @@ async fn load_resource_conn(
             .get_environment(&resource.environment_id)
             .map_err(|e| {
                 tracing::error!(action = "SSH_ENV_LOAD", resource_id = %rid, resource_name = %resource.name, env_id = %resource.environment_id, error = %e, "failed to load environment");
-                format!("db error: {e}")
+                ConnError::transient(format!("db error: {e}"))
             })?
             .ok_or_else(|| {
                 tracing::warn!(action = "SSH_ENV_NOT_FOUND", resource_id = %rid, resource_name = %resource.name, env_id = %resource.environment_id, "environment not found");
-                "environment not found".to_string()
+                ConnError::fatal(format!("environment not found: {}", resource.environment_id))
             })?;
 
         let use_agent = env.connection_mode == "agent";
@@ -333,7 +391,7 @@ async fn load_resource_conn(
         })
     })
     .await
-    .map_err(|e| format!("task join error: {e}"))?
+    .map_err(|e| ConnError::transient(format!("task join error: {e}")))?
 }
 
 // ═══════════════════════════════════════
@@ -391,7 +449,12 @@ async fn handle_direct_terminal(
                 Some(conn.name.clone()),
                 conn.audit_scope(resource_id),
             );
-            let _ = send_ws_error(&mut ws, &format!("SSH connection failed: {e}")).await;
+            let _ = send_ws_error_classified(
+                &mut ws,
+                &format!("SSH connection failed: {e}"),
+                classify_ssh_connect_failure(&e),
+            )
+            .await;
             return;
         }
     };
@@ -414,7 +477,7 @@ async fn handle_direct_terminal(
     let (data_tx, mut data_rx) = mpsc::channel::<String>(512);
 
     let cmd_tx_for_ping = cmd_tx.clone();
-    let ws_read_task = tokio::spawn(async move {
+    let mut ws_read_task = tokio::spawn(async move {
         while let Some(msg) = ws_stream.next().await {
             match msg {
                 Ok(Message::Text(text)) => {
@@ -435,7 +498,7 @@ async fn handle_direct_terminal(
     });
 
     let session_for_ssh = session.clone();
-    let ssh_task = tokio::spawn(async move {
+    let mut ssh_task = tokio::spawn(async move {
         loop {
             let mut session = session_for_ssh.lock().await;
             tokio::select! {
@@ -450,6 +513,8 @@ async fn handle_direct_terminal(
                             let _ = session.resize(cols, rows).await;
                         }
                         Some(ClientMsg::Disconnect) | None => {
+                            // 收到 `terminal.disconnect` 帧 → 主动断开 SSH，
+                            // 释放服务端会话；随后 ws_read_task 退出，select! 解除。
                             let _ = session.disconnect().await;
                             break;
                         }
@@ -483,7 +548,7 @@ async fn handle_direct_terminal(
         }
     });
 
-    let ws_write_task = tokio::spawn(async move {
+    let mut ws_write_task = tokio::spawn(async move {
         while let Some(data) = data_rx.recv().await {
             let msg = if data.starts_with('{') {
                 Message::Text(data.into())
@@ -501,7 +566,7 @@ async fn handle_direct_terminal(
 
     // 服务端 keepalive ping（每 25 秒发送 ping，防止中间件/代理超时断开）
     let mut ping_interval = create_server_ping_interval();
-    let ws_ping_task = tokio::spawn(async move {
+    let mut ws_ping_task = tokio::spawn(async move {
         loop {
             ping_interval.tick().await;
             // 通过 cmd_tx_for_ping 发送 ping（不直接持有 ws_sink）
@@ -511,11 +576,24 @@ async fn handle_direct_terminal(
         }
     });
 
+    // 任一子任务退出（前端 WS 关闭 / 断开 / session 断开）→ 取消其它任务并
+    // 主动断开 SSH。过去仅 `tokio::select!` 等待其中一者结束就原样返回，
+    // 另外三个任务仍可能滞留 —— 若前端因某种原因未及时触发 WS close
+    //（如 tab 被 KeepAlive 缓存后又因路由/异常脱离）会话就会泄漏，
+    // 服务端继续重连且永远不退出。
     tokio::select! {
-        _ = ws_read_task => {},
-        _ = ssh_task => {},
-        _ = ws_write_task => {},
-        _ = ws_ping_task => {},
+        _ = &mut ws_read_task => {},
+        _ = &mut ssh_task => {},
+        _ = &mut ws_write_task => {},
+        _ = &mut ws_ping_task => {},
+    }
+    ws_read_task.abort();
+    ssh_task.abort();
+    ws_write_task.abort();
+    ws_ping_task.abort();
+    // 主动断开 SSH channel（直接模式 session 在本函数作用域持有 Arc）。
+    if let Err(e) = session.lock().await.disconnect().await {
+        tracing::debug!(action = "SSH_SESSION_END", session_id, error = %e, "ssh disconnect on session end");
     }
 
     tracing::debug!(
@@ -658,7 +736,7 @@ async fn handle_agent_terminal(
                 error = %e,
                 "agent reported connection error"
             );
-            let _ = send_ws_error(&mut ws, &e).await;
+            let _ = send_ws_error_classified(&mut ws, &e, classify_ssh_connect_failure(&e)).await;
             return;
         }
         Ok(Ok(_)) => {
@@ -731,7 +809,7 @@ async fn handle_agent_terminal(
 
     let agent_for_send = agent_conn.clone();
     let channel_id_clone = channel_id.clone();
-    let frontend_to_agent = tokio::spawn(async move {
+    let mut frontend_to_agent = tokio::spawn(async move {
         while let Some(msg) = ws_stream.next().await {
             match msg {
                 Ok(Message::Text(text)) => {
@@ -771,7 +849,7 @@ async fn handle_agent_terminal(
         }
     });
 
-    let agent_to_frontend = tokio::spawn(async move {
+    let mut agent_to_frontend = tokio::spawn(async move {
         while let Some(data) = data_rx.recv().await {
             let encoded = base64::engine::general_purpose::STANDARD.encode(&data);
             let msg = ServerMsg::Data {
@@ -859,21 +937,166 @@ async fn handle_agent_terminal(
     );
 }
 
+/// 发错误信令到前端。
+///
+/// 默认按「可重试 / transient」分类：保持原有行为（前端自动重连）。
+/// 仅凭据 / 配置级别的错误应走 [`send_ws_error_classified`] 并传 `Fatal`。
 async fn send_ws_error(ws: &mut WebSocket, msg: &str) -> Result<(), axum::Error> {
+    send_ws_error_classified(ws, msg, ConnFailure::Transient).await
+}
+
+/// 发分类错误信令。`Fatal` 错误带 `retryable=false`，前端在收到后停止
+/// 自动重连并把 `message` 呈现给用户（解密失败 / 认证失败 / 资源缺失等）。
+async fn send_ws_error_classified(
+    ws: &mut WebSocket,
+    msg: &str,
+    failure: ConnFailure,
+) -> Result<(), axum::Error> {
     use crate::error::send_ws_json;
-    let code = crate::error::classify_connect_error(msg)
-        .as_str()
-        .to_string();
+    let retryable = failure.retryable();
+    let code = if retryable {
+        crate::error::classify_connect_error(msg)
+            .as_str()
+            .to_string()
+    } else {
+        fatal_error_code(msg).to_string()
+    };
     send_ws_json(
         ws,
         &ServerMsg::Error {
             payload: ErrorPayload {
                 code,
                 message: msg.into(),
+                retryable,
             },
         },
     )
     .await
+}
+
+/// 终止性错误的结构化码。用于 `retryable=false` 错误帧的 `code` 字段，
+/// 让前端 / 用户能精确定位（解密失败 vs 认证失败 vs 资源缺失）。
+fn fatal_error_code(msg: &str) -> &'static str {
+    let lower = msg.to_lowercase();
+    if lower.contains("decryption failed") || lower.contains("decrypt failed") {
+        "SSH_CONFIG_DECRYPT_FAILED"
+    } else if lower.contains("invalid config json") {
+        "SSH_CONFIG_INVALID"
+    } else if lower.contains("resource not found") {
+        "RESOURCE_NOT_FOUND"
+    } else if lower.contains("environment not found") {
+        "ENVIRONMENT_NOT_FOUND"
+    } else if lower.contains("host is empty") || lower.contains("host is required") {
+        "HOST_REQUIRED"
+    } else if lower.contains("authentication failed") || lower.contains("auth") {
+        "AUTH_FAILED"
+    } else {
+        "ERROR"
+    }
+}
+
+/// SSH 建连失败 → 可重试性。
+///
+/// 认证失败（密码/私钥错误）属于凭据问题：重连仍用同一份凭据，必然被拒 →
+/// 终止性。网络层失败（超时 / 拒绝 / DNS / TLS）可能因网络恢复而自愈 →
+/// 可重试。判定复用 `crate::error::classify_connect_error` 的 `AuthFailed`。
+///
+/// 此处 `e` 应为 `rex_ssh` 建连抛出的 `anyhow::Error`，其 Display 仅显示
+/// 最外层 context；`rex_ssh` 自身已把底层 russh 错误串在链上，所以传入
+/// `e.to_string()` 可能丢失二级原因，`classify_ssh_connect_failure` 只能做
+/// 启发式 —— 详见 `connect_direct` 的 `.context("SSH connection failed")`。
+fn classify_ssh_connect_failure(err: impl std::fmt::Display) -> ConnFailure {
+    match crate::error::classify_connect_error(&err.to_string()) {
+        crate::error::ErrorCode::AuthFailed => ConnFailure::Fatal,
+        _ => ConnFailure::Transient,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fatal_error_code_classifies_decrypt_failure() {
+        assert_eq!(
+            fatal_error_code("SSH credential decryption failed: decrypt failed: aead::Error"),
+            "SSH_CONFIG_DECRYPT_FAILED"
+        );
+    }
+
+    #[test]
+    fn fatal_error_code_classifies_auth_failure() {
+        assert_eq!(
+            fatal_error_code("SSH authentication failed (password: ...)"),
+            "AUTH_FAILED"
+        );
+    }
+
+    #[test]
+    fn fatal_error_code_classifies_resource_not_found() {
+        assert_eq!(
+            fatal_error_code("resource not found: r1"),
+            "RESOURCE_NOT_FOUND"
+        );
+        assert_eq!(
+            fatal_error_code("environment not found: e1"),
+            "ENVIRONMENT_NOT_FOUND"
+        );
+        assert_eq!(
+            fatal_error_code("resource r1: host is empty"),
+            "HOST_REQUIRED"
+        );
+    }
+
+    #[test]
+    fn fatal_error_code_falls_back_for_unknown() {
+        assert_eq!(fatal_error_code("something odd"), "ERROR");
+    }
+
+    #[test]
+    fn classify_ssh_auth_failure_is_fatal() {
+        // russh 聚合认证失败文案 → 终止性。
+        assert_eq!(
+            classify_ssh_connect_failure(
+                "SSH authentication failed (password: partial_success=false)"
+            ),
+            ConnFailure::Fatal
+        );
+    }
+
+    #[test]
+    fn classify_ssh_transport_failure_is_transient() {
+        assert_eq!(
+            classify_ssh_connect_failure(
+                "SSH connection failed: Connection refused (os error 111)"
+            ),
+            ConnFailure::Transient
+        );
+        assert_eq!(
+            classify_ssh_connect_failure("SSH connection failed: DNS resolution failed"),
+            ConnFailure::Transient
+        );
+        assert_eq!(
+            classify_ssh_connect_failure("SSH connection failed: TLS handshake failed"),
+            ConnFailure::Transient
+        );
+    }
+
+    #[test]
+    fn conn_error_default_is_transient_for_db_errors() {
+        let e = ConnError::transient("db error: connection refused");
+        assert!(e.failure.retryable());
+        assert_eq!(
+            crate::error::classify_connect_error(&e.message),
+            crate::error::ErrorCode::ConnectionRefused
+        );
+    }
+
+    #[test]
+    fn decrypt_failure_is_fatal() {
+        let e = ConnError::fatal("SSH credential decryption failed: decrypt failed: aead::Error");
+        assert!(!e.failure.retryable());
+    }
 }
 
 /// 创建服务端 keepalive ping 定时器（每 25 秒发送一次 ping）
