@@ -1,5 +1,66 @@
 # Changelog
 
+## [0.94.0] - 2026-10-08
+
+### Added
+- **SSH KEX compatibility**: `rex-ssh` now sets `Config::preferred.kex`, appending legacy `ecdh-sha2-nistp256` + `diffie-hellman-group14-sha1` **last**, so modern servers still negotiate MLKEM/curve25519 but legacy sshd (e.g. old embedded/box sshd) can complete key exchange (fixes `SSH_ERR_KEX_NO_COMMON_ALGO`).
+- **Data-key guardrail (soft-fail)**: if the master key is unavailable at Hub startup, the Hub now logs a warning and continues in a degraded mode instead of hard-crashing; the key can be re-supplied without a full data restore.
+
+### Fixed
+- **Agent-mode test connections**: the connection *test* probe for `mysql` / `postgresql` / `sql` / `redis` now routes through the Agent tunnel when `connection_mode == "agent"`, matching the data plane. Previously the Hub TCP-probed directly and failed with `No route to host` for intranet databases while the real connection worked fine.
+- **Export no longer leaks ciphertext**: resource/environment export surfaces decryption-failure as an error instead of silently persisting the encrypted blob (previously import would double-encrypt).
+- **Runtime decrypt failures humanized**: credential-decryption failures during resource connect are now surfaced as a readable message across `resource_api` / `resource_conn` / `terminal_ws` / `env_api` (single canonical message, reusing v0.93 error classification).
+- Env-card UI: action-button bar anchors to the card bottom when no Agent is online; the "1 online" badge only renders when `agent_status === 'online'`.
+
+## [0.93.0] - 2026-10-07
+
+### Added
+- **Structured, classified tunnel connect failures**: `tunnel_ws` `TunnelMsg::Error` now carries `code` / `stage` / `retryable` / `message` (six bare-string failures → `FailureKind` constants `client`/`agent`/`dispatch`/`agent_error`/`agent_response`/`agent_channel`/`timeout`).
+- **Single error-classification source**: `ErrorPayload` / `ConnFailure` / `ErrorCode` + `ProtoKind` (`Ssh`/`Sql`/`Redis`/`MongoDb`/`Tunnel`) with `wire_code(proto, root)` moved into shared `error.rs`. SSH wire codes unchanged for compatibility.
+- **SQL / Redis / Mongo connection-error classification by stage**: failures flow through `connect_error_response_with_stage` → `code = <SQL|REDIS|MONGODB>_<root>` + `stage` (`dns`/`tcp`/`tls`/`auth`/`timeout`/`connect`) + `retryable`; surfaced in the frontend toast via `e.code`.
+- **Audit dimension filters**: `GET /api/audit-log` and `/api/audit-log/stats` accept `resource_id` and `agent_id`; UI gains Resource + Agent filter controls alongside the existing Environment filter.
+- **Audit scoped writes**: all `audit_log(` writes in `sql_api`/`file_api`/`redis_api`/`mongodb_api`/`tunnel_ws`/`agent_ws`/`terminal_ws` now carry `environment_id`/`resource_id`/`agent_id`; zero-match stats are `COALESCE`d and write failures `tracing::error!`.
+
+### Fixed
+- `AuditLogPage` uses `Promise.allSettled`: a single stats/list failure no longer blanks the whole table; partial results render with a warning toast + failure counter + watermark.
+- Cancel-during-conflict no longer clobbers a `canceled` row to `failed`; cancel preserves `.rex.part` cleanup (cooperative `is_canceled()` DB checks, no `AbortHandle`).
+- Transfer `Fail`/`Rename` errors land `Failed` with reason instead of sticking at `running`; zero-byte sources copy correctly; skipped files no longer over-report progress.
+- Audit CSV export produces a toast instead of an unhandled rejection.
+
+## [0.92.0] - 2026-10-06
+
+_(approximate date — no 0.92.0 bump commit or git tag exists in the repo; dated from the milestone completion marker)_
+
+### Added
+- **Real folder sync engine** over the v0.91.0 task model: `SyncDirection`, `CompareBasis`, `SyncOptions` (include/exclude globs, `delete_orphans`), `SyncPlan` with `SyncActionKind`.
+- **Sync REST API**: `POST /api/files/sync` (create), `POST /api/files/sync/preview` (dry-run), `GET /api/files/sync/{id}`, `DELETE /api/files/sync/{id}`. Sync tasks reuse `transfer_task` via a new `kind` column (`transfer | sync`) + `sync_options` JSON.
+- **Sync lifecycle / phases**: `pending → scanning → planning → running → verifying → completed/failed/canceled`, localized via `files.syncPhase*`.
+- `chmod` over the agent tunnel (`POST /api/file/chmod` + `TunnelKind::Chmod`); SFTP list/stat populate `permissions`, S3 populate `acl`/`storage_class`.
+- SSH terminal fatal-error handling (`SSH_CONFIG_DECRYPT_FAILED`/`SSH_CONFIG_INVALID`/`RESOURCE_NOT_FOUND`/`ENVIRONMENT_NOT_FOUND`/`HOST_REQUIRED`/`AUTH_FAILED`, `retryable=false`) so terminals stop retrying on non-recoverable config errors.
+- Agent-side SSH error diagnostics: russh/io errors → `stage` + `code` (`SSH_ERR_AUTH_FAILED`/`SSH_ERR_PRIVATE_KEY_DECODE`/`SSH_ERR_KEX_NO_COMMON_ALGO`/`…`) forwarded to the Hub.
+- Hub session release on terminal-tab close: `close` frame evicts the `russh` session from the Agent pool (fixes lingering reconnect).
+- **Path-nesting guard**: `POST /api/files/sync(preview)` rejects a target inside the same-resource source (HTTP 400, `SYNC_PATH_NESTED`); frontend `useFiles.openSync` mirrors the check.
+- FolderSyncDialog rebuilt into a real sync dialog (direction / compare-by / include+exclude / delete-orphans / preview / start).
+
+### Changed
+- SFTP `upload` uses `seek(offset)` for byte-accurate resume; S3 `offset>0` takes the multipart-resume path.
+
+### Removed
+- Dead browser file API methods (`statFile`, `listMultipartUploads`, `resumeMultipartUpload`, `abortMultipartUpload`) and backend `/stat`, `/s3/multipart-*` routes.
+
+## [0.91.0] - 2026-10-05
+
+### Added
+- **Transfer task model + persistent queue**: `TransferTask` / `ConflictPolicy` (`overwrite`/`skip`/`rename`/`fail`) / `TransferStatus`, persisted in `transfer_task` (with `status`/`created_at` indexes) + `models.rs`.
+- **File-transfer REST API**: `GET /api/file/transfer` (list), `GET /api/file/transfer/{id}` (single + live progress), `POST /api/file/transfer/{id}/cancel`. Server-side only — browser memory never holds file bytes.
+- **Server-side direct transfer**: `POST /api/file/transfer/action {op, src, dst, conflict}` routes drag/drop/copy/move through a direct source→target connector instead of `download→blob→upload` via the browser.
+- **FileConnector capability model**: `FileConnector::capability()` / `GET /api/files/connector/{resource_id}/capability` replaces 6 `downcast_ref` sites; S3 presigned/ACL/multipart now work in agent mode, SFTP reports `chmod`.
+- **WebSocket transfer progress**: `GET /ws/files` broadcasts `TransferProgressEvent` live progress/done — replaces polling in the frontend `useTransferStore`.
+- `FilesPage.vue` split into `FilesPage`/`FilesToolbar`/`FilesGrid`/`FilesList`/`FilesDrawer` + shared `useFiles`/`useTransfer` composables.
+
+### Fixed
+- Conflict `Fail`/`Rename` now land `Failed` (were stuck `running`); cancel is cooperative (no `AbortHandle`) and preserves `.rex.part` cleanup; zero-byte sources copy correctly; skipped files no longer inflate progress; preflight failures persist to the task `error` and broadcast on `/ws/files`.
+
 ## [0.90.1] - 2026-10-03
 
 ### Added
