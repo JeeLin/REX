@@ -349,6 +349,114 @@ fn agent_test_connect_config(
     cfg
 }
 
+/// 环境是否走 Agent 隧道（协议无关）：仅 `connection_mode == "agent"` 为真。
+///
+/// 真实数据路径按此判定选 Agent 连接器，测试连接必须同口径，否则内网目标
+/// 在 Hub 直连探测上必然 `No route to host`。
+async fn env_uses_agent(state: &crate::AppState, env_id: Option<&str>) -> bool {
+    let Some(env_id) = env_id else { return false };
+    let db = state.db.clone();
+    let eid = env_id.to_string();
+    tokio::task::spawn_blocking(move || db.get_environment(&eid))
+        .await
+        .ok()
+        .and_then(|r| r.ok())
+        .flatten()
+        .map(|env| env.connection_mode == "agent")
+        .unwrap_or(false)
+}
+
+/// agent 模式下把探测请求转发给 Agent（协议无关，Agent 侧按 protocol 分发）。
+///
+/// 返回 `None` 表示不适用（无环境 / 非 agent 模式 / 无在线 Agent / WS 未建立），
+/// 调用方回退到 Hub 直连；`Some(Err(..))` 表示已尝试但探测失败。
+async fn test_connect_via_agent(
+    state: &crate::AppState,
+    protocol: &str,
+    host: &str,
+    port: u16,
+    username: Option<&str>,
+    config_json: Option<&str>,
+    environment_id: Option<&str>,
+) -> Option<Result<(), String>> {
+    if !env_uses_agent(state, environment_id).await {
+        return None;
+    }
+
+    let db = state.db.clone();
+    let eid = environment_id.unwrap_or("").to_string();
+    let agent_id = tokio::task::spawn_blocking(move || {
+        db.list_agents_by_env(&eid)
+            .unwrap_or_default()
+            .into_iter()
+            .find(|a| a.status == "online")
+            .map(|a| a.id)
+    })
+    .await
+    .ok()
+    .flatten()?;
+
+    let conn = {
+        let conns = state.agent_tunnel.connections.read().await;
+        conns.get(&agent_id).cloned()
+    };
+    let conn = match conn {
+        Some(c) => c,
+        None => return Some(Err("agent not connected".into())),
+    };
+
+    let request_id = format!("req_{}", &uuid::Uuid::new_v4().to_string()[..8]);
+    let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
+    {
+        let mut pending = state.agent_tunnel.pending_requests.write().await;
+        pending.insert(request_id.clone(), resp_tx);
+    }
+    let connect_config = agent_test_connect_config(host, port, username, config_json);
+    let connect_msg = serde_json::json!({
+        "type": "connect",
+        "payload": {
+            "request_id": request_id,
+            "resource_id": "test",
+            "protocol": protocol,
+            "config": connect_config,
+        }
+    });
+    if conn
+        .sender
+        .send(crate::agent_ws::AgentEvent::Text(connect_msg.to_string()))
+        .await
+        .is_err()
+    {
+        return Some(Err("failed to send connect request to agent".into()));
+    }
+
+    // 等待 Agent 响应（5s 超时）
+    let resp = match tokio::time::timeout(std::time::Duration::from_secs(5), resp_rx).await {
+        Ok(Ok(resp)) => resp,
+        Ok(Err(_)) => return Some(Err("agent response channel closed".into())),
+        Err(_) => return Some(Err("agent connection timed out".into())),
+    };
+    if resp.error.is_some() {
+        return Some(Err(resp
+            .error
+            .unwrap_or_else(|| "agent connect failed".into())));
+    }
+    // 连接成功：通知 Agent 关闭 channel 并清理本地映射
+    if let Some(channel_id) = &resp.channel_id {
+        let close_msg = serde_json::json!({
+            "type": "close",
+            "payload": { "channel_id": channel_id }
+        });
+        let _ = conn
+            .sender
+            .send(crate::agent_ws::AgentEvent::Text(close_msg.to_string()))
+            .await;
+        let mut channels = state.agent_tunnel.channels.write().await;
+        channels.remove(channel_id);
+    }
+    Some(Ok(()))
+}
+
 pub async fn test_connection(
     State(state): State<crate::AppState>,
     Json(body): Json<TestConnectionRequest>,
@@ -377,126 +485,18 @@ pub async fn test_connection(
             let host = body.host.clone();
             let port = body.port.unwrap_or(22);
 
-            // Check if this environment uses agent proxy
-            let use_agent = if let Some(ref env_id) = body.environment_id {
-                let db = state.db.clone();
-                let eid = env_id.clone();
-                tokio::task::spawn_blocking(move || db.get_environment(&eid))
-                    .await
-                    .ok()
-                    .and_then(|r| r.ok())
-                    .flatten()
-                    .map(|env| env.connection_mode == "agent")
-                    .unwrap_or(false)
-            } else {
-                false
-            };
-
-            if use_agent {
-                // Route through agent tunnel
-                let env_id = body.environment_id.as_deref().unwrap_or("");
-                let db = state.db.clone();
-                let eid = env_id.to_string();
-                let agent_result = tokio::task::spawn_blocking(move || {
-                    let agents = db.list_agents_by_env(&eid).unwrap_or_default();
-                    agents
-                        .into_iter()
-                        .find(|a| a.status == "online")
-                        .map(|a| a.id)
-                })
-                .await
-                .ok()
-                .flatten();
-
-                match agent_result {
-                    Some(agent_id) => {
-                        // Get agent WebSocket connection
-                        let agent_conn = {
-                            let conns = state.agent_tunnel.connections.read().await;
-                            conns.get(&agent_id).cloned()
-                        };
-                        match agent_conn {
-                            Some(conn) => {
-                                // Send connect request via agent tunnel
-                                let request_id =
-                                    format!("req_{}", &uuid::Uuid::new_v4().to_string()[..8]);
-                                let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
-                                {
-                                    let mut pending =
-                                        state.agent_tunnel.pending_requests.write().await;
-                                    pending.insert(request_id.clone(), resp_tx);
-                                }
-                                let connect_config = agent_test_connect_config(
-                                    &host,
-                                    port,
-                                    body.username.as_deref(),
-                                    body.config_json.as_deref(),
-                                );
-                                let connect_msg = serde_json::json!({
-                                    "type": "connect",
-                                    "payload": {
-                                        "request_id": request_id,
-                                        "resource_id": "test",
-                                        "protocol": body.protocol,
-                                        "config": connect_config,
-                                    }
-                                });
-                                if conn
-                                    .sender
-                                    .send(crate::agent_ws::AgentEvent::Text(
-                                        connect_msg.to_string(),
-                                    ))
-                                    .await
-                                    .is_err()
-                                {
-                                    Err("failed to send connect request to agent".into())
-                                } else {
-                                    // Wait for agent response (5s timeout)
-                                    match tokio::time::timeout(
-                                        std::time::Duration::from_secs(5),
-                                        resp_rx,
-                                    )
-                                    .await
-                                    {
-                                        Ok(Ok(resp)) => {
-                                            if resp.error.is_some() {
-                                                Err(resp
-                                                    .error
-                                                    .unwrap_or("agent connect failed".into()))
-                                            } else {
-                                                // Connection successful, notify agent to close the channel
-                                                if let Some(channel_id) = &resp.channel_id {
-                                                    // Send close message to agent
-                                                    let close_msg = serde_json::json!({
-                                                        "type": "close",
-                                                        "payload": {
-                                                            "channel_id": channel_id
-                                                        }
-                                                    });
-                                                    let _ = conn
-                                                        .sender
-                                                        .send(crate::agent_ws::AgentEvent::Text(
-                                                            close_msg.to_string(),
-                                                        ))
-                                                        .await;
-                                                    // Remove from local channel map
-                                                    let mut channels =
-                                                        state.agent_tunnel.channels.write().await;
-                                                    channels.remove(channel_id);
-                                                }
-                                                Ok(())
-                                            }
-                                        }
-                                        Ok(Err(_)) => Err("agent response channel closed".into()),
-                                        Err(_) => Err("agent connection timed out".into()),
-                                    }
-                                }
-                            }
-                            None => Err("agent not connected".into()),
-                        }
-                    }
-                    None => Err("no online agent available".into()),
-                }
+            let result = if let Some(r) = test_connect_via_agent(
+                &state,
+                &body.protocol,
+                &host,
+                port,
+                body.username.as_deref(),
+                body.config_json.as_deref(),
+                body.environment_id.as_deref(),
+            )
+            .await
+            {
+                r
             } else {
                 // Direct TCP connection
                 let addr = if host.contains(':') {
@@ -514,34 +514,51 @@ pub async fn test_connection(
                     Ok(Err(e)) => Err(format!("TCP connect failed: {e}")),
                     Err(_) => Err("connection timed out".into()),
                 }
-            }
+            };
+            result
         }
         "redis" => {
-            let redis_host = if body.host.contains(':') {
-                format!("[{}]", body.host)
-            } else {
-                body.host.clone()
-            };
-            let addr = format!("redis://{}:{}/", redis_host, body.port.unwrap_or(6379));
-            match tokio::time::timeout(std::time::Duration::from_secs(5), async {
-                let client =
-                    redis::Client::open(addr.as_str()).map_err(|e| format!("redis error: {e}"))?;
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .map_err(|e| format!("redis connect error: {e}"))?;
-                redis::Cmd::new()
-                    .arg("PING")
-                    .query_async::<String>(&mut conn)
-                    .await
-                    .map_err(|e| format!("redis PING failed: {e}"))?;
-                Ok::<(), String>(())
-            })
+            let port = body.port.unwrap_or(6379);
+            let result = if let Some(r) = test_connect_via_agent(
+                &state,
+                &body.protocol,
+                &body.host,
+                port,
+                body.username.as_deref(),
+                body.config_json.as_deref(),
+                body.environment_id.as_deref(),
+            )
             .await
             {
-                Ok(r) => r,
-                Err(_) => Err("connection timed out".into()),
-            }
+                r
+            } else {
+                let redis_host = if body.host.contains(':') {
+                    format!("[{}]", body.host)
+                } else {
+                    body.host.clone()
+                };
+                let addr = format!("redis://{}:{}/", redis_host, port);
+                match tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                    let client = redis::Client::open(addr.as_str())
+                        .map_err(|e| format!("redis error: {e}"))?;
+                    let mut conn = client
+                        .get_multiplexed_async_connection()
+                        .await
+                        .map_err(|e| format!("redis connect error: {e}"))?;
+                    redis::Cmd::new()
+                        .arg("PING")
+                        .query_async::<String>(&mut conn)
+                        .await
+                        .map_err(|e| format!("redis PING failed: {e}"))?;
+                    Ok::<(), String>(())
+                })
+                .await
+                {
+                    Ok(r) => r,
+                    Err(_) => Err("connection timed out".into()),
+                }
+            };
+            result
         }
         "sql" => {
             // v0.73.2：统一 SQL 协议迁移后，protocol='sql' + subtype 携带方言。
@@ -584,21 +601,49 @@ pub async fn test_connection(
                     let port = body
                         .port
                         .unwrap_or(if subtype == "mysql" { 3306 } else { 5432 });
-                    let addr = if host.contains(':') {
-                        format!("[{host}]:{port}")
-                    } else {
-                        format!("{host}:{port}")
+                    // Agent 以 config.subtype 选方言下发（agent_ws handle_connect_sql），
+                    // 探测出的 subtype 需显式带入，否则回退按 protocol='sql' 解析失败。
+                    let cfg_json = {
+                        let mut v: serde_json::Value = body
+                            .config_json
+                            .as_deref()
+                            .and_then(|c| serde_json::from_str::<serde_json::Value>(c).ok())
+                            .unwrap_or_else(|| serde_json::json!({}));
+                        if let serde_json::Value::Object(m) = &mut v {
+                            m.insert("subtype".to_string(), serde_json::json!(subtype.clone()));
+                        }
+                        v.to_string()
                     };
-                    match tokio::time::timeout(
-                        std::time::Duration::from_secs(5),
-                        tokio::net::TcpStream::connect(&addr),
+                    let result = if let Some(r) = test_connect_via_agent(
+                        &state,
+                        &body.protocol,
+                        &host,
+                        port,
+                        body.username.as_deref(),
+                        Some(&cfg_json),
+                        body.environment_id.as_deref(),
                     )
                     .await
                     {
-                        Ok(Ok(_)) => Ok(()),
-                        Ok(Err(e)) => Err(format!("TCP connect failed: {e}")),
-                        Err(_) => Err("connection timed out".into()),
-                    }
+                        r
+                    } else {
+                        let addr = if host.contains(':') {
+                            format!("[{host}]:{port}")
+                        } else {
+                            format!("{host}:{port}")
+                        };
+                        match tokio::time::timeout(
+                            std::time::Duration::from_secs(5),
+                            tokio::net::TcpStream::connect(&addr),
+                        )
+                        .await
+                        {
+                            Ok(Ok(_)) => Ok(()),
+                            Ok(Err(e)) => Err(format!("TCP connect failed: {e}")),
+                            Err(_) => Err("connection timed out".into()),
+                        }
+                    };
+                    result
                 }
             }
         }
@@ -625,21 +670,36 @@ pub async fn test_connection(
             let port = body
                 .port
                 .unwrap_or(if body.protocol == "mysql" { 3306 } else { 5432 });
-            let addr = if host.contains(':') {
-                format!("[{host}]:{port}")
-            } else {
-                format!("{host}:{port}")
-            };
-            match tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                tokio::net::TcpStream::connect(&addr),
+            let result = if let Some(r) = test_connect_via_agent(
+                &state,
+                &body.protocol,
+                &host,
+                port,
+                body.username.as_deref(),
+                body.config_json.as_deref(),
+                body.environment_id.as_deref(),
             )
             .await
             {
-                Ok(Ok(_)) => Ok(()),
-                Ok(Err(e)) => Err(format!("TCP connect failed: {e}")),
-                Err(_) => Err("connection timed out".into()),
-            }
+                r
+            } else {
+                let addr = if host.contains(':') {
+                    format!("[{host}]:{port}")
+                } else {
+                    format!("{host}:{port}")
+                };
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    tokio::net::TcpStream::connect(&addr),
+                )
+                .await
+                {
+                    Ok(Ok(_)) => Ok(()),
+                    Ok(Err(e)) => Err(format!("TCP connect failed: {e}")),
+                    Err(_) => Err("connection timed out".into()),
+                }
+            };
+            result
         }
         "s3" => match body.config_json {
             Some(ref cfg) => {
@@ -781,5 +841,36 @@ mod tests {
 
         let cfg = agent_test_connect_config("10.0.0.1", 22, None, None);
         assert_eq!(cfg.get("username").and_then(|v| v.as_str()), Some("root"));
+    }
+
+    /// env_uses_agent 判定 agent 转发口径：仅 `connection_mode == "agent"` 为真，
+    /// direct 环境与环境缺失都回退 Hub 直连。
+    #[tokio::test]
+    async fn env_uses_agent_only_for_agent_mode() {
+        let (_dir, state) = crate::testutil::make_state();
+        let direct = state
+            .db
+            .create_environment(&crate::models::NewEnvironment {
+                name: "direct-env".into(),
+                description: None,
+                connection_mode: Some("direct".into()),
+            })
+            .unwrap();
+        let agent = state
+            .db
+            .create_environment(&crate::models::NewEnvironment {
+                name: "agent-env".into(),
+                description: None,
+                connection_mode: Some("agent".into()),
+            })
+            .unwrap();
+
+        assert!(
+            !env_uses_agent(&state, None).await,
+            "no environment means direct connect"
+        );
+        assert!(!env_uses_agent(&state, Some("env_missing")).await);
+        assert!(!env_uses_agent(&state, Some(&direct.id)).await);
+        assert!(env_uses_agent(&state, Some(&agent.id)).await);
     }
 }
