@@ -248,7 +248,7 @@ async fn load_resource_conn(
                     .decrypt(&resource.config_json)
                     .map_err(|e| {
                         tracing::error!(action = "SSH_CONFIG_DECRYPT", resource_id = %rid, resource_name = %resource.name, error = %e, "config_json decryption failed");
-                        ConnError::fatal(format!("SSH credential decryption failed: decrypt failed: {e}; please re-save the resource credentials (the master key that encrypted them no longer matches this Hub)"))
+                        ConnError::fatal(format!("{} ({e})", crate::error::CREDENTIAL_DECRYPT_MSG))
                     })?;
 
             let config: serde_json::Value = serde_json::from_str(&config_str).map_err(|e| {
@@ -1012,7 +1012,10 @@ mod tests {
 
     #[test]
     fn decrypt_failure_is_fatal() {
-        let e = ConnError::fatal("SSH credential decryption failed: decrypt failed: aead::Error");
+        let e = ConnError::fatal(format!(
+            "{} (aead::Error)",
+            crate::error::CREDENTIAL_DECRYPT_MSG
+        ));
         assert!(!e.failure.retryable());
     }
 }

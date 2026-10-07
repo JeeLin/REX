@@ -45,6 +45,12 @@ async fn list_resources(
         if !r.config_json.is_empty() && r.config_json != "{}" {
             if let Ok(dec) = state.crypto.decrypt(&r.config_json) {
                 r.config_json = dec;
+            } else {
+                r.config_json = String::new();
+                tracing::warn!(
+                    resource_id = %r.id,
+                    "config_json decrypt failed (data key mismatch)"
+                );
             }
         }
     }
@@ -63,8 +69,14 @@ async fn get_resource(
         .ok_or_else(|| err(StatusCode::NOT_FOUND, "resource not found"))?;
     // 解密 config_json
     if !resource.config_json.is_empty() && resource.config_json != "{}" {
-        if let Ok(dec) = state.crypto.decrypt(&resource.config_json) {
-            resource.config_json = dec;
+        match state.crypto.decrypt(&resource.config_json) {
+            Ok(dec) => resource.config_json = dec,
+            Err(_) => {
+                return Err(err(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    crate::error::CREDENTIAL_DECRYPT_MSG,
+                ));
+            }
         }
     }
     Ok(Json(resource))

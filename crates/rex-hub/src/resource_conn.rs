@@ -58,10 +58,14 @@ pub fn load_resource_config(
 
     // 解密 config_json
     let config = if !resource.config_json.is_empty() && resource.config_json != "{}" {
-        let decrypted = state
-            .crypto
-            .decrypt(&resource.config_json)
-            .map_err(|e| format!("decrypt failed for resource {resource_id}: {e}"))?;
+        let decrypted = state.crypto.decrypt(&resource.config_json).map_err(|e| {
+            tracing::warn!(
+                resource_id = %resource_id,
+                error = %e,
+                "decrypt failed for resource (data key mismatch)"
+            );
+            crate::error::CREDENTIAL_DECRYPT_MSG.to_string()
+        })?;
         serde_json::from_str(&decrypted)
             .map_err(|e| format!("invalid config json for resource {resource_id}: {e}"))?
     } else {
