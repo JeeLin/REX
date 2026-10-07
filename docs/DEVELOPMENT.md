@@ -805,7 +805,7 @@ rex-agent = 所有 crate（无前端）
 - **版本号**：v0.92.0
 - **状态**：✅ 已完成（centralized `cargo test --workspace` + `bun run type-check/lint/build/vitest` 全绿；v0.91 文件传输语义不变）
 
-### v0.93.0：跨协议连接错误透传（← 新增（下一步））
+### v0.93.0：跨协议连接错误透传 ✅ 已完成（v0.93.0）
 - **核心功能**：把 v0.92.0 只在 SSH 终端落实的「连接错误可诊断」范式推广到其余协议与写入点——**1)** `sql_api` / `redis_api` / `mongodb_api` / `tunnel_ws` 的连接失败改用 anyhow context 保留底层错误，按失败阶段（dns/tcp/auth/timeout）与协议产出稳定 `ErrorCode`，并标 `retryable`（配置/凭据类终止、网络类可重试），前端各控制台展示可区分原因（对标 Navicat / ARDM 的报错可读性）；**2)** 统一连接错误分类入口，复用 v0.92.0 的 `ErrorPayload{code,message,retryable}` 与 `classify_connect_error`，不新增第二套语义；**3)** 审计归属补齐：`sql_api` / `file_api` / `redis_api` / `mongodb_api` / `tunnel_ws` / `agent_ws` 的审计写入改走带 `environment_id`/`resource_id`/`agent_id` 的 `audit_log_scoped`，使审计页按维度过滤可命中（v0.92.0 只补了 SSH 会话）；**4)** 传输失败落状态：`TransferCoordinator` 非 Canceled 错误路径统一 funnel `set_status(Failed)`，并补 loop 结束前 `is_canceled()` 复查，消除「任务卡 running/verifying」与 cancel 被覆盖的窗口；**5)** `AuditLogPage` 的 `Promise.all` → `Promise.allSettled`（单请求失败不再清空整表）+ `query_audit_log` 裸 `OFFSET` 语法兜底；**6)** 补齐 v0.92.0 i18n 审计发现的 95 个缺失键（en/zh 双语）
 - **不做**：定时/调度式同步、remote↔remote 跨连接传输、非连接类错误（SQL 语句错误、命令语义错误）的重分类；不引入连接池/重试策略等新机制，只做错误可诊断化
 - **子任务预估**：5 个（连接错误分类统一 + sql/redis 前端展示 + 审计归属补齐 + 传输失败落状态/审计页健壮性 + i18n 键补齐与回归验收）
@@ -814,6 +814,7 @@ rex-agent = 所有 crate（无前端）
 - **版本类型**：minor
 - **版本号**：v0.93.0
 - **来源**：v0.92.0 步骤3 自查 + @oracle 审查产出（`docs/BUGS.md` 缺陷池）+ 用户反馈「整个项目对于连接的错误处理很粗糙」
+- **状态**：✅ 已完成（`cargo check/clippy --workspace --all-targets` rc=0；`cargo test -p rex-hub --lib` 263 项全过；`bun type-check/lint/build` 全绿；v0.92 传输语义不变。全 workspace `cargo test` 因本地 3.7 GB 内存/40 GB 磁盘受限，由 tag 触发的 CI 补跑）
 
 ### 候选（已裁决待排期）：数据密钥守卫与解密失败指引
 - **背景**：用户实测——Docker 升级/清理时 `.master-key` 丢失，DB 保留 → 静默生成新 key → SSH 报 `decrypt failed: aead::Error`，错误延迟到连接时且无法联想到密钥丢失（2026-09-24）
