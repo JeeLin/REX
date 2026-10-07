@@ -18,6 +18,8 @@ export interface AuditQuery {
   action?: string
   result?: string
   environment_id?: string
+  resource_id?: string
+  agent_id?: string
   limit?: number
   offset?: number
 }
@@ -36,6 +38,8 @@ export const auditApi = {
     if (params?.action) query.action = params.action
     if (params?.result) query.result = params.result
     if (params?.environment_id) query.environment_id = params.environment_id
+    if (params?.resource_id) query.resource_id = params.resource_id
+    if (params?.agent_id) query.agent_id = params.agent_id
     if (params?.limit) query.limit = String(params.limit)
     if (params?.offset) query.offset = String(params.offset)
     return api.get<AuditEntry[]>('/audit-log', query)
@@ -45,6 +49,8 @@ export const auditApi = {
     if (params?.action) query.action = params.action
     if (params?.result) query.result = params.result
     if (params?.environment_id) query.environment_id = params.environment_id
+    if (params?.resource_id) query.resource_id = params.resource_id
+    if (params?.agent_id) query.agent_id = params.agent_id
     if (params?.time_from) query.time_from = params.time_from
     if (params?.time_to) query.time_to = params.time_to
     return api.get<AuditStats>('/audit-log/stats', query)
