@@ -7,6 +7,7 @@ pub(crate) mod pool;
 #[cfg(test)]
 mod test_support;
 
+use std::borrow::Cow;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -14,8 +15,45 @@ use anyhow::{Context, Result};
 use bytes::Bytes;
 use russh::client;
 use russh::keys::{decode_secret_key, PrivateKeyWithHashAlg, PublicKey};
-use russh::{Channel, ChannelMsg, ChannelWriteHalf, Pty};
+use russh::{kex, Channel, ChannelMsg, ChannelWriteHalf, Preferred, Pty};
 use tokio::sync::mpsc;
+
+/// KEX preference order. Keeps russh's modern/PQ defaults first (so modern
+/// servers still negotiate the strongest algorithms), then appends legacy /
+/// ECDHE algorithms so older sshd builds offering only `ecdh-sha2-nistp256`
+/// or `diffie-hellman-group14-sha1` can still negotiate.
+const PREFERRED_KEX: &[kex::Name] = &[
+    kex::MLKEM768X25519_SHA256,
+    kex::CURVE25519,
+    kex::CURVE25519_PRE_RFC_8731,
+    kex::DH_GEX_SHA256,
+    kex::DH_G18_SHA512,
+    kex::DH_G17_SHA512,
+    kex::DH_G16_SHA512,
+    kex::DH_G15_SHA512,
+    kex::DH_G14_SHA256,
+    kex::ECDH_SHA2_NISTP256,
+    kex::ECDH_SHA2_NISTP384,
+    kex::ECDH_SHA2_NISTP521,
+    kex::DH_G14_SHA1,
+    kex::DH_GEX_SHA1,
+    kex::DH_G1_SHA1,
+    kex::EXTENSION_SUPPORT_AS_CLIENT,
+    kex::EXTENSION_SUPPORT_AS_SERVER,
+    kex::EXTENSION_OPENSSH_STRICT_KEX_AS_CLIENT,
+    kex::EXTENSION_OPENSSH_STRICT_KEX_AS_SERVER,
+];
+
+/// Shared SSH client config. Returns by value so callers can still adjust
+/// `keepalive_interval` before wrapping it in `Arc`.
+pub(crate) fn ssh_client_config() -> client::Config {
+    let mut config = client::Config::default();
+    config.preferred = Preferred {
+        kex: Cow::Borrowed(PREFERRED_KEX),
+        ..Default::default()
+    };
+    config
+}
 
 /// SSH 连接配置
 #[derive(Debug, Clone)]
@@ -306,7 +344,7 @@ impl SshSession {
         config: SshConfig,
     ) -> Result<(client::Handle<SshHandler>, Self)> {
         // SSH 客户端配置
-        let mut ssh_config = client::Config::default();
+        let mut ssh_config = ssh_client_config();
         let keepalive = config.keepalive_interval.unwrap_or(60);
         if keepalive > 0 {
             ssh_config.keepalive_interval = Some(std::time::Duration::from_secs(keepalive as u64));
@@ -602,5 +640,30 @@ mod tests {
             pooled.starts_with("failed to open session (pooled connection): boom"),
             "{pooled}"
         );
+    }
+
+    #[test]
+    fn test_ssh_client_config_offers_legacy_kex() {
+        let config = ssh_client_config();
+        let offered = &config.preferred.kex;
+
+        // Legacy sshd builds only offer these two — without them KEX fails with
+        // SSH_ERR_KEX_NO_COMMON_ALGO.
+        assert!(
+            offered.contains(&kex::ECDH_SHA2_NISTP256),
+            "ecdh-sha2-nistp256 must be offered"
+        );
+        assert!(
+            offered.contains(&kex::DH_G14_SHA1),
+            "diffie-hellman-group14-sha1 must be offered"
+        );
+
+        // Modern/PQ entries still lead the list so strong servers keep the
+        // strongest algorithms.
+        assert_eq!(offered.first(), Some(&kex::MLKEM768X25519_SHA256));
+        assert!(offered.contains(&kex::CURVE25519));
+
+        // Never negotiate plaintext KEX.
+        assert!(!offered.contains(&kex::NONE));
     }
 }

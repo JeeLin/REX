@@ -115,7 +115,7 @@ async fn fresh_handle(
     use russh::client;
     use std::sync::Arc;
 
-    let ssh_config = Arc::new(client::Config::default());
+    let ssh_config = Arc::new(crate::ssh_client_config());
     let handler = crate::SshHandler;
     let addr = crate::format_ssh_addr(&config.host, config.port);
     tracing::info!(action = "SFTP_CONNECT", host = %config.host, port = config.port, "SFTP: opening new SSH connection");

@@ -124,7 +124,7 @@ mod tests {
 
     /// Establish a live (key-exchange only) handle against the loopback test server.
     async fn live_handle(addr: SocketAddr) -> client::Handle<SshHandler> {
-        let ssh_config = Arc::new(client::Config::default());
+        let ssh_config = Arc::new(crate::ssh_client_config());
         let target = format!("127.0.0.1:{}", addr.port());
         client::connect(ssh_config, &target, SshHandler)
             .await
