@@ -636,6 +636,29 @@ impl Database {
         }
     }
 
+    /// Whether any resource row stores encrypted credential material.
+    ///
+    /// A row counts when `config_json` is non-NULL, non-empty and not the
+    /// empty JSON object (resources created without a config default to
+    /// `'{}'`). Used at startup to detect a missing `.master-key` in front of
+    /// real encrypted data (a fresh/empty DB legitimately has none).
+    pub fn has_encrypted_config(&self) -> bool {
+        let Ok(conn) = self.conn() else {
+            return false;
+        };
+        let Ok(mut stmt) = conn.prepare(
+            "SELECT 1 FROM resources
+             WHERE config_json IS NOT NULL AND config_json <> '' AND config_json <> '{}'
+             LIMIT 1",
+        ) else {
+            return false;
+        };
+        let Ok(mut rows) = stmt.query([]) else {
+            return false;
+        };
+        matches!(rows.next(), Ok(Some(_)))
+    }
+
     pub fn create_resource(&self, env_id: &str, res: &NewResource) -> Result<Resource> {
         let conn = self.conn()?;
         let id = uuid::Uuid::new_v4().to_string();
@@ -767,9 +790,9 @@ impl Database {
         if config_json.is_empty() || config_json == "{}" {
             return Err(RExError::Message("resource has no config_json".into()));
         }
-        let decrypted = crypto
-            .decrypt(&config_json)
-            .map_err(|e| RExError::Message(format!("decrypt failed: {e}")))?;
+        let decrypted = crypto.decrypt(&config_json).map_err(|e| {
+            RExError::Message(format!("{}: {e}", crate::error::CREDENTIAL_DECRYPT_MSG))
+        })?;
         let mut profile: serde_json::Value = serde_json::from_str(&decrypted)
             .map_err(|e| RExError::Message(format!("invalid config_json: {e}")))?;
         let accounts = profile
@@ -2301,7 +2324,58 @@ mod tests {
         assert!(db.get_resource(&res.id).unwrap().is_none());
     }
 
-    // --- set_resource_active_account ---
+    // --- has_encrypted_config ---
+
+    #[test]
+    fn test_has_encrypted_config() {
+        let (_dir, db) = test_db();
+        let env = db
+            .create_environment(&NewEnvironment {
+                name: "env".into(),
+                description: None,
+                connection_mode: None,
+            })
+            .unwrap();
+
+        // Fresh DB / no resources -> false.
+        assert!(!db.has_encrypted_config());
+
+        // Resource with no config_json defaults to '{}' -> not encrypted.
+        db.create_resource(
+            &env.id,
+            &NewResource {
+                name: "empty".into(),
+                protocol: "ssh".into(),
+                host: "1.2.3.4".into(),
+                port: None,
+                username: None,
+                config_json: None,
+                subtype: None,
+                color: None,
+                sort_order: None,
+            },
+        )
+        .unwrap();
+        assert!(!db.has_encrypted_config());
+
+        // Non-empty ciphertext present -> true.
+        db.create_resource(
+            &env.id,
+            &NewResource {
+                name: "cipher".into(),
+                protocol: "ssh".into(),
+                host: "1.2.3.4".into(),
+                port: None,
+                username: None,
+                config_json: Some("ciphertext".into()),
+                subtype: None,
+                color: None,
+                sort_order: None,
+            },
+        )
+        .unwrap();
+        assert!(db.has_encrypted_config());
+    }
 
     #[test]
     fn test_set_resource_active_account() {

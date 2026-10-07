@@ -188,6 +188,20 @@ fn worker_main() {
                 .expect("failed to init credential crypto"),
         );
 
+        // Startup soft-fail guard: a missing `.master-key` together with rows
+        // holding encrypted `config_json` means the data key that originally
+        // encrypted the credentials is gone. `from_data_dir` already generates
+        // a fresh key on miss (see crypto.rs), so the Hub keeps running — but we
+        // surface the mismatch loudly so it is not mistaken for a healthy start.
+        if !data_dir.join(".master-key").exists() && db.has_encrypted_config() {
+            tracing::error!(
+                data_key_mismatch = true,
+                key_file_missing = true,
+                "{}",
+                rex_hub::error::CREDENTIAL_DECRYPT_MSG
+            );
+        }
+
         let sql_pool: SqlState =
             Arc::new(tokio::sync::Mutex::new(sql_api::SqlConnectionPool::new()));
         let redis_pool: RedisState = Arc::new(tokio::sync::Mutex::new(

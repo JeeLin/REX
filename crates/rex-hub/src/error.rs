@@ -5,6 +5,15 @@ use axum::http::StatusCode;
 use axum::Json;
 use serde::{Deserialize, Serialize};
 
+/// Canonical message for a data-key mismatch: the persisted `.master-key`
+/// no longer corresponds to the encrypted credential material in the DB.
+/// Used by startup guards, resource/env decrypt paths and connection setup
+/// so failures surface a single, actionable hint instead of a raw
+/// `aead::Error`. Classified via [`fatal_error_code`] (matches
+/// "decryption failed").
+pub const CREDENTIAL_DECRYPT_MSG: &str =
+    "Credential decryption failed: the data key (.master-key) does not match the database. Restore .master-key from a backup, or re-edit the connection and re-enter the credentials.";
+
 #[derive(Serialize)]
 pub struct ErrorBody {
     pub error: ErrorDetail,
