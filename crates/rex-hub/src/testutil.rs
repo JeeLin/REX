@@ -157,6 +157,12 @@ impl FileConnector for TreeConnector {
     }
 
     async fn stat(&mut self, path: &str) -> anyhow::Result<FileEntry> {
+        // 取消钩子在 stat 亦触发：模拟「取消恰好落在 source.stat 这第一次 IO，
+        // 介于 entry guard 与 resolve_conflict 之间」这一窗口。upload 亦触发，
+        // 因此仅挂在 connector 的测试仍会在上传前提前命中取消。
+        if let Some(hook) = &self.cancel_hook {
+            hook();
+        }
         if self.fail.fail_stat {
             anyhow::bail!("stat failed (simulated)");
         }

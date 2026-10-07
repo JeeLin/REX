@@ -250,12 +250,26 @@ impl TransferCoordinator {
         let total = src_entry.size;
 
         // 冲突处理（事先 stat 目标）
-        let final_dst = match Self::resolve_conflict(target, dst_path, spec.conflict).await? {
-            ConflictOutcome::Skip => {
+        let final_dst = match Self::resolve_conflict(target, dst_path, spec.conflict).await {
+            Ok(ConflictOutcome::Skip) => {
                 Self::set_status(state, task_id, TransferStatus::Completed, None);
                 return Ok(());
             }
-            ConflictOutcome::Path(p) => p,
+            Ok(ConflictOutcome::Path(p)) => p,
+            // Fail/Rename 策略失败（目标已存在 / 重命名序号耗尽）：`Running` 已在
+            // 入口置位，此处不上终态任务行会永远停在 `running`——既不显示失败也不可重试。
+            Err(e) => {
+                let msg = e.to_string();
+                if !Self::is_canceled(state, task_id) {
+                    Self::set_status(
+                        state,
+                        task_id,
+                        TransferStatus::Failed(msg.clone()),
+                        Some(&msg),
+                    );
+                }
+                return Err(e);
+            }
         };
 
         let temp = format!("{final_dst}{TEMP_SUFFIX}");
@@ -1737,6 +1751,173 @@ mod tests {
         drop(dst);
         let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
         assert_eq!(rec.status, "canceled", "canceled must not be clobbered");
+    }
+
+    // -----------------------------------------------------------------------
+    // Conflict resolution failure must land a terminal state: `Running` is set
+    // on entry, so an unguarded `?` here left the row stuck at `running`.
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn conflict_fail_policy_sets_failed_status() {
+        let (_dir, state) = make_state();
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/cf.bin".into(),
+                target_path: "/dst/cf.bin".into(),
+                conflict_policy: Some("fail".into()),
+                ..Default::default()
+            })
+            .unwrap();
+
+        let src_store = Arc::new(Mutex::new(HashMap::from([(
+            "/src/cf.bin".to_string(),
+            b"new".to_vec(),
+        )])));
+        let dst_store: Arc<Mutex<HashMap<String, Vec<u8>>>> = Arc::new(Mutex::new(HashMap::new()));
+        dst_store
+            .lock()
+            .unwrap()
+            .insert("/dst/cf.bin".to_string(), b"old".to_vec());
+
+        let mut rx = state.transfer_bcast.subscribe();
+        let mut source = TreeConnector::new(src_store);
+        let mut target = TreeConnector::new(Arc::clone(&dst_store));
+
+        let res = TransferCoordinator::run_stream(
+            &state,
+            &task_id,
+            TransferSpec {
+                op: TransferOp::Copy,
+                conflict: ConflictPolicy::Fail,
+            },
+            &mut source,
+            &mut target,
+            "/src/cf.bin",
+            "/dst/cf.bin",
+        )
+        .await;
+
+        assert!(
+            matches!(res, Err(TransferError::AlreadyExists(_))),
+            "fail policy on an existing target must surface as AlreadyExists, got {res:?}"
+        );
+
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        assert_eq!(
+            rec.status, "failed",
+            "conflict failure must not leave the task running"
+        );
+        let reason = rec.error.clone().unwrap_or_default();
+        assert!(
+            reason.contains("already exists"),
+            "failed must carry the conflict reason, got {reason:?}"
+        );
+
+        let dst = dst_store.lock().unwrap();
+        assert_eq!(
+            dst.get("/dst/cf.bin"),
+            Some(&b"old".to_vec()),
+            "the existing target must stay untouched"
+        );
+        assert!(
+            !dst.contains_key("/dst/cf.bin.rex.part"),
+            "conflict failure must not leave a temp file: {:?}",
+            dst.keys().collect::<Vec<_>>()
+        );
+        drop(dst);
+
+        let failed: Vec<_> = drain(&mut rx)
+            .into_iter()
+            .filter(|e| e.status == "failed")
+            .collect();
+        assert_eq!(failed.len(), 1, "exactly one failed terminal broadcast");
+        assert_eq!(
+            failed[0].error.as_deref(),
+            Some(reason.as_str()),
+            "terminal event must carry the same reason as the DB row"
+        );
+    }
+
+    /// A conflict failure racing a cancel must stay `canceled`: the error path
+    /// guards on `is_canceled`, so no `failed` row and no `failed` broadcast.
+    ///
+    /// The cancel is written by the source `stat`, the first IO after `Running`
+    /// is set and the last await before `resolve_conflict`, which is exactly the
+    /// window between the entry guard and the conflict check.
+    #[tokio::test]
+    async fn conflict_failure_does_not_clobber_canceled() {
+        let (_dir, state) = make_state();
+        let task_id = state
+            .db
+            .create_transfer_task(&crate::models::NewTransferTask {
+                source_resource_id: "src".into(),
+                target_resource_id: "dst".into(),
+                source_path: "/src/cc.bin".into(),
+                target_path: "/dst/cc.bin".into(),
+                conflict_policy: Some("fail".into()),
+                ..Default::default()
+            })
+            .unwrap();
+
+        let src_store = Arc::new(Mutex::new(HashMap::from([(
+            "/src/cc.bin".to_string(),
+            b"new".to_vec(),
+        )])));
+        let dst_store: Arc<Mutex<HashMap<String, Vec<u8>>>> = Arc::new(Mutex::new(HashMap::new()));
+        dst_store
+            .lock()
+            .unwrap()
+            .insert("/dst/cc.bin".to_string(), b"old".to_vec());
+
+        let hook: Arc<dyn Fn() + Send + Sync> = Arc::new({
+            let cancel_state = state.clone();
+            let cancel_tid = task_id.clone();
+            move || {
+                let _ = cancel_state
+                    .db
+                    .set_transfer_task_status(&cancel_tid, "canceled", None);
+            }
+        });
+
+        let mut rx = state.transfer_bcast.subscribe();
+        let mut source = TreeConnector::new(src_store).with_cancel_hook(hook);
+        let mut target = TreeConnector::new(Arc::clone(&dst_store));
+
+        let res = TransferCoordinator::run_stream(
+            &state,
+            &task_id,
+            TransferSpec {
+                op: TransferOp::Copy,
+                conflict: ConflictPolicy::Fail,
+            },
+            &mut source,
+            &mut target,
+            "/src/cc.bin",
+            "/dst/cc.bin",
+        )
+        .await;
+
+        assert!(
+            matches!(res, Err(TransferError::AlreadyExists(_))),
+            "got {res:?}"
+        );
+        let rec = state.db.get_transfer_task(&task_id).unwrap().unwrap();
+        assert_eq!(rec.status, "canceled", "canceled must not be clobbered");
+        assert!(
+            rec.error.as_deref().unwrap_or("").is_empty(),
+            "cancel is not a failure, got error {:?}",
+            rec.error
+        );
+
+        let events = drain(&mut rx);
+        assert!(
+            !events.iter().any(|e| e.status == "failed"),
+            "a canceled task must not be reported as failed: {events:?}"
+        );
     }
 
     // -----------------------------------------------------------------------
