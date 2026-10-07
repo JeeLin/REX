@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::db::audit_log;
+use crate::db::{audit_log_scoped, AuditScope};
 use crate::models::NewTransferTask;
 use crate::resource_conn::{load_resource_config, normalize_username, ResourceConnInfo};
 use crate::sync_coordinator::SyncCoordinator;
@@ -27,8 +27,14 @@ use crate::error::{error_with_status, ErrorBody};
 
 pub type FileState = Arc<Mutex<FileConnectionPool>>;
 
+/// 文件连接池：sessionId → 连接器 + 审计归属。
+///
+/// `scopes` 与 `connectors` 同键。`disconnect` 与所有按 session 走的
+/// 读写操作只有 session id，得靠它还原资源与环境；查不到时留空维度，
+/// 不让审计写入失败（宁可缺维度，也不要编造）。
 pub struct FileConnectionPool {
     connectors: HashMap<String, Box<dyn FileConnector>>,
+    scopes: HashMap<String, AuditScope>,
 }
 
 impl Default for FileConnectionPool {
@@ -41,13 +47,44 @@ impl FileConnectionPool {
     pub fn new() -> Self {
         Self {
             connectors: HashMap::new(),
+            scopes: HashMap::new(),
         }
     }
     pub fn insert(&mut self, id: String, conn: Box<dyn FileConnector>) {
         self.connectors.insert(id, conn);
     }
+    /// 连同审计归属建连（连接时资源 id 与环境 id 都可得）。
+    pub fn insert_with_scope(
+        &mut self,
+        id: String,
+        conn: Box<dyn FileConnector>,
+        scope: AuditScope,
+    ) {
+        self.scopes.insert(id.clone(), scope);
+        self.connectors.insert(id, conn);
+    }
     pub fn remove(&mut self, id: &str) -> Option<Box<dyn FileConnector>> {
+        self.scopes.remove(id);
         self.connectors.remove(id)
+    }
+    /// 取会话的审计归属；会话不存在时给空归属。
+    pub fn audit_scope(&self, id: &str) -> AuditScope {
+        self.scopes.get(id).cloned().unwrap_or_default()
+    }
+}
+
+/// 文件事件的归属：资源与环境取自资源记录，agent 维度取
+/// `load_resource_config` 解析出的在线 Agent（直连为 None）。
+fn resource_scope(state: &AppState, res: &ResourceConnInfo, resource_id: &str) -> AuditScope {
+    AuditScope {
+        environment_id: state
+            .db
+            .get_resource(resource_id)
+            .ok()
+            .flatten()
+            .map(|r| r.environment_id),
+        resource_id: Some(resource_id.to_string()),
+        agent_id: res.agent_id.clone(),
     }
 }
 
@@ -147,11 +184,14 @@ async fn create_transfer_task(
         target_resource_id = %body.target_resource_id,
         "transfer task created"
     );
-    audit_log(
+    // 该事件横跨 source 与 target 两个资源，`AuditScope` 只有一个 resource_id
+    // 字段，无法不带主观臆断地填入任一方 → 归属留空，见交付说明。
+    audit_log_scoped(
         &state.db,
         "FILE_TRANSFER_CREATED",
         "success",
         Some(task_id.clone()),
+        AuditScope::default(),
     );
     (
         StatusCode::CREATED,
@@ -178,11 +218,14 @@ async fn cancel_task(
                 transfer_task_id = %task_id,
                 "transfer task canceled"
             );
-            audit_log(
+            // 取消事件横跨 source 与 target，归属维度只有一个 resource_id → 留空，
+            // 见交付说明。
+            audit_log_scoped(
                 &state.db,
                 audit_action,
                 "success",
                 Some(task_id.to_string()),
+                AuditScope::default(),
             );
             (
                 StatusCode::OK,
@@ -423,11 +466,14 @@ async fn create_sync_task(
         target_resource_id = %body.target.resource_id,
         "sync task created"
     );
-    audit_log(
+    // 同步任务横跨 source 与 target 两个资源，`AuditScope` 只有一个 resource_id
+    // 字段 → 归属留空，见交付说明。
+    audit_log_scoped(
         &state.db,
         "FILE_SYNC_CREATED",
         "success",
         Some(task_id.clone()),
+        AuditScope::default(),
     );
     // 子任务 2：提交同步引擎（scanning → planning → running → verifying）。
     // 文件字节仅在服务端 source/target 连接器之间搬运，不经过浏览器。
@@ -506,11 +552,13 @@ async fn transfer_action(
         target_resource_id = %body.dst.resource_id,
         "transfer task created"
     );
-    audit_log(
+    // 同 `create_transfer_task`：两端资源并存于一个归属字段 → 留空，见交付说明。
+    audit_log_scoped(
         &state.db,
         "FILE_TRANSFER_CREATED",
         "success",
         Some(task_id.clone()),
+        AuditScope::default(),
     );
     // T2：提交后台传输流（打开两个连接器并流式传输）。
     state
@@ -770,21 +818,23 @@ fn connect_failure_response(
         }
         ConnectError::SftpConnect(msg) => {
             tracing::error!(action = "FILE_CONNECT", resource_id = %resource_id, resource_name = %res.name, protocol = %res.protocol, error = %msg, "SFTP connection failed");
-            audit_log(
+            audit_log_scoped(
                 &state.db,
                 "FILE_CONNECT",
                 "failure",
                 Some(resource_id.to_string()),
+                resource_scope(state, res, resource_id),
             );
             crate::error::connect_error_response("failed to connect to SFTP server", msg)
                 .into_response()
         }
         ConnectError::S3Connect(msg) => {
-            audit_log(
+            audit_log_scoped(
                 &state.db,
                 "FILE_CONNECT",
                 "failure",
                 Some(resource_id.to_string()),
+                resource_scope(state, res, resource_id),
             );
             crate::error::connect_error_response("failed to connect to S3 storage", msg)
                 .into_response()
@@ -911,11 +961,12 @@ async fn connect(
     };
 
     let session_id = format!("file_{}", &uuid::Uuid::new_v4().to_string()[..8]);
+    let conn_scope = resource_scope(&state, &res, &body.resource_id);
     state
         .file_pool
         .lock()
         .await
-        .insert(session_id.clone(), conn);
+        .insert_with_scope(session_id.clone(), conn, conn_scope.clone());
     if res.use_agent {
         let agent_id = res.agent_id.clone().unwrap_or_default();
         tracing::info!(action = "FILE_CONNECT_AGENT", session_id = %session_id, resource_id = %body.resource_id, resource_name = %res.name, agent_id = %agent_id, protocol = %res.protocol, "file connected via agent");
@@ -927,17 +978,13 @@ async fn connect(
             protocol = %res.protocol,
             "file session connected"
         );
-        let audit_db = state.db.clone();
-        let audit_target = body.resource_id.clone();
-        let _ = tokio::task::spawn_blocking(move || {
-            audit_db.write_audit_log(&crate::models::NewAuditEntry {
-                action: "FILE_CONNECT".into(),
-                target: Some(audit_target),
-                result: "success".into(),
-                ..Default::default()
-            })
-        })
-        .await;
+        audit_log_scoped(
+            &state.db,
+            "FILE_CONNECT",
+            "success",
+            Some(body.resource_id.clone()),
+            conn_scope.clone(),
+        );
     }
     (StatusCode::OK, Json(ConnectResponse { session_id })).into_response()
 }
@@ -947,24 +994,23 @@ async fn disconnect(
     Json(body): Json<DisconnectBody>,
 ) -> axum::response::Response {
     let mut pool = state.file_pool.lock().await;
+    // 归属随连接器一并移除，先取出再 remove，否则事后回查拿到的是空归属。
+    let audit_scope = pool.audit_scope(&body.session_id);
     if let Some(mut conn) = pool.remove(&body.session_id) {
         let _ = conn.close().await;
+
         tracing::info!(
             action = "FILE_DISCONNECT",
             session_id = %body.session_id,
             "file session disconnected"
         );
-        let audit_db = state.db.clone();
-        let session_id = body.session_id.clone();
-        let _ = tokio::task::spawn_blocking(move || {
-            audit_db.write_audit_log(&crate::models::NewAuditEntry {
-                action: "FILE_DISCONNECT".into(),
-                target: Some(session_id),
-                result: "success".into(),
-                ..Default::default()
-            })
-        })
-        .await;
+        audit_log_scoped(
+            &state.db,
+            "FILE_DISCONNECT",
+            "success",
+            Some(body.session_id.clone()),
+            audit_scope,
+        );
         (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response()
     } else {
         error_response("SESSION_NOT_FOUND", "session not found").into_response()
@@ -1028,15 +1074,17 @@ async fn upload(
     };
 
     let mut pool = state.file_pool.lock().await;
+    let audit_scope = pool.audit_scope(&session_id);
     let conn = match pool.connectors.get_mut(&session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
     };
-    audit_log(
+    audit_log_scoped(
         &state.db,
         "FILE_TRANSFER_START",
         "success",
         Some(remote_path.clone()),
+        audit_scope.clone(),
     );
     tracing::info!(action = "TRANSFER_START", op = "upload", path = %remote_path, session_id = %session_id, "upload starting");
     match conn.upload(&remote_path, data, offset, None).await {
@@ -1048,11 +1096,12 @@ async fn upload(
                 session_id = %session_id,
                 "file uploaded"
             );
-            audit_log(
+            audit_log_scoped(
                 &state.db,
                 "FILE_TRANSFER_COMPLETE",
                 "success",
                 Some(remote_path.clone()),
+                audit_scope.clone(),
             );
             tracing::info!(action = "TRANSFER_COMPLETE", op = "upload", path = %remote_path, session_id = %session_id, "upload complete");
             (
@@ -1066,11 +1115,12 @@ async fn upload(
         }
         Err(e) => {
             tracing::error!(action = "TRANSFER_FAIL", op = "upload", path = %remote_path, session_id = %session_id, error = %e, "upload failed");
-            audit_log(
+            audit_log_scoped(
                 &state.db,
                 "FILE_TRANSFER_FAILED",
                 "failure",
                 Some(remote_path.clone()),
+                audit_scope.clone(),
             );
             error_response("UPLOAD_FAILED", &e.to_string()).into_response()
         }
@@ -1083,6 +1133,7 @@ async fn download(
     headers: axum::http::HeaderMap,
 ) -> axum::response::Response {
     let mut pool = state.file_pool.lock().await;
+    let audit_scope = pool.audit_scope(&params.session_id);
     let conn = match pool.connectors.get_mut(&params.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -1108,11 +1159,12 @@ async fn download(
         }
     }
 
-    audit_log(
+    audit_log_scoped(
         &state.db,
         "FILE_TRANSFER_START",
         "success",
         Some(params.path.clone()),
+        audit_scope.clone(),
     );
     tracing::info!(action = "TRANSFER_START", op = "download", session_id = %params.session_id, path = %params.path, "download starting");
 
@@ -1144,21 +1196,26 @@ async fn download(
                             let audit_db = state.db.clone();
 
                             let download_path = params.path.clone();
+                            let scope = audit_scope.clone();
                             let _ = tokio::task::spawn_blocking(move || {
                                 audit_db.write_audit_log(&crate::models::NewAuditEntry {
                                     action: "FILE_OP".into(),
                                     target: Some(download_path),
                                     detail: Some("op=download".into()),
                                     result: "success".into(),
+                                    environment_id: scope.environment_id,
+                                    resource_id: scope.resource_id,
+                                    agent_id: scope.agent_id,
                                     ..Default::default()
                                 })
                             })
                             .await;
-                            audit_log(
+                            audit_log_scoped(
                                 &state.db,
                                 "FILE_TRANSFER_COMPLETE",
                                 "success",
                                 Some(params.path.clone()),
+                                audit_scope.clone(),
                             );
                             tracing::info!(action = "TRANSFER_COMPLETE", op = "download", session_id = %params.session_id, path = %params.path, "download complete");
                             (
@@ -1176,11 +1233,12 @@ async fn download(
                         }
                         Err(e) => {
                             tracing::error!(action = "TRANSFER_FAIL", op = "download", session_id = %params.session_id, path = %params.path, error = %e, "download range failed");
-                            audit_log(
+                            audit_log_scoped(
                                 &state.db,
                                 "FILE_TRANSFER_FAILED",
                                 "failure",
                                 Some(params.path.clone()),
+                                audit_scope.clone(),
                             );
                             error_response("DOWNLOAD_FAILED", &e.to_string()).into_response()
                         }
@@ -1208,21 +1266,26 @@ async fn download(
                 let audit_db = state.db.clone();
 
                 let download_path = params.path.clone();
+                let scope = audit_scope.clone();
                 let _ = tokio::task::spawn_blocking(move || {
                     audit_db.write_audit_log(&crate::models::NewAuditEntry {
                         action: "FILE_OP".into(),
                         target: Some(download_path),
                         detail: Some("op=download".into()),
                         result: "success".into(),
+                        environment_id: scope.environment_id,
+                        resource_id: scope.resource_id,
+                        agent_id: scope.agent_id,
                         ..Default::default()
                     })
                 })
                 .await;
-                audit_log(
+                audit_log_scoped(
                     &state.db,
                     "FILE_TRANSFER_COMPLETE",
                     "success",
                     Some(params.path.clone()),
+                    audit_scope.clone(),
                 );
                 tracing::info!(action = "TRANSFER_COMPLETE", op = "download", session_id = %params.session_id, path = %params.path, "download complete");
                 (
@@ -1240,11 +1303,12 @@ async fn download(
             }
             Err(e) => {
                 tracing::error!(action = "TRANSFER_FAIL", op = "download", session_id = %params.session_id, path = %params.path, error = %e, "download failed");
-                audit_log(
+                audit_log_scoped(
                     &state.db,
                     "FILE_TRANSFER_FAILED",
                     "failure",
                     Some(params.path.clone()),
+                    audit_scope.clone(),
                 );
                 error_response("DOWNLOAD_FAILED", &e.to_string()).into_response()
             }
@@ -1286,6 +1350,7 @@ async fn save_from_edit(
     Json(body): Json<SaveFromEditBody>,
 ) -> axum::response::Response {
     let mut pool = state.file_pool.lock().await;
+    let audit_scope = pool.audit_scope(&body.session_id);
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -1303,12 +1368,16 @@ async fn save_from_edit(
                 let audit_db = state.db.clone();
 
                 let save_path = body.path.clone();
+                let scope = audit_scope.clone();
                 let _ = tokio::task::spawn_blocking(move || {
                     audit_db.write_audit_log(&crate::models::NewAuditEntry {
                         action: "FILE_OP".into(),
                         target: Some(save_path),
                         detail: Some("op=save_edit".into()),
                         result: "success".into(),
+                        environment_id: scope.environment_id,
+                        resource_id: scope.resource_id,
+                        agent_id: scope.agent_id,
                         ..Default::default()
                     })
                 })
@@ -1352,6 +1421,7 @@ async fn rename(
     Json(body): Json<RenameBody>,
 ) -> axum::response::Response {
     let mut pool = state.file_pool.lock().await;
+    let audit_scope = pool.audit_scope(&body.session_id);
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -1365,18 +1435,13 @@ async fn rename(
                 to = %body.to,
                 "file renamed"
             );
-            let audit_db = state.db.clone();
-
-            let rename_from = body.from.clone();
-            let _ = tokio::task::spawn_blocking(move || {
-                audit_db.write_audit_log(&crate::models::NewAuditEntry {
-                    action: "FILE_RENAME".into(),
-                    target: Some(rename_from),
-                    result: "success".into(),
-                    ..Default::default()
-                })
-            })
-            .await;
+            audit_log_scoped(
+                &state.db,
+                "FILE_RENAME",
+                "success",
+                Some(body.from.clone()),
+                audit_scope.clone(),
+            );
             (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response()
         }
         Err(e) => error_response("RENAME_FAILED", &e.to_string()).into_response(),
@@ -1388,6 +1453,7 @@ async fn mkdir(
     Json(body): Json<MkdirBody>,
 ) -> axum::response::Response {
     let mut pool = state.file_pool.lock().await;
+    let audit_scope = pool.audit_scope(&body.session_id);
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -1400,18 +1466,13 @@ async fn mkdir(
                 path = %body.path,
                 "directory created"
             );
-            let audit_db = state.db.clone();
-
-            let mkdir_path = body.path.clone();
-            let _ = tokio::task::spawn_blocking(move || {
-                audit_db.write_audit_log(&crate::models::NewAuditEntry {
-                    action: "FILE_MKDIR".into(),
-                    target: Some(mkdir_path),
-                    result: "success".into(),
-                    ..Default::default()
-                })
-            })
-            .await;
+            audit_log_scoped(
+                &state.db,
+                "FILE_MKDIR",
+                "success",
+                Some(body.path.clone()),
+                audit_scope.clone(),
+            );
             (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response()
         }
         Err(e) => error_response("MKDIR_FAILED", &e.to_string()).into_response(),
@@ -1430,6 +1491,7 @@ async fn chmod(
         "file chmod"
     );
     let mut pool = state.file_pool.lock().await;
+    let audit_scope = pool.audit_scope(&body.session_id);
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -1443,17 +1505,13 @@ async fn chmod(
                 mode = %body.mode,
                 "file chmod applied"
             );
-            let audit_db = state.db.clone();
-            let chmod_path = body.path.clone();
-            let _ = tokio::task::spawn_blocking(move || {
-                audit_db.write_audit_log(&crate::models::NewAuditEntry {
-                    action: "FILE_CHMOD".into(),
-                    target: Some(chmod_path),
-                    result: "success".into(),
-                    ..Default::default()
-                })
-            })
-            .await;
+            audit_log_scoped(
+                &state.db,
+                "FILE_CHMOD",
+                "success",
+                Some(body.path.clone()),
+                audit_scope.clone(),
+            );
             (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response()
         }
         Err(e) => connector_op_error("CHMOD_FAILED", &e).into_response(),
@@ -1510,6 +1568,7 @@ async fn get_acl(
     Query(params): Query<PathQuery>,
 ) -> axum::response::Response {
     let pool = state.file_pool.lock().await;
+    let audit_scope = pool.audit_scope(&params.session_id);
     let conn = match pool.connectors.get(&params.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -1526,12 +1585,16 @@ async fn get_acl(
             let audit_db = state.db.clone();
 
             let acl_path = params.path.clone();
+            let scope = audit_scope.clone();
             let _ = tokio::task::spawn_blocking(move || {
                 audit_db.write_audit_log(&crate::models::NewAuditEntry {
                     action: "FILE_ACL".into(),
                     target: Some(acl_path),
                     detail: Some("op=get_acl".into()),
                     result: "success".into(),
+                    environment_id: scope.environment_id,
+                    resource_id: scope.resource_id,
+                    agent_id: scope.agent_id,
                     ..Default::default()
                 })
             })
@@ -1554,6 +1617,7 @@ async fn put_acl(
     Json(body): Json<PutAclBody>,
 ) -> axum::response::Response {
     let mut pool = state.file_pool.lock().await;
+    let audit_scope = pool.audit_scope(&body.session_id);
     let conn = match pool.connectors.get_mut(&body.session_id) {
         Some(c) => c,
         None => return error_response("SESSION_NOT_FOUND", "session not found").into_response(),
@@ -1570,12 +1634,16 @@ async fn put_acl(
             let audit_db = state.db.clone();
 
             let acl_path = body.path.clone();
+            let scope = audit_scope.clone();
             let _ = tokio::task::spawn_blocking(move || {
                 audit_db.write_audit_log(&crate::models::NewAuditEntry {
                     action: "FILE_ACL".into(),
                     target: Some(acl_path),
                     detail: Some("op=put_acl".into()),
                     result: "success".into(),
+                    environment_id: scope.environment_id,
+                    resource_id: scope.resource_id,
+                    agent_id: scope.agent_id,
                     ..Default::default()
                 })
             })
@@ -2265,5 +2333,115 @@ mod tests {
             0,
             "excluded files must be invisible and must not become orphans: {body}"
         );
+    }
+
+    // ---- 审计归属补齐（v0.93.0 子任务 4）----
+
+    /// 文件连接池归属随会话存活：`FILE_DISCONNECT` / 文件读写只有 session id，
+    /// 靠连接池里的 scope 表还原资源与环境；移除后归属一并清掉。
+    #[test]
+    fn file_pool_scope_survives_session_and_is_dropped_with_it() {
+        let mut pool = FileConnectionPool::new();
+        let scope = AuditScope {
+            environment_id: Some("env-1".into()),
+            resource_id: Some("res-1".into()),
+            agent_id: Some("agent-1".into()),
+        };
+        pool.insert_with_scope(
+            "file_abc".into(),
+            Box::new(rex_transfer::MemConnector::default()),
+            scope,
+        );
+        assert_eq!(
+            pool.audit_scope("file_abc").resource_id.as_deref(),
+            Some("res-1")
+        );
+        assert_eq!(
+            pool.audit_scope("file_abc").environment_id.as_deref(),
+            Some("env-1")
+        );
+
+        assert!(pool.remove("file_abc").is_some());
+        assert!(
+            pool.audit_scope("file_abc").resource_id.is_none(),
+            "a removed session must not leave a stale scope behind"
+        );
+        assert!(
+            pool.audit_scope("never-opened").resource_id.is_none(),
+            "an unknown session yields an empty scope rather than a guess"
+        );
+    }
+
+    /// 按 resource_id 过滤能看到文件会话事件：`FILE_CONNECT`（资源归属）与走
+    /// 连接池 session scope 的 `FILE_DISCONNECT` / `FILE_MKDIR` 共用同一份归属。
+    #[tokio::test]
+    async fn file_audit_events_are_visible_when_filtering_by_resource_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = crate::resource_conn::build_test_state(dir.path());
+        let resource_id = create_s3_resource(&state);
+
+        let res = load_resource_config(&state, &resource_id).unwrap();
+        let scope = resource_scope(&state, &res, &resource_id);
+        state.file_pool.lock().await.insert_with_scope(
+            "file_live".into(),
+            Box::new(rex_transfer::MemConnector::default()),
+            scope.clone(),
+        );
+
+        // 连接事件归属于资源本身。
+        crate::db::audit_log_scoped(
+            &state.db,
+            "FILE_CONNECT",
+            "success",
+            Some(resource_id.clone()),
+            scope,
+        );
+        // 会话侧事件：归属从连接池里登记的 scope 表里取，与 connect 一致。
+        let session_scope = state.file_pool.lock().await.audit_scope("file_live");
+        for (action, target) in [
+            ("FILE_MKDIR", "/srv/logs"),
+            ("FILE_DISCONNECT", "file_live"),
+        ] {
+            crate::db::audit_log_scoped(
+                &state.db,
+                action,
+                "success",
+                Some(target.into()),
+                session_scope.clone(),
+            );
+        }
+
+        let mut found = Vec::new();
+        for _ in 0..50 {
+            found = state
+                .db
+                .query_audit_log(&crate::models::AuditFilter {
+                    resource_id: Some(resource_id.clone()),
+                    ..Default::default()
+                })
+                .unwrap();
+            if found.len() >= 3 {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        let actions: Vec<&str> = found.iter().map(|e| e.action.as_str()).collect();
+        assert!(actions.contains(&"FILE_CONNECT"), "got {actions:?}");
+        assert!(actions.contains(&"FILE_MKDIR"), "got {actions:?}");
+        assert!(actions.contains(&"FILE_DISCONNECT"), "got {actions:?}");
+        assert!(
+            found
+                .iter()
+                .all(|e| e.resource_id.as_deref() == Some(&*resource_id)),
+            "every file event must carry the resource it was opened against"
+        );
+        assert!(state
+            .db
+            .query_audit_log(&crate::models::AuditFilter {
+                resource_id: Some("res-unrelated".into()),
+                ..Default::default()
+            })
+            .unwrap()
+            .is_empty());
     }
 }

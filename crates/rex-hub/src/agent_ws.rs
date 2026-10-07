@@ -11,6 +11,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot, RwLock};
 
+use crate::db::{audit_log_scoped, AuditScope};
 use crate::AppState;
 
 // ═══════════════════════════════════════
@@ -381,7 +382,9 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
     // 3. 查找或创建 Agent 记录
     let db = state.db.clone();
     let env_id = env.id.clone();
-    let agent_id = tokio::task::spawn_blocking(move || db.find_agent_by_env_id(&env_id)).await;
+    let env_id_lookup = env_id.clone();
+    let agent_id =
+        tokio::task::spawn_blocking(move || db.find_agent_by_env_id(&env_id_lookup)).await;
     let verified_id = match agent_id {
         Ok(Ok(Some(id))) => id,
         Ok(Ok(None)) => {
@@ -455,18 +458,18 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
 
     // 审计日志：Agent 上线
     {
-        let audit_db = state.db.clone();
         let aid = verified_id.clone();
-        let _ = tokio::task::spawn_blocking(move || {
-            audit_db.write_audit_log(&crate::models::NewAuditEntry {
-                action: "AGENT_ONLINE".into(),
-                target: Some(aid.clone()),
+        audit_log_scoped(
+            &state.db,
+            "AGENT_ONLINE",
+            "success",
+            Some(aid.clone()),
+            AuditScope {
+                environment_id: Some(env_id.clone()),
+                resource_id: None,
                 agent_id: Some(aid),
-                result: "success".into(),
-                ..Default::default()
-            })
-        })
-        .await;
+            },
+        );
     }
 
     // 4. 创建事件通道
@@ -540,18 +543,17 @@ async fn handle_agent_socket(ws: WebSocket, state: AppState) {
 
     // 审计日志：Agent 离线
     {
-        let audit_db = state.db.clone();
-        let aid = agent_id.clone();
-        let _ = tokio::task::spawn_blocking(move || {
-            audit_db.write_audit_log(&crate::models::NewAuditEntry {
-                action: "AGENT_OFFLINE".into(),
-                target: Some(aid.clone()),
-                agent_id: Some(aid),
-                result: "success".into(),
-                ..Default::default()
-            })
-        })
-        .await;
+        audit_log_scoped(
+            &state.db,
+            "AGENT_OFFLINE",
+            "success",
+            Some(agent_id.clone()),
+            AuditScope {
+                environment_id: Some(env_id.clone()),
+                resource_id: None,
+                agent_id: Some(agent_id.clone()),
+            },
+        );
     }
 
     // 标记 offline
