@@ -269,7 +269,7 @@ async function handleImport(event: Event) {
           <div class="env-card-agents-header">
             {{ t('environments.agentsSection') }}
             <div class="env-card-agents-spacer"></div>
-            <span v-if="env.agent_status" class="badge-sm badge-green">1 {{ t('environments.agentsOnline') }}</span>
+            <span v-if="env.agent_status === 'online'" class="badge-sm badge-green">1 {{ t('environments.agentsOnline') }}</span>
           </div>
           <div v-if="env.agent_status" class="env-card-agent-row">
             <span class="env-card-agent-icon">⟡</span>
@@ -681,6 +681,7 @@ async function handleImport(event: Event) {
   gap: 6px;
   padding: 12px 16px;
   border-top: 1px solid var(--border);
+  margin-top: auto;
 }
 
 .env-card-action {
