@@ -240,6 +240,11 @@ impl Database {
             params.push(Box::new(env.clone()));
             idx += 1;
         }
+        if let Some(ref res) = filter.resource_id {
+            sql.push_str(&format!(" AND resource_id = ?{idx}"));
+            params.push(Box::new(res.clone()));
+            idx += 1;
+        }
         if let Some(ref aid) = filter.agent_id {
             sql.push_str(&format!(" AND agent_id = ?{idx}"));
             params.push(Box::new(aid.clone()));
@@ -318,6 +323,16 @@ impl Database {
         if let Some(ref env) = filter.environment_id {
             sql.push_str(&format!(" AND environment_id = ?{idx}"));
             params.push(Box::new(env.clone()));
+            idx += 1;
+        }
+        if let Some(ref res) = filter.resource_id {
+            sql.push_str(&format!(" AND resource_id = ?{idx}"));
+            params.push(Box::new(res.clone()));
+            idx += 1;
+        }
+        if let Some(ref aid) = filter.agent_id {
+            sql.push_str(&format!(" AND agent_id = ?{idx}"));
+            params.push(Box::new(aid.clone()));
             idx += 1;
         }
         if let Some(ref r) = filter.result {
@@ -1235,7 +1250,10 @@ pub fn audit_log_scoped(
     let db = db.clone();
     let action = action.to_string();
     let result = result.to_string();
-    let _ = tokio::task::spawn_blocking(move || {
+    let log_action = action.clone();
+    let log_result = result.clone();
+    let log_target = target.clone();
+    let write = tokio::task::spawn_blocking(move || {
         db.write_audit_log(&NewAuditEntry {
             action,
             target,
@@ -1245,6 +1263,22 @@ pub fn audit_log_scoped(
             agent_id: scope.agent_id,
             ..Default::default()
         })
+    });
+    // 保持 fire-and-forget：写入失败（DB 错误 / blocking 任务被取消）只记录日志，不阻塞调用方。
+    tokio::spawn(async move {
+        match write.await {
+            Ok(Err(e)) => tracing::error!(
+                action = "AUDIT_LOG_WRITE",
+                error = %e,
+                "审计日志写入失败: {log_action}/{log_result} target={log_target:?}"
+            ),
+            Err(e) => tracing::error!(
+                action = "AUDIT_LOG_WRITE",
+                error = %e,
+                "审计日志写入任务未完成: {log_action}/{log_result} target={log_target:?}"
+            ),
+            Ok(Ok(())) => {}
+        }
     });
 }
 
@@ -1408,7 +1442,10 @@ pub fn audit_log_with_detail(
     let db = db.clone();
     let action = action.to_string();
     let result = result.to_string();
-    let _ = tokio::task::spawn_blocking(move || {
+    let log_action = action.clone();
+    let log_result = result.clone();
+    let log_target = target.clone();
+    let write = tokio::task::spawn_blocking(move || {
         db.write_audit_log(&NewAuditEntry {
             action,
             target,
@@ -1416,6 +1453,22 @@ pub fn audit_log_with_detail(
             detail,
             ..Default::default()
         })
+    });
+    // 保持 fire-and-forget：写入失败（DB 错误 / blocking 任务被取消）只记录日志，不阻塞调用方。
+    tokio::spawn(async move {
+        match write.await {
+            Ok(Err(e)) => tracing::error!(
+                action = "AUDIT_LOG_WRITE",
+                error = %e,
+                "审计日志写入失败: {log_action}/{log_result} target={log_target:?}"
+            ),
+            Err(e) => tracing::error!(
+                action = "AUDIT_LOG_WRITE",
+                error = %e,
+                "审计日志写入任务未完成: {log_action}/{log_result} target={log_target:?}"
+            ),
+            Ok(Ok(())) => {}
+        }
     });
 }
 
@@ -1742,6 +1795,169 @@ mod tests {
         let entries = db.query_audit_log(&filter).unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].action, "SSH_CONNECT");
+    }
+
+    #[test]
+    fn test_audit_log_filter_by_resource_id() {
+        let (_dir, db) = test_db();
+        db.write_audit_log(&NewAuditEntry {
+            action: "SQL_QUERY".into(),
+            result: "success".into(),
+            environment_id: Some("env-1".into()),
+            resource_id: Some("res-1".into()),
+            agent_id: Some("agent-1".into()),
+            ..Default::default()
+        })
+        .unwrap();
+        db.write_audit_log(&NewAuditEntry {
+            action: "SQL_QUERY".into(),
+            result: "success".into(),
+            environment_id: Some("env-1".into()),
+            resource_id: Some("res-2".into()),
+            agent_id: Some("agent-1".into()),
+            ..Default::default()
+        })
+        .unwrap();
+
+        // 命中资源：只返回该资源的事件
+        let hit = db
+            .query_audit_log(&AuditFilter {
+                resource_id: Some("res-1".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(hit.len(), 1);
+        assert_eq!(hit[0].resource_id.as_deref(), Some("res-1"));
+
+        // 未命中资源：返回空
+        let miss = db
+            .query_audit_log(&AuditFilter {
+                resource_id: Some("res-absent".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(miss.is_empty());
+    }
+
+    #[test]
+    fn test_audit_stats_filter_by_agent_and_resource() {
+        let (_dir, db) = test_db();
+        db.write_audit_log(&NewAuditEntry {
+            action: "SQL_QUERY".into(),
+            result: "success".into(),
+            environment_id: Some("env-1".into()),
+            resource_id: Some("res-1".into()),
+            agent_id: Some("agent-1".into()),
+            ..Default::default()
+        })
+        .unwrap();
+        db.write_audit_log(&NewAuditEntry {
+            action: "SQL_QUERY".into(),
+            result: "failure".into(),
+            environment_id: Some("env-1".into()),
+            resource_id: Some("res-1".into()),
+            agent_id: Some("agent-1".into()),
+            ..Default::default()
+        })
+        .unwrap();
+        db.write_audit_log(&NewAuditEntry {
+            action: "SQL_QUERY".into(),
+            result: "success".into(),
+            environment_id: Some("env-1".into()),
+            resource_id: Some("res-2".into()),
+            agent_id: Some("agent-2".into()),
+            ..Default::default()
+        })
+        .unwrap();
+
+        // 按 Agent 过滤
+        let by_agent = db
+            .query_audit_stats(&AuditFilter {
+                agent_id: Some("agent-1".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(by_agent.total, 2);
+        assert_eq!(by_agent.success_count, 1);
+        assert_eq!(by_agent.failure_count, 1);
+
+        // 按资源过滤
+        let by_resource = db
+            .query_audit_stats(&AuditFilter {
+                resource_id: Some("res-1".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(by_resource.total, 2);
+        assert_eq!(by_resource.success_count, 1);
+        assert_eq!(by_resource.failure_count, 1);
+
+        // 环境 + 资源 + Agent 同时过滤
+        let combined = db
+            .query_audit_stats(&AuditFilter {
+                environment_id: Some("env-1".into()),
+                resource_id: Some("res-2".into()),
+                agent_id: Some("agent-2".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(combined.total, 1);
+        assert_eq!(combined.success_count, 1);
+        assert_eq!(combined.failure_count, 0);
+
+        // 未命中的组合：统计为 0 而不是报错
+        let miss = db
+            .query_audit_stats(&AuditFilter {
+                resource_id: Some("res-2".into()),
+                agent_id: Some("agent-1".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(miss.total, 0);
+        assert_eq!(miss.success_count, 0);
+        assert_eq!(miss.failure_count, 0);
+    }
+
+    #[test]
+    fn test_audit_log_and_stats_counts_agree() {
+        let (_dir, db) = test_db();
+        for (i, agent) in ["agent-1", "agent-1", "agent-2"].iter().enumerate() {
+            for resource in ["res-1", "res-2"] {
+                db.write_audit_log(&NewAuditEntry {
+                    action: format!("ACTION_{i}"),
+                    result: if i == 0 { "failure" } else { "success" }.into(),
+                    environment_id: Some("env-1".into()),
+                    resource_id: Some(resource.into()),
+                    agent_id: Some((*agent).into()),
+                    ..Default::default()
+                })
+                .unwrap();
+            }
+        }
+
+        // 列表与统计共用同一组筛选维度，计数必须一致
+        for filter in [
+            AuditFilter {
+                agent_id: Some("agent-1".into()),
+                ..Default::default()
+            },
+            AuditFilter {
+                resource_id: Some("res-1".into()),
+                ..Default::default()
+            },
+            AuditFilter {
+                environment_id: Some("env-1".into()),
+                resource_id: Some("res-2".into()),
+                agent_id: Some("agent-2".into()),
+                result: Some("failure".into()),
+                ..Default::default()
+            },
+            AuditFilter::default(),
+        ] {
+            let listed = db.query_audit_log(&filter).unwrap().len();
+            let stats = db.query_audit_stats(&filter).unwrap();
+            assert_eq!(stats.total as usize, listed, "列表与统计口径不一致");
+        }
     }
 
     #[test]
