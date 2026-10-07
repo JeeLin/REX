@@ -81,11 +81,34 @@ handler 通过 `crate::error::api_error`（别名 `err`）或 `error_with_status
 
 > 测试专用码（如 `TEST_CODE`）不出现在生产响应中，本文不列。
 
+### 协议前缀与阶段（v0.93.0）
+
+v0.93.0 起，连接类错误在根因码之上补两个正交维度，使各协议的错误可区分、可归因。
+
+- **协议前缀**：`wire_code(proto, root)` 把协议前缀与根因码合成 wire `code`，形如 `SQL_CONNECTION_REFUSED`、`MONGODB_AUTH_FAILED`。规则：`code = <prefix>_<root>`，前缀为 `None` 时不拼（保持既有裸码 `CONNECTION_REFUSED` 原样输出，wire 兼容）。前缀由 `ProtoKind` 单点定义（`Sql`→`SQL`、`Redis`→`REDIS`、`MongoDb`→`MONGODB`、`Tunnel`→`TUNNEL`；`Ssh` 与 `ResourceTest` 不加前缀，因其终止性码字面量已自带 `SSH_`/`RESOURCE_` 领域信息）。
+- **阶段**：`connect_stage(root)` 由根因码推导连接阶段，取值 `dns` / `tcp` / `tls` / `auth` / `timeout` / `connect`，命名风格与 Agent 侧 `STAGE_*` 一致。
+- **合成入口唯一**：`connect_error_with_stage(err_msg, proto, fatal)` 是 WS 路径的唯一合成点，`retryable = !fatal`。REST 路径用 `connect_error_response_with_stage(context, raw, chain, proto)`：分类输入仍是 `raw`（最外层 `Display`，与既有 `connect_error_response` 一致 → 根因码不变），`chain`（逐层 `source()` 展开的完整错误链）只进 `message` 并对密码/连接串做 redact。
+- 非连接类错误不带 `stage`：`ErrorDetail.stage` 为 `Option` 且 `skip_serializing_if = "Option::is_none"`，故既有 REST/WS 响应的 wire 形状逐字不变。
+
+SQL / Redis / MongoDB 三条连接路径因此产出 `SQL_*` / `REDIS_*` / `MONGODB_*` 前缀码（如 `sql_api.rs` 的 `connect_error()`、`redis_api.rs` 的 `connect_error()`、`mongodb_api.rs` 的 `config_error()` / `connect_error()`）。既有非连接类业务码（`INVALID_URI`/`SESSION_NOT_FOUND`/`QUERY_*` 等）保持字面量不变，其中 `INVALID_URI` 仅补 `stage: "config"`。
+
 ### WS 信令错误（v0.90.1）
 
 `send_ws_error` 复用共享 `send_ws_json` 序列化+发送助手（消除 terminal / sip / tunnel 间的重复序列化逻辑）。
 
 - `terminal` 的 `ErrorPayload` 新增 `code` 字段（**加法，wire 兼容**）：`send_ws_error` 在序列化前用 `classify_connect_error` 填充，取值见上表连接类错误；供前端弹 toast，并可据此跳转至本文档。
-- `sip` 用 `ReasonPayload { reason }`；`tunnel` 用 `TunnelMsg::Error { message }` — 形状不变。
+- `sip` 用 `ReasonPayload { reason }`。
+- `tunnel` 的 `TunnelMsg::Error` 在 v0.93.0 由 `{ message }` 扩展为 `{ code, stage, retryable, message }`（三个新字段均带 `#[serde(default)]`，`retryable` 默认 `true`，故旧帧不炸且不会被误判终止性）。`code` 取值见下表，`stage` 取值为连接阶段或隧道专属阶段。
+- v0.93.0 起 `ErrorPayload` / `ConnFailure` / `fatal_error_code` 已从 `terminal_ws.rs` 提升到 `crates/rex-hub/src/error.rs` **共享层**（原先为 terminal 模块私有），`terminal_ws` 改为纯消费方。终止性码（`SSH_CONFIG_DECRYPT_FAILED` / `SSH_CONFIG_INVALID` / `RESOURCE_NOT_FOUND` / `ENVIRONMENT_NOT_FOUND` / `HOST_REQUIRED` / `AUTH_FAILED`）码值逐字不变。
 
-> 后续可选灰度：在 `terminal.error` 之外的 WS 信令 payload 补充结构化 `code`，以完全打通 REST 与 WS 的错误码体系。
+#### 隧道连接错误码（v0.93.0）
+
+| `code` | `stage` | `retryable` | 说明 |
+| --- | --- | --- | --- |
+| `TUNNEL_BAD_REQUEST` | `client` | `false` | 客户端未按协议先发 connect 消息 |
+| `TUNNEL_AGENT_NOT_CONNECTED` | `agent` | `true` | 目标 Agent 未连接 |
+| `TUNNEL_AGENT_SEND_FAILED` | `dispatch` | `true` | 向 Agent 下发 connect 失败 |
+| `TUNNEL_AGENT_CONNECT_REJECTED` | `agent_error` | `false` | Agent 返回连接失败（原始 Agent 文案保留在 `message`，但不用于 Hub 侧分类） |
+| `TUNNEL_AGENT_BAD_RESPONSE` | `agent_response` | `true` | Agent 返回空响应 |
+| `TUNNEL_AGENT_CHANNEL_CLOSED` | `agent_channel` | `true` | Agent 响应通道关闭 |
+| `TUNNEL_AGENT_TIMEOUT` | `timeout` | `true` | Agent 响应超时 |
