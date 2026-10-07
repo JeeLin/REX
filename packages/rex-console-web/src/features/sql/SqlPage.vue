@@ -791,7 +791,7 @@ onBeforeUnmount(() => {
         />
         <p v-if="saveError" class="saved-query-error">{{ saveError }}</p>
         <template #footer>
-          <Button variant="ghost" :disabled="savingNamed" @click="showSaveNamed = false">{{ t('cancel') }}</Button>
+          <Button variant="ghost" :disabled="savingNamed" @click="showSaveNamed = false">{{ t('common.cancel') }}</Button>
           <Button variant="primary" :loading="savingNamed" :disabled="!saveName.trim()" @click="confirmSaveNamed">
             {{ t('sql.saveQuery') }}
           </Button>

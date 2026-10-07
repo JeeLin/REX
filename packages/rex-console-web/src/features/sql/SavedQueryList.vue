@@ -132,7 +132,7 @@ async function onDelete(q: SavedQuery) {
         @keydown.enter="confirmRename"
       />
       <template #footer>
-        <Button variant="ghost" :disabled="savingRename" @click="renaming = null">{{ t('cancel') }}</Button>
+        <Button variant="ghost" :disabled="savingRename" @click="renaming = null">{{ t('common.cancel') }}</Button>
         <Button variant="primary" :loading="savingRename" :disabled="!renameValue.trim()" @click="confirmRename">
           {{ t('sql.saveQuery') }}
         </Button>
