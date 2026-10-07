@@ -174,6 +174,7 @@ rex-agent = 所有 crate（无前端）
 | **v0.90.1** | 日志与接口错误信息优化（patch，结构化日志+请求追踪、tracing-appender 轮转/保留、REST/WS error 统一到 rex-common、前端 ApiError→toast 归一） | — | ✅ 已完成（v0.90.1） |
 | **v0.91.0** | 文件操作逻辑重设计（SFTP/S3）（minor，后端传输任务模型 + server-side 直连搬运 + FileConnector 能力模型 + chmod/mkdir/ACL/续传 + WS 进度推送 + 前端结构重构 + FolderSyncDialog 移除） | — | ✅ 已完成（v0.91.0） |
 | **v0.92.0** | 真实目录同步（SFTP+S3）（minor，server-side 直连搬运 + 传输任务模型 + 双面板 diff 比较/冲突处理 + chmod/Sync 浏览/右键菜单 + 前端结构重构 + WS 进度推送；SSH 终端错误分类与会话生命周期修复：解密/配置/资源缺失失败→ fatal 帧止无限重连、关闭 tab 释放 Hub session、Agent SSH 错误码/阶段透传） | — | ✅ 已完成（v0.92.0） |
+| **v0.93.0** | 跨协议连接错误透传 + 审计归属补全（minor，sql/redis/mongo/tunnel 连接失败按阶段分类产稳定 ErrorCode + retryable、审计写入走 audit_log_scoped 维度过滤、传输失败落 terminal 状态、AuditLogPage Promise.allSettled 部分失败降级、95 个 i18n 键补全） | — | ✅ 已完成（v0.93.0） |
 ### M0：项目骨架重建
 
 **核心功能**：清空 `packages/rex-console-web` 与 `crates/*` 源码，按新设计系统重建最小可运行骨架。
@@ -816,7 +817,7 @@ rex-agent = 所有 crate（无前端）
 - **来源**：v0.92.0 步骤3 自查 + @oracle 审查产出（`docs/BUGS.md` 缺陷池）+ 用户反馈「整个项目对于连接的错误处理很粗糙」
 - **状态**：✅ 已完成（`cargo check/clippy --workspace --all-targets` rc=0；`cargo test -p rex-hub --lib` 263 项全过；`bun type-check/lint/build` 全绿；v0.92 传输语义不变。全 workspace `cargo test` 因本地 3.7 GB 内存/40 GB 磁盘受限，由 tag 触发的 CI 补跑）
 
-### 候选（已裁决待排期）：数据密钥守卫与解密失败指引
+### 已排期（v0.94.0）：数据密钥守卫与解密失败指引
 - **背景**：用户实测——Docker 升级/清理时 `.master-key` 丢失，DB 保留 → 静默生成新 key → SSH 报 `decrypt failed: aead::Error`，错误延迟到连接时且无法联想到密钥丢失（2026-09-24）
 - **已裁决方案（用户决策 B，2026-09-24）——软失败，不拦启动**：
   1. **启动守卫**：`crates/rex-hub/src/rex-hub.rs:172-181` worker 初始化处——DB 已存在非空 `config_json` 密文而 `.master-key` 缺失（本启动生成新 key）→ `tracing::error!` 明确报「数据密钥与数据库不匹配，`.master-key` 可能丢失，请从备份恢复或重新输入连接凭据」，服务照常运行（UI 存活，保留重输密码自救路径）
@@ -824,7 +825,7 @@ rex-agent = 所有 crate（无前端）
   3. **（可选）密钥指纹**：DB 存一行 key fingerprint 供启动比对（指纹不可反推密钥）；支持 `REX_MASTER_KEY` 环境变量覆盖（与幽灵 `REX_SECRET_KEY` 区分，注释写明）
 - **不做**：密钥存 DB（密文与密钥同体，DB 导出即泄露，已否决 2026-09-24）；硬失败拦启动（断 UI 自救路径，已否决）
 - **关联**：备份文档点名 `.master-key` 与 `rex.db` 同等关键（v0.89 S7 已排）；v0.89 Bugs 表 decrypt failed 行
-- **状态**：已裁决待排期，不塞 v0.89（范围已满）；`milestone-planner` 规划时吸纳为独立小任务
+- **状态**：已吸纳进 v0.94.0（`.mdflow/milestones/v0.94.0-data-key-guard-and-defects.md`）；不塞 v0.89（范围已满）；软失败不拦启动（用户决策 B，2026-09-24）
 
 ### 候选（条件触发）：资源访问短路（控制面/数据面分离）
 - **核心功能**：同 Agent 内文件互传、远程 Hub 时 SIP 媒体等数据面流量不再绕 Hub；形态 = Hub 会话建立时下发「直连」指令，Agent 按指令哑中继（类似 TURN 选择），鉴权/审计/会话判定/录音仍全走 Hub（控制面一步不动），拓扑判断收敛 Hub 单点、无散落分支
