@@ -18,6 +18,7 @@ use tokio::time::Interval;
 
 use crate::agent_ws::{AgentEvent, ConnectResponse};
 use crate::db::{audit_log_scoped, AuditScope};
+use crate::error::{connect_error_with_stage, ConnFailure, ErrorPayload, ProtoKind};
 use crate::AppState;
 
 /// 前端 → 后端的消息（连接建立后的控制消息）
@@ -63,37 +64,6 @@ struct DataPayload {
 #[derive(Debug, Serialize)]
 struct DisconnectedPayload {
     reason: String,
-}
-
-#[derive(Debug, Serialize)]
-struct ErrorPayload {
-    code: String,
-    message: String,
-    /// 该错误重连是否有可能自愈。前端据此决定是否自动重连：
-    /// `false` = 终止性（配置/凭据类，重试多少次都是同一结果）→ 停止重连并
-    /// 把 `message` 呈现给用户；`true` / 缺省 = 可重试（传输中断等）。
-    #[serde(rename = "retryable")]
-    retryable: bool,
-}
-
-/// 终端建连失败的分类：决定是否值得让前端重连。
-///
-/// 只有「重试一次可能变成成功」的错误才算可重试。凭据解密失败、config_json
-/// 不是合法 JSON、资源不存在、host 为空 —— 这些重连多少次都会在同一处失败，
-/// 继续重连既刷 `/ws/terminal` 日志又让用户看到终端反复回到初始状态却看不到
-/// 原因，因此按终止性错误上报。DB / spawn_blocking 这类基础设施抖动仍可重试。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ConnFailure {
-    /// 终止性：重连无法改变结果。
-    Fatal,
-    /// 可重试：传输或数据库层的瞬时故障。
-    Transient,
-}
-
-impl ConnFailure {
-    fn retryable(self) -> bool {
-        matches!(self, ConnFailure::Transient)
-    }
 }
 
 /// 带分类的资源加载失败。`String` 版本无法区分二者，会让前端对解密失败
@@ -947,52 +917,23 @@ async fn send_ws_error(ws: &mut WebSocket, msg: &str) -> Result<(), axum::Error>
 
 /// 发分类错误信令。`Fatal` 错误带 `retryable=false`，前端在收到后停止
 /// 自动重连并把 `message` 呈现给用户（解密失败 / 认证失败 / 资源缺失等）。
+///
+/// 分类与码合成统一走 `crate::error::connect_error_with_stage`；SSH 不带协议
+/// 前缀，故产出与迁移前逐字一致（可重试 → 裸根因码，终止性 → 裸终止性码）。
 async fn send_ws_error_classified(
     ws: &mut WebSocket,
     msg: &str,
     failure: ConnFailure,
 ) -> Result<(), axum::Error> {
     use crate::error::send_ws_json;
-    let retryable = failure.retryable();
-    let code = if retryable {
-        crate::error::classify_connect_error(msg)
-            .as_str()
-            .to_string()
-    } else {
-        fatal_error_code(msg).to_string()
-    };
+    let fatal = !failure.retryable();
     send_ws_json(
         ws,
         &ServerMsg::Error {
-            payload: ErrorPayload {
-                code,
-                message: msg.into(),
-                retryable,
-            },
+            payload: connect_error_with_stage(msg, ProtoKind::Ssh, fatal),
         },
     )
     .await
-}
-
-/// 终止性错误的结构化码。用于 `retryable=false` 错误帧的 `code` 字段，
-/// 让前端 / 用户能精确定位（解密失败 vs 认证失败 vs 资源缺失）。
-fn fatal_error_code(msg: &str) -> &'static str {
-    let lower = msg.to_lowercase();
-    if lower.contains("decryption failed") || lower.contains("decrypt failed") {
-        "SSH_CONFIG_DECRYPT_FAILED"
-    } else if lower.contains("invalid config json") {
-        "SSH_CONFIG_INVALID"
-    } else if lower.contains("resource not found") {
-        "RESOURCE_NOT_FOUND"
-    } else if lower.contains("environment not found") {
-        "ENVIRONMENT_NOT_FOUND"
-    } else if lower.contains("host is empty") || lower.contains("host is required") {
-        "HOST_REQUIRED"
-    } else if lower.contains("authentication failed") || lower.contains("auth") {
-        "AUTH_FAILED"
-    } else {
-        "ERROR"
-    }
 }
 
 /// SSH 建连失败 → 可重试性。
@@ -1017,40 +958,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fatal_error_code_classifies_decrypt_failure() {
-        assert_eq!(
-            fatal_error_code("SSH credential decryption failed: decrypt failed: aead::Error"),
-            "SSH_CONFIG_DECRYPT_FAILED"
-        );
-    }
+    fn ssh_error_frame_keeps_legacy_wire_shape() {
+        // 无协议前缀时必须原样输出既有裸码，避免改动前端判定。
+        let fatal = connect_error_with_stage("resource not found: r1", ProtoKind::Ssh, true);
+        assert_eq!(fatal.code, "RESOURCE_NOT_FOUND");
+        assert_eq!(fatal.message, "resource not found: r1");
+        assert!(!fatal.retryable);
 
-    #[test]
-    fn fatal_error_code_classifies_auth_failure() {
-        assert_eq!(
-            fatal_error_code("SSH authentication failed (password: ...)"),
-            "AUTH_FAILED"
-        );
-    }
-
-    #[test]
-    fn fatal_error_code_classifies_resource_not_found() {
-        assert_eq!(
-            fatal_error_code("resource not found: r1"),
-            "RESOURCE_NOT_FOUND"
-        );
-        assert_eq!(
-            fatal_error_code("environment not found: e1"),
-            "ENVIRONMENT_NOT_FOUND"
-        );
-        assert_eq!(
-            fatal_error_code("resource r1: host is empty"),
-            "HOST_REQUIRED"
-        );
-    }
-
-    #[test]
-    fn fatal_error_code_falls_back_for_unknown() {
-        assert_eq!(fatal_error_code("something odd"), "ERROR");
+        let transient =
+            connect_error_with_stage("db error: connection refused", ProtoKind::Ssh, false);
+        assert_eq!(transient.code, "CONNECTION_REFUSED");
+        assert!(transient.retryable);
     }
 
     #[test]
