@@ -6,6 +6,7 @@ import { auditApi, type AuditEntry, type AuditStats } from '@/api/audit'
 import { clipboard } from '@/utils/clipboard'
 import { agentsApi, type Agent } from '@/api/agents'
 import { useEnvironmentsStore } from '@/stores/environments'
+import { useNotificationStore } from '@/stores/notification'
 import Button from '@/components/ui/Button.vue'
 import ContextMenu from '@/components/ui/ContextMenu.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -14,10 +15,13 @@ import ResponsiveTable from '@/components/ResponsiveTable.vue'
 
 const { t } = useI18n()
 const store = useEnvironmentsStore()
+const notify = useNotificationStore()
 
 const entries = ref<AuditEntry[]>([])
 const loading = ref(true)
 const stats = ref<AuditStats>({ total: 0, success_count: 0, failure_count: 0 })
+const listError = ref('')
+const statsError = ref('')
 const expandedId = ref<string | null>(null)
 const currentPage = ref(1)
 const pageSize = ref(50)
@@ -27,6 +31,10 @@ const pageSizeOptions = [
   { label: '200', value: 200 },
 ]
 const totalCount = ref(0)
+// The exact total only comes from the statistics endpoint. Without it the row
+// count of the current page cannot be turned into a total, so the total stays
+// explicitly unknown instead of being guessed from the rows that did arrive.
+const totalKnown = ref(false)
 const agentsMap = ref<Map<string, Agent>>(new Map())
 
 // Context menu
@@ -63,6 +71,16 @@ function ctxFilterByEnv() {
   closeCtxMenu()
 }
 
+function ctxFilterByResource() {
+  if (ctxMenu.value.entry) resourceFilter.value = ctxMenu.value.entry.resource_id || ''
+  closeCtxMenu()
+}
+
+function ctxFilterByAgent() {
+  if (ctxMenu.value.entry) agentFilter.value = ctxMenu.value.entry.agent_id || ''
+  closeCtxMenu()
+}
+
 function ctxRefresh() {
   refreshAll()
   closeCtxMenu()
@@ -73,11 +91,17 @@ function ctxExportCsv() {
   closeCtxMenu()
 }
 
-function ctxClearFilters() {
+function clearFilters() {
   actionFilter.value = ''
   resultFilter.value = ''
   environmentFilter.value = ''
+  resourceFilter.value = ''
+  agentFilter.value = ''
   timeRange.value = 'all'
+}
+
+function ctxClearFilters() {
+  clearFilters()
   closeCtxMenu()
 }
 
@@ -87,6 +111,8 @@ function handleCtxAction(action: string) {
     case 'copy': ctxCopyRecord(); break
     case 'filterType': ctxFilterByType(); break
     case 'filterEnv': ctxFilterByEnv(); break
+    case 'filterResource': ctxFilterByResource(); break
+    case 'filterAgent': ctxFilterByAgent(); break
     case 'refresh': ctxRefresh(); break
     case 'export': ctxExportCsv(); break
     case 'clearFilters': ctxClearFilters(); break
@@ -97,7 +123,35 @@ function handleCtxAction(action: string) {
 const actionFilter = ref('')
 const resultFilter = ref('')
 const environmentFilter = ref('')
+const resourceFilter = ref('')
+const agentFilter = ref('')
 const timeRange = ref('all')
+
+// Resource / Agent chips reuse the data already loaded for name resolution (no extra request)
+const resourceOptions = computed(() => {
+  const envId = environmentFilter.value
+  const groups = envId ? [store.envResources.get(envId)] : [...store.envResources.values()]
+  const seen = new Set<string>()
+  const options: { id: string; name: string }[] = []
+  for (const list of groups) {
+    for (const r of list ?? []) {
+      if (seen.has(r.id)) continue
+      seen.add(r.id)
+      options.push({ id: r.id, name: r.name })
+    }
+  }
+  return options.sort((a, b) => a.name.localeCompare(b.name))
+})
+
+const agentOptions = computed(() => {
+  const envId = environmentFilter.value
+  return [...agentsMap.value.values()]
+    .filter(a => !envId || a.environment_id === envId)
+    .sort((a, b) => a.name.localeCompare(b.name))
+})
+
+const statsUnavailable = computed(() => loading.value || !!statsError.value)
+const totalUnavailable = computed(() => !!listError.value || !!statsError.value)
 
 const actionOptions = [
   { label: 'auditLog.all', value: '' },
@@ -136,33 +190,55 @@ function getTimeRange(): { time_from?: string; time_to?: string } {
   return { time_from: start.toISOString() }
 }
 
+function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e)
+}
+
 async function fetchEntries() {
   loading.value = true
   const range = getTimeRange()
+  const offset = (currentPage.value - 1) * pageSize.value
+  const filters = {
+    action: actionFilter.value || undefined,
+    result: resultFilter.value || undefined,
+    environment_id: environmentFilter.value || undefined,
+    resource_id: resourceFilter.value || undefined,
+    agent_id: agentFilter.value || undefined,
+    ...range,
+  }
   try {
-    const offset = (currentPage.value - 1) * pageSize.value
-    const [data, statsData] = await Promise.all([
-      auditApi.query({
-        action: actionFilter.value || undefined,
-        result: resultFilter.value || undefined,
-        environment_id: environmentFilter.value || undefined,
-        ...range,
-        limit: pageSize.value,
-        offset,
-      }),
-      auditApi.stats({
-        action: actionFilter.value || undefined,
-        result: resultFilter.value || undefined,
-        environment_id: environmentFilter.value || undefined,
-        ...range,
-      }),
+    // List and stats degrade independently: a failing stats call must not blank the table
+    const [listResult, statsResult] = await Promise.allSettled([
+      auditApi.query({ ...filters, limit: pageSize.value, offset }),
+      auditApi.stats({ ...filters }),
     ])
-    entries.value = data
-    totalCount.value = statsData.total
-    stats.value = statsData
-  } catch {
-    entries.value = []
-    totalCount.value = 0
+    const hadListError = !!listError.value
+    const hadStatsError = !!statsError.value
+
+    if (listResult.status === 'fulfilled') {
+      entries.value = listResult.value
+      listError.value = ''
+    } else {
+      console.error('Audit log query failed:', listResult.reason)
+      entries.value = []
+      listError.value = errorMessage(listResult.reason)
+      if (!hadListError) notify.error(t('auditLog.loadFailed', 'Failed to load audit entries'))
+    }
+
+    if (statsResult.status === 'fulfilled') {
+      stats.value = statsResult.value
+      totalCount.value = statsResult.value.total
+      totalKnown.value = true
+      statsError.value = ''
+    } else {
+      console.error('Audit log stats query failed:', statsResult.reason)
+      // The rows of the current page say nothing about the total: mark it unknown
+      totalKnown.value = false
+      statsError.value = errorMessage(statsResult.reason)
+      if (!hadStatsError && listResult.status === 'fulfilled') {
+        notify.warning(t('auditLog.statsFailed', 'Statistics unavailable, showing the list only'))
+      }
+    }
   } finally {
     loading.value = false
   }
@@ -178,27 +254,34 @@ function toggleExpand(id: string) {
 
 async function exportCsv() {
   const range = getTimeRange()
-  const allEntries = await auditApi.query({
-    action: actionFilter.value || undefined,
-    result: resultFilter.value || undefined,
-    environment_id: environmentFilter.value || undefined,
-    ...range,
-    limit: 10000,
-  })
-  const headers = ['time', 'action', 'target', 'environment_id', 'resource_id', 'agent_id', 'result', 'detail']
-  const rows = allEntries.map(e => headers.map(h => {
-    const val = (e as unknown as Record<string, unknown>)[h]
-    const str = val === null || val === undefined ? '' : String(val)
-    return `"${str.replace(/"/g, '""')}"`
-  }).join(','))
-  const csv = [headers.join(','), ...rows].join('\n')
-  const blob = new Blob([csv], { type: 'text/csv' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  try {
+    const allEntries = await auditApi.query({
+      action: actionFilter.value || undefined,
+      result: resultFilter.value || undefined,
+      environment_id: environmentFilter.value || undefined,
+      resource_id: resourceFilter.value || undefined,
+      agent_id: agentFilter.value || undefined,
+      ...range,
+      limit: 10000,
+    })
+    const headers = ['time', 'action', 'target', 'environment_id', 'resource_id', 'agent_id', 'result', 'detail']
+    const rows = allEntries.map(e => headers.map(h => {
+      const val = (e as unknown as Record<string, unknown>)[h]
+      const str = val === null || val === undefined ? '' : String(val)
+      return `"${str.replace(/"/g, '""')}"`
+    }).join(','))
+    const csv = [headers.join(','), ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    console.error('Audit log CSV export failed:', e)
+    notify.error(t('auditLog.exportFailed', 'Failed to export CSV'))
+  }
 }
 
 function actionBadge(action: string) {
@@ -272,11 +355,37 @@ function opTagClass(action: string): string {
   return 'env'
 }
 
-const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / pageSize.value)))
+// Total pages only exist when the total is known; the received rows say nothing
+// about how many entries follow them.
+const totalPages = computed(() =>
+  totalKnown.value ? Math.max(1, Math.ceil(totalCount.value / pageSize.value)) : null,
+)
+const pageInfo = computed(() =>
+  totalPages.value === null ? `${currentPage.value} / —` : `${currentPage.value} / ${totalPages.value}`,
+)
+// Jump to page needs a last page to clamp against, so it stays disabled without a known total
+const gotoDisabled = computed(() => !!listError.value || totalPages.value === null)
+// An unknown total can only be probed: a partial page is the end of the list,
+// a full page may still have entries after it
+const pageHasMore = computed(() =>
+  totalPages.value !== null
+    ? currentPage.value < totalPages.value
+    : entries.value.length >= pageSize.value,
+)
 
 const gotoPage = ref(1)
 
-watch([actionFilter, resultFilter, environmentFilter, timeRange], () => {
+// Scope filters follow the environment: drop a resource / agent selection that left the scope
+watch(environmentFilter, () => {
+  if (resourceFilter.value && !resourceOptions.value.some(r => r.id === resourceFilter.value)) {
+    resourceFilter.value = ''
+  }
+  if (agentFilter.value && !agentOptions.value.some(a => a.id === agentFilter.value)) {
+    agentFilter.value = ''
+  }
+})
+
+watch([actionFilter, resultFilter, environmentFilter, resourceFilter, agentFilter, timeRange], () => {
   currentPage.value = 1
   gotoPage.value = 1
   refreshAll()
@@ -290,6 +399,7 @@ watch(pageSize, () => {
 
 // 跳页：输入页码后回车跳转到目标页
 function applyGoto() {
+  if (totalPages.value === null) return
   const target = Math.min(Math.max(1, Math.floor(gotoPage.value || 1)), totalPages.value)
   currentPage.value = target
 }
@@ -302,15 +412,31 @@ watch(currentPage, () => {
 onMounted(async () => {
   await store.fetchEnvironments()
   // Load resources for all environments to enable name resolution
+  let resourceFailures = 0
+  let agentFailures = 0
   await Promise.all(store.environments.map(async (e) => {
-    await store.fetchResources(e.id)
-    try {
-      const agents = await agentsApi.listByEnv(e.id)
-      for (const agent of agents) {
+    // Settled independently: one failing env must not abort the rest or the audit fetch below
+    const [resourceResult, agentResult] = await Promise.allSettled([
+      store.fetchResources(e.id),
+      agentsApi.listByEnv(e.id),
+    ])
+    if (resourceResult.status === 'rejected') resourceFailures += 1
+    if (agentResult.status === 'fulfilled') {
+      for (const agent of agentResult.value) {
         agentsMap.value.set(agent.id, agent)
       }
-    } catch { /* ignore */ }
+    } else {
+      agentFailures += 1
+    }
   }))
+  if (resourceFailures > 0) {
+    console.error(`Failed to load resources for ${resourceFailures} environment(s)`)
+    notify.warning(t('auditLog.resourcesResolveFailed', 'Resources failed to load for some environments, names cannot be resolved'))
+  }
+  if (agentFailures > 0) {
+    console.error(`Failed to load agents for ${agentFailures} environment(s)`)
+    notify.warning(t('auditLog.agentsResolveFailed', 'Agents failed to load for some environments, names cannot be resolved'))
+  }
   refreshAll()
 })
 </script>
@@ -325,7 +451,6 @@ onMounted(async () => {
 
     <p class="page-desc">{{ t('auditLog.subtitle') }}</p>
 
-    <!-- Toolbar: filters + actions -->
     <!-- Toolbar: chip filters + actions -->
     <div class="toolbar">
       <div class="filter-chips">
@@ -345,6 +470,44 @@ onMounted(async () => {
           @click="environmentFilter = env.id"
         >
           {{ env.name }}
+        </button>
+      </div>
+      <div v-if="resourceOptions.length" class="filter-chips">
+        <span class="filter-chips-label">{{ t('auditLog.resource', 'Resource') }}</span>
+        <button
+          class="filter-chip"
+          :class="{ 'filter-chip--on': !resourceFilter }"
+          @click="resourceFilter = ''"
+        >
+          {{ t('auditLog.allResources', 'All Resources') }}
+        </button>
+        <button
+          v-for="opt in resourceOptions"
+          :key="opt.id"
+          class="filter-chip"
+          :class="{ 'filter-chip--on': resourceFilter === opt.id }"
+          @click="resourceFilter = opt.id"
+        >
+          {{ opt.name }}
+        </button>
+      </div>
+      <div v-if="agentOptions.length" class="filter-chips">
+        <span class="filter-chips-label">{{ t('auditLog.agent', 'Agent') }}</span>
+        <button
+          class="filter-chip"
+          :class="{ 'filter-chip--on': !agentFilter }"
+          @click="agentFilter = ''"
+        >
+          {{ t('auditLog.allAgents', 'All Agents') }}
+        </button>
+        <button
+          v-for="opt in agentOptions"
+          :key="opt.id"
+          class="filter-chip"
+          :class="{ 'filter-chip--on': agentFilter === opt.id }"
+          @click="agentFilter = opt.id"
+        >
+          {{ opt.name }}
         </button>
       </div>
       <div class="filter-chips">
@@ -367,7 +530,7 @@ onMounted(async () => {
         </button>
       </div>
       <span class="spacer"></span>
-      <Button variant="ghost" size="sm" @click="actionFilter = ''; resultFilter = ''; environmentFilter = ''; timeRange = 'all'">
+      <Button variant="ghost" size="sm" @click="clearFilters">
         {{ t('auditLog.clearFilters') }}
       </Button>
       <Button variant="primary" size="sm" @click="exportCsv">
@@ -375,19 +538,35 @@ onMounted(async () => {
         {{ t('auditLog.exportCsv') }}
       </Button>
     </div>
+    <!-- Partial failure notice: list and stats load independently -->
+    <div
+      v-if="listError || statsError"
+      class="load-note"
+      :class="listError ? 'load-note--error' : 'load-note--warn'"
+    >
+      <span class="load-note-icon">{{ listError ? '✕' : '⚠' }}</span>
+      <span class="load-note-text">
+        {{ listError
+          ? t('auditLog.loadFailed', 'Failed to load audit entries')
+          : t('auditLog.statsFailed', 'Statistics unavailable, showing the list only') }}
+      </span>
+      <span class="load-note-detail mono" :title="listError || statsError">{{ listError || statsError }}</span>
+      <Button variant="ghost" size="sm" @click="refreshAll">{{ t('common.refresh') }}</Button>
+    </div>
+
     <!-- Stats cards -->
     <div class="stats">
       <div class="stat">
         <div class="stat-key">{{ t('auditLog.statTotal') }}</div>
-        <div class="stat-value" :class="{ loading }">{{ loading ? '—' : stats.total.toLocaleString() }}</div>
+        <div class="stat-value" :class="{ loading: loading && !statsError, 'stat-value--error': statsError }">{{ statsUnavailable ? '—' : stats.total.toLocaleString() }}</div>
       </div>
       <div class="stat green">
         <div class="stat-key">{{ t('auditLog.statSuccess') }}</div>
-        <div class="stat-value" :class="{ loading }">{{ loading ? '—' : stats.success_count.toLocaleString() }}</div>
+        <div class="stat-value" :class="{ loading: loading && !statsError, 'stat-value--error': statsError }">{{ statsUnavailable ? '—' : stats.success_count.toLocaleString() }}</div>
       </div>
       <div class="stat red">
         <div class="stat-key">{{ t('auditLog.statFailure') }}</div>
-        <div class="stat-value" :class="{ loading }">{{ loading ? '—' : stats.failure_count.toLocaleString() }}</div>
+        <div class="stat-value" :class="{ loading: loading && !statsError, 'stat-value--error': statsError }">{{ statsUnavailable ? '—' : stats.failure_count.toLocaleString() }}</div>
       </div>
       <div class="stat brand">
         <div class="stat-key">{{ t('auditLog.activeUsers', 'Active users') }}</div>
@@ -399,8 +578,10 @@ onMounted(async () => {
     <EmptyState
       v-if="!loading && entries.length === 0"
       icon="📋"
-      :title="t('auditLog.noEntries')"
-      :description="t('auditLog.emptyDesc')"
+      :title="listError
+        ? t('auditLog.loadFailed', 'Failed to load audit entries')
+        : t('auditLog.noEntries')"
+      :description="listError || t('auditLog.emptyDesc')"
     />
 
     <!-- Data table -->
@@ -485,12 +666,13 @@ onMounted(async () => {
 
     <!-- Pagination -->
     <div class="audit-table-footer">
-      <span class="page-total muted">{{ t('auditLog.totalCount', { n: totalCount }) }}</span>
+      <span class="page-total muted">{{ t('auditLog.totalCount', { n: totalUnavailable ? '—' : totalCount }) }}</span>
       <span class="field-label">{{ t('auditLog.pageSize') }}</span>
       <Select v-model="pageSize" :options="pageSizeOptions" size="sm" />
-      <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--">← {{ t('common.prev', 'Prev') }}</button>
-      <span class="page-info mono">{{ currentPage }} / {{ totalPages }}</span>
-      <button class="page-btn" :disabled="currentPage >= totalPages" @click="currentPage++">{{ t('common.next', 'Next') }} →</button>
+      <button class="page-btn" :disabled="currentPage <= 1 || !!listError" @click="currentPage--">← {{ t('common.prev', 'Prev') }}</button>
+      <!-- Total unknown: step forward while the backend keeps returning full pages, never past its end -->
+      <span class="page-info mono">{{ pageInfo }}</span>
+      <button class="page-btn" :disabled="!pageHasMore || !!listError" @click="currentPage++">{{ t('common.next', 'Next') }} →</button>
       <span class="page-goto">
         <span class="muted">{{ t('auditLog.gotoPage') }}</span>
         <input
@@ -498,7 +680,8 @@ onMounted(async () => {
           class="page-goto-input mono"
           type="number"
           min="1"
-          :max="totalPages"
+          :max="totalPages ?? undefined"
+          :disabled="gotoDisabled"
           @keyup.enter="applyGoto"
         />
         <span class="muted">{{ t('auditLog.pageUnit') }}</span>
@@ -519,6 +702,8 @@ onMounted(async () => {
         <div class="ctx-divider"></div>
         <div class="ctx-item" @click="choose('filterType')">🏷 {{ t('auditLog.filterByType') }}</div>
         <div class="ctx-item" @click="choose('filterEnv')">🌍 {{ t('auditLog.filterByEnv') }}</div>
+        <div class="ctx-item" @click="choose('filterResource')">🗄 {{ t('auditLog.filterByResource', 'Filter by Resource') }}</div>
+        <div class="ctx-item" @click="choose('filterAgent')">🖥️ {{ t('auditLog.filterByAgent', 'Filter by Agent') }}</div>
         <div class="ctx-divider"></div>
         <div class="ctx-item" @click="choose('refresh')">🔄 {{ t('auditLog.refresh') }}</div>
         <div class="ctx-item" @click="choose('export')">📥 {{ t('auditLog.export') }}</div>
@@ -584,6 +769,52 @@ onMounted(async () => {
   flex: 1;
 }
 
+/* Partial failure notice */
+.load-note {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  font-size: var(--text-sm);
+}
+.load-note--warn {
+  border-left-color: var(--warning);
+  background: var(--warning-soft);
+}
+.load-note--error {
+  border-left-color: var(--danger);
+  background: var(--danger-soft);
+}
+.load-note-icon {
+  flex-shrink: 0;
+  font-size: var(--text-sm);
+}
+.load-note--warn .load-note-icon {
+  color: var(--warning);
+}
+.load-note--error .load-note-icon {
+  color: var(--danger);
+}
+.load-note-text {
+  flex-shrink: 0;
+  color: var(--text-primary);
+}
+.load-note-detail {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Stats */
 .stats {
   flex-shrink: 0;
@@ -630,6 +861,13 @@ onMounted(async () => {
 
 .stat.brand .stat-value {
   color: var(--accent);
+}
+
+/* Stats endpoint failed: show the failure, never a misleading 0 */
+.stat .stat-value--error,
+.stat.green .stat-value--error,
+.stat.red .stat-value--error {
+  color: var(--danger);
 }
 
 /* Table */
