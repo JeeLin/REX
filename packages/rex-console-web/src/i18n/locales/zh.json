@@ -274,6 +274,7 @@
     "description": "管理你的环境及其资源",
     "count": "环境数",
     "agentsOnline": "在线 Agent",
+    "agentsOnlineCount": "{count} 个在线 Agent",
     "resourcesCount": "资源数",
     "list": "列表",
     "topology": "拓扑",

@@ -411,6 +411,7 @@ async fn get_topology(State(state): State<AppState>) -> ApiResult<Topology> {
                 metadata: Some(serde_json::json!({
                     "connection_mode": env_detail.environment.connection_mode,
                     "resource_count": env_detail.resource_count,
+                    "agents_online": env_detail.agents_online,
                 })),
             });
 

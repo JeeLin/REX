@@ -40,6 +40,7 @@ function makeEnv(connectionMode: string): Environment {
     connection_mode: connectionMode,
     resource_count: 1,
     agent_status: null,
+    agents_online: 0,
     registration_token: 'tok',
     created_at: '',
     updated_at: '',

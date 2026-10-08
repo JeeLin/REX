@@ -36,7 +36,12 @@ pub struct EnvironmentDetail {
     #[serde(flatten)]
     pub environment: Environment,
     pub resource_count: i64,
+    /// 环境级 Agent 状态：任一 Agent 在线即为 `online`；否则取第一个 Agent 的状态；
+    /// 无 Agent 注册时为 `null`。多 Agent 下不再由 `LIMIT 1` 的任意命中决定。
     pub agent_status: Option<String>,
+    /// 状态为 `online` 的 Agent 数量。前端的「N 在线」必须读这个字段，不能从
+    /// `agent_status` 反推（一个 online Agent 推出 1，多 Agent 时就是错的）。
+    pub agents_online: i64,
 }
 
 // --- Resource ---

@@ -39,6 +39,25 @@ pub struct Database {
     pool: r2d2::Pool<SqliteConnectionManager>,
 }
 
+// Environment + aggregate stats, shared verbatim by the list and the
+// single-lookup queries below. Keeping both call sites on one literal is
+// what prevents the `agent_status` drift that this milestone fixes.
+//
+// `agent_status`: any agent 'online' => 'online', otherwise the earliest
+// (by created_at, tiebroken by id) agent's status, or NULL when the
+// environment has no agents. Deterministic — no more `LIMIT 1` on an
+// unordered scan.
+// `agents_online`: count of 'online' agents (0 when none). Replaces the
+// frontend's previously hardcoded "1".
+const ENV_STATS_SELECT: &str = "SELECT e.id, e.name, e.description, e.connection_mode, e.registration_token, e.created_at, e.updated_at,
+            COALESCE(r.res_count, 0) AS resource_count,
+            (SELECT s.status FROM agents s WHERE s.environment_id = e.id
+             ORDER BY (s.status = 'online') DESC, s.created_at, s.id LIMIT 1) AS agent_status,
+            COALESCE((SELECT SUM(CASE WHEN s.status = 'online' THEN 1 ELSE 0 END)
+                      FROM agents s WHERE s.environment_id = e.id), 0) AS agents_online
+     FROM environments e
+     LEFT JOIN (SELECT environment_id, COUNT(*) AS res_count FROM resources GROUP BY environment_id) r ON r.environment_id = e.id";
+
 impl Database {
     /// Open or create database at the given path, run migrations.
     pub fn open(path: &Path) -> Result<Self> {
@@ -496,15 +515,9 @@ impl Database {
 
     pub fn list_environments_with_stats(&self) -> Result<Vec<EnvironmentDetail>> {
         let conn = self.conn()?;
+        let sql = format!("{ENV_STATS_SELECT} ORDER BY e.name");
         let mut stmt = conn
-            .prepare(
-                "SELECT e.id, e.name, e.description, e.connection_mode, e.registration_token, e.created_at, e.updated_at,
-                        COALESCE(r.res_count, 0) AS resource_count,
-                        (SELECT a.status FROM agents a WHERE a.environment_id = e.id LIMIT 1) AS agent_status
-                 FROM environments e
-                 LEFT JOIN (SELECT environment_id, COUNT(*) AS res_count FROM resources GROUP BY environment_id) r ON r.environment_id = e.id
-                 ORDER BY e.name",
-            )
+            .prepare(&sql)
             .map_err(|e| RExError::Message(e.to_string()))?;
         let rows = stmt
             .query_map([], |row| {
@@ -520,6 +533,7 @@ impl Database {
                     },
                     resource_count: row.get(7)?,
                     agent_status: row.get(8)?,
+                    agents_online: row.get(9)?,
                 })
             })
             .map_err(|e| RExError::Message(e.to_string()))?;
@@ -532,15 +546,9 @@ impl Database {
 
     pub fn get_environment_with_stats(&self, id: &str) -> Result<Option<EnvironmentDetail>> {
         let conn = self.conn()?;
+        let sql = format!("{ENV_STATS_SELECT} WHERE e.id = ?1");
         let mut stmt = conn
-            .prepare(
-                "SELECT e.id, e.name, e.description, e.connection_mode, e.registration_token, e.created_at, e.updated_at,
-                        COALESCE(r.res_count, 0) AS resource_count,
-                        (SELECT a.status FROM agents a WHERE a.environment_id = e.id LIMIT 1) AS agent_status
-                 FROM environments e
-                 LEFT JOIN (SELECT environment_id, COUNT(*) AS res_count FROM resources GROUP BY environment_id) r ON r.environment_id = e.id
-                 WHERE e.id = ?1",
-            )
+            .prepare(&sql)
             .map_err(|e| RExError::Message(e.to_string()))?;
         let mut rows = stmt
             .query_map(rusqlite::params![id], |row| {
@@ -556,6 +564,7 @@ impl Database {
                     },
                     resource_count: row.get(7)?,
                     agent_status: row.get(8)?,
+                    agents_online: row.get(9)?,
                 })
             })
             .map_err(|e| RExError::Message(e.to_string()))?;
@@ -642,6 +651,25 @@ impl Database {
     /// empty JSON object (resources created without a config default to
     /// `'{}'`). Used at startup to detect a missing `.master-key` in front of
     /// real encrypted data (a fresh/empty DB legitimately has none).
+    ///
+    /// # Query failures degrade to `false` on purpose
+    ///
+    /// All three failure modes — `self.conn()` cannot hand out a connection
+    /// (pool exhausted / DB file gone), `prepare` failing (SQL error), and
+    /// `query`/`next` failing — are swallowed and reported as `false`.
+    ///
+    /// The caller (the startup guard in `src/rex-hub.rs`) therefore cannot
+    /// distinguish "the DB provably holds no ciphertext" from "we could not
+    /// ask". A failing lookup is reported as an absent `.master-key`, so a
+    /// genuine outage stays silent there instead of blocking startup.
+    ///
+    /// This is intentional: the guard is advisory, and refusing to boot
+    /// because SQLite is briefly unreachable would turn a recoverable
+    /// condition into a hard outage. The cost is that a missing key is not
+    /// reported for a broken database — acceptable, because that case surfaces
+    /// immediately on the first real resource/terminal operation anyway.
+    /// Changing this to a hard failure is a deliberate policy decision, not a
+    /// local fix: the signature would have to become fallible.
     pub fn has_encrypted_config(&self) -> bool {
         let Ok(conn) = self.conn() else {
             return false;
@@ -1567,6 +1595,140 @@ mod tests {
         assert_eq!(rec.kind, "transfer");
         assert_eq!(rec.sync_options, "");
     }
+
+    // --- Environments with stats ---
+
+    fn agent_env(db: &Database, name: &str) -> String {
+        db.create_environment(&NewEnvironment {
+            name: name.into(),
+            description: None,
+            connection_mode: Some("agent".into()),
+        })
+        .unwrap()
+        .id
+    }
+
+    fn add_agent(db: &Database, env_id: &str, name: &str, status: &str) {
+        db.create_agent(env_id, name, "hash", "1.0.0", "linux", "x86_64", "host")
+            .unwrap();
+        let id = db
+            .list_agents_by_env(env_id)
+            .unwrap()
+            .into_iter()
+            .find(|a| a.name == name)
+            .expect("agent just created")
+            .id;
+        db.set_agent_offline(&id).unwrap();
+        if status == "online" {
+            db.update_agent_heartbeat(&id, "1.0.0", "10.0.0.1").unwrap();
+        }
+        assert_eq!(db.get_agent(&id).unwrap().unwrap().status, status);
+    }
+
+    #[test]
+    fn environment_stats_report_no_agents_as_null_status_and_zero_count() {
+        let (_dir, db) = test_db();
+        let env_id = agent_env(&db, "solo");
+        let detail = db
+            .get_environment_with_stats(&env_id)
+            .unwrap()
+            .expect("env exists");
+        assert_eq!(detail.agent_status, None);
+        assert_eq!(detail.agents_online, 0);
+        assert_eq!(detail.resource_count, 0);
+    }
+
+    #[test]
+    fn environment_stats_count_every_online_agent_not_just_one() {
+        let (_dir, db) = test_db();
+        let env_id = agent_env(&db, "fleet");
+        for i in 0..3 {
+            add_agent(&db, &env_id, &format!("agent-{i}"), "online");
+        }
+        let detail = db
+            .get_environment_with_stats(&env_id)
+            .unwrap()
+            .expect("env exists");
+        // The hardcoded "1" on the environment card has to be able to say 3.
+        assert_eq!(detail.agents_online, 3);
+        assert_eq!(detail.agent_status.as_deref(), Some("online"));
+        assert_eq!(
+            db.list_environments_with_stats().unwrap()[0].agents_online,
+            3
+        );
+    }
+
+    #[test]
+    fn environment_agent_status_is_online_when_any_agent_is_online() {
+        let (_dir, db) = test_db();
+        let mixed = agent_env(&db, "mixed");
+        // "offline" sorts before "online": the status picked when nothing is
+        // online must not be what an unordered scan happens to hit first.
+        add_agent(&db, &mixed, "aaa-offline", "offline");
+        add_agent(&db, &mixed, "zzz-online", "online");
+        add_agent(&db, &mixed, "mmm-offline", "offline");
+
+        let detail = db.get_environment_with_stats(&mixed).unwrap().unwrap();
+        assert_eq!(detail.agent_status.as_deref(), Some("online"));
+        assert_eq!(detail.agents_online, 1);
+    }
+
+    #[test]
+    fn environment_agent_status_falls_back_to_a_stable_status_without_online_agents() {
+        let (_dir, db) = test_db();
+        let env_id = agent_env(&db, "down");
+        add_agent(&db, &env_id, "aaa", "offline");
+        add_agent(&db, &env_id, "bbb", "offline");
+
+        let detail = db.get_environment_with_stats(&env_id).unwrap().unwrap();
+        assert_eq!(detail.agent_status.as_deref(), Some("offline"));
+        assert_eq!(detail.agents_online, 0);
+    }
+
+    #[test]
+    fn environment_agent_status_tracks_agents_going_offline() {
+        let (_dir, db) = test_db();
+        let env_id = agent_env(&db, "flapping");
+        add_agent(&db, &env_id, "a", "online");
+        assert_eq!(
+            db.get_environment_with_stats(&env_id)
+                .unwrap()
+                .unwrap()
+                .agent_status
+                .as_deref(),
+            Some("online")
+        );
+
+        let id = db.list_agents_by_env(&env_id).unwrap()[0].id.clone();
+        db.set_agent_offline(&id).unwrap();
+
+        let detail = db.get_environment_with_stats(&env_id).unwrap().unwrap();
+        assert_eq!(detail.agent_status.as_deref(), Some("offline"));
+        assert_eq!(detail.agents_online, 0);
+    }
+
+    #[test]
+    fn environment_stats_keep_agents_scoped_to_their_own_environment() {
+        let (_dir, db) = test_db();
+        let a = agent_env(&db, "env-a");
+        let b = agent_env(&db, "env-b");
+        add_agent(&db, &a, "a1", "online");
+        add_agent(&db, &b, "b1", "online");
+        add_agent(&db, &b, "b2", "offline");
+
+        let all = db.list_environments_with_stats().unwrap();
+        let da = all.iter().find(|d| d.environment.id == a).unwrap();
+        let db_ = all.iter().find(|d| d.environment.id == b).unwrap();
+        assert_eq!(
+            (da.agents_online, da.agent_status.as_deref()),
+            (1, Some("online"))
+        );
+        assert_eq!(
+            (db_.agents_online, db_.agent_status.as_deref()),
+            (1, Some("online"))
+        );
+    }
+
     use super::*;
     use tempfile::tempdir;
 

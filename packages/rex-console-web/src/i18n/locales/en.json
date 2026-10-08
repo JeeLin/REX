@@ -274,6 +274,7 @@
     "description": "Manage your environments and their resources",
     "count": "Environments",
     "agentsOnline": "Agents Online",
+    "agentsOnlineCount": "{count} online | {count} online",
     "resourcesCount": "Resources",
     "list": "List",
     "topology": "Topology",

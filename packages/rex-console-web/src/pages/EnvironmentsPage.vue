@@ -269,7 +269,7 @@ async function handleImport(event: Event) {
           <div class="env-card-agents-header">
             {{ t('environments.agentsSection') }}
             <div class="env-card-agents-spacer"></div>
-            <span v-if="env.agent_status === 'online'" class="badge-sm badge-green">1 {{ t('environments.agentsOnline') }}</span>
+            <span v-if="env.agents_online > 0" class="badge-sm badge-green">{{ t('environments.agentsOnlineCount', env.agents_online, { named: { count: env.agents_online } }) }}</span>
           </div>
           <div v-if="env.agent_status" class="env-card-agent-row">
             <span class="env-card-agent-icon">⟡</span>
@@ -280,6 +280,10 @@ async function handleImport(event: Event) {
           </div>
           <div v-else class="env-card-no-agent">{{ t('environments.noAgentsRegistered') }}</div>
         </div>
+
+        <!-- Spacer: soaks up the leftover height, keeping the actions pinned
+             to the bottom without depending on them being the last child -->
+        <div class="env-card-fill"></div>
 
         <!-- Card Footer Actions -->
         <div class="env-card-actions">
@@ -676,6 +680,10 @@ async function handleImport(event: Event) {
 }
 
 /* Card Actions */
+.env-card-fill {
+  flex: 1 1 auto;
+}
+
 .env-card-actions {
   display: flex;
   gap: 6px;
