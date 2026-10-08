@@ -727,23 +727,14 @@ async fn connector_capability(
 /// falls back with `unwrap_or("")`, so an empty value authenticates as an empty
 /// SSH user (same origin as the terminal config in `agent_ssh.rs`).
 fn agent_file_config(res: &ResourceConnInfo) -> serde_json::Value {
-    let mut cfg = serde_json::json!({
-        "host": res.host,
-        "port": res.port.unwrap_or(22),
-    });
-    if let serde_json::Value::Object(m) = res.config.clone() {
-        for (k, v) in m {
-            cfg[k] = v;
-        }
-    }
-    if let serde_json::Value::Object(m) = &mut cfg {
-        // 资源顶层 username 为权威字段，不被 config_json 中的历史键覆盖
-        m.insert(
-            "username".to_string(),
-            normalize_username(&res.username).into(),
-        );
-    }
-    cfg
+    // 合并逻辑归口 `merge_resource_config`（与 `agent_test_connect_config` 同源）；
+    // 端口默认由调用处 `res.port.unwrap_or(22)` 补齐。
+    crate::resource_conn::merge_resource_config(
+        &res.host,
+        res.port.unwrap_or(22),
+        &res.username,
+        &res.config,
+    )
 }
 
 /// 直连腿的 SSH/SFTP 连接参数。

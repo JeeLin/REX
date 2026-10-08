@@ -342,27 +342,15 @@ fn agent_test_connect_config(
     username: Option<&str>,
     config_json: Option<&str>,
 ) -> serde_json::Value {
-    let mut cfg = serde_json::json!({
-        "host": host,
-        "port": port,
-    });
-    // 合并 config_json（含 password/private_key 等凭证）
-    if let Some(cfg_str) = config_json {
-        if let Ok(serde_json::Value::Object(m)) = serde_json::from_str::<serde_json::Value>(cfg_str)
-        {
-            for (k, v) in m {
-                cfg[k] = v;
-            }
+    // config_json 解析失败按空配置处理（静默丢弃），合并逻辑归口
+    // `merge_resource_config`（与 `file_api::agent_file_config` 同源）。
+    let config = match config_json {
+        Some(cfg_str) => {
+            serde_json::from_str::<serde_json::Value>(cfg_str).unwrap_or(serde_json::Value::Null)
         }
-    }
-    if let serde_json::Value::Object(m) = &mut cfg {
-        // 资源顶层 username 为权威字段，不被 config_json 中的历史键覆盖
-        m.insert(
-            "username".to_string(),
-            crate::resource_conn::normalize_username(username.unwrap_or("")).into(),
-        );
-    }
-    cfg
+        None => serde_json::Value::Null,
+    };
+    crate::resource_conn::merge_resource_config(host, port, username.unwrap_or(""), &config)
 }
 
 /// 环境是否走 Agent 隧道：仅 `connection_mode == "agent"` 为真。

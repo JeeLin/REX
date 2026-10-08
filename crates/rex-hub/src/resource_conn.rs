@@ -113,6 +113,37 @@ pub fn normalize_username(username: &str) -> String {
     }
 }
 
+/// 构建下发给 Agent 的连接 config。
+///
+/// 以 `host`/`port` 为骨架并入 `config` 的键，再以顶层 `username`（经
+/// [`normalize_username`]）覆盖同名键——`config` 中的历史 `host`/`port`/`username`
+/// 键被顶层字段覆盖，与 `agent_test_connect_config` / `agent_file_config` 两处
+/// 既有行为一致。端口默认（22）由调用方决定传入，本函数不补默认。
+///
+/// `config` 非 `Object`（如 `Null`）时不合并任何键，行为与既有
+/// `if let Value::Object(m) = ... { merge }` 恰一致。
+pub fn merge_resource_config(
+    host: &str,
+    port: u16,
+    username: &str,
+    config: &serde_json::Value,
+) -> serde_json::Value {
+    let mut cfg = serde_json::json!({
+        "host": host,
+        "port": port,
+    });
+    if let serde_json::Value::Object(m) = config {
+        for (k, v) in m {
+            cfg[k] = v.clone();
+        }
+    }
+    if let serde_json::Value::Object(m) = &mut cfg {
+        // 资源顶层 username 为权威字段，不被 config_json 中的历史键覆盖
+        m.insert("username".to_string(), normalize_username(username).into());
+    }
+    cfg
+}
+
 /// 若资源所属环境为 agent 模式，返回 (true, 某个在线 Agent 的 id)，否则 (false, None)。
 ///
 /// 直连资源（无环境 / 环境为 direct）一律走 Hub 直连，不受此影响。
