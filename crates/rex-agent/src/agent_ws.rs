@@ -294,6 +294,13 @@ struct ConnectRequest {
     resource_id: String,
     protocol: String,
     config: serde_json::Value,
+    /// 「测试连接」探测标记（Hub 侧 `resource_api::test_connect_via_agent` 下发）。
+    ///
+    /// 缺省 `false`：旧 Hub 不带该字段时行为完全不变，走各协议原有的 connect 流程。
+    /// 仅 ssh / sftp 消费它 —— Agent 侧对这两种协议只做无副作用的可达性握手，
+    /// 不建会话、不写共享 Handle 池（见 `agent_ssh::probe_ssh`）。
+    #[serde(default)]
+    probe: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -589,10 +596,20 @@ async fn connect_and_run(
                             });
                         }
                         HubMsg::Close { payload } => {
-                            let mut chs = channels.write().await;
-                            if let Some(ch) = chs.remove(&payload.channel_id) {
+                            if let Some(ch) = channels.write().await.remove(&payload.channel_id) {
                                 let _ = ch.data_tx.send(vec![]).await; // signal close
                             }
+                            // 始终回 `closed`：Hub 侧 channel 映射只靠这一帧清理
+                            // （sql/redis/sftp 会话结束时不会主动回帧，探测通道更是
+                            // 从未在本地注册），缺帧即永久残留。重复 close 时 Hub 侧
+                            // remove 是 no-op。
+                            let closed = serde_json::to_string(&AgentMsg::Closed {
+                                payload: ChannelPayload {
+                                    channel_id: payload.channel_id.clone(),
+                                },
+                            })
+                            .unwrap_or_default();
+                            let _ = evt_tx.send(AgentEvent::Text(closed)).await;
                         }
                         HubMsg::Resize { payload } => {
                             let chs = channels.read().await;
@@ -668,6 +685,14 @@ async fn handle_connect(
     // SIP 资源走 Agent 内网 UA₂：不建 TCP，由 UA₂ 直接对内网 SIP server 信令。
     if req.protocol == "sip" {
         handle_connect_sip(req, evt_tx, channels).await;
+        return;
+    }
+
+    // 「测试连接」探测（ssh / sftp）：只做无副作用的可达性握手，不建会话、不写
+    // 共享 Handle 池。放在 ssh 分支之前，使 sftp 探测也不必真的开一条 SSH 会话。
+    if req.probe && matches!(req.protocol.as_str(), "ssh" | "sftp") {
+        let channel_id = AGENT_CHANNEL_SEQ.fetch_add(1, Ordering::SeqCst).to_string();
+        crate::agent_ssh::probe_ssh(req.request_id.clone(), channel_id, &req.config, evt_tx).await;
         return;
     }
 
@@ -1460,6 +1485,26 @@ mod tests {
     #[test]
     fn missing_ca_file_is_error() {
         assert!(resolve_hub_tls(false, Some("/nonexistent/ca.pem")).is_err());
+    }
+
+    /// connect payload 的 `probe` 字段：缺省 `false`，保证不带该字段的旧消息
+    /// 走完整 connect 流程（建会话、入 Handle 池），行为不变。
+    #[test]
+    fn connect_request_probe_defaults_to_false() {
+        let without: ConnectRequest = serde_json::from_str(
+            r#"{"request_id":"req_1","resource_id":"r","protocol":"ssh","config":{}}"#,
+        )
+        .unwrap();
+        assert!(
+            !without.probe,
+            "old Hub messages without the field must keep full connect behavior"
+        );
+
+        let with: ConnectRequest = serde_json::from_str(
+            r#"{"request_id":"req_1","resource_id":"test","protocol":"sftp","config":{},"probe":true}"#,
+        )
+        .unwrap();
+        assert!(with.probe);
     }
 
     #[test]

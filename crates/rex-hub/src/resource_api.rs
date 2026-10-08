@@ -1,5 +1,7 @@
 //! 资源管理 REST API。
 
+use std::sync::Arc;
+
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
@@ -296,6 +298,15 @@ async fn delete_resource(
 
 // --- Test connection ---
 
+/// 探测类请求的默认超时：Hub 直连 TCP、Agent connect 回帧、redis PING 共用同一口径。
+const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// 探测超时的用户可见文案。
+const PROBE_TIMEOUT_MSG: &str = "connection timed out";
+
+/// 下发给 Agent 的探测请求 id 前缀（与 `agent_ws::open_agent_session` 同口径）。
+const AGENT_REQUEST_ID_PREFIX: &str = "req_";
+
 #[derive(serde::Deserialize)]
 pub struct TestConnectionRequest {
     pub protocol: String,
@@ -313,13 +324,16 @@ pub struct TestConnectionResult {
     pub error: Option<String>,
 }
 
-/// agent 模式「测试连接」下发给 Agent 的 connect config：host/port +
-/// 合并 `config_json`（凭证等）。
+/// 下发给 Agent 的 connect config：host/port + 合并 `config_json`（凭证等）。
 ///
 /// 顶层 `username` 在 merge **之后**写入为权威字段（空 → `root`，
 /// [`crate::resource_conn::normalize_username`]），口径与
 /// `file_api::agent_file_config` 同源：Agent 侧 `agent_ssh::parse_ssh_config`
 /// 以下发 config 的 username 认证，缺字段即以空用户认证，测试连接必被拒（CR15）。
+///
+/// Agent 侧真正的认证是 ssh/sftp 的 `handle_connect_ssh` 与 sql/redis 各自的
+/// connector 建连；`probe` 请求的轻量 ssh 探测不读凭据，但 config 仍按同一形状
+/// 下发，便于 Agent 侧失败文案统一 redact。
 fn agent_test_connect_config(
     host: &str,
     port: u16,
@@ -349,27 +363,133 @@ fn agent_test_connect_config(
     cfg
 }
 
-/// 环境是否走 Agent 隧道（协议无关）：仅 `connection_mode == "agent"` 为真。
+/// 环境是否走 Agent 隧道：仅 `connection_mode == "agent"` 为真。
 ///
 /// 真实数据路径按此判定选 Agent 连接器，测试连接必须同口径，否则内网目标
-/// 在 Hub 直连探测上必然 `No route to host`。
+/// 在 Hub 直连探测上必然 `No route to host`。取值失败（DB 报错或 spawn_blocking
+/// panic）记 warn 后回退直连 —— 静默 `unwrap_or(false)` 会把基础设施故障伪装成
+/// 「非 agent 环境」，排查时看不出探测为何走了直连。
 async fn env_uses_agent(state: &crate::AppState, env_id: Option<&str>) -> bool {
     let Some(env_id) = env_id else { return false };
     let db = state.db.clone();
     let eid = env_id.to_string();
-    tokio::task::spawn_blocking(move || db.get_environment(&eid))
-        .await
-        .ok()
-        .and_then(|r| r.ok())
-        .flatten()
-        .map(|env| env.connection_mode == "agent")
-        .unwrap_or(false)
+    let lookup_eid = eid.clone();
+    match tokio::task::spawn_blocking(move || db.get_environment(&lookup_eid)).await {
+        Ok(Ok(env)) => env.is_some_and(|e| e.connection_mode == "agent"),
+        Ok(Err(e)) => {
+            tracing::warn!(
+                env_id = %eid,
+                error = %e,
+                "environment lookup failed, falling back to direct probe"
+            );
+            false
+        }
+        Err(e) => {
+            tracing::warn!(
+                env_id = %eid,
+                error = %e,
+                "environment lookup task failed, falling back to direct probe"
+            );
+            false
+        }
+    }
 }
 
-/// agent 模式下把探测请求转发给 Agent（协议无关，Agent 侧按 protocol 分发）。
+/// Hub 直连 TCP 可达性探测（ssh / sftp / sql / mysql / postgresql 共用）。
+///
+/// 只验地址可达，不验凭据。Agent 侧走隧道探测：sql/redis 连真库验凭据，
+/// ssh/sftp 走 `probe` 握手验 SSH 服务可达。深度不同，但两者都只回答
+/// 「这个资源现在能不能连」。
+async fn direct_tcp_probe(host: &str, port: u16) -> Result<(), String> {
+    let addr = if host.contains(':') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    };
+    match tokio::time::timeout(PROBE_TIMEOUT, tokio::net::TcpStream::connect(&addr)).await {
+        Ok(Ok(_)) => Ok(()),
+        Ok(Err(e)) => Err(format!("TCP connect failed: {e}")),
+        Err(_) => Err(PROBE_TIMEOUT_MSG.to_string()),
+    }
+}
+
+/// 从下发给 Agent 的 connect config 中取出凭据片段。
+///
+/// Agent 侧驱动会把连接串回显到错误里（`agent_sql` 的
+/// `SQL connection failed: {e}`），该文案经 `connect_error` 进用户可见 toast
+/// 又进日志；凭据只应留在内存里。
+fn connect_config_secrets(cfg: &serde_json::Value) -> Vec<String> {
+    let mut secrets: Vec<String> = cfg
+        .get("password")
+        .and_then(|v| v.as_str())
+        .map(String::from)
+        .into_iter()
+        .collect();
+    secrets.extend(rex_common::resource_config::config_private_key(cfg));
+    secrets
+}
+
+/// 抹掉 Agent 回传错误中的凭据明文（用户可见文案与日志共用这一份 redact 结果）。
+fn redact_agent_error(message: &str, cfg: &serde_json::Value) -> String {
+    let secrets = connect_config_secrets(cfg);
+    let refs: Vec<&str> = secrets.iter().map(String::as_str).collect();
+    crate::error::redact_secrets(message, &refs)
+}
+
+/// 一次 `pending_requests` 登记的所有权句柄：Drop 时反注册。
+///
+/// `pending_requests` 是无界 `HashMap`（`agent_ws::AgentTunnelState`），且只在
+/// 收到 Agent 回帧时按 request_id remove。发送失败 / oneshot 通道关闭 / 超时
+/// 这些提前退出路径若各自补 `remove`，新增分支极易再漏 —— 每漏一次就永久残留
+/// 一个 `req_*` 键与 oneshot Sender，反复「测试连接」即无界增长。Drop 兜底让
+/// 清理与控制流无关（对照 `tunnel_ws` 握手超时分支的手工 remove）。
+struct PendingRequestSlot {
+    tunnel: Arc<crate::agent_ws::AgentTunnelState>,
+    request_id: String,
+}
+
+impl PendingRequestSlot {
+    async fn register(
+        tunnel: Arc<crate::agent_ws::AgentTunnelState>,
+        request_id: String,
+    ) -> (
+        Self,
+        tokio::sync::oneshot::Receiver<crate::agent_ws::ConnectResponse>,
+    ) {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        tunnel
+            .pending_requests
+            .write()
+            .await
+            .insert(request_id.clone(), tx);
+        (Self { tunnel, request_id }, rx)
+    }
+}
+
+impl Drop for PendingRequestSlot {
+    fn drop(&mut self) {
+        let tunnel = self.tunnel.clone();
+        let request_id = std::mem::take(&mut self.request_id);
+        // 正常路径上回帧消费方已 remove（remove 缺失键是 no-op）；抢不到写锁时
+        // 退到后台任务，避免因锁竞争再漏一次清理。
+        if let Ok(mut pending) = tunnel.pending_requests.try_write() {
+            pending.remove(&request_id);
+            return;
+        }
+        tokio::spawn(async move {
+            tunnel.pending_requests.write().await.remove(&request_id);
+        });
+    }
+}
+
+/// agent 模式下把探测请求转发给 Agent（Agent 侧按 protocol 分发）。
 ///
 /// 返回 `None` 表示不适用（无环境 / 非 agent 模式 / 无在线 Agent / WS 未建立），
 /// 调用方回退到 Hub 直连；`Some(Err(..))` 表示已尝试但探测失败。
+///
+/// 探测请求带 `probe` 标记：ssh/sftp 在 Agent 侧只做无副作用的可达性握手，
+/// 不建会话、不入共享会话池（见 `agent_ssh::probe_ssh`）；其余协议无此轻量路径，
+/// 标记被 Agent 忽略，走各自原有的 connect 流程。
 async fn test_connect_via_agent(
     state: &crate::AppState,
     protocol: &str,
@@ -405,12 +525,10 @@ async fn test_connect_via_agent(
         None => return Some(Err("agent not connected".into())),
     };
 
-    let request_id = format!("req_{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
-    {
-        let mut pending = state.agent_tunnel.pending_requests.write().await;
-        pending.insert(request_id.clone(), resp_tx);
-    }
+    let request_id = format!(
+        "{AGENT_REQUEST_ID_PREFIX}{}",
+        &uuid::Uuid::new_v4().to_string()[..8]
+    );
     let connect_config = agent_test_connect_config(host, port, username, config_json);
     let connect_msg = serde_json::json!({
         "type": "connect",
@@ -419,8 +537,15 @@ async fn test_connect_via_agent(
             "resource_id": "test",
             "protocol": protocol,
             "config": connect_config,
+            "probe": matches!(protocol, "ssh" | "sftp"),
         }
     });
+
+    // 句柄活到本函数返回：发送失败 / 通道关闭 / 超时等提前 return 路径一律由
+    // Drop 反注册，新增分支无需记得补 remove。
+    let (_slot, resp_rx) =
+        PendingRequestSlot::register(state.agent_tunnel.clone(), request_id.clone()).await;
+
     if conn
         .sender
         .send(crate::agent_ws::AgentEvent::Text(connect_msg.to_string()))
@@ -430,19 +555,18 @@ async fn test_connect_via_agent(
         return Some(Err("failed to send connect request to agent".into()));
     }
 
-    // 等待 Agent 响应（5s 超时）
-    let resp = match tokio::time::timeout(std::time::Duration::from_secs(5), resp_rx).await {
+    // 等待 Agent 响应
+    let resp = match tokio::time::timeout(PROBE_TIMEOUT, resp_rx).await {
         Ok(Ok(resp)) => resp,
         Ok(Err(_)) => return Some(Err("agent response channel closed".into())),
         Err(_) => return Some(Err("agent connection timed out".into())),
     };
-    if resp.error.is_some() {
-        return Some(Err(resp
-            .error
-            .unwrap_or_else(|| "agent connect failed".into())));
+    if let Some(e) = resp.error {
+        return Some(Err(redact_agent_error(&e, &connect_config)));
     }
-    // 连接成功：通知 Agent 关闭 channel 并清理本地映射
-    if let Some(channel_id) = &resp.channel_id {
+    // 探测成功：关闭通道。Hub 侧 `channels` 映射交给 Agent 回帧（`closed`）清理，
+    // 本地不删 —— Agent 尚未处理 close 的窗口内必须留着映射，否则后续帧无处可路由。
+    if let Some(channel_id) = resp.channel_id {
         let close_msg = serde_json::json!({
             "type": "close",
             "payload": { "channel_id": channel_id }
@@ -451,10 +575,34 @@ async fn test_connect_via_agent(
             .sender
             .send(crate::agent_ws::AgentEvent::Text(close_msg.to_string()))
             .await;
-        let mut channels = state.agent_tunnel.channels.write().await;
-        channels.remove(channel_id);
     }
     Some(Ok(()))
+}
+
+/// agent 环境经隧道探测，非 agent 环境回退 Hub 直连 TCP 探测。
+async fn probe_target(
+    state: &crate::AppState,
+    protocol: &str,
+    host: &str,
+    port: u16,
+    username: Option<&str>,
+    config_json: Option<&str>,
+    environment_id: Option<&str>,
+) -> Result<(), String> {
+    match test_connect_via_agent(
+        state,
+        protocol,
+        host,
+        port,
+        username,
+        config_json,
+        environment_id,
+    )
+    .await
+    {
+        Some(r) => r,
+        None => direct_tcp_probe(host, port).await,
+    }
 }
 
 pub async fn test_connection(
@@ -482,40 +630,17 @@ pub async fn test_connection(
     let start = std::time::Instant::now();
     let result = match body.protocol.as_str() {
         "ssh" | "sftp" => {
-            let host = body.host.clone();
             let port = body.port.unwrap_or(22);
-
-            let result = if let Some(r) = test_connect_via_agent(
+            probe_target(
                 &state,
                 &body.protocol,
-                &host,
+                &body.host,
                 port,
                 body.username.as_deref(),
                 body.config_json.as_deref(),
                 body.environment_id.as_deref(),
             )
             .await
-            {
-                r
-            } else {
-                // Direct TCP connection
-                let addr = if host.contains(':') {
-                    format!("[{host}]:{port}")
-                } else {
-                    format!("{host}:{port}")
-                };
-                match tokio::time::timeout(
-                    std::time::Duration::from_secs(5),
-                    tokio::net::TcpStream::connect(&addr),
-                )
-                .await
-                {
-                    Ok(Ok(_)) => Ok(()),
-                    Ok(Err(e)) => Err(format!("TCP connect failed: {e}")),
-                    Err(_) => Err("connection timed out".into()),
-                }
-            };
-            result
         }
         "redis" => {
             let port = body.port.unwrap_or(6379);
@@ -538,7 +663,7 @@ pub async fn test_connection(
                     body.host.clone()
                 };
                 let addr = format!("redis://{}:{}/", redis_host, port);
-                match tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                match tokio::time::timeout(PROBE_TIMEOUT, async {
                     let client = redis::Client::open(addr.as_str())
                         .map_err(|e| format!("redis error: {e}"))?;
                     let mut conn = client
@@ -555,7 +680,7 @@ pub async fn test_connection(
                 .await
                 {
                     Ok(r) => r,
-                    Err(_) => Err("connection timed out".into()),
+                    Err(_) => Err(PROBE_TIMEOUT_MSG.to_string()),
                 }
             };
             result
@@ -627,21 +752,7 @@ pub async fn test_connection(
                     {
                         r
                     } else {
-                        let addr = if host.contains(':') {
-                            format!("[{host}]:{port}")
-                        } else {
-                            format!("{host}:{port}")
-                        };
-                        match tokio::time::timeout(
-                            std::time::Duration::from_secs(5),
-                            tokio::net::TcpStream::connect(&addr),
-                        )
-                        .await
-                        {
-                            Ok(Ok(_)) => Ok(()),
-                            Ok(Err(e)) => Err(format!("TCP connect failed: {e}")),
-                            Err(_) => Err("connection timed out".into()),
-                        }
+                        direct_tcp_probe(&host, port).await
                     };
                     result
                 }
@@ -666,42 +777,22 @@ pub async fn test_connection(
             }
         }
         "mysql" | "postgresql" => {
-            let host = body.host.clone();
             let port = body
                 .port
                 .unwrap_or(if body.protocol == "mysql" { 3306 } else { 5432 });
-            let result = if let Some(r) = test_connect_via_agent(
+            probe_target(
                 &state,
                 &body.protocol,
-                &host,
+                &body.host,
                 port,
                 body.username.as_deref(),
                 body.config_json.as_deref(),
                 body.environment_id.as_deref(),
             )
             .await
-            {
-                r
-            } else {
-                let addr = if host.contains(':') {
-                    format!("[{host}]:{port}")
-                } else {
-                    format!("{host}:{port}")
-                };
-                match tokio::time::timeout(
-                    std::time::Duration::from_secs(5),
-                    tokio::net::TcpStream::connect(&addr),
-                )
-                .await
-                {
-                    Ok(Ok(_)) => Ok(()),
-                    Ok(Err(e)) => Err(format!("TCP connect failed: {e}")),
-                    Err(_) => Err("connection timed out".into()),
-                }
-            };
-            result
         }
         "s3" => match body.config_json {
+            // s3 / sip 尚未接 agent 路由，测试连接恒为 Hub 直连。
             Some(ref cfg) => {
                 let v: serde_json::Value =
                     serde_json::from_str(cfg).unwrap_or(serde_json::Value::Null);
@@ -728,12 +819,7 @@ pub async fn test_connection(
                         .behavior_version_latest()
                         .build();
                     let client = aws_sdk_s3::Client::from_conf(config);
-                    match tokio::time::timeout(
-                        std::time::Duration::from_secs(5),
-                        client.list_buckets().send(),
-                    )
-                    .await
-                    {
+                    match tokio::time::timeout(PROBE_TIMEOUT, client.list_buckets().send()).await {
                         Ok(Ok(_)) => Ok(()),
                         Ok(Err(e)) => Err(format!("S3 ListBuckets failed: {e}")),
                         Err(_) => Err("S3 request timed out".into()),
@@ -747,6 +833,7 @@ pub async fn test_connection(
             // （账户自带 server + 生效账户 username）。复用 load_sip_conn，校验逻辑与信令注册一致。
             // 匿名注册（无 password）也是合法的，故 password 非必填。
             // 真正的 REGISTER 拨测在 /ws/sip 信令联调中完成。
+            // sip 尚未接 agent 路由，恒为 Hub 本地校验。
             match &body.config_json {
                 Some(cfg) => match serde_json::from_str::<serde_json::Value>(cfg) {
                     Ok(value) => {
@@ -872,5 +959,37 @@ mod tests {
         assert!(!env_uses_agent(&state, Some("env_missing")).await);
         assert!(!env_uses_agent(&state, Some(&direct.id)).await);
         assert!(env_uses_agent(&state, Some(&agent.id)).await);
+    }
+
+    /// Agent 侧 sqlx 会把连接串回显进错误文案；该文案既进用户可见 toast 又进
+    /// 日志，凭据必须被 redact（password / 私钥两种键名都算）。
+    #[test]
+    fn agent_error_is_redacted_for_both_secret_fields() {
+        let cfg = agent_test_connect_config(
+            "10.0.0.1",
+            3306,
+            Some("ops"),
+            Some(r#"{"password":"s3cr3t-pw","private_key":"PEM-SECRET"}"#),
+        );
+
+        let pw = redact_agent_error(
+            "SQL connection failed: mysql://ops:s3cr3t-pw@10.0.0.1",
+            &cfg,
+        );
+        assert!(
+            !pw.contains("s3cr3t-pw"),
+            "password must not reach response or log: {pw}"
+        );
+        assert!(pw.contains("mysql://ops:***@10.0.0.1"));
+
+        let key = redact_agent_error("failed to decode private key PEM-SECRET", &cfg);
+        assert!(!key.contains("PEM-SECRET"));
+
+        // 无凭据时原文原样返回（空密码不应把整条文案抹成 ***）
+        let bare = agent_test_connect_config("10.0.0.1", 22, Some("ops"), None);
+        assert_eq!(
+            redact_agent_error("Connection refused", &bare),
+            "Connection refused"
+        );
     }
 }

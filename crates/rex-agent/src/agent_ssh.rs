@@ -14,6 +14,7 @@ use std::io;
 use std::sync::Arc;
 
 use crate::agent_ws::SshHandlePool;
+use tokio::net::TcpStream;
 use tokio::sync::{mpsc, RwLock};
 
 use rex_ssh::{SshConfig, SshSession, TerminalEvent};
@@ -23,6 +24,13 @@ use rex_common::agent_proto::AgentEvent;
 use rex_common::resource_config::config_private_key;
 
 use crate::agent_ws::LocalChannel;
+
+/// 探测（[`probe_ssh`]）的单步超时：与 Hub 侧 `resource_api::PROBE_TIMEOUT` 同口径，
+/// 两段相加仍在 Hub 的等待窗口内。
+const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// SSH 标识串读取上限（字节），防畸形对端不发换行把探测拖死。
+const SSH_BANNER_MAX: usize = 512;
 
 /// 从 connect config 解析 SSH 配置（对应 Hub 侧 `handle_agent_terminal` 下发的字段约定）。
 pub fn parse_ssh_config(cfg: &Value) -> SshConfig {
@@ -551,10 +559,129 @@ pub async fn handle_connect_ssh(
     .await;
 }
 
+/// 「测试连接」探测：SSH 可达性握手，无会话副作用。
+///
+/// 与 `handle_connect_ssh` 的区别是**不建会话**：只连 TCP 并读一帧 SSH 标识串，
+/// 不分配 PTY、不 open shell、不写共享 Handle 池。因此探测既不在目标机留下 shell
+/// 启动痕迹（`.bashrc` / MOTD / audit 日志），也不占 sshd 的 `MaxSessions` 配额；
+/// 池键与真实会话天然不冲突，用户终端的 Handle 既不会被顶掉，也不会在探测结束时
+/// 被误删。
+///
+/// 成功回 `Connected`（`channel_id` 从不在本地注册，Hub 收到后随即下发 `close`），
+/// 失败回 `ConnectError`。`diagnose_ssh_failure` 在此不适用：未进入认证阶段，
+/// 没有可稳定分类的 russh 错误码，只有 TCP 层错误。
+pub async fn probe_ssh(
+    request_id: String,
+    channel_id: String,
+    cfg: &Value,
+    evt_tx: mpsc::Sender<AgentEvent>,
+) {
+    let host = cfg
+        .get("host")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let port = cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(22) as u16;
+
+    let fail = |error: String| send_probe_error(&evt_tx, &request_id, error);
+
+    if host.is_empty() {
+        fail("missing host".into()).await;
+        return;
+    }
+
+    // IPv6 addresses need brackets: [::1]:22
+    let addr = if host.contains(':') && !host.starts_with('[') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    };
+
+    let mut stream = match tokio::time::timeout(PROBE_TIMEOUT, TcpStream::connect(&addr)).await {
+        Ok(Ok(s)) => s,
+        Ok(Err(e)) => {
+            fail(format!("TCP connect failed: {e}")).await;
+            return;
+        }
+        Err(_) => {
+            fail("connection timed out".into()).await;
+            return;
+        }
+    };
+
+    let banner = match tokio::time::timeout(PROBE_TIMEOUT, read_ssh_banner(&mut stream)).await {
+        Ok(Ok(b)) => b,
+        Ok(Err(e)) => {
+            fail(format!("SSH identification read failed: {e}")).await;
+            return;
+        }
+        Err(_) => {
+            fail("SSH identification timed out".into()).await;
+            return;
+        }
+    };
+
+    // 不回显标识串原文：它由对端控制（含换行即可污染 Hub 日志与前端 toast）。
+    if !banner.starts_with("SSH-") {
+        fail("not an SSH service".into()).await;
+        return;
+    }
+
+    tracing::info!(
+        action = "AGENT_SSH_PROBE",
+        request_id = %request_id,
+        host = %host,
+        port = port,
+        "SSH probe ok (no session opened)"
+    );
+
+    let ok = serde_json::to_string(&crate::agent_ws::AgentMsg::Connected {
+        payload: crate::agent_ws::ConnectedPayload {
+            request_id,
+            channel_id,
+        },
+    })
+    .unwrap_or_default();
+    let _ = evt_tx.send(AgentEvent::Text(ok)).await;
+}
+
+/// 读 SSH 标识串首行（RFC 4253 §4.2：客户端标识串以 CRLF 结束）。
+///
+/// 上限 [`SSH_BANNER_MAX`] 字节，防畸形对端一直不发换行把探测拖死。
+async fn read_ssh_banner(stream: &mut tokio::net::TcpStream) -> io::Result<String> {
+    use tokio::io::AsyncReadExt;
+    let mut banner = Vec::with_capacity(SSH_BANNER_MAX);
+    let mut byte = [0u8; 1];
+    while banner.len() < SSH_BANNER_MAX {
+        if stream.read(&mut byte).await? == 0 {
+            break;
+        }
+        banner.push(byte[0]);
+        if byte[0] == b'\n' {
+            break;
+        }
+    }
+    Ok(String::from_utf8_lossy(&banner).trim().to_string())
+}
+
+/// 探测失败回帧：与 `handle_connect_ssh` 的失败路径同一形状（`connect_error`）。
+async fn send_probe_error(evt_tx: &mpsc::Sender<AgentEvent>, request_id: &str, error: String) {
+    let msg = serde_json::to_string(&crate::agent_ws::AgentMsg::ConnectError {
+        payload: crate::agent_ws::ConnectErrorPayload {
+            request_id: request_id.to_string(),
+            error,
+        },
+    })
+    .unwrap_or_default();
+    let _ = evt_tx.send(AgentEvent::Text(msg)).await;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io;
+    use std::time::Duration;
+    use tokio::io::AsyncReadExt;
 
     /// 锁定 Agent 侧 SSH 配置解析与 Hub 下发字段的契约
     /// （`terminal_ws::handle_agent_terminal` 的 connect payload 用
@@ -624,6 +751,125 @@ mod tests {
             crate::agent_ws::ssh_pool_key_from_cfg(&bare),
             "@10.0.0.5:2222"
         );
+    }
+
+    // ── 「测试连接」探测（probe_ssh）──
+
+    /// 探测读到 `SSH-` 标识串即算成功，且不回显对端可控的标识串原文
+    /// （含换行即可污染 Hub 日志与前端 toast）。
+    #[tokio::test]
+    async fn probe_ok_on_ssh_banner_without_echoing_it() {
+        let (addr, conn) = spawn_banner_server(BANNER_SSH).await;
+        let (evt_tx, mut evt_rx) = mpsc::channel::<AgentEvent>(8);
+        let request_id = "req_probe".to_string();
+        let channel_id = "7".to_string();
+
+        probe_ssh(
+            request_id.clone(),
+            channel_id.clone(),
+            &serde_json::json!({"host": "127.0.0.1", "port": addr.port()}),
+            evt_tx,
+        )
+        .await;
+
+        let sent = evt_rx.recv().await.expect("probe must report a verdict");
+        let AgentEvent::Text(raw) = sent else {
+            panic!("probe reply must be text");
+        };
+        let msg: serde_json::Value = serde_json::from_str(&raw).expect("probe reply must be JSON");
+        assert_eq!(msg["type"], "connected");
+        assert_eq!(msg["payload"]["request_id"], request_id.as_str());
+        assert_eq!(msg["payload"]["channel_id"], channel_id.as_str());
+        assert!(
+            !raw.contains("OpenSSH_9.6p1"),
+            "remote-controlled banner text must not be echoed back: {raw}"
+        );
+
+        // 探测只握手不建会话：读走标识串即断，从不发客户端标识串（RFC 4253
+        // 要求会话建立时由客户端先发 `SSH-2.0-...`），更不请求 PTY / shell。
+        let mut server_side = conn.await.expect("banner server task must not panic");
+        let mut buf = [0u8; 64];
+        let tail = tokio::time::timeout(Duration::from_millis(200), server_side.read(&mut buf))
+            .await
+            .map(|r| r.unwrap_or(0))
+            .unwrap_or(0);
+        assert_eq!(
+            tail, 0,
+            "probe must not send a client identification string or any session request"
+        );
+    }
+
+    /// 非 SSH 服务：标识串不以 `SSH-` 开头即判失败，回 `connect_error`。
+    #[tokio::test]
+    async fn probe_fails_on_non_ssh_service() {
+        let (addr, _conn) = spawn_banner_server(BANNER_FTP).await;
+        let (evt_tx, mut evt_rx) = mpsc::channel::<AgentEvent>(8);
+
+        probe_ssh(
+            "req_probe".into(),
+            "7".into(),
+            &serde_json::json!({"host": "127.0.0.1", "port": addr.port()}),
+            evt_tx,
+        )
+        .await;
+
+        let Some(AgentEvent::Text(raw)) = evt_rx.recv().await else {
+            panic!("probe must report a verdict");
+        };
+        let msg: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(msg["type"], "connect_error");
+        assert_eq!(msg["payload"]["request_id"], "req_probe");
+        assert_eq!(msg["payload"]["error"], "not an SSH service");
+    }
+
+    /// TCP 拒绝连接：不进 SSH 阶段即失败，文案不泄漏任何凭据。
+    #[tokio::test]
+    async fn probe_fails_when_tcp_refused() {
+        // 绑定后立即 drop：端口基本确定处于「无人监听」状态
+        let port = {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            listener.local_addr().unwrap().port()
+        };
+        let (evt_tx, mut evt_rx) = mpsc::channel::<AgentEvent>(8);
+
+        probe_ssh(
+            "req_probe".into(),
+            "7".into(),
+            &serde_json::json!({"host": "127.0.0.1", "port": port, "password": "s3cr3t"}),
+            evt_tx,
+        )
+        .await;
+
+        let Some(AgentEvent::Text(raw)) = evt_rx.recv().await else {
+            panic!("probe must report a verdict");
+        };
+        let msg: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(msg["type"], "connect_error");
+        let error = msg["payload"]["error"].as_str().unwrap();
+        assert!(error.starts_with("TCP connect failed"), "{error}");
+        assert!(!error.contains("s3cr3t"), "{error}");
+    }
+
+    const BANNER_SSH: &str = "SSH-2.0-OpenSSH_9.6p1 Debian-1\r\n";
+    const BANNER_FTP: &str = "220 ProFTPD 1.3.5 Server ready\r\n";
+
+    /// 监听一次、写完标识串首行后返回「已 accept 的连接」，供探测侧读完后
+    /// 断言它没有再发任何东西（不回客户端标识串、不请求 PTY / shell）。
+    async fn spawn_banner_server(
+        banner: &'static str,
+    ) -> (
+        std::net::SocketAddr,
+        tokio::task::JoinHandle<tokio::net::TcpStream>,
+    ) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let handle = tokio::spawn(async move {
+            use tokio::io::AsyncWriteExt;
+            let (mut stream, _) = listener.accept().await.expect("accept banner connection");
+            let _ = stream.write_all(banner.as_bytes()).await;
+            stream
+        });
+        (addr, handle)
     }
 
     // ── SSH failure diagnosis (Bug fix: surface underlying error + stage) ──
