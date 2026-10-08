@@ -331,9 +331,11 @@ pub struct TestConnectionResult {
 /// `file_api::agent_file_config` 同源：Agent 侧 `agent_ssh::parse_ssh_config`
 /// 以下发 config 的 username 认证，缺字段即以空用户认证，测试连接必被拒（CR15）。
 ///
-/// Agent 侧真正的认证是 ssh/sftp 的 `handle_connect_ssh` 与 sql/redis 各自的
-/// connector 建连；`probe` 请求的轻量 ssh 探测不读凭据，但 config 仍按同一形状
-/// 下发，便于 Agent 侧失败文案统一 redact。
+/// Agent 侧真正的认证是 ssh/sftp 的 `handle_connect_ssh` / `handle_connect_file`
+/// 与 sql/redis 各自的 connector 建连；`probe` 请求的轻量 ssh 探测**也读凭据**
+/// （`connect_with_handle` 在 `Ok` 前已跑完 TCP → KEX → authenticate，
+/// 错凭据回 `connect_error` 而非 `Connected`），但 config 仍按同一形状下发，
+/// 便于 Agent 侧失败文案统一 redact。
 fn agent_test_connect_config(
     host: &str,
     port: u16,
@@ -398,8 +400,8 @@ async fn env_uses_agent(state: &crate::AppState, env_id: Option<&str>) -> bool {
 /// Hub 直连 TCP 可达性探测（ssh / sftp / sql / mysql / postgresql 共用）。
 ///
 /// 只验地址可达，不验凭据。Agent 侧走隧道探测：sql/redis 连真库验凭据，
-/// ssh/sftp 走 `probe` 握手验 SSH 服务可达。深度不同，但两者都只回答
-/// 「这个资源现在能不能连」。
+/// ssh 走 `probe_ssh` 握手+认证验凭据；sftp 走真实 SFTP 连接器验凭据。
+/// 深度不同，但两者都只回答「这个资源现在能不能连」。
 async fn direct_tcp_probe(host: &str, port: u16) -> Result<(), String> {
     let addr = if host.contains(':') {
         format!("[{host}]:{port}")
@@ -487,9 +489,12 @@ impl Drop for PendingRequestSlot {
 /// 返回 `None` 表示不适用（无环境 / 非 agent 模式 / 无在线 Agent / WS 未建立），
 /// 调用方回退到 Hub 直连；`Some(Err(..))` 表示已尝试但探测失败。
 ///
-/// 探测请求带 `probe` 标记：ssh/sftp 在 Agent 侧只做无副作用的可达性握手，
-/// 不建会话、不入共享会话池（见 `agent_ssh::probe_ssh`）；其余协议无此轻量路径，
-/// 标记被 Agent 忽略，走各自原有的 connect 流程。
+/// 探测请求带 `probe` 标记：ssh 在 Agent 侧走 `probe_ssh` 完成**真实认证**后即时
+/// 拆连（`connect_with_handle` 跑完 TCP → KEX → authenticate；错凭据回
+/// `connect_error` 不入共享会话池 `ssh_handles`）；sftp 不走 `probe`（其
+/// `connect_with_handle` 会启动 shell，纯 SFTP 服务端会拒绝），改走 Agent 侧
+/// 真实 SFTP 连接器 `handle_connect_file`，用 SessionOpened/SessionError 回传
+/// 结果。其余协议无此轻量路径，标记被 Agent 忽略，走各自原有的 connect 流程。
 async fn test_connect_via_agent(
     state: &crate::AppState,
     protocol: &str,
@@ -537,7 +542,15 @@ async fn test_connect_via_agent(
             "resource_id": "test",
             "protocol": protocol,
             "config": connect_config,
-            "probe": matches!(protocol, "ssh" | "sftp"),
+            // 探测是「握手+认证后拆除」的轻探针：ssh 走 Agent 侧 `probe_ssh`
+            // （`connect_with_handle` 完成认证）。sftp 不走探测 —— probe_ssh 的
+            // connect_with_handle 会启动 shell，纯 SFTP 服务端（`ForceCommand
+            // internal-sftp`）会拒绝；sftp 走 Agent 侧 `handle_connect_file` 的
+            // 真实 SFTP 连接器（`channel_open_session` + sftp subsystem，完成
+            // 认证且不开 PTY/shell），`probe=false` 让 Hub 把 Test Connection 当
+            // 一次「即开即关」的真实 sftp 会话处理，借助已有的
+            // SessionOpened/SessionError 回传回路回收结果。
+            "probe": protocol == "ssh",
         }
     });
 
