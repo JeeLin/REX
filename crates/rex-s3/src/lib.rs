@@ -69,6 +69,34 @@ impl S3Connector {
         )
         .await
     }
+
+    /// 只验可达性与凭据，不碰数据面：测试连接专用探测。
+    ///
+    /// `connect_from_request` 只构造 client、不发任何请求，构造成功**不代表**
+    /// endpoint 可达或 key 有效。本方法按 bucket 有无分流：
+    /// - 有 bucket → `head_bucket` 精确验该桶的读权限（AWS SigV4 完整签名）；
+    /// - 无 bucket → `list_buckets` 验账号级凭据（minio 等无权 ListAllMyBuckets
+    ///   的部署用有 bucket 分支即可，不因该权限缺失误报）。
+    ///
+    /// 两者都只读不写，不建会话、不写共享 Handle 池。
+    pub async fn verify(&self) -> Result<()> {
+        if self.bucket.is_empty() {
+            self.client
+                .list_buckets()
+                .send()
+                .await
+                .context("S3 ListBuckets failed (verify credentials)")?;
+        } else {
+            let bucket = self.bucket.clone();
+            self.client
+                .head_bucket()
+                .bucket(&bucket)
+                .send()
+                .await
+                .with_context(|| format!("S3 HeadBucket failed bucket={bucket}"))?;
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]

@@ -527,14 +527,17 @@ async fn test_connect_via_agent(
             "protocol": protocol,
             "config": connect_config,
             // 探测是「握手+认证后拆除」的轻探针：ssh 走 Agent 侧 `probe_ssh`
-            // （`connect_with_handle` 完成认证）。sftp 不走探测 —— probe_ssh 的
-            // connect_with_handle 会启动 shell，纯 SFTP 服务端（`ForceCommand
-            // internal-sftp`）会拒绝；sftp 走 Agent 侧 `handle_connect_file` 的
-            // 真实 SFTP 连接器（`channel_open_session` + sftp subsystem，完成
-            // 认证且不开 PTY/shell），`probe=false` 让 Hub 把 Test Connection 当
-            // 一次「即开即关」的真实 sftp 会话处理，借助已有的
-            // SessionOpened/SessionError 回传回路回收结果。
-            "probe": protocol == "ssh",
+            // （`connect_with_handle` 完成认证）；s3 走 Agent 侧 `S3Connector::verify`
+            // （list_buckets/head_bucket 真正验凭据 —— `connect_from_request` 只建
+            // client 不验凭据，测试时无 bucket 会假阳性）；sip 走 Agent 侧 UA₂ 的
+            // 真实 REGISTER（`handle_connect_sip` probe 分支），验完即 drop UA 释放
+            // 注册。sftp/sql/redis/mysql/postgresql/sqlite 不走探测（sftp 的
+            // probe_ssh 会启动 shell，纯 SFTP 服务端拒绝；其余需要真会话）。
+            // sftp 走 Agent 侧 `handle_connect_file` 的真实 SFTP 连接器
+            // （`channel_open_session` + sftp subsystem，完成认证且不开 PTY/shell），
+            // `probe=false` 让 Hub 把 Test Connection 当一次「即开即关」的真实 sftp
+            // 会话处理，借助已有的 SessionOpened/SessionError 回传回路回收结果。
+            "probe": matches!(protocol, "ssh" | "s3"),
         }
     });
 
@@ -832,43 +835,63 @@ pub async fn test_connection(
             )
             .await
         }
-        "s3" => match body.config_json {
-            // s3 / sip 尚未接 agent 路由，测试连接恒为 Hub 直连。
-            Some(ref cfg) => {
-                let v: serde_json::Value =
-                    serde_json::from_str(cfg).unwrap_or(serde_json::Value::Null);
-                let endpoint = v.get("endpoint").and_then(|e| e.as_str()).unwrap_or("");
-                let access_key = v.get("access_key").and_then(|e| e.as_str()).unwrap_or("");
-                let secret_key = v.get("secret_key").and_then(|e| e.as_str()).unwrap_or("");
-                let region = v
-                    .get("region")
-                    .and_then(|e| e.as_str())
-                    .unwrap_or("us-east-1");
-                if endpoint.is_empty() || access_key.is_empty() || secret_key.is_empty() {
-                    Err("missing endpoint, access_key, or secret_key".into())
-                } else {
-                    let config = aws_sdk_s3::Config::builder()
-                        .endpoint_url(endpoint)
-                        .region(aws_sdk_s3::config::Region::new(region.to_string()))
-                        .credentials_provider(aws_sdk_s3::config::Credentials::new(
-                            access_key.to_string(),
-                            secret_key.to_string(),
-                            None,
-                            None,
-                            "rex-hub-test",
-                        ))
-                        .behavior_version_latest()
-                        .build();
-                    let client = aws_sdk_s3::Client::from_conf(config);
-                    match tokio::time::timeout(PROBE_TIMEOUT, client.list_buckets().send()).await {
-                        Ok(Ok(_)) => Ok(()),
-                        Ok(Err(e)) => Err(format!("S3 ListBuckets failed: {e}")),
-                        Err(_) => Err("S3 request timed out".into()),
+        "s3" => {
+            // agent-first-then-fallback：agent-mode 时路由探测到 Agent 侧
+            // `S3Connector::verify`（真正验凭据），直连模式回退 Hub-local list_buckets。
+            let result = if let Some(r) = test_connect_via_agent(
+                &state,
+                "s3",
+                &body.host,
+                body.port.unwrap_or(0),
+                body.username.as_deref(),
+                body.config_json.as_deref(),
+                body.environment_id.as_deref(),
+            )
+            .await
+            {
+                r
+            } else {
+                match body.config_json {
+                    Some(ref cfg) => {
+                        let v: serde_json::Value =
+                            serde_json::from_str(cfg).unwrap_or(serde_json::Value::Null);
+                        let endpoint = v.get("endpoint").and_then(|e| e.as_str()).unwrap_or("");
+                        let access_key = v.get("access_key").and_then(|e| e.as_str()).unwrap_or("");
+                        let secret_key = v.get("secret_key").and_then(|e| e.as_str()).unwrap_or("");
+                        let region = v
+                            .get("region")
+                            .and_then(|e| e.as_str())
+                            .unwrap_or("us-east-1");
+                        if endpoint.is_empty() || access_key.is_empty() || secret_key.is_empty() {
+                            Err("missing endpoint, access_key, or secret_key".into())
+                        } else {
+                            let config = aws_sdk_s3::Config::builder()
+                                .endpoint_url(endpoint)
+                                .region(aws_sdk_s3::config::Region::new(region.to_string()))
+                                .credentials_provider(aws_sdk_s3::config::Credentials::new(
+                                    access_key.to_string(),
+                                    secret_key.to_string(),
+                                    None,
+                                    None,
+                                    "rex-hub-test",
+                                ))
+                                .behavior_version_latest()
+                                .build();
+                            let client = aws_sdk_s3::Client::from_conf(config);
+                            match tokio::time::timeout(PROBE_TIMEOUT, client.list_buckets().send())
+                                .await
+                            {
+                                Ok(Ok(_)) => Ok(()),
+                                Ok(Err(e)) => Err(format!("S3 ListBuckets failed: {e}")),
+                                Err(_) => Err("S3 request timed out".into()),
+                            }
+                        }
                     }
+                    None => Err("missing config_json for S3".into()),
                 }
-            }
-            None => Err("missing config_json for S3".into()),
-        },
+            };
+            result
+        }
         "sip" => {
             // SIP 测试连接：校验 config_json（SipProfile）解析后能选出生效账户
             // （账户自带 server + 生效账户 username）。复用 load_sip_conn，校验逻辑与信令注册一致。

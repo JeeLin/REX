@@ -126,6 +126,117 @@ pub async fn handle_connect_file(
     tracing::info!(action = "AGENT_FILE_END", channel_id = %channel_id, "agent file session ended");
 }
 
+/// 探测（S7-F7）：Agent 侧 S3 可达性+凭据验证，不碰数据面。
+///
+/// 不复用 `handle_connect_file` 的真实会话 —— `build_connector` 会在
+/// `connect_from_request` 里构造 client（不发请求），但后者本身无法判定
+/// endpoint 可达或 key 有效。这里只建 client 即可调用 `verify()`
+/// （`list_buckets`/`head_bucket`，只读不写），认证通过回 `SessionOpened`，
+/// 失败回 `SessionError`，随即 drop client。全程不注册 channel，不写共享
+/// Handle 池，与 `probe_ssh` 同等是「握手+认证后拆除」的轻探针。
+pub async fn probe_s3(
+    request_id: String,
+    channel_id: String,
+    cfg: &serde_json::Value,
+    evt_tx: mpsc::Sender<AgentEvent>,
+) {
+    const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+    let req = FileConnectRequest {
+        protocol: "s3".to_string(),
+        host: cfg
+            .get("host")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        port: cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(443) as u16,
+        username: None,
+        password: None,
+        private_key: None,
+        keepalive_interval: None,
+        bucket: cfg.get("bucket").and_then(|v| v.as_str()).map(String::from),
+        region: cfg.get("region").and_then(|v| v.as_str()).map(String::from),
+        endpoint: cfg
+            .get("endpoint")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        access_key: cfg
+            .get("access_key")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        secret_key: cfg
+            .get("secret_key")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+    };
+
+    let endpoint = cfg
+        .get("endpoint")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let port = cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(443) as u16;
+
+    let res = tokio::time::timeout(PROBE_TIMEOUT, async {
+        let conn = rex_s3::S3Connector::connect_from_request(&req).await?;
+        conn.verify().await
+    })
+    .await;
+
+    match res {
+        Ok(Ok(())) => {
+            let ok =
+                serde_json::to_string(&rex_common::agent_proto::AgentSessionMsg::SessionOpened(
+                    rex_common::agent_proto::SessionOpened {
+                        request_id: request_id.clone(),
+                        channel_id: channel_id.clone(),
+                        subtype: None,
+                    },
+                ))
+                .unwrap_or_default();
+            let _ = evt_tx.send(AgentEvent::Text(ok)).await;
+            tracing::info!(
+                action = "AGENT_S3_PROBE_OK",
+                request_id = %request_id,
+                endpoint = %endpoint,
+                port = port,
+                "S3 probe verified (credentials OK)"
+            );
+        }
+        Ok(Err(e)) => {
+            send_session_error(
+                &evt_tx,
+                &channel_id,
+                Some(&request_id),
+                &format!("S3 verify failed: {e}"),
+            )
+            .await;
+            tracing::warn!(
+                action = "AGENT_S3_PROBE_FAILED",
+                request_id = %request_id,
+                endpoint = %endpoint,
+                port = port,
+                error = %e,
+                "S3 probe failed"
+            );
+        }
+        Err(_) => {
+            send_session_error(&evt_tx, &channel_id, Some(&request_id), PROBE_TIMEOUT_FMT).await;
+            tracing::warn!(
+                action = "AGENT_S3_PROBE_FAILED",
+                request_id = %request_id,
+                endpoint = %endpoint,
+                port = port,
+                "S3 probe timed out"
+            );
+        }
+    }
+}
+
+/// Agent 侧探测超时的用户可见文案（与 Hub `PROBE_TIMEOUT_MSG` 同值）。
+const PROBE_TIMEOUT_FMT: &str = "connection timed out";
+
+/// 与 `handle_connect_file` 同源：从 connect config 构造 FileConnector。
 async fn build_connector(
     protocol: &str,
     cfg: &serde_json::Value,

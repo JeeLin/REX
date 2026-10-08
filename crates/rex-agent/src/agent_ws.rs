@@ -688,15 +688,22 @@ async fn handle_connect(
         return;
     }
 
-    // 「测试连接」探测（仅 ssh）：走 `probe_ssh` 完成**真实认证**再拆连接，
-    // 坏凭据必回 `connect_error`。sftp 不走探测 —— probe_ssh 的
-    // `connect_with_handle` 会启动 shell，纯 SFTP 服务端（`ForceCommand
-    // internal-sftp`）会拒绝；sftp 的真实连接器 `handle_connect_file` 走
-    // `channel_open_session` + sftp subsystem，完成认证且不开 PTY/shell，因此
-    // 直接送下去即可校验凭据。
+    // 「测试连接」探测：ssh 走 `probe_ssh` 完成**真实认证**再拆连接，
+    // 坏凭据必回 `connect_error`；s3 走 `agent_file::probe_s3`（verify，
+    // list_buckets/head_bucket 真正验凭据，不碰数据面）。sftp 不走探测 ——
+    // probe_ssh 的 `connect_with_handle` 会启动 shell，纯 SFTP 服务端
+    // （`ForceCommand internal-sftp`）会拒绝；sftp 的真实连接器
+    // `handle_connect_file` 走 `channel_open_session` + sftp subsystem，完成
+    // 认证且不开 PTY/shell，因此直接送下去即可校验凭据。
     if req.probe && req.protocol == "ssh" {
         let channel_id = AGENT_CHANNEL_SEQ.fetch_add(1, Ordering::SeqCst).to_string();
         crate::agent_ssh::probe_ssh(req.request_id.clone(), channel_id, &req.config, evt_tx).await;
+        return;
+    }
+
+    if req.probe && req.protocol == "s3" {
+        let channel_id = AGENT_CHANNEL_SEQ.fetch_add(1, Ordering::SeqCst).to_string();
+        crate::agent_file::probe_s3(req.request_id.clone(), channel_id, &req.config, evt_tx).await;
         return;
     }
 
