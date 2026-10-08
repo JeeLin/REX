@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
+use rex_common::agent_proto::send_session_error;
 use rex_sip::SipUaTrait;
 use rex_ssh::SshHandle;
 use serde::{Deserialize, Serialize};
@@ -961,6 +962,8 @@ async fn handle_connect_sip(
         }
     };
 
+    // sip_cfg 即将被移动入 UA，不可事后从 UA 读取；提前留底用于探测日志。
+    let (probe_server, probe_port) = (sip_cfg.server.clone(), sip_cfg.port);
     let ua = match rex_sip::SipUa::real(sip_cfg).await {
         Ok(ua) => ua,
         Err(e) => {
@@ -975,6 +978,72 @@ async fn handle_connect_sip(
             return;
         }
     };
+
+    // 「测试连接」探测：UA₂ 已建，补一次真实 REGISTER 验凭据是否能达到内网
+    // SIP server。成功回 SessionOpened，失败回 SessionError；随即 drop UA
+    //（Drop → ua_stop_register 释放注册），不建会话、不注册 channel，不写共享
+    // 状态 —— 与 probe_ssh/probe_s3 同等「握手+认证后拆除」的轻探针。
+    if req.probe {
+        const SIP_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+        let server = probe_server; // for log
+        let verdict = tokio::time::timeout(SIP_PROBE_TIMEOUT, ua.register()).await;
+        match verdict {
+            Ok(Ok(())) => {
+                let ok = serde_json::to_string(
+                    &rex_common::agent_proto::AgentSessionMsg::SessionOpened(
+                        rex_common::agent_proto::SessionOpened {
+                            request_id: req.request_id.clone(),
+                            channel_id: channel_id.clone(),
+                            subtype: None,
+                        },
+                    ),
+                )
+                .unwrap_or_default();
+                let _ = evt_tx.send(AgentEvent::Text(ok)).await;
+                tracing::info!(
+                    action = "AGENT_SIP_PROBE_OK",
+                    request_id = %req.request_id,
+                    server = %server,
+                    port = probe_port,
+                    "SIP probe REGISTER verified (credentials OK)"
+                );
+            }
+            Ok(Err(e)) => {
+                send_session_error(
+                    &evt_tx,
+                    &channel_id,
+                    Some(&req.request_id),
+                    &format!("SIP REGISTER failed: {e}"),
+                )
+                .await;
+                tracing::warn!(
+                    action = "AGENT_SIP_PROBE_FAILED",
+                    request_id = %req.request_id,
+                    server = %server,
+                    error = %e,
+                    "SIP probe REGISTER failed"
+                );
+            }
+            Err(_) => {
+                send_session_error(
+                    &evt_tx,
+                    &channel_id,
+                    Some(&req.request_id),
+                    "connection timed out",
+                )
+                .await;
+                tracing::warn!(
+                    action = "AGENT_SIP_PROBE_FAILED",
+                    request_id = %req.request_id,
+                    server = %server,
+                    "SIP probe timed out"
+                );
+            }
+        }
+        // 验券完成，立即释放 UA（ua_stop_register 回收注册）。
+        drop(ua);
+        return;
+    }
 
     // 通知 Hub 连接成功（UA₂ 已就绪）。
     let ok_msg = serde_json::to_string(&AgentMsg::Connected {

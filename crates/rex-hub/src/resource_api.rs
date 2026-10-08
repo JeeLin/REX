@@ -537,7 +537,7 @@ async fn test_connect_via_agent(
             // （`channel_open_session` + sftp subsystem，完成认证且不开 PTY/shell），
             // `probe=false` 让 Hub 把 Test Connection 当一次「即开即关」的真实 sftp
             // 会话处理，借助已有的 SessionOpened/SessionError 回传回路回收结果。
-            "probe": matches!(protocol, "ssh" | "s3"),
+            "probe": matches!(protocol, "ssh" | "s3" | "sip"),
         }
     });
 
@@ -892,39 +892,62 @@ pub async fn test_connection(
             };
             result
         }
-        "sip" => {
-            // SIP 测试连接：校验 config_json（SipProfile）解析后能选出生效账户
-            // （账户自带 server + 生效账户 username）。复用 load_sip_conn，校验逻辑与信令注册一致。
-            // 匿名注册（无 password）也是合法的，故 password 非必填。
-            // 真正的 REGISTER 拨测在 /ws/sip 信令联调中完成。
-            // sip 尚未接 agent 路由，恒为 Hub 本地校验。
-            match &body.config_json {
-                Some(cfg) => match serde_json::from_str::<serde_json::Value>(cfg) {
-                    Ok(value) => {
-                        // SIP 的 server/port 完全下沉到账户层，load_sip_conn 不读取顶层
-                        // host/port/username（子任务 #1 已移除回退），故此处仅传 config。
-                        let info = crate::resource_conn::ResourceConnInfo {
-                            resource_id: String::new(),
-                            name: String::new(),
-                            protocol: "sip".into(),
-                            host: String::new(),
-                            port: None,
-                            username: String::new(),
-                            config: value,
-                            subtype: None,
-                            use_agent: false,
-                            agent_id: None,
-                        };
-                        match crate::resource_conn::load_sip_conn(&info) {
-                            Ok(_) => Ok(()),
-                            Err(e) => Err(format!("invalid SIP config: {e}")),
+        "sip" => match &body.config_json {
+            None => Err("missing config_json for SIP".into()),
+            Some(cfg) => match serde_json::from_str::<serde_json::Value>(cfg) {
+                Err(e) => Err(format!("invalid config_json: {e}")),
+                Ok(value) => {
+                    // SIP 的 server/port 完全下沉到账户层，load_sip_conn 不读取
+                    // 顶层 host/port/username（子任务 #1 已移除回退），故 info 仅带
+                    // config。先用与信令注册一致的 load_sip_conn 校验 SipProfile
+                    // 能选出生效账户；匿名注册（无 password）是合法的。
+                    let info = crate::resource_conn::ResourceConnInfo {
+                        resource_id: String::new(),
+                        name: String::new(),
+                        protocol: "sip".into(),
+                        host: String::new(),
+                        port: None,
+                        username: String::new(),
+                        config: value,
+                        subtype: None,
+                        use_agent: false,
+                        agent_id: None,
+                    };
+                    match crate::resource_conn::load_sip_conn(&info) {
+                        Err(e) => Err(format!("invalid SIP config: {e}")),
+                        Ok(sip_cfg) => {
+                            // agent-first-then-fallback：agent-mode 时把生效账户的
+                            // 平坦 SipConfig 下发到 Agent，由 UA₂ 做真实 REGISTER
+                            //（验凭据可达内网 SIP server）；直连模式回退 Hub 本地
+                            // 仅做配置校验（真正的信令拨测联调见 /ws/sip）。
+                            let flat = serde_json::json!({
+                                "server": sip_cfg.server,
+                                "port": sip_cfg.port,
+                                "username": sip_cfg.username,
+                                "password": sip_cfg.password,
+                                "displayName": sip_cfg.display_name,
+                                "transport": sip_cfg.transport.as_str(),
+                            });
+                            if let Some(r) = test_connect_via_agent(
+                                &state,
+                                "sip",
+                                "",
+                                0,
+                                Some(&sip_cfg.username),
+                                Some(&flat.to_string()),
+                                body.environment_id.as_deref(),
+                            )
+                            .await
+                            {
+                                r
+                            } else {
+                                Ok(())
+                            }
                         }
                     }
-                    Err(e) => Err(format!("invalid config_json: {e}")),
-                },
-                None => Err("missing config_json for SIP".into()),
-            }
-        }
+                }
+            },
+        },
         _ => Err(format!("unsupported protocol: {}", body.protocol)),
     };
     let latency = start.elapsed().as_millis() as u64;
