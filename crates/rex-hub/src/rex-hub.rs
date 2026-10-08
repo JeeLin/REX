@@ -147,6 +147,20 @@ fn supervisor_main() {
     rex_common::supervisor::run_supervisor(config, &args);
 }
 
+/// 启动期数据密钥错配的告警判定。
+///
+/// 两个条件缺一不可：`crypto.was_generated()` 表示本次启动新生成了 `.master-key`
+/// （磁盘上原本没有），`db.has_encrypted_config()` 表示库里仍有密文配置 —— 只有
+/// 同时成立才说明「加密凭据的那把 key 丢了」；全新部署是新 key + 空库，不该刷这条
+/// 告警。判定结果只用于 `tracing::error!`，软失败，不影响启动。
+///
+/// 判定依据必须是 [`crypto::CredentialCrypto`] 自报的新生标记：`from_data_dir`
+/// 在 miss 时已经把新 key 写盘，事后再查 `.master-key` 是否存在恒为真，守卫会变成
+/// 永不触发的死代码。
+fn should_warn_data_key_mismatch(crypto: &crypto::CredentialCrypto, db: &Database) -> bool {
+    crypto.was_generated() && db.has_encrypted_config()
+}
+
 fn worker_main() {
     let timer = tracing_subscriber::fmt::time::ChronoLocal::rfc_3339();
 
@@ -183,17 +197,19 @@ fn worker_main() {
         let db_path = data_dir.join("rex.db");
         let db = Arc::new(Database::open(&db_path).expect("failed to open database"));
         let auth = Arc::new(auth::AuthConfig::new(db.clone()).expect("failed to init auth"));
-        let crypto = Arc::new(
-            crypto::CredentialCrypto::from_data_dir(&data_dir)
-                .expect("failed to init credential crypto"),
-        );
+        let crypto = crypto::CredentialCrypto::from_data_dir(&data_dir)
+            .expect("failed to init credential crypto");
 
-        // Startup soft-fail guard: a missing `.master-key` together with rows
-        // holding encrypted `config_json` means the data key that originally
-        // encrypted the credentials is gone. `from_data_dir` already generates
-        // a fresh key on miss (see crypto.rs), so the Hub keeps running — but we
-        // surface the mismatch loudly so it is not mistaken for a healthy start.
-        if !data_dir.join(".master-key").exists() && db.has_encrypted_config() {
+        // Startup soft-fail guard: a key generated on this boot means
+        // `.master-key` was missing, and encrypted `config_json` rows mean the
+        // data key that encrypted those credentials is gone. Fresh installs
+        // generate a key with no ciphertext, hence both conditions.
+        // `from_data_dir` writes the new key immediately, so the judgement is
+        // made on `was_generated()` — a later `Path::exists()` check on
+        // `.master-key` is already true by then and would never fire.
+        // The Hub keeps running; we surface the mismatch loudly so it is not
+        // mistaken for a healthy start.
+        if should_warn_data_key_mismatch(&crypto, &db) {
             tracing::error!(
                 data_key_mismatch = true,
                 key_file_missing = true,
@@ -201,6 +217,7 @@ fn worker_main() {
                 rex_hub::error::CREDENTIAL_DECRYPT_MSG
             );
         }
+        let crypto = Arc::new(crypto);
 
         let sql_pool: SqlState =
             Arc::new(tokio::sync::Mutex::new(sql_api::SqlConnectionPool::new()));
@@ -580,5 +597,65 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
         let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         assert_eq!(body.as_ref(), b"console.log(1);");
+    }
+
+    /// 启动守卫的触发条件：本次新生成了数据密钥 ∧ 库里仍有密文。
+    ///
+    /// 守卫此前在生成 key 之后再查 `.master-key` 存在性，该条件恒为 false，
+    /// 告警永不触发。这里把两个判定输入都取自真实调用（`was_generated()` /
+    /// `has_encrypted_config()`），因此任一半边失效（key 不再上报新生、或密文
+    /// 检测漏判）断言都会红。
+    #[test]
+    fn startup_data_key_guard_fires_only_on_generated_key_with_ciphertext() {
+        use rex_hub::crypto::CredentialCrypto;
+        use rex_hub::db::Database;
+        use rex_hub::models::{NewEnvironment, NewResource};
+
+        let dir = tempfile::tempdir().expect("create tempdir");
+        let db = Database::open(&dir.path().join("rex.db")).expect("open sqlite");
+
+        // 全新部署：新 key + 空库 → 不告警。
+        let first_boot = CredentialCrypto::from_data_dir(dir.path()).expect("crypto");
+        assert!(first_boot.was_generated());
+        assert!(!db.has_encrypted_config());
+        assert!(!should_warn_data_key_mismatch(&first_boot, &db));
+
+        // 有密文 + key 文件已在盘上 → 沿用原密钥，不告警。
+        let env = db
+            .create_environment(&NewEnvironment {
+                name: "env".into(),
+                description: None,
+                connection_mode: Some("direct".into()),
+            })
+            .expect("create env");
+        db.create_resource(
+            &env.id,
+            &NewResource {
+                name: "ssh-1".into(),
+                protocol: "ssh".into(),
+                host: "10.0.0.1".into(),
+                port: Some(22),
+                username: Some("root".into()),
+                config_json: Some("Y2lwaGVydGV4dA==".into()),
+                subtype: None,
+                color: None,
+                sort_order: None,
+            },
+        )
+        .expect("create resource");
+        assert!(db.has_encrypted_config());
+
+        let restarted = CredentialCrypto::from_data_dir(dir.path()).expect("crypto");
+        assert!(!restarted.was_generated());
+        assert!(!should_warn_data_key_mismatch(&restarted, &db));
+
+        // 密文仍在、`.master-key` 丢失 → 新 key + 密文，必须告警。
+        std::fs::remove_file(dir.path().join(crypto::MASTER_KEY_FILE)).expect("remove key");
+        let key_lost = CredentialCrypto::from_data_dir(dir.path()).expect("crypto");
+        assert!(key_lost.was_generated());
+        assert!(db.has_encrypted_config());
+        // 此处 `.master-key` 已重新落盘：改回按文件存在性判定会让这一条转红。
+        assert!(dir.path().join(crypto::MASTER_KEY_FILE).exists());
+        assert!(should_warn_data_key_mismatch(&key_lost, &db));
     }
 }
