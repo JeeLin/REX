@@ -57,7 +57,7 @@ pub fn load_resource_config(
         .ok_or_else(|| format!("resource not found: {resource_id}"))?;
 
     // 解密 config_json
-    let config = if !resource.config_json.is_empty() && resource.config_json != "{}" {
+    let config = if has_config_json(&resource.config_json) {
         let decrypted = state.crypto.decrypt(&resource.config_json).map_err(|e| {
             tracing::warn!(
                 resource_id = %resource_id,
@@ -91,6 +91,14 @@ pub fn load_resource_config(
         use_agent,
         agent_id,
     })
+}
+
+/// 判定 `config_json` 串是否携带有效凭据配置（非空且不等于字面量 `{}`）。
+///
+/// 跨模块统一此 Sentinel 哨兵，取代散写在 9 处 `is_empty() && == "{}"`；
+/// SQL 侧 `db::has_encrypted_config` 保留字面量判断（SQL 无法共享 Rust 助手）。
+pub fn has_config_json(config_json: &str) -> bool {
+    !config_json.is_empty() && config_json != "{}"
 }
 
 /// Fall back to `root` for an empty username. **Only called at SSH/SFTP

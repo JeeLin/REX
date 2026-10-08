@@ -815,7 +815,7 @@ impl Database {
                 "set_active_account only applies to sip resources".into(),
             ));
         }
-        if config_json.is_empty() || config_json == "{}" {
+        if !crate::resource_conn::has_config_json(&config_json) {
             return Err(RExError::Message("resource has no config_json".into()));
         }
         let decrypted = crypto.decrypt(&config_json).map_err(|e| {

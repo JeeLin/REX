@@ -220,7 +220,7 @@ async fn export_environments(State(state): State<AppState>) -> ApiResult<ExportD
         let mut export_resources = Vec::with_capacity(resources.len());
         for mut r in resources {
             // 解密 config_json 以便导出明文密码，import 时会重新加密
-            if !r.config_json.is_empty() && r.config_json != "{}" {
+            if crate::resource_conn::has_config_json(&r.config_json) {
                 match state.crypto.decrypt(&r.config_json) {
                     Ok(dec) => r.config_json = dec,
                     Err(_) => {
@@ -321,7 +321,7 @@ async fn import_environments(
             let env_id = env.id.clone();
             // 重新加密 config_json（导出时已解密为明文）
             let config_json = imp_res.config_json.as_deref().and_then(|cfg| {
-                if cfg.is_empty() || cfg == "{}" {
+                if !crate::resource_conn::has_config_json(cfg) {
                     Some(cfg.to_string())
                 } else {
                     match state.crypto.encrypt(cfg) {
@@ -351,7 +351,7 @@ async fn import_environments(
                 && imp_res
                     .config_json
                     .as_deref()
-                    .is_some_and(|c| !c.is_empty() && c != "{}")
+                    .is_some_and(crate::resource_conn::has_config_json)
             {
                 return Err(err(
                     StatusCode::INTERNAL_SERVER_ERROR,

@@ -227,7 +227,7 @@ async fn load_resource_conn(
             host = %resource.host,
             port = ?resource.port,
             username = %resource.username,
-            has_config_json = %(!resource.config_json.is_empty() && resource.config_json != "{}"),
+            has_config_json = %crate::resource_conn::has_config_json(&resource.config_json),
             "resource loaded"
         );
 
@@ -243,7 +243,7 @@ async fn load_resource_conn(
         // 从 config_json 解密敏感字段（password、privateKey/private_key、initScript）
         // 未知键静默忽略，不报错也不告警。
         let (password, private_key, init_script) =
-            if !resource.config_json.is_empty() && resource.config_json != "{}" {
+            if crate::resource_conn::has_config_json(&resource.config_json) {
             let config_str = crypto
                     .decrypt(&resource.config_json)
                     .map_err(|e| {

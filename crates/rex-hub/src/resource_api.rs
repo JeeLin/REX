@@ -44,7 +44,7 @@ async fn list_resources(
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
     // 解密每条资源的 config_json
     for r in &mut resources {
-        if !r.config_json.is_empty() && r.config_json != "{}" {
+        if crate::resource_conn::has_config_json(&r.config_json) {
             if let Ok(dec) = state.crypto.decrypt(&r.config_json) {
                 r.config_json = dec;
             } else {
@@ -70,7 +70,7 @@ async fn get_resource(
         .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
         .ok_or_else(|| err(StatusCode::NOT_FOUND, "resource not found"))?;
     // 解密 config_json
-    if !resource.config_json.is_empty() && resource.config_json != "{}" {
+    if crate::resource_conn::has_config_json(&resource.config_json) {
         match state.crypto.decrypt(&resource.config_json) {
             Ok(dec) => resource.config_json = dec,
             Err(_) => {
