@@ -642,28 +642,83 @@ mod tests {
         );
     }
 
+    /// russh's default kex order (`src/negotiation.rs` `SAFE_KEX_ORDER` in
+    /// russh 0.62) minus its extension markers. `PREFERRED_KEX` must keep this
+    /// block verbatim at the front: when a russh upgrade promotes a new modern
+    /// algorithm, this test goes red instead of silently losing it.
+    const UPSTREAM_DEFAULT_KEX: &[kex::Name] = &[
+        kex::MLKEM768X25519_SHA256,
+        kex::CURVE25519,
+        kex::CURVE25519_PRE_RFC_8731,
+        kex::DH_GEX_SHA256,
+        kex::DH_G18_SHA512,
+        kex::DH_G17_SHA512,
+        kex::DH_G16_SHA512,
+        kex::DH_G15_SHA512,
+        kex::DH_G14_SHA256,
+    ];
+
+    /// Legacy algorithms appended after the defaults. Old sshd builds offering
+    /// only `ecdh-sha2-nistp256` / `diffie-hellman-group14-sha1` fail KEX with
+    /// SSH_ERR_KEX_NO_COMMON_ALGO without them.
+    const LEGACY_KEX: &[kex::Name] = &[
+        kex::ECDH_SHA2_NISTP256,
+        kex::ECDH_SHA2_NISTP384,
+        kex::ECDH_SHA2_NISTP521,
+        kex::DH_G14_SHA1,
+        kex::DH_GEX_SHA1,
+        kex::DH_G1_SHA1,
+    ];
+
+    /// Extension markers. russh filters these out before algorithm selection
+    /// and detects strict kex with an order-independent lookup, so pinning them
+    /// to the tail only guards against losing them.
+    const KEX_EXTENSIONS: &[kex::Name] = &[
+        kex::EXTENSION_SUPPORT_AS_CLIENT,
+        kex::EXTENSION_SUPPORT_AS_SERVER,
+        kex::EXTENSION_OPENSSH_STRICT_KEX_AS_CLIENT,
+        kex::EXTENSION_OPENSSH_STRICT_KEX_AS_SERVER,
+    ];
+
     #[test]
     fn test_ssh_client_config_offers_legacy_kex() {
         let config = ssh_client_config();
         let offered = &config.preferred.kex;
 
-        // Legacy sshd builds only offer these two — without them KEX fails with
-        // SSH_ERR_KEX_NO_COMMON_ALGO.
-        assert!(
-            offered.contains(&kex::ECDH_SHA2_NISTP256),
-            "ecdh-sha2-nistp256 must be offered"
-        );
-        assert!(
-            offered.contains(&kex::DH_G14_SHA1),
-            "diffie-hellman-group14-sha1 must be offered"
+        assert_eq!(
+            offered.len(),
+            UPSTREAM_DEFAULT_KEX.len() + LEGACY_KEX.len() + KEX_EXTENSIONS.len(),
+            "unexpected kex table size: {offered:?}"
         );
 
         // Modern/PQ entries still lead the list so strong servers keep the
         // strongest algorithms.
-        assert_eq!(offered.first(), Some(&kex::MLKEM768X25519_SHA256));
-        assert!(offered.contains(&kex::CURVE25519));
+        assert_eq!(
+            offered[..UPSTREAM_DEFAULT_KEX.len()],
+            UPSTREAM_DEFAULT_KEX[..],
+            "russh's default kex order must stay at the front, unchanged"
+        );
+
+        // Legacy algorithms follow the defaults — never ahead of them.
+        assert_eq!(
+            offered[UPSTREAM_DEFAULT_KEX.len()..UPSTREAM_DEFAULT_KEX.len() + LEGACY_KEX.len()],
+            LEGACY_KEX[..],
+            "legacy kex algorithms must follow the defaults, in order"
+        );
+
+        assert_eq!(
+            offered[UPSTREAM_DEFAULT_KEX.len() + LEGACY_KEX.len()..],
+            KEX_EXTENSIONS[..],
+            "extension markers must stay at the tail"
+        );
 
         // Never negotiate plaintext KEX.
-        assert!(!offered.contains(&kex::NONE));
+        for name in offered.iter() {
+            let wire: &str = name.as_ref();
+            assert!(
+                !wire.ends_with("none"),
+                "plaintext kex {wire} must not be offered"
+            );
+        }
     }
 }
