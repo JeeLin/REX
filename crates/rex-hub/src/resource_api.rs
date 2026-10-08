@@ -701,21 +701,49 @@ pub async fn test_connection(
                 .unwrap_or_else(|| "mysql".to_string());
             match subtype.as_str() {
                 "sqlite" => {
+                    // sqlite 以文件路径作为 host 传给 Agent 侧 SqliteConnector
+                    // （rex_sqlite::connect 使用 ConnectRequest.host 作为 db_path）；
+                    // agent-first-then-fallback，mirroring the `_` branch below.
                     let path = body
                         .config_json
                         .as_ref()
                         .and_then(|c| serde_json::from_str::<serde_json::Value>(c).ok())
                         .and_then(|v| v.get("file_path")?.as_str().map(String::from))
                         .unwrap_or_else(|| ":memory:".into());
-                    match rusqlite::Connection::open(&path) {
-                        Ok(conn) => {
-                            if conn.execute_batch("SELECT 1").is_ok() {
-                                Ok(())
-                            } else {
-                                Err("SQLite query failed".into())
-                            }
+                    let cfg_json = {
+                        let mut v: serde_json::Value = body
+                            .config_json
+                            .as_deref()
+                            .and_then(|c| serde_json::from_str::<serde_json::Value>(c).ok())
+                            .unwrap_or_else(|| serde_json::json!({}));
+                        if let serde_json::Value::Object(m) = &mut v {
+                            m.insert("subtype".to_string(), serde_json::json!("sqlite"));
                         }
-                        Err(e) => Err(format!("SQLite open failed: {e}")),
+                        v.to_string()
+                    };
+                    if let Some(r) = test_connect_via_agent(
+                        &state,
+                        &body.protocol,
+                        &path,
+                        0,
+                        body.username.as_deref(),
+                        Some(&cfg_json),
+                        body.environment_id.as_deref(),
+                    )
+                    .await
+                    {
+                        r
+                    } else {
+                        match rusqlite::Connection::open(&path) {
+                            Ok(conn) => {
+                                if conn.execute_batch("SELECT 1").is_ok() {
+                                    Ok(())
+                                } else {
+                                    Err("SQLite query failed".into())
+                                }
+                            }
+                            Err(e) => Err(format!("SQLite open failed: {e}")),
+                        }
                     }
                 }
                 _ => {
@@ -756,21 +784,37 @@ pub async fn test_connection(
             }
         }
         "sqlite" => {
+            // sqlite 以文件路径作为 host 传给 Agent 侧 SqliteConnector；
+            // agent-first-then-fallback，mirroring the sql subtype="sqlite" arm.
             let path = body
                 .config_json
                 .as_ref()
                 .and_then(|c| serde_json::from_str::<serde_json::Value>(c).ok())
                 .and_then(|v| v.get("file_path")?.as_str().map(String::from))
                 .unwrap_or_else(|| ":memory:".into());
-            match rusqlite::Connection::open(&path) {
-                Ok(conn) => {
-                    if conn.execute_batch("SELECT 1").is_ok() {
-                        Ok(())
-                    } else {
-                        Err("SQLite query failed".into())
+            if let Some(r) = test_connect_via_agent(
+                &state,
+                "sqlite",
+                &path,
+                0,
+                body.username.as_deref(),
+                body.config_json.as_deref(),
+                body.environment_id.as_deref(),
+            )
+            .await
+            {
+                r
+            } else {
+                match rusqlite::Connection::open(&path) {
+                    Ok(conn) => {
+                        if conn.execute_batch("SELECT 1").is_ok() {
+                            Ok(())
+                        } else {
+                            Err("SQLite query failed".into())
+                        }
                     }
+                    Err(e) => Err(format!("SQLite open failed: {e}")),
                 }
-                Err(e) => Err(format!("SQLite open failed: {e}")),
             }
         }
         "mysql" | "postgresql" => {
