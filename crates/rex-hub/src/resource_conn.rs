@@ -167,12 +167,47 @@ fn resolve_agent_for_resource(
         Ok(Some(e)) => e,
         _ => return (false, None),
     };
-    if env.connection_mode != "agent" {
-        return (false, None);
+    // 环境获取及其静默回退策略留在调用处；agent-lookup 路由至共享 helper。
+    let resolution = resolve_agent_mode(&state.db, env_id, &env.connection_mode);
+    (resolution.use_agent, resolution.agent_id)
+}
+
+/// Agent 模式解析结果。
+///
+/// - `use_agent`：环境为 agent 模式（连接由 Agent 在私网内终结）。
+/// - `agent_id`：选定的在线 Agent，agent 模式下可能为 None（无在线 Agent）。
+/// - `agent_count`：该环境下全部 Agent 数量，用于日志统计。
+pub struct AgentModeResolution {
+    pub use_agent: bool,
+    pub agent_id: Option<String>,
+    pub agent_count: usize,
+}
+
+/// 在环境 `connection_mode` 已就绪的前提下完成 agent-mode 判定 + online-agent 查。
+///
+/// 仅做「判定 `connection_mode == "agent"` → 列出该环境 Agent → 取首个
+/// online」；环境获取及其 error policy（silent/warn/fatal）由调用方完成，故
+/// 入参为 `connection_mode`（已解析）。`list_agents_by_env` 失败视为空列表
+/// （`unwrap_or_default()`），语义与既有行为一致。
+pub fn resolve_agent_mode(
+    db: &crate::db::Database,
+    env_id: &str,
+    connection_mode: &str,
+) -> AgentModeResolution {
+    if connection_mode != "agent" {
+        return AgentModeResolution {
+            use_agent: false,
+            agent_id: None,
+            agent_count: 0,
+        };
     }
-    let agents = state.db.list_agents_by_env(env_id).unwrap_or_default();
+    let agents = db.list_agents_by_env(env_id).unwrap_or_default();
     let online = agents.iter().find(|a| a.status == "online");
-    (true, online.map(|a| a.id.clone()))
+    AgentModeResolution {
+        use_agent: true,
+        agent_id: online.map(|a| a.id.clone()),
+        agent_count: agents.len(),
+    }
 }
 
 /// 从 `ResourceConnInfo` 解析 SIP 配置。

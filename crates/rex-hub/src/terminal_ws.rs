@@ -321,18 +321,23 @@ async fn load_resource_conn(
         );
 
         let agent_id = if use_agent {
-            let agents = db
-                .list_agents_by_env(&resource.environment_id)
-                .unwrap_or_default();
-            let online = agents.iter().find(|a| a.status == "online");
+            // agent-lookup 路由至共享 helper (`resolve_agent_mode`)；env-fetch
+            // 及其 fatal 回退策略已在 `db.get_environment` 处留存。helper 不做
+            // 日志且 db 查为 silent，故 log 顺序（SSH_ENV_LOADED 在 SSH_AGENT_LOOKUP
+            // 之前）与 `total_agents` 字段值均与既有行为一致。
+            let resolution = crate::resource_conn::resolve_agent_mode(
+                &db,
+                &resource.environment_id,
+                &env.connection_mode,
+            );
             tracing::debug!(
                 action = "SSH_AGENT_LOOKUP",
                 resource_id = %rid,
-                total_agents = agents.len(),
-                online_agent = online.map(|a| a.id.as_str()).unwrap_or("none"),
+                total_agents = resolution.agent_count,
+                online_agent = resolution.agent_id.as_deref().unwrap_or("none"),
                 "agent lookup"
             );
-            online.map(|a| a.id.clone())
+            resolution.agent_id
         } else {
             None
         };

@@ -499,11 +499,7 @@ async fn test_connect_via_agent(
     let db = state.db.clone();
     let eid = environment_id.unwrap_or("").to_string();
     let agent_id = tokio::task::spawn_blocking(move || {
-        db.list_agents_by_env(&eid)
-            .unwrap_or_default()
-            .into_iter()
-            .find(|a| a.status == "online")
-            .map(|a| a.id)
+        crate::resource_conn::resolve_agent_mode(&db, &eid, "agent").agent_id
     })
     .await
     .ok()
