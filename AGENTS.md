@@ -45,6 +45,10 @@ cargo clippy --workspace --all-targets
 cargo test --workspace
 ```
 
+`cargo test --workspace` 由 CI 执行——`.github/workflows/ci.yml` 是仓库唯一 workflow，触发条件为 `on: push: tags: ['v*']`，**普通 push 不触发**。本地低内存机器上 `rex-hub` 的测试二进制会在链接阶段被 OOM killer 杀掉（`cc ... collect2: fatal error: ld terminated with signal 9`），此时本地可执行 `cargo fmt --check`、`cargo clippy`、`cargo check --workspace`，以及 `cargo test -p <小 crate>` 补部分证据（如 `-p rex-ssh` 可正常链接运行）。测试与覆盖率项本地无法自证时，如实记录「不可执行 + 原因」，不得记为通过。
+
+不要试图用 `CARGO_PROFILE_*_DEBUG=0` 削减 debuginfo 来降低链接内存——变更 profile 会使全部 crate fingerprint 失效、触发全量重编，极易把磁盘撑满并导致 shell 完全不可用。需要腾空间时先 `df -h` 确认，再 `cargo clean`。
+
 前端（`packages/rex-console-web/`）：
 ```bash
 bun run type-check

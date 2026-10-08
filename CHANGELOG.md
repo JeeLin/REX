@@ -4,7 +4,7 @@
 
 ### Added
 - **SSH KEX compatibility**: `rex-ssh` now sets `Config::preferred.kex`, appending legacy `ecdh-sha2-nistp256` + `diffie-hellman-group14-sha1` **last**, so modern servers still negotiate MLKEM/curve25519 but legacy sshd (e.g. old embedded/box sshd) can complete key exchange (fixes `SSH_ERR_KEX_NO_COMMON_ALGO`).
-- **Data-key guardrail (soft-fail)**: if the master key is unavailable at Hub startup, the Hub now logs a warning and continues in a degraded mode instead of hard-crashing; the key can be re-supplied without a full data restore.
+- **Data-key guardrail (soft-fail)**: at Hub startup, if the master key was missing while the database still holds encrypted credentials, the Hub logs an **error** naming the mismatch and keeps running (soft-fail: it never blocks startup). This surfaces the problem at boot instead of at first connect. Recovery is still "restore the original `.master-key`"; there is no key re-injection mechanism.
 
 ### Fixed
 - **Agent-mode test connections**: the connection *test* probe for `mysql` / `postgresql` / `sql` / `redis` now routes through the Agent tunnel when `connection_mode == "agent"`, matching the data plane. Previously the Hub TCP-probed directly and failed with `No route to host` for intranet databases while the real connection worked fine.
