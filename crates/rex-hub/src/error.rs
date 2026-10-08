@@ -481,6 +481,20 @@ mod tests {
     }
 
     #[test]
+    fn test_credential_decrypt_msg_classifies_as_decrypt_failed() {
+        // `CREDENTIAL_DECRYPT_MSG` 与错误码表是既有 wire 契约：用常量本身
+        // （而非另抄一份字面量）断言分类结果，文案被改成不含 "decryption failed"
+        // 的措辞时这里会红，前端也就拿不到 `SSH_CONFIG_DECRYPT_FAILED`。
+        assert_eq!(
+            fatal_error_code(CREDENTIAL_DECRYPT_MSG),
+            "SSH_CONFIG_DECRYPT_FAILED"
+        );
+        let payload = connect_error_with_stage(CREDENTIAL_DECRYPT_MSG, ProtoKind::Ssh, true);
+        assert_eq!(payload.code, "SSH_CONFIG_DECRYPT_FAILED");
+        assert!(!payload.retryable);
+    }
+
+    #[test]
     fn test_connect_error_with_stage_no_prefix_keeps_bare_code() {
         for proto in [ProtoKind::Ssh, ProtoKind::ResourceTest] {
             assert_eq!(proto.prefix(), None);

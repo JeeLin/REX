@@ -1011,12 +1011,20 @@ mod tests {
     }
 
     #[test]
-    fn decrypt_failure_is_fatal() {
-        let e = ConnError::fatal(format!(
-            "{} (aead::Error)",
-            crate::error::CREDENTIAL_DECRYPT_MSG
-        ));
-        assert!(!e.failure.retryable());
+    fn decrypt_failure_is_fatal_and_maps_to_decrypt_code() {
+        // 文案 → 终止性码必须真的走 `fatal_error_code` 的解密分支：
+        // 旧断言只查 `ConnError::fatal(..)` 的 `retryable`，而该构造函数无条件
+        // 设 Fatal，与文案无关（恒真）。这里按生产路径合成 wire 码，
+        // 文案一旦不含 "decryption failed" 就会退化到其它分支而红。
+        let message = format!("{} (aead::Error)", crate::error::CREDENTIAL_DECRYPT_MSG);
+        let e = ConnError::fatal(message);
+        let fatal = !e.failure.retryable();
+        let payload = connect_error_with_stage(&e.message, ProtoKind::Ssh, fatal);
+
+        assert!(fatal);
+        assert_eq!(payload.code, "SSH_CONFIG_DECRYPT_FAILED");
+        assert_eq!(payload.message, e.message);
+        assert!(!payload.retryable);
     }
 }
 
