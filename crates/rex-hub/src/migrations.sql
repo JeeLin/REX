@@ -108,3 +108,9 @@ CREATE TABLE IF NOT EXISTS transfer_task (
 );
 CREATE INDEX IF NOT EXISTS idx_transfer_task_status ON transfer_task(status);
 CREATE INDEX IF NOT EXISTS idx_transfer_task_created_at ON transfer_task(created_at);
+
+-- v0.94.0：环境统计子查询的复合索引。
+-- ENV_STATS_SELECT 的 agent_status / agents_online 子查询按
+-- (environment_id, status) 过滤，单列索引需逐行回表读 status；
+-- 复合索引让这两个子查询可走 index-only。
+CREATE INDEX IF NOT EXISTS idx_agents_environment_id_status ON agents(environment_id, status);

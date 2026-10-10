@@ -39,24 +39,51 @@ pub struct Database {
     pool: r2d2::Pool<SqliteConnectionManager>,
 }
 
-// Environment + aggregate stats, shared verbatim by the list and the
-// single-lookup queries below. Keeping both call sites on one literal is
-// what prevents the `agent_status` drift that this milestone fixes.
+// 环境本体 + 聚合统计，list 与单条查询共用同一份字面量：两个调用点不走两份
+// SQL，正是它杜绝了本里程碑修掉的 `agent_status` 语义漂移。
 //
-// `agent_status`: any agent 'online' => 'online', otherwise the earliest
-// (by created_at, tiebroken by id) agent's status, or NULL when the
-// environment has no agents. Deterministic — no more `LIMIT 1` on an
-// unordered scan.
-// `agents_online`: count of 'online' agents (0 when none). Replaces the
-// frontend's previously hardcoded "1".
-const ENV_STATS_SELECT: &str = "SELECT e.id, e.name, e.description, e.connection_mode, e.registration_token, e.created_at, e.updated_at,
-            COALESCE(r.res_count, 0) AS resource_count,
-            (SELECT s.status FROM agents s WHERE s.environment_id = e.id
-             ORDER BY (s.status = 'online') DESC, s.created_at, s.id LIMIT 1) AS agent_status,
-            COALESCE((SELECT SUM(CASE WHEN s.status = 'online' THEN 1 ELSE 0 END)
-                      FROM agents s WHERE s.environment_id = e.id), 0) AS agents_online
-     FROM environments e
-     LEFT JOIN (SELECT environment_id, COUNT(*) AS res_count FROM resources GROUP BY environment_id) r ON r.environment_id = e.id";
+// `agent_status`：存在 online agent 则为 'online'，否则取 created_at 最小
+// （同值再按 id）的那个 agent 的 status；环境无 agent 时为 NULL。
+// 确定性排序，不再是 `LIMIT 1` 落在无序扫描上。
+// `agents_online`：online agent 计数（无则 0），替掉前端此前写死的 "1"。
+// `resource_count`：相关子查询 COUNT(*)，取代 `LEFT JOIN (SELECT ...
+// GROUP BY environment_id)` 派生表——后者每次调用都聚合整张 resources 表，
+// 单环境查询也照付这份代价；相关子查询由 idx_resources_environment_id 覆盖。
+//
+// `env_stats_select!` 把 SELECT 字面量与调用处的尾部 ORDER BY/WHERE 拼在一起，
+// 二者均为字面量 → `concat!` 在编译期产出完整 SQL 字面量，调用点零堆分配。
+macro_rules! env_stats_select {
+    ($tail:literal) => {
+        concat!(
+            "SELECT e.id, e.name, e.description, e.connection_mode, e.registration_token, e.created_at, e.updated_at,
+              (SELECT COUNT(*) FROM resources r WHERE r.environment_id = e.id) AS resource_count,
+              (SELECT s.status FROM agents s WHERE s.environment_id = e.id
+               ORDER BY (s.status = 'online') DESC, s.created_at, s.id LIMIT 1) AS agent_status,
+              COALESCE((SELECT SUM(CASE WHEN s.status = 'online' THEN 1 ELSE 0 END)
+                        FROM agents s WHERE s.environment_id = e.id), 0) AS agents_online
+             FROM environments e",
+            $tail
+        )
+    };
+}
+
+/// `env_stats_select!` 产出 SQL 的行映射，两个调用点共用一份列序。
+fn map_environment_detail(row: &rusqlite::Row) -> rusqlite::Result<EnvironmentDetail> {
+    Ok(EnvironmentDetail {
+        environment: Environment {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            description: row.get(2)?,
+            connection_mode: row.get(3)?,
+            registration_token: row.get(4)?,
+            created_at: row.get(5)?,
+            updated_at: row.get(6)?,
+        },
+        resource_count: row.get(7)?,
+        agent_status: row.get(8)?,
+        agents_online: row.get(9)?,
+    })
+}
 
 impl Database {
     /// Open or create database at the given path, run migrations.
@@ -515,27 +542,11 @@ impl Database {
 
     pub fn list_environments_with_stats(&self) -> Result<Vec<EnvironmentDetail>> {
         let conn = self.conn()?;
-        let sql = format!("{ENV_STATS_SELECT} ORDER BY e.name");
         let mut stmt = conn
-            .prepare(&sql)
+            .prepare(env_stats_select!(" ORDER BY e.name"))
             .map_err(|e| RExError::Message(e.to_string()))?;
         let rows = stmt
-            .query_map([], |row| {
-                Ok(EnvironmentDetail {
-                    environment: Environment {
-                        id: row.get(0)?,
-                        name: row.get(1)?,
-                        description: row.get(2)?,
-                        connection_mode: row.get(3)?,
-                        registration_token: row.get(4)?,
-                        created_at: row.get(5)?,
-                        updated_at: row.get(6)?,
-                    },
-                    resource_count: row.get(7)?,
-                    agent_status: row.get(8)?,
-                    agents_online: row.get(9)?,
-                })
-            })
+            .query_map([], map_environment_detail)
             .map_err(|e| RExError::Message(e.to_string()))?;
         let mut envs = Vec::new();
         for row in rows {
@@ -546,27 +557,11 @@ impl Database {
 
     pub fn get_environment_with_stats(&self, id: &str) -> Result<Option<EnvironmentDetail>> {
         let conn = self.conn()?;
-        let sql = format!("{ENV_STATS_SELECT} WHERE e.id = ?1");
         let mut stmt = conn
-            .prepare(&sql)
+            .prepare(env_stats_select!(" WHERE e.id = ?1"))
             .map_err(|e| RExError::Message(e.to_string()))?;
         let mut rows = stmt
-            .query_map(rusqlite::params![id], |row| {
-                Ok(EnvironmentDetail {
-                    environment: Environment {
-                        id: row.get(0)?,
-                        name: row.get(1)?,
-                        description: row.get(2)?,
-                        connection_mode: row.get(3)?,
-                        registration_token: row.get(4)?,
-                        created_at: row.get(5)?,
-                        updated_at: row.get(6)?,
-                    },
-                    resource_count: row.get(7)?,
-                    agent_status: row.get(8)?,
-                    agents_online: row.get(9)?,
-                })
-            })
+            .query_map(rusqlite::params![id], map_environment_detail)
             .map_err(|e| RExError::Message(e.to_string()))?;
         match rows.next() {
             Some(Ok(env)) => Ok(Some(env)),
@@ -645,31 +640,16 @@ impl Database {
         }
     }
 
-    /// Whether any resource row stores encrypted credential material.
+    /// 是否存在存了加密凭据的资源行。
     ///
-    /// A row counts when `config_json` is non-NULL, non-empty and not the
-    /// empty JSON object (resources created without a config default to
-    /// `'{}'`). Used at startup to detect a missing `.master-key` in front of
-    /// real encrypted data (a fresh/empty DB legitimately has none).
+    /// 命中的行：`config_json` 非 NULL、非空串、且不是空 JSON 对象
+    /// （未填 config 建出的资源默认写 '{}'）。启动期据此判断「`.master-key`
+    /// 丢了但库里仍有密文」（全新/空库本就没有）。
     ///
-    /// # Query failures degrade to `false` on purpose
-    ///
-    /// All three failure modes — `self.conn()` cannot hand out a connection
-    /// (pool exhausted / DB file gone), `prepare` failing (SQL error), and
-    /// `query`/`next` failing — are swallowed and reported as `false`.
-    ///
-    /// The caller (the startup guard in `src/rex-hub.rs`) therefore cannot
-    /// distinguish "the DB provably holds no ciphertext" from "we could not
-    /// ask". A failing lookup is reported as an absent `.master-key`, so a
-    /// genuine outage stays silent there instead of blocking startup.
-    ///
-    /// This is intentional: the guard is advisory, and refusing to boot
-    /// because SQLite is briefly unreachable would turn a recoverable
-    /// condition into a hard outage. The cost is that a missing key is not
-    /// reported for a broken database — acceptable, because that case surfaces
-    /// immediately on the first real resource/terminal operation anyway.
-    /// Changing this to a hard failure is a deliberate policy decision, not a
-    /// local fix: the signature would have to become fallible.
+    /// `false` 有三种无法区分的成因，且有意统一报成 `false`：库里确实没有密文、
+    /// `self.conn()` 拿不到连接、或 `prepare`/`query`/`next` 失败。启动守卫
+    /// （`src/rex-hub.rs`）是咨询性的，不该因 SQLite 短暂不可达就拒绝启动，
+    /// 故库损坏时此处静默，等第一次真实凭据操作时自然暴露。
     pub fn has_encrypted_config(&self) -> bool {
         let Ok(conn) = self.conn() else {
             return false;
@@ -1525,6 +1505,16 @@ pub fn audit_log_with_detail(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    fn test_db() -> (tempfile::TempDir, Database) {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::open(&db_path).unwrap();
+        (dir, db)
+    }
+
     #[test]
     fn transfer_task_crud_round_trip() {
         let (_dir, db) = test_db();
@@ -1608,21 +1598,43 @@ mod tests {
         .id
     }
 
-    fn add_agent(db: &Database, env_id: &str, name: &str, status: &str) {
-        db.create_agent(env_id, name, "hash", "1.0.0", "linux", "x86_64", "host")
-            .unwrap();
+    /// 建一个指定状态的 agent，返回其 id。
+    /// `create_agent` 落库即 'online'，故 offline 需再显式置一次；
+    /// 状态来自调用方参数，不回查 DB（回查只会断言刚写下的 fixture）。
+    fn add_agent(db: &Database, env_id: &str, name: &str, status: &str) -> String {
         let id = db
-            .list_agents_by_env(env_id)
+            .create_agent(env_id, name, "hash", "1.0.0", "linux", "x86_64", "host")
             .unwrap()
-            .into_iter()
-            .find(|a| a.name == name)
-            .expect("agent just created")
             .id;
         db.set_agent_offline(&id).unwrap();
         if status == "online" {
             db.update_agent_heartbeat(&id, "1.0.0", "10.0.0.1").unwrap();
         }
-        assert_eq!(db.get_agent(&id).unwrap().unwrap().status, status);
+        id
+    }
+
+    /// 直接写 `agents.status`，用于构造 online 之外的状态取值。
+    /// 仅测试用：`error` 不是生产路径会写入的取值（生产只有 online/offline），
+    /// 这里当作「可区分的标记」用来分辨 tiebreak 到底选中了哪个 agent。
+    fn set_agent_status(db: &Database, id: &str, status: &str) {
+        db.conn()
+            .unwrap()
+            .execute(
+                "UPDATE agents SET status = ?1 WHERE id = ?2",
+                rusqlite::params![status, id],
+            )
+            .unwrap();
+    }
+
+    /// 覆盖 `agents.created_at`，让 tiebreak 维度在测试里可区分。
+    fn set_agent_created_at(db: &Database, id: &str, created_at: &str) {
+        db.conn()
+            .unwrap()
+            .execute(
+                "UPDATE agents SET created_at = ?1 WHERE id = ?2",
+                rusqlite::params![created_at, id],
+            )
+            .unwrap();
     }
 
     #[test]
@@ -1677,19 +1689,58 @@ mod tests {
     fn environment_agent_status_falls_back_to_a_stable_status_without_online_agents() {
         let (_dir, db) = test_db();
         let env_id = agent_env(&db, "down");
-        add_agent(&db, &env_id, "aaa", "offline");
-        add_agent(&db, &env_id, "bbb", "offline");
+        let older = add_agent(&db, &env_id, "aaa", "offline");
+        let newer = add_agent(&db, &env_id, "bbb", "offline");
+        // 错开 created_at，并让两者的 status 可区分：agent_status 取
+        // created_at 最小的那个 agent 的 status，断言必须钉住这一个，
+        // 否则 tiebreak（created_at → id）被改坏时测试仍绿。
+        set_agent_status(&db, &older, "offline");
+        set_agent_status(&db, &newer, "error");
+        set_agent_created_at(&db, &older, "2020-01-01T00:00:00+00:00");
+        set_agent_created_at(&db, &newer, "2021-01-01T00:00:00+00:00");
 
         let detail = db.get_environment_with_stats(&env_id).unwrap().unwrap();
-        assert_eq!(detail.agent_status.as_deref(), Some("offline"));
+        assert_eq!(
+            detail.agent_status.as_deref(),
+            Some("offline"),
+            "the earliest-created agent decides the fallback status"
+        );
         assert_eq!(detail.agents_online, 0);
+    }
+
+    /// 同 created_at 时 tiebreak 落到 id 最小的那一个。
+    #[test]
+    fn environment_agent_status_tiebreaks_on_agent_id_when_created_at_is_equal() {
+        let (_dir, db) = test_db();
+        let env_id = agent_env(&db, "same-time");
+        let first = add_agent(&db, &env_id, "zzz-first", "offline");
+        let second = add_agent(&db, &env_id, "aaa-second", "offline");
+        set_agent_status(&db, &first, "offline");
+        set_agent_status(&db, &second, "error");
+        let same = "2022-01-01T00:00:00+00:00";
+        set_agent_created_at(&db, &first, same);
+        set_agent_created_at(&db, &second, same);
+        // id 是 uuid，谁小不可预知：先比出 id 最小的是哪个，再断言取到的是它
+        // 那一侧的状态。断言跟着 fixture 走，不是恒真。
+        assert_ne!(
+            first, second,
+            "two distinct agents are required for a tiebreak"
+        );
+        let expected = if first < second { "offline" } else { "error" };
+
+        let detail = db.get_environment_with_stats(&env_id).unwrap().unwrap();
+        assert_eq!(
+            detail.agent_status.as_deref(),
+            Some(expected),
+            "identical created_at must fall back to the smaller agent id, not scan order"
+        );
     }
 
     #[test]
     fn environment_agent_status_tracks_agents_going_offline() {
         let (_dir, db) = test_db();
         let env_id = agent_env(&db, "flapping");
-        add_agent(&db, &env_id, "a", "online");
+        let id = add_agent(&db, &env_id, "a", "online");
         assert_eq!(
             db.get_environment_with_stats(&env_id)
                 .unwrap()
@@ -1699,7 +1750,6 @@ mod tests {
             Some("online")
         );
 
-        let id = db.list_agents_by_env(&env_id).unwrap()[0].id.clone();
         db.set_agent_offline(&id).unwrap();
 
         let detail = db.get_environment_with_stats(&env_id).unwrap().unwrap();
@@ -1727,16 +1777,6 @@ mod tests {
             (db_.agents_online, db_.agent_status.as_deref()),
             (1, Some("online"))
         );
-    }
-
-    use super::*;
-    use tempfile::tempdir;
-
-    fn test_db() -> (tempfile::TempDir, Database) {
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("test.db");
-        let db = Database::open(&db_path).unwrap();
-        (dir, db)
     }
 
     // --- Settings ---
