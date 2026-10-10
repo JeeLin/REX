@@ -74,7 +74,7 @@ impl S3Connector {
     ///
     /// `connect_from_request` 只构造 client、不发任何请求，构造成功**不代表**
     /// endpoint 可达或 key 有效。本方法按 bucket 有无分流：
-    /// - 有 bucket → `head_bucket` 精确验该桶的读权限（AWS SigV4 完整签名）；
+    /// - 有 bucket → `head_bucket` 验该桶可访问（AWS SigV4 完整签名）；
     /// - 无 bucket → `list_buckets` 验账号级凭据（minio 等无权 ListAllMyBuckets
     ///   的部署用有 bucket 分支即可，不因该权限缺失误报）。
     ///
@@ -88,15 +88,49 @@ impl S3Connector {
                 .context("S3 ListBuckets failed (verify credentials)")?;
         } else {
             let bucket = self.bucket.clone();
-            self.client
-                .head_bucket()
-                .bucket(&bucket)
-                .send()
-                .await
-                .with_context(|| format!("S3 HeadBucket failed bucket={bucket}"))?;
+            match self.client.head_bucket().bucket(&bucket).send().await {
+                Ok(_) => {}
+                Err(e) if head_bucket_forbidden(&e) => {
+                    // 403：凭据缺少 bucket 级读权限（ListBucket / GetBucketLocation /
+                    // 读 ACL 等），而真实文件传输只需对象级 `s3:GetObject`/`PutObject`
+                    // —— MinIO 或自定义策略仅授对象级权限的资源会在这里被误报为
+                    // 「凭据错误」，而用户真实下载完全正常。故 403 降级为对象级只读
+                    // 探测（`list_objects` 限 1 条），只验与数据面同级的权限。
+                    // 仅 403 降级：网络/5xx/404（桶不存在）等错误码原样返回，不掩盖真错。
+                    self.verify_object_level(&bucket).await.with_context(|| {
+                        format!(
+                            "S3 verify failed: HeadBucket forbidden and object-level probe \
+                             also failed bucket={bucket}"
+                        )
+                    })?;
+                }
+                Err(e) => {
+                    return Err(e).with_context(|| format!("S3 HeadBucket failed bucket={bucket}"));
+                }
+            }
         }
         Ok(())
     }
+}
+
+/// AWS SDK S3 错误是否携带 HTTP 403（`access_denied` / 无权限）。
+///
+/// 只看状态码，不看 service error code —— 不同 S3 兼容实现（MinIO、Ceph、OSS 网关）
+/// 对同一情形返回的 code 各不相同，状态码才是跨实现的稳定判据。
+fn head_bucket_forbidden(
+    err: &aws_sdk_s3::error::SdkError<
+        aws_sdk_s3::operation::head_bucket::HeadBucketError,
+        aws_sdk_s3::config::http::HttpResponse,
+    >,
+) -> bool {
+    is_forbidden_status(err.raw_response().map(|r| r.status().as_u16()))
+}
+
+/// 降级判定的纯逻辑：`Some(403)` 才降级，其余（含 `None` 无 HTTP 响应）一律不降级。
+///
+/// 抽成纯函数是为了单测能在无网络、无 SDK 内部构造器的前提下锁定「只降级 403」。
+fn is_forbidden_status(status: Option<u16>) -> bool {
+    status == Some(403)
 }
 
 #[async_trait]
@@ -578,6 +612,21 @@ impl FileConnector for S3Connector {
 }
 
 impl S3Connector {
+    /// `HeadBucket` 403 后的降级探测：对象级只读权限验证（`ListObjectsV2` 限 1 条）。
+    ///
+    /// 只用「列出桶内 1 个对象」这一数据面同级的只读动作，不写任何对象。
+    /// 连这一步也 403 → 凭据连对象读都没有，如实返回失败。
+    async fn verify_object_level(&self, bucket: &str) -> Result<()> {
+        self.client
+            .list_objects_v2()
+            .bucket(bucket)
+            .max_keys(1)
+            .send()
+            .await
+            .map(|_| ())
+            .context("S3 ListObjectsV2 failed (object-level verify after HeadBucket 403)")
+    }
+
     /// 单文件上传与分片上传的分界（5MB）。
     pub const MULTIPART_THRESHOLD: u64 = 5 * 1024 * 1024;
 
@@ -806,7 +855,7 @@ impl S3Connector {
 
 #[cfg(test)]
 mod tests {
-    use super::S3Connector;
+    use super::{is_forbidden_status, S3Connector};
 
     #[test]
     fn multipart_threshold_constant() {
@@ -851,6 +900,158 @@ mod tests {
         assert_eq!(
             S3Connector::canned_acl_from_str(""),
             ObjectCannedAcl::Private
+        );
+    }
+
+    /// S5-6 回归：`verify()` 的降级判定**只对 HTTP 403 生效**。
+    ///
+    /// 三条断言覆盖真实分支语义（非恒真——每一项都区分不同输入的相反结果）：
+    /// - `Some(403)` 必须降级到对象级只读探测（MinIO/仅对象级权限场景）；
+    /// - 5xx / 404 / 401 等其它状态码必须原样返回，否则会掩盖真实故障；
+    /// - `None`（错误不带 HTTP 响应，如签名构造失败/超时）同样不降级。
+    #[test]
+    fn verify_forbidden_fallback_is_scoped_to_http_403() {
+        assert!(
+            is_forbidden_status(Some(403)),
+            "403 (missing bucket-level read permission) must fall back to the object-level probe"
+        );
+        for status in [400u16, 401, 404, 500, 503] {
+            assert!(
+                !is_forbidden_status(Some(status)),
+                "status {status} must be surfaced as-is, not downgraded"
+            );
+        }
+        assert!(
+            !is_forbidden_status(None),
+            "errors carrying no HTTP response must not be treated as 403"
+        );
+    }
+
+    /// 最小 S3 假服务：按请求方法返回指定状态码，并记录收到的请求行。
+    ///
+    /// 只监听 127.0.0.1 随机端口（不联外网），固定响应，不做签名校验。
+    async fn spawn_fake_s3(
+        head_status: u16,
+        list_status: u16,
+    ) -> (String, tokio::sync::mpsc::UnboundedReceiver<String>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind loopback listener");
+        let addr = listener.local_addr().expect("listener addr");
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+
+        tokio::spawn(async move {
+            while let Ok((mut sock, _)) = listener.accept().await {
+                let (head_status, list_status) = (head_status, list_status);
+                let tx = tx.clone();
+                tokio::spawn(async move {
+                    let mut buf = vec![0u8; 4096];
+                    let n = sock.read(&mut buf).await.unwrap_or(0);
+                    let req = String::from_utf8_lossy(&buf[..n]).to_string();
+                    let request_line = req.lines().next().unwrap_or_default().to_string();
+                    let is_list = request_line.starts_with("GET ");
+                    let _ = tx.send(request_line);
+
+                    let (status, body) = if is_list {
+                        (
+                            list_status,
+                            r#"<?xml version="1.0"?><ListBucketResult><Name>b</Name></ListBucketResult>"#,
+                        )
+                    } else {
+                        // HeadBucket 无响应体；403 用 XML body 让 SDK 走 ServiceError 分支。
+                        (
+                            head_status,
+                            r#"<?xml version="1.0"?><Error><Code>AccessDenied</Code><Message>denied</Message></Error>"#,
+                        )
+                    };
+
+                    let reason = match status {
+                        200 => "OK",
+                        403 => "Forbidden",
+                        404 => "Not Found",
+                        500 => "Internal Server Error",
+                        _ => "Error",
+                    };
+                    let resp = format!(
+                        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/xml\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    );
+                    let _ = sock.write_all(resp.as_bytes()).await;
+                    let _ = sock.flush().await;
+                });
+            }
+        });
+
+        (format!("http://{addr}"), rx)
+    }
+
+    async fn s3_for_endpoint(bucket: &str, endpoint: &str) -> S3Connector {
+        S3Connector::connect(
+            bucket.to_string(),
+            Some("us-east-1".to_string()),
+            Some(endpoint.to_string()),
+            Some("ak".to_string()),
+            Some("sk".to_string()),
+        )
+        .await
+        .expect("construct S3 connector against loopback endpoint")
+    }
+
+    /// S5-8 回归：`head_bucket` 返回 403 时 `verify()` 必须走降级路径（ListObjectsV2 限 1 条）。
+    ///
+    /// 用 loopback 假 S3 观察真实请求序列：HeadBucket 403 → ListObjectsV2 被调用。
+    /// 若降级被摘掉，本测试会因为「第二个请求缺席」而失败，不是恒真断言。
+    #[tokio::test]
+    async fn verify_falls_back_to_object_level_probe_on_head_bucket_403() {
+        let (endpoint, mut requests) = spawn_fake_s3(403, 200).await;
+        let conn = s3_for_endpoint("b", &endpoint).await;
+
+        conn.verify()
+            .await
+            .expect("HeadBucket 403 with working object-level access must not fail verify");
+
+        let head = requests.recv().await.expect("HeadBucket request");
+        assert!(
+            head.starts_with("HEAD "),
+            "first probe must be HeadBucket, got: {head}"
+        );
+
+        let list = requests
+            .recv()
+            .await
+            .expect("HeadBucket 403 must trigger the ListObjectsV2 fallback probe");
+        assert!(
+            list.starts_with("GET ") && list.contains("list-type=2"),
+            "fallback probe must be ListObjectsV2, got: {list}"
+        );
+    }
+
+    /// S5-8 反向断言：`head_bucket` 返回非 403 时**不得**触发降级探测。
+    ///
+    /// 与上一条互补——若实现对任意错误都降级，本测试会因第二个请求出现而失败。
+    #[tokio::test]
+    async fn verify_does_not_fall_back_on_non_403_head_bucket_error() {
+        let (endpoint, mut requests) = spawn_fake_s3(404, 200).await;
+        let conn = s3_for_endpoint("b", &endpoint).await;
+
+        let err = conn.verify().await.expect_err(
+            "HeadBucket 404 (missing bucket) must surface as an error, not be downgraded",
+        );
+        assert!(
+            !err.to_string().contains("object-level probe"),
+            "404 must not be reported as a forbidden-then-probed case, got: {err}"
+        );
+
+        let head = requests.recv().await.expect("HeadBucket request");
+        assert!(
+            head.starts_with("HEAD "),
+            "expected HeadBucket, got: {head}"
+        );
+        assert!(
+            requests.try_recv().is_err(),
+            "no fallback ListObjectsV2 may be sent after a non-403 HeadBucket error"
         );
     }
 
