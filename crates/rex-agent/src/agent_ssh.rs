@@ -24,9 +24,14 @@ use rex_common::resource_config::config_private_key;
 
 use crate::agent_ws::LocalChannel;
 
-/// 探测（[`probe_ssh`]）单次建连的总超时：包住整条 TCP → KEX → 认证链路，与
-/// Hub 侧 `resource_api::PROBE_TIMEOUT` 同口径，Agent 不会比 Hub 更晚回帧。
-const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+/// [`probe_ssh`] 单次建连（TCP → KEX → 认证）的总超时上限：与 Hub 侧
+/// `resource_api::PROBE_TIMEOUT` 同口径，Agent 不会比 Hub 更晚回帧。
+const PROBE_CONNECT_TIMEOUT: std::time::Duration = crate::agent_ws::PROBE_TIMEOUT;
+
+/// [`probe_ssh`] 认证成功后的**收尾**等待上限：只包住送 shell channel EOF
+/// 这一步（`session.disconnect`），与建连是不同语义边界，故不与
+/// `PROBE_CONNECT_TIMEOUT` 混用同一个名字。
+const PROBE_TEARDOWN_TIMEOUT: std::time::Duration = crate::agent_ws::PROBE_TIMEOUT;
 
 /// 从 connect config 解析 SSH 配置（对应 Hub 侧 `handle_agent_terminal` 下发的字段约定）。
 pub fn parse_ssh_config(cfg: &Value) -> SshConfig {
@@ -566,8 +571,8 @@ pub async fn handle_connect_ssh(
 /// **不写共享 Handle 池**（`ssh_handles`）：用户终端的 Handle 以 `user@host:port`
 /// 为键存活，探测若复用该键会顶掉活跃会话；若结束时再 `remove` 同一键，更会把
 /// 用户正在用的 Handle 删掉。探测自建的 Handle 只在本函数作用域存在 —— `Ok`
-/// 分支回帧后立即 `drop`：`russh::Handle` 析构释放 `sender`，driver 任务随之退
-/// 出、TCP 关闭；连接关闭后 `connect_with_handle` 派生的读任务也结束。失败/超时
+/// 分支回帧后即离开作用域析构：`russh::Handle` 析构释放 `sender`，driver 任务随之
+/// 退出、TCP 关闭；连接关闭后 `connect_with_handle` 派生的读任务也结束。失败/超时
 /// 两路由 `connect_with_handle` 内部（或 future 被 drop）自行回收，本函数不额外
 /// 持有。
 ///
@@ -576,7 +581,7 @@ pub async fn handle_connect_ssh(
 /// （`rex_ssh` 未公开「仅认证」入口，`authenticate` / `connect_direct` 均为
 /// `pub(crate)`），所以认证成功后目标机确会启动一次 shell（触发 `.bashrc` / MOTD /
 /// audit，占一次 `MaxSessions`）。`Ok` 分支随即 `session.disconnect()`（channel
-/// EOF）再 drop handle，把该残留窗口压到最短。纯 SFTP 服务端不受影响：sftp 不走本
+/// EOF）再随作用域释放 handle，把该残留窗口压到最短。纯 SFTP 服务端不受影响：sftp 不走本
 /// 探测（见 `agent_ws::handle_connect` 的 probe 分支），走真实 SFTP 连接器认证。
 pub async fn probe_ssh(
     request_id: String,
@@ -593,11 +598,29 @@ pub async fn probe_ssh(
         return;
     }
 
-    // 单次有界建连：整条 TCP → KEX → 认证链路包在一个 timeout 内。超时后 future
-    // 被 drop：此时 russh driver 任务尚未派发（派发在读到对端标识串之后），
-    // socket 随 future 一起释放，不残留后台任务。
-    match tokio::time::timeout(PROBE_TIMEOUT, SshSession::connect_with_handle(ssh_cfg)).await {
-        Ok(Ok((handle, session))) => {
+    // 单次有界建连：整条 TCP → KEX → 认证链路包在一个 timeout 内。
+    //
+    // 超时后 future 被 drop，但**并不代表资源立即全部释放**：russh 0.62 的
+    // `connect_stream`（`russh-0.62.2/src/client/mod.rs`）先 `write_all` 客户端标识串
+    // （L1010）、再 `stream.read_ssh_id()` 读对端标识串（L1014），**读到对端标识串
+    // 之后**才在 L1048 `russh_util::runtime::spawn(session.run(stream, handler, …))`
+    // 派发 driver 任务并把 socket 移入其中。也就是说：若超时发生在「已读到对端标识串
+    // 之后、KEX 完成之前」，driver 任务与 socket 已被派发且脱离 future，drop future
+    // 不会终止它们。该残留是**有界的**——driver 循环（`run_inner`）在下列任一条件下
+    // 自行退出：对端关闭/读错误（`start_reading` 返回 Err）、收到 `DISCONNECT` 包、
+    // 或 keepalive 连续失败超过 `keepalive_max`（本项目 `connect_with_handle` 把
+    // `keepalive_interval` 设为 60s，见 `rex_ssh::SshSession::connect_with_handle`）。
+    // `inactivity_timeout` 在 client 配置里为 `None`（russh 默认，rex-ssh 未设置），
+    // 故不提供额外兜底；窗口上界由对端行为决定，而非由本 timeout 决定。
+    match tokio::time::timeout(
+        PROBE_CONNECT_TIMEOUT,
+        SshSession::connect_with_handle(ssh_cfg),
+    )
+    .await
+    {
+        // `_handle` 绑定而非显式 drop：`handle` 在 disconnect 之后不再被使用，
+        // 作用域结束即析构（`russh::Handle` 析构释放 sender → driver 任务退出）。
+        Ok(Ok((_handle, session))) => {
             // 凭据已验证：先回成功帧（Hub 拿到结论后随即下发 close），再立刻拆除。
             let ok = serde_json::to_string(&crate::agent_ws::AgentMsg::Connected {
                 payload: crate::agent_ws::ConnectedPayload {
@@ -609,10 +632,10 @@ pub async fn probe_ssh(
             let _ = evt_tx.send(AgentEvent::Text(ok)).await;
 
             // 优雅收尾：给 shell 送 channel EOF 让它尽快退出（有界，绝不挂住探测）；
-            // 随后 drop handle 关连连接、结束派生读任务。全程不碰 `ssh_handles`。
-            let _ = tokio::time::timeout(PROBE_TIMEOUT, session.disconnect()).await;
-            drop(handle);
-            drop(session);
+            // 随后 `_handle` / `session` 随作用域结束析构（关连接、结束派生读任务）。
+            // 全程不碰 `ssh_handles` —— 探测自建的 Handle 不入共享池，也不 remove
+            // 同键条目（否则会删掉用户终端正在用的 Handle）。
+            let _ = tokio::time::timeout(PROBE_TEARDOWN_TIMEOUT, session.disconnect()).await;
 
             tracing::info!(
                 action = "AGENT_SSH_PROBE",

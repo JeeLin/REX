@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
-use rex_common::agent_proto::send_session_error;
+use rex_common::agent_proto::{send_session_error, send_session_opened};
 use rex_sip::SipUaTrait;
 use rex_ssh::SshHandle;
 use serde::{Deserialize, Serialize};
@@ -29,6 +29,18 @@ pub(crate) fn ssh_pool_key_from_cfg(cfg: &serde_json::Value) -> String {
     let username = cfg.get("username").and_then(|v| v.as_str()).unwrap_or("");
     format!("{username}@{host}:{port}")
 }
+
+/// 「测试连接」探测的总超时：Agent 侧 ssh / s3 / sip 三条探测路径共用，与 Hub 侧
+/// `resource_api::PROBE_TIMEOUT` 同口径 —— Agent 不会比 Hub 更晚回帧。
+///
+/// 各探测路径对「超时」的语义不同（建连 / 探测收尾 / 探测真实请求），故本常量只
+/// 提供统一的上限基线，语义专属的边界由各自模块用语义名常量再包装一层。
+pub(crate) const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// 探测超时的用户可见文案（与 Hub 侧 `PROBE_TIMEOUT_MSG` 同值）。
+///
+/// 各协议探测共用同一句：超时只是「没在限定时间内拿到结论」，不透露目标细节。
+pub(crate) const PROBE_TIMEOUT_MSG: &str = "connection timed out";
 
 // ═══════════════════════════════════════
 // TLS Insecure 模式（自签名证书跳过验证）
@@ -298,8 +310,13 @@ struct ConnectRequest {
     /// 「测试连接」探测标记（Hub 侧 `resource_api::test_connect_via_agent` 下发）。
     ///
     /// 缺省 `false`：旧 Hub 不带该字段时行为完全不变，走各协议原有的 connect 流程。
-    /// 仅 ssh / sftp 消费它 —— Agent 侧对这两种协议只做无副作用的可达性握手，
-    /// 不建会话、不写共享 Handle 池（见 `agent_ssh::probe_ssh`）。
+    /// 仅 **ssh / s3 / sip** 消费它（与 Hub 侧下发的
+    /// `matches!(protocol, "ssh" | "s3" | "sip")` 严格对齐）—— Agent 侧对这三种协议
+    /// 只做无副作用的握手+认证探测，不建会话、不写共享 Handle 池
+    /// （见 `agent_ssh::probe_ssh` / `agent_file::probe_s3` / `probe_sip`）。
+    /// sftp / sql / redis / mysql / postgresql / sqlite **不走探测**：sftp 的
+    /// `probe_ssh` 会启动 shell（纯 SFTP 服务端拒绝），其余协议需要真会话才有意义，
+    /// 由各协议的 connect 路径完成认证并回传结论。
     #[serde(default)]
     probe: bool,
 }
@@ -308,6 +325,21 @@ struct ConnectRequest {
 pub(crate) struct ChannelPayload {
     #[allow(dead_code)]
     pub(crate) channel_id: String,
+}
+
+/// 向 Hub 回 `closed` 帧：Agent 侧所有「通道结束」路径的唯一出口。
+///
+/// **必须始终回帧**（含失败路径）：Hub 侧 `channels` 映射只靠这一帧清理
+/// （sql/redis/sftp 会话结束时不会主动回帧，探测通道更是从未在本地注册），
+/// 缺帧即永久残留。重复 close 时 Hub 侧 remove 是 no-op，故本 helper 幂等。
+async fn send_closed(evt_tx: &mpsc::Sender<AgentEvent>, channel_id: &str) {
+    let closed = serde_json::to_string(&AgentMsg::Closed {
+        payload: ChannelPayload {
+            channel_id: channel_id.to_string(),
+        },
+    })
+    .unwrap_or_default();
+    let _ = evt_tx.send(AgentEvent::Text(closed)).await;
 }
 
 #[derive(Debug, Deserialize)]
@@ -600,17 +632,7 @@ async fn connect_and_run(
                             if let Some(ch) = channels.write().await.remove(&payload.channel_id) {
                                 let _ = ch.data_tx.send(vec![]).await; // signal close
                             }
-                            // 始终回 `closed`：Hub 侧 channel 映射只靠这一帧清理
-                            // （sql/redis/sftp 会话结束时不会主动回帧，探测通道更是
-                            // 从未在本地注册），缺帧即永久残留。重复 close 时 Hub 侧
-                            // remove 是 no-op。
-                            let closed = serde_json::to_string(&AgentMsg::Closed {
-                                payload: ChannelPayload {
-                                    channel_id: payload.channel_id.clone(),
-                                },
-                            })
-                            .unwrap_or_default();
-                            let _ = evt_tx.send(AgentEvent::Text(closed)).await;
+                            send_closed(&evt_tx, &payload.channel_id).await;
                         }
                         HubMsg::Resize { payload } => {
                             let chs = channels.read().await;
@@ -807,6 +829,9 @@ async fn handle_connect(
         })
         .unwrap();
         let _ = evt_tx.send(AgentEvent::Text(err_msg)).await;
+        // 失败路径同样回 `closed`：channel_id 已分配，统一「每条通道必有一帧终局」
+        // 语义（Hub 侧 remove 幂等）。
+        send_closed(&evt_tx, &channel_id).await;
         return;
     }
 
@@ -901,14 +926,8 @@ async fn handle_connect(
                 chs.remove(&channel_id);
             }
 
-            // 通知 Hub 关闭 channel
-            let close_msg = serde_json::to_string(&AgentMsg::Closed {
-                payload: ChannelPayload {
-                    channel_id: channel_id.clone(),
-                },
-            })
-            .unwrap();
-            let _ = evt_tx.send(AgentEvent::Text(close_msg)).await;
+            // 通知 Hub 关闭 channel（与 Hub `close` 回包共用同一 helper）
+            send_closed(&evt_tx, &channel_id).await;
 
             tracing::info!(channel_id = %channel_id, "local connection closed");
         }
@@ -926,6 +945,9 @@ async fn handle_connect(
             })
             .unwrap();
             let _ = evt_tx.send(AgentEvent::Text(err_msg)).await;
+            // 失败路径同样回 `closed`：本路径已分配 channel_id，若此前任何一步
+            // 让 Hub 侧登记过映射，缺帧即残留（Hub 侧 remove 幂等）。
+            send_closed(&evt_tx, &channel_id).await;
         }
     }
 }
@@ -979,68 +1001,20 @@ async fn handle_connect_sip(
         }
     };
 
-    // 「测试连接」探测：UA₂ 已建，补一次真实 REGISTER 验凭据是否能达到内网
-    // SIP server。成功回 SessionOpened，失败回 SessionError；随即 drop UA
-    //（Drop → ua_stop_register 释放注册），不建会话、不注册 channel，不写共享
-    // 状态 —— 与 probe_ssh/probe_s3 同等「握手+认证后拆除」的轻探针。
+    // 「测试连接」探测：UA₂ 已建，补一次真实 REGISTER 验凭据；验完即释放 UA，
+    // 不建会话 —— 与 probe_ssh / probe_s3 同等「握手+认证后拆除」的轻探针。
     if req.probe {
-        const SIP_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
-        let server = probe_server; // for log
-        let verdict = tokio::time::timeout(SIP_PROBE_TIMEOUT, ua.register()).await;
-        match verdict {
-            Ok(Ok(())) => {
-                let ok = serde_json::to_string(
-                    &rex_common::agent_proto::AgentSessionMsg::SessionOpened(
-                        rex_common::agent_proto::SessionOpened {
-                            request_id: req.request_id.clone(),
-                            channel_id: channel_id.clone(),
-                            subtype: None,
-                        },
-                    ),
-                )
-                .unwrap_or_default();
-                let _ = evt_tx.send(AgentEvent::Text(ok)).await;
-                tracing::info!(
-                    action = "AGENT_SIP_PROBE_OK",
-                    request_id = %req.request_id,
-                    server = %server,
-                    port = probe_port,
-                    "SIP probe REGISTER verified (credentials OK)"
-                );
-            }
-            Ok(Err(e)) => {
-                send_session_error(
-                    &evt_tx,
-                    &channel_id,
-                    Some(&req.request_id),
-                    &format!("SIP REGISTER failed: {e}"),
-                )
-                .await;
-                tracing::warn!(
-                    action = "AGENT_SIP_PROBE_FAILED",
-                    request_id = %req.request_id,
-                    server = %server,
-                    error = %e,
-                    "SIP probe REGISTER failed"
-                );
-            }
-            Err(_) => {
-                send_session_error(
-                    &evt_tx,
-                    &channel_id,
-                    Some(&req.request_id),
-                    "connection timed out",
-                )
-                .await;
-                tracing::warn!(
-                    action = "AGENT_SIP_PROBE_FAILED",
-                    request_id = %req.request_id,
-                    server = %server,
-                    "SIP probe timed out"
-                );
-            }
-        }
-        // 验券完成，立即释放 UA（ua_stop_register 回收注册）。
+        probe_sip(
+            &ua,
+            &req.request_id,
+            &channel_id,
+            &probe_server,
+            probe_port,
+            &evt_tx,
+        )
+        .await;
+        // 验券完成，立即释放 UA（Drop → ua_stop_register 回收注册）；此后绝不
+        // 继续走 `run_sip_ua2`（探测通道从未在本地注册）。
         drop(ua);
         return;
     }
@@ -1071,6 +1045,62 @@ async fn handle_connect_sip(
 
     // UA₂ 事件流 → 隧道 SipEvent 帧；Hub 经隧道发来的 SipControl/媒体帧 → UA₂。
     run_sip_ua2(ua, channel_id, evt_tx, channels, data_rx).await;
+}
+
+/// 「测试连接」SIP 探测：真实 REGISTER 验凭据能否达到内网 SIP server。
+///
+/// 与 `probe_s3` 同构（函数体只做「跑探测 → 按结论回帧 → 记日志」，真实探测
+/// 委托给一个 `verify` 式入口，这里即 `SipUaTrait::register`）：
+/// - REGISTER 成功 → `session_opened`；失败 → `session_error`；超时 → 超时文案。
+/// - 不注册 channel、不写共享状态、不进 `run_sip_ua2`（由调用方在返回后 drop UA）。
+///
+/// 泛型 `U: SipUaTrait` 便于用 `MockSipUa` 做单测（真路径传 `rex_sip::SipUa`）。
+async fn probe_sip<U: SipUaTrait + Sync>(
+    ua: &U,
+    request_id: &str,
+    channel_id: &str,
+    server: &str,
+    port: u16,
+    evt_tx: &mpsc::Sender<AgentEvent>,
+) {
+    let verdict = tokio::time::timeout(PROBE_TIMEOUT, ua.register()).await;
+    match verdict {
+        Ok(Ok(())) => {
+            send_session_opened(evt_tx, channel_id, request_id, None).await;
+            tracing::info!(
+                action = "AGENT_SIP_PROBE_OK",
+                request_id = %request_id,
+                server = %server,
+                port = port,
+                "SIP probe REGISTER verified (credentials OK)"
+            );
+        }
+        Ok(Err(e)) => {
+            send_session_error(
+                evt_tx,
+                channel_id,
+                Some(request_id),
+                &format!("SIP REGISTER failed: {e}"),
+            )
+            .await;
+            tracing::warn!(
+                action = "AGENT_SIP_PROBE_FAILED",
+                request_id = %request_id,
+                server = %server,
+                error = %e,
+                "SIP probe REGISTER failed"
+            );
+        }
+        Err(_) => {
+            send_session_error(evt_tx, channel_id, Some(request_id), PROBE_TIMEOUT_MSG).await;
+            tracing::warn!(
+                action = "AGENT_SIP_PROBE_FAILED",
+                request_id = %request_id,
+                server = %server,
+                "SIP probe timed out"
+            );
+        }
+    }
 }
 
 /// 驱动 UA₂：把 baresip 事件封装为 `SipEvent` JSON 经隧道回 Hub；
@@ -1918,6 +1948,172 @@ mod tests {
         assert!(hub_origin("not a url").is_err());
         assert!(hub_origin("hub.example.com").is_err());
         assert!(hub_origin("ftp://hub.example.com").is_err());
+    }
+
+    // ── S4-20 / S5-9：SIP 探测（probe_sip）──
+    //
+    // 探测分支的契约：真实 REGISTER 一次 → 按结论回 `session_opened` /
+    // `session_error`，绝不进入 `run_sip_ua2`（探测通道从未在本地注册）。
+    // 下列用例用 `MockSipUa` 驱动真实 `probe_sip`，断言线上帧与 UA 动作。
+
+    fn sip_cfg() -> rex_sip::SipConfig {
+        rex_sip::SipConfig {
+            server: "sip.example.com".into(),
+            port: 5060,
+            username: "1000".into(),
+            password: Some("secret".into()),
+            display_name: None,
+            transport: rex_sip::SipTransport::Udp,
+        }
+    }
+
+    /// REGISTER 成功：必须回 `session_opened`（带 request_id/channel_id）且 UA 恰好
+    /// 收到一次 register —— 证明探测走的是真实 REGISTER 而非「直接报成功」。
+    #[tokio::test]
+    async fn sip_probe_register_success_reports_session_opened() {
+        let ua = rex_sip::MockSipUa::new(sip_cfg(), vec![]);
+        let (evt_tx, mut evt_rx) = mpsc::channel::<AgentEvent>(8);
+
+        probe_sip(&ua, "req_probe", "12", "sip.example.com", 5060, &evt_tx).await;
+
+        {
+            let acts = ua.actions.lock().unwrap();
+            assert_eq!(
+                acts.as_slice(),
+                [rex_sip::MockAction::Register],
+                "probe must issue exactly one real REGISTER"
+            );
+        }
+
+        let Some(AgentEvent::Text(raw)) = evt_rx.recv().await else {
+            panic!("probe must report a verdict");
+        };
+        let msg: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(msg["type"], "session_opened", "got {raw}");
+        assert_eq!(msg["request_id"], "req_probe");
+        assert_eq!(msg["channel_id"], "12");
+        assert!(
+            evt_rx.try_recv().is_err(),
+            "a successful probe must emit exactly one verdict frame"
+        );
+    }
+
+    /// REGISTER 失败：必须回 `session_error` 且携带 request_id（Hub 侧据此把结论
+    /// 路由给等待中的探测请求），绝不误报 `session_opened`。
+    #[tokio::test]
+    async fn sip_probe_register_failure_reports_session_error() {
+        /// 恒失败的 UA：register 直接报错，其余动作不可达。
+        struct FailingUa;
+        #[async_trait::async_trait]
+        impl SipUaTrait for FailingUa {
+            async fn register(&self) -> anyhow::Result<()> {
+                anyhow::bail!("407 Proxy Authentication Required")
+            }
+            async fn dial(&self, _dest: &str) -> anyhow::Result<String> {
+                anyhow::bail!("unreachable in probe")
+            }
+            async fn answer(&self, _call_id: &str) -> anyhow::Result<()> {
+                anyhow::bail!("unreachable in probe")
+            }
+            async fn hangup(&self, _call_id: &str) -> anyhow::Result<()> {
+                anyhow::bail!("unreachable in probe")
+            }
+            async fn hold(&self, _call_id: &str) -> anyhow::Result<()> {
+                anyhow::bail!("unreachable in probe")
+            }
+            async fn unhold(&self, _call_id: &str) -> anyhow::Result<()> {
+                anyhow::bail!("unreachable in probe")
+            }
+            async fn dtmf(&self, _call_id: &str, _digit: char) -> anyhow::Result<()> {
+                anyhow::bail!("unreachable in probe")
+            }
+            fn events(&self) -> tokio::sync::mpsc::UnboundedReceiver<rex_sip::SipEvent> {
+                let (_tx, rx) = tokio::sync::mpsc::unbounded_channel();
+                rx
+            }
+        }
+
+        let (evt_tx, mut evt_rx) = mpsc::channel::<AgentEvent>(8);
+        probe_sip(
+            &FailingUa,
+            "req_probe",
+            "13",
+            "sip.example.com",
+            5060,
+            &evt_tx,
+        )
+        .await;
+
+        let Some(AgentEvent::Text(raw)) = evt_rx.recv().await else {
+            panic!("probe must report a verdict");
+        };
+        let msg: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(msg["type"], "session_error", "got {raw}");
+        assert_eq!(msg["request_id"], "req_probe");
+        assert_eq!(msg["channel_id"], "13");
+        let error = msg["error"].as_str().unwrap();
+        assert!(error.contains("407"), "{error}");
+    }
+
+    /// 超时：REGISTER 永挂 → 必须回 `session_error` + 超时文案，且**不得**回
+    /// `session_opened`（否则坏凭据/不可达会被误报为连接成功）。
+    #[tokio::test]
+    async fn sip_probe_register_hang_reports_timeout_not_opened() {
+        /// 永不完成的 UA：register 挂住直到外层 timeout 触发。
+        struct HangingUa;
+        #[async_trait::async_trait]
+        impl SipUaTrait for HangingUa {
+            async fn register(&self) -> anyhow::Result<()> {
+                std::future::pending::<()>().await;
+                anyhow::bail!("unreachable")
+            }
+            async fn dial(&self, _dest: &str) -> anyhow::Result<String> {
+                anyhow::bail!("unreachable in probe")
+            }
+            async fn answer(&self, _call_id: &str) -> anyhow::Result<()> {
+                anyhow::bail!("unreachable in probe")
+            }
+            async fn hangup(&self, _call_id: &str) -> anyhow::Result<()> {
+                anyhow::bail!("unreachable in probe")
+            }
+            async fn hold(&self, _call_id: &str) -> anyhow::Result<()> {
+                anyhow::bail!("unreachable in probe")
+            }
+            async fn unhold(&self, _call_id: &str) -> anyhow::Result<()> {
+                anyhow::bail!("unreachable in probe")
+            }
+            async fn dtmf(&self, _call_id: &str, _digit: char) -> anyhow::Result<()> {
+                anyhow::bail!("unreachable in probe")
+            }
+            fn events(&self) -> tokio::sync::mpsc::UnboundedReceiver<rex_sip::SipEvent> {
+                let (_tx, rx) = tokio::sync::mpsc::unbounded_channel();
+                rx
+            }
+        }
+
+        let (evt_tx, mut evt_rx) = mpsc::channel::<AgentEvent>(8);
+        // 用真实 PROBE_TIMEOUT（5s）驱动，验证「超时」分支而不是提前失败。
+        let started = std::time::Instant::now();
+        probe_sip(
+            &HangingUa,
+            "req_probe",
+            "14",
+            "sip.example.com",
+            5060,
+            &evt_tx,
+        )
+        .await;
+        assert!(
+            started.elapsed() >= PROBE_TIMEOUT,
+            "probe must wait for the full probe timeout before reporting a timeout"
+        );
+
+        let Some(AgentEvent::Text(raw)) = evt_rx.recv().await else {
+            panic!("probe must report a verdict");
+        };
+        let msg: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(msg["type"], "session_error", "got {raw}");
+        assert_eq!(msg["error"], PROBE_TIMEOUT_MSG);
     }
 
     /// Bugs 表 🟡 回归：`REX_HUB_URL=https://…` 必须拨号 `wss://`（构造点 build_ws_url）。

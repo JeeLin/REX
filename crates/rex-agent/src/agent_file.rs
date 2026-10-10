@@ -13,6 +13,7 @@ use tokio::sync::{mpsc, RwLock};
 use rex_common::file_transfer::{dispatch_file, FileConnectRequest, FileConnector};
 
 use rex_common::agent_proto::send_session_error;
+use rex_common::agent_proto::send_session_opened;
 use rex_common::agent_proto::AgentEvent;
 use rex_common::resource_config::config_private_key;
 
@@ -68,15 +69,7 @@ pub async fn handle_connect_file(
         );
     }
 
-    let ok = serde_json::to_string(&rex_common::agent_proto::AgentSessionMsg::SessionOpened(
-        rex_common::agent_proto::SessionOpened {
-            request_id,
-            channel_id: channel_id.clone(),
-            subtype: None,
-        },
-    ))
-    .unwrap_or_default();
-    let _ = evt_tx.send(AgentEvent::Text(ok)).await;
+    send_session_opened(&evt_tx, &channel_id, &request_id, None).await;
 
     while let Some(frame) = data_rx.recv().await {
         if frame.is_empty() {
@@ -140,35 +133,7 @@ pub async fn probe_s3(
     cfg: &serde_json::Value,
     evt_tx: mpsc::Sender<AgentEvent>,
 ) {
-    const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
-
-    let req = FileConnectRequest {
-        protocol: "s3".to_string(),
-        host: cfg
-            .get("host")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string(),
-        port: cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(443) as u16,
-        username: None,
-        password: None,
-        private_key: None,
-        keepalive_interval: None,
-        bucket: cfg.get("bucket").and_then(|v| v.as_str()).map(String::from),
-        region: cfg.get("region").and_then(|v| v.as_str()).map(String::from),
-        endpoint: cfg
-            .get("endpoint")
-            .and_then(|v| v.as_str())
-            .map(String::from),
-        access_key: cfg
-            .get("access_key")
-            .and_then(|v| v.as_str())
-            .map(String::from),
-        secret_key: cfg
-            .get("secret_key")
-            .and_then(|v| v.as_str())
-            .map(String::from),
-    };
+    let req = s3_connect_request_from_config(cfg);
 
     let endpoint = cfg
         .get("endpoint")
@@ -177,7 +142,7 @@ pub async fn probe_s3(
         .to_string();
     let port = cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(443) as u16;
 
-    let res = tokio::time::timeout(PROBE_TIMEOUT, async {
+    let res = tokio::time::timeout(crate::agent_ws::PROBE_TIMEOUT, async {
         let conn = rex_s3::S3Connector::connect_from_request(&req).await?;
         conn.verify().await
     })
@@ -185,16 +150,7 @@ pub async fn probe_s3(
 
     match res {
         Ok(Ok(())) => {
-            let ok =
-                serde_json::to_string(&rex_common::agent_proto::AgentSessionMsg::SessionOpened(
-                    rex_common::agent_proto::SessionOpened {
-                        request_id: request_id.clone(),
-                        channel_id: channel_id.clone(),
-                        subtype: None,
-                    },
-                ))
-                .unwrap_or_default();
-            let _ = evt_tx.send(AgentEvent::Text(ok)).await;
+            send_session_opened(&evt_tx, &channel_id, &request_id, None).await;
             tracing::info!(
                 action = "AGENT_S3_PROBE_OK",
                 request_id = %request_id,
@@ -221,7 +177,13 @@ pub async fn probe_s3(
             );
         }
         Err(_) => {
-            send_session_error(&evt_tx, &channel_id, Some(&request_id), PROBE_TIMEOUT_FMT).await;
+            send_session_error(
+                &evt_tx,
+                &channel_id,
+                Some(&request_id),
+                crate::agent_ws::PROBE_TIMEOUT_MSG,
+            )
+            .await;
             tracing::warn!(
                 action = "AGENT_S3_PROBE_FAILED",
                 request_id = %request_id,
@@ -233,8 +195,45 @@ pub async fn probe_s3(
     }
 }
 
-/// Agent 侧探测超时的用户可见文案（与 Hub `PROBE_TIMEOUT_MSG` 同值）。
-const PROBE_TIMEOUT_FMT: &str = "connection timed out";
+/// 由 connect config 构造 S3 的 `FileConnectRequest`：**探测与真实会话的唯一构造点**。
+///
+/// 两处共用同一函数（`probe_s3` 与 `build_connector` 的 `"s3"` 分支），保证
+/// 「测试连接」与真实会话拿到完全相同的凭据/端点配置 —— 字段增删（如将来加
+/// `session_token`）只改这一处，杜绝「探测通过但真实会话失败」的字段漂移。
+///
+/// `host` / `port` 仅作占位：`S3Connector::connect_from_request` 只消费
+/// `bucket` / `region` / `endpoint` / `access_key` / `secret_key`，S3 的目标地址
+/// 由 `endpoint` 承载（`FileConnectRequest` 的公共形状要求这两个字段存在）。
+fn s3_connect_request_from_config(cfg: &serde_json::Value) -> FileConnectRequest {
+    FileConnectRequest {
+        protocol: "s3".to_string(),
+        // 死字段：S3Connector 不消费，仅为满足 FileConnectRequest 的公共形状。
+        host: cfg
+            .get("host")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        port: cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(443) as u16,
+        username: None,
+        password: None,
+        private_key: None,
+        keepalive_interval: None,
+        bucket: cfg.get("bucket").and_then(|v| v.as_str()).map(String::from),
+        region: cfg.get("region").and_then(|v| v.as_str()).map(String::from),
+        endpoint: cfg
+            .get("endpoint")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        access_key: cfg
+            .get("access_key")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        secret_key: cfg
+            .get("secret_key")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+    }
+}
 
 /// 与 `handle_connect_file` 同源：从 connect config 构造 FileConnector。
 async fn build_connector(
@@ -301,33 +300,8 @@ async fn build_connector(
             Ok(Box::new(conn))
         }
         "s3" => {
-            let req = FileConnectRequest {
-                protocol: "s3".to_string(),
-                host: cfg
-                    .get("host")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string(),
-                port: cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(443) as u16,
-                username: None,
-                password: None,
-                private_key: None,
-                keepalive_interval: None,
-                bucket: cfg.get("bucket").and_then(|v| v.as_str()).map(String::from),
-                region: cfg.get("region").and_then(|v| v.as_str()).map(String::from),
-                endpoint: cfg
-                    .get("endpoint")
-                    .and_then(|v| v.as_str())
-                    .map(String::from),
-                access_key: cfg
-                    .get("access_key")
-                    .and_then(|v| v.as_str())
-                    .map(String::from),
-                secret_key: cfg
-                    .get("secret_key")
-                    .and_then(|v| v.as_str())
-                    .map(String::from),
-            };
+            // 与 `probe_s3` 共用同一构造点，避免探测/真实会话字段漂移。
+            let req = s3_connect_request_from_config(cfg);
             let conn = rex_s3::S3Connector::connect_from_request(&req).await?;
             Ok(Box::new(conn))
         }
