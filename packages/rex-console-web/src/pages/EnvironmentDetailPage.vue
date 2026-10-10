@@ -434,7 +434,7 @@ async function resetToken() {
         <div class="section-head">
           <h2 class="section-title">Agents</h2>
           <span class="section-head-spacer"></span>
-          <Badge v-if="env.agents_online > 0">{{ t('environments.agentsOnlineCount', env.agents_online, { named: { count: env.agents_online } }) }}</Badge>
+          <Badge v-if="env.agents_online > 0">{{ t('environments.agentsOnlineBadge', { count: env.agents_online }) }}</Badge>
         </div>
         <div class="section-body">
           <div v-if="env.agent_status" class="agent-row">

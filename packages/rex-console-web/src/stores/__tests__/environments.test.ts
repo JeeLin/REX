@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useEnvironmentsStore } from '../environments'
+import { makeEnv } from './makeEnv'
 
 // Mock the API modules
 vi.mock('@/api/environments', () => ({
@@ -36,8 +37,8 @@ describe('environments store', () => {
   describe('fetchEnvironments', () => {
     it('should load environments from API', async () => {
       const mockEnvs = [
-        { id: '1', name: 'Production', description: '', connection_mode: 'direct', created_at: '', updated_at: '', resource_count: 0, agent_status: null, agents_online: 0, registration_token: 'test-token' },
-        { id: '2', name: 'Staging', description: '', connection_mode: 'agent', created_at: '', updated_at: '', resource_count: 0, agent_status: null, agents_online: 0, registration_token: 'test-token' },
+        makeEnv({ name: 'Production' }),
+        makeEnv({ id: '2', name: 'Staging', connection_mode: 'agent' }),
       ]
       mockEnvironmentsApi.list.mockResolvedValue(mockEnvs)
       const store = useEnvironmentsStore()
@@ -57,8 +58,7 @@ describe('environments store', () => {
 
   describe('createEnvironment', () => {
     it('should add new environment to list', async () => {
-      const newEnv = { id: '3', name: 'New', description: '', connection_mode: 'direct', created_at: '', updated_at: '', resource_count: 0, agent_status: null, agents_online: 0, registration_token: 'test-token' }
-      mockEnvironmentsApi.create.mockResolvedValue(newEnv)
+      mockEnvironmentsApi.create.mockResolvedValue(makeEnv({ id: '3', name: 'New' }))
       const store = useEnvironmentsStore()
       const result = await store.createEnvironment({ name: 'New', description: '', connection_mode: 'direct' })
       expect(result.id).toBe('3')
@@ -70,10 +70,8 @@ describe('environments store', () => {
   describe('updateEnvironment', () => {
     it('should update environment in list', async () => {
       const store = useEnvironmentsStore()
-      store.environments = [
-        { id: '1', name: 'Old', description: '', connection_mode: 'direct', created_at: '', updated_at: '', resource_count: 0, agent_status: null, agents_online: 0, registration_token: 'test-token' },
-      ]
-      mockEnvironmentsApi.update.mockResolvedValue({ id: '1', name: 'Updated', description: '', connection_mode: 'direct', created_at: '', updated_at: '', resource_count: 0, agent_status: null, agents_online: 0, registration_token: 'test-token' })
+      store.environments = [makeEnv({ name: 'Old' })]
+      mockEnvironmentsApi.update.mockResolvedValue(makeEnv({ name: 'Updated' }))
       await store.updateEnvironment('1', { name: 'Updated' })
       expect(store.environments[0]!.name).toBe('Updated')
     })
@@ -82,9 +80,7 @@ describe('environments store', () => {
   describe('deleteEnvironment', () => {
     it('should remove environment from list', async () => {
       const store = useEnvironmentsStore()
-      store.environments = [
-        { id: '1', name: 'ToDelete', description: '', connection_mode: 'direct', created_at: '', updated_at: '', resource_count: 0, agent_status: null, agents_online: 0, registration_token: 'test-token' },
-      ]
+      store.environments = [makeEnv({ name: 'ToDelete' })]
       mockEnvironmentsApi.delete.mockResolvedValue({ ok: true })
       await store.deleteEnvironment('1')
       expect(store.environments).toHaveLength(0)
@@ -94,9 +90,7 @@ describe('environments store', () => {
   describe('createResource', () => {
     it('should increment environment resource_count', async () => {
       const store = useEnvironmentsStore()
-      store.environments = [
-        { id: '1', name: 'Env', description: '', connection_mode: 'direct', created_at: '', updated_at: '', resource_count: 0, agent_status: null, agents_online: 0, registration_token: 'test-token' },
-      ]
+      store.environments = [makeEnv()]
       const newRes = { id: 'r1', name: 'Res', protocol: 'ssh', host: 'localhost', environment_id: '1', port: 22, username: '', config_json: '{}', color: null, sort_order: 0, created_at: '', updated_at: '' }
       mockResourcesApi.create.mockResolvedValue(newRes)
       await store.createResource('1', { name: 'Res', protocol: 'ssh', host: 'localhost' })
@@ -107,9 +101,7 @@ describe('environments store', () => {
   describe('deleteResource', () => {
     it('should decrement environment resource_count', async () => {
       const store = useEnvironmentsStore()
-      store.environments = [
-        { id: '1', name: 'Env', description: '', connection_mode: 'direct', created_at: '', updated_at: '', resource_count: 2, agent_status: null, agents_online: 0, registration_token: 'test-token' },
-      ]
+      store.environments = [makeEnv({ resource_count: 2 })]
       mockResourcesApi.delete.mockResolvedValue({ ok: true })
       await store.deleteResource('1', 'r1')
       expect(store.environments[0]!.resource_count).toBe(1)
@@ -117,9 +109,7 @@ describe('environments store', () => {
 
     it('should not decrement below zero', async () => {
       const store = useEnvironmentsStore()
-      store.environments = [
-        { id: '1', name: 'Env', description: '', connection_mode: 'direct', created_at: '', updated_at: '', resource_count: 0, agent_status: null, agents_online: 0, registration_token: 'test-token' },
-      ]
+      store.environments = [makeEnv()]
       mockResourcesApi.delete.mockResolvedValue({ ok: true })
       await store.deleteResource('1', 'r1')
       expect(store.environments[0]!.resource_count).toBe(0)

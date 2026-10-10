@@ -59,6 +59,13 @@ const envProtocols = computed(() => {
 
 const hasEnvironments = computed(() => store.environments.length > 0)
 
+// Counts agents, not environments: same measure as the per-card badge below,
+// which reads the backend-authoritative `agents_online`. Deriving it from
+// `agent_status` would report 1 per environment with any online agent.
+const onlineAgentCount = computed(() =>
+  store.environments.reduce((sum, e) => sum + e.agents_online, 0),
+)
+
 function openCreate() {
   editingEnv.value = null
   formName.value = ''
@@ -188,7 +195,7 @@ async function handleImport(event: Event) {
         <Badge>{{ store.environments.length }} {{ t('environments.count') }}</Badge>
       </span>
       <span class="badge-item">
-        <Badge tone="success">{{ store.environments.filter(e => e.agent_status === 'online').length }} {{ t('environments.agentsOnline') }}</Badge>
+        <Badge tone="success">{{ onlineAgentCount }} {{ t('environments.agentsOnline') }}</Badge>
       </span>
       <span class="badge-item">
         <Badge>{{ store.environments.reduce((sum, e) => sum + e.resource_count, 0) }} {{ t('environments.resourcesCount') }}</Badge>
@@ -269,7 +276,7 @@ async function handleImport(event: Event) {
           <div class="env-card-agents-header">
             {{ t('environments.agentsSection') }}
             <div class="env-card-agents-spacer"></div>
-            <span v-if="env.agents_online > 0" class="badge-sm badge-green">{{ t('environments.agentsOnlineCount', env.agents_online, { named: { count: env.agents_online } }) }}</span>
+            <span v-if="env.agents_online > 0" class="badge-sm badge-green">{{ t('environments.agentsOnlineBadge', { count: env.agents_online }) }}</span>
           </div>
           <div v-if="env.agent_status" class="env-card-agent-row">
             <span class="env-card-agent-icon">⟡</span>
@@ -281,8 +288,9 @@ async function handleImport(event: Event) {
           <div v-else class="env-card-no-agent">{{ t('environments.noAgentsRegistered') }}</div>
         </div>
 
-        <!-- Spacer: soaks up the leftover height, keeping the actions pinned
-             to the bottom without depending on them being the last child -->
+        <!-- Flex filler: soaks up the leftover height, keeping the actions pinned
+             to the bottom without depending on them being the last child.
+             Footer pinning is owned by this element alone — see `.env-card-fill`. -->
         <div class="env-card-fill"></div>
 
         <!-- Card Footer Actions -->
@@ -679,17 +687,20 @@ async function handleImport(event: Event) {
   padding: 4px 0;
 }
 
-/* Card Actions */
+/* Footer pinning lives here and nowhere else: the filler takes all leftover
+   card height, so the action bar below it sits flush with the card bottom.
+   The action bar carries no auto margin — a second mechanism doing the same
+   job would make the layout depend on which one happens to win. */
 .env-card-fill {
   flex: 1 1 auto;
 }
 
+/* Card Actions */
 .env-card-actions {
   display: flex;
   gap: 6px;
   padding: 12px 16px;
   border-top: 1px solid var(--border);
-  margin-top: auto;
 }
 
 .env-card-action {
