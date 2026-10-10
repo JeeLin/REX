@@ -157,8 +157,31 @@ fn supervisor_main() {
 /// 判定依据必须是 [`crypto::CredentialCrypto`] 自报的新生标记：`from_data_dir`
 /// 在 miss 时已经把新 key 写盘，事后再查 `.master-key` 是否存在恒为真，守卫会变成
 /// 永不触发的死代码。
-fn should_warn_data_key_mismatch(crypto: &crypto::CredentialCrypto, db: &Database) -> bool {
-    crypto.was_generated() && db.has_encrypted_config()
+///
+/// 该函数为 async：`db.has_encrypted_config()` 是同步 rusqlite 查询，必须透过
+/// `tokio::task::spawn_blocking` 移出 runtime worker 线程，否则会阻塞整个多线程
+/// runtime 的 worker 池，把所有 WebSocket 隧道（terminal / file / agent）拖挂。
+/// `JoinError`（spawn_blocking panic）按软失败语义处理：记 `tracing::error!`
+/// 后返回 false，不 panic、不阻塞启动 —— 正是本函数「软失败，不影响启动」的含义。
+async fn should_warn_data_key_mismatch(
+    crypto: &crypto::CredentialCrypto,
+    db: Arc<Database>,
+) -> bool {
+    // 保持原 `was_generated() && ...` 短路顺序：未生成新 key 时不发起
+    // spawn_blocking，避免无谓线程切换。
+    if !crypto.was_generated() {
+        return false;
+    }
+    match tokio::task::spawn_blocking(move || db.has_encrypted_config()).await {
+        Ok(has) => has,
+        Err(e) => {
+            tracing::error!(
+                error = %e,
+                "spawn_blocking for has_encrypted_config panicked; data-key mismatch guard skipped"
+            );
+            false
+        }
+    }
 }
 
 fn worker_main() {
@@ -209,7 +232,7 @@ fn worker_main() {
         // `.master-key` is already true by then and would never fire.
         // The Hub keeps running; we surface the mismatch loudly so it is not
         // mistaken for a healthy start.
-        if should_warn_data_key_mismatch(&crypto, &db) {
+        if should_warn_data_key_mismatch(&crypto, db.clone()).await {
             tracing::error!(
                 data_key_mismatch = true,
                 key_file_missing = true,
@@ -605,20 +628,20 @@ mod tests {
     /// 告警永不触发。这里把两个判定输入都取自真实调用（`was_generated()` /
     /// `has_encrypted_config()`），因此任一半边失效（key 不再上报新生、或密文
     /// 检测漏判）断言都会红。
-    #[test]
-    fn startup_data_key_guard_fires_only_on_generated_key_with_ciphertext() {
+    #[tokio::test]
+    async fn startup_data_key_guard_fires_only_on_generated_key_with_ciphertext() {
         use rex_hub::crypto::CredentialCrypto;
         use rex_hub::db::Database;
         use rex_hub::models::{NewEnvironment, NewResource};
 
         let dir = tempfile::tempdir().expect("create tempdir");
-        let db = Database::open(&dir.path().join("rex.db")).expect("open sqlite");
+        let db = Arc::new(Database::open(&dir.path().join("rex.db")).expect("open sqlite"));
 
         // 全新部署：新 key + 空库 → 不告警。
         let first_boot = CredentialCrypto::from_data_dir(dir.path()).expect("crypto");
         assert!(first_boot.was_generated());
         assert!(!db.has_encrypted_config());
-        assert!(!should_warn_data_key_mismatch(&first_boot, &db));
+        assert!(!should_warn_data_key_mismatch(&first_boot, db.clone()).await);
 
         // 有密文 + key 文件已在盘上 → 沿用原密钥，不告警。
         let env = db
@@ -647,7 +670,7 @@ mod tests {
 
         let restarted = CredentialCrypto::from_data_dir(dir.path()).expect("crypto");
         assert!(!restarted.was_generated());
-        assert!(!should_warn_data_key_mismatch(&restarted, &db));
+        assert!(!should_warn_data_key_mismatch(&restarted, db.clone()).await);
 
         // 密文仍在、`.master-key` 丢失 → 新 key + 密文，必须告警。
         std::fs::remove_file(dir.path().join(crypto::MASTER_KEY_FILE)).expect("remove key");
@@ -656,6 +679,6 @@ mod tests {
         assert!(db.has_encrypted_config());
         // 此处 `.master-key` 已重新落盘：改回按文件存在性判定会让这一条转红。
         assert!(dir.path().join(crypto::MASTER_KEY_FILE).exists());
-        assert!(should_warn_data_key_mismatch(&key_lost, &db));
+        assert!(should_warn_data_key_mismatch(&key_lost, db.clone()).await);
     }
 }
