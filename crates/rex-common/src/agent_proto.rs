@@ -21,6 +21,26 @@ pub enum AgentEvent {
     Close,
 }
 
+/// 向 Hub 发送会话建立成功消息（`send_session_error` 的对偶）。
+///
+/// Agent 侧所有「会话/探测已就绪」的成功回帧都走这里，避免各调用点手拼
+/// `AgentSessionMsg::SessionOpened` —— 字段增删时只改这一处。
+/// `subtype` 仅 SQL 会话上报探测出的方言，其余协议传 `None`。
+pub async fn send_session_opened(
+    evt_tx: &mpsc::Sender<AgentEvent>,
+    channel_id: &str,
+    request_id: &str,
+    subtype: Option<&str>,
+) {
+    let msg = AgentSessionMsg::SessionOpened(SessionOpened {
+        channel_id: channel_id.to_string(),
+        request_id: request_id.to_string(),
+        subtype: subtype.map(|s| s.to_string()),
+    });
+    let s = serde_json::to_string(&msg).unwrap_or_default();
+    let _ = evt_tx.send(AgentEvent::Text(s)).await;
+}
+
 /// 向 Hub 发送会话级错误消息。
 pub async fn send_session_error(
     evt_tx: &mpsc::Sender<AgentEvent>,
@@ -266,6 +286,48 @@ mod tests {
                 assert_eq!(e.error, "timeout");
             }
             _ => panic!("unexpected"),
+        }
+    }
+
+    /// `send_session_opened` 的线格式：`type=session_opened` + 字段逐字落在 payload，
+    /// 与 `send_session_error` 对偶（错误帧带 `request_id` 可选，成功帧必带）。
+    #[tokio::test]
+    async fn send_session_opened_frame_matches_proto_contract() {
+        let (tx, mut rx) = mpsc::channel::<AgentEvent>(4);
+        send_session_opened(&tx, "5", "req_2", Some("mysql")).await;
+        let Some(AgentEvent::Text(raw)) = rx.recv().await else {
+            panic!("must emit one frame");
+        };
+        let back: AgentSessionMsg = serde_json::from_str(&raw).unwrap();
+        match back {
+            AgentSessionMsg::SessionOpened(o) => {
+                assert_eq!(o.request_id, "req_2");
+                assert_eq!(o.channel_id, "5");
+                assert_eq!(o.subtype.as_deref(), Some("mysql"));
+            }
+            _ => panic!("expected session_opened"),
+        }
+    }
+
+    /// 非 SQL 会话：`subtype=None` 必须序列化为 `null` 且 Hub 侧反序列化后仍为 None，
+    /// 且成功帧与错误帧类型不同（Hub 据此区分「已就绪」与「失败」）。
+    #[tokio::test]
+    async fn send_session_opened_without_subtype_is_distinct_from_error_frame() {
+        let (tx, mut rx) = mpsc::channel::<AgentEvent>(4);
+        send_session_opened(&tx, "9", "req_3", None).await;
+        send_session_error(&tx, "9", Some("req_3"), "boom").await;
+
+        let AgentEvent::Text(opened_raw) = rx.recv().await.expect("opened frame") else {
+            panic!("expected text frame");
+        };
+        let AgentEvent::Text(err_raw) = rx.recv().await.expect("error frame") else {
+            panic!("expected text frame");
+        };
+        assert!(opened_raw.contains("session_opened"));
+        assert!(err_raw.contains("session_error"));
+        match serde_json::from_str::<AgentSessionMsg>(&opened_raw).unwrap() {
+            AgentSessionMsg::SessionOpened(o) => assert!(o.subtype.is_none()),
+            _ => panic!("expected session_opened"),
         }
     }
 
