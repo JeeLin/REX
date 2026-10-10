@@ -3,63 +3,63 @@
 ## [0.94.0] - 2026-10-08
 
 ### Added
-- **SSH KEX compatibility**: `rex-ssh` now sets `Config::preferred.kex`, appending legacy `ecdh-sha2-nistp256` + `diffie-hellman-group14-sha1` **last**, so modern servers still negotiate MLKEM/curve25519 but legacy sshd (e.g. old embedded/box sshd) can complete key exchange (fixes `SSH_ERR_KEX_NO_COMMON_ALGO`).
-- **Data-key guardrail (soft-fail)**: at Hub startup, if the master key was missing while the database still holds encrypted credentials, the Hub logs an **error** naming the mismatch and keeps running (soft-fail: it never blocks startup). This surfaces the problem at boot instead of at first connect. Recovery is still "restore the original `.master-key`"; there is no key re-injection mechanism.
+- **SSH KEX 兼容性**：`rex-ssh` 现在设置 `Config::preferred.kex`，把 legacy `ecdh-sha2-nistp256` + `diffie-hellman-group14-sha1` **追加在末尾**，使现代服务器仍能协商 MLKEM/curve25519，而 legacy sshd（如老旧嵌入式/盒式 sshd）也能完成密钥交换（修复 `SSH_ERR_KEX_NO_COMMON_ALGO`）
+- **主密钥兜底检查（soft-fail）**：Hub 启动时若主密钥缺失、而数据库里仍存有加密凭据，Hub 打一条**错误**日志点名该不一致并继续运行（soft-fail：绝不阻塞启动）。这把问题暴露在启动时点而非首次连接时。恢复方式仍是「还原原始 `.master-key`」；不存在密钥重新注入机制
 
 ### Fixed
-- **Agent-mode test connections**: the connection *test* probe for `mysql` / `postgresql` / `sql` / `redis` now routes through the Agent tunnel when `connection_mode == "agent"`, matching the data plane. Previously the Hub TCP-probed directly and failed with `No route to host` for intranet databases while the real connection worked fine.
-- **Export no longer leaks ciphertext**: resource/environment export surfaces decryption-failure as an error instead of silently persisting the encrypted blob (previously import would double-encrypt).
-- **Runtime decrypt failures humanized**: credential-decryption failures during resource connect are now surfaced as a readable message across `resource_api` / `resource_conn` / `terminal_ws` / `env_api` (single canonical message, reusing v0.93 error classification).
-- Env-card UI: action-button bar anchors to the card bottom when no Agent is online; the "1 online" badge only renders when `agent_status === 'online'`.
+- **Agent 模式测试连接**：`mysql` / `postgresql` / `sql` / `redis` 的连接*测试*探针在 `connection_mode == "agent"` 时改走 Agent 隧道，与数据面一致。此前 Hub 直接做 TCP 探测，对内网数据库会以 `No route to host` 失败，而真实连接本身正常
+- **导出不再泄漏密文**：资源/环境导出把解密失败暴露为错误，不再静默把加密块落库（此前会导致导入二次加密）
+- **运行时解密失败文案可读化**：资源连接期间的凭据解密失败现在在 `resource_api` / `resource_conn` / `terminal_ws` / `env_api` 统一暴露为可读文案（单一权威文案，复用 v0.93 错误分类）
+- Env 卡片 UI：操作按钮栏由单个 flex filler（`.env-card-fill`）撑底，固定在卡片底部；在线 Agent 徽标展示后端权威的 `agents_online` 计数，仅在 `agents_online > 0` 时渲染。工具栏的「Agents online」总数改为统计所有环境下的 Agent 数，而非「有任一 Agent 在线的环境数」
 
 ## [0.93.0] - 2026-10-07
 
 ### Added
-- **Structured, classified tunnel connect failures**: `tunnel_ws` `TunnelMsg::Error` now carries `code` / `stage` / `retryable` / `message` (six bare-string failures → `FailureKind` constants `client`/`agent`/`dispatch`/`agent_error`/`agent_response`/`agent_channel`/`timeout`).
-- **Single error-classification source**: `ErrorPayload` / `ConnFailure` / `ErrorCode` + `ProtoKind` (`Ssh`/`Sql`/`Redis`/`MongoDb`/`Tunnel`) with `wire_code(proto, root)` moved into shared `error.rs`. SSH wire codes unchanged for compatibility.
-- **SQL / Redis / Mongo connection-error classification by stage**: failures flow through `connect_error_response_with_stage` → `code = <SQL|REDIS|MONGODB>_<root>` + `stage` (`dns`/`tcp`/`tls`/`auth`/`timeout`/`connect`) + `retryable`; surfaced in the frontend toast via `e.code`.
-- **Audit dimension filters**: `GET /api/audit-log` and `/api/audit-log/stats` accept `resource_id` and `agent_id`; UI gains Resource + Agent filter controls alongside the existing Environment filter.
-- **Audit scoped writes**: all `audit_log(` writes in `sql_api`/`file_api`/`redis_api`/`mongodb_api`/`tunnel_ws`/`agent_ws`/`terminal_ws` now carry `environment_id`/`resource_id`/`agent_id`; zero-match stats are `COALESCE`d and write failures `tracing::error!`.
+- **隧道连接失败结构化并分类**：`tunnel_ws` 的 `TunnelMsg::Error` 现在携带 `code` / `stage` / `retryable` / `message`（六处裸字符串失败收敛为 `FailureKind` 常量 `client`/`agent`/`dispatch`/`agent_error`/`agent_response`/`agent_channel`/`timeout`）
+- **统一错误分类来源**：`ErrorPayload` / `ConnFailure` / `ErrorCode` 与 `ProtoKind`（`Ssh`/`Sql`/`Redis`/`MongoDb`/`Tunnel`），`wire_code(proto, root)` 迁入共享 `error.rs`。SSH wire code 为兼容性保持不变
+- **SQL / Redis / Mongo 按阶段分类连接错误**：失败经 `connect_error_response_with_stage` 输出 `code = <SQL|REDIS|MONGODB>_<root>` + `stage`（`dns`/`tcp`/`tls`/`auth`/`timeout`/`connect`）+ `retryable`，前端 toast 经 `e.code` 呈现
+- **审计维度筛选**：`GET /api/audit-log` 与 `/api/audit-log/stats` 接受 `resource_id` 与 `agent_id`；UI 在既有 Environment 筛选旁增加 Resource + Agent 筛选控件
+- **审计写入带维度**：`sql_api`/`file_api`/`redis_api`/`mongodb_api`/`tunnel_ws`/`agent_ws`/`terminal_ws` 中所有 `audit_log(` 写入均带上 `environment_id`/`resource_id`/`agent_id`；零匹配统计用 `COALESCE` 处理，写入失败打 `tracing::error!`
 
 ### Fixed
-- `AuditLogPage` uses `Promise.allSettled`: a single stats/list failure no longer blanks the whole table; partial results render with a warning toast + failure counter + watermark.
-- Cancel-during-conflict no longer clobbers a `canceled` row to `failed`; cancel preserves `.rex.part` cleanup (cooperative `is_canceled()` DB checks, no `AbortHandle`).
-- Transfer `Fail`/`Rename` errors land `Failed` with reason instead of sticking at `running`; zero-byte sources copy correctly; skipped files no longer over-report progress.
-- Audit CSV export produces a toast instead of an unhandled rejection.
+- `AuditLogPage` 改用 `Promise.allSettled`：单条 stats/list 失败不再整表空白；部分结果带警告 toast + 失败计数 + 水印渲染
+- 冲突处理中取消不再把 `canceled` 行覆盖成 `failed`；取消保留 `.rex.part` 清理（协作式 `is_canceled()` DB 检查，无 `AbortHandle`）
+- 传输 `Fail`/`Rename` 错误落到 `Failed` 并带原因，不再卡在 `running`；零字节源可正确复制；跳过文件不再超报进度
+- 审计 CSV 导出走 toast，不再产生未处理 rejection
 
 ## [0.92.0] - 2026-10-06
 
-_(approximate date — no 0.92.0 bump commit or git tag exists in the repo; dated from the milestone completion marker)_
+_(大致日期——仓库中不存在 0.92.0 的 bump commit 或 git tag；按里程碑完成标记推断)_
 
 ### Added
-- **Real folder sync engine** over the v0.91.0 task model: `SyncDirection`, `CompareBasis`, `SyncOptions` (include/exclude globs, `delete_orphans`), `SyncPlan` with `SyncActionKind`.
-- **Sync REST API**: `POST /api/files/sync` (create), `POST /api/files/sync/preview` (dry-run), `GET /api/files/sync/{id}`, `DELETE /api/files/sync/{id}`. Sync tasks reuse `transfer_task` via a new `kind` column (`transfer | sync`) + `sync_options` JSON.
-- **Sync lifecycle / phases**: `pending → scanning → planning → running → verifying → completed/failed/canceled`, localized via `files.syncPhase*`.
-- `chmod` over the agent tunnel (`POST /api/file/chmod` + `TunnelKind::Chmod`); SFTP list/stat populate `permissions`, S3 populate `acl`/`storage_class`.
-- SSH terminal fatal-error handling (`SSH_CONFIG_DECRYPT_FAILED`/`SSH_CONFIG_INVALID`/`RESOURCE_NOT_FOUND`/`ENVIRONMENT_NOT_FOUND`/`HOST_REQUIRED`/`AUTH_FAILED`, `retryable=false`) so terminals stop retrying on non-recoverable config errors.
-- Agent-side SSH error diagnostics: russh/io errors → `stage` + `code` (`SSH_ERR_AUTH_FAILED`/`SSH_ERR_PRIVATE_KEY_DECODE`/`SSH_ERR_KEX_NO_COMMON_ALGO`/`…`) forwarded to the Hub.
-- Hub session release on terminal-tab close: `close` frame evicts the `russh` session from the Agent pool (fixes lingering reconnect).
-- **Path-nesting guard**: `POST /api/files/sync(preview)` rejects a target inside the same-resource source (HTTP 400, `SYNC_PATH_NESTED`); frontend `useFiles.openSync` mirrors the check.
-- FolderSyncDialog rebuilt into a real sync dialog (direction / compare-by / include+exclude / delete-orphans / preview / start).
+- **真实目录同步引擎**，基于 v0.91.0 的任务模型：`SyncDirection`、`CompareBasis`、`SyncOptions`（include/exclude glob、`delete_orphans`）、带 `SyncActionKind` 的 `SyncPlan`
+- **同步 REST API**：`POST /api/files/sync`（创建）、`POST /api/files/sync/preview`（试运行）、`GET /api/files/sync/{id}`、`DELETE /api/files/sync/{id}`。同步任务复用 `transfer_task`，新增 `kind` 列（`transfer | sync`）+ `sync_options` JSON
+- **同步生命周期/阶段**：`pending → scanning → planning → running → verifying → completed/failed/canceled`，经 `files.syncPhase*` 本地化
+- 经 Agent 隧道的 `chmod`（`POST /api/file/chmod` + `TunnelKind::Chmod`）；SFTP 的 list/stat 填充 `permissions`，S3 填充 `acl`/`storage_class`
+- SSH 终端致命错误处理（`SSH_CONFIG_DECRYPT_FAILED`/`SSH_CONFIG_INVALID`/`RESOURCE_NOT_FOUND`/`ENVIRONMENT_NOT_FOUND`/`HOST_REQUIRED`/`AUTH_FAILED`，`retryable=false`），使终端对不可恢复的配置类错误不再重试
+- Agent 侧 SSH 错误诊断：russh/io 错误 → `stage` + `code`（`SSH_ERR_AUTH_FAILED`/`SSH_ERR_PRIVATE_KEY_DECODE`/`SSH_ERR_KEX_NO_COMMON_ALGO`/`…`）并转发给 Hub
+- 终端标签关闭时 Hub 侧释放会话：`close` 帧把 `russh` 会话从 Agent 连接池中逐出（修复残留重连）
+- **路径嵌套保护**：`POST /api/files/sync/preview` 拒绝目标位于同资源源目录之内（HTTP 400，`SYNC_PATH_NESTED`）；前端 `useFiles.openSync` 做同样校验
+- FolderSyncDialog 重做为真正的同步对话框（方向 / 比较依据 / include+exclude / delete-orphans / 预览 / 开始）
 
 ### Changed
-- SFTP `upload` uses `seek(offset)` for byte-accurate resume; S3 `offset>0` takes the multipart-resume path.
+- SFTP `upload` 改用 `seek(offset)` 实现按字节精确续传；S3 在 `offset>0` 时走分片续传路径
 
 ### Removed
-- Dead browser file API methods (`statFile`, `listMultipartUploads`, `resumeMultipartUpload`, `abortMultipartUpload`) and backend `/stat`, `/s3/multipart-*` routes.
+- 无用的浏览器文件 API 方法（`statFile`、`listMultipartUploads`、`resumeMultipartUpload`、`abortMultipartUpload`）与后端 `/stat`、`/s3/multipart-*` 路由
 
 ## [0.91.0] - 2026-10-05
 
 ### Added
-- **Transfer task model + persistent queue**: `TransferTask` / `ConflictPolicy` (`overwrite`/`skip`/`rename`/`fail`) / `TransferStatus`, persisted in `transfer_task` (with `status`/`created_at` indexes) + `models.rs`.
-- **File-transfer REST API**: `GET /api/file/transfer` (list), `GET /api/file/transfer/{id}` (single + live progress), `POST /api/file/transfer/{id}/cancel`. Server-side only — browser memory never holds file bytes.
-- **Server-side direct transfer**: `POST /api/file/transfer/action {op, src, dst, conflict}` routes drag/drop/copy/move through a direct source→target connector instead of `download→blob→upload` via the browser.
-- **FileConnector capability model**: `FileConnector::capability()` / `GET /api/files/connector/{resource_id}/capability` replaces 6 `downcast_ref` sites; S3 presigned/ACL/multipart now work in agent mode, SFTP reports `chmod`.
-- **WebSocket transfer progress**: `GET /ws/files` broadcasts `TransferProgressEvent` live progress/done — replaces polling in the frontend `useTransferStore`.
-- `FilesPage.vue` split into `FilesPage`/`FilesToolbar`/`FilesGrid`/`FilesList`/`FilesDrawer` + shared `useFiles`/`useTransfer` composables.
+- **传输任务模型 + 持久化队列**：`TransferTask` / `ConflictPolicy`（`overwrite`/`skip`/`rename`/`fail`）/ `TransferStatus`，持久化到 `transfer_task`（含 `status`/`created_at` 索引）+ `models.rs`
+- **文件传输 REST API**：`GET /api/file/transfer`（列表）、`GET /api/file/transfer/{id}`（单条 + 实时进度）、`POST /api/file/transfer/{id}/cancel`。仅在服务端——浏览器内存从不持有文件字节
+- **服务端直传**：`POST /api/file/transfer/action {op, src, dst, conflict}` 把拖拽/复制/移动路由到源→目标的直连连接器，取代经浏览器的 `download→blob→upload`
+- **FileConnector 能力模型**：`FileConnector::capability()` / `GET /api/files/connector/{resource_id}/capability` 替换 6 处 `downcast_ref`；S3 presigned/ACL/multipart 现可在 Agent 模式下工作，SFTP 上报 `chmod`
+- **WebSocket 传输进度**：`GET /ws/files` 广播 `TransferProgressEvent` 实时进度/完成——取代前端 `useTransferStore` 中的轮询
+- `FilesPage.vue` 拆分为 `FilesPage`/`FilesToolbar`/`FilesGrid`/`FilesList`/`FilesDrawer` + 共享的 `useFiles`/`useTransfer` composable
 
 ### Fixed
-- Conflict `Fail`/`Rename` now land `Failed` (were stuck `running`); cancel is cooperative (no `AbortHandle`) and preserves `.rex.part` cleanup; zero-byte sources copy correctly; skipped files no longer inflate progress; preflight failures persist to the task `error` and broadcast on `/ws/files`.
+- 冲突 `Fail`/`Rename` 现落到 `Failed`（此前卡在 `running`）；取消为协作式（无 `AbortHandle`）并保留 `.rex.part` 清理；零字节源可正确复制；跳过文件不再虚增进度；预检失败落库到任务 `error` 并经 `/ws/files` 广播
 
 ## [0.90.1] - 2026-10-03
 

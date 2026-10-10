@@ -45,9 +45,16 @@ cargo clippy --workspace --all-targets
 cargo test --workspace
 ```
 
-`cargo test --workspace` 由 CI 执行——`.github/workflows/ci.yml` 是仓库唯一 workflow，触发条件为 `on: push: tags: ['v*']`，**普通 push 不触发**。本地低内存机器上 `rex-hub` 的测试二进制会在链接阶段被 OOM killer 杀掉（`cc ... collect2: fatal error: ld terminated with signal 9`），此时本地可执行 `cargo fmt --check`、`cargo clippy`、`cargo check --workspace`，以及 `cargo test -p <小 crate>` 补部分证据（如 `-p rex-ssh` 可正常链接运行）。测试与覆盖率项本地无法自证时，如实记录「不可执行 + 原因」，不得记为通过。
+`cargo test --workspace` 由 CI 执行——`.github/workflows/ci.yml` 是仓库唯一 workflow，触发条件为 `on: push: tags: ['v*']`，**普通 push 不触发**。但本地**可以**执行：低内存机器上给 `rex-hub` 测试二进制链接时的失败多来自磁盘而非内存，`cargo test --workspace -j 1`（限并发压峰值内存）实测可跑完（v0.94.0：560 passed / 0 failed）。跑之前先确认两件事，缺任一项都会中途失败：
+
+- **磁盘**：`rex-hub` 全量测试产物约 8-9 GiB，磁盘不足时报 `cc: No space left on device (os error 28)`（易被误判为 OOM）。先 `df -h /` 确认，空间紧张用 `cargo clean` 释放。
+- **原生工具链**：`rex-sip/build.rs` 用 CMake 静态链 libre/baresip、bindgen 需要 libclang，缺 `cmake` / `clang` 时构建即失败（`failed to spawn build command: NotFound`）。Debian/Ubuntu 下装 `cmake` 与 `clang libclang-dev llvm-dev`。
+
+即便如此，测试与覆盖率项**若**确实无法本地自证，如实记录「不可执行 + 根因」，不得记为通过；也不要把「环境因素导致失败」直接写成「环境限制」——磁盘、工具链这类**可修复因素**应先排除再下结论。
 
 不要试图用 `CARGO_PROFILE_*_DEBUG=0` 削减 debuginfo 来降低链接内存——变更 profile 会使全部 crate fingerprint 失效、触发全量重编，极易把磁盘撑满并导致 shell 完全不可用。需要腾空间时先 `df -h` 确认，再 `cargo clean`。
+
+覆盖率：本项目暂不设**阻塞性**覆盖率门禁——唯一 CI 门禁仍是 `cargo fmt` / `clippy` / `test --workspace`。从 v0.95.0 起，CI 新增 `cargo llvm-cov --workspace --textfile` 以**仅报告** Rust workspace 行覆盖率（目标 `≥85%`），报告写入 CI Artifacts + PR 评论，但**不阻断合并**；下个里程碑视达标情况酌定是否转为阻塞门禁。`cargo llvm-cov` 未安装时本地不测覆盖率，如实记「未测量」；步骤6 报告中的覆盖率项引用本行「报告不阻断、阈值 v0.95.0 起 85%」即可，不得再列为「阈值未定义」。
 
 前端（`packages/rex-console-web/`）：
 ```bash
