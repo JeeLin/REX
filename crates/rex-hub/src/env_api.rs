@@ -217,30 +217,27 @@ async fn export_environments(State(state): State<AppState>) -> ApiResult<ExportD
             .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?
             .map_err(|e| err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
 
-        let mut export_resources = Vec::with_capacity(resources.len());
-        for mut r in resources {
-            // 解密 config_json 以便导出明文密码，import 时会重新加密
-            if crate::resource_conn::has_config_json(&r.config_json) {
-                match state.crypto.decrypt(&r.config_json) {
-                    Ok(dec) => r.config_json = dec,
-                    Err(_) => {
-                        return Err(err(
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            crate::error::CREDENTIAL_DECRYPT_MSG,
-                        ));
-                    }
+        // 解密 config_json 以便导出明文密码，import 时会重新加密
+        let export_resources: Vec<ExportResource> = resources
+            .into_iter()
+            .map(|mut r| {
+                if crate::resource_conn::has_config_json(&r.config_json) {
+                    r.config_json = state
+                        .crypto
+                        .decrypt(&r.config_json)
+                        .map_err(|_| crate::resource_conn::credential_decrypt_error())?;
                 }
-            }
-            export_resources.push(ExportResource {
-                name: r.name,
-                protocol: r.protocol,
-                host: r.host,
-                port: r.port,
-                username: r.username,
-                config_json: r.config_json,
-                color: r.color,
-            });
-        }
+                Ok(ExportResource {
+                    name: r.name,
+                    protocol: r.protocol,
+                    host: r.host,
+                    port: r.port,
+                    username: r.username,
+                    config_json: r.config_json,
+                    color: r.color,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         export_envs.push(ExportEnvironment {
             name: env.name.clone(),
@@ -319,23 +316,22 @@ async fn import_environments(
         for imp_res in &imp_env.resources {
             let db = state.db.clone();
             let env_id = env.id.clone();
-            // 重新加密 config_json（导出时已解密为明文）
-            let config_json = imp_res.config_json.as_deref().and_then(|cfg| {
-                if !crate::resource_conn::has_config_json(cfg) {
-                    Some(cfg.to_string())
-                } else {
-                    match state.crypto.encrypt(cfg) {
-                        Ok(enc) => Some(enc),
-                        Err(_) => {
-                            tracing::warn!(
-                                resource_name = %imp_res.name,
-                                "config_json re-encrypt failed (data key mismatch)"
-                            );
-                            None
-                        }
-                    }
-                }
-            });
+            // 重新加密 config_json（导出时已解密为明文）。加密失败即当场返回，
+            // 不再回落到 None 后由调用方二次推导失败。
+            let config_json = match imp_res.config_json.as_deref() {
+                None => None,
+                Some(cfg) if !crate::resource_conn::has_config_json(cfg) => Some(cfg.to_string()),
+                Some(cfg) => Some(state.crypto.encrypt(cfg).map_err(|_| {
+                    tracing::warn!(
+                        resource_name = %imp_res.name,
+                        "config_json re-encrypt failed (data key mismatch)"
+                    );
+                    err(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        crate::error::CREDENTIAL_DECRYPT_MSG,
+                    )
+                })?),
+            };
             let new_res = crate::models::NewResource {
                 name: imp_res.name.clone(),
                 protocol: imp_res.protocol.clone(),
@@ -347,17 +343,6 @@ async fn import_environments(
                 color: imp_res.color.clone(),
                 sort_order: None,
             };
-            if new_res.config_json.is_none()
-                && imp_res
-                    .config_json
-                    .as_deref()
-                    .is_some_and(crate::resource_conn::has_config_json)
-            {
-                return Err(err(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    crate::error::CREDENTIAL_DECRYPT_MSG,
-                ));
-            }
             let _ =
                 tokio::task::spawn_blocking(move || db.create_resource(&env_id, &new_res)).await;
         }

@@ -4,9 +4,12 @@
 /// SSH 的 `load_resource_conn` (terminal_ws.rs) 是最早实现的版本，
 /// 包含 SSH 特有字段（use_agent, agent_id, keepalive_interval）。
 /// 本模块提供更通用的版本，适用于 MySQL/PostgreSQL/Redis/SFTP/SQLite/S3/SIP。
+use axum::http::StatusCode;
+use axum::Json;
 use serde_json::Value as JsonValue;
 
 use crate::app::AppState;
+use crate::error::ErrorBody;
 
 /// 从 DB 加载的资源连接信息（host/port/username + 解密后的 config_json）
 ///
@@ -101,12 +104,28 @@ pub fn has_config_json(config_json: &str) -> bool {
     !config_json.is_empty() && config_json != "{}"
 }
 
+/// `config_json` 解密失败 → 500 响应的唯一出口。
+///
+/// 资源读取（`resource_api::get_resource`）与环境导出（`env_api::export_environments`）
+/// 是同构块：同一 `has_config_json` → `decrypt` → 失败即 500 + 同一条
+/// [`crate::error::CREDENTIAL_DECRYPT_MSG`]。文案/状态码任一处单独改即产生用户
+/// 可见口径分叉，故收敛到此处。
+///
+/// `list_resources` 的「置空 + warn」是批量列表的第三种策略（不因单条坏数据让
+/// 整个列表失败），刻意不走本 helper。
+pub fn credential_decrypt_error() -> (StatusCode, Json<ErrorBody>) {
+    crate::error::api_error(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        crate::error::CREDENTIAL_DECRYPT_MSG,
+    )
+}
+
 /// Fall back to `root` for an empty username. **Only called at SSH/SFTP
 /// entry points**: `terminal_ws::load_resource_conn`, the direct `sftp`/`ssh`
 /// branch of `file_api`, `file_api::agent_file_config` (the agent-mode file
 /// entry, forwarded to the SSH/SFTP branch of `agent_file.rs`) and
-/// `resource_api::agent_test_connect_config` (the agent-mode test-connection
-/// entry).
+/// `merge_resource_config` (the agent-mode connect-config builder, used by
+/// both agent entries above and `resource_api`'s test-connection entry).
 ///
 /// 连接池键是 `user@host:port`（`rex_ssh::pool`），这些入口口径不一致会让
 /// SFTP 拿到与终端不同的键 → 必然新建连接，且以空用户名认证必然失败。
@@ -121,12 +140,17 @@ pub fn normalize_username(username: &str) -> String {
     }
 }
 
-/// 构建下发给 Agent 的连接 config。
+/// 构建下发给 Agent 的连接 config（**仅适用于 agent-mode 的 connect/probe 下发**）。
+///
+/// 调用方是三条 agent-mode 入口，形状覆盖 redis/sql/mysql/postgresql/sqlite/
+/// s3/sip 全协议，不是 ssh 专用：
+/// - `file_api::agent_file_config`（文件数据面 → `agent_file.rs`）
+/// - `resource_api` 的测试连接探测（`test_connect_via_agent`）
 ///
 /// 以 `host`/`port` 为骨架并入 `config` 的键，再以顶层 `username`（经
 /// [`normalize_username`]）覆盖同名键——`config` 中的历史 `host`/`port`/`username`
-/// 键被顶层字段覆盖，与 `agent_test_connect_config` / `agent_file_config` 两处
-/// 既有行为一致。端口默认（22）由调用方决定传入，本函数不补默认。
+/// 键被顶层字段覆盖，与 `agent_file_config` 的既有行为一致。端口默认（22）由
+/// 调用方决定传入，本函数不补默认。
 ///
 /// `config` 非 `Object`（如 `Null`）时不合并任何键，行为与既有
 /// `if let Value::Object(m) = ... { merge }` 恰一致。
