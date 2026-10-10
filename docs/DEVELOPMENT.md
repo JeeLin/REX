@@ -176,6 +176,7 @@ rex-agent = 所有 crate（无前端）
 | **v0.92.0** | 真实目录同步（SFTP+S3）（minor，server-side 直连搬运 + 传输任务模型 + 双面板 diff 比较/冲突处理 + chmod/Sync 浏览/右键菜单 + 前端结构重构 + WS 进度推送；SSH 终端错误分类与会话生命周期修复：解密/配置/资源缺失失败→ fatal 帧止无限重连、关闭 tab 释放 Hub session、Agent SSH 错误码/阶段透传） | — | ✅ 已完成（v0.92.0） |
 | **v0.93.0** | 跨协议连接错误透传 + 审计归属补全（minor，sql/redis/mongo/tunnel 连接失败按阶段分类产稳定 ErrorCode + retryable、审计写入走 audit_log_scoped 维度过滤、传输失败落 terminal 状态、AuditLogPage Promise.allSettled 部分失败降级、95 个 i18n 键补全） | — | ✅ 已完成（v0.93.0） |
 | **v0.94.0** | 数据密钥守卫与环境卡缺陷修复（minor，启动期 `.master-key` 丢失软失败告警 + 解密失败统一人话、SSH KEX 旧算法兼容、测试连接协议无关化 Agent 转发（s3/sip/sqlite 补探针）、Agent 在线徽标与计数同口径；三轮审查 + 48 条 bug 全清） | — | ✅ 已完成（v0.94.0） |
+| **v0.95.0** | SSH 终端会话健壮性（patch，SSH 资源可重复打开 + 进度条类输出回显；2 条用户反馈缺陷，详见 `.mdflow/milestones/v0.95.0-ssh-terminal-robustness.md`） | — | 📋 已排期（v0.95.0） |
 ### M0：项目骨架重建
 
 **核心功能**：清空 `packages/rex-console-web` 与 `crates/*` 源码，按新设计系统重建最小可运行骨架。
