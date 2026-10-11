@@ -953,6 +953,16 @@
     "paste": "Paste",
     "paste denied": "Clipboard access denied. Use Ctrl+V to paste.",
     "reconnect": "Reconnect",
+    "search": {
+      "caseSensitive": "Case Sensitive",
+      "close": "Close (Esc)",
+      "next": "Next (Enter)",
+      "noResult": "No results",
+      "placeholder": "Find…",
+      "prev": "Previous (Shift+Enter)",
+      "regex": "Regex",
+      "wholeWord": "Whole Word"
+    },
     "selectAll": "Select All",
     "sessionDisconnected": "Session disconnected",
     "sftp": "SFTP",

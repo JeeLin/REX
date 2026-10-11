@@ -953,6 +953,16 @@
     "paste": "粘贴",
     "paste denied": "剪贴板访问被拒绝，请使用 Ctrl+V 粘贴。",
     "reconnect": "重连",
+    "search": {
+      "caseSensitive": "区分大小写",
+      "close": "关闭 (Esc)",
+      "next": "下一个 (Enter)",
+      "noResult": "无结果",
+      "placeholder": "查找…",
+      "prev": "上一个 (Shift+Enter)",
+      "regex": "正则表达式",
+      "wholeWord": "全词匹配"
+    },
     "selectAll": "全选",
     "sessionDisconnected": "会话已断开",
     "sftp": "SFTP",
