@@ -127,25 +127,43 @@ CREATE TABLE acp_sessions (
 );
 ```
 > 转录(历史消息)可先不落库, 靠 `session/load` 重放; 需要"跨设备留痕"再补 message 表。
+> 落点: `crates/rex-hub/src/migrations.sql`, 沿用 `CREATE TABLE IF NOT EXISTS` 约定
+> (现有 environments/resources/agents/audit_log/settings 都在这)。
 
 ### 5.2 通道一: 浏览器 ↔ Hub (`/ws/acp`)
 Hub 多会话中继, 消息直接映射 ACP 语义:
 - client→server: `session.new` / `session.open` / `prompt{blocks[]}` / `cancel` / `permission.reply{optionId}`
 - server→client: `session.ready` / `update{sessionUpdate}` / `permission.request{toolCall,options[]}` / `stop{stopReason}` / `error`
+> 落点: `crates/rex-hub/src/rex-hub.rs:461-472` 现有 `.route("/ws/terminal"…) / /ws/files / /ws/sip / /ws/tunnel`
+> 并列处加一行 + 一个 `acp_ws` handler 模块, 照 `terminal_ws` 模式, 纯加法。
 
 ### 5.3 通道二: Hub ↔ Node (复用 `/ws/agent` 隧道)
-- 新增 `TunnelKind::Acp`, 沿用现有 channel_id 多路复用。
+- 新增 `AgentSessionMsg` 变体(如 `acp_frame`): 隧道本来就按 `channel_id: String` 多路复用, 变体用 `#[serde(tag = "type")]` 区分(现有 `session_open/session_request/session_opened/session_error/session_response/file_chunk`, 见 `crates/rex-common/src/agent_proto.rs`)—— 纯加法, 不动现有变体。
 - 建链: Hub 下 `{"type":"acp_spawn","channel_id":N,"agent_key":..,"cwd":..}` → Node spawn agent, 回 `acp_spawned`;
-  之后该 channel 上的帧 = **换行分隔 ACP JSON-RPC**(对隧道不透明, Node 负责 pump stdin↔stdout)。
+  之后该 channel 上的帧 = **换行分隔 ACP JSON-RPC**(对隧道不透明, Node 负责 pump stdin↔stdout, 不解析 ACP)。
+  Hub 侧直接用 crate 自带 `Channel`/`Lines` 传输适配器"说" ACP, 不手写组帧。
 - 不采纳 ACP 的 HTTP/WS 草案传输做隧道(v1 稳定=stdio; HTTP/WS 互操作尚早) —— 直接桥 stdio 更稳。
 
-### 5.4 Rust 选型
-- 新增 workspace 依赖 `agent-client-protocol`(Zed 自用 crate, Apache-2.0) + `…-schema`。
-- Hub 实现其 `Client` trait: 驱动 `initialize → session/new|load → session/prompt`,
-  消费 `session/update`, 回应 `session/request_permission`。
+### 5.4 Rust 选型 (已对代码与 crate 双向核实)
+
+- 依赖 `agent-client-protocol`(Zed 自用, Apache-2.0), **精确 pin `="3.3.0"` + `features = ["process"]`**:
+  crate 大版本(3.x)≠协议版本, 线上 v1 靠运行时 `ProtocolVersion::V1` 选择;
+  SDK 发版极快(83 个版本, 3.0→3.3 只隔 4 天), 必须 pin, 线协议 v1 则稳定。
+  `process` 用 smol 系 spawn, 与本仓 tokio(`features = ["full"]`, 已含 process)无冲突,
+  官方 client 示例本身就跑在 `#[tokio::main]` 下。MSRV 1.88 / edition 2024, 当前 stable 可编。
+- **没有 Client trait 要实现**: `Client.builder()` 注册闭包 —
+  `.on_receive_notification::<SessionNotification>(…)` 消费 `session/update`(≥14 变体要做分发),
+  `.on_receive_request::<RequestPermissionRequest>(…)` 接 `session/request_permission`,
+  再 `.connect_with(transport, …)` 驱动 `initialize → session/new|load → session/prompt`。
+- 本机场景零手写帧: `AcpAgent::from_str("opencode acp")` 自动 spawn + 换行分隔 JSON-RPC 组帧。
+- `session/cancel` 是 **notification**(fire-and-forget, 无响应); `/ws/acp` 的 `cancel` 由 Hub 翻译成它。
+- 参考实现: 官方 `yolo_one_shot_client.rs`(~120 行, 正好是我们的流程:
+  spawn→initialize(V1)→session/new→session/prompt + update 打印 + 权限自动放行)。
+  注意 `agent-client-protocol-test` 是 `publish = false`, CI 的 mock 要照它的样子 vendor, 不能直接依赖。
 
 ### 5.5 M1 开工顺序(可并行/可测试)
-1. crate 接入 + Hub 侧 ACP client 封装; 用一个 echo mock agent 过 stdio 集成测试。
+1. crate 接入 + Hub 侧 ACP client 封装(照官方 yolo 示例); 用 vendor 的 echo mock agent 过 stdio 集成测试
+   (官方 test crate `publish = false`, 不能直接依赖)。
 2. `acp_sessions` 表 + 迁移。
 3. `/ws/acp` 服务端: session.new/open/prompt/cancel/permission 中继。
 4. Node 侧 ACP channel spawn + stdio 桥(或 M1 先在 Hub 本机 spawn 走捷径)。
