@@ -105,7 +105,57 @@ opencode `serve`/`web` = 服务端持会话,浏览器经 **REST + SSE**(`GET /ev
 一个 ACP 会话 = **Target(机器/项目) × via Node × Task(一段持续对话) × Result(记录+diff+产物)** ——
 正是 §2 统一模型在 Agent 侧的落地;会话即 Task 的具体实例。
 
-## 5. 具体改动计划 (由你确认后执行)
+## 5. M1 可落地骨架 (与两个分叉无关的公共底座)
+
+> 这节把 §4 落到可开工的粒度。以下骨架对"M1 先接 Node 还是先接 Hub 本地"、"首个 agent 选谁"**都不敏感** ——
+> 先把这层做出来, 任一方向都能立刻接上。
+
+### 5.1 数据: 会话表
+```sql
+CREATE TABLE acp_sessions (
+  id TEXT PRIMARY KEY,            -- REX 侧 uuid
+  acp_session_id TEXT NOT NULL,   -- ACP 分配的 opaque sessionId
+  node_id TEXT,                   -- 所在 Node(=agents.id); Hub 本地运行时 NULL
+  environment_id TEXT,            -- 归属环境
+  agent_key TEXT NOT NULL,        -- opencode | goose | gemini | ...
+  cwd TEXT NOT NULL,
+  title TEXT,
+  status TEXT NOT NULL,           -- active | idle | closed | error
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  last_active_at TEXT
+);
+```
+> 转录(历史消息)可先不落库, 靠 `session/load` 重放; 需要"跨设备留痕"再补 message 表。
+
+### 5.2 通道一: 浏览器 ↔ Hub (`/ws/acp`)
+Hub 多会话中继, 消息直接映射 ACP 语义:
+- client→server: `session.new` / `session.open` / `prompt{blocks[]}` / `cancel` / `permission.reply{optionId}`
+- server→client: `session.ready` / `update{sessionUpdate}` / `permission.request{toolCall,options[]}` / `stop{stopReason}` / `error`
+
+### 5.3 通道二: Hub ↔ Node (复用 `/ws/agent` 隧道)
+- 新增 `TunnelKind::Acp`, 沿用现有 channel_id 多路复用。
+- 建链: Hub 下 `{"type":"acp_spawn","channel_id":N,"agent_key":..,"cwd":..}` → Node spawn agent, 回 `acp_spawned`;
+  之后该 channel 上的帧 = **换行分隔 ACP JSON-RPC**(对隧道不透明, Node 负责 pump stdin↔stdout)。
+- 不采纳 ACP 的 HTTP/WS 草案传输做隧道(v1 稳定=stdio; HTTP/WS 互操作尚早) —— 直接桥 stdio 更稳。
+
+### 5.4 Rust 选型
+- 新增 workspace 依赖 `agent-client-protocol`(Zed 自用 crate, Apache-2.0) + `…-schema`。
+- Hub 实现其 `Client` trait: 驱动 `initialize → session/new|load → session/prompt`,
+  消费 `session/update`, 回应 `session/request_permission`。
+
+### 5.5 M1 开工顺序(可并行/可测试)
+1. crate 接入 + Hub 侧 ACP client 封装; 用一个 echo mock agent 过 stdio 集成测试。
+2. `acp_sessions` 表 + 迁移。
+3. `/ws/acp` 服务端: session.new/open/prompt/cancel/permission 中继。
+4. Node 侧 ACP channel spawn + stdio 桥(或 M1 先在 Hub 本机 spawn 走捷径)。
+5. 前端最小会话列表 + 聊天视图(文本 + tool_call + 权限确认)。
+
+### 5.6 仍待你拍板(只影响第 4/5 步的"从哪起")
+- M1 先落 **Node 上的 agent**(推荐, 差异化) 还是 **Hub 本机 agent**(最快)?
+- 首个接 **opencode**(`opencode acp`) 还是 **goose/gemini**?
+
+## 6. 具体改动计划 (由你确认后执行)
 
 ### 文档
 - `README.md`:标语 +「核心承诺」加"可达不可达 + 调度任务"。
@@ -127,7 +177,7 @@ opencode `serve`/`web` = 服务端持会话,浏览器经 **REST + SSE**(`GET /ev
 ### 门禁
 Rust: `cargo fmt --check` / `clippy --workspace --all-targets` / `test`; 前端 `bun run type-check/lint/build` —— 沿用 `AGENTS.md` 质量门禁,任务粒度小不改依赖。
 
-## 6. 边界判定 (什么时候改改就好)
+## 7. 边界判定 (什么时候改改就好)
 
 - 把 Agent 当作一种资源类型行不行？— 不行:它不是"Terminal"而是"Runtime"。
 - 引入多用户/RBAC 行不行？— 不行:违反硬约束。
