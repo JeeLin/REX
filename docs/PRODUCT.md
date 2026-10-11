@@ -351,9 +351,13 @@ CSS 变量（`--bg-deep` / `--bg-surface` / `--bg-elevated` / `--bg-hover` / `--
 - **对话视图**：消息流式输出、展示工具调用、处理 agent 发起的权限请求（单用户默认自动放行，可配置为逐次确认）。
 - **传输**：新增 `/ws/acp`，与 `/ws/terminal`、`/ws/files`、`/ws/sip` 并列。
 
-**布局**：所有 agent 与所有会话收在**一个页面** —— 左栏 agent 列表（含在线状态），
-顶部会话标签条（跨 agent 混排，每会话一个标签），中部对话区，底部输入区。
-复用工作空间已有的标签 / 窗格模型，不新增页面层级；可全屏。详见 `docs/POSITIONING.md` §4.1。
+**布局**：**agent 会话直接开在现有工作空间 (Workspace) 里**，不新建 agent 页面 ——
+沿用 §4 既定约束（"各资源控制台统一在工作空间格子内打开"）。
+`useTabs` 增加 `'acp'` 协议分支、`PaneLeaf.vue` 增加对话渲染分支（与 Redis / Files / SIP 并列）、
+连接树中 agent 与资源并列（点谁开谁）。详见 `docs/POSITIONING.md` §4.1。
+
+由此同时满足"统一管理"：agent 会话与 ssh / mysql / redis 分屏共存，
+一个 agent 在跑时仍可查看服务器 —— 单开页面则做不到。
 
 **本期边界**：只连本机跑着的 agent；远程 agent、任务派发、多 agent 编排均不在本期范围（见 `docs/POSITIONING.md` §5）。
 
@@ -376,7 +380,8 @@ CSS 变量（`--bg-deep` / `--bg-surface` / `--bg-elevated` / `--bg-hover` / `--
 ### 命名调整（随 §3.16）
 
 - 侧边栏「Agent 管理」（§3.11，隧道 agent）更名为「**节点**」—— 隧道是"把不可达变可达的通道"。
-- 侧边栏新增「**Agent**」入口，指向 §3.16 AI Agent 对话页。
+- **AI agent 不新增侧边栏入口**：出现在连接树中（环境 → 资源 / agent），点击即在工作空间开标签。
+  保持侧边栏不膨胀，同时与"所有控制台都在工作空间"的既定结构一致。
 - 文档与界面中，隧道 agent 一律称「节点」，AI agent 一律称「Agent」，避免同名异义。
 
 ---
