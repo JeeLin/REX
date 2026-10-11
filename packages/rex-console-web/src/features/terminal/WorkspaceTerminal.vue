@@ -77,6 +77,39 @@ let ws: WebSocket | null = null
 let resizeObserver: ResizeObserver | null = null
 let inputBuffer = ''
 
+// 单个流式解码器：WS 分帧不会对齐 UTF-8 字符边界（一个 emoji 的 4 字节
+// 可能被拆到两帧），故用 stream 模式让不完整序列留在解码器内部缓冲、
+// 等后续字节补齐后再输出。
+const utf8Decoder = typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8') : null
+
+/**
+ * 解服务端 base64 帧为终端可写的字符串。
+ *
+ * 后端 `terminal_ws.rs` 对 Rust `String` 的 UTF-8 **原始字节**做 base64
+ * （`base64::encode(data.as_bytes())`）。而 `atob()` 返回的是 binary string
+ * —— 每个字符码点恰好等于一个字节（0–255）。把它直接交给 `terminal.write()`
+ * 会被 xterm **再做一次 UTF-8 编码**，于是所有 ≥ 0x80 的字节被双重编码：
+ *   `中` = E4 B8 AD → atob 得 U+00E4 U+00B8 U+00AD → xterm 编码成
+ *   C3 A4 C2 B8 C2 AD（6 字节）→ 乱码。
+ * 纯 ASCII 字节（< 0x80）两次编码结果相同，所以此前只在含非 ASCII 的输出上
+ * 暴露（中文、进度条里的非 ASCII 符号等）。
+ *
+ * 正确做法是先把 base64 还原成字节，再用 TextDecoder 按 UTF-8 解码。
+ */
+function decodeBase64Utf8(b64: string): string {
+  let binary: string
+  try {
+    binary = atob(b64)
+  } catch {
+    return '' // 畸形 base64：丢弃该帧，不让整个 onmessage 抛掉
+  }
+  if (!utf8Decoder) return binary
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  // stream:true —— 跨帧的残缺序列留在解码器缓冲，等下一帧补齐
+  return utf8Decoder.decode(bytes, { stream: true })
+}
+
 // Auto-reconnect
 let reconnectAttempts = 0
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -391,7 +424,7 @@ function connectSession() {
           // Session established
           break
         case 'terminal.data': {
-          const data = atob(msg.payload.data)
+          const data = decodeBase64Utf8(msg.payload.data)
           terminal?.write(data)
           break
         }
