@@ -14,7 +14,8 @@ REX 存在的根本理由不是“多个资源用多个工具”，而是：**�
 ## 1. 一句话定位
 
 REX = **个人自托管的统一管理平台**：在同一个界面管你的远程资源与你的本地 Agent，
-并经部署在各网络的节点，把任务派下、结果留痕。
+并经部署在各网络的节点(用 **ACP** 与跑在你机器上的编码 agent 对话)，把任务派下、结果留痕。
+> 即:除了"手动操作远程资源",还能"在 REX 里新建/打开一个 agent 会话对话" —— 见 §4。
 
 - **单用户 · 自托管 · 数据自主 · 深色优先** — 沿用原有四个硬约束不变。
 - **不引入**：多用户 / RBAC / 团队协作 / 人工审批 —— 见 `AGENTS.md` 硬性约束。
@@ -60,15 +61,49 @@ REX = **个人自托管的统一管理平台**：在同一个界面管你的远�
 
 > 注: Multica 是团队协作平台, REX 是个人自托管。我们借的是**如何组织"活"**, 而不是借多租户模型。
 
-## 4. 默认执行假设 (a) — 未确定即为草案
+## 4. Agent 侧落地:ACP 会话 (Agent Client Protocol)
 
-由于思路仍在明晗,本草案 **默认假设**:
+> 本节取代早期"确定性 playbook"的默认假设。ACP 是**标准协议**(类比 LSP),
+> REX 只做 **ACP 客户端 + 会话 broker**, 不把 LLM 烧进 REX —— 这才是"借鉴 Multica"
+> (其 agent runtime 皆走 ACP)的真正落点。
 
-- **(a) 确定性执行**: Node 自主"干活"先按固定 playbook/脚本; 结果确定可复现, **零 LLM 依赖**,
-  贴合 REX 单二进制自守理念。`tasks.config_json` 存指令/脚本体; executor 在 Node 本地运行。
-- **暂不引入**:外部 AI CLI (codex/claude 等)的对接 — 独立后续, 会牵"单二进制自包含"理念。
+### 4.1 为什么是 ACP
+- **标准**:Zed 发起,`agentclientprotocol` 组织维护,Apache-2.0,稳定 **v1**;客户端=编辑器,服务端=agent。
+- **Rust 一等公民**:官方 crate `agent-client-protocol`(Zed 自己用的就是它)+ `…-http` 传输版。
+- **生态现成**:opencode `opencode acp`、Gemini CLI `gemini --acp`、Goose `goose acp`、
+  Qwen `qwen --acp` 皆原生;Claude Code / Codex 经官方 shim(`claude-agent-acp` / `codex-acp`)。
+- **会话原生**:`session/new` / `session/load` / `session/prompt` / `session/cancel`
+  正好对上"新建或打开会话对话"。
 
-> (a) 决定工程里程碴,不改变本 §1 定位。换 (b) LLM 自主只改 §5 的执行器实现。
+### 4.2 关键决策:不走"交互式 SSH 终端",走 **Node 隧道**
+- **否决**:骑在 SSH 终端 PTY 上。终端是裸字节流(回显/行编辑/多路复用不可控),
+  ACP 要的是**换行分隔的 JSON-RPC**,塞进共享交互 shell 不可靠。
+- **主路(推荐)**:agent CLI 跑在 **Node(你项目所在的机器)** —— 因为 agent 需要你的代码与工具。
+  Hub 经既有 `/ws/agent` 隧道新增一条 **ACP channel**(channel_id 多路复用)下发指令;
+  Node 本地 spawn agent 子进程,把其 stdio 的 ACP 帧桥接进隧道。**全程不需要 SSH**,复用 REX 现有隧道/鉴权/版本锁。
+- **兜底**:无 Node 时,才用已有 SSH 通道 spawn agent 并管道传输 ACP(更脆弱,仅备选)。
+
+### 4.3 通道与会话
+- **浏览器 ↔ Hub**:新开 `/ws/acp` WebSocket —— Hub 多会话中继 `session/prompt`、
+  下行 `session/update` 流(agent_message_chunk / thought / tool_call / tool_call_update / plan / usage)、
+  并把 `session/request_permission` 抬到 UI。
+- **Hub ↔ Node**:ACP channel over `/ws/agent`,帧 = 换行分隔 JSON-RPC。
+- **会话持久化**:新 `sessions` 表(node_id / agent_id / acp_sessionId / cwd / created / lastActive)
+  → 支撑"新建会话"(`session/new`)与"打开会话"(`session/load` 重放历史)。
+
+### 4.4 权限模型(单用户信任面)
+agent 发 `session/request_permission {toolCall, options[allow_once/always, reject_once/always]}` →
+REX UI 出确认条;或按会话设"只读自动放行 / 写与执行需确认"。这是单用户下的唯一信任闸门。
+
+### 4.5 与"opencode 允许网页"的对照
+opencode `serve`/`web` = 服务端持会话,浏览器经 **REST + SSE**(`GET /event`)接入,自带文件树/diff/权限/分享 ——
+是**第一方单体契约**,非 ACP。REX 同构:Node=serve 端,Hub=会话 broker+鉴权,浏览器=UI;
+差别在 REX **用自己的隧道到达内网 agent**,且与资源管理同在一个界面。
+接 opencode 两条路:①`opencode acp` 走统一 ACP;②其 REST/SSE 走更丰富 UI(文件树/diff)—— 二选一,建议先①。
+
+### 4.6 定位合流
+一个 ACP 会话 = **Target(机器/项目) × via Node × Task(一段持续对话) × Result(记录+diff+产物)** ——
+正是 §2 统一模型在 Agent 侧的落地;会话即 Task 的具体实例。
 
 ## 5. 具体改动计划 (由你确认后执行)
 
