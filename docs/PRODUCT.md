@@ -37,11 +37,13 @@ REX Hub 是一款面向个人开发者和运维工程师的自托管远程资源
 | 多种资源需要多个工具 | SSH 用 Terminal，MySQL 用 Navicat，Redis 用 ARDM，文件用 FileZilla… | **一个 Web 页面**管理所有远程资源 |
 | 内网资源无法从外部访问 | 依赖 VPN、端口转发、跳板机 | 部署 Agent 后，**任何有网络的地方**都能访问 |
 | 数据在第三方平台 | 使用在线 SaaS 工具，数据不可控 | 完全**自托管**，数据留在自己的基础设施上 |
+| AI agent 散落在各处 | 逐个开终端、多个客户端各连各的 | 统一接入 REX，**在同一个界面里对话** |
 
-### 两个目标
+### 三个目标
 
 1. **一个平台覆盖多种资源类型** — SSH 终端、数据库查询、Redis 管理、文件传输、对象存储，不再在多个客户端之间切换。
 2. **一个服务访问公网 + 内网资源** — 通过内网 Agent 代理，公网和内网服务器统一管理，无需 VPN 或端口转发。
+3. **把各个 AI agent 统一接进来对话** — 见 §2.5。资源是"连上去操作"，agent 是"说话"，因此它不是多一种资源格子，而是多一个能对话的对象。
 
 ### 设计方法
 
@@ -110,6 +112,20 @@ Agent 设备信息：操作系统、架构、主机名、系统版本——影�
 |------|------|------|
 | Agent 代理 | ⬡ `#E8912D` | 通过内网 Agent 隧道访问 |
 | 直连 | ◉ `#58A6FF` | 控制台直接连接目标 |
+
+### 2.5 AI Agent
+
+可通过对话交互的编码 agent。与资源的关键区别：**资源是"连上去操作"，agent 是"说话"** —— 它有会话、会回话、会请求授权。因此 AI Agent 不属于 §2.3 的资源类型，而是在资源之外**多一个能对话的对象**，与资源并列由同一个界面管理。
+
+> **命名**：§2.2 的 Agent 指**隧道进程**（rex-agent 二进制），与此处 AI Agent 不同物。
+> 界面上隧道称「节点」，把「Agent」留给 AI Agent，避免混淆。
+
+**接入协议**：ACP (Agent Client Protocol) —— Zed 发起的 agent 标准协议（Apache-2.0，稳定 v1），
+会话语义原生对应：`session/new` 新建、`session/load` 打开、`session/prompt` 对话、`session/cancel` 中断。
+REX 只做协议客户端与中继，**不把 LLM 集成进 REX**。
+
+**生态**：opencode `opencode acp`、Gemini CLI `gemini --acp`、Goose `goose acp`、Qwen `qwen --acp` 原生支持；
+Claude Code / Codex 经官方 shim 接入。
 
 ---
 
@@ -324,6 +340,18 @@ CSS 变量（`--bg-deep` / `--bg-surface` / `--bg-elevated` / `--bg-hover` / `--
 ### 3.15 国际化 (i18n)
 ### 3.15 国际化 (i18n) [已完成]
 中（zh）/ 英（en）双语。设置页或侧栏切换，持久化 localStorage。新增功能必须同步补翻译。
+
+### 3.16 AI Agent 对话 [规划中]
+
+统一接入各个 AI Agent（§2.5），在同一个界面里管理与对话。
+
+- **Agent 列表**：手工添加（名称 + 启动命令 + 工作目录），如 `opencode acp`、`gemini --acp`、`goose acp`。不做自动发现。
+- **连接**：后端以 ACP 客户端连上并拉起进程，自动完成握手与组帧。
+- **会话**：`session/new` 新建、`session/load` 打开历史会话；仅存最小元信息（所属 agent / 工作目录 / acp sessionId），对话历史由 agent 侧重放。
+- **对话视图**：消息流式输出、展示工具调用、处理 agent 发起的权限请求（单用户默认自动放行，可配置为逐次确认）。
+- **传输**：新增 `/ws/acp`，与 `/ws/terminal`、`/ws/files`、`/ws/sip` 并列。
+
+**本期边界**：只连本机跑着的 agent；远程 agent、任务派发、多 agent 编排均不在本期范围（见 `docs/POSITIONING.md` §5）。
 
 ---
 
