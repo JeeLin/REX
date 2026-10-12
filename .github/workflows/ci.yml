@@ -36,6 +36,40 @@ jobs:
         run: cargo clippy --workspace
       - name: Test
         run: cargo test --workspace
+
+  # ── 覆盖率上报（仅报告，不阻断） ─────────────────
+  # AGENTS.md：自 v0.95.0 起，CI 以 cargo llvm-cov 报告 Rust workspace 行覆盖率
+  # （目标 ≥85%，仅写入 Artifacts，不阻断合并）。
+  # 独立 job 且不被任何下游 needs，避免覆盖率失败卡住构建/发布。
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: coverage
+          save-if: ${{ github.event_name == 'push' }}
+      - name: Download frontend dist
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend
+          path: packages/rex-console-web/dist/
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Coverage report (non-blocking)
+        run: cargo llvm-cov --workspace --textfile
+        continue-on-error: true
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v8
+        with:
+          name: coverage-report
+          path: llvm-cov-target/*.txt
+          if-no-files-found: warn
   # ── 构建 Rust 二进制（5 平台矩阵，产物用于 Docker + Release） ──
   # 各目标架构用「原生 runner」构建（与 baresip 官方 CI 一致，统一用 macos-latest）：
   #   linux-amd64   → ubuntu-latest (x86_64 原生)
