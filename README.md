@@ -4,6 +4,8 @@
 
 在一个深色优先的 Web 页面里，管理 SSH 终端、数据库查询、Redis 管理、文件传输、对象存储、SIP 电话等多类远程资源；并通过内网 Agent 隧道，无需 VPN 或开放入站端口，从任何有网络的地方访问你的公网与内网服务器。
 
+同时，REX 也是你的 **AI agent 汇聚入口**：把各个 agent 统一接进来，在同一个界面里管理和对话。
+
 > **单用户 · 自托管 · 数据自主掌控 · 深色优先**  
 > **Single-user · Self-hosted · Data sovereignty · Dark-mode first**
 
@@ -25,6 +27,7 @@
 | 一个平台管多种资源类型<br/>One platform for multiple resource types | SSH/iTerm2 + Navicat + FileZilla… 在多个客户端间切换<br/>Switching between multiple clients | **一个工作空间**搞定一切<br/>**One workspace** to rule them all |
 | 一个服务管公网 + 内网<br/>One service for public + internal network | VPN / 端口转发 / 跳板机<br/>VPN / port forwarding / jump host | Agent 反向隧道，**零端口暴露**<br/>Agent reverse tunnel, **zero port exposure** |
 | 数据自主掌控<br/>Data sovereignty | 在线 SaaS 工具，数据在第三方<br/>Online SaaS tools, data in third-party | 完全**自托管**，数据在你手中<br/>Completely **self-hosted**, data in your hands |
+| agent 散落在各处<br/>Agents scattered everywhere | 逐个开终端 / 多个客户端<br/>One terminal or client per agent | 统一接入 REX，**一个界面里对话**<br/>All in REX, **one place to chat** |
 
 > 专为单用户设计，不涉及多用户、团队协作、RBAC 权限。  
 > Designed for single-user only, no multi-user, team collaboration, or RBAC permissions.
