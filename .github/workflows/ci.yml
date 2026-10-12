@@ -60,15 +60,15 @@ jobs:
           name: frontend
           path: packages/rex-console-web/dist/
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
+        uses: taiki-e/install-action@releases/cargo-llvm-cov
       - name: Coverage report (non-blocking)
-        run: cargo llvm-cov --workspace --textfile
+        run: cargo llvm-cov --workspace --text --output-path coverage.txt
         continue-on-error: true
       - name: Upload coverage report
-        uses: actions/upload-artifact@v8
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-report
-          path: llvm-cov-target/*.txt
+          path: coverage.txt
           if-no-files-found: warn
   # ── 构建 Rust 二进制（5 平台矩阵，产物用于 Docker + Release） ──
   # 各目标架构用「原生 runner」构建（与 baresip 官方 CI 一致，统一用 macos-latest）：
