@@ -120,13 +120,25 @@ export function useTabs(deps: UseTabsDeps) {
   }
 
   // ===== 打开资源 =====
+  // 同一 (resourceId, protocol) 原则上去重（防双击刷 tab、保 one-tab-one-pane），
+  // 但「活动 pane 为空闲（tabId 为 null）」时允许新建同一资源的第二个实例——
+  // 否则第二个终端压根建不出来，分栏同资源即失效（v0.95.0 子任务 1）。
+  // activePaneOccupied 的缺省语义：allLeaves 是可选依赖，未注入时无法证明
+  // pane 空闲，按「占用」保守处理 → 去重分支生效、不新开 tab（fail-closed）。
+  // 若用可选链 `!!allLeaves?.value…` 写，缺省时短路为 undefined → 恒 false →
+  // 去重分支永不进入 → 同资源反复 push 新 tab，原缺陷复现且无任何报错。
   function openResource(node: ResourceNode) {
     const resourceId = node.id
     const protocol = (node.protocol || 'ssh') as Tab['protocol']
     const existing = tabs.value.find((t) => t.resourceId === resourceId && t.protocol === protocol)
     if (existing) {
-      activateTab(existing.id)
-      return
+      const activePaneOccupied = allLeaves
+        ? !!allLeaves.value.find((l) => l.id === activePaneId.value)?.tabId
+        : true
+      if (activePaneOccupied) {
+        activateTab(existing.id)
+        return
+      }
     }
 
     const id = nextTabId()

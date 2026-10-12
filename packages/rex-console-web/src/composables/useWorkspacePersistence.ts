@@ -44,19 +44,58 @@ export function useWorkspacePersistence(opts: {
         return false
       }
 
-      // Restore tabs — 持久化的 tabs 数量可能超过当前布局 leaves 数量。
-      // 只恢复前 N 个（N = leaves 数量），多余的 tab 无 pane 可绑定，直接丢弃，
-      // 避免 tabs>leaves 不对齐导致多余 tab 无法打开。
-      // 去重：按 (resourceId, protocol) 判重，与 openResource 的判重键一致，
-      // 防止「restore 与打开资源的即时动作叠加」产生同一资源的重复 tab（重启后出现旧+新两个）。
+      // 先恢复 pane layout —— 叶数必须取自恢复后的布局，而不是默认单格。
+      // 顺序反了会先按 leafCount=1 把 tabs 截断到只剩第一个（v0.95.0 子任务 4）。
+      if (state.paneLayout) {
+        paneLayoutDeserialize(state.paneLayout)
+      }
+
+      // 再恢复 tabs，按 tab id 去重（而非 (resourceId, protocol)）：
+      // 同资源的多个实例（分栏各开一个）是合法状态，按资源去重会把它们折叠成一个。
+      //
+      // 别名回写：若本次会话已为某资源开了一个「pending」tab（openResource 先于
+      // restore 执行，id 是新的），而快照里存的是同一资源的旧 id，则旧 tab 不再 push ——
+      // 否则重启后同一资源会出现「新+旧」两个。但只有 1:1 对应时这么做：快照里同一
+      // 资源有多个实例（合法的分栏多开）时，不能拿其中一个去顶掉本次会话的 tab。
       const leafCount = allLeaves.value.length || 1
-      const tabsToRestore = state.tabs.slice(0, leafCount)
+      const existingIds = new Set(tabs.value.map((x) => x.id))
       const restoredIds: string[] = []
-      for (const t of tabsToRestore) {
-        const already = tabs.value.some(
-          x => x.resourceId === t.resourceId && x.protocol === t.protocol,
-        )
-        if (already) continue
+
+      // 本次会话已开的 tab，按 (resourceId, protocol) 索引，用于别名回写匹配。
+      const liveByKey = new Map<string, string[]>()
+      for (const x of tabs.value) {
+        if (!x.resourceId) continue
+        const key = `${x.resourceId}::${x.protocol}`
+        const arr = liveByKey.get(key)
+        if (arr) arr.push(x.id)
+        else liveByKey.set(key, [x.id])
+      }
+      // 快照里每个资源出现几次：>1 说明该资源本来就是多实例，不能做 1:1 别名回写。
+      const persistedCountByKey = new Map<string, number>()
+      for (const t of state.tabs) {
+        if (!t.resourceId) continue
+        const key = `${t.resourceId}::${t.protocol}`
+        persistedCountByKey.set(key, (persistedCountByKey.get(key) ?? 0) + 1)
+      }
+
+      for (const t of state.tabs.slice(0, leafCount)) {
+        if (existingIds.has(t.id)) {
+          // 同 id 已在（本次会话刚开的 tab）：不重复 push，仅记录为已绑定来源。
+          restoredIds.push(t.id)
+          continue
+        }
+
+        // 别名回写判定：快照中该资源恰好只有 1 个实例，且本次会话已有同一资源的
+        // pending tab → 认作同一个 tab 的旧 id，跳过 push（由 pending tab 吸收）。
+        if (t.resourceId) {
+          const key = `${t.resourceId}::${t.protocol}`
+          const live = liveByKey.get(key) ?? []
+          if (live.length === 1 && persistedCountByKey.get(key) === 1) {
+            restoredIds.push(live[0]!) // 绑定时用本次会话的活 tab id
+            continue
+          }
+        }
+
         tabs.value.push({
           id: t.id,
           label: t.label,
@@ -65,6 +104,7 @@ export function useWorkspacePersistence(opts: {
           environmentId: t.environmentId,
           status: 'disconnected',
         })
+        existingIds.add(t.id)
         restoredIds.push(t.id)
       }
 
@@ -75,19 +115,20 @@ export function useWorkspacePersistence(opts: {
         activeTab.value = tabs.value[0]!.id
       }
 
-      // Restore pane layout
-      if (state.paneLayout) {
-        paneLayoutDeserialize(state.paneLayout)
+      // 恢复 tab→pane 绑定：按 tab 在快照中的顺序依次占用空闲叶，
+      // 保持「一 tab 一叶」；绑定前先清掉指向不存在 tab 的悬空绑定，
+      // 否则 PaneLeaf 会渲染一个查无此 tab 的空白占位。
+      const leaves = allLeaves.value
+      const validIds = new Set(tabs.value.map((x) => x.id))
+      for (const leaf of leaves) {
+        if (leaf.tabId && !validIds.has(leaf.tabId)) setPaneTab(leaf.id, null)
       }
-
-      // Restore tab-to-pane bindings（仅绑定实际恢复的 tab，忽略被去重的重复项）
-      for (const t of state.tabs) {
-        if (!restoredIds.includes(t.id)) continue
-        const leaves = allLeaves.value
-        // Find first unbound leaf and bind it
+      // restoredIds 里存的已是「实际 tab id」（别名回写时是本次会话的活 id，
+      // 不是快照里的旧 id），所以这里直接用 restoredIds 的顺序依次占空闲叶。
+      for (const tabId of restoredIds) {
         for (const leaf of leaves) {
           if (!leaf.tabId) {
-            setPaneTab(leaf.id, t.id)
+            setPaneTab(leaf.id, tabId)
             break
           }
         }
@@ -122,7 +163,9 @@ export function useWorkspacePersistence(opts: {
   }
 
   // Auto-save on state changes
-  watch([tabs, activeTab], save, { deep: true })
+  // allLeaves 也要 watch：split / closePane 只改布局、不动 tabs 与 activeTab，
+  // 不把它纳入依赖的话，纯布局操作不会落盘，刷新后布局回退成单格（v0.95.0 子任务 4）。
+  watch([tabs, activeTab, allLeaves], save, { deep: true })
 
   return { restore, save }
 }

@@ -68,19 +68,39 @@ describe('useWorkspacePersistence', () => {
     expect(tabs.value).toHaveLength(2)
   })
 
-  it('dedups persisted tabs against already-open tabs by resourceId+protocol (restart duplicate bug)', () => {
-    // 模拟「openResource 已按 resourceId+protocol 创建一个新 tab」后在 onMounted 执行 restore()
+  it('alias writeback: a pending live tab absorbs the persisted old tab of the same resource (restart duplicate bug)', () => {
+    // 模拟「openResource 已按 resourceId+protocol 创建一个新 tab」后在 onMounted 执行 restore()。
+    // 持久化状态里存在同一资源但 id 是旧值（tab-old）。
     const tabs = ref<PersistedTab[]>([
       { id: 'tab-new', label: '京东云', protocol: 'ssh', resourceId: 'r-jd', environmentId: 'e1', status: 'connecting' },
     ]) as Ref<PersistedTab[]>
-    // 持久化状态里存在同一资源（resourceId 相同，protocol 相同）但 id 是旧值
     seedStorage([
       { id: 'tab-old', label: '京东云', protocol: 'ssh', resourceId: 'r-jd', status: 'connected' },
     ])
     const { restore } = useWorkspacePersistence(makeOpts(tabs))
-    // 不应出现「旧+新」两个相同资源的 tab
+    // 不应出现「旧+新」两个相同资源的 tab：
+    // 本次会话已开的 tab-new 吸收快照里的 tab-old（别名回写），旧的不再 push。
     expect(restore()).toBe(true)
     expect(tabs.value).toHaveLength(1)
     expect(tabs.value[0]!.id).toBe('tab-new')
+  })
+
+  it('keeps multiple persisted instances of the same resource distinct', () => {
+    // v0.95.0 子任务 1/4：同一资源分栏多开是合法状态，
+    // restore 必须按 tab id 恢复，不能按 (resourceId, protocol) 把它们折叠成一个。
+    const tabs = ref<PersistedTab[]>([]) as Ref<PersistedTab[]>
+    seedStorage([
+      { id: 't1', label: 'A', protocol: 'ssh', resourceId: 'r1', status: 'connected' },
+      { id: 't2', label: 'A', protocol: 'ssh', resourceId: 'r1', status: 'connected' },
+      { id: 't3', label: 'A', protocol: 'ssh', resourceId: 'r1', status: 'connected' },
+    ])
+    const { restore } = useWorkspacePersistence(makeOpts(tabs, [
+      { id: 'leaf-1', tabId: null },
+      { id: 'leaf-2', tabId: null },
+      { id: 'leaf-3', tabId: null },
+    ]))
+    expect(restore()).toBe(true)
+    expect(tabs.value).toHaveLength(3)
+    expect(tabs.value.map((t) => t.id)).toEqual(['t1', 't2', 't3'])
   })
 })
