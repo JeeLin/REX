@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.95.0] - 2026-10-12
+
+### Added
+- **工作区资源组与分栏布局恢复**：工作区布局与已打开的 tab 现在跨刷新持久化并在下次打开时恢复（快照 24h 过期；恢复回来为 `disconnected` 并自动重连）。`restore` 先恢复 pane 布局再恢复 tabs（叶数取自恢复后的布局），按 tab `id` 恢复以保留同一资源的多实例；本次会话已开的 tab 走别名回写，不与快照叠加出重复旧 tab；指向不存在 tab 的悬空 pane 绑定会被清理。纯布局操作（split / closePane，不改动 tabs 与 activeTab）现在也会落盘
+- **CI 覆盖率上报（仅报告）**：新增 `coverage` job 运行 `cargo llvm-cov --workspace --textfile`，报告写入 Artifacts，目标行覆盖率 ≥85%。该 job 独立且不被任何下游 `needs` 依赖，**不阻断合并与发布**
+
+### Fixed
+- **同一 SSH 资源可开第二个终端**：此前 `useTabs.openResource` 按 `(resourceId, protocol)` 硬判重并直接返回，第二个终端压根不会被创建，分栏同资源完全失效（Owner 反馈「同一个 ssh 无法打开链接，分栏都不行了」）。现在仅当活动 pane 为空闲（`tabId` 为 null）时允许同一资源新建实例到该格；活动格已有 tab 时仍走去重，保 one-tab-one-pane 与防双击刷 tab。空闲格判定在 `allLeaves` 缺省时按「占用」保守处理，避免可选依赖短路导致 fail-open
+- **SSH 终端进度回显（`docker pull` 等）**：`terminal.data` 帧的 base64 改用 `TextDecoder` 按 UTF-8 解码，不再被 xterm 二次编码（此前所有 ≥ 0x80 的字节双重编码，中文与进度条里的非 ASCII 符号全部乱码）；解码使用 `{ stream: true }`，WS 分帧不对齐 UTF-8 字符边界时残缺序列留在缓冲区等下一帧补齐
+- **进度条类输出及时上屏**：含 `\r` 且不含 `\n` 的帧（进度条原地覆盖写）改走 `terminal.write(data, cb)` 并在回调中 `refresh()`，避免密集帧下视图停在上一帧；普通流式输出保持 fire-and-forget 快路径，不因逐帧回调拖慢高吞吐
+- **静默长任务不再被误断连**：`agent_ssh` 的 `out_task` 不再以「60s 无任何事件」判定僵死并主动 close。此前 `docker pull` 静默下载期没有终端输出即被误杀（keepalive 保活不产生 `TerminalEvent::Data`，与该判定语义冲突）。僵死判定交还底层：真实断连由 `ChannelMsg::Eof/Close/None` → `TerminalEvent::Disconnected` 处理，半关闭由 rex-ssh keepalive（间隔 60s，连续失败超过 `keepalive_max`）兜底
+- **终端搜索加固**：多窗格下搜索框聚焦跳错窗格（旧实现用全局 `document.querySelector('.ts-input')`，多开窗格时命中 DOM 首个搜索框）改为模板 ref + `nextTick`；补匹配计数与 `terminal.search.*` 中英文案
+
 ## [0.94.0] - 2026-10-08
 
 ### Added
