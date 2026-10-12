@@ -425,7 +425,19 @@ function connectSession() {
           break
         case 'terminal.data': {
           const data = decodeBase64Utf8(msg.payload.data)
-          terminal?.write(data)
+          const term = terminal
+          if (!term) break
+          // 进度条类输出（docker pull 等）靠 \r 原地覆盖同一行，若沿用 fire-and-forget
+          // 快路径，密集帧下解析队列可能还没排空，视图就停在上一帧 → 回显滞后。
+          // 这类帧改走回调：write 完成后再 refresh 一次强制上屏。
+          // 含 \n 的普通流式输出保持快路径——逐帧回调在高吞吐下会拖慢渲染。
+          if (data.includes('\r') && !data.includes('\n')) {
+            term.write(data, () => {
+              term.refresh(0, term.rows - 1)
+            })
+          } else {
+            term.write(data)
+          }
           break
         }
         case 'terminal.disconnected':

@@ -10,9 +10,11 @@ vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
 // Hoisted so assertions outside the mock factory can inspect what was written.
 const MockTerminal = vi.hoisted(() => {
   const writes: string[] = []
+  const refreshes: Array<[number, number]> = []
   return {
     writes,
-    reset() { writes.length = 0 },
+    refreshes,
+    reset() { writes.length = 0; refreshes.length = 0 },
   }
 })
 vi.mock('@xterm/xterm', () => {
@@ -32,7 +34,13 @@ vi.mock('@xterm/xterm', () => {
     attachCustomKeyEventHandler() { /* no-op */ }
     onData() { /* no-op */ }
     onResize() { /* no-op */ }
-    write(data: string) { MockTerminal.writes.push(data) }
+    write(data: string, callback?: () => void) {
+      MockTerminal.writes.push(data)
+      // 真实 xterm 在解析完这一帧后触发 callback（异步），
+      // 这里同步触发即可让断言跑在同一条路径上。
+      if (callback) callback()
+    }
+    refresh(start: number, end: number) { MockTerminal.refreshes.push([start, end]) }
     writeln() { /* no-op */ }
     focus() { /* no-op */ }
     dispose() { /* no-op */ }
@@ -314,6 +322,60 @@ describe('WorkspaceTerminal hub-direct failure hint', () => {
       })
       await flushPromises()
       expect(MockTerminal.writes.at(-1)).toBe('still alive')
+    })
+  })
+
+  // ── rc3：进度条类输出的重绘时机 ────────────────────────────────
+  // `docker pull` 这类进度条靠 \r 原地覆盖同一行。若沿用 fire-and-forget 快路径，
+  // 密集帧下解析队列未排空视图就停在上一帧 → 回显滞后。含 \r 且不含 \n 的帧
+  // 改走 write(data, cb) + cb 内 refresh 强制上屏；普通流式输出保持快路径，
+  // 避免逐帧回调在高吞吐下拖慢渲染。
+  describe('progress-bar frame refresh (rc3)', () => {
+    async function mountConnected() {
+      wrapper = await mountTerminal('agent', 'direct')
+      const ws = FakeWebSocket.instances.at(-1)!
+      ws.simulateOpen()
+      await flushPromises()
+      MockTerminal.reset()
+      return ws
+    }
+
+    it('含 \\r 且不含 \\n 的进度帧触发 refresh', async () => {
+      const ws = await mountConnected()
+      const frame = 'Downloading 50%\r'
+      ws.simulateMessage('terminal.data', {
+        data: Buffer.from(frame, 'utf8').toString('base64'),
+      })
+      await flushPromises()
+
+      expect(MockTerminal.writes.at(-1)).toBe(frame)
+      // 旧实现下 refreshes 为空，这条断言承重
+      expect(MockTerminal.refreshes).toHaveLength(1)
+      expect(MockTerminal.refreshes[0]).toEqual([0, 23]) // 0..rows-1
+    })
+
+    it('普通流式输出（含 \\n）不逐帧 refresh', async () => {
+      const ws = await mountConnected()
+      ws.simulateMessage('terminal.data', {
+        data: Buffer.from('line one\nline two\n', 'utf8').toString('base64'),
+      })
+      await flushPromises()
+
+      expect(MockTerminal.writes.at(-1)).toBe('line one\nline two\n')
+      // 快路径：不得逐帧 refresh，否则高吞吐输出会被回调拖慢
+      expect(MockTerminal.refreshes).toHaveLength(0)
+    })
+
+    it('含 \\r 也含 \\n 的帧按普通流处理，不 refresh', async () => {
+      const ws = await mountConnected()
+      const frame = 'progress\r\ndone\n'
+      ws.simulateMessage('terminal.data', {
+        data: Buffer.from(frame, 'utf8').toString('base64'),
+      })
+      await flushPromises()
+
+      expect(MockTerminal.writes.at(-1)).toBe(frame)
+      expect(MockTerminal.refreshes).toHaveLength(0)
     })
   })
 })
