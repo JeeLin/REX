@@ -318,14 +318,18 @@ pub async fn run_ssh_session(
     }
 
     // ── out_task：终端输出（russh 事件）→ 隧道帧 ──
-    // 加超时检测：若 60s 无任何事件，判定 SSH 连接已僵死并主动退出。
+    // 这里不设「无输出即僵死」的超时：静默长任务（如 docker pull 的下载期）本就长时间
+    // 没有终端输出，按空闲时间断连会把仍在正常工作的会话误杀。
+    // 僵死判定交由底层负责：真实断连时 channel 先产出 Eof/Close/None →
+    // TerminalEvent::Disconnected；半关闭（半开 TCP）无事件也无 EOF，由 rex-ssh
+    // driver 的 keepalive（间隔 60s，见 `SshSession::connect_with_handle`）兜底——
+    // 连续失败次数超过 russh 默认 `keepalive_max`（3）后 driver 自行退出。
     let evt_tx_out = evt_tx.clone();
     let cid_out = channel_id.clone();
     let out_task = tokio::spawn(async move {
-        let stall_timeout = std::time::Duration::from_secs(60);
         loop {
-            match tokio::time::timeout(stall_timeout, events.recv()).await {
-                Ok(Some(TerminalEvent::Data(data))) => {
+            match events.recv().await {
+                Some(TerminalEvent::Data(data)) => {
                     let mut frame = Vec::with_capacity(4 + data.len());
                     frame.extend_from_slice(&ch_id_num.to_be_bytes());
                     frame.extend_from_slice(data.as_bytes());
@@ -334,7 +338,7 @@ pub async fn run_ssh_session(
                         break;
                     }
                 }
-                Ok(Some(TerminalEvent::Disconnected(reason))) => {
+                Some(TerminalEvent::Disconnected(reason)) => {
                     tracing::info!(action = "AGENT_SSH_OUT", channel_id = %cid_out, reason = %reason, "SSH disconnected");
                     let close = serde_json::to_string(&crate::agent_ws::AgentMsg::Closed {
                         payload: crate::agent_ws::ChannelPayload {
@@ -345,25 +349,8 @@ pub async fn run_ssh_session(
                     let _ = evt_tx_out.send(AgentEvent::Text(close)).await;
                     break;
                 }
-                Ok(None) => {
+                None => {
                     tracing::info!(action = "AGENT_SSH_OUT", channel_id = %cid_out, "events channel closed");
-                    break;
-                }
-                Err(_elapsed) => {
-                    // 超时无事件 — SSH 连接可能已僵死（半关闭 TCP 等）。
-                    tracing::warn!(
-                        action = "AGENT_SSH_OUT",
-                        channel_id = %cid_out,
-                        timeout_secs = stall_timeout.as_secs(),
-                        "SSH event stall detected, closing session"
-                    );
-                    let close = serde_json::to_string(&crate::agent_ws::AgentMsg::Closed {
-                        payload: crate::agent_ws::ChannelPayload {
-                            channel_id: cid_out.clone(),
-                        },
-                    })
-                    .unwrap_or_default();
-                    let _ = evt_tx_out.send(AgentEvent::Text(close)).await;
                     break;
                 }
             }
